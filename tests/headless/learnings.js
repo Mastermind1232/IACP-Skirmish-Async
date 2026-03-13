@@ -1,18 +1,20 @@
 /**
- * Strategy learning module — Linear Function Approximation (Brain Phase 2).
- * Replaces tabular Q-learning with weighted feature vectors per action type.
- * Q(state, action) = dot(weights[action], features(state))
- * Both players share the same weights, indexed from their own perspective.
+ * Strategy learning module — Dueling Neural Network (Brain Phase 3).
+ * Hidden layer captures feature interactions. Separate value/advantage heads.
+ * Target network + gradient clipping for stable learning.
+ * Q(s,a) = V(s) + (A(s,a) - mean(A(s,*)))
  */
 import { parseCoord } from '../../src/game/coords.js';
-import { getDcEffects } from '../../src/data-loader.js';
+import { getDcEffects, getMapTokensData } from '../../src/data-loader.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const GAMMA = 0.95;        // Discount factor
-const ALPHA = 0.01;        // Learning rate (fixed for linear approx)
-const WEIGHT_CLAMP = 10.0; // Safety clamp to prevent divergence
+const GAMMA = 0.95;          // Discount factor
+const ALPHA = 0.002;         // Learning rate (smaller for neural stability)
+const HIDDEN_SIZE = 32;      // Hidden layer width
+const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
+const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
 
 const REWARD_WEIGHTS = {
   vp: 10.0,               // VP gained (primary win condition)
@@ -22,13 +24,14 @@ const REWARD_WEIGHTS = {
   terminal: 50.0,         // Win/loss bonus at game end
 };
 
-const NUM_FEATURES = 14;
+const NUM_FEATURES = 16;
 
 const FEATURE_NAMES = [
   'vpAdv', 'myHpRatio', 'oppHpRatio', 'hpAdv',
   'myFigsRatio', 'figsAdv', 'closeness', 'nearestEnemy',
   'roundProgress', 'activationsRatio', 'inCombat', 'inMovement',
   'attackPower', 'bias',
+  'enemyThreat', 'objectivePotential',
 ];
 
 const ABSTRACT_TYPES = [
@@ -37,10 +40,20 @@ const ABSTRACT_TYPES = [
   'ability', 'spend_surge', 'skip_surges', 'reroll', 'other',
 ];
 
+const NUM_ACTIONS = ABSTRACT_TYPES.length;
+
 // Expected damage per attack die (from dice.json face averages)
 const EXPECTED_DMG_PER_DIE = { red: 2.17, blue: 1.17, green: 1.33, yellow: 0.67 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Box-Muller transform for standard normal random numbers. */
+function randn() {
+  let u, v;
+  do { u = Math.random(); } while (u === 0);
+  v = Math.random();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
 
 function coordDistance(a, b) {
   const pa = parseCoord(a);
@@ -101,7 +114,6 @@ function getArmyAttackPower(game, playerNum) {
   let dcEffects;
   try { dcEffects = getDcEffects(); } catch { return 0; }
   for (const figKey of figKeys) {
-    // Extract DC name: "Darth Vader-1-0" → "Darth Vader"
     const dcName = figKey.replace(/-\d+-\d+$/, '');
     const lower = dcName.toLowerCase();
     const ciKey = Object.keys(dcEffects).find(k => k.toLowerCase() === lower);
@@ -112,8 +124,137 @@ function getArmyAttackPower(game, playerNum) {
       }
     }
   }
-  // Normalize — ~15 is roughly max single-army expected damage
   return Math.min(1, totalDmg / 15);
+}
+
+function getExpectedDamage(dcEffects, dcName) {
+  const lower = dcName.toLowerCase();
+  const ciKey = Object.keys(dcEffects).find(k => k.toLowerCase() === lower);
+  const eff = dcEffects[dcName] || (ciKey ? dcEffects[ciKey] : null);
+  if (!eff?.attack?.dice) return 0;
+  let dmg = 0;
+  for (const die of eff.attack.dice) {
+    dmg += EXPECTED_DMG_PER_DIE[die] || 0;
+  }
+  return dmg;
+}
+
+function getAttackRange(dcEffects, dcName) {
+  const lower = dcName.toLowerCase();
+  const ciKey = Object.keys(dcEffects).find(k => k.toLowerCase() === lower);
+  const eff = dcEffects[dcName] || (ciKey ? dcEffects[ciKey] : null);
+  if (!eff?.attack) return 1; // default melee
+  return eff.attack.range || 1;
+}
+
+// ── New Feature Helpers ─────────────────────────────────────────────────────
+
+/**
+ * enemyThreat — Approximate incoming danger to the currently acting figure.
+ * Counts enemy figures within their attack range of the active figure,
+ * weighted by expected damage. Normalizes to [0, 1].
+ */
+function getEnemyThreat(game, playerNum, dcMessageMeta) {
+  const oppNum = playerNum === 1 ? 2 : 1;
+  let activeFigPos = null;
+
+  // Try to find the currently activated figure from dcActionsData
+  if (game.dcActionsData && dcMessageMeta) {
+    for (const [msgId, meta] of dcMessageMeta) {
+      if (meta?.playerNum === playerNum && game.dcActionsData?.[msgId]) {
+        const actionsData = game.dcActionsData[msgId];
+        const figureIndex = actionsData.selectedFigure ?? 0;
+        const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const dgIndex = dgMatch ? dgMatch[1] : '1';
+        const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+        activeFigPos = game.figurePositions?.[playerNum]?.[figureKey];
+        if (activeFigPos) break;
+      }
+    }
+  }
+
+  // Fallback: check moveInProgress for a moving figure
+  if (!activeFigPos && game.moveInProgress) {
+    for (const moveState of Object.values(game.moveInProgress)) {
+      if (moveState?.currentPosition) {
+        activeFigPos = moveState.currentPosition;
+        break;
+      }
+    }
+  }
+
+  // No active figure found — return 0
+  if (!activeFigPos) return 0;
+
+  let dcEffects;
+  try { dcEffects = getDcEffects(); } catch { return 0; }
+
+  const oppFigs = game.figurePositions?.[oppNum] || {};
+  let threat = 0;
+
+  for (const [figKey, pos] of Object.entries(oppFigs)) {
+    const dcName = figKey.replace(/-\d+-\d+$/, '');
+    const attackRange = getAttackRange(dcEffects, dcName);
+    const dist = coordDistance(pos, activeFigPos);
+    if (dist <= attackRange) {
+      threat += getExpectedDamage(dcEffects, dcName);
+    }
+  }
+
+  return Math.min(1, threat / 15);
+}
+
+/**
+ * objectivePotential — How close the closest friendly figure is to any
+ * map objective (terminals + mission tokens). Inversely normalized like closeness.
+ */
+function getObjectivePotential(game, playerNum) {
+  let mapTokens;
+  try { mapTokens = getMapTokensData(); } catch { return 0; }
+
+  const mapId = game.selectedMap?.id;
+  if (!mapId || !mapTokens?.[mapId]) return 0;
+
+  const mapData = mapTokens[mapId];
+  const objectiveCoords = [];
+
+  // Add terminal positions
+  if (Array.isArray(mapData.terminals)) {
+    for (const coord of mapData.terminals) {
+      objectiveCoords.push(coord);
+    }
+  }
+
+  // Add mission variant positions
+  const variant = game.selectedMission?.variant;
+  const missionKey = variant ? `mission${variant.toUpperCase()}` : null;
+  if (missionKey && mapData[missionKey]?.positions) {
+    for (const coords of Object.values(mapData[missionKey].positions)) {
+      if (Array.isArray(coords)) {
+        for (const coord of coords) {
+          objectiveCoords.push(coord);
+        }
+      }
+    }
+  }
+
+  if (objectiveCoords.length === 0) return 0;
+
+  const myFigs = Object.values(game.figurePositions?.[playerNum] || {});
+  if (myFigs.length === 0) return 0;
+
+  let globalMinDist = Infinity;
+  for (const figPos of myFigs) {
+    for (const objCoord of objectiveCoords) {
+      try {
+        const d = coordDistance(figPos, objCoord);
+        if (d < globalMinDist) globalMinDist = d;
+      } catch { /* skip invalid coords */ }
+    }
+  }
+
+  if (!isFinite(globalMinDist)) return 0;
+  return 1 - Math.min(globalMinDist, 10) / 10;
 }
 
 // ── Feature Extraction ──────────────────────────────────────────────────────
@@ -138,87 +279,285 @@ export function extractFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
   const totalActs = myActs + oppActs;
 
   return [
-    /* 0  vpAdv          */ (myVP - oppVP) / 40,
-    /* 1  myHpRatio      */ myHpRatio,
-    /* 2  oppHpRatio     */ oppHpRatio,
-    /* 3  hpAdv          */ myHpRatio - oppHpRatio,
-    /* 4  myFigsRatio    */ totalFigs > 0 ? myFigs / totalFigs : 0.5,
-    /* 5  figsAdv        */ totalFigs > 0 ? (myFigs - oppFigs) / totalFigs : 0,
-    /* 6  closeness      */ 1 - Math.min(avgDist, 10) / 10,
-    /* 7  nearestEnemy   */ 1 - Math.min(minDist, 10) / 10,
-    /* 8  roundProgress  */ Math.min(round, 5) / 5,
-    /* 9  activationsRatio */ totalActs > 0 ? myActs / totalActs : 0.5,
-    /* 10 inCombat       */ game.pendingCombat ? 1 : 0,
-    /* 11 inMovement     */ game.moveInProgress && Object.keys(game.moveInProgress).length > 0 ? 1 : 0,
-    /* 12 attackPower    */ getArmyAttackPower(game, playerNum),
-    /* 13 bias           */ 1.0,
+    /* 0  vpAdv             */ (myVP - oppVP) / 40,
+    /* 1  myHpRatio         */ myHpRatio,
+    /* 2  oppHpRatio        */ oppHpRatio,
+    /* 3  hpAdv             */ myHpRatio - oppHpRatio,
+    /* 4  myFigsRatio       */ totalFigs > 0 ? myFigs / totalFigs : 0.5,
+    /* 5  figsAdv           */ totalFigs > 0 ? (myFigs - oppFigs) / totalFigs : 0,
+    /* 6  closeness         */ 1 - Math.min(avgDist, 10) / 10,
+    /* 7  nearestEnemy      */ 1 - Math.min(minDist, 10) / 10,
+    /* 8  roundProgress     */ Math.min(round, 5) / 5,
+    /* 9  activationsRatio  */ totalActs > 0 ? myActs / totalActs : 0.5,
+    /* 10 inCombat          */ game.pendingCombat ? 1 : 0,
+    /* 11 inMovement        */ game.moveInProgress && Object.keys(game.moveInProgress).length > 0 ? 1 : 0,
+    /* 12 attackPower       */ getArmyAttackPower(game, playerNum),
+    /* 13 bias              */ 1.0,
+    /* 14 enemyThreat       */ getEnemyThreat(game, playerNum, dcMessageMeta),
+    /* 15 objectivePotential */ getObjectivePotential(game, playerNum),
   ];
 }
 
-// ── Weight System ───────────────────────────────────────────────────────────
+// ── Network Initialization ──────────────────────────────────────────────────
 
-export function initializeWeights() {
-  const weights = {};
-  for (const t of ABSTRACT_TYPES) {
-    weights[t] = new Array(NUM_FEATURES).fill(0);
+/** Initialize dueling network with He/Xavier init. */
+export function initializeNetwork() {
+  // W1: [HIDDEN_SIZE][NUM_FEATURES] — He init
+  const heStd = Math.sqrt(2 / NUM_FEATURES);
+  const W1 = [];
+  for (let j = 0; j < HIDDEN_SIZE; j++) {
+    const row = [];
+    for (let i = 0; i < NUM_FEATURES; i++) {
+      row.push(randn() * heStd);
+    }
+    W1.push(row);
   }
-  return weights;
+  const b1 = new Array(HIDDEN_SIZE).fill(0);
+
+  // Wv: [HIDDEN_SIZE] — Xavier init
+  const xavierV = Math.sqrt(2 / (HIDDEN_SIZE + 1));
+  const Wv = [];
+  for (let j = 0; j < HIDDEN_SIZE; j++) {
+    Wv.push(randn() * xavierV);
+  }
+  const bv = 0;
+
+  // Wa: [NUM_ACTIONS][HIDDEN_SIZE] — Xavier init
+  const xavierA = Math.sqrt(2 / (HIDDEN_SIZE + NUM_ACTIONS));
+  const Wa = [];
+  for (let k = 0; k < NUM_ACTIONS; k++) {
+    const row = [];
+    for (let j = 0; j < HIDDEN_SIZE; j++) {
+      row.push(randn() * xavierA);
+    }
+    Wa.push(row);
+  }
+  const ba = new Array(NUM_ACTIONS).fill(0);
+
+  return { W1, b1, Wv, bv, Wa, ba };
 }
 
-export function computeQ(weights, actionType, features) {
-  const w = weights[actionType];
-  if (!w) return 0;
-  let sum = 0;
-  for (let i = 0; i < NUM_FEATURES; i++) {
-    sum += w[i] * (features[i] || 0);
-  }
-  return sum;
+/** Deep-copy all 6 parameter arrays of a network. */
+function deepCopyNetwork(network) {
+  return {
+    W1: network.W1.map(row => [...row]),
+    b1: [...network.b1],
+    Wv: [...network.Wv],
+    bv: network.bv,
+    Wa: network.Wa.map(row => [...row]),
+    ba: [...network.ba],
+  };
 }
 
-function getBestQ(weights, features) {
+// ── Forward Pass ────────────────────────────────────────────────────────────
+
+/**
+ * Dueling forward pass.
+ * Returns { Q: [NUM_ACTIONS], V, A: [NUM_ACTIONS], h_pre: [HIDDEN_SIZE], h: [HIDDEN_SIZE] }
+ */
+function forwardPass(network, features) {
+  const { W1, b1, Wv, bv, Wa, ba } = network;
+
+  // Shared hidden layer: h_pre = W1 * features + b1, h = ReLU(h_pre)
+  const h_pre = new Array(HIDDEN_SIZE);
+  const h = new Array(HIDDEN_SIZE);
+  for (let j = 0; j < HIDDEN_SIZE; j++) {
+    let sum = b1[j];
+    for (let i = 0; i < NUM_FEATURES; i++) {
+      sum += W1[j][i] * (features[i] || 0);
+    }
+    h_pre[j] = sum;
+    h[j] = sum > 0 ? sum : 0; // ReLU
+  }
+
+  // Value head: V = Wv · h + bv
+  let V = bv;
+  for (let j = 0; j < HIDDEN_SIZE; j++) {
+    V += Wv[j] * h[j];
+  }
+
+  // Advantage head: A[k] = Wa[k] · h + ba[k]
+  const A = new Array(NUM_ACTIONS);
+  let meanA = 0;
+  for (let k = 0; k < NUM_ACTIONS; k++) {
+    let sum = ba[k];
+    for (let j = 0; j < HIDDEN_SIZE; j++) {
+      sum += Wa[k][j] * h[j];
+    }
+    A[k] = sum;
+    meanA += sum;
+  }
+  meanA /= NUM_ACTIONS;
+
+  // Combine: Q[k] = V + A[k] - mean(A)
+  const Q = new Array(NUM_ACTIONS);
+  for (let k = 0; k < NUM_ACTIONS; k++) {
+    Q[k] = V + A[k] - meanA;
+  }
+
+  return { Q, V, A, h_pre, h };
+}
+
+// ── NaN Safety ──────────────────────────────────────────────────────────────
+
+function sanitizeParam(value) {
+  return isFinite(value) ? value : 0;
+}
+
+function sanitizeNetwork(network, stats) {
+  let resets = 0;
+
+  for (let j = 0; j < HIDDEN_SIZE; j++) {
+    for (let i = 0; i < NUM_FEATURES; i++) {
+      if (!isFinite(network.W1[j][i])) { network.W1[j][i] = 0; resets++; }
+    }
+    if (!isFinite(network.b1[j])) { network.b1[j] = 0; resets++; }
+    if (!isFinite(network.Wv[j])) { network.Wv[j] = 0; resets++; }
+  }
+  if (!isFinite(network.bv)) { network.bv = 0; resets++; }
+
+  for (let k = 0; k < NUM_ACTIONS; k++) {
+    for (let j = 0; j < HIDDEN_SIZE; j++) {
+      if (!isFinite(network.Wa[k][j])) { network.Wa[k][j] = 0; resets++; }
+    }
+    if (!isFinite(network.ba[k])) { network.ba[k] = 0; resets++; }
+  }
+
+  if (resets > 0 && stats) {
+    stats.nanResets = (stats.nanResets || 0) + resets;
+  }
+  return resets;
+}
+
+// ── Backpropagation ─────────────────────────────────────────────────────────
+
+/**
+ * Manual backprop through dueling architecture with SGD update.
+ */
+function backpropUpdate(network, actionIdx, delta, alpha, h_pre, h, features) {
+  const { W1, b1, Wv, Wa, ba } = network;
+
+  // Advantage head gradients
+  for (let m = 0; m < NUM_ACTIONS; m++) {
+    const dA = (m === actionIdx) ? delta * (14 / 15) : delta * (-1 / 15);
+    for (let j = 0; j < HIDDEN_SIZE; j++) {
+      Wa[m][j] += alpha * dA * h[j];
+    }
+    ba[m] += alpha * dA;
+  }
+
+  // Value head gradients
+  for (let j = 0; j < HIDDEN_SIZE; j++) {
+    Wv[j] += alpha * delta * h[j];
+  }
+  network.bv += alpha * delta;
+
+  // Hidden layer gradients (sum V + A head contributions, gate through ReLU)
+  for (let j = 0; j < HIDDEN_SIZE; j++) {
+    let grad_h = delta * Wv[j];
+    for (let m = 0; m < NUM_ACTIONS; m++) {
+      const dA = (m === actionIdx) ? delta * (14 / 15) : delta * (-1 / 15);
+      grad_h += dA * Wa[m][j];
+    }
+    const grad_pre = h_pre[j] > 0 ? grad_h : 0; // ReLU gate
+
+    // Input layer gradients
+    for (let i = 0; i < NUM_FEATURES; i++) {
+      W1[j][i] += alpha * grad_pre * (features[i] || 0);
+    }
+    b1[j] += alpha * grad_pre;
+  }
+}
+
+// ── Masked Q ────────────────────────────────────────────────────────────────
+
+/**
+ * Compute max Q over only legal action indices.
+ * Returns 0 for terminal states (null/empty nextActionIdxs).
+ */
+function getMaskedBestQ(network, features, nextActionIdxs) {
+  if (!nextActionIdxs || nextActionIdxs.length === 0) return 0;
+  const { Q } = forwardPass(network, features);
   let maxQ = -Infinity;
-  for (const t of ABSTRACT_TYPES) {
-    const q = computeQ(weights, t, features);
-    if (q > maxQ) maxQ = q;
+  for (const idx of nextActionIdxs) {
+    if (idx >= 0 && idx < NUM_ACTIONS && Q[idx] > maxQ) {
+      maxQ = Q[idx];
+    }
   }
   return maxQ === -Infinity ? 0 : maxQ;
 }
 
-function updateWeightsForAction(weights, actionType, features, delta, alpha) {
-  if (!weights[actionType]) weights[actionType] = new Array(NUM_FEATURES).fill(0);
-  const w = weights[actionType];
-  for (let i = 0; i < NUM_FEATURES; i++) {
-    w[i] += alpha * delta * (features[i] || 0);
-    if (w[i] > WEIGHT_CLAMP) w[i] = WEIGHT_CLAMP;
-    if (w[i] < -WEIGHT_CLAMP) w[i] = -WEIGHT_CLAMP;
+// ── Training Update (Neural) ────────────────────────────────────────────────
+
+function updateTraceNeural(learnings, trace) {
+  if (!learnings.network) learnings.network = initializeNetwork();
+  if (!learnings.targetNetwork) learnings.targetNetwork = deepCopyNetwork(learnings.network);
+  if (!learnings.trainingStats) {
+    learnings.trainingStats = {
+      totalUpdates: 0, avgAbsDelta: 0, featureNames: FEATURE_NAMES,
+      hiddenSize: HIDDEN_SIZE, lastTargetSync: 0, targetSyncs: 0,
+      nanResets: 0, tdErrorHistory: [],
+    };
   }
-}
 
-// ── Training Update ─────────────────────────────────────────────────────────
-
-function updateTraceLinear(learnings, trace) {
-  if (!learnings.weights) learnings.weights = initializeWeights();
-  if (!learnings.trainingStats) learnings.trainingStats = { totalUpdates: 0, avgAbsDelta: 0, featureNames: FEATURE_NAMES };
-  const weights = learnings.weights;
+  const network = learnings.network;
+  const targetNetwork = learnings.targetNetwork;
+  const stats = learnings.trainingStats;
   let deltaSum = 0;
   let count = 0;
 
+  // Backward sweep through trace
   for (let i = trace.length - 1; i >= 0; i--) {
-    const { features, absType, reward, nextFeatures } = trace[i];
-    if (!features) continue;
-    const currentQ = computeQ(weights, absType, features);
-    const maxQNext = nextFeatures ? getBestQ(weights, nextFeatures) : 0;
-    const delta = reward + GAMMA * maxQNext - currentQ;
-    updateWeightsForAction(weights, absType, features, delta, ALPHA);
-    deltaSum += Math.abs(delta);
+    const entry = trace[i];
+    if (!entry.features) continue;
+
+    const { features, actionIdx, reward, nextFeatures, nextActionIdxs, done } = entry;
+
+    // Forward pass on online network
+    const { Q, h_pre, h } = forwardPass(network, features);
+
+    // Compute TD target
+    let target;
+    if (done || !nextFeatures) {
+      target = reward;
+    } else {
+      const maxQNext = getMaskedBestQ(targetNetwork, nextFeatures, nextActionIdxs);
+      target = reward + GAMMA * maxQNext;
+    }
+
+    // Clip TD error
+    const rawDelta = target - Q[actionIdx];
+    const delta = Math.max(-DELTA_CLAMP, Math.min(DELTA_CLAMP, rawDelta));
+
+    // Backprop update
+    backpropUpdate(network, actionIdx, delta, ALPHA, h_pre, h, features);
+
+    // NaN safety
+    sanitizeNetwork(network, stats);
+
+    deltaSum += Math.abs(rawDelta);
     count++;
+    stats.totalUpdates++;
+
+    // TD error history (sample every 100 updates)
+    if (stats.totalUpdates % 100 === 0) {
+      const meanAbsTD = count > 0 ? deltaSum / count : 0;
+      if (!stats.tdErrorHistory) stats.tdErrorHistory = [];
+      stats.tdErrorHistory.push({ updates: stats.totalUpdates, meanAbsTD });
+      if (stats.tdErrorHistory.length > 500) stats.tdErrorHistory.shift();
+    }
+
+    // Target network sync
+    if (stats.totalUpdates > 0 && stats.totalUpdates % TARGET_UPDATE_INTERVAL === 0) {
+      learnings.targetNetwork = deepCopyNetwork(network);
+      stats.lastTargetSync = stats.totalUpdates;
+      stats.targetSyncs = (stats.targetSyncs || 0) + 1;
+    }
   }
 
   if (count > 0) {
-    learnings.trainingStats.totalUpdates += count;
-    // Running average of |delta|
-    const prevAvg = learnings.trainingStats.avgAbsDelta || 0;
-    learnings.trainingStats.avgAbsDelta = prevAvg * 0.95 + (deltaSum / count) * 0.05;
+    const prevAvg = stats.avgAbsDelta || 0;
+    stats.avgAbsDelta = prevAvg * 0.95 + (deltaSum / count) * 0.05;
   }
 }
 
@@ -329,7 +668,7 @@ export function computeReward(before, after, isTerminal, didWin) {
 // ── Action Selection ────────────────────────────────────────────────────────
 
 function getEpsilon(totalGames) {
-  return Math.max(0.05, 0.3 - 0.001 * totalGames);
+  return Math.max(0.05, 0.3 * Math.exp(-totalGames / 5000));
 }
 
 export function pickSmartAction(allActions, game, learnings, playerNum, dcHealthState, dcMessageMeta) {
@@ -362,20 +701,22 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     return heuristicPick(strategicActions, game);
   }
 
-  // Exploitation: compute Q via linear function approximation
+  // Exploitation: compute Q via dueling neural network
   const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
-  const weights = learnings.weights;
-  if (!weights) return heuristicPick(strategicActions, game);
+  const network = learnings.network;
+  if (!network) return heuristicPick(strategicActions, game);
 
+  const { Q } = forwardPass(network, features);
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
   if (absTypes.length === 0) return heuristicPick(strategicActions, game);
 
   let bestType = null;
   let bestQ = -Infinity;
   for (const absType of absTypes) {
-    const q = computeQ(weights, absType, features);
-    if (q > bestQ) {
-      bestQ = q;
+    const idx = ABSTRACT_TYPES.indexOf(absType);
+    if (idx < 0) continue;
+    if (Q[idx] > bestQ) {
+      bestQ = Q[idx];
       bestType = absType;
     }
   }
@@ -465,13 +806,37 @@ function heuristicPick(allActions, game) {
 
 // ── Game Loop Integration ───────────────────────────────────────────────────
 
+/**
+ * Compute unique abstract action type indices from a set of game actions.
+ * Excludes mandatory (gate, combat_flow) types.
+ */
+function getAbstractTypeIdxs(actions, game) {
+  const idxSet = new Set();
+  const mandatoryTypes = ['gate', 'combat_flow'];
+  for (const action of actions) {
+    const abs = abstractActionType(action, game);
+    if (mandatoryTypes.includes(abs)) continue;
+    const idx = ABSTRACT_TYPES.indexOf(abs);
+    if (idx >= 0) idxSet.add(idx);
+  }
+  return idxSet.size > 0 ? [...idxSet] : null;
+}
+
 export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageMeta) {
   const trace = [];
   let lastSnapshot = null;
   let lastFeatures = null;
 
   return {
-    beforeAction(game) {
+    beforeAction(game, playerActions) {
+      // Fill in previous entry's nextActionIdxs from current available actions
+      if (playerActions && trace.length > 0) {
+        const prev = trace[trace.length - 1];
+        if (prev.nextActionIdxs === null && !prev.done) {
+          prev.nextActionIdxs = getAbstractTypeIdxs(playerActions, game);
+        }
+      }
+
       lastSnapshot = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
       lastFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
     },
@@ -487,7 +852,11 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       const afterSnap = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
       const nextFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
       const reward = computeReward(lastSnapshot, afterSnap, false, false);
-      trace.push({ features: lastFeatures, absType, reward, nextFeatures });
+      const actionIdx = ABSTRACT_TYPES.indexOf(absType);
+      trace.push({
+        features: lastFeatures, actionIdx, reward, nextFeatures,
+        nextActionIdxs: null, done: false,
+      });
       lastSnapshot = null;
       lastFeatures = null;
     },
@@ -496,10 +865,13 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       const didWin = game.ended && game.winnerId === (playerNum === 1 ? game.player1Id : game.player2Id);
       const didLose = game.ended && game.winnerId && !didWin;
       if (trace.length > 0 && game.ended) {
-        trace[trace.length - 1].reward += didWin ? REWARD_WEIGHTS.terminal : (didLose ? -REWARD_WEIGHTS.terminal : 0);
-        trace[trace.length - 1].nextFeatures = null; // Terminal state
+        const last = trace[trace.length - 1];
+        last.reward += didWin ? REWARD_WEIGHTS.terminal : (didLose ? -REWARD_WEIGHTS.terminal : 0);
+        last.nextFeatures = null; // Terminal state
+        last.nextActionIdxs = null;
+        last.done = true;
       }
-      updateTraceLinear(learnings, trace);
+      updateTraceNeural(learnings, trace);
       if (updateMeta) {
         learnings.meta.totalGames++;
         if (game.ended && game.winnerId) {
@@ -519,24 +891,47 @@ export function loadLearnings(filePath) {
   try {
     if (existsSync(filePath)) {
       const data = JSON.parse(readFileSync(filePath, 'utf8'));
-      // Migrate from tabular to linear if needed
-      if (!data.weights) {
-        data.weights = initializeWeights();
+      // Migrate from Phase 1/2 to Phase 3 if needed
+      if (!data.network) {
+        data.network = initializeNetwork();
+        delete data.weights;
         delete data.states;
+        data.brainPhase = 3;
       }
       if (!data.trainingStats) {
-        data.trainingStats = { totalUpdates: 0, avgAbsDelta: 0, featureNames: FEATURE_NAMES };
+        data.trainingStats = {
+          totalUpdates: 0, avgAbsDelta: 0, featureNames: FEATURE_NAMES,
+          hiddenSize: HIDDEN_SIZE, lastTargetSync: 0, targetSyncs: 0,
+          nanResets: 0, tdErrorHistory: [],
+        };
       }
+      // Ensure Phase 3 stats fields exist
+      data.trainingStats.featureNames = FEATURE_NAMES;
+      data.trainingStats.hiddenSize = HIDDEN_SIZE;
+      if (data.trainingStats.lastTargetSync === undefined) data.trainingStats.lastTargetSync = 0;
+      if (data.trainingStats.targetSyncs === undefined) data.trainingStats.targetSyncs = 0;
+      if (data.trainingStats.nanResets === undefined) data.trainingStats.nanResets = 0;
+      if (!data.trainingStats.tdErrorHistory) data.trainingStats.tdErrorHistory = [];
+      data.brainPhase = 3;
+      // Target network is always recreated from online network (not persisted)
+      data.targetNetwork = deepCopyNetwork(data.network);
       if (!data.dcStats) data.dcStats = {};
       if (!data.affiliationStats) data.affiliationStats = {};
       if (!data.matchups) data.matchups = [];
       return data;
     }
   } catch { /* start fresh */ }
+  const network = initializeNetwork();
   return {
+    brainPhase: 3,
     meta: { totalGames: 0, p1Wins: 0, p2Wins: 0, lastUpdated: null },
-    weights: initializeWeights(),
-    trainingStats: { totalUpdates: 0, avgAbsDelta: 0, featureNames: FEATURE_NAMES },
+    network,
+    targetNetwork: deepCopyNetwork(network),
+    trainingStats: {
+      totalUpdates: 0, avgAbsDelta: 0, featureNames: FEATURE_NAMES,
+      hiddenSize: HIDDEN_SIZE, lastTargetSync: 0, targetSyncs: 0,
+      nanResets: 0, tdErrorHistory: [],
+    },
     dcStats: {},
     affiliationStats: {},
     matchups: [],
@@ -545,7 +940,17 @@ export function loadLearnings(filePath) {
 
 export function saveLearnings(learnings, filePath) {
   learnings.meta.lastUpdated = new Date().toISOString();
-  writeFileSync(filePath, JSON.stringify(learnings));
+  // Exclude targetNetwork from persistence (in-memory only)
+  const toSave = {
+    brainPhase: 3,
+    meta: learnings.meta,
+    network: learnings.network,
+    trainingStats: learnings.trainingStats,
+    dcStats: learnings.dcStats,
+    affiliationStats: learnings.affiliationStats,
+    matchups: learnings.matchups,
+  };
+  writeFileSync(filePath, JSON.stringify(toSave));
 }
 
 // ── Per-DC / Affiliation Tracking ────────────────────────────────────────
@@ -641,20 +1046,22 @@ export function pickAgentAction(agent, allActions, game, learnings, playerNum, d
     return heuristicPick(strategicActions, game);
   }
 
-  // Exploitation: Q via linear function approximation + agent preferences
+  // Exploitation: Q via dueling neural network + agent preferences
   const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
-  const weights = learnings.weights;
-  if (!weights) return heuristicPick(strategicActions, game);
+  const network = learnings.network;
+  if (!network) return heuristicPick(strategicActions, game);
 
+  const { Q } = forwardPass(network, features);
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
   if (absTypes.length === 0) return heuristicPick(strategicActions, game);
 
   let bestType = null;
   let bestQ = -Infinity;
   for (const absType of absTypes) {
-    const qBase = computeQ(weights, absType, features);
+    const idx = ABSTRACT_TYPES.indexOf(absType);
+    if (idx < 0) continue;
     const preference = agent.strategy.actionPreferences[absType] ?? 0;
-    const effectiveQ = qBase + preference;
+    const effectiveQ = Q[idx] + preference;
     if (effectiveQ > bestQ) {
       bestQ = effectiveQ;
       bestType = absType;
@@ -700,7 +1107,15 @@ export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessage
   let lastFeatures = null;
 
   return {
-    beforeAction(game) {
+    beforeAction(game, playerActions) {
+      // Fill in previous entry's nextActionIdxs from current available actions
+      if (playerActions && trace.length > 0) {
+        const prev = trace[trace.length - 1];
+        if (prev.nextActionIdxs === null && !prev.done) {
+          prev.nextActionIdxs = getAbstractTypeIdxs(playerActions, game);
+        }
+      }
+
       lastSnapshot = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
       lastFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
     },
@@ -716,7 +1131,11 @@ export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessage
       const afterSnap = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
       const nextFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
       const reward = computeAgentReward(lastSnapshot, afterSnap, false, false, rewardMultipliers);
-      trace.push({ features: lastFeatures, absType, reward, nextFeatures });
+      const actionIdx = ABSTRACT_TYPES.indexOf(absType);
+      trace.push({
+        features: lastFeatures, actionIdx, reward, nextFeatures,
+        nextActionIdxs: null, done: false,
+      });
       lastSnapshot = null;
       lastFeatures = null;
     },
@@ -725,13 +1144,16 @@ export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessage
       const didWin = game.ended && game.winnerId === (playerNum === 1 ? game.player1Id : game.player2Id);
       const didLose = game.ended && game.winnerId && !didWin;
       if (trace.length > 0 && game.ended) {
+        const last = trace[trace.length - 1];
         const termReward = didWin
           ? REWARD_WEIGHTS.terminal * (rewardMultipliers.terminal ?? 1)
           : (didLose ? -REWARD_WEIGHTS.terminal * (rewardMultipliers.terminal ?? 1) : 0);
-        trace[trace.length - 1].reward += termReward;
-        trace[trace.length - 1].nextFeatures = null;
+        last.reward += termReward;
+        last.nextFeatures = null;
+        last.nextActionIdxs = null;
+        last.done = true;
       }
-      updateTraceLinear(learnings, trace);
+      updateTraceNeural(learnings, trace);
       if (updateMeta) {
         learnings.meta.totalGames++;
         if (game.ended && game.winnerId) {
@@ -748,26 +1170,59 @@ export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessage
 // ── Stats ───────────────────────────────────────────────────────────────────
 
 export function getLearningsStats(learnings) {
-  const weights = learnings.weights || {};
-  let weightCount = 0;
-  let maxAbsWeight = 0;
-  let minAbsWeight = Infinity;
-  let totalAbsWeight = 0;
-
-  const perAction = {};
-  for (const [actionType, wArr] of Object.entries(weights)) {
-    if (!Array.isArray(wArr)) continue;
-    perAction[actionType] = [];
-    for (let i = 0; i < wArr.length; i++) {
-      const absW = Math.abs(wArr[i]);
-      weightCount++;
-      totalAbsWeight += absW;
-      if (absW > maxAbsWeight) maxAbsWeight = absW;
-      if (absW < minAbsWeight) minAbsWeight = absW;
-      perAction[actionType].push({ feature: FEATURE_NAMES[i] || `f${i}`, weight: wArr[i], absWeight: absW });
-    }
+  const network = learnings.network;
+  if (!network) {
+    return {
+      totalGames: learnings.meta.totalGames,
+      p1Wins: learnings.meta.p1Wins,
+      p2Wins: learnings.meta.p2Wins,
+      weightCount: 0,
+      avgAbsWeight: 0,
+      weightRange: [0, 0],
+      totalUpdates: 0,
+      avgAbsDelta: 0,
+      epsilon: getEpsilon(learnings.meta.totalGames),
+    };
   }
-  if (weightCount === 0) minAbsWeight = 0;
+
+  // Count all parameters
+  let weightCount = 0;
+  let totalAbsWeight = 0;
+  let maxAbsWeight = 0;
+
+  function accum(val) {
+    const av = Math.abs(val);
+    weightCount++;
+    totalAbsWeight += av;
+    if (av > maxAbsWeight) maxAbsWeight = av;
+  }
+
+  for (let j = 0; j < HIDDEN_SIZE; j++) {
+    for (let i = 0; i < NUM_FEATURES; i++) accum(network.W1[j][i]);
+    accum(network.b1[j]);
+    accum(network.Wv[j]);
+  }
+  accum(network.bv);
+  for (let k = 0; k < NUM_ACTIONS; k++) {
+    for (let j = 0; j < HIDDEN_SIZE; j++) accum(network.Wa[k][j]);
+    accum(network.ba[k]);
+  }
+
+  // Feature importance: importance[i] = Σ_j |W1[j][i]| × (|Wv[j]| + Σ_k |Wa[k][j]|)
+  const featureImportance = [];
+  for (let i = 0; i < NUM_FEATURES; i++) {
+    let importance = 0;
+    for (let j = 0; j < HIDDEN_SIZE; j++) {
+      let outputMag = Math.abs(network.Wv[j]);
+      for (let k = 0; k < NUM_ACTIONS; k++) {
+        outputMag += Math.abs(network.Wa[k][j]);
+      }
+      importance += Math.abs(network.W1[j][i]) * outputMag;
+    }
+    featureImportance.push(importance);
+  }
+
+  const ts = learnings.trainingStats || {};
 
   return {
     totalGames: learnings.meta.totalGames,
@@ -776,8 +1231,29 @@ export function getLearningsStats(learnings) {
     weightCount,
     avgAbsWeight: weightCount > 0 ? totalAbsWeight / weightCount : 0,
     weightRange: [-maxAbsWeight, maxAbsWeight],
-    totalUpdates: learnings.trainingStats?.totalUpdates || 0,
-    avgAbsDelta: learnings.trainingStats?.avgAbsDelta || 0,
+    totalUpdates: ts.totalUpdates || 0,
+    avgAbsDelta: ts.avgAbsDelta || 0,
     epsilon: getEpsilon(learnings.meta.totalGames),
+    nanResets: ts.nanResets || 0,
+    lastTargetSync: ts.lastTargetSync || 0,
+    targetSyncs: ts.targetSyncs || 0,
+    featureImportance,
   };
+}
+
+// ── Compatibility Wrappers ──────────────────────────────────────────────────
+
+/** Compute Q for a single action type (wraps forwardPass). */
+export function computeQ(network, actionType, features) {
+  if (!network || !network.W1) return 0;
+  const idx = ABSTRACT_TYPES.indexOf(actionType);
+  if (idx < 0) return 0;
+  return forwardPass(network, features).Q[idx];
+}
+
+/** Max Q across all action types (fallback). */
+function getBestQ(network, features) {
+  if (!network || !network.W1) return 0;
+  const { Q } = forwardPass(network, features);
+  return Math.max(...Q);
 }

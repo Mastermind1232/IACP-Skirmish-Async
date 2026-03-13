@@ -285,8 +285,8 @@
     </div>
 
     <div class="grid g2">
-      <div class="card" data-tip="Key training metrics. Brain Phase 2: Linear Function Approximation.">
-        <div class="card-label">Training <span class="pill blue">Phase 2</span></div>
+      <div class="card" data-tip="Key training metrics. Brain Phase 3: Dueling Neural Network.">
+        <div class="card-label">Training <span class="pill blue">Phase 3</span></div>
         <div class="stat-row">
           <div class="stat-item"><div class="stat-val" id="sGames">0</div><div class="stat-label">Games</div></div>
           <div class="stat-item"><div class="stat-val" id="sWeights">0</div><div class="stat-label">Weights</div></div>
@@ -309,14 +309,18 @@
         <div><div style="font-size:11px;color:var(--text-dim);margin-bottom:2px">Updates & Avg |Delta|</div><div class="chart-container chart-sm"><canvas id="trendChart2"></canvas></div></div>
       </div>
     </div>
+    <div class="card" style="margin-top:14px" data-tip="TD error magnitude over training updates. Should trend downward as brain converges.">
+      <div class="card-label">TD Error History</div>
+      <div class="chart-container" style="height:160px"><canvas id="tdErrorChart"></canvas></div>
+    </div>
   </div>
 
   <!-- STRATEGY -->
   <div class="page" id="page-strategy">
     <div class="page-title">Strategy Analysis</div>
-    <div class="card" data-tip="Weight heatmap. Each row is an action type, each column a feature. Blue=negative, white=zero, red=positive. Stronger color = higher magnitude.">
-      <div class="card-label">Weight Heatmap (15 actions x 14 features)</div>
-      <div style="overflow-x:auto"><table class="weight-table" id="weightHeatmap"></table></div>
+    <div class="card" data-tip="Input→Hidden weight matrix (W1). 32 hidden neurons × 16 input features. Blue=negative, white=zero, red=positive.">
+      <div class="card-label">Input → Hidden (W1: 32×16)</div>
+      <div style="overflow-x:auto"><table class="weight-table" id="heatmapW1"></table></div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:9px;color:var(--text-dim)">
         <span>Negative</span>
         <div style="display:flex;height:8px;width:120px;border-radius:4px;overflow:hidden">
@@ -327,17 +331,29 @@
           <div style="flex:1;background:#dc2626"></div>
         </div>
         <span>Positive</span>
-        <span style="margin-left:auto" id="weightRangeLabel"></span>
+        <span style="margin-left:auto" id="w1RangeLabel"></span>
       </div>
     </div>
     <div class="grid g2" style="margin-top:14px">
-      <div class="card" data-tip="Average absolute weight per feature across all action types. Higher = more influential.">
-        <div class="card-label">Feature Importance</div>
-        <div class="chart-container" style="height:260px"><canvas id="featureImportChart"></canvas></div>
+      <div class="card" data-tip="Hidden→Value weights (Wv). Single value head output from 32 hidden neurons.">
+        <div class="card-label">Hidden → Value (Wv: 1×32)</div>
+        <div style="overflow-x:auto"><table class="weight-table" id="heatmapWv"></table></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:9px;color:var(--text-dim)"><span style="margin-left:auto" id="wvRangeLabel"></span></div>
       </div>
-      <div class="card" data-tip="How often the AI picks each type of move.">
+      <div class="card" data-tip="Hidden→Advantage weights (Wa). 15 action advantage outputs from 32 hidden neurons.">
+        <div class="card-label">Hidden → Advantage (Wa: 15×32)</div>
+        <div style="overflow-x:auto"><table class="weight-table" id="heatmapWa"></table></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:9px;color:var(--text-dim)"><span style="margin-left:auto" id="waRangeLabel"></span></div>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:14px">
+      <div class="card" data-tip="Feature importance via two-layer product through both heads. Higher = more influential.">
+        <div class="card-label">Feature Importance</div>
+        <div class="chart-container" style="height:300px"><canvas id="featureImportChart"></canvas></div>
+      </div>
+      <div class="card" data-tip="Action weight magnitude from advantage head rows.">
         <div class="card-label">Action Distribution</div>
-        <div class="chart-container" style="height:260px"><canvas id="actionPieChart"></canvas></div>
+        <div class="chart-container" style="height:300px"><canvas id="actionPieChart"></canvas></div>
       </div>
     </div>
   </div>
@@ -400,7 +416,7 @@ Try: "What did you learn recently?" or "Who's your best DC?"</div></div>
 // ═══ STATE ═══
 const hist = { avgW:[], delta:[], updates:[], games:[], ts:[] };
 let latestStats = null;
-let trendChart1 = null, trendChart2 = null, actionChart = null, featureChart = null;
+let trendChart1 = null, trendChart2 = null, actionChart = null, featureChart = null, tdErrorChart = null;
 
 // Chart.js defaults
 Chart.defaults.color = '#5a6a80';
@@ -410,9 +426,11 @@ Chart.defaults.font.family = 'Rajdhani';
 // ═══ LABELS ═══
 const AL={attack_close:'Melee',attack_ranged:'Ranged',move_toward:'Advance',move_away:'Retreat',move_lateral:'Reposition',move_done:'Finish Move',start_move:'Start Move',activate:'Activate',end_activation:'End Turn',pass:'Pass',gate:'Phase Gate',combat_flow:'Combat',ability:'Ability',spend_surge:'Surge',reroll:'Reroll',skip_surges:'Skip Surges',other:'Other'};
 const AC={attack_close:'#e74c3c',attack_ranged:'#e67e22',move_toward:'#3498db',move_away:'#9b59b6',move_lateral:'#1abc9c',move_done:'#16a085',start_move:'#2980b9',activate:'#2ecc71',end_activation:'#f1c40f',pass:'#7f8c8d',gate:'#8e44ad',combat_flow:'#d35400',ability:'#e84393',spend_surge:'#00cec9',reroll:'#6c5ce7',skip_surges:'#636e72',other:'#555'};
-const FL={vpAdv:'VP Adv',myHpRatio:'My HP%',oppHpRatio:'Opp HP%',hpAdv:'HP Adv',myFigsRatio:'My Figs%',figsAdv:'Figs Adv',closeness:'Closeness',nearestEnemy:'Nearest',roundProgress:'Round',activationsRatio:'Acts Left',inCombat:'In Combat',inMovement:'In Move',attackPower:'Atk Power',bias:'Bias'};
-const FEATURE_NAMES=['vpAdv','myHpRatio','oppHpRatio','hpAdv','myFigsRatio','figsAdv','closeness','nearestEnemy','roundProgress','activationsRatio','inCombat','inMovement','attackPower','bias'];
+const FL={vpAdv:'VP Adv',myHpRatio:'My HP%',oppHpRatio:'Opp HP%',hpAdv:'HP Adv',myFigsRatio:'My Figs%',figsAdv:'Figs Adv',closeness:'Closeness',nearestEnemy:'Nearest',roundProgress:'Round',activationsRatio:'Acts Left',inCombat:'In Combat',inMovement:'In Move',attackPower:'Atk Power',bias:'Bias',enemyThreat:'Threat',objectivePotential:'Objective'};
+const FEATURE_NAMES=['vpAdv','myHpRatio','oppHpRatio','hpAdv','myFigsRatio','figsAdv','closeness','nearestEnemy','roundProgress','activationsRatio','inCombat','inMovement','attackPower','bias','enemyThreat','objectivePotential'];
 const ABSTRACT_TYPES=['attack_close','attack_ranged','move_toward','move_away','move_lateral','move_done','start_move','activate','end_activation','pass','ability','spend_surge','skip_surges','reroll','other'];
+const HIDDEN_SIZE=32;
+const NUM_ACTIONS=ABSTRACT_TYPES.length;
 
 // ═══ HUMAN READABLE PATTERNS ═══
 const PATTERN_DESC = {
@@ -463,8 +481,8 @@ function buildCtx(){
   if(!latestStats)return'No training data loaded.';
   const s=latestStats;
   let c=`You are Skirbo, an AI learning Imperial Assault skirmish. Be direct — answer the question, skip the preamble. No filler, no restating the question. Casual tone. Call yourself "I" and the user "commander."\n\n`;
-  c+=`Stats: ${s.meta.totalGames} games, ${s.weightCount} weights, ${s.totalUpdates} updates, avg|w| ${s.avgAbsWeight.toFixed(3)}, ${(s.epsilon*100).toFixed(0)}% exploration, ${((s.meta.p1Wins+s.meta.p2Wins)/(s.meta.totalGames||1)*100).toFixed(0)}% completion.\n`;
-  c+=`Brain: Linear Function Approximation (Phase 2). I learn relationships between 14 features and 15 action types.\n`;
+  c+=`Stats: ${s.meta.totalGames} games, ${s.weightCount} weights (1072 params), ${s.totalUpdates} updates, avg|w| ${s.avgAbsWeight.toFixed(3)}, ${(s.epsilon*100).toFixed(0)}% exploration, ${((s.meta.p1Wins+s.meta.p2Wins)/(s.meta.totalGames||1)*100).toFixed(0)}% completion.${s.nanResets?' NaN resets: '+s.nanResets:''}\n`;
+  c+=`Brain: Dueling Neural Network (Phase 3). 16 inputs, 32 hidden (ReLU), dueling V+A heads, target network. 1,072 parameters. I learn feature interactions — like "attack when close AND enemy is wounded."\n`;
   if(s.topPatterns&&s.topPatterns.length>0){c+='Top patterns: '+s.topPatterns.slice(0,5).map(p=>`${p.action}×${p.feature}=${p.weight>0?'+':''}${p.weight.toFixed(2)}`).join(', ')+'\n';}
   const dcArr=Object.entries(s.dcStats).map(([n,d])=>({n,...d,wr:d.games>0?d.wins/d.games:0})).sort((a,b)=>b.wr-a.wr);
   if(dcArr.length>0){c+='Top DCs: '+dcArr.slice(0,5).map(d=>`${d.n} ${(d.wr*100).toFixed(0)}%`).join(', ')+'\n';}
@@ -539,41 +557,71 @@ async function loadData(){
 }
 
 function computeStats(data){
-  const weights=data.weights||{};
-  let wc=0,maxAbs=0,totalAbs=0;
-  const perFeature=new Array(14).fill(0);
-  const allPatterns=[];
-
-  for(const[action,wArr]of Object.entries(weights)){
-    if(!Array.isArray(wArr))continue;
-    for(let i=0;i<wArr.length;i++){
-      const w=wArr[i],aw=Math.abs(w);
-      wc++;totalAbs+=aw;
-      if(aw>maxAbs)maxAbs=aw;
-      perFeature[i]+=aw;
-      allPatterns.push({action,feature:FEATURE_NAMES[i]||`f${i}`,weight:w,absWeight:aw});
-    }
-  }
+  const net=data.network;
+  if(!net)return{weightCount:0,avgAbsWeight:0,maxAbsWeight:0,totalUpdates:0,avgAbsDelta:0,epsilon:0.3,network:null,featureImportance:[],topPatterns:[],hiddenNeurons:[],meta:data.meta,dcStats:data.dcStats||{},affiliationStats:data.affiliationStats||{},matchups:data.matchups||[],tdErrorHistory:[],nanResets:0,targetSyncs:0};
+  let wc=0,totalAbs=0,maxAbs=0;
+  function accum(v){const a=Math.abs(v);wc++;totalAbs+=a;if(a>maxAbs)maxAbs=a;}
+  for(let j=0;j<HIDDEN_SIZE;j++){for(let i=0;i<FEATURE_NAMES.length;i++)accum(net.W1[j][i]);accum(net.b1[j]);accum(net.Wv[j]);}
+  accum(net.bv);
+  for(let k=0;k<NUM_ACTIONS;k++){for(let j=0;j<HIDDEN_SIZE;j++)accum(net.Wa[k][j]);accum(net.ba[k]);}
   const avgAbsWeight=wc>0?totalAbs/wc:0;
-  // Feature importance: average |weight| across all actions
-  const featureImportance=perFeature.map((s,i)=>({name:FEATURE_NAMES[i]||`f${i}`,importance:Object.keys(weights).length>0?s/Object.keys(weights).length:0}));
-  featureImportance.sort((a,b)=>b.importance-a.importance);
-  // Top patterns
-  allPatterns.sort((a,b)=>b.absWeight-a.absWeight);
-  const topPatterns=allPatterns.slice(0,20);
 
-  const eps=Math.max(0.05,0.3-0.001*(data.meta.totalGames||0));
+  // Feature importance: importance[i] = Σ_j |W1[j][i]| × (|Wv[j]| + Σ_k |Wa[k][j]|)
+  const featureImportance=FEATURE_NAMES.map((name,i)=>{
+    let imp=0;
+    for(let j=0;j<HIDDEN_SIZE;j++){
+      let outMag=Math.abs(net.Wv[j]);
+      for(let k=0;k<NUM_ACTIONS;k++)outMag+=Math.abs(net.Wa[k][j]);
+      imp+=Math.abs(net.W1[j][i])*outMag;
+    }
+    return{name,importance:imp};
+  });
+  featureImportance.sort((a,b)=>b.importance-a.importance);
+
+  // Top hidden neurons by total output magnitude
+  const hiddenNeurons=[];
+  for(let j=0;j<HIDDEN_SIZE;j++){
+    let totalOut=Math.abs(net.Wv[j]);
+    for(let k=0;k<NUM_ACTIONS;k++)totalOut+=Math.abs(net.Wa[k][j]);
+    // Strongest input features
+    const inputs=FEATURE_NAMES.map((name,i)=>({name,w:net.W1[j][i],aw:Math.abs(net.W1[j][i])})).sort((a,b)=>b.aw-a.aw);
+    // Output connections
+    const valW=net.Wv[j];
+    const advConns=ABSTRACT_TYPES.map((t,k)=>({type:t,w:net.Wa[k][j],aw:Math.abs(net.Wa[k][j])})).sort((a,b)=>b.aw-a.aw);
+    hiddenNeurons.push({idx:j,totalOut,inputs:inputs.slice(0,3),valW,advConns:advConns.slice(0,3)});
+  }
+  hiddenNeurons.sort((a,b)=>b.totalOut-a.totalOut);
+
+  // Top patterns: find strongest weight paths through the network
+  const topPatterns=[];
+  for(const feat of featureImportance.slice(0,8)){
+    const fi=FEATURE_NAMES.indexOf(feat.name);
+    // Find which action benefits most from this feature
+    let bestAction=null,bestMag=0;
+    for(let k=0;k<NUM_ACTIONS;k++){
+      let pathMag=0;
+      for(let j=0;j<HIDDEN_SIZE;j++){
+        pathMag+=net.W1[j][fi]*net.Wa[k][j];
+      }
+      if(Math.abs(pathMag)>bestMag){bestMag=Math.abs(pathMag);bestAction={type:ABSTRACT_TYPES[k],weight:pathMag};}
+    }
+    if(bestAction)topPatterns.push({action:bestAction.type,feature:feat.name,weight:bestAction.weight,absWeight:Math.abs(bestAction.weight)});
+  }
+  topPatterns.sort((a,b)=>b.absWeight-a.absWeight);
+
+  const eps=Math.max(0.05,0.3*Math.exp(-(data.meta.totalGames||0)/5000));
   const ts=data.trainingStats||{};
 
   return{
     weightCount:wc,avgAbsWeight,maxAbsWeight:maxAbs,
     totalUpdates:ts.totalUpdates||0,avgAbsDelta:ts.avgAbsDelta||0,
-    epsilon:eps,weights,featureImportance,topPatterns,
-    meta:data.meta,dcStats:data.dcStats||{},affiliationStats:data.affiliationStats||{},matchups:data.matchups||[]
+    epsilon:eps,network:net,featureImportance,topPatterns,hiddenNeurons:hiddenNeurons.slice(0,8),
+    meta:data.meta,dcStats:data.dcStats||{},affiliationStats:data.affiliationStats||{},matchups:data.matchups||[],
+    tdErrorHistory:ts.tdErrorHistory||[],nanResets:ts.nanResets||0,targetSyncs:ts.targetSyncs||0
   };
 }
 
-// ═══ WEIGHT HEATMAP ═══
+// ═══ WEIGHT HEATMAPS (3-section) ═══
 function weightColor(w, maxAbs) {
   if (maxAbs === 0) return 'background:var(--bg-deep);color:var(--text-dim)';
   const intensity = Math.min(Math.abs(w) / maxAbs, 1);
@@ -583,24 +631,59 @@ function weightColor(w, maxAbs) {
   return 'background:var(--bg-deep);color:var(--text-dim)';
 }
 
-function renderWeightHeatmap(s) {
-  const weights = s.weights || {};
-  const maxAbs = s.maxAbsWeight || 1;
-  let html = '<thead><tr><th></th>';
-  for (const fn of FEATURE_NAMES) html += `<th>${FL[fn]||fn}</th>`;
-  html += '</tr></thead><tbody>';
-  for (const action of ABSTRACT_TYPES) {
-    const wArr = weights[action] || new Array(14).fill(0);
-    html += `<tr><td class="wt-action">${AL[action]||action}</td>`;
-    for (let i = 0; i < 14; i++) {
-      const w = wArr[i] || 0;
-      html += `<td style="${weightColor(w, maxAbs)}" data-tip="${action} × ${FEATURE_NAMES[i]}: ${w.toFixed(3)}">${w===0?'·':w.toFixed(2)}</td>`;
+function maxAbsArr(arr){let m=0;for(const v of arr){const a=Math.abs(v);if(a>m)m=a;}return m;}
+function maxAbsMat(mat){let m=0;for(const row of mat)for(const v of row){const a=Math.abs(v);if(a>m)m=a;}return m;}
+
+function renderWeightHeatmaps(s) {
+  const net=s.network;
+  if(!net){document.getElementById('heatmapW1').innerHTML='<tr><td>No network data</td></tr>';return;}
+
+  // W1: 32×16 (hidden × features)
+  const w1Max=maxAbsMat(net.W1);
+  let h1='<thead><tr><th></th>';
+  for(const fn of FEATURE_NAMES)h1+=`<th>${FL[fn]||fn}</th>`;
+  h1+='</tr></thead><tbody>';
+  for(let j=0;j<HIDDEN_SIZE;j++){
+    h1+=`<tr><td class="wt-action">H${j}</td>`;
+    for(let i=0;i<FEATURE_NAMES.length;i++){
+      const w=net.W1[j][i]||0;
+      h1+=`<td style="${weightColor(w,w1Max)}" data-tip="H${j}×${FEATURE_NAMES[i]}: ${w.toFixed(3)}">${w===0?'·':w.toFixed(2)}</td>`;
     }
-    html += '</tr>';
+    h1+='</tr>';
   }
-  html += '</tbody>';
-  document.getElementById('weightHeatmap').innerHTML = html;
-  document.getElementById('weightRangeLabel').textContent = `Max |w|: ${maxAbs.toFixed(3)}`;
+  h1+='</tbody>';
+  document.getElementById('heatmapW1').innerHTML=h1;
+  document.getElementById('w1RangeLabel').textContent=`Max |w|: ${w1Max.toFixed(3)}`;
+
+  // Wv: 1×32 (value head)
+  const wvMax=maxAbsArr(net.Wv);
+  let hv='<thead><tr><th></th>';
+  for(let j=0;j<HIDDEN_SIZE;j++)hv+=`<th>H${j}</th>`;
+  hv+='</tr></thead><tbody><tr><td class="wt-action">Value</td>';
+  for(let j=0;j<HIDDEN_SIZE;j++){
+    const w=net.Wv[j]||0;
+    hv+=`<td style="${weightColor(w,wvMax)}" data-tip="Wv[${j}]: ${w.toFixed(3)}">${w===0?'·':w.toFixed(2)}</td>`;
+  }
+  hv+='</tr></tbody>';
+  document.getElementById('heatmapWv').innerHTML=hv;
+  document.getElementById('wvRangeLabel').textContent=`Max |w|: ${wvMax.toFixed(3)} | bv: ${(net.bv||0).toFixed(3)}`;
+
+  // Wa: 15×32 (advantage head)
+  const waMax=maxAbsMat(net.Wa);
+  let ha='<thead><tr><th></th>';
+  for(let j=0;j<HIDDEN_SIZE;j++)ha+=`<th>H${j}</th>`;
+  ha+='</tr></thead><tbody>';
+  for(let k=0;k<NUM_ACTIONS;k++){
+    ha+=`<tr><td class="wt-action">${AL[ABSTRACT_TYPES[k]]||ABSTRACT_TYPES[k]}</td>`;
+    for(let j=0;j<HIDDEN_SIZE;j++){
+      const w=net.Wa[k][j]||0;
+      ha+=`<td style="${weightColor(w,waMax)}" data-tip="${ABSTRACT_TYPES[k]}×H${j}: ${w.toFixed(3)}">${w===0?'·':w.toFixed(2)}</td>`;
+    }
+    ha+='</tr>';
+  }
+  ha+='</tbody>';
+  document.getElementById('heatmapWa').innerHTML=ha;
+  document.getElementById('waRangeLabel').textContent=`Max |w|: ${waMax.toFixed(3)}`;
 }
 
 // ═══ RENDER ═══
@@ -626,37 +709,53 @@ function render(s){
   renderDcList('oDcList',s);
   renderDcList('dcList',s);
 
-  // Weight heatmap
-  renderWeightHeatmap(s);
+  // Weight heatmaps (3-section)
+  renderWeightHeatmaps(s);
 
   // Feature importance chart
   const fiData=s.featureImportance;
   const fiLabels=fiData.map(f=>FL[f.name]||f.name);
   const fiValues=fiData.map(f=>f.importance);
-  const fiColors=fiData.map(f=>f.importance>s.avgAbsWeight*2?'#00d4ff':f.importance>s.avgAbsWeight?'#2980b9':'#1a2744');
+  const avgImp=fiValues.length>0?fiValues.reduce((a,b)=>a+b,0)/fiValues.length:0;
+  const fiColors=fiData.map(f=>f.importance>avgImp*2?'#00d4ff':f.importance>avgImp?'#2980b9':'#1a2744');
   if(featureChart){featureChart.data.labels=fiLabels;featureChart.data.datasets[0].data=fiValues;featureChart.data.datasets[0].backgroundColor=fiColors;featureChart.update();}
-  else{featureChart=new Chart(document.getElementById('featureImportChart'),{type:'bar',data:{labels:fiLabels,datasets:[{label:'Avg |weight|',data:fiValues,backgroundColor:fiColors,borderWidth:0,borderRadius:3}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(26,39,68,0.5)'},ticks:{font:{size:10}}},y:{ticks:{font:{size:10,family:'Rajdhani'},color:'#b8c4d8'},grid:{display:false}}}}});}
+  else{featureChart=new Chart(document.getElementById('featureImportChart'),{type:'bar',data:{labels:fiLabels,datasets:[{label:'Importance',data:fiValues,backgroundColor:fiColors,borderWidth:0,borderRadius:3}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(26,39,68,0.5)'},ticks:{font:{size:10}}},y:{ticks:{font:{size:10,family:'Rajdhani'},color:'#b8c4d8'},grid:{display:false}}}}});}
 
-  // Action pie — compute from weights (which actions have highest total weight magnitude)
-  const actionMag=ABSTRACT_TYPES.map(a=>{
-    const wArr=s.weights[a]||[];
-    return{type:a,mag:wArr.reduce((s,w)=>s+Math.abs(w),0)};
-  }).sort((a,b)=>b.mag-a.mag).slice(0,10);
+  // Action pie — compute from Wa rows (advantage head weight magnitude per action)
+  const net=s.network;
+  const actionMag=net?ABSTRACT_TYPES.map((a,k)=>{
+    let mag=0;for(let j=0;j<HIDDEN_SIZE;j++)mag+=Math.abs(net.Wa[k][j]);
+    return{type:a,mag};
+  }).sort((a,b)=>b.mag-a.mag).slice(0,10):[];
   const pieLabels=actionMag.map(a=>AL[a.type]||a.type);
   const pieData=actionMag.map(a=>parseFloat(a.mag.toFixed(3)));
   const pieColors=actionMag.map(a=>AC[a.type]||'#555');
   if(actionChart){actionChart.data.labels=pieLabels;actionChart.data.datasets[0].data=pieData;actionChart.data.datasets[0].backgroundColor=pieColors;actionChart.update();}
   else{actionChart=new Chart(document.getElementById('actionPieChart'),{type:'doughnut',data:{labels:pieLabels,datasets:[{data:pieData,backgroundColor:pieColors,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:6,font:{size:11}}}}}});}
 
-  // Learned patterns
-  const patterns=s.topPatterns.slice(0,12);
-  document.getElementById('patternCards').innerHTML=patterns.length>0?patterns.map(p=>{
-    const key=`${p.action}×${p.feature}`;
-    const desc=PATTERN_DESC[key]||`${AL[p.action]||p.action} responds to ${FL[p.feature]||p.feature}`;
-    const cls=p.weight>0?'pos':'neg';
-    const sign=p.weight>0?'+':'';
-    return`<div class="pattern-card"><div class="pattern-label">${AL[p.action]||p.action} × ${FL[p.feature]||p.feature}</div><div class="pattern-detail"><span class="pattern-weight ${cls}">${sign}${p.weight.toFixed(3)}</span> — ${desc}</div></div>`;
-  }).join(''):'<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:24px">No patterns learned yet. Run training first.</div>';
+  // Learned patterns — top weight paths + hidden neuron descriptions
+  const patterns=s.topPatterns.slice(0,6);
+  const neurons=s.hiddenNeurons||[];
+  let patternHtml='';
+  if(patterns.length>0){
+    patternHtml+=patterns.map(p=>{
+      const key=`${p.action}×${p.feature}`;
+      const desc=PATTERN_DESC[key]||`${AL[p.action]||p.action} responds to ${FL[p.feature]||p.feature}`;
+      const cls=p.weight>0?'pos':'neg';
+      const sign=p.weight>0?'+':'';
+      return`<div class="pattern-card"><div class="pattern-label">${AL[p.action]||p.action} × ${FL[p.feature]||p.feature}</div><div class="pattern-detail"><span class="pattern-weight ${cls}">${sign}${p.weight.toFixed(3)}</span> — ${desc}</div></div>`;
+    }).join('');
+  }
+  if(neurons.length>0){
+    patternHtml+=neurons.slice(0,6).map(n=>{
+      const ins=n.inputs.map(i=>`${FL[i.name]||i.name}(${i.w>0?'+':''}${i.w.toFixed(2)})`).join(', ');
+      const valDir=n.valW>0?'High':'Low';
+      const topAdv=n.advConns[0];
+      const advDesc=topAdv?`${AL[topAdv.type]||topAdv.type} advantage`:'';
+      return`<div class="pattern-card"><div class="pattern-label">Neuron #${n.idx} <span style="color:var(--text-dim)">(out: ${n.totalOut.toFixed(2)})</span></div><div class="pattern-detail" style="font-size:11px">${ins} → ${valDir} Value${advDesc?', '+advDesc:''}</div></div>`;
+    }).join('');
+  }
+  document.getElementById('patternCards').innerHTML=patternHtml||'<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:24px">No patterns learned yet. Run training first.</div>';
 
   // Trends
   hist.avgW.push(s.avgAbsWeight);hist.delta.push(s.avgAbsDelta);hist.updates.push(s.totalUpdates);hist.games.push(g);hist.ts.push(Date.now());
@@ -674,6 +773,17 @@ function render(s){
     {label:'Avg |delta|',data:[...hist.delta],borderColor:'#f39c12',backgroundColor:'rgba(243,156,18,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5},
     {label:'Updates',data:[...hist.updates],borderColor:'#2ecc71',backgroundColor:'rgba(46,204,113,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5,yAxisID:'y1'}
   ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},scales:{x:{display:false},y:{display:false},y1:{display:false,position:'right'}},plugins:{legend:{display:true,labels:{boxWidth:8,padding:4,font:{size:10}}}}}});}
+
+  // TD Error History chart
+  const tdHist=s.tdErrorHistory||[];
+  if(tdHist.length>0){
+    const tdLabels=tdHist.map(e=>e.updates);
+    const tdData=tdHist.map(e=>e.meanAbsTD);
+    if(tdErrorChart){tdErrorChart.data.labels=tdLabels;tdErrorChart.data.datasets[0].data=tdData;tdErrorChart.update();}
+    else{tdErrorChart=new Chart(document.getElementById('tdErrorChart'),{type:'line',data:{labels:tdLabels,datasets:[
+      {label:'Mean |TD Error|',data:tdData,borderColor:'#e74c3c',backgroundColor:'rgba(231,76,60,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5}
+    ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},scales:{x:{title:{display:true,text:'Updates',font:{size:10},color:'#5a6a80'},ticks:{font:{size:9},maxTicksLimit:8},grid:{color:'rgba(26,39,68,0.5)'}},y:{title:{display:true,text:'|TD Error|',font:{size:10},color:'#5a6a80'},ticks:{font:{size:9}},grid:{color:'rgba(26,39,68,0.5)'}}},plugins:{legend:{display:false}}}});}
+  }
 
   document.getElementById('statusText').textContent=new Date().toLocaleTimeString();
   document.getElementById('pulseDot').classList.remove('off');

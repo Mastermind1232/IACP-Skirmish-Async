@@ -148,7 +148,7 @@ async function runOneGame(learnings, gameNum) {
 
     const playerActions = actionsToUse.filter(a => a.actingPlayer === actingPN);
     const tracer = actingPN === 1 ? tracer1 : tracer2;
-    tracer.beforeAction(g);
+    tracer.beforeAction(g, playerActions);
     action = pickSmartAction(playerActions, g, learnings, actingPN, dcHealthState, dcMessageMeta);
 
     if (!action) continue;

@@ -148,7 +148,7 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
     const agent = actingPN === 1 ? agent1 : agent2;
     const tracer = actingPN === 1 ? tracer1 : tracer2;
 
-    tracer.beforeAction(g);
+    tracer.beforeAction(g, playerActions);
     const action = pickAgentAction(agent, playerActions, g, learnings, actingPN, dcHealthState, dcMessageMeta);
 
     if (!action) continue;
