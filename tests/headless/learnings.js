@@ -128,6 +128,9 @@ export function abstractActionType(action, game) {
   if (t === 'combat_resolve' || t === 'combat_skip_surges') return 'skip_surges';
   if (t?.startsWith('combat_reroll')) return 'reroll';
   if (t?.startsWith('combat_surge')) return 'spend_surge';
+  // DC specials and CC play
+  if (t === 'dc_special') return 'ability';
+  if (t === 'play_cc') return 'ability';
   // Attacks
   if (t === 'attack_target') {
     if (action.params?.targetFigureKey && game) {
@@ -426,18 +429,236 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
 export function loadLearnings(filePath) {
   try {
     if (existsSync(filePath)) {
-      return JSON.parse(readFileSync(filePath, 'utf8'));
+      const data = JSON.parse(readFileSync(filePath, 'utf8'));
+      // Ensure newer tracking fields exist
+      if (!data.dcStats) data.dcStats = {};
+      if (!data.affiliationStats) data.affiliationStats = {};
+      if (!data.matchups) data.matchups = [];
+      return data;
     }
   } catch { /* start fresh */ }
   return {
     meta: { totalGames: 0, p1Wins: 0, p2Wins: 0, lastUpdated: null },
     states: {},
+    dcStats: {},           // { dcName: { wins, losses, games, kills, deaths } }
+    affiliationStats: {},  // { affiliation: { wins, losses, games } }
+    matchups: [],          // last 200 game results for trend analysis
   };
 }
 
 export function saveLearnings(learnings, filePath) {
   learnings.meta.lastUpdated = new Date().toISOString();
   writeFileSync(filePath, JSON.stringify(learnings));
+}
+
+// ── Per-DC / Affiliation Tracking ────────────────────────────────────────
+
+export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcStatsFunc, getDcEffectsFunc) {
+  if (!learnings.dcStats) learnings.dcStats = {};
+  if (!learnings.affiliationStats) learnings.affiliationStats = {};
+  if (!learnings.matchups) learnings.matchups = [];
+
+  // Helper to get affiliation for a DC
+  function getAffiliation(dcName) {
+    try {
+      if (getDcEffectsFunc) {
+        const effects = getDcEffectsFunc();
+        const lower = dcName?.toLowerCase?.() || '';
+        const ciKey = Object.keys(effects).find(k => k.toLowerCase() === lower);
+        const eff = effects[dcName] || (ciKey ? effects[ciKey] : null);
+        if (eff?.affiliation) return eff.affiliation.toLowerCase();
+      }
+    } catch { /* ignore */ }
+    return 'unknown';
+  }
+
+  // Track each DC
+  function trackDc(dcName, isWinner) {
+    if (!learnings.dcStats[dcName]) {
+      learnings.dcStats[dcName] = { wins: 0, losses: 0, games: 0, affiliation: getAffiliation(dcName) };
+    }
+    const s = learnings.dcStats[dcName];
+    s.games++;
+    if (isWinner === true) s.wins++;
+    else if (isWinner === false) s.losses++;
+    // Update affiliation in case it was missing
+    if (s.affiliation === 'unknown') s.affiliation = getAffiliation(dcName);
+  }
+
+  for (const dc of p1Army) {
+    const name = typeof dc === 'object' ? dc.dcName : dc;
+    trackDc(name, winnerLabel === 'P1' ? true : winnerLabel === 'P2' ? false : null);
+  }
+  for (const dc of p2Army) {
+    const name = typeof dc === 'object' ? dc.dcName : dc;
+    trackDc(name, winnerLabel === 'P2' ? true : winnerLabel === 'P1' ? false : null);
+  }
+
+  // Track affiliations
+  const p1Affs = new Set(p1Army.map(dc => getAffiliation(typeof dc === 'object' ? dc.dcName : dc)));
+  const p2Affs = new Set(p2Army.map(dc => getAffiliation(typeof dc === 'object' ? dc.dcName : dc)));
+  for (const aff of p1Affs) {
+    if (!learnings.affiliationStats[aff]) learnings.affiliationStats[aff] = { wins: 0, losses: 0, games: 0 };
+    learnings.affiliationStats[aff].games++;
+    if (winnerLabel === 'P1') learnings.affiliationStats[aff].wins++;
+    else if (winnerLabel === 'P2') learnings.affiliationStats[aff].losses++;
+  }
+  for (const aff of p2Affs) {
+    if (!learnings.affiliationStats[aff]) learnings.affiliationStats[aff] = { wins: 0, losses: 0, games: 0 };
+    learnings.affiliationStats[aff].games++;
+    if (winnerLabel === 'P2') learnings.affiliationStats[aff].wins++;
+    else if (winnerLabel === 'P1') learnings.affiliationStats[aff].losses++;
+  }
+
+  // Store recent matchup for trend
+  learnings.matchups.push({
+    p1: p1Army.map(dc => typeof dc === 'object' ? dc.dcName : dc),
+    p2: p2Army.map(dc => typeof dc === 'object' ? dc.dcName : dc),
+    winner: winnerLabel,
+    game: learnings.meta.totalGames,
+  });
+  // Keep last 200
+  if (learnings.matchups.length > 200) learnings.matchups = learnings.matchups.slice(-200);
+}
+
+// ── Agent-Specific Action Selection (Arena) ─────────────────────────────────
+
+/**
+ * Pick an action using an agent's strategy profile instead of global epsilon.
+ * Same logic as pickSmartAction but with agent-specific preferences and exploration.
+ */
+export function pickAgentAction(agent, allActions, game, learnings, playerNum, dcHealthState, dcMessageMeta) {
+  if (allActions.length === 0) return null;
+  if (allActions.length === 1) return allActions[0];
+
+  const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // Group actions by abstract type
+  const groups = {};
+  for (const action of allActions) {
+    const abs = abstractActionType(action, game);
+    if (!groups[abs]) groups[abs] = [];
+    groups[abs].push(action);
+  }
+
+  // Mandatory actions — always pick first
+  const mandatoryTypes = ['gate', 'combat_flow'];
+  const mandatoryActions = allActions.filter(a => mandatoryTypes.includes(abstractActionType(a, game)));
+  if (mandatoryActions.length === allActions.length) return pickRandom(mandatoryActions);
+  if (mandatoryActions.length > 0) return pickRandom(mandatoryActions);
+
+  // Strategic actions only
+  const strategicActions = allActions.filter(a => !mandatoryTypes.includes(abstractActionType(a, game)));
+  if (strategicActions.length === 0) return pickRandom(allActions);
+
+  const stateHash = computeStateHash(game, playerNum, dcHealthState, dcMessageMeta);
+  const state = learnings.states[stateHash];
+
+  // Agent-specific epsilon
+  const epsilon = agent.strategy.epsilon;
+  if (!state || Math.random() < epsilon) {
+    return heuristicPick(strategicActions, game);
+  }
+
+  // Exploitation: pick best abstract type by Q-value + agent action preferences
+  const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
+  if (absTypes.length === 0) return heuristicPick(strategicActions, game);
+
+  let bestType = null;
+  let bestQ = -Infinity;
+  for (const absType of absTypes) {
+    const actionData = state.actions[absType];
+    const qBase = actionData?.qValue ?? 0;
+    const preference = agent.strategy.actionPreferences[absType] ?? 0;
+    const effectiveQ = qBase + preference;
+    if (effectiveQ > bestQ) {
+      bestQ = effectiveQ;
+      bestType = absType;
+    }
+  }
+
+  if (bestType === null) return heuristicPick(strategicActions, game);
+  return pickWithinGroup(groups[bestType], bestType, game);
+}
+
+/**
+ * Compute reward with agent-specific reward multipliers.
+ */
+export function computeAgentReward(before, after, isTerminal, didWin, rewardMultipliers) {
+  const m = rewardMultipliers;
+  const deltaVP = (after.myVP - before.myVP) - (after.oppVP - before.oppVP);
+  const oppDmgBefore = before.oppHpMax - before.oppHpCurrent;
+  const oppDmgAfter = after.oppHpMax - after.oppHpCurrent;
+  const deltaEnemyDmg = oppDmgAfter - oppDmgBefore;
+  const deltaMyHP = after.myHpCurrent - before.myHpCurrent;
+  const deltaDist = before.avgDist - after.avgDist;
+
+  const w = REWARD_WEIGHTS;
+  let reward =
+    w.vp * deltaVP * (m.vp ?? 1) +
+    w.dmg * deltaEnemyDmg * (m.dmg ?? 1) +
+    w.hp * deltaMyHP * (m.hp ?? 1) +
+    w.dist * deltaDist * (m.dist ?? 1);
+
+  if (isTerminal) {
+    const terminalReward = didWin ? w.terminal : -w.terminal;
+    reward += terminalReward * (m.terminal ?? 1);
+  }
+  return reward;
+}
+
+/**
+ * Create a game tracer that uses agent-specific reward computation.
+ */
+export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessageMeta, rewardMultipliers) {
+  const trace = [];
+  let lastSnapshot = null;
+  let lastStateHash = null;
+
+  return {
+    beforeAction(game) {
+      lastSnapshot = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
+      lastStateHash = computeStateHash(game, playerNum, dcHealthState, dcMessageMeta);
+    },
+
+    afterAction(game, action) {
+      if (!lastSnapshot || !lastStateHash) return;
+      const absType = abstractActionType(action, game);
+      if (absType === 'gate' || absType === 'combat_flow') {
+        lastSnapshot = null;
+        lastStateHash = null;
+        return;
+      }
+      const afterSnap = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
+      const nextHash = computeStateHash(game, playerNum, dcHealthState, dcMessageMeta);
+      const reward = computeAgentReward(lastSnapshot, afterSnap, false, false, rewardMultipliers);
+      trace.push({ stateHash: lastStateHash, absType, reward, nextStateHash: nextHash });
+      lastSnapshot = null;
+      lastStateHash = null;
+    },
+
+    finalize(game, updateMeta = false) {
+      const didWin = game.ended && game.winnerId === (playerNum === 1 ? game.player1Id : game.player2Id);
+      const didLose = game.ended && game.winnerId && !didWin;
+      if (trace.length > 0 && game.ended) {
+        const termReward = didWin
+          ? REWARD_WEIGHTS.terminal * (rewardMultipliers.terminal ?? 1)
+          : (didLose ? -REWARD_WEIGHTS.terminal * (rewardMultipliers.terminal ?? 1) : 0);
+        trace[trace.length - 1].reward += termReward;
+        trace[trace.length - 1].nextStateHash = null;
+      }
+      updateTrace(learnings, trace);
+      if (updateMeta) {
+        learnings.meta.totalGames++;
+        if (game.ended && game.winnerId) {
+          if (game.winnerId === game.player1Id) learnings.meta.p1Wins++;
+          else learnings.meta.p2Wins++;
+        }
+      }
+    },
+
+    getTrace() { return trace; },
+  };
 }
 
 // ── Stats ───────────────────────────────────────────────────────────────────

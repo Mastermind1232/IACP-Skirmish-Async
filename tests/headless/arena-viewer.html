@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SKIRBO ARENA — Evolutionary AI Leaderboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-deep: #05080f;
+    --bg-panel: #0c1220;
+    --bg-card: #111a2e;
+    --border: #1a2744;
+    --border-glow: #1e3a5f;
+    --text: #b8c4d8;
+    --text-dim: #5a6a80;
+    --text-bright: #e4ecf7;
+    --rebel: #4895ef;
+    --imperial: #e63946;
+    --scum: #2ecc71;
+    --mixed: #7f8c8d;
+    --accent: #00d4ff;
+    --good: #2ecc71;
+    --bad: #e74c3c;
+    --warn: #f39c12;
+  }
+  body { font-family: 'Rajdhani', sans-serif; background: var(--bg-deep); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-deep); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 200px; min-width: 200px; background: var(--bg-panel);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  }
+  .sidebar-header { padding: 18px 14px 10px; border-bottom: 1px solid var(--border); text-align: center; }
+  .sidebar-header h1 { font-family: 'Orbitron'; font-size: 14px; font-weight: 900; color: var(--accent); letter-spacing: 3px; }
+  .sidebar-header .sub { font-size: 10px; color: var(--text-dim); margin-top: 2px; letter-spacing: 1px; }
+  .sidebar-status { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-dim); }
+  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); animation: pulse 2s ease infinite; flex-shrink: 0; }
+  .pulse-dot.off { background: var(--bad); animation: none; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(46,204,113,0.4)} 50%{box-shadow:0 0 0 6px rgba(46,204,113,0)} }
+
+  .sidebar nav { flex: 1; padding: 6px 0; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
+    color: var(--text-dim); transition: all 0.15s; border-left: 3px solid transparent; letter-spacing: 0.5px;
+  }
+  .nav-item:hover { color: var(--text); background: rgba(0,212,255,0.03); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(0,212,255,0.06); }
+  .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+  .nav-link { display: block; padding: 9px 14px; font-size: 12px; color: var(--text-dim); text-decoration: none; border-left: 3px solid transparent; }
+  .nav-link:hover { color: var(--accent); }
+
+  .sidebar-controls { padding: 10px 14px; border-top: 1px solid var(--border); }
+  .sidebar-controls label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .sidebar-controls select {
+    width: 100%; margin-top: 4px;
+    background: var(--bg-deep); border: 1px solid var(--border); color: var(--text);
+    padding: 3px 6px; border-radius: 4px; font-size: 12px; font-family: 'Rajdhani';
+  }
+
+  /* MAIN */
+  .main { flex: 1; overflow-y: auto; padding: 20px 28px; }
+  .page { display: none; } .page.active { display: block; }
+  .page-title { font-family: 'Orbitron'; font-size: 15px; font-weight: 700; color: var(--text-bright); margin-bottom: 18px; letter-spacing: 1px; }
+
+  .grid { display: grid; gap: 14px; margin-bottom: 14px; }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g3 { grid-template-columns: 1fr 1fr 1fr; }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--border-glow); }
+  .card.full { grid-column: 1 / -1; }
+  .card-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; font-weight: 600; }
+
+  .stat-row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .stat-item { text-align: center; min-width: 70px; }
+  .stat-val { font-family: 'Orbitron'; font-size: 22px; font-weight: 700; color: var(--text-bright); }
+  .stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+  /* Chart containers */
+  .chart-container { position: relative; height: 300px; }
+  .chart-sm { height: 200px; }
+
+  /* Agent cards */
+  .agent-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; cursor: pointer; transition: border-color 0.2s;
+  }
+  .agent-card:hover { border-color: var(--border-glow); }
+  .agent-card .agent-name { font-family: 'Orbitron'; font-size: 13px; font-weight: 700; color: var(--text-bright); margin-bottom: 4px; }
+  .agent-card .agent-elo { font-family: 'Orbitron'; font-size: 18px; font-weight: 900; margin: 4px 0; }
+  .agent-card .agent-record { font-size: 12px; color: var(--text-dim); }
+  .agent-card .agent-army { font-size: 11px; color: var(--text-dim); margin-top: 6px; max-height: 0; overflow: hidden; transition: max-height 0.3s; }
+  .agent-card.expanded .agent-army { max-height: 300px; }
+  .aff-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .aff-badge.imperial { background: rgba(230,57,70,0.15); color: var(--imperial); }
+  .aff-badge.rebel { background: rgba(72,149,239,0.15); color: var(--rebel); }
+  .aff-badge.mercenary { background: rgba(46,204,113,0.15); color: var(--scum); }
+  .aff-badge.mixed { background: rgba(127,140,141,0.15); color: var(--mixed); }
+
+  /* Match table */
+  .match-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .match-table th { text-align: left; padding: 6px 8px; color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); }
+  .match-table td { padding: 5px 8px; border-bottom: 1px solid rgba(26,39,68,0.3); }
+  .match-table tr:hover td { background: rgba(0,212,255,0.03); }
+  .match-table .winner { color: var(--good); font-weight: 600; }
+  .match-table .loser { color: var(--text-dim); }
+  .elo-up { color: var(--good); font-size: 11px; }
+  .elo-down { color: var(--bad); font-size: 11px; }
+
+  /* Evolution timeline */
+  .evo-entry { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .evo-entry .evo-title { font-family: 'Orbitron'; font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+  .evo-entry .evo-detail { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+  .evo-entry .evo-detail strong { color: var(--text); }
+
+  /* Radar chart container */
+  .radar-wrap { width: 120px; height: 120px; }
+
+  /* Filter */
+  .filter-bar { margin-bottom: 14px; display: flex; gap: 8px; align-items: center; }
+  .filter-bar input {
+    background: var(--bg-deep); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 10px; border-radius: 4px; font-family: 'Rajdhani'; font-size: 12px; outline: none; width: 200px;
+  }
+  .filter-bar input:focus { border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-header"><h1>SKIRBO</h1><div class="sub">ARENA</div></div>
+  <div class="sidebar-status"><div class="pulse-dot" id="pulseDot"></div><span id="statusText">Loading...</span></div>
+  <nav>
+    <div class="nav-item active" data-page="leaderboard"><span class="nav-icon">&#9650;</span> Leaderboard</div>
+    <div class="nav-item" data-page="agents"><span class="nav-icon">&#9733;</span> Agents</div>
+    <div class="nav-item" data-page="matches"><span class="nav-icon">&#9876;</span> Matches</div>
+    <div class="nav-item" data-page="evolution"><span class="nav-icon">&#9860;</span> Evolution</div>
+    <a class="nav-link" href="learnings-viewer.html">&#8592; Brain Dashboard</a>
+  </nav>
+  <div class="sidebar-controls">
+    <label>Refresh Rate</label>
+    <select id="refreshRate"><option value="3000">3s</option><option value="5000" selected>5s</option><option value="10000">10s</option><option value="0">Paused</option></select>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEADERBOARD -->
+  <div class="page active" id="page-leaderboard">
+    <div class="page-title">Arena Leaderboard</div>
+
+    <div class="grid g4" id="topStats">
+      <div class="card"><div class="card-label">Total Games</div><div class="stat-val" id="sTotalGames">0</div></div>
+      <div class="card"><div class="card-label">Generation</div><div class="stat-val" id="sGeneration">1</div></div>
+      <div class="card"><div class="card-label">Avg ELO</div><div class="stat-val" id="sAvgElo">1500</div></div>
+      <div class="card"><div class="card-label">Peak ELO</div><div class="stat-val" id="sPeakElo" style="color:var(--warn)">1500</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-label">Top 10 — Rising Leaderboard</div>
+      <div class="chart-container"><canvas id="leaderboardChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">ELO Trends — Top 5</div>
+      <div class="chart-container chart-sm"><canvas id="eloTrendChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- AGENTS -->
+  <div class="page" id="page-agents">
+    <div class="page-title">Agent Profiles</div>
+    <div class="grid g3" id="agentGrid"></div>
+  </div>
+
+  <!-- MATCHES -->
+  <div class="page" id="page-matches">
+    <div class="page-title">Match History</div>
+    <div class="filter-bar">
+      <input type="text" id="matchFilter" placeholder="Filter by agent name..." />
+    </div>
+    <div class="card">
+      <table class="match-table" id="matchTable">
+        <thead><tr><th>#</th><th>Agent 1</th><th>Agent 2</th><th>Winner</th><th>ELO Change</th></tr></thead>
+        <tbody id="matchBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EVOLUTION -->
+  <div class="page" id="page-evolution">
+    <div class="page-title">Evolution Timeline</div>
+    <div id="evoTimeline"></div>
+  </div>
+
+</div>
+
+<script>
+// ═══ STATE ═══
+let leaderboardChart = null, eloTrendChart = null;
+Chart.defaults.color = '#5a6a80';
+Chart.defaults.borderColor = '#1a2744';
+Chart.defaults.font.family = 'Rajdhani';
+
+const FACTION_COLORS = {
+  Imperial: '#e63946', Rebel: '#4895ef', Mercenary: '#2ecc71', Mixed: '#7f8c8d',
+  imperial: '#e63946', rebel: '#4895ef', mercenary: '#2ecc71', mixed: '#7f8c8d',
+};
+
+// ═══ NAV ═══
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById('page-' + item.dataset.page).classList.add('active');
+  });
+});
+
+// ═══ HELPERS ═══
+function fmt(n) { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : n.toLocaleString(); }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ═══ DATA ═══
+async function loadData() {
+  try {
+    const r = await fetch('arena-data.json?t=' + Date.now());
+    if (!r.ok) throw 0;
+    return await r.json();
+  } catch {
+    document.getElementById('pulseDot').classList.add('off');
+    document.getElementById('statusText').textContent = 'No data';
+    return null;
+  }
+}
+
+// ═══ RENDER ═══
+function render(data) {
+  const agents = Object.values(data.agents || {}).sort((a, b) => b.elo - a.elo);
+  if (agents.length === 0) return;
+
+  const totalGames = data.meta.totalGames || 0;
+  const generation = data.meta.totalGenerations || 1;
+  const avgElo = Math.round(agents.reduce((s, a) => s + a.elo, 0) / agents.length);
+  const peakElo = Math.round(Math.max(...agents.map(a => a.stats?.bestElo || a.elo)));
+
+  // Top stats
+  document.getElementById('sTotalGames').textContent = fmt(totalGames);
+  document.getElementById('sGeneration').textContent = generation;
+  document.getElementById('sAvgElo').textContent = avgElo;
+  document.getElementById('sPeakElo').textContent = peakElo;
+
+  // ── Leaderboard bar chart (top 10, ascending = staircase left-to-right) ──
+  const top10 = agents.slice(0, 10).reverse(); // ascending for staircase
+  const barLabels = top10.map(a => a.name);
+  const barData = top10.map(a => Math.round(a.elo));
+  const barColors = top10.map(a => FACTION_COLORS[a.affiliation] || '#7f8c8d');
+
+  if (leaderboardChart) {
+    leaderboardChart.data.labels = barLabels;
+    leaderboardChart.data.datasets[0].data = barData;
+    leaderboardChart.data.datasets[0].backgroundColor = barColors;
+    leaderboardChart.update();
+  } else {
+    leaderboardChart = new Chart(document.getElementById('leaderboardChart'), {
+      type: 'bar',
+      data: {
+        labels: barLabels,
+        datasets: [{
+          label: 'ELO Rating',
+          data: barData,
+          backgroundColor: barColors,
+          borderWidth: 0,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 500 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              afterLabel: (ctx) => {
+                const agent = top10[ctx.dataIndex];
+                return `${agent.affiliation} | ${agent.stats?.wins||0}W/${agent.stats?.losses||0}L`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { font: { size: 10, family: 'Orbitron' }, color: '#b8c4d8', maxRotation: 45, minRotation: 30 },
+            grid: { display: false },
+          },
+          y: {
+            beginAtZero: false,
+            ticks: { font: { size: 10 }, color: '#5a6a80' },
+            grid: { color: 'rgba(26,39,68,0.5)' },
+          }
+        }
+      }
+    });
+  }
+
+  // ── ELO trend line chart (top 5) ──
+  const top5 = agents.slice(0, 5);
+  const trendColors = ['#00d4ff', '#e63946', '#2ecc71', '#f39c12', '#bb86fc'];
+
+  const datasets = top5.map((agent, i) => {
+    const history = agent.eloHistory || [{ game: 0, elo: 1500 }];
+    return {
+      label: agent.name,
+      data: history.map(h => ({ x: h.game, y: h.elo })),
+      borderColor: trendColors[i],
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      pointRadius: 0,
+      borderWidth: 2,
+    };
+  });
+
+  if (eloTrendChart) {
+    eloTrendChart.data.datasets = datasets;
+    eloTrendChart.update();
+  } else {
+    eloTrendChart = new Chart(document.getElementById('eloTrendChart'), {
+      type: 'line',
+      data: { datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        scales: {
+          x: { type: 'linear', title: { display: true, text: 'Game #', font: { size: 10 } }, ticks: { font: { size: 10 } } },
+          y: { title: { display: true, text: 'ELO', font: { size: 10 } }, ticks: { font: { size: 10 } } },
+        },
+        plugins: {
+          legend: { labels: { boxWidth: 10, padding: 6, font: { size: 11 } } }
+        }
+      }
+    });
+  }
+
+  // ── Agent Profiles ──
+  document.getElementById('agentGrid').innerHTML = agents.map(a => {
+    const wr = a.stats?.games > 0 ? ((a.stats.wins / a.stats.games) * 100).toFixed(0) : '—';
+    const affClass = (a.affiliation || 'mixed').toLowerCase();
+    const eloColor = FACTION_COLORS[a.affiliation] || '#7f8c8d';
+    const dcs = (a.army?.dcList || []).join(', ');
+    const ccs = (a.army?.ccList || []).join(', ');
+    const parentInfo = a.parentIds?.length ? `Parents: ${a.parentIds.join(', ')}` : 'Original';
+    return `
+      <div class="agent-card" onclick="this.classList.toggle('expanded')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="agent-name">${esc(a.name)}</div>
+          <span class="aff-badge ${affClass}">${esc(a.affiliation)}</span>
+        </div>
+        <div class="agent-elo" style="color:${eloColor}">${Math.round(a.elo)}</div>
+        <div class="agent-record">${a.stats?.wins||0}W / ${a.stats?.losses||0}L — ${wr}% WR | Gen ${a.generation}</div>
+        <div class="agent-army">
+          <div style="margin-top:8px;font-size:10px;color:var(--text-dim)">
+            <strong style="color:var(--text)">DCs:</strong> ${esc(dcs)}<br>
+            <strong style="color:var(--text)">CCs:</strong> ${esc(ccs)}<br>
+            <strong style="color:var(--text)">Source:</strong> ${esc(a.army?.deckName || '?')}<br>
+            <strong style="color:var(--text)">Epsilon:</strong> ${(a.strategy?.epsilon || 0.1).toFixed(2)}<br>
+            <strong style="color:var(--text)">${parentInfo}</strong>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // ── Match History ──
+  renderMatches(data);
+
+  // ── Evolution Timeline ──
+  const evoLog = data.evolutionLog || [];
+  document.getElementById('evoTimeline').innerHTML = evoLog.length > 0
+    ? evoLog.slice().reverse().map(e => `
+      <div class="evo-entry">
+        <div class="evo-title">Generation ${e.generation} — Game ${e.game}</div>
+        <div class="evo-detail">
+          <strong style="color:var(--bad)">Culled:</strong> ${(e.culled||[]).map(c => `${esc(c.name)} (${c.elo})`).join(', ') || 'None'}<br>
+          <strong style="color:var(--good)">Bred:</strong> ${(e.bred||[]).map(b => `${esc(b.name)}${b.parentIds?.length ? ' ← ' + b.parentIds.join('+') : ' (fresh)'}`).join(', ') || 'None'}
+        </div>
+      </div>`).join('')
+    : '<div style="text-align:center;color:var(--text-dim);padding:24px">No evolution yet. Run at least 50 arena games.</div>';
+
+  document.getElementById('statusText').textContent = new Date().toLocaleTimeString();
+  document.getElementById('pulseDot').classList.remove('off');
+}
+
+function renderMatches(data) {
+  const filter = (document.getElementById('matchFilter')?.value || '').toLowerCase();
+  const matches = (data.matchHistory || []).slice(-50).reverse();
+  const filtered = filter
+    ? matches.filter(m => (m.agent1Name||'').toLowerCase().includes(filter) || (m.agent2Name||'').toLowerCase().includes(filter))
+    : matches;
+
+  document.getElementById('matchBody').innerHTML = filtered.map(m => {
+    const a1Class = m.winnerId === m.agent1Id ? 'winner' : 'loser';
+    const a2Class = m.winnerId === m.agent2Id ? 'winner' : 'loser';
+    const e1 = m.elo1Change >= 0 ? `<span class="elo-up">+${m.elo1Change}</span>` : `<span class="elo-down">${m.elo1Change}</span>`;
+    const e2 = m.elo2Change >= 0 ? `<span class="elo-up">+${m.elo2Change}</span>` : `<span class="elo-down">${m.elo2Change}</span>`;
+    const winnerName = m.winnerName || 'Draw';
+    return `<tr>
+      <td style="color:var(--text-dim)">${m.game}</td>
+      <td class="${a1Class}">${esc(m.agent1Name)}</td>
+      <td class="${a2Class}">${esc(m.agent2Name)}</td>
+      <td style="color:var(--good)">${esc(winnerName)}</td>
+      <td>${e1} / ${e2}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-dim)">No matches yet</td></tr>';
+}
+
+// Match filter
+document.getElementById('matchFilter')?.addEventListener('input', () => {
+  loadData().then(d => { if (d) renderMatches(d); });
+});
+
+// ═══ REFRESH ═══
+let refreshInterval;
+async function tick() { const d = await loadData(); if (d) render(d); }
+function setupRefresh() {
+  if (refreshInterval) clearInterval(refreshInterval);
+  const ms = +document.getElementById('refreshRate').value;
+  if (ms > 0) refreshInterval = setInterval(tick, ms);
+}
+document.getElementById('refreshRate').addEventListener('change', setupRefresh);
+tick();
+setupRefresh();
+</script>
+</body>
+</html>
