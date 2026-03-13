@@ -98,6 +98,11 @@ import { handleEndTurn as cmdEndTurn, handlePassActivationTurn as cmdPassTurn, h
 import { handleStartRound as cmdStartRound, handleEndRound as cmdEndRound, handleEndOfRoundStart as cmdEndOfRoundStart, handleActivationPhaseStart as cmdActivationPhaseStart } from './src/domain/commands/round-commands.js';
 import { handleDeclareAttack as cmdDeclareAttack, handleReadyForCombat as cmdReadyForCombat, handleRollCombatDice as cmdRollDice, handleSpendSurge as cmdSpendSurge, handlePerformReroll as cmdPerformReroll } from './src/domain/commands/combat-commands.js';
 import { handleStartMovement as cmdStartMovement, handleMoveToSpace as cmdMoveToSpace, handleCompleteMovement as cmdCompleteMovement } from './src/domain/commands/movement-commands.js';
+import { handleResolveCombat as cmdResolveCombat, handleCancelCombat as cmdCancelCombat, handleCombatPassive as cmdCombatPassive, handleCombatToken as cmdCombatToken, handleCleaveTarget as cmdCleaveTarget } from './src/domain/commands/combat-reaction-commands.js';
+import { handlePlayCommandCard as cmdPlayCard, handleDiscardCommandCard as cmdDiscardCard, handleDrawCommandCards as cmdDrawCards, handleNegationAttempt as cmdNegationAttempt, handleNegationResolve as cmdNegationResolve } from './src/domain/commands/hand-commands.js';
+import { handleSelectMap as cmdSelectMap, handleConfirmMap as cmdConfirmMap, handleDetermineInitiative as cmdDetermineInitiative, handleChooseDeploymentZone as cmdChooseZone, handleDeployFigure as cmdDeployFigure, handleFinishDeployment as cmdFinishDeployment, handleSubmitSquad as cmdSubmitSquad } from './src/domain/commands/setup-commands.js';
+import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDcEndActivation } from './src/domain/commands/dc-play-area-commands.js';
+import { createDomainEvent } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
@@ -3163,6 +3168,72 @@ client.on('interactionCreate', async (interaction) => {
       'combat_resolve_ready_',
       'combat_passive_',
       'combat_token_',
+      // Combat reactions
+      'cleave_target_',
+      // Hand/CC operations
+      'cc_play_',
+      'cc_confirm_play_',
+      'cc_cancel_play_',
+      'cc_draw_',
+      'cc_shuffle_draw_',
+      'cc_discard_',
+      'cc_discard_select_',
+      'cc_search_discard_',
+      'cc_close_discard_',
+      'cc_play_select_',
+      'cc_choice_',
+      'cc_attach_to_',
+      'cc_space_',
+      'negation_play_',
+      'negation_let_resolve_',
+      'dc_cc_special_',
+      'dc_cc_double_',
+      'dc_cc_eoa_',
+      'dc_cc_defender_',
+      'bm_draw_',
+      'bm_discard_',
+      'bm_return_',
+      'bm_skip_',
+      'deck_illegal_play_',
+      'deck_illegal_redo_',
+      'illegal_cc_ignore_',
+      'illegal_cc_unplay_',
+      // Setup operations
+      'map_selection_',
+      'map_type_',
+      'map_confirm_',
+      'map_goback_',
+      'map_selection_draw_',
+      'map_selection_pick_',
+      'determine_initiative_',
+      'deployment_zone_red_',
+      'deployment_zone_blue_',
+      'deploy_pick_',
+      'deploy_row_',
+      'deploy_row_back_',
+      'deployment_fig_',
+      'deployment_orient_',
+      'deployment_done_',
+      'auto_deploy_',
+      'squad_select_',
+      'squad_confirm_',
+      'squad_cancel_',
+      'form_pick_',
+      'loadout_pick_',
+      // DC play area
+      'dc_attack_',
+      'dc_move_',
+      'dc_interact_',
+      'dc_special_',
+      'dc_toggle_',
+      'dc_deplete_',
+      'dc_unactivate_',
+      'dc_ability_choice_',
+      'dc_rename_',
+      'special_done_',
+      'interact_choice_',
+      'interact_cancel_',
+      'fast_forward_',
     ]);
 
     const COMMAND_HANDLER_MAP = {
@@ -3170,7 +3241,6 @@ client.on('interactionCreate', async (interaction) => {
       'PhaseGateUnready': handlePhaseGateUnready,
       'ActivateDc': cmdActivateDc,
       'EndTurn': cmdEndTurn,
-      'DcEndActivation': cmdEndTurn,
       'PassActivationTurn': cmdPassTurn,
       'DeclareAttack': cmdDeclareAttack,
       'AttackTarget': cmdDeclareAttack,
@@ -3184,6 +3254,30 @@ client.on('interactionCreate', async (interaction) => {
       'EndEndOfRound': cmdEndRound,
       'EndStartOfRound': cmdStartRound,
       'StatusPhase': cmdActivationPhaseStart,
+      // Combat reactions
+      'ResolveCombat': cmdResolveCombat,
+      'CombatResolveReady': cmdResolveCombat,
+      'CancelCombat': cmdCancelCombat,
+      'CombatPassive': cmdCombatPassive,
+      'CombatToken': cmdCombatToken,
+      'CleaveTarget': cmdCleaveTarget,
+      // Hand/CC
+      'PlayCommandCard': cmdPlayCard,
+      'DiscardCommandCard': cmdDiscardCard,
+      'DrawCommandCards': cmdDrawCards,
+      'NegationAttempt': cmdNegationAttempt,
+      'NegationResolve': cmdNegationResolve,
+      // Setup
+      'SelectMap': cmdSelectMap,
+      'ConfirmMap': cmdConfirmMap,
+      'DetermineInitiative': cmdDetermineInitiative,
+      'ChooseDeploymentZone': cmdChooseZone,
+      'DeployFigure': cmdDeployFigure,
+      'FinishDeployment': cmdFinishDeployment,
+      'SubmitSquad': cmdSubmitSquad,
+      // DC play area
+      'PerformAction': cmdPerformAction,
+      'DcEndActivation': cmdDcEndActivation,
     };
 
     // Periodic event verification (env VERIFY_INTERVAL, default 0 = disabled)
@@ -3208,6 +3302,17 @@ client.on('interactionCreate', async (interaction) => {
         // (diff-translator will still capture state changes downstream)
       }
       // Fall through to existing handler for Discord output
+    }
+
+    // Catch-all: record unhandled button presses as GenericInteraction events
+    if (!COMMAND_MODE_HANDLERS.has(buttonKey) && _buttonLockId) {
+      try {
+        const _genericEvent = createDomainEvent(
+          'GenericInteraction', _buttonLockId, interaction.user.id,
+          { prefix: buttonKey, customId: interaction.customId }
+        );
+        appendDomainEvents(_buttonLockId, [_genericEvent]).catch(e => console.error('[domain-events] generic:', e));
+      } catch (_e) { /* never block */ }
     }
 
     // Periodic verification check

@@ -40,6 +40,15 @@ export const COMMAND_TYPES = {
   CombatResolveReady: 'CombatResolveReady',
   CombatPassive: 'CombatPassive',
   CombatToken: 'CombatToken',
+  CancelCombat: 'CancelCombat',
+  CleaveTarget: 'CleaveTarget',
+  // Hand/CC
+  NegationAttempt: 'NegationAttempt',
+  NegationResolve: 'NegationResolve',
+  // Setup
+  SubmitSquad: 'SubmitSquad',
+  // Generic catch-all
+  GenericInteraction: 'GenericInteraction',
 };
 
 export function createCommand(type, gameId, playerId, payload = {}) {
