@@ -683,11 +683,13 @@ function renderArena(data){
   if(!data||!data.agents||Object.keys(data.agents).length===0){document.getElementById('arenaCard').style.display='none';return;}
   document.getElementById('arenaCard').style.display='';
   const agents=Object.values(data.agents).sort((a,b)=>b.elo-a.elo);
-  const top10=agents.slice(0,10).reverse();
+  const qualified=agents.filter(a=>(a.stats?.games||0)>=25);
+  const top10=qualified.slice(0,10).reverse();
   const labels=top10.map(a=>a.name);
   const values=top10.map(a=>Math.round(a.elo));
   const colors=top10.map(a=>ARENA_FACTION_COLORS[a.affiliation]||'#7f8c8d');
-  document.getElementById('arenaInfo').textContent=`Gen ${data.meta.totalGenerations} · ${data.meta.totalGames} games · Top: ${agents[0]?.name} (${Math.round(agents[0]?.elo)})`;
+  const topAgent=qualified[0]||agents[0];
+  document.getElementById('arenaInfo').textContent=`Gen ${data.meta.totalGenerations} · ${data.meta.totalGames} games` + (topAgent ? ` · Top: ${topAgent.name} (${Math.round(topAgent.elo)})` : ' · <25 games each');
   if(arenaBarChart){arenaBarChart.data.labels=labels;arenaBarChart.data.datasets[0].data=values;arenaBarChart.data.datasets[0].backgroundColor=colors;arenaBarChart.update();}
   else{arenaBarChart=new Chart(document.getElementById('arenaBarChart'),{type:'bar',data:{labels,datasets:[{label:'ELO',data:values,backgroundColor:colors,borderWidth:0,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:500},plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:function(ctx){const a=top10[ctx.dataIndex];return(a.affiliation||'')+' | '+(a.stats?.wins||0)+'W/'+(a.stats?.losses||0)+'L';}}}},scales:{x:{ticks:{font:{size:9,family:'Orbitron'},color:'#b8c4d8',maxRotation:45,minRotation:30},grid:{display:false}},y:{beginAtZero:false,ticks:{font:{size:10},color:'#5a6a80'},grid:{color:'rgba(26,39,68,0.5)'}}}}});}
 }

@@ -265,7 +265,8 @@ function render(data) {
   document.getElementById('sPeakElo').textContent = peakElo;
 
   // ── Leaderboard bar chart (top 10, ascending = staircase left-to-right) ──
-  const top10 = agents.slice(0, 10).reverse(); // ascending for staircase
+  const qualified = agents.filter(a => (a.stats?.games || 0) >= 25);
+  const top10 = qualified.slice(0, 10).reverse(); // ascending for staircase
   const barLabels = top10.map(a => a.name);
   const barData = top10.map(a => Math.round(a.elo));
   const barColors = top10.map(a => FACTION_COLORS[a.affiliation] || '#7f8c8d');
@@ -319,7 +320,7 @@ function render(data) {
   }
 
   // ── ELO trend line chart (top 5) ──
-  const top5 = agents.slice(0, 5);
+  const top5 = qualified.slice(0, 5);
   const trendColors = ['#00d4ff', '#e63946', '#2ecc71', '#f39c12', '#bb86fc'];
 
   const datasets = top5.map((agent, i) => {
