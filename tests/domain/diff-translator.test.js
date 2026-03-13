@@ -206,6 +206,31 @@ describe('DiffTranslator', () => {
     assert.equal(deployEvent.payload.playerNum, 1);
   });
 
+  it('skipTypes prevents duplicate events', () => {
+    const diff = {
+      set: {
+        pendingCombat: {
+          attackerMsgId: 'msg1', defenderMsgId: 'msg2',
+          attackerPlayerNum: 1,
+        },
+      },
+      deleted: [],
+    };
+    const context = {
+      gameId: 'g1', playerId: 'p1',
+      before: {},
+      after: { pendingCombat: diff.set.pendingCombat },
+    };
+
+    // Without skipTypes: CombatDeclared emitted
+    const events1 = translateDiffToEvents('attack_target_', diff, context);
+    assert.ok(events1.some(e => e.type === 'CombatDeclared'));
+
+    // With skipTypes: CombatDeclared skipped
+    const events2 = translateDiffToEvents('attack_target_', diff, context, ['CombatDeclared']);
+    assert.ok(!events2.some(e => e.type === 'CombatDeclared'));
+  });
+
   it('phaseGate open → ready → cleared lifecycle', () => {
     // Open
     let before = {};

@@ -7,12 +7,18 @@ import { createDomainEvent } from './events.js';
  * @param {{ gameId: string, playerId: string, before: object, after: object, correlationId?: string }} context
  * @returns {object[]} array of domain events
  */
-export function translateDiffToEvents(handlerKey, diff, context) {
+export function translateDiffToEvents(handlerKey, diff, context, skipTypes = null) {
   const events = [];
   if (!diff) return events;
   const { set, deleted } = diff;
   const { gameId, playerId, before, after } = context;
   const meta = { correlationId: context.correlationId || null };
+  const _skip = skipTypes ? new Set(skipTypes) : null;
+
+  function emit(type, payload) {
+    if (_skip && _skip.has(type)) return;
+    events.push(createDomainEvent(type, gameId, playerId, payload, meta));
+  }
 
   // ── Phase changes ──
   if (set?.phase && set.phase !== before?.phase) {
@@ -22,69 +28,58 @@ export function translateDiffToEvents(handlerKey, diff, context) {
 
   // ── Phase gate ──
   if (set?.phaseGate && !before?.phaseGate) {
-    events.push(createDomainEvent('PhaseGateOpened', gameId, playerId,
-      { gateType: set.phaseGate.phase }, meta));
+    emit('PhaseGateOpened', { gateType: set.phaseGate.phase });
   }
   if (set?.phaseGate && before?.phaseGate) {
     if (set.phaseGate.p1Ready && !before.phaseGate.p1Ready) {
-      events.push(createDomainEvent('PhaseGatePlayerReady', gameId, playerId,
-        { playerNum: 1 }, meta));
+      emit('PhaseGatePlayerReady', { playerNum: 1 });
     }
     if (set.phaseGate.p2Ready && !before.phaseGate.p2Ready) {
-      events.push(createDomainEvent('PhaseGatePlayerReady', gameId, playerId,
-        { playerNum: 2 }, meta));
+      emit('PhaseGatePlayerReady', { playerNum: 2 });
     }
   }
   if (deleted?.includes('phaseGate') || (before?.phaseGate && !after?.phaseGate)) {
-    events.push(createDomainEvent('PhaseGateCleared', gameId, playerId,
-      { gateType: before.phaseGate?.phase || 'unknown' }, meta));
+    emit('PhaseGateCleared', { gateType: before.phaseGate?.phase || 'unknown' });
   }
 
   // ── Combat ──
   if (set?.pendingCombat && !before?.pendingCombat) {
-    events.push(createDomainEvent('CombatDeclared', gameId, playerId, {
+    emit('CombatDeclared', {
       attackerMsgId: set.pendingCombat.attackerMsgId,
       defenderMsgId: set.pendingCombat.defenderMsgId,
       attackerPlayerNum: set.pendingCombat.attackerPlayerNum,
-    }, meta));
+    });
   }
   if (set?.pendingCombat && before?.pendingCombat) {
     if (set.pendingCombat.p1Ready && !before.pendingCombat.p1Ready) {
-      events.push(createDomainEvent('CombatPlayerReady', gameId, playerId,
-        { playerNum: 1 }, meta));
+      emit('CombatPlayerReady', { playerNum: 1 });
     }
     if (set.pendingCombat.p2Ready && !before.pendingCombat.p2Ready) {
-      events.push(createDomainEvent('CombatPlayerReady', gameId, playerId,
-        { playerNum: 2 }, meta));
+      emit('CombatPlayerReady', { playerNum: 2 });
     }
     if (set.pendingCombat.attackRoll && !before.pendingCombat.attackRoll) {
-      events.push(createDomainEvent('CombatDiceRolled', gameId, playerId,
-        { side: 'attack', dice: set.pendingCombat.attackRoll }, meta));
+      emit('CombatDiceRolled', { side: 'attack', dice: set.pendingCombat.attackRoll });
     }
     if (set.pendingCombat.defenseRoll && !before.pendingCombat.defenseRoll) {
-      events.push(createDomainEvent('CombatDiceRolled', gameId, playerId,
-        { side: 'defense', dice: set.pendingCombat.defenseRoll }, meta));
+      emit('CombatDiceRolled', { side: 'defense', dice: set.pendingCombat.defenseRoll });
     }
   }
   if ((deleted?.includes('pendingCombat') || (before?.pendingCombat && !after?.pendingCombat))) {
-    events.push(createDomainEvent('CombatResolved', gameId, playerId,
-      { damageDealt: 0, defeated: false }, meta));
+    emit('CombatResolved', { damageDealt: 0, defeated: false });
   }
 
   // ── Movement ──
   if (set?.moveInProgress) {
     for (const [figKey, moveData] of Object.entries(set.moveInProgress)) {
       if (!before?.moveInProgress?.[figKey]) {
-        events.push(createDomainEvent('MovementStarted', gameId, playerId,
-          { figureKey: figKey, movementPoints: moveData.movementPoints || moveData.remaining || 0 }, meta));
+        emit('MovementStarted', { figureKey: figKey, movementPoints: moveData.movementPoints || moveData.remaining || 0 });
       }
     }
   }
   if (before?.moveInProgress) {
     for (const figKey of Object.keys(before.moveInProgress)) {
       if (!after?.moveInProgress?.[figKey]) {
-        events.push(createDomainEvent('MovementCompleted', gameId, playerId,
-          { figureKey: figKey }, meta));
+        emit('MovementCompleted', { figureKey: figKey });
       }
     }
   }
@@ -97,8 +92,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       for (const [figKey, newCoord] of Object.entries(afterPos)) {
         const oldCoord = beforePos[figKey];
         if (oldCoord && oldCoord !== newCoord) {
-          events.push(createDomainEvent('FigureMoved', gameId, playerId,
-            { figureKey: figKey, fromCoord: oldCoord, toCoord: newCoord }, meta));
+          emit('FigureMoved', { figureKey: figKey, fromCoord: oldCoord, toCoord: newCoord });
         }
       }
     }
@@ -111,8 +105,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       const afterPos = after?.figurePositions?.[playerNum] || {};
       for (const figKey of Object.keys(beforePos)) {
         if (!(figKey in afterPos)) {
-          events.push(createDomainEvent('FigureDefeated', gameId, playerId,
-            { figureKey: figKey, dcName: figKey.split('-')[0], playerNum }, meta));
+          emit('FigureDefeated', { figureKey: figKey, dcName: figKey.split('-')[0], playerNum });
         }
       }
     }
@@ -124,8 +117,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
     if (set?.[vpKey] && before?.[vpKey]) {
       const diff_vp = (set[vpKey].total || 0) - (before[vpKey].total || 0);
       if (diff_vp > 0) {
-        events.push(createDomainEvent('VpAwarded', gameId, playerId,
-          { playerNum, amount: diff_vp, reason: 'unknown' }, meta));
+        emit('VpAwarded', { playerNum, amount: diff_vp, reason: 'unknown' });
       }
     }
   }
@@ -136,8 +128,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       const oldConds = before.figureConditions?.[figKey] || [];
       for (const c of newConds) {
         if (!oldConds.includes(c)) {
-          events.push(createDomainEvent('ConditionApplied', gameId, playerId,
-            { figureKey: figKey, condition: c }, meta));
+          emit('ConditionApplied', { figureKey: figKey, condition: c });
         }
       }
     }
@@ -147,8 +138,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
   if (set?.currentActivationTurnPlayerId &&
       set.currentActivationTurnPlayerId !== before?.currentActivationTurnPlayerId) {
     const newNum = set.currentActivationTurnPlayerId === after?.player1Id ? 1 : 2;
-    events.push(createDomainEvent('ActivationTurnPassed', gameId, playerId,
-      { newActivePlayerNum: newNum }, meta));
+    emit('ActivationTurnPassed', { newActivePlayerNum: newNum });
   }
 
   // ── Health changes ──
@@ -157,11 +147,9 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       const oldHp = before.dcHealthState?.[figKey];
       if (oldHp != null && newHp != null && oldHp !== newHp) {
         if (newHp < oldHp) {
-          events.push(createDomainEvent('FigureDamaged', gameId, playerId,
-            { figureKey: figKey, amount: oldHp - newHp }, meta));
+          emit('FigureDamaged', { figureKey: figKey, amount: oldHp - newHp });
         } else {
-          events.push(createDomainEvent('FigureHealed', gameId, playerId,
-            { figureKey: figKey, amount: newHp - oldHp, maxHp: newHp }, meta));
+          emit('FigureHealed', { figureKey: figKey, amount: newHp - oldHp, maxHp: newHp });
         }
       }
     }
@@ -173,8 +161,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       const newConds = after?.figureConditions?.[figKey] || [];
       for (const c of oldConds) {
         if (!newConds.includes(c)) {
-          events.push(createDomainEvent('ConditionRemoved', gameId, playerId,
-            { figureKey: figKey, condition: c }, meta));
+          emit('ConditionRemoved', { figureKey: figKey, condition: c });
         }
       }
     }
@@ -199,12 +186,10 @@ export function translateDiffToEvents(handlerKey, diff, context) {
         const oldCount = oldCounts[tokenType] || 0;
         const newCount = newCounts[tokenType] || 0;
         for (let i = 0; i < newCount - oldCount; i++) {
-          events.push(createDomainEvent('PowerTokenGained', gameId, playerId,
-            { figureKey: figKey, tokenType }, meta));
+          emit('PowerTokenGained', { figureKey: figKey, tokenType });
         }
         for (let i = 0; i < oldCount - newCount; i++) {
-          events.push(createDomainEvent('PowerTokenSpent', gameId, playerId,
-            { figureKey: figKey, tokenType }, meta));
+          emit('PowerTokenSpent', { figureKey: figKey, tokenType });
         }
       }
     }
@@ -214,14 +199,12 @@ export function translateDiffToEvents(handlerKey, diff, context) {
   if (set?.dcActionsData && before?.dcActionsData) {
     for (const [msgId, data] of Object.entries(after?.dcActionsData || {})) {
       if (!before.dcActionsData?.[msgId]) {
-        events.push(createDomainEvent('DcActivated', gameId, playerId,
-          { msgId, totalActions: data?.total || 2 }, meta));
+        emit('DcActivated', { msgId, totalActions: data?.total || 2 });
       }
     }
   } else if (set?.dcActionsData && !before?.dcActionsData) {
     for (const [msgId, data] of Object.entries(set.dcActionsData || {})) {
-      events.push(createDomainEvent('DcActivated', gameId, playerId,
-        { msgId, totalActions: data?.total || 2 }, meta));
+      emit('DcActivated', { msgId, totalActions: data?.total || 2 });
     }
   }
 
@@ -232,8 +215,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       if (oldData && data?.remaining != null && oldData.remaining != null) {
         const diff_actions = oldData.remaining - data.remaining;
         if (diff_actions > 0 && data.remaining >= 0) {
-          events.push(createDomainEvent('DcActionPerformed', gameId, playerId,
-            { msgId, actionCost: diff_actions }, meta));
+          emit('DcActionPerformed', { msgId, actionCost: diff_actions });
         }
       }
     }
@@ -244,29 +226,25 @@ export function translateDiffToEvents(handlerKey, diff, context) {
     for (const [msgId, oldData] of Object.entries(before.dcActionsData)) {
       const newData = after?.dcActionsData?.[msgId];
       if (oldData?.remaining > 0 && newData?.remaining === 0) {
-        events.push(createDomainEvent('DcEndedActivation', gameId, playerId,
-          { msgId }, meta));
+        emit('DcEndedActivation', { msgId });
       }
     }
   }
 
   // ── Round transitions ──
   if (set?.currentRound && set.currentRound !== before?.currentRound) {
-    events.push(createDomainEvent('RoundStarted', gameId, playerId,
-      { roundNumber: set.currentRound }, meta));
+    emit('RoundStarted', { roundNumber: set.currentRound });
   }
   if (set?.roundPhase) {
     if (set.roundPhase === 'activation' && before?.roundPhase === 'start_of_round') {
-      events.push(createDomainEvent('ActivationPhaseStarted', gameId, playerId,
-        { activePlayerId: after?.currentActivationTurnPlayerId || null }, meta));
+      emit('ActivationPhaseStarted', { activePlayerId: after?.currentActivationTurnPlayerId || null });
     }
     if (set.roundPhase === 'end_of_round' && before?.roundPhase !== 'end_of_round') {
-      events.push(createDomainEvent('EndOfRoundStarted', gameId, playerId, {}, meta));
+      emit('EndOfRoundStarted', {});
     }
   }
   if (before?.roundPhase && !after?.roundPhase) {
-    events.push(createDomainEvent('RoundEnded', gameId, playerId,
-      { roundNumber: before.currentRound || 0 }, meta));
+    emit('RoundEnded', { roundNumber: before.currentRound || 0 });
   }
 
   // ── Combat surge spent ──
@@ -279,8 +257,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       const newSpent = after?.pendingCombat?.surgesSpent || [];
       for (const key of newSpent) {
         if (!oldSpent.includes(key) || newSpent.filter(k => k === key).length > oldSpent.filter(k => k === key).length) {
-          events.push(createDomainEvent('CombatSurgeSpent', gameId, playerId,
-            { surgeKey: key, cost: 1 }, meta));
+          emit('CombatSurgeSpent', { surgeKey: key, cost: 1 });
           break; // One surge per handler call
         }
       }
@@ -296,8 +273,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       if (oldRoll && newRoll && oldRoll.length === newRoll.length) {
         for (let i = 0; i < oldRoll.length; i++) {
           if (JSON.stringify(oldRoll[i]?.face) !== JSON.stringify(newRoll[i]?.face)) {
-            events.push(createDomainEvent('CombatRerollPerformed', gameId, playerId,
-              { side, dieIndex: i, newFace: newRoll[i].face }, meta));
+            emit('CombatRerollPerformed', { side, dieIndex: i, newFace: newRoll[i].face });
           }
         }
       }
@@ -311,8 +287,7 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       const afterPos = after?.figurePositions?.[playerNum] || {};
       for (const [figKey, coord] of Object.entries(afterPos)) {
         if (!(figKey in beforePos)) {
-          events.push(createDomainEvent('FigureDeployed', gameId, playerId,
-            { figureKey: figKey, dcName: figKey.split('-').slice(0, -2).join('-'), playerNum, coord }, meta));
+          emit('FigureDeployed', { figureKey: figKey, dcName: figKey.split('-').slice(0, -2).join('-'), playerNum, coord });
         }
       }
     }
@@ -331,15 +306,87 @@ export function translateDiffToEvents(handlerKey, diff, context) {
       // Cards that left the hand and entered discard
       for (const card of oldHand) {
         if (!newHand.includes(card) && newDiscard.includes(card) && !oldDiscard.includes(card)) {
-          events.push(createDomainEvent('CardPlayed', gameId, playerId,
-            { playerNum, cardName: card }, meta));
+          emit('CardPlayed', { playerNum, cardName: card });
         }
       }
       // Cards drawn (appeared in hand, not from discard)
       const drawnCards = newHand.filter(c => !oldHand.includes(c));
       if (drawnCards.length > 0 && !set?.[discardKey]) {
-        events.push(createDomainEvent('CardsDrawn', gameId, playerId,
-          { playerNum, count: drawnCards.length }, meta));
+        emit('CardsDrawn', { playerNum, count: drawnCards.length });
+      }
+    }
+  }
+
+  // ── Activation cleanup ──
+  // Detected when dcActionsData entry is removed entirely
+  if (before?.dcActionsData) {
+    for (const msgId of Object.keys(before.dcActionsData)) {
+      if (!after?.dcActionsData?.[msgId]) {
+        emit('ActivationCleanedUp', { msgId });
+      }
+    }
+  }
+
+  // ── Activation phase ended ──
+  if (set?.player1ActivationPhaseEnded && !before?.player1ActivationPhaseEnded) {
+    emit('ActivationPhaseEnded', {});
+  }
+
+  // ── Deployment completed ──
+  if (set?.player1Deployed && !before?.player1Deployed) {
+    emit('DeploymentCompleted', { playerNum: 1 });
+  }
+  if (set?.player2Deployed && !before?.player2Deployed) {
+    emit('DeploymentCompleted', { playerNum: 2 });
+  }
+
+  // ── Figure strain ──
+  if (set?.figureStrain && before?.figureStrain) {
+    for (const [figKey, newStrain] of Object.entries(after?.figureStrain || {})) {
+      const oldStrain = before.figureStrain?.[figKey] || 0;
+      if (newStrain > oldStrain) {
+        emit('FigureStrained', { figureKey: figKey, amount: newStrain - oldStrain });
+      }
+    }
+  }
+
+  // ── VP deducted ──
+  for (const playerNum of [1, 2]) {
+    const vpKey = `player${playerNum}VP`;
+    if (set?.[vpKey] && before?.[vpKey]) {
+      const diff_vp = (before[vpKey].total || 0) - (after?.[vpKey]?.total || 0);
+      if (diff_vp > 0) {
+        emit('VpDeducted', { playerNum, amount: diff_vp, reason: 'unknown' });
+      }
+    }
+  }
+
+  // ── Movement points adjusted ──
+  if (set?.movementBank && before?.movementBank) {
+    for (const [msgId, newBank] of Object.entries(after?.movementBank || {})) {
+      const oldBank = before.movementBank?.[msgId];
+      if (oldBank && newBank?.remaining != null && oldBank.remaining != null && newBank.remaining !== oldBank.remaining) {
+        emit('MovementPointsAdjusted', { msgId, oldMp: oldBank.remaining, newMp: newBank.remaining });
+      }
+    }
+  }
+
+  // ── Card discarded (directly, not via play) ──
+  if (set?.player1Discard || set?.player2Discard) {
+    for (const playerNum of [1, 2]) {
+      const discardKey = `player${playerNum}Discard`;
+      const handKey = `player${playerNum}Hand`;
+      const oldDiscard = before?.[discardKey] || [];
+      const newDiscard = after?.[discardKey] || [];
+      const oldHand = before?.[handKey] || [];
+      for (const card of newDiscard) {
+        if (!oldDiscard.includes(card)) {
+          // Only emit CardDiscarded if card wasn't played from hand (CardPlayed already handles that)
+          const wasInHand = oldHand.includes(card);
+          if (!wasInHand) {
+            emit('CardDiscarded', { playerNum, cardName: card });
+          }
+        }
       }
     }
   }

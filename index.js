@@ -3283,6 +3283,7 @@ client.on('interactionCreate', async (interaction) => {
     // Periodic event verification (env VERIFY_INTERVAL, default 0 = disabled)
     const _verifyInterval = parseInt(process.env.VERIFY_INTERVAL, 10) || 0;
 
+    let _cmdEmittedTypes = null;
     if (COMMAND_MODE_HANDLERS.has(buttonKey)) {
       const _cmdGameId = _buttonLockId;
       const _cmdState = _cmdGameId ? getGame(_cmdGameId) : null;
@@ -3293,6 +3294,7 @@ client.on('interactionCreate', async (interaction) => {
           const { events: _cmdEvents, error: _cmdError } = _cmdHandler(_cmdState, _cmd);
           if (!_cmdError && _cmdEvents.length > 0) {
             appendDomainEvents(_cmdGameId, _cmdEvents).catch(e => console.error('[command-mode]', e));
+            _cmdEmittedTypes = _cmdEvents.map(e => e.type);
           }
           if (_cmdError) {
             console.warn('[command-mode] Command error:', _cmdError, 'for', buttonKey);
@@ -3364,7 +3366,7 @@ client.on('interactionCreate', async (interaction) => {
           // Domain events (dual-write)
           const _domainEvents = translateDiffToEvents(buttonKey, _evtDiff, {
             gameId: _evtGameId, playerId: interaction.user.id, before: _evtBefore, after: _evtAfter,
-          });
+          }, _cmdEmittedTypes);
           if (_domainEvents.length > 0) {
             appendDomainEvents(_evtGameId, _domainEvents).catch(e => console.error('[domain-events]', e));
           }
