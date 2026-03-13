@@ -151,27 +151,14 @@ export function normalizeSquadInput(squad) {
     }
     delete squad.unclassified;
   }
-  const autoRegularWarnings = [];
   if (squad?.dcList) {
-    squad.dcList = squad.dcList.map((raw) => {
-      const resolved = resolveDcInput(raw, dcEffects);
-      // Detect when a bare name defaulted to Regular and Elite also exists
-      const inputNorm = normalizeInputName(raw);
-      if (resolved !== inputNorm && resolved.endsWith('(Regular)') && dcEffects[resolved.replace('(Regular)', '(Elite)').trim()]) {
-        const baseName = resolved.replace(/\s*\(Regular\)\s*$/, '');
-        const regCost = dcEffects[resolved]?.cost;
-        const eliteCost = dcEffects[resolved.replace('(Regular)', '(Elite)').trim()]?.cost;
-        autoRegularWarnings.push(`"${baseName}" defaulted to Regular (${regCost} pts). Use "${baseName} [E]" for Elite (${eliteCost} pts).`);
-      }
-      return resolved;
-    });
+    squad.dcList = squad.dcList.map((raw) => resolveDcInput(raw, dcEffects));
     squad.dcCount = squad.dcList.length;
   }
   if (squad?.ccList) {
     squad.ccList = squad.ccList.map((raw) => resolveCcInput(raw, ccCards));
     squad.ccCount = squad.ccList.length;
   }
-  squad._autoRegularWarnings = autoRegularWarnings;
   return squad;
 }
 
@@ -208,10 +195,6 @@ export function validateDeckLegal(squad) {
   }
   if (dcTotal !== DC_POINTS_LEGAL) {
     errors.push(`Deployment total is ${dcTotal} points. Legal total is exactly ${DC_POINTS_LEGAL}.`);
-  }
-  // Surface auto-Regular warnings from normalizeSquadInput so user knows to use [E] for Elite
-  if (squad._autoRegularWarnings?.length) {
-    errors.push(...squad._autoRegularWarnings);
   }
   // Nemik's Manifesto: "Your command deck may include up to 3 additional Command cards."
   const hasNemiksManifesto = dcList.some((entry) => {
