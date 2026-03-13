@@ -153,95 +153,37 @@ export async function runRecovery(game, gameId, ctx) {
 // ─── Recover: both squads submitted but initiative button never posted ────────
 
 async function recoverBothSquadsReady(game, gameId, ctx) {
-  const { client, getDetermineInitiativeButtons, populatePlayAreas, createPlayAreaChannels, createBoardChannel, buildBoardMapPayload, saveGames } = ctx;
+  const { client, saveGames } = ctx;
 
   // Guard: both squads must be submitted
   if (!game.player1Squad || !game.player2Squad) return null;
   // Guard: initiative already determined — no recovery needed
-  // Note: game.initiativePlayerNum is never set directly; use initiativeDetermined/initiativePlayerId
   if (game.initiativeDetermined || game.initiativePlayerId) return null;
   // Guard: game already in active play
   if (game.currentRound > 0) return null;
 
-  console.log(`[recover] bothSquadsReady: game ${gameId} has both squads, no initiative determined, round 0 — checking for initiative button`);
-
-  // Check if the initiative button message actually exists in the game log
-  if (!game.generalId) {
-    console.warn(`[recover] bothSquadsReady: game ${gameId} has no generalId`);
-    return null;
-  }
+  // Check if the initiative button already exists in the game log
+  if (!game.generalId) return null;
   const generalChannel = await client.channels.fetch(game.generalId);
   if (!generalChannel) return null;
 
-  // Look for an existing initiative button in recent messages
-  try {
-    const recentMsgs = await generalChannel.messages.fetch({ limit: 30 });
-    const hasInitiativeButton = recentMsgs.some(m =>
-      m.author.bot && m.components?.some(row =>
-        row.components?.some(c => c.customId?.startsWith('determine_initiative_'))
-      )
-    );
-    if (hasInitiativeButton) {
-      console.log(`[recover] bothSquadsReady: initiative button already exists in game ${gameId}`);
-      return null;
-    }
-    console.log(`[recover] No initiative button found in ${recentMsgs.size} recent messages for game ${gameId} — will re-post`);
-  } catch (err) {
-    console.warn('[recover] Failed to check for initiative button:', err.message);
-    // Continue — better to re-post a duplicate than leave the game stuck
-  }
+  const recentMsgs = await generalChannel.messages.fetch({ limit: 30 });
+  const hasInitiativeButton = recentMsgs.some(m =>
+    m.author.bot && m.components?.some(row =>
+      row.components?.some(c => c.customId?.startsWith('determine_initiative_'))
+    )
+  );
+  if (hasInitiativeButton) return null;
 
-  // Ensure play area channels exist
-  try {
-    if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
-      if (createPlayAreaChannels) {
-        const guild = generalChannel.guild;
-        const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
-        const prefix = `IA${game.gameId}`;
-        const { p1PlayAreaChannel, p2PlayAreaChannel } = await createPlayAreaChannels(
-          guild, gameCategory, prefix, game.player1Id, game.player2Id
-        );
-        game.p1PlayAreaId = p1PlayAreaChannel.id;
-        game.p2PlayAreaId = p2PlayAreaChannel.id;
-      }
-    }
-    if (!game.boardId && createBoardChannel) {
-      const guild = generalChannel.guild;
-      const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
-      const prefix = `IA${game.gameId}`;
-      const boardChannel = await createBoardChannel(guild, gameCategory, prefix, game.player1Id, game.player2Id);
-      game.boardId = boardChannel.id;
-      if (game.selectedMap && buildBoardMapPayload) {
-        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-        await boardChannel.send(payload).catch(discordCatch);
-      }
-    }
-    if (populatePlayAreas) {
-      await populatePlayAreas(game, client);
-    }
-  } catch (err) {
-    console.error('[recover] Failed to create/populate play areas:', err.message);
-    // Continue — still try to post the initiative button
-  }
-
-  // Post the initiative button
-  game.bothReadyPosted = true;
-  const { EmbedBuilder } = await import('discord.js');
-  await generalChannel.send({
-    content: `<@${game.player1Id}> <@${game.player2Id}> — **[Recovered]** Both squads are ready! Determine initiative below.`,
-    allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
-    embeds: [
-      new EmbedBuilder()
-        .setTitle('Both Squads Ready')
-        .setDescription(
-          `**Player 1:** ${game.player1Squad.name || 'Unnamed'} (${game.player1Squad.dcCount} DCs, ${game.player1Squad.ccCount} CCs)\n` +
-          `**Player 2:** ${game.player2Squad.name || 'Unnamed'} (${game.player2Squad.dcCount} DCs, ${game.player2Squad.ccCount} CCs)\n\n` +
-          'Play Area channels have been populated. Next: Determine Initiative.'
-        )
-        .setColor(0x57F287),
-    ],
-    components: getDetermineInitiativeButtons ? [getDetermineInitiativeButtons(game)] : [],
-  });
+  // Reuse the canonical "both squads ready" flow
+  const { postBothSquadsReady } = await import('../game-creation.js');
+  await postBothSquadsReady(game, client, {
+    createPlayAreaChannels: ctx.createPlayAreaChannels,
+    createBoardChannel: ctx.createBoardChannel,
+    buildBoardMapPayload: ctx.buildBoardMapPayload,
+    populatePlayAreas: ctx.populatePlayAreas,
+    getDetermineInitiativeButtons: ctx.getDetermineInitiativeButtons,
+  }, { tag: '[Recovered]' });
   if (saveGames) saveGames();
   return 'Re-posted "Both Squads Ready" with initiative button';
 }

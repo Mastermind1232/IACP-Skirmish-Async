@@ -329,66 +329,90 @@ export async function applySquadSubmission(game, isP1, squad, client, deps) {
       components: [],
     });
   }
-  const generalChannel = await client.channels.fetch(game.generalId);
   const bothReady = game.player1Squad && game.player2Squad && !game.bothReadyPosted;
   if (bothReady) {
-    try {
-      if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
-        const guild = generalChannel.guild;
-        const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
-        const prefix = `IA${game.gameId}`;
-        const { p1PlayAreaChannel, p2PlayAreaChannel } = await createPlayAreaChannelsFn(
-          guild, gameCategory, prefix, game.player1Id, game.player2Id
-        );
-        game.p1PlayAreaId = p1PlayAreaChannel.id;
-        game.p2PlayAreaId = p2PlayAreaChannel.id;
-      }
-      // Map Updates channel created AFTER play areas so it appears last
-      if (!game.boardId) {
-        try {
-          const guild = generalChannel.guild;
-          const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
-          const prefix = `IA${game.gameId}`;
-          const boardChannel = await createBoardChannelFn(guild, gameCategory, prefix, game.player1Id, game.player2Id);
-          game.boardId = boardChannel.id;
-          if (game.selectedMap) {
-            const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-            await boardChannel.send(payload).catch(discordCatch);
-          }
-        } catch (err) {
-          console.error('Failed to create Map Updates channel:', err);
-        }
-      }
-      await populatePlayAreas(game, client);
-    } catch (err) {
-      console.error('Failed to create/populate Play Areas:', err);
-    }
-    try {
-      const bothReadyMsg = await generalChannel.send({
-        content: `<@${game.player1Id}> <@${game.player2Id}> — Both squads are ready! Determine initiative below.`,
-        allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
-        embeds: [
-          new EmbedBuilder()
-            .setTitle('Both Squads Ready')
-            .setDescription(
-              `**Player 1:** ${game.player1Squad.name || 'Unnamed'} (${game.player1Squad.dcCount} DCs, ${game.player1Squad.ccCount} CCs)\n` +
-                `**Player 2:** ${game.player2Squad.name || 'Unnamed'} (${game.player2Squad.dcCount} DCs, ${game.player2Squad.ccCount} CCs)\n\n` +
-                'Play Area channels have been populated with one thread per Deployment Card. Next: Determine Initiative.'
-            )
-            .setColor(COLORS.GREEN),
-        ],
-        components: [getDetermineInitiativeButtons(game)],
-      });
-      game.bothReadyMessageId = bothReadyMsg.id;
-      // Set flag AFTER message is successfully sent — prevents stuck state
-      // where flag is true but the initiative button was never posted
-      game.bothReadyPosted = true;
-    } catch (err) {
-      console.error('Failed to send Both Squads Ready message:', err);
-      // Do NOT set bothReadyPosted — recovery can retry on next startup
-    }
+    await postBothSquadsReady(game, client, {
+      createPlayAreaChannels: createPlayAreaChannelsFn,
+      createBoardChannel: createBoardChannelFn,
+      buildBoardMapPayload, populatePlayAreas,
+      getDetermineInitiativeButtons,
+    });
   }
   saveGames();
+}
+
+/**
+ * Ensure play area/board channels exist, populate them, and post the
+ * "Both Squads Ready" message with the initiative button.
+ *
+ * Single source of truth — called by applySquadSubmission (happy path)
+ * and recoverBothSquadsReady (recovery path).
+ *
+ * Sets game.bothReadyPosted = true ONLY after the Discord message is
+ * successfully sent, so a crash before that point is recoverable.
+ *
+ * @param {object} game
+ * @param {import('discord.js').Client} client
+ * @param {object} deps - { createPlayAreaChannels, createBoardChannel,
+ *   buildBoardMapPayload, populatePlayAreas, getDetermineInitiativeButtons }
+ * @param {object} [opts]
+ * @param {string} [opts.tag] - prefix for the message content (e.g. '[Recovered]')
+ */
+export async function postBothSquadsReady(game, client, deps, opts = {}) {
+  const { createPlayAreaChannels, createBoardChannel,
+    buildBoardMapPayload, populatePlayAreas, getDetermineInitiativeButtons } = deps;
+
+  const generalChannel = await client.channels.fetch(game.generalId);
+
+  // ── Ensure play area + board channels exist ──────────────────────
+  try {
+    if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
+      const guild = generalChannel.guild;
+      const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
+      const prefix = `IA${game.gameId}`;
+      const { p1PlayAreaChannel, p2PlayAreaChannel } = await createPlayAreaChannels(
+        guild, gameCategory, prefix, game.player1Id, game.player2Id
+      );
+      game.p1PlayAreaId = p1PlayAreaChannel.id;
+      game.p2PlayAreaId = p2PlayAreaChannel.id;
+    }
+    if (!game.boardId) {
+      const guild = generalChannel.guild;
+      const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
+      const prefix = `IA${game.gameId}`;
+      const boardChannel = await createBoardChannel(guild, gameCategory, prefix, game.player1Id, game.player2Id);
+      game.boardId = boardChannel.id;
+      if (game.selectedMap) {
+        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await boardChannel.send(payload).catch(() => {});
+      }
+    }
+    await populatePlayAreas(game, client);
+  } catch (err) {
+    console.error('Failed to create/populate Play Areas:', err);
+  }
+
+  // ── Post initiative button ───────────────────────────────────────
+  const tag = opts.tag ? `**${opts.tag}** ` : '';
+  const bothReadyMsg = await generalChannel.send({
+    content: `<@${game.player1Id}> <@${game.player2Id}> — ${tag}Both squads are ready! Determine initiative below.`,
+    allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
+    embeds: [
+      new EmbedBuilder()
+        .setTitle('Both Squads Ready')
+        .setDescription(
+          `**Player 1:** ${game.player1Squad.name || 'Unnamed'} (${game.player1Squad.dcCount} DCs, ${game.player1Squad.ccCount} CCs)\n` +
+            `**Player 2:** ${game.player2Squad.name || 'Unnamed'} (${game.player2Squad.dcCount} DCs, ${game.player2Squad.ccCount} CCs)\n\n` +
+            'Play Area channels have been populated with one thread per Deployment Card. Next: Determine Initiative.'
+        )
+        .setColor(0x57F287),
+    ],
+    components: [getDetermineInitiativeButtons(game)],
+  });
+  game.bothReadyMessageId = bothReadyMsg.id;
+  // Set flag AFTER message sent — prevents stuck state where flag is
+  // true but the initiative button was never posted.
+  game.bothReadyPosted = true;
 }
 
 /**
