@@ -465,18 +465,12 @@ function initChat(){
 function buildCtx(){
   if(!latestStats)return'No training data loaded.';
   const s=latestStats;
-  let c=`You are Skirbo, an AI bot learning Imperial Assault skirmish. Speak casually and with personality. Call yourself "I" and the user "commander." Keep answers concise but insightful.\n\n`;
-  c+=`TRAINING: ${s.meta.totalGames} games, ${s.states} states, ${s.actionEntries} entries. Exploration: ${(s.epsilon*100).toFixed(1)}% random.\n`;
-  c+=`WINS: P1 ${s.meta.p1Wins}, P2 ${s.meta.p2Wins}. Completion: ${((s.meta.p1Wins+s.meta.p2Wins)/(s.meta.totalGames||1)*100).toFixed(0)}%.\n`;
-  c+=`Q-RANGE: ${s.minQ.toFixed(1)} to ${s.maxQ.toFixed(1)}.\n\n`;
-  if(Object.keys(s.dcStats).length>0){c+='DC STATS:\n';for(const[n,d]of Object.entries(s.dcStats))c+=`  ${n} (${d.affiliation}): ${d.games>0?(d.wins/d.games*100).toFixed(0):'?'}% WR (${d.wins}W/${d.losses}L, ${d.games}g)\n`;c+='\n';}
-  if(Object.keys(s.affiliationStats).length>0){c+='FACTIONS:\n';for(const[a,d]of Object.entries(s.affiliationStats))c+=`  ${a}: ${d.games>0?(d.wins/d.games*100).toFixed(0):'?'}% (${d.wins}W/${d.losses}L)\n`;c+='\n';}
-  const sorted=Object.entries(s.actionTypeCounts).sort((a,b)=>b[1]-a[1]);
-  const ta=sorted.reduce((s,[,c])=>s+c,0)||1;
-  c+='ACTIONS:\n';for(const[t,v]of sorted.slice(0,6))c+=`  ${AL[t]||t}: ${(v/ta*100).toFixed(1)}%\n`;c+='\n';
-  if(s.matchups.length>0){c+='LAST 5:\n';for(const m of s.matchups.slice(-5))c+=`  ${(m.p1||[]).join('+')} vs ${(m.p2||[]).join('+')} → ${m.winner||'DNF'}\n`;}
-  const troubles=findTroubles(s);
-  if(troubles.length>0){c+='\nTROUBLE SPOTS:\n';for(const t of troubles.slice(0,4))c+=`  ${t.key} (seen ${t.visits}x, bestQ ${t.bestQ.toFixed(1)}): ${t.reasons.join('; ')}\n`;}
+  let c=`You are Skirbo, an AI learning Imperial Assault skirmish. Be brief — 1-3 sentences max. Casual tone. Call yourself "I" and the user "commander."\n\n`;
+  c+=`Stats: ${s.meta.totalGames} games, ${s.states} states, ${(s.epsilon*100).toFixed(0)}% exploration, Q ${s.minQ.toFixed(0)} to ${s.maxQ.toFixed(0)}, ${((s.meta.p1Wins+s.meta.p2Wins)/(s.meta.totalGames||1)*100).toFixed(0)}% completion.\n`;
+  // Top 5 DCs only
+  const dcArr=Object.entries(s.dcStats).map(([n,d])=>({n,...d,wr:d.games>0?d.wins/d.games:0})).sort((a,b)=>b.wr-a.wr);
+  if(dcArr.length>0){c+='Top DCs: '+dcArr.slice(0,5).map(d=>`${d.n} ${(d.wr*100).toFixed(0)}%`).join(', ')+'\n';}
+  if(Object.keys(s.affiliationStats).length>0){c+='Factions: ';for(const[a,d]of Object.entries(s.affiliationStats))c+=`${a} ${d.games>0?(d.wins/d.games*100).toFixed(0):'?'}% `;c+='\n';}
   return c;
 }
 
@@ -487,7 +481,7 @@ async function sendChat(msg){
   el.innerHTML+=`<div class="chat-msg bot" id="${thinkId}"><div class="sender">SKIRBO</div><div class="msg-text" style="color:var(--text-dim)">Thinking...</div></div>`;
   el.scrollTop=el.scrollHeight;
   try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,system:buildCtx(),messages:[{role:'user',content:msg}]})});
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:200,system:buildCtx(),messages:[{role:'user',content:msg}]})});
     if(!r.ok)throw new Error(await r.text());
     const d=await r.json();
     document.getElementById(thinkId).querySelector('.msg-text').innerHTML=esc(d.content?.[0]?.text||'Got nothing. Try again?');
