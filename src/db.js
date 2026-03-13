@@ -707,6 +707,19 @@ export async function getLatestSnapshot(gameId) {
   }
 }
 
+export async function getActiveGameIdsFromEvents() {
+  if (!pool) return [];
+  try {
+    const res = await pool.query(
+      `SELECT DISTINCT game_id FROM domain_events ORDER BY game_id`
+    );
+    return res.rows.map(r => r.game_id);
+  } catch (err) {
+    console.error('[DB] getActiveGameIdsFromEvents failed:', err.message);
+    return [];
+  }
+}
+
 export async function deleteSnapshots(gameId) {
   if (!pool) return;
   try {
