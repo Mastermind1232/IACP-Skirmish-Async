@@ -106,7 +106,7 @@
   .aff-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
   .aff-badge.imperial { background: rgba(230,57,70,0.15); color: var(--imperial); }
   .aff-badge.rebel { background: rgba(72,149,239,0.15); color: var(--rebel); }
-  .aff-badge.mercenary { background: rgba(46,204,113,0.15); color: var(--scum); }
+  .aff-badge.mercenary, .aff-badge.scum { background: rgba(46,204,113,0.15); color: var(--scum); }
   .aff-badge.mixed { background: rgba(127,140,141,0.15); color: var(--mixed); }
 
   /* Match table */
@@ -217,8 +217,8 @@ Chart.defaults.borderColor = '#1a2744';
 Chart.defaults.font.family = 'Rajdhani';
 
 const FACTION_COLORS = {
-  Imperial: '#e63946', Rebel: '#4895ef', Mercenary: '#2ecc71', Mixed: '#7f8c8d',
-  imperial: '#e63946', rebel: '#4895ef', mercenary: '#2ecc71', mixed: '#7f8c8d',
+  Imperial: '#e63946', Rebel: '#4895ef', Mercenary: '#2ecc71', Scum: '#2ecc71', Mixed: '#7f8c8d',
+  imperial: '#e63946', rebel: '#4895ef', mercenary: '#2ecc71', scum: '#2ecc71', mixed: '#7f8c8d',
 };
 
 // ═══ NAV ═══

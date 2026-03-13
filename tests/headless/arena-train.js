@@ -263,6 +263,13 @@ async function main() {
       agent2.stats.games++;
     }
 
+    // Record DC/affiliation stats into learnings
+    const winnerLabel = result.winnerAgentId === agent1.id ? 'P1' :
+                        result.winnerAgentId === agent2.id ? 'P2' : null;
+    const p1Army = agent1.army.dcList.map(n => ({ dcName: n }));
+    const p2Army = agent2.army.dcList.map(n => ({ dcName: n }));
+    recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcStats, getDcEffects);
+
     // Match history
     arenaData.matchHistory.push({
       game: arenaData.meta.totalGames,
