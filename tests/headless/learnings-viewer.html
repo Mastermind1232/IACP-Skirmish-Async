@@ -466,7 +466,7 @@ async function sendChat(msg){
   const el=document.getElementById('chatMessages');
   el.innerHTML+=`<div class="chat-msg user"><div class="sender">YOU</div><div class="msg-text">${esc(msg)}</div></div>`;
   const thinkId='think'+Date.now();
-  el.innerHTML+=`<div class="chat-msg bot" id="${thinkId}"><div class="sender">SKIRBO</div><div class="msg-text" style="color:var(--text-dim)">Thinking...</div></div>`;
+  el.innerHTML+=`<div class="chat-msg bot" id="${thinkId}"><div class="sender">SKIRBO</div><div class="msg-text"><span style="color:var(--text-dim)">Thinking...</span></div></div>`;
   el.scrollTop=el.scrollHeight;
   try{
     const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:400,system:buildCtx(),messages:[{role:'user',content:msg}]})});
