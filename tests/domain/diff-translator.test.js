@@ -231,6 +231,98 @@ describe('DiffTranslator', () => {
     assert.ok(!events2.some(e => e.type === 'CombatDeclared'));
   });
 
+  it('push handler → FigurePushed (not FigureMoved)', () => {
+    const before = { figurePositions: { 2: { 'Rebel-0-0': 'C3' } } };
+    const after = { figurePositions: { 2: { 'Rebel-0-0': 'D3' } } };
+    const diff = { set: { figurePositions: after.figurePositions }, deleted: [] };
+    const events = translateDiffToEvents('push_pick_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'FigurePushed'));
+    const pushEvent = events.find(e => e.type === 'FigurePushed');
+    assert.equal(pushEvent.payload.fromCoord, 'C3');
+    assert.equal(pushEvent.payload.toCoord, 'D3');
+  });
+
+  it('cancel handler + pendingCombat deleted → CombatCancelled', () => {
+    const before = { pendingCombat: { attackerMsgId: 'msg1' } };
+    const after = {};
+    const diff = { set: {}, deleted: ['pendingCombat'] };
+    const events = translateDiffToEvents('cancel_combat_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'CombatCancelled'));
+  });
+
+  it('discard emptied + deck grew → DeckShuffled', () => {
+    const before = { player1CcDiscard: ['A', 'B'], player1CcDeck: [] };
+    const after = { player1CcDiscard: [], player1CcDeck: ['B', 'A'] };
+    const diff = { set: { player1CcDiscard: [], player1CcDeck: ['B', 'A'] }, deleted: [] };
+    const events = translateDiffToEvents('cc_draw_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'DeckShuffled'));
+    assert.equal(events.find(e => e.type === 'DeckShuffled').payload.playerNum, 1);
+  });
+
+  it('dcAttachments added → AttachmentPlaced', () => {
+    const before = { dcAttachments: {} };
+    const after = { dcAttachments: { 'Stormtrooper': ['The Darksaber'] } };
+    const diff = { set: { dcAttachments: after.dcAttachments }, deleted: [] };
+    const events = translateDiffToEvents('attachment_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'AttachmentPlaced'));
+    const attEvent = events.find(e => e.type === 'AttachmentPlaced');
+    assert.equal(attEvent.payload.dcName, 'Stormtrooper');
+    assert.equal(attEvent.payload.attachmentName, 'The Darksaber');
+  });
+
+  it('confirmedMapId set → MapConfirmed', () => {
+    const before = {};
+    const after = { confirmedMapId: 'mos-eisley' };
+    const diff = { set: { confirmedMapId: 'mos-eisley' }, deleted: [] };
+    const events = translateDiffToEvents('map_confirm_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'MapConfirmed'));
+    assert.equal(events.find(e => e.type === 'MapConfirmed').payload.mapId, 'mos-eisley');
+  });
+
+  it('lastCleaveTarget set → CleaveTargetSelected', () => {
+    const before = {};
+    const after = { lastCleaveTarget: 'Rebel-0-0', lastCleaveDamage: 2 };
+    const diff = { set: { lastCleaveTarget: 'Rebel-0-0', lastCleaveDamage: 2 }, deleted: [] };
+    const events = translateDiffToEvents('cleave_target_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'CleaveTargetSelected'));
+    assert.equal(events.find(e => e.type === 'CleaveTargetSelected').payload.cleaveDamage, 2);
+  });
+
+  it('pendingCombat.netDamage set → CombatDamageCalculated', () => {
+    const before = { pendingCombat: { attackerMsgId: 'msg1' } };
+    const after = { pendingCombat: { attackerMsgId: 'msg1', totalDamage: 3, totalBlock: 1, netDamage: 2 } };
+    const diff = { set: { pendingCombat: after.pendingCombat }, deleted: [] };
+    const events = translateDiffToEvents('combat_resolve_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'CombatDamageCalculated'));
+    assert.equal(events.find(e => e.type === 'CombatDamageCalculated').payload.netDamage, 2);
+  });
+
+  it('cancel handler + moveInProgress deleted → MovementCancelled', () => {
+    const before = { moveInProgress: { 'Trooper-0-0': { remaining: 3 } } };
+    const after = {};
+    const diff = { set: {}, deleted: ['moveInProgress'] };
+    const events = translateDiffToEvents('cancel_move_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'MovementCancelled'));
+    assert.equal(events.find(e => e.type === 'MovementCancelled').payload.figureKey, 'Trooper-0-0');
+  });
+
+  it('setupAttachmentConfirmed set → AttachmentsConfirmed', () => {
+    const before = {};
+    const after = { setupAttachmentConfirmed: true };
+    const diff = { set: { setupAttachmentConfirmed: true }, deleted: [] };
+    const events = translateDiffToEvents('attachment_confirm_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'AttachmentsConfirmed'));
+  });
+
+  it('player1CcDrawn set → CommandCardsDrawn', () => {
+    const before = {};
+    const after = { player1CcDrawn: true };
+    const diff = { set: { player1CcDrawn: true }, deleted: [] };
+    const events = translateDiffToEvents('cc_draw_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'CommandCardsDrawn'));
+    assert.equal(events.find(e => e.type === 'CommandCardsDrawn').payload.playerNum, 1);
+  });
+
   it('phaseGate open → ready → cleared lifecycle', () => {
     // Open
     let before = {};

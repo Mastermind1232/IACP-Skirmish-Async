@@ -19,9 +19,20 @@ export async function verifyGameEvents(gameId, actualState) {
 }
 
 const COMPARABLE_KEYS = [
+  // Core game state
   'currentRound', 'roundPhase', 'phase', 'figurePositions', 'figureConditions',
   'figurePowerTokens', 'dcActionsData', 'pendingCombat', 'moveInProgress',
   'player1VP', 'player2VP', 'phaseGate',
+  // Health & deployment
+  'dcHealthState', 'player1Deployed', 'player2Deployed',
+  // Setup state
+  'selectedMap', 'initiativePlayerNum', 'dcAttachments', 'confirmedMapId',
+  // Combat sub-state
+  'lastCleaveTarget', 'lastCleaveDamage',
+  // Hand state
+  'player1Hand', 'player2Hand',
+  // Terminal/crate state
+  'terminalControl', 'collectedCrates',
 ];
 
 export { COMPARABLE_KEYS };

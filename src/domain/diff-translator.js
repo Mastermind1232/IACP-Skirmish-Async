@@ -452,6 +452,97 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
     emit('NegationResolved', { negated: !!before.pendingNegation.negated });
   }
 
+  // ── Figure pushed (position change via push handler) ──
+  if (set?.figurePositions && before?.figurePositions && /push|dark_energy|face_me/i.test(handlerKey)) {
+    for (const playerNum of [1, 2]) {
+      const beforePos = before.figurePositions?.[playerNum] || {};
+      const afterPos = after?.figurePositions?.[playerNum] || {};
+      for (const [figKey, newCoord] of Object.entries(afterPos)) {
+        const oldCoord = beforePos[figKey];
+        if (oldCoord && oldCoord !== newCoord) {
+          emit('FigurePushed', { figureKey: figKey, fromCoord: oldCoord, toCoord: newCoord, playerNum });
+        }
+      }
+    }
+  }
+
+  // ── Combat cancelled (pendingCombat deleted without resolution data) ──
+  if ((deleted?.includes('pendingCombat') || (before?.pendingCombat && !after?.pendingCombat))
+      && /cancel/i.test(handlerKey)) {
+    emit('CombatCancelled', {});
+  }
+
+  // ── Deck shuffled (discard emptied, deck grew) ──
+  for (const playerNum of [1, 2]) {
+    const discardKey = `player${playerNum}CcDiscard`;
+    const deckKey = `player${playerNum}CcDeck`;
+    if (set?.[discardKey] && set?.[deckKey]) {
+      const oldDiscard = before?.[discardKey] || [];
+      const newDiscard = after?.[discardKey] || [];
+      if (oldDiscard.length > 0 && newDiscard.length === 0) {
+        emit('DeckShuffled', { playerNum });
+      }
+    }
+  }
+
+  // ── Command cards drawn flag ──
+  for (const playerNum of [1, 2]) {
+    const key = playerNum === 1 ? 'player1CcDrawn' : 'player2CcDrawn';
+    if (set?.[key] && !before?.[key]) {
+      emit('CommandCardsDrawn', { playerNum });
+    }
+  }
+
+  // ── Attachment placed ──
+  if (set?.dcAttachments) {
+    for (const [dcName, newAttachments] of Object.entries(after?.dcAttachments || {})) {
+      const oldAttachments = before?.dcAttachments?.[dcName] || [];
+      for (const att of newAttachments) {
+        if (!oldAttachments.includes(att)) {
+          emit('AttachmentPlaced', { dcName, attachmentName: att });
+        }
+      }
+    }
+  }
+
+  // ── Attachments confirmed ──
+  if (set?.setupAttachmentConfirmed && !before?.setupAttachmentConfirmed) {
+    emit('AttachmentsConfirmed', {});
+  }
+
+  // ── Map confirmed ──
+  if (set?.confirmedMapId && set.confirmedMapId !== before?.confirmedMapId) {
+    emit('MapConfirmed', { mapId: set.confirmedMapId });
+  }
+
+  // ── Cleave target selected ──
+  if (set?.lastCleaveTarget && set.lastCleaveTarget !== before?.lastCleaveTarget) {
+    emit('CleaveTargetSelected', {
+      targetFigureKey: set.lastCleaveTarget,
+      cleaveDamage: set.lastCleaveDamage || 0,
+    });
+  }
+
+  // ── Combat damage calculated ──
+  if (set?.pendingCombat && before?.pendingCombat) {
+    if (set.pendingCombat.netDamage != null && before.pendingCombat.netDamage == null) {
+      emit('CombatDamageCalculated', {
+        totalDamage: set.pendingCombat.totalDamage || 0,
+        totalBlock: set.pendingCombat.totalBlock || 0,
+        netDamage: set.pendingCombat.netDamage || 0,
+      });
+    }
+  }
+
+  // ── Movement cancelled ──
+  if (before?.moveInProgress && /cancel/i.test(handlerKey)) {
+    for (const figKey of Object.keys(before.moveInProgress)) {
+      if (!after?.moveInProgress?.[figKey]) {
+        emit('MovementCancelled', { figureKey: figKey });
+      }
+    }
+  }
+
   return events;
 }
 
