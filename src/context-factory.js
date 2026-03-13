@@ -17,6 +17,8 @@ const COMBAT_DEPS = [
   'SURGE_LABELS', 'parseSurgeEffect', 'getAbility', 'resolveSurgeAbility',
   'getSurgeAbilityLabel', 'getRange', 'hasLineOfSight', 'getDiceData',
   'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons',
+  'calculateKillVp', 'checkHuntDissent', 'decrementActivationIfGroupDefeated',
+  'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
 ];
 
 const CONTEXT_GROUPS = {

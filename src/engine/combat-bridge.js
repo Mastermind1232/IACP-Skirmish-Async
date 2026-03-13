@@ -3,14 +3,16 @@
  * Each function receives an explicit `deps` object carrying closed-over values.
  */
 
+import { processFigureDefeat } from './defeat-handler.js';
+
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
  * Handles HP reduction, defeat, VP award, and game log.
  */
 export async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, sourceLabel, deps) {
   const { logGameAction, client, dcHealthState, dcMessageMeta,
-    dcNameFromFigureKey, parseFigureKey, reduceHp, removeFigurePosition,
-    opponentPlayerNum, calculateKillVp, awardKillVp, checkNefariousGains } = deps;
+    dcNameFromFigureKey, parseFigureKey, reduceHp,
+    opponentPlayerNum, getDcMessageIds, getDcList } = deps;
 
   const dcName = dcNameFromFigureKey(figureKey);
   const { dgIndex, figureIndex } = parseFigureKey(figureKey);
@@ -19,21 +21,29 @@ export async function applyNpcDamageToFigure(game, playerNum, figureKey, damage,
   let msgId = null;
   for (const [mid, meta] of dcMessageMeta) {
     if (meta.gameId !== game.gameId || meta.playerNum !== playerNum) continue;
+    if (meta.dcName !== dcName) continue;
     const dn = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-    if (meta.dcName === dcName && dn && String(dn[1]) === String(dgIndex)) { msgId = mid; break; }
+    const metaDg = dn ? String(dn[1]) : '1';
+    if (metaDg === String(dgIndex)) { msgId = mid; break; }
   }
 
   if (msgId) {
     const { newHp, maxHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figureIndex, damage, playerNum);
     if (dcHealthState.get(msgId)?.[figureIndex]) {
       if (wasDefeated) {
-        removeFigurePosition(game, playerNum, figureKey);
         const oppPN = opponentPlayerNum(playerNum);
-        const vp = calculateKillVp(dcName);
-        awardKillVp(game, oppPN, vp);
-        await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** was defeated! +${vp} VP to Player ${oppPN}.`, { phase: 'ROUND', icon: 'attack' });
-        // Nefarious Gains (Jabba): NPC damage defeat
-        await checkNefariousGains(game, playerNum, client);
+        const dcIds = getDcMessageIds(game, playerNum);
+        const dcIdx = (dcIds || []).indexOf(msgId);
+        await processFigureDefeat(game, {
+          defeatedPlayerNum: playerNum,
+          figureKey,
+          attackerPlayerNum: oppPN,
+          msgId,
+          dcIdx,
+          dcName,
+          displayName: dcName,
+          source: sourceLabel,
+        }, deps);
       } else {
         await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** suffered **${damage} damage** (${newHp}/${maxHp} HP remaining).`, { phase: 'ROUND', icon: 'attack' });
       }
@@ -49,8 +59,7 @@ export async function applyNpcDamageToFigure(game, playerNum, figureKey, damage,
  */
 export async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage, client, thread, sourceName, deps) {
   const { dcHealthState, reduceHp, dcNameFromFigureKey, discordCatch,
-    getDcMessageIds, getDcList, removeFigurePosition, opponentPlayerNum,
-    calculateKillVp, awardKillVp, checkNefariousGains, checkWinConditions } = deps;
+    getDcMessageIds, getDcList, opponentPlayerNum } = deps;
 
   if (!msgId) return;
   const figMatch = figKey.match(/-\d+-(\d+)$/);
@@ -59,18 +68,21 @@ export async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, 
   const figName = dcNameFromFigureKey(figKey);
   if (thread) await thread.send(`**${sourceName}** — ${figName} suffers **${damage} Damage**.`).catch(discordCatch);
   const dcIds = getDcMessageIds(game, playerNum);
-  const dcList = getDcList(game, playerNum);
   const idx = (dcIds || []).indexOf(msgId);
   if (wasDefeated && idx >= 0) {
-    removeFigurePosition(game, playerNum, figKey);
-    // VP goes to the opponent (the one dealing the damage)
     const oppPN = opponentPlayerNum(playerNum);
-    const vp = calculateKillVp(dcList[idx]?.dcName);
-    awardKillVp(game, oppPN, vp);
-    if (thread) await thread.send(`**${sourceName}** — ${figName} was **defeated**! +${vp} VP.`).catch(discordCatch);
-    // Nefarious Gains (Jabba): direct damage defeat
-    await checkNefariousGains(game, playerNum, client);
-    await checkWinConditions(game, client);
+    const dcList = getDcList(game, playerNum);
+    await processFigureDefeat(game, {
+      defeatedPlayerNum: playerNum,
+      figureKey: figKey,
+      attackerPlayerNum: oppPN,
+      msgId,
+      dcIdx: idx,
+      dcName: dcList[idx]?.dcName,
+      displayName: figName,
+      source: sourceName,
+    }, deps);
+    if (thread) await thread.send(`**${sourceName}** — ${figName} was **defeated**!`).catch(discordCatch);
   }
 }
 
@@ -667,25 +679,18 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
                 await logGameAction(game, client, `\u{1F535} **Force Deflection** — **${_fdYodaDcName}** deflects! **${combat.attackerDcName}** suffers **${_fdDiceCount} Damage** (${_fdDiceCount} attack dice rolled). HP: ${_fdAtkPrev} \u2192 ${_fdAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
                 // Check if attacker was defeated by Force Deflection
                 if (_fdAtkDefeated) {
-                  removeFigurePosition(game, attackerPlayerNum, combat.attackerFigureKey);
-                  if (game.figureConditions?.[combat.attackerFigureKey]) delete game.figureConditions[combat.attackerFigureKey];
-                  const _fdAtkStats = getDcStats(combat.attackerDcName);
-                  const _fdAtkEffects = getDcEffects()?.[combat.attackerDcName];
-                  const _fdAtkFigures = _fdAtkStats?.figures ?? 1;
-                  const _fdAtkVp = (_fdAtkFigures > 1 && _fdAtkEffects?.subCost != null) ? _fdAtkEffects.subCost : (_fdAtkStats?.cost ?? 5);
-                  awardKillVp(game, defenderPlayerNum, _fdAtkVp);
-                  await logGameAction(game, client, `**Force Deflection** — **${combat.attackerDcName}** was defeated! +${_fdAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-                  // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Force Deflection defeat
-                  {
-                    const _fdPrResult = checkFriendlyDefeatedPassiveRedraws(game, attackerPlayerNum, combat.attackerDcName);
-                    for (const _fdPrCard of _fdPrResult.redrawn) {
-                      await logGameAction(game, client, `**Passive Redraw** — **${_fdPrCard}** re-drawn from discard (friendly **${combat.attackerDcName}** defeated by Force Deflection).`, { phase: 'ROUND', icon: 'card' });
-                    }
-                  }
-                  // Nefarious Gains (Jabba): Force Deflection defeat
-                  await checkNefariousGains(game, attackerPlayerNum, client);
-                  // Hunt Dissent (Agent Kallus): Force Deflection defeat (defender defeated attacker)
-                  await checkHuntDissent(game, defenderPlayerNum, combat.target.figureKey, client);
+                  const _fdAtkDcIds = getDcMessageIds(game, attackerPlayerNum);
+                  const _fdAtkDcIdx = (_fdAtkDcIds || []).indexOf(combat.attackerMsgId);
+                  await processFigureDefeat(game, {
+                    defeatedPlayerNum: attackerPlayerNum,
+                    figureKey: combat.attackerFigureKey,
+                    attackerPlayerNum: defenderPlayerNum,
+                    attackerFigureKey: combat.target.figureKey,
+                    msgId: combat.attackerMsgId,
+                    dcIdx: _fdAtkDcIdx,
+                    dcName: combat.attackerDcName,
+                    source: 'Force Deflection',
+                  }, deps);
                 }
               }
             }
@@ -715,23 +720,18 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
               _fdNeedsEmbedRefresh = true;
               await logGameAction(game, client, `**Distracting Fire** — **${_dfDcName}** has LOS to attacker **${combat.attackerDcName}**! Attacker suffers **1 Damage**. HP: ${_dfAtkPrev} \u2192 ${_dfAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
               if (_dfAtkDefeated) {
-                removeFigurePosition(game, attackerPlayerNum, combat.attackerFigureKey);
-                if (game.figureConditions?.[combat.attackerFigureKey]) delete game.figureConditions[combat.attackerFigureKey];
-                const _dfAtkStats = getDcStats(combat.attackerDcName);
-                const _dfAtkEffects = getDcEffects()?.[combat.attackerDcName];
-                const _dfAtkFigures = _dfAtkStats?.figures ?? 1;
-                const _dfAtkVp = (_dfAtkFigures > 1 && _dfAtkEffects?.subCost != null) ? _dfAtkEffects.subCost : (_dfAtkStats?.cost ?? 5);
-                awardKillVp(game, defenderPlayerNum, _dfAtkVp);
-                await logGameAction(game, client, `**Distracting Fire** — **${combat.attackerDcName}** was defeated! +${_dfAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-                // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Distracting Fire defeat
-                {
-                  const _dfPrResult = checkFriendlyDefeatedPassiveRedraws(game, attackerPlayerNum, combat.attackerDcName);
-                  for (const _dfPrCard of _dfPrResult.redrawn) {
-                    await logGameAction(game, client, `**Passive Redraw** — **${_dfPrCard}** re-drawn from discard (friendly **${combat.attackerDcName}** defeated by Distracting Fire).`, { phase: 'ROUND', icon: 'card' });
-                  }
-                }
-                await checkNefariousGains(game, attackerPlayerNum, client);
-                await checkHuntDissent(game, defenderPlayerNum, combat.target.figureKey, client);
+                const _dfAtkDcIds = getDcMessageIds(game, attackerPlayerNum);
+                const _dfAtkDcIdx = (_dfAtkDcIds || []).indexOf(combat.attackerMsgId);
+                await processFigureDefeat(game, {
+                  defeatedPlayerNum: attackerPlayerNum,
+                  figureKey: combat.attackerFigureKey,
+                  attackerPlayerNum: defenderPlayerNum,
+                  attackerFigureKey: combat.target.figureKey,
+                  msgId: combat.attackerMsgId,
+                  dcIdx: _dfAtkDcIdx,
+                  dcName: combat.attackerDcName,
+                  source: 'Distracting Fire',
+                }, deps);
               }
             }
             break; // Only one Distracting Fire trigger per attack
@@ -1200,10 +1200,19 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
         if (blastDefeated) {
-          removeFigurePosition(game, blastPlayerNum, blastFigureKey);
-          if (game.figureConditions?.[blastFigureKey]) delete game.figureConditions[blastFigureKey];
-          const vp = calculateKillVp(blastDcList[blastIdx]?.dcName);
-          awardKillVp(game, attackerPlayerNum, vp);
+          const blastLabel = blastDcList[blastIdx]?.displayName || blastFigureKey;
+          const blastDcName = blastDcList[blastIdx]?.dcName;
+          const { vp } = await processFigureDefeat(game, {
+            defeatedPlayerNum: blastPlayerNum,
+            figureKey: blastFigureKey,
+            attackerPlayerNum,
+            attackerFigureKey: combat.attackerFigureKey,
+            msgId: blastMsgId,
+            dcIdx: blastIdx,
+            dcName: blastDcName,
+            displayName: blastLabel,
+            source: 'Blast',
+          }, { ...deps, client });
           // Achievement: count blast kills for activation streak
           if (combat.attackerMsgId) {
             game.activationKills = game.activationKills || {};
@@ -1214,23 +1223,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
                 .catch((err) => console.error('[Achievements] blast activation_kills check failed:', err.message));
             }
           }
-          const blastLabel = blastDcList[blastIdx]?.displayName || blastFigureKey;
-          await logGameAction(game, client, `Blast: <@${ownerId}> defeated **${blastLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-          if (blastIdx >= 0) {
-            await decrementActivationIfGroupDefeated(game, blastPlayerNum, blastIdx, client);
-            const blastCcAttachKey = ccAttachmentsKey(blastPlayerNum);
-            if (game[blastCcAttachKey]?.[blastMsgId]?.length) {
-              delete game[blastCcAttachKey][blastMsgId];
-              await updateAttachmentMessageForDc(game, blastPlayerNum, blastMsgId, client);
-            }
-          }
-          // Nefarious Gains (Jabba): blast defeat
-          await checkNefariousGains(game, blastPlayerNum, client);
-          // Hunt Dissent (Agent Kallus): blast defeat
-          await checkHuntDissent(game, attackerPlayerNum, combat.attackerFigureKey, client);
-          await checkWinConditions(game, client);
-          const blastDefeatedDcName = blastDcList[blastIdx]?.dcName;
-          if (!game.pendingCelebration && isDcUnique(blastDefeatedDcName)) {
+          // Celebration: prompt if unique figure defeated via Blast
+          if (!game.pendingCelebration && isDcUnique(blastDcName)) {
             game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
             await thread.send({
               content: `<@${ownerId}> — You defeated a unique figure (Blast). Play **Celebration** to gain 4 VP?`,
@@ -1523,25 +1517,17 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const { newHp: _ftNew, wasDefeated: _ftDefeated } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
             await thread.send(`**Incinerate** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`).catch(discordCatch);
             if (_ftDefeated || _ftNew <= 0) {
-              removeFigurePosition(game, defenderPlayerNum, combat.target.figureKey);
-              if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
-              const _ftVp = calculateKillVp(combat.defenderDcName);
-              awardKillVp(game, attackerPlayerNum, _ftVp);
-              await logGameAction(game, client, `\u{1F480} **Incinerate** — **${combat.target.label}** defeated from Strain (+${_ftVp} VP).`, { phase: 'ROUND', icon: 'attack' });
-              // Nefarious Gains (Jabba): Incinerate defeat
-              await checkNefariousGains(game, defenderPlayerNum, client);
-              // Hunt Dissent (Agent Kallus): Incinerate defeat
-              await checkHuntDissent(game, attackerPlayerNum, combat.attackerFigureKey, client);
-              const { dcList: _ftDcList, idx: _ftIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
-              if (_ftIdx >= 0) {
-                await decrementActivationIfGroupDefeated(game, defenderPlayerNum, _ftIdx, client);
-                const _ftCcKey = ccAttachmentsKey(defenderPlayerNum);
-                if (game[_ftCcKey]?.[targetMsgId]?.length) {
-                  delete game[_ftCcKey][targetMsgId];
-                  await updateAttachmentMessageForDc(game, defenderPlayerNum, targetMsgId, client);
-                }
-              }
-              await checkWinConditions(game, client);
+              const { idx: _ftIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
+              await processFigureDefeat(game, {
+                defeatedPlayerNum: defenderPlayerNum,
+                figureKey: combat.target.figureKey,
+                attackerPlayerNum,
+                attackerFigureKey: combat.attackerFigureKey,
+                msgId: targetMsgId,
+                dcIdx: _ftIdx,
+                dcName: combat.defenderDcName,
+                source: 'Incinerate',
+              }, deps);
             }
         }
       }
@@ -1565,20 +1551,18 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         await thread.send(`**Incinerate** — **${_ftBlastName}** suffers 1 Strain from Blast.`).catch(discordCatch);
         _ftBlastRefreshMsgIds.push(_ftBlastMsgId);
         if (_ftBlastDied || _ftBlastNew <= 0) {
-          removeFigurePosition(game, _ftBlastPn, _ftBlastFk);
-          if (game.figureConditions?.[_ftBlastFk]) delete game.figureConditions[_ftBlastFk];
-          const _ftBlastVp = calculateKillVp(_ftBlastName);
-          awardKillVp(game, _ftBlastPn === attackerPlayerNum ? defenderPlayerNum : attackerPlayerNum, _ftBlastVp);
-          await logGameAction(game, client, `\u{1F480} **Incinerate** — **${_ftBlastName}** defeated from Blast Strain (+${_ftBlastVp} VP).`, { phase: 'ROUND', icon: 'attack' });
-          // Nefarious Gains (Jabba): Incinerate blast defeat
-          await checkNefariousGains(game, _ftBlastPn, client);
-          // Hunt Dissent (Agent Kallus): Incinerate blast defeat
-          await checkHuntDissent(game, attackerPlayerNum, combat.attackerFigureKey, client);
-          const { dcList: _ftBlastDcList, idx: _ftBlastIdx } = lookupFigureDcIndex(game, _ftBlastPn, _ftBlastFk);
-          if (_ftBlastIdx >= 0) {
-            await decrementActivationIfGroupDefeated(game, _ftBlastPn, _ftBlastIdx, client);
-          }
-          await checkWinConditions(game, client);
+          const _ftBlastVpRecipient = _ftBlastPn === attackerPlayerNum ? defenderPlayerNum : attackerPlayerNum;
+          const { idx: _ftBlastIdx } = lookupFigureDcIndex(game, _ftBlastPn, _ftBlastFk);
+          await processFigureDefeat(game, {
+            defeatedPlayerNum: _ftBlastPn,
+            figureKey: _ftBlastFk,
+            attackerPlayerNum: _ftBlastVpRecipient,
+            attackerFigureKey: combat.attackerFigureKey,
+            msgId: _ftBlastMsgId,
+            dcIdx: _ftBlastIdx,
+            dcName: _ftBlastName,
+            source: 'Incinerate (Blast)',
+          }, deps);
         }
       }
     }
@@ -1646,19 +1630,17 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const _sdaMaxHp = _sdaPrevHs[_sdaFigIdx][1] ?? _sdaPrevHs[_sdaFigIdx][0] ?? 99;
         reduceHp(dcHealthState, game, _sdaMsgId, _sdaFigIdx, _sdaMaxHp, attackerPlayerNum);
         const _sdaDcIds = getDcMessageIds(game, attackerPlayerNum);
-        const _sdaDcList = getDcList(game, attackerPlayerNum);
         const _sdaIdx = (_sdaDcIds || []).indexOf(_sdaMsgId);
-        removeFigurePosition(game, attackerPlayerNum, _sdaFigKey);
-        if (game.figureConditions?.[_sdaFigKey]) delete game.figureConditions[_sdaFigKey];
-        const _sdaName = _sdaDcList?.[_sdaIdx]?.displayName || dcNameFromFigureKey(_sdaFigKey);
-        const _sdaStats = _sdaIdx >= 0 ? getDcStats(_sdaDcList[_sdaIdx]?.dcName) : null;
-        const _sdaVp = _sdaStats?.cost ?? 5;
-        awardKillVp(game, defenderPlayerNum, _sdaVp);
         embedRefreshMsgIds.add(_sdaMsgId);
-        await logGameAction(game, client, `**${_sdaName}** defeated itself (self-sacrifice). Opponent gains **${_sdaVp} VP**.`, { phase: 'ROUND', icon: 'attack' });
-        // Nefarious Gains (Jabba): self-defeat
-        await checkNefariousGains(game, attackerPlayerNum, client);
-        await checkWinConditions(game, client);
+        await processFigureDefeat(game, {
+          defeatedPlayerNum: attackerPlayerNum,
+          figureKey: _sdaFigKey,
+          attackerPlayerNum: defenderPlayerNum,
+          msgId: _sdaMsgId,
+          dcIdx: _sdaIdx,
+          dcName: combat.attackerDcName,
+          source: 'Dying Lunge',
+        }, deps);
       }
     }
   }

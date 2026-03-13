@@ -1252,6 +1252,9 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
     logGameAction: _logGameAction, client: _client, dcHealthState: _dcHealthState, dcMessageMeta: _dcMessageMeta,
     dcNameFromFigureKey, parseFigureKey, reduceHp, removeFigurePosition,
     opponentPlayerNum, calculateKillVp, awardKillVp, checkNefariousGains,
+    getDcMessageIds, getDcList,
+    checkHuntDissent, checkWinConditions, checkFriendlyDefeatedPassiveRedraws,
+    decrementActivationIfGroupDefeated, ccAttachmentsKey, updateAttachmentMessageForDc,
   });
 }
 
@@ -1272,6 +1275,9 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
     dcHealthState, reduceHp, dcNameFromFigureKey, discordCatch,
     getDcMessageIds, getDcList, removeFigurePosition, opponentPlayerNum,
     calculateKillVp, awardKillVp, checkNefariousGains, checkWinConditions,
+    logGameAction, client,
+    checkHuntDissent, checkFriendlyDefeatedPassiveRedraws,
+    decrementActivationIfGroupDefeated, ccAttachmentsKey, updateAttachmentMessageForDc,
   });
 }
 
@@ -2375,6 +2381,8 @@ function buildAllDeps() {
     getDeploymentZones,
     // Combat special effects deps
     calculateKillVp, decrementActivationIfGroupDefeated,
+    checkHuntDissent, checkFriendlyDefeatedPassiveRedraws, checkNefariousGains,
+    ccAttachmentsKey,
     getDcUpgradeAttachments, getFigureLabel,
     filterCondition, isConditionImmune,
     applyCondition: _applyCondition, HARMFUL_CONDITIONS,

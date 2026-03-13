@@ -8,12 +8,14 @@ import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, get
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces } from '../game/index.js';
+import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getCcHand, getActivatedDcIndices,
   getActivationsRemaining, setActivationsRemaining,
   ccDiscardKey, ccHandKey, ccAttachmentsKey, vpKey,
   opponentPlayerNum, getInitiativePlayerNum,
+  removeFigurePosition,
 } from '../game/player-helpers.js';
 import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
@@ -4845,6 +4847,12 @@ export async function handleCleaveTarget(interaction, ctx) {
     updateAttachmentMessageForDc,
     saveGames,
     client,
+    calculateKillVp,
+    checkHuntDissent,
+    decrementActivationIfGroupDefeated,
+    checkFriendlyDefeatedPassiveRedraws: ctxCheckFriendlyRedraws,
+    checkNefariousGains: ctxCheckNefariousGains,
+    ccAttachmentsKey: ctxCcAttachmentsKey,
   } = ctx;
   const match = interaction.customId.match(/^cleave_target_([^_]+)_(\d+)$/);
   if (!match) return;
@@ -4896,38 +4904,35 @@ export async function handleCleaveTarget(interaction, ctx) {
       const cleaveLabel = target.label || cleaveDcList?.[cleaveIdx]?.displayName || cleaveFigureKey;
       await logGameAction(game, client, `Cleave: <@${ownerId}> dealt **${pending.surgeCleave}** damage to **${cleaveLabel}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
       if (newCCur <= 0) {
-        if (game.figurePositions?.[cleavePlayerNum]) delete game.figurePositions[cleavePlayerNum][cleaveFigureKey];
-        const cleaveStats = getDcStats(cleaveDcList[cleaveIdx]?.dcName);
-        const cost = cleaveStats?.cost ?? 5;
-        const figures = cleaveStats?.figures ?? 1;
-        const subCost = getDcEffects()[cleaveDcList[cleaveIdx]?.dcName]?.subCost;
-        const vp = (figures > 1 && subCost != null) ? subCost : cost;
-        awardKillVp(game, attackerPlayerNum, vp);
-        await logGameAction(game, client, `Cleave: <@${ownerId}> defeated **${cleaveLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-        // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Cleave defeat
-        {
-          const _clvPrDcName = cleaveDcList[cleaveIdx]?.dcName || cleaveLabel;
-          const _clvPrResult = checkFriendlyDefeatedPassiveRedraws(game, cleavePlayerNum, _clvPrDcName);
-          for (const _clvPrCard of _clvPrResult.redrawn) {
-            await logGameAction(game, client, `**Passive Redraw** — **${_clvPrCard}** re-drawn from discard (friendly **${_clvPrDcName}** defeated by Cleave).`, { phase: 'ROUND', icon: 'card' });
-          }
-        }
-        // Nefarious Gains (Jabba): Cleave defeat
-        const _ngCleave = checkNefariousGains(game, cleavePlayerNum);
-        if (_ngCleave) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngCleave.jabbaOwnerPN} VP: ${_ngCleave.vpTotal}`, { phase: 'ROUND', icon: 'card' });
-        if (cleaveIdx >= 0 && isGroupDefeated(game, cleavePlayerNum, cleaveIdx)) {
-          const activatedIndices = getActivatedDcIndices(game, cleavePlayerNum) || [];
-          if (!activatedIndices.includes(cleaveIdx)) {
-            setActivationsRemaining(game, cleavePlayerNum, Math.max(0, (getActivationsRemaining(game, cleavePlayerNum) ?? 0) - 1));
-            await updateActivationsMessage(game, cleavePlayerNum, client);
-          }
-          const cleaveCcAttachKey = ccAttachmentsKey(cleavePlayerNum);
-          if (game[cleaveCcAttachKey]?.[cleaveMsgId]?.length) {
-            delete game[cleaveCcAttachKey][cleaveMsgId];
-            if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, cleavePlayerNum, cleaveMsgId, client);
-          }
-        }
-        await checkWinConditions(game, client);
+        const cleaveDcName = cleaveDcList[cleaveIdx]?.dcName;
+        await processFigureDefeat(game, {
+          defeatedPlayerNum: cleavePlayerNum,
+          figureKey: cleaveFigureKey,
+          attackerPlayerNum,
+          attackerFigureKey: pending.combat?.attackerFigureKey || null,
+          msgId: cleaveMsgId,
+          dcIdx: cleaveIdx,
+          dcName: cleaveDcName,
+          displayName: cleaveLabel,
+          source: 'Cleave',
+        }, {
+          removeFigurePosition,
+          calculateKillVp: calculateKillVp || ((name) => {
+            const s = getDcStats(name); const e = getDcEffects()?.[name];
+            return (s?.figures > 1 && e?.subCost != null) ? e.subCost : (s?.cost ?? 5);
+          }),
+          awardKillVp,
+          dcNameFromFigureKey,
+          logGameAction,
+          client,
+          decrementActivationIfGroupDefeated,
+          ccAttachmentsKey: ctxCcAttachmentsKey || ccAttachmentsKey,
+          updateAttachmentMessageForDc,
+          checkFriendlyDefeatedPassiveRedraws: ctxCheckFriendlyRedraws || checkFriendlyDefeatedPassiveRedraws,
+          checkNefariousGains: ctxCheckNefariousGains || checkNefariousGains,
+          checkHuntDissent,
+          checkWinConditions,
+        });
       }
     }
   }

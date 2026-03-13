@@ -161,6 +161,7 @@ function logRecoveryCrossCheck(actionsDiag, results, gameId) {
 // ─── Step 4: Recover pendingCombat ────────────────────────────────────────────
 
 async function recoverPendingCombat(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return null;
   const { client, sendReadyToResolveRolls } = ctx;
   const combat = game.pendingCombat;
   if (!combat?.combatThreadId) return null;
@@ -228,6 +229,7 @@ async function recoverPendingCombat(game, gameId, ctx) {
 // ─── Step 5: Recover pendingNegation ──────────────────────────────────────────
 
 async function recoverPendingNegation(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return null;
   const { client, getNegationResponseButtons } = ctx;
   if (!game.pendingNegation) return null;
 
@@ -247,6 +249,7 @@ async function recoverPendingNegation(game, gameId, ctx) {
 // ─── Step 6: Recover setupAttachmentPhase ─────────────────────────────────────
 
 async function recoverSetupAttachmentPhase(game, gameId, ctx) {
+  if (game.phase !== 'attachment') return [];
   const { client } = ctx;
   if (!game.setupAttachmentPhase) return [];
 
@@ -322,6 +325,7 @@ async function recoverSetupAttachmentPhase(game, gameId, ctx) {
 // ─── Step 7: Recover pendingEndTurn ───────────────────────────────────────────
 
 async function recoverPendingEndTurn(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return [];
   const { client } = ctx;
   if (!game.pendingEndTurn || Object.keys(game.pendingEndTurn).length === 0) return [];
 
@@ -362,6 +366,7 @@ async function recoverPendingEndTurn(game, gameId, ctx) {
 // ─── Step 8: Recover endOfRoundWhoseTurn ──────────────────────────────────────
 
 async function recoverEndOfRoundWhoseTurn(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return null;
   const { client, updateHandChannelMessages } = ctx;
   if (!game.endOfRoundWhoseTurn) return null;
 
@@ -382,6 +387,7 @@ async function recoverEndOfRoundWhoseTurn(game, gameId, ctx) {
 // ─── Step 9: Recover forceVisionPending ───────────────────────────────────────
 
 async function recoverForceVisionPending(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return null;
   const { client } = ctx;
   const fvPn = game.forceVisionPending;
   if (!fvPn) return null;
@@ -429,6 +435,7 @@ async function recoverForceVisionPending(game, gameId, ctx) {
 // ─── Step 10: Recover pendingStartOfRoundResolve ──────────────────────────────
 
 async function recoverPendingStartOfRound(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return null;
   const { client } = ctx;
   if (!game.pendingStartOfRoundResolve || game.pendingStartOfRoundResolve <= 0) return null;
 
@@ -476,6 +483,7 @@ async function recoverPendingStartOfRound(game, gameId, ctx) {
 // ─── Step 11: Recover moveInProgress ──────────────────────────────────────────
 
 async function recoverMoveInProgress(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return [];
   const { client, getMoveMpButtonRows } = ctx;
   if (!game.moveInProgress || Object.keys(game.moveInProgress).length === 0) return [];
 
@@ -512,6 +520,7 @@ async function recoverMoveInProgress(game, gameId, ctx) {
 // ─── Step 12: Recover roundActivationMessageId ───────────────────────────────
 
 async function recoverRoundActivationMessage(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return null;
   const { client } = ctx;
   if (!game.roundActivationMessageId || !game.generalId) return null;
   if (!game.currentRound) return null;
@@ -541,6 +550,8 @@ async function recoverRoundActivationMessage(game, gameId, ctx) {
 
 async function recoverCcDrawPhase(game, gameId, ctx) {
   const { client } = ctx;
+  // Only recover CC draw if we're actually in cc_draw phase (or round_active with undrawn CCs)
+  if (game.phase !== 'cc_draw' && game.phase !== 'round_active') return [];
   if (game.player1CcDrawn && game.player2CcDrawn) return [];
   if (!game.p1HandId && !game.p2HandId) return [];
 

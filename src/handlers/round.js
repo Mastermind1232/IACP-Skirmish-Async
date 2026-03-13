@@ -6,6 +6,7 @@ import { getDcEffects, getMapSpaces, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, awardKillVp, deductVp } from '../game/index.js';
+import { processFigureDefeat } from '../engine/defeat-handler.js';
 import { getRange } from '../game/spatial.js';
 import { getDeploymentZones, getCcEffect } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
@@ -17,6 +18,7 @@ import {
   ccHandKey, ccDiscardKey, ccDeckKey,
   opponentPlayerNum,
   getInitiativePlayerNum,
+  removeFigurePosition,
 } from '../game/player-helpers.js';
 import { checkStartOfRoundPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
@@ -379,15 +381,34 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       const idx = dcIds.indexOf(msgId);
       if (idx >= 0 && dcListArr[idx]) dcListArr[idx].healthState = [...healthState];
       // Check for defeats
+      const meta = dcMessageMeta.get(msgId);
+      const dgMatch = meta?.displayName?.match(/\[(?:DG|Group) (\d+)\]/);
+      const dgIndex = dgMatch ? dgMatch[1] : '0';
       for (let fi = 0; fi < healthState.length; fi++) {
         if (!Array.isArray(healthState[fi])) continue;
         if (healthState[fi][0] <= 0) {
-          // Figure defeated by Adrenaline end-of-round damage
-          const dcName = info.dcName || 'Figure';
-          const figureKey = Object.keys(game.figurePositions?.[pn] || {}).find(fk => fk.startsWith(dcName.replace(/\s*\[.*\]\s*$/, '').trim()));
-          if (figureKey && game.figurePositions?.[pn]?.[figureKey]) {
-            delete game.figurePositions[pn][figureKey];
-          }
+          // Figure defeated by Adrenaline end-of-round damage (self-inflicted, no VP)
+          const baseName = (info.dcName || 'Figure').replace(/\s*\[.*\]\s*$/, '').trim();
+          const figureKey = `${baseName}-${dgIndex}-${fi}`;
+          await processFigureDefeat(game, {
+            defeatedPlayerNum: pn,
+            figureKey,
+            attackerPlayerNum: pn,
+            msgId,
+            dcIdx: idx,
+            dcName: info.dcName,
+            displayName: info.dcName,
+            source: 'Adrenaline',
+            awardVp: false,
+          }, {
+            removeFigurePosition,
+            calculateKillVp: () => 0,
+            awardKillVp,
+            dcNameFromFigureKey,
+            logGameAction,
+            client,
+            checkWinConditions,
+          });
         }
       }
       await logGameAction(game, client, `**End of round — Adrenaline** — **${info.dcName}** lost **+5 Health** bonus and suffered **5 Damage**.`, { phase: 'ROUND', icon: 'round' });

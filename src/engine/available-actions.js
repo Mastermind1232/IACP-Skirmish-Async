@@ -324,6 +324,23 @@ function getActivationActions(game, playerNum, deps) {
     }
   }
 
+  // CC play actions — list playable CCs from hand
+  if (deps.getPlayableCcFromHand) {
+    const hand = playerNum === 1 ? game.player1CcHand : game.player2CcHand;
+    if (hand?.length) {
+      const playable = deps.getPlayableCcFromHand(hand, game, playerNum, { timing: 'special_action' });
+      for (let i = 0; i < playable.length; i++) {
+        const card = playable[i];
+        actions.push({
+          type: ACTION_TYPES.PLAY_CC,
+          customId: `cc_play_${gameId}_${playerNum}_${i}`,
+          description: `Play CC: ${card.name || card}`,
+          params: { cardIndex: i, cardName: card.name || card },
+        });
+      }
+    }
+  }
+
   // End activation phase (if both players have used all activations)
   const shouldShowEnd = (game.p1ActivationsRemaining ?? 0) === 0 && (game.p2ActivationsRemaining ?? 0) === 0;
   if (shouldShowEnd) {
@@ -374,23 +391,55 @@ function getCombatActions(game, playerNum, deps) {
     return actions;
   }
 
-  // Reroll phase
+  // Reroll phase — list each eligible die for reroll + done option
   if (combat.rerollPhase) {
     const rerollPn = combat.rerollPhase === 'attacker' ? attackerPn : defenderPn;
     if (playerNum === rerollPn) {
-      // Can reroll or skip
+      const side = combat.rerollPhase;
+      const rerollsRemaining = side === 'attacker'
+        ? (combat.attackerRerollsRemaining ?? 0)
+        : (combat.defenderRerollsRemaining ?? 0);
+      const roll = side === 'attacker' ? combat.attackRoll : combat.defenseRoll;
+
+      if (rerollsRemaining > 0 && roll?.dice) {
+        for (let i = 0; i < roll.dice.length; i++) {
+          actions.push({
+            type: ACTION_TYPES.COMBAT_REROLL,
+            customId: buildCustomId(ACTION_TYPES.COMBAT_REROLL, { gameId, dieIndex: i }),
+            description: `Reroll ${side} die ${i + 1} (${roll.dice[i]?.color || 'unknown'})`,
+            params: { side, dieIndex: i },
+          });
+        }
+      }
+
+      // Done rerolling / skip
       actions.push({
         type: ACTION_TYPES.COMBAT_RESOLVE,
         customId: buildCustomId(ACTION_TYPES.COMBAT_RESOLVE, { gameId }),
-        description: 'Skip rerolls and resolve',
+        description: 'Done rerolling',
       });
     }
     return actions;
   }
 
-  // Surge assignment phase
-  if (combat.pendingSurges) {
+  // Surge assignment phase — list each spendable surge ability
+  if (combat.pendingSurges || combat.surgeRemaining > 0) {
     if (playerNum === attackerPn) {
+      const surgeAbilities = combat.surgeAbilities || [];
+      for (let i = 0; i < surgeAbilities.length; i++) {
+        const sa = surgeAbilities[i];
+        const cost = sa.cost ?? 1;
+        if (cost <= (combat.surgeRemaining ?? 0)) {
+          actions.push({
+            type: ACTION_TYPES.COMBAT_SURGE,
+            customId: buildCustomId(ACTION_TYPES.COMBAT_SURGE, { gameId, surgeIndex: i }),
+            description: `Spend surge: ${sa.label || sa.key || `ability ${i}`}`,
+            params: { surgeIndex: i, surgeKey: sa.key },
+          });
+        }
+      }
+
+      // Skip remaining surges
       actions.push({
         type: ACTION_TYPES.COMBAT_SKIP_SURGES,
         customId: buildCustomId(ACTION_TYPES.COMBAT_RESOLVE, { gameId }),
@@ -413,12 +462,38 @@ function getMovementActions(game, playerNum, deps) {
 
     // Movement in progress — pick space or adjust MP
     if (moveState.phase === 'pick_space' || !moveState.phase) {
-      // Space picking is complex — simplified here
+      // Compute reachable spaces if deps available
+      if (deps.computeMovementCache && deps.getBoardStateForMovement && moveState.figureKey) {
+        try {
+          const board = deps.getBoardStateForMovement(game, null);
+          const profile = deps.getMovementProfile?.(moveState.figureKey, game) || {};
+          const mpRemaining = moveState.mpRemaining ?? moveState.totalMp ?? 0;
+          if (board && mpRemaining > 0) {
+            const cache = deps.computeMovementCache(board, moveState.currentPosition || moveState.startCoord, profile, mpRemaining);
+            if (cache?.reachable) {
+              for (const [coord, cost] of Object.entries(cache.reachable)) {
+                if (cost > 0 && cost <= mpRemaining) {
+                  actions.push({
+                    type: ACTION_TYPES.MOVE_PICK_SPACE,
+                    customId: buildCustomId(ACTION_TYPES.MOVE_PICK_SPACE, { moveKey, coord }),
+                    description: `Move to ${coord} (cost ${cost})`,
+                    params: { moveKey, coord, cost },
+                  });
+                }
+              }
+            }
+          }
+        } catch {
+          // Fall through to simple finish action
+        }
+      }
+
+      // Always offer finish movement
       actions.push({
         type: ACTION_TYPES.MOVE_PICK_SPACE,
         customId: `move_pick_${moveKey}_done`,
         description: 'Finish movement',
-        params: { moveKey },
+        params: { moveKey, done: true },
       });
     }
   }
