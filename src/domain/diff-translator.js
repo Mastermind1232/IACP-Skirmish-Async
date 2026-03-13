@@ -92,7 +92,7 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
       for (const [figKey, newCoord] of Object.entries(afterPos)) {
         const oldCoord = beforePos[figKey];
         if (oldCoord && oldCoord !== newCoord) {
-          emit('FigureMoved', { figureKey: figKey, fromCoord: oldCoord, toCoord: newCoord });
+          emit('FigureMoved', { figureKey: figKey, fromCoord: oldCoord, toCoord: newCoord, playerNum, mpCost: 1 });
         }
       }
     }
@@ -123,7 +123,7 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
   }
 
   // ── Conditions ──
-  if (set?.figureConditions && before?.figureConditions) {
+  if (set?.figureConditions) {
     for (const [figKey, newConds] of Object.entries(after?.figureConditions || {})) {
       const oldConds = before.figureConditions?.[figKey] || [];
       for (const c of newConds) {
@@ -142,7 +142,7 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
   }
 
   // ── Health changes ──
-  if (set?.dcHealthState && before?.dcHealthState) {
+  if (set?.dcHealthState) {
     for (const [figKey, newHp] of Object.entries(after?.dcHealthState || {})) {
       const oldHp = before.dcHealthState?.[figKey];
       if (oldHp != null && newHp != null && oldHp !== newHp) {
@@ -156,7 +156,7 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
   }
 
   // ── Condition removed ──
-  if (set?.figureConditions && before?.figureConditions) {
+  if (set?.figureConditions) {
     for (const [figKey, oldConds] of Object.entries(before.figureConditions || {})) {
       const newConds = after?.figureConditions?.[figKey] || [];
       for (const c of oldConds) {
@@ -281,7 +281,7 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
   }
 
   // ── Figure deployed (new position, not moved) ──
-  if (set?.figurePositions && before?.figurePositions) {
+  if (set?.figurePositions) {
     for (const playerNum of [1, 2]) {
       const beforePos = before.figurePositions?.[playerNum] || {};
       const afterPos = after?.figurePositions?.[playerNum] || {};
@@ -389,6 +389,67 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
         }
       }
     }
+  }
+
+  // ── Squad submitted ──
+  for (const playerNum of [1, 2]) {
+    const armyKey = `player${playerNum}Army`;
+    if (set?.[armyKey] && !before?.[armyKey]) {
+      emit('SquadSubmitted', { playerNum, affiliation: after?.[armyKey]?.affiliation || 'unknown' });
+    }
+  }
+
+  // ── Objective claimed ──
+  for (const playerNum of [1, 2]) {
+    const vpKey = `player${playerNum}VP`;
+    if (set?.[vpKey] && before?.[vpKey]) {
+      const oldObj = before[vpKey].objectives || 0;
+      const newObj = after?.[vpKey]?.objectives || 0;
+      if (newObj > oldObj) {
+        emit('ObjectiveClaimed', { playerNum, amount: newObj - oldObj });
+      }
+    }
+  }
+
+  // ── Terminal controlled ──
+  if (set?.terminalControl && before?.terminalControl) {
+    for (const [termId, newController] of Object.entries(after?.terminalControl || {})) {
+      const oldController = before.terminalControl?.[termId];
+      if (newController !== oldController) {
+        emit('TerminalControlled', { terminalId: termId, playerNum: newController });
+      }
+    }
+  } else if (set?.terminalControl && !before?.terminalControl) {
+    for (const [termId, controller] of Object.entries(set.terminalControl)) {
+      emit('TerminalControlled', { terminalId: termId, playerNum: controller });
+    }
+  }
+
+  // ── Crate collected ──
+  if (set?.collectedCrates) {
+    const oldCrates = before?.collectedCrates || [];
+    const newCrates = after?.collectedCrates || [];
+    for (const crate of newCrates) {
+      if (!oldCrates.includes(crate)) {
+        emit('CrateCollected', { crateId: crate });
+      }
+    }
+  }
+
+  // ── Map type chosen ──
+  if (set?.selectedMapType && set.selectedMapType !== before?.selectedMapType) {
+    emit('MapTypeChosen', { mapType: set.selectedMapType });
+  }
+
+  // ── Negation ──
+  if (set?.pendingNegation && !before?.pendingNegation) {
+    emit('NegationAttempted', {
+      playerNum: set.pendingNegation.playedBy,
+      targetCardName: set.pendingNegation.card || 'unknown',
+    });
+  }
+  if (before?.pendingNegation && !after?.pendingNegation) {
+    emit('NegationResolved', { negated: !!before.pendingNegation.negated });
   }
 
   return events;
