@@ -72,22 +72,8 @@ function getAttachmentRestriction(cardName) {
   const onlyMatch = firstLine.match(/^(.+?)\s+ONLY$/i);
   // Fallback: if no "X ONLY" line but card has keywords, use keywords as restriction
   if (!onlyMatch) {
-    if (card.attachment && card.keywords?.length > 0) {
-      const kwRestriction = card.keywords.join(' OR ');
-      const restrictionUpper = kwRestriction.toUpperCase();
-      if (RESTRICTION_KEYWORDS.some(k => restrictionUpper.includes(k))) {
-        return {
-          restrictionText: kwRestriction,
-          filter: (dcName) => {
-            const dcStats = effects[dcName];
-            if (!dcStats) return true;
-            const dcKw = (dcStats.keywords || []).map(k => String(k).toUpperCase());
-            const affiliation = (dcStats.affiliation || '').toUpperCase();
-            return card.keywords.some(kw => _matchesKeywordPhrase(String(kw).toUpperCase(), dcKw, affiliation));
-          },
-        };
-      }
-    }
+    // No "X ONLY" restriction line — card can attach to any DC
+    // Note: card.keywords are traits the card grants, NOT target restrictions
     return null;
   }
   const restrictionRaw = onlyMatch[1].replace(/"/g, '').trim();
@@ -2329,6 +2315,14 @@ export async function _sendAttachmentDropdown(game, gameId, playerNum, card, cli
     if (restriction && !restriction.filter(dc.dcName)) return null;
     return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
   }).filter(Boolean);
+  if (options.length === 0) {
+    // No valid targets — skip this attachment and move on
+    const pending = game.setupAttachmentPending?.[playerNum] || [];
+    if (pending.length > 0) pending.shift();
+    const restrictionNote = restriction ? ` (${restriction.restrictionText} only)` : '';
+    await handChannel.send({ content: `⚠️ **${card}** has no valid Deployment Card targets${restrictionNote}. Skipping.` });
+    return;
+  }
   const select = new StringSelectMenuBuilder()
     .setCustomId(`setup_attach_to_${gameId}_${playerNum}`)
     .setPlaceholder('Attach to which Deployment Card?')
