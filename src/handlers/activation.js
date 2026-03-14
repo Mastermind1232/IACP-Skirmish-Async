@@ -10,6 +10,7 @@ import { getRange } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
+import { sendPowerTokenOverflowUI } from './combat.js';
 import {
   getPlayerId,
   getDcList,
@@ -1124,6 +1125,9 @@ export async function handleConfirmActivate(interaction, ctx) {
       grantPowerTokens(game, selfFk, 'Surge', surgeCount);
     }
     await thread.send({ content: `🔥 **Into the Fray** — **${displayName}** gains **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).` }).catch(discordCatch);
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      await sendPowerTokenOverflowUI(game, gameId, thread, meta.playerNum, saveGames);
+    }
   }
   // Advanced Weapons Research (Director Krennic): friendly within range gains 1 Hit or Surge Token
   // Range is 2 (or 3 with Advanced Com Systems attachment)
@@ -2035,6 +2039,9 @@ export async function handleActPassive(interaction, ctx) {
       const fk = `${meta.dcName}-${dgIndex}-0`;
       grantPowerTokens(game, fk, 'Block', 1);
       await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **1 Block Token**.`, components: [] }).catch(discordCatch);
+      if (game.pendingPowerTokenOverflow?.length > 0) {
+        await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
+      }
     }
   } else if (ability === 'responsive') {
     if (choice === 'mp') {
@@ -2063,6 +2070,9 @@ export async function handleActPassive(interaction, ctx) {
     } else if (choice === 'evade') {
       grantPowerTokens(game, fk, 'Evade', 1);
       await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Evade Token**.`, components: [] }).catch(discordCatch);
+    }
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
     }
   } else if (ability === 'tacmove') {
     if (choice === 'skip') {
@@ -2111,6 +2121,9 @@ export async function handleActPassive(interaction, ctx) {
     grantPowerTokens(game, targetFk, tokenType, 1);
     delete game.pendingAwr;
     await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
+    }
   } else if (ability === 'openminded') {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const fk = `${meta.dcName}-${dgIndex}-0`;
@@ -2249,6 +2262,9 @@ export async function handleActPassive(interaction, ctx) {
     const abilityLabel = pending.ability === 'longlaid' ? 'Long-Laid Plans' : 'Arms Distribution';
     const icon = pending.ability === 'longlaid' ? '🧠' : '🎯';
     await logGameAction?.(game, client, `**${abilityLabel}** — ${targetDcName} gained 1 ${tokenType} Token.`, { phase: 'ACTIVATION', icon: 'activate' });
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
+    }
     if (pending.remaining <= 0) {
       await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Distribution complete.`, components: [] }).catch(discordCatch);
       delete game.pendingTokenDistribution;
@@ -2681,6 +2697,9 @@ export async function handleActPassive(interaction, ctx) {
         grantPowerTokens(game, fk, _icType.charAt(0).toUpperCase() + _icType.slice(1), 1);
         await interaction.message.edit({ content: `**Imperial Citadel** — **${displayName}** gained 1 **${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token** from the Citadel.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Imperial Citadel** — **${displayName}** gained 1 ${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token from the Citadel.`, { phase: 'ACTIVATION', icon: 'card' });
+        if (game.pendingPowerTokenOverflow?.length > 0) {
+          await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
+        }
       } else {
         await interaction.message.edit({ content: `**Imperial Citadel** — No ${_icType} tokens remaining.`, components: [] }).catch(discordCatch);
       }

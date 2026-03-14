@@ -44,13 +44,24 @@ function getFormsChosenByTeamClawdites(game, playerNum, excludeFigureKey) {
   return taken;
 }
 
-/** Get blocking terrain info for deployment filtering. */
+/** Get blocking terrain info for deployment filtering.
+ * When ignoreBlocking is true (Massive/Mobile), blocking cells are merged into
+ * the zone so the footprint zone-membership check passes for cells that are
+ * blocking terrain but geographically inside the deployment zone.
+ */
 function getDeployBlockingInfo(game, dcName) {
   const ms = getMapSpaces(game.selectedMap?.id);
   const blocking = ms?.blocking || [];
   const keywords = getDcKeywords(game)?.[dcName] || [];
   const ignoreBlocking = keywords.includes('Mobile') || keywords.includes('Massive');
   return { blocking, ignoreBlocking };
+}
+
+/** Extend zone spaces to include blocking cells when the figure ignores blocking. */
+function extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking) {
+  if (!ignoreBlocking || !blocking?.length) return zoneSpaces;
+  const blockingLower = blocking.map(s => String(s).toLowerCase());
+  return [...new Set([...zoneSpaces, ...blockingLower])];
 }
 
 /** Keyword tokens recognized as trait/type restrictions (not DC names). */
@@ -1137,7 +1148,8 @@ export async function handleDeploymentFig(interaction, ctx) {
     return;
   }
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
+  const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(extZone, occupied, figureSize, blocking, ignoreBlocking);
   if (zoneSpaces.length > 0) {
     const { rows, available } = getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
     if (available.length === 0) {
@@ -1147,8 +1159,9 @@ export async function handleDeploymentFig(interaction, ctx) {
     const BTM_PER_MSG = 5;
     game.deploySpaceGridMessageIds = game.deploySpaceGridMessageIds || {};
     const gridKey = `${playerNum}_${flatIndex}`;
+    const [fsCols, fsRows] = figureSize.split('x').map(Number);
     const promptText = isLarge
-      ? `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${figureSize} unit):`
+      ? `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${figureSize} unit — ${fsCols} wide, ${fsRows} tall):`
       : `Pick a space for **${label.replace(/^Deploy /, '')}**:`;
     const isInitiative = playerNum === initiativePlayerNum;
     const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
@@ -1162,7 +1175,7 @@ export async function handleDeploymentFig(interaction, ctx) {
         await deployMsg.edit({ attachments: [] });
       } catch {}
     }
-    const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
+    const mapAttachment = await getDeploymentMapAttachment(game, playerZone, { includeBlocking: ignoreBlocking });
     // If too many rows for one message, use two-tier row picker
     const useRowPicker = rows.length > BTM_PER_MSG;
     if (useRowPicker) {
@@ -1260,7 +1273,8 @@ export async function handleDeploymentOrient(interaction, ctx) {
   }
   const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, figMeta.dcName);
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, orientation, blocking, ignoreBlocking);
+  const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(extZone, occupied, orientation, blocking, ignoreBlocking);
   if (validSpaces.length === 0) {
     delete game.pendingDeployOrientation[`${playerNum}_${flatIndex}`];
     await interaction.followUp({ content: 'No valid spots for this orientation in your zone. Try the other orientation.', ephemeral: true }).catch(discordCatch);
@@ -1285,8 +1299,9 @@ export async function handleDeploymentOrient(interaction, ctx) {
         await deployMsg.edit({ attachments: [] });
       } catch {}
     }
-    const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
-    const promptText = `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${orientation} unit):`;
+    const mapAttachment = await getDeploymentMapAttachment(game, playerZone, { includeBlocking: ignoreBlocking });
+    const [oCols, oRows] = orientation.split('x').map(Number);
+    const promptText = `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${orientation} unit — ${oCols} wide, ${oRows} tall):`;
     if (useRowPicker) {
       const { buildDeployRowButtons } = ctx;
       const { rows: rowBtns } = buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
@@ -1352,7 +1367,8 @@ export async function handleDeployRow(interaction, ctx) {
   const dcName = figMeta?.dcName;
   const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
+  const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(extZone, occupied, figureSize, blocking, ignoreBlocking);
   // Filter to only spaces in the chosen row
   const rowSpaces = validSpaces.filter((s) => {
     const m = s.match(/^[a-z]+(\d+)$/i);
@@ -1446,7 +1462,8 @@ export async function handleDeployRowBack(interaction, ctx) {
   const dcName = figMeta?.dcName;
   const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
+  const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(extZone, occupied, figureSize, blocking, ignoreBlocking);
   const labels = game[_deployLabelsKey(playerNum)];
   const label = labels?.[flatIndex] || 'figure';
   const isLarge = figureSize !== '1x1';
@@ -1930,7 +1947,8 @@ export async function handleAutoDeploy(interaction, ctx) {
     const size = baseSize === '2x3' ? '2x3' : baseSize;
     const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
     const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, meta.dcName);
-    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, size, blocking, ignoreBlocking);
+    const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
+    const validSpaces = filterValidTopLeftSpaces(extZone, occupied, size, blocking, ignoreBlocking);
     if (!validSpaces.length) continue;
     validSpaces.sort((a, b) => {
       const pa = parseCoord(a), pb = parseCoord(b);

@@ -13,6 +13,7 @@ import {
 import { normalizeCoord, getFootprintCells } from '../game/coords.js';
 import { getRange } from '../game/spatial.js';
 import { discordCatch } from '../error-handling.js';
+import { sendPowerTokenOverflowUI } from './combat.js';
 import { requireGame } from '../utils/guards.js';
 
 // ── Ability scanning ────────────────────────────────────────────────────────
@@ -784,6 +785,10 @@ async function postAbilityPicker(game, gameId, client, logGameAction) {
   if (!hasInteractive) {
     for (const ab of abilities) {
       await resolveAutoAbility(game, ab, client, logGameAction);
+      if (game.pendingPowerTokenOverflow?.length > 0) {
+        const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+        if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ab.playerNum, ctx.saveGames);
+      }
     }
     q.abilities = [];
     await advanceToNextPlayer(game, gameId, client, logGameAction);
@@ -795,6 +800,10 @@ async function postAbilityPicker(game, gameId, client, logGameAction) {
     const [ability] = abilities.splice(0, 1);
     q.awaitingOrder = false;
     await resolveAutoAbility(game, ability, client, logGameAction);
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+      if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ability.playerNum, ctx.saveGames);
+    }
     await advanceToNextPlayer(game, gameId, client, logGameAction);
     return;
   }
@@ -880,6 +889,15 @@ export async function runPostDeployPhase(game, gameId, client, ctx, onComplete) 
     game.postDeployEffectsFired = true;
     for (const ab of initAbilities) await resolveAutoAbility(game, ab, client, logGameAction);
     for (const ab of otherAbilities) await resolveAutoAbility(game, ab, client, logGameAction);
+    // Check for overflow after batch auto-resolve
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+      if (_ovCh) {
+        const _ovEntry = game.pendingPowerTokenOverflow[0];
+        const _ovPn = _ovEntry?.playerNum || initPn;
+        await sendPowerTokenOverflowUI(game, gameId, _ovCh, _ovPn, saveGames);
+      }
+    }
     if (saveGames) saveGames();
     return false;
   }
@@ -953,6 +971,10 @@ export async function handlePostDeployPick(interaction, ctx) {
 
   if (!ability.interactive) {
     await resolveAutoAbility(game, ability, client, logGameAction);
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+      if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ability.playerNum, saveGames);
+    }
     await postAbilityPicker(game, gameId, client, logGameAction);
   } else {
     await postInteractiveAbility(game, gameId, ability, client, ctx);
@@ -978,6 +1000,9 @@ export async function handleSecurityDetailPick(interaction, ctx) {
   const leaderDcName = dcNameFromFigureKey(leaderFk);
   grantPowerTokens(game, leaderFk, 'Block', 1);
   await logGameAction(game, client, `🛡️ **Security Detail** — **${leaderDcName}** gains **1 Block Token**.`, { phase: 'ROUND', icon: 'deployed' });
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    await sendPowerTokenOverflowUI(game, gameId, interaction.channel, playerNum, saveGames);
+  }
 
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
 
@@ -1050,6 +1075,9 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
   active.tokenRemaining -= 1;
 
   await logGameAction(game, client, `⚡ **Strike Team** — **${dcName}** gains **1 Hit Token** (${active.tokenRemaining} remaining).`, { phase: 'ROUND', icon: 'deployed' });
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    await sendPowerTokenOverflowUI(game, gameId, interaction.channel, playerNum, saveGames);
+  }
 
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
 
@@ -1394,6 +1422,9 @@ export async function handleArmsDistTokenPick(interaction, ctx) {
 
   grantPowerTokens(game, figureKey, tokenType, 1);
   await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — **${dcName}** gains **1 ${tokenType} Token**.`, { phase: 'ROUND', icon: 'deployed' });
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    await sendPowerTokenOverflowUI(game, gameId, interaction.channel, playerNum, saveGames);
+  }
 
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
 

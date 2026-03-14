@@ -30,6 +30,7 @@ import {
   getDcStats,
   getMapTokensData,
   getDeploymentZones,
+  getMapSpaces,
   getFigureSize,
 } from './data-loader.js';
 import { dcMessageMeta } from './game-state.js';
@@ -335,13 +336,19 @@ export async function getMovementMinimapAttachment(game, msgId, figureKey, space
 // ---------------------------------------------------------------------------
 
 /** Returns AttachmentBuilder for deployment zone map (zoomed, black coords). zone = 'red' | 'blue'. */
-export async function getDeploymentMapAttachment(game, zone) {
+export async function getDeploymentMapAttachment(game, zone, opts = {}) {
   const map = game?.selectedMap;
   if (!map?.id) return null;
   try {
     const figures = getFiguresForRender(game);
     const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
-    const zoneSpaces = zone && getDeploymentZones()[map.id]?.[zone] ? getDeploymentZones()[map.id][zone] : null;
+    let zoneSpaces = zone && getDeploymentZones()[map.id]?.[zone] ? [...getDeploymentZones()[map.id][zone]] : null;
+    // For Massive/Mobile figures, include blocking cells in the zone so they appear numbered
+    if (opts.includeBlocking && zoneSpaces) {
+      const ms = getMapSpaces(map.id);
+      const blockingCells = (ms?.blocking || []).map(s => String(s).toLowerCase());
+      zoneSpaces = [...new Set([...zoneSpaces, ...blockingCells])];
+    }
     const occupiedSet = toLowerSet(getOccupiedSpacesForMovement(game) || []);
     const validLabelCoords =
       zoneSpaces && zoneSpaces.length > 0

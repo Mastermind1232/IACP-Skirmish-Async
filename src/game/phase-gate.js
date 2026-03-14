@@ -9,7 +9,7 @@ import { PHASES, ROUND_PHASES } from './phase.js';
 
 export const PHASE_GATE_LABELS = {
   deploy_done:          'Both players have deployed. Ready to proceed?',
-  attach_done:          'Attachments placed and confirmed. Ready to draw starting hands?',
+  attach_done:          'Attachments placed and confirmed. Ready for deployment?',
   cc_drawn:             'Both players drew starting hands. Ready to begin Round {round}?',
   pre_end_of_round:     'Round {round} — All activations done. Ready to enter End of Round?',
   post_end_of_round:    'Round {round} — End of Round effects done. Ready to proceed to Status Phase?',

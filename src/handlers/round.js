@@ -7,6 +7,7 @@ import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, deductVp, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
+import { sendPowerTokenOverflowUI } from './combat.js';
 import { getRange } from '../game/spatial.js';
 import { getDeploymentZones, getCcEffect } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
@@ -663,6 +664,16 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       await interaction.message.edit({ components: [] }).catch(discordCatch);
       saveGames();
       return;
+    }
+    // Check for power token overflow from mission rules (fluctuation/crate tokens)
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+      if (_ovCh) {
+        const _ovEntry = game.pendingPowerTokenOverflow[0];
+        // Determine owning player from figure positions
+        const _ovPn = Object.entries(game.figurePositions || {}).find(([, figs]) => figs?.[_ovEntry.figureKey])?.[0];
+        await sendPowerTokenOverflowUI(game, gameId, _ovCh, _ovPn ? parseInt(_ovPn, 10) : 1, saveGames);
+      }
     }
   }
 
@@ -1328,6 +1339,9 @@ export async function handleExtraArmorConfirm(interaction, ctx) {
   pending.remaining -= 1;
   const dcName = dcNameFromFigureKey(figureKey);
   await logGameAction(game, client, `🛡️ **Extra Armor** — **${dcName}** gains **1 Block Token** (${pending.remaining} remaining).`);
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    await sendPowerTokenOverflowUI(game, gameId, interaction.channel, playerNum, saveGames);
+  }
   if (pending.remaining <= 0) {
     delete game[`pendingExtraArmor_p${playerNum}`];
     await interaction.message.edit({ content: '🛡️ **Extra Armor** — All 4 Block Tokens distributed.', components: [] }).catch(discordCatch);
