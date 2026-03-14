@@ -19,6 +19,7 @@ const COMBAT_DEPS = [
   'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons',
   'calculateKillVp', 'checkHuntDissent', 'decrementActivationIfGroupDefeated',
   'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
+  'checkNefariousGains', 'updateHandVisualMessage',
 ];
 
 const CONTEXT_GROUPS = {

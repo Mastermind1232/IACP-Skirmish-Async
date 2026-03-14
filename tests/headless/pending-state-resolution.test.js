@@ -209,13 +209,30 @@ describe('Strain Choice pending-state resolution', () => {
 
     const actionDeps = buildActionDeps(meta);
     const MAX_ITERATIONS = 800;
+    const STALE_THRESHOLD = 200; // force a kill if no progress in this many iterations
     let coverFireCount = 0;
     let iterations = 0;
+    let lastKillIteration = 0;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
       iterations = i + 1;
       const g = harness.getGame();
       if (g.ended) break;
+
+      // Stale-progress detection: if no figure has died in STALE_THRESHOLD
+      // iterations, random play is not converging — force a kill to unblock
+      if (i - lastKillIteration >= STALE_THRESHOLD) {
+        const p2Figs = Object.keys(g.figurePositions?.[2] || {});
+        const p1Figs = Object.keys(g.figurePositions?.[1] || {});
+        if (p2Figs.length > 0) {
+          await deps.applyNpcDamageToFigure(g, 2, p2Figs[0], 999, 'Stale breaker');
+          lastKillIteration = i;
+        } else if (p1Figs.length > 0) {
+          await deps.applyNpcDamageToFigure(g, 1, p1Figs[0], 999, 'Stale breaker');
+          lastKillIteration = i;
+        }
+        continue;
+      }
 
       const p1Actions = getAvailableActions(g, 1, actionDeps);
       const p2Actions = getAvailableActions(g, 2, actionDeps);
@@ -225,13 +242,15 @@ describe('Strain Choice pending-state resolution', () => {
       ];
 
       if (allActions.length === 0) {
-        // Deadlock breaker
+        // No-action deadlock breaker
         const p2Figs = Object.keys(g.figurePositions?.[2] || {});
         const p1Figs = Object.keys(g.figurePositions?.[1] || {});
         if (p2Figs.length > 0) {
           await deps.applyNpcDamageToFigure(g, 2, p2Figs[0], 999, 'Deadlock breaker');
+          lastKillIteration = i;
         } else if (p1Figs.length > 0) {
           await deps.applyNpcDamageToFigure(g, 1, p1Figs[0], 999, 'Deadlock breaker');
+          lastKillIteration = i;
         } else break;
         continue;
       }

@@ -25,7 +25,8 @@
     "test:all": "node --test tests/headless/*.test.js tests/certification/regression.test.js",
     "smoke:startup": "node scripts/smoke-startup.js",
     "smoke:imports": "node scripts/smoke-imports.js",
-    "predeploy": "npm run smoke:imports && npm run smoke:startup && npm run test:headless"
+    "smoke:context": "node scripts/smoke-context.js",
+    "predeploy": "npm run smoke:imports && npm run smoke:context && npm run smoke:startup && npm run test:headless"
   },
   "type": "module",
   "dependencies": {
