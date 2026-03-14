@@ -6,7 +6,7 @@ import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ModalB
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getLoadoutCards, getFormCards, getDcEffects, getDcStats } from '../data-loader.js';
+import { getLoadoutCards, getFormCards, getDcEffects, getDcStats, getMapSpaces, getDcKeywords } from '../data-loader.js';
 import { getDcImagePath } from '../asset-paths.js';
 import { setPhase, PHASES } from '../game/phase.js';
 
@@ -42,6 +42,15 @@ function getFormsChosenByTeamClawdites(game, playerNum, excludeFigureKey) {
     if (form) taken.add(form);
   }
   return taken;
+}
+
+/** Get blocking terrain info for deployment filtering. */
+function getDeployBlockingInfo(game, dcName) {
+  const ms = getMapSpaces(game.selectedMap?.id);
+  const blocking = ms?.blocking || [];
+  const keywords = getDcKeywords(game)?.[dcName] || [];
+  const ignoreBlocking = keywords.includes('Mobile') || keywords.includes('Massive');
+  return { blocking, ignoreBlocking };
 }
 
 /** Keyword tokens recognized as trait/type restrictions (not DC names). */
@@ -904,6 +913,82 @@ export async function handleDeploymentZone(interaction, ctx) {
       console.error('Failed to remove deployment zone buttons:', err);
     }
   }
+  // Check for setup attachments BEFORE deployment (rules: attachments placed first)
+  const { isDcAttachment, resolveDcName } = ctx;
+  const p1DcListRaw = game.player1Squad?.dcList || [];
+  const p2DcListRaw = game.player2Squad?.dcList || [];
+  const p1SetupAttachments = isDcAttachment ? p1DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry))) : [];
+  const p2SetupAttachments = isDcAttachment ? p2DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry))) : [];
+
+  if (p1SetupAttachments.length > 0 || p2SetupAttachments.length > 0) {
+    // Attachments exist — start attachment phase before deployment
+    game.setupAttachmentPhase = true;
+    setPhase(game, PHASES.ATTACHMENT);
+    game.setupAttachmentPending = {
+      1: p1SetupAttachments.map((e) => resolveDcName(e)),
+      2: p2SetupAttachments.map((e) => resolveDcName(e)),
+    };
+    game.setupAttachmentOriginal = {
+      1: [...game.setupAttachmentPending[1]],
+      2: [...game.setupAttachmentPending[2]],
+    };
+    game.setupAttachmentApplied = { 1: [], 2: [] };
+    const generalChannel = await client.channels.fetch(game.generalId);
+    await generalChannel.send({
+      content: '**Deployment zones chosen.** Place your Skirmish Upgrade card(s) on your Deployment cards (see the **Your Hand** thread in your Play Area). Deployment will begin after upgrades are placed.',
+    });
+
+    const { dcMessageMeta } = ctx;
+    for (const pn of [1, 2]) {
+      const pending = game.setupAttachmentPending[pn];
+      if (pending.length === 0) {
+        game.setupAttachmentConfirmed = game.setupAttachmentConfirmed || {};
+        game.setupAttachmentConfirmed[pn] = true;
+        continue;
+      }
+      // Auto-attach character-specific attachments
+      const dcList = getDcList(game, pn) || [];
+      const dcMsgIds = getDcMessageIds(game, pn) || [];
+      const attached = new Set((game.setupAttachmentApplied?.[pn] || []).map(a => a.dcMsgId));
+      while (pending.length > 0) {
+        const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds, attached);
+        if (!autoTarget) break;
+        const card = pending[0];
+        await applySetupAttachment(game, pn, card, autoTarget, ctx);
+        pending.shift();
+        game.setupAttachmentApplied[pn].push({ card, dcMsgId: autoTarget });
+        attached.add(autoTarget);
+        await logGameAction(game, client, `**${card}** auto-attached to **${dcMessageMeta?.get(autoTarget)?.displayName || 'DC'}** (setup).`, { phase: 'SETUP', icon: 'card' });
+      }
+      if (pending.length === 0) {
+        await _sendAttachDonePrompt(game, gameId, pn, client);
+        continue;
+      }
+      await _sendAttachmentDropdown(game, gameId, pn, pending[0], client);
+    }
+    saveGames();
+    return;
+  }
+
+  // No attachments — proceed directly to deployment
+  await _sendInitiativeDeployButtons(game, gameId, ctx);
+  // Store deploy message IDs in the undo entry so they can be cleaned up on undo
+  const undoEntry = game.undoStack?.[game.undoStack.length - 1];
+  if (undoEntry && undoEntry.type === 'deployment_zone') {
+    undoEntry.deployMessageIds = game.initiativeDeployMessageIds || [];
+    undoEntry.deployHandChannelId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
+  }
+  saveGames();
+}
+
+/**
+ * Send deploy buttons to the initiative player. Extracted so it can be called
+ * from both zone selection (no attachments) and post-attachment completion.
+ */
+async function _sendInitiativeDeployButtons(game, gameId, ctx) {
+  const { getDeployFigureLabels, getDeployButtonRows, getDeploymentMapAttachment, client, saveGames } = ctx;
+  const zone = game.deploymentZoneChosen;
+  setPhase(game, PHASES.DEPLOYMENT);
   const initiativePlayerNum = getInitiativePlayerNum(game);
   const initiativeHandId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
   const initiativeSquad = getSquad(game, initiativePlayerNum);
@@ -916,14 +1001,14 @@ export async function handleDeploymentZone(interaction, ctx) {
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   try {
     const initiativeHandChannel = await client.channels.fetch(initiativeHandId);
-    const { deployRows, doneRow } = getDeployButtonRows(game.gameId, initiativePlayerNum, initiativeDcList, zone, game.figurePositions, game);
+    const { deployRows, doneRow } = getDeployButtonRows(gameId, initiativePlayerNum, initiativeDcList, zone, game.figurePositions, game);
     const DEPLOY_ROWS_PER_MSG = 4;
     game.initiativeDeployMessageIds = game.initiativeDeployMessageIds || [];
     const initiativePing = `<@${game.initiativePlayerId}>`;
     const initMapAttachment = await getDeploymentMapAttachment(game, zone);
     if (deployRows.length === 0) {
       const payload = {
-        content: `${initiativePing} — You chose the **${zone}** zone. When finished, click **Deployment Completed** below.\n-# *Attachments (Skirmish Upgrades) are placed after all figures are deployed.*`,
+        content: `${initiativePing} — You chose the **${zone}** zone. When finished, click **Deployment Completed** below.`,
         components: [doneRow],
         allowedMentions: { users: [game.initiativePlayerId] },
       };
@@ -936,7 +1021,7 @@ export async function handleDeploymentZone(interaction, ctx) {
         const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
         const components = isLastChunk ? [...chunk, doneRow] : chunk;
         const payload = {
-          content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*\n-# *Attachments (Skirmish Upgrades) are placed after all figures are deployed.*` : null,
+          content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*` : null,
           components,
           allowedMentions: { users: [game.initiativePlayerId] },
         };
@@ -949,13 +1034,16 @@ export async function handleDeploymentZone(interaction, ctx) {
   } catch (err) {
     console.error('Failed to send deploy prompt to initiative player:', err);
   }
-  // Store deploy message IDs in the undo entry so they can be cleaned up on undo
-  const undoEntry = game.undoStack?.[game.undoStack.length - 1];
-  if (undoEntry && undoEntry.type === 'deployment_zone') {
-    undoEntry.deployMessageIds = game.initiativeDeployMessageIds || [];
-    undoEntry.deployHandChannelId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
-  }
-  saveGames();
+}
+
+/**
+ * Start deployment phase after attachments are complete. Called from finishSetupAttachments.
+ * Exported so it can be passed via ctx.
+ */
+export async function startDeploymentAfterAttachments(game, client, ctx) {
+  const gameId = game.gameId;
+  await _sendInitiativeDeployButtons(game, gameId, ctx);
+  ctx.saveGames();
 }
 
 /**
@@ -1047,7 +1135,8 @@ export async function handleDeploymentFig(interaction, ctx) {
     }).catch(discordCatch);
     return;
   }
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize);
+  const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
   if (zoneSpaces.length > 0) {
     const { rows, available } = getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
     if (available.length === 0) {
@@ -1169,7 +1258,8 @@ export async function handleDeploymentOrient(interaction, ctx) {
     }
   }
   const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, orientation);
+  const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, figMeta.dcName);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, orientation, blocking, ignoreBlocking);
   if (validSpaces.length === 0) {
     delete game.pendingDeployOrientation[`${playerNum}_${flatIndex}`];
     await interaction.followUp({ content: 'No valid spots for this orientation in your zone. Try the other orientation.', ephemeral: true }).catch(discordCatch);
@@ -1260,7 +1350,8 @@ export async function handleDeployRow(interaction, ctx) {
   const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
   const dcName = figMeta?.dcName;
   const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize);
+  const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
   // Filter to only spaces in the chosen row
   const rowSpaces = validSpaces.filter((s) => {
     const m = s.match(/^[a-z]+(\d+)$/i);
@@ -1353,7 +1444,8 @@ export async function handleDeployRowBack(interaction, ctx) {
   const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
   const dcName = figMeta?.dcName;
   const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize);
+  const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
   const labels = game[_deployLabelsKey(playerNum)];
   const label = labels?.[flatIndex] || 'figure';
   const isLarge = figureSize !== '1x1';
@@ -1710,7 +1802,7 @@ export async function handleDeploymentDone(interaction, ctx) {
       const nonInitMapAttachment = await getDeploymentMapAttachment(game, otherZone);
       if (deployRows.length === 0) {
         const payload = {
-          content: `${nonInitiativePing} — Your opponent has deployed. Deploy in the **${otherZone}** zone. When finished, click **Deployment Completed** below.\n-# *Attachments (Skirmish Upgrades) are placed after all figures are deployed.*`,
+          content: `${nonInitiativePing} — Your opponent has deployed. Deploy in the **${otherZone}** zone. When finished, click **Deployment Completed** below.`,
           components: [doneRow],
           allowedMentions: { users: [nonInitiativePlayerId] },
         };
@@ -1723,7 +1815,7 @@ export async function handleDeploymentDone(interaction, ctx) {
           const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
           const components = isLastChunk ? [...chunk, doneRow] : chunk;
           const payload = {
-            content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*\n-# *Attachments (Skirmish Upgrades) are placed after all figures are deployed.*` : null,
+            content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*` : null,
             components,
             allowedMentions: { users: [nonInitiativePlayerId] },
           };
@@ -1836,7 +1928,8 @@ export async function handleAutoDeploy(interaction, ctx) {
     const baseSize = getFigureSize(meta.dcName);
     const size = baseSize === '2x3' ? '2x3' : baseSize;
     const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
-    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, size);
+    const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, meta.dcName);
+    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, size, blocking, ignoreBlocking);
     if (!validSpaces.length) continue;
     validSpaces.sort((a, b) => {
       const pa = parseCoord(a), pb = parseCoord(b);

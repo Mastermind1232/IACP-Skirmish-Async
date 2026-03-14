@@ -143,6 +143,22 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
         abilities.push({ abilityId: 'scavenged_walker_move', label: 'Scavenged Walker', dcName: dc.dcName, figureKey: fk, msgId: mid, playerNum, interactive: true, type: 'movement', optional: true });
       }
     }
+    // Companion deployment via attachment (e.g., [Clan of Two] → The Child)
+    for (const attName of atts) {
+      const attData = dcEffects[attName] || dcEffects[`[${attName}]`];
+      if (attData && typeof attData.companion === 'string' && !game[`companionDeployed_${mid}`]) {
+        const dc = dcList[i];
+        if (!dc || dc.defeated) continue;
+        const hostFk = Object.keys(figPositions).find(k => k.startsWith(dc.dcName + '-'));
+        if (hostFk) {
+          abilities.push({
+            abilityId: 'companion_deploy', label: `Deploy ${attData.companion}`,
+            dcName: dc.dcName, figureKey: hostFk, msgId: mid, playerNum,
+            companionName: attData.companion, interactive: false, type: 'companion',
+          });
+        }
+      }
+    }
   }
 
   return abilities;
@@ -205,6 +221,22 @@ async function resolveAutoAbility(game, ability, client, logGameAction) {
         game.figurePowerTokens[leader.figureKey] = game.figurePowerTokens[leader.figureKey] || [];
         game.figurePowerTokens[leader.figureKey].push('Block');
         await logGameAction(game, client, `🛡️ **Security Detail** — **${leader.dcName}** gains **1 Block Token** (from ${dcName}).`, { phase: 'ROUND', icon: 'deployed' });
+      }
+      break;
+    }
+    case 'companion_deploy': {
+      // Place companion at host figure's position
+      const companionName = ability.companionName;
+      const hostPos = game.figurePositions?.[playerNum]?.[figureKey];
+      if (hostPos && companionName) {
+        const companionKey = `${companionName}-0-0`;
+        if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
+        game.figurePositions[playerNum][companionKey] = hostPos;
+        game[`companionDeployed_${ability.msgId}`] = true;
+        // Track companion → host relationship for activation
+        game.companionHostMap = game.companionHostMap || {};
+        game.companionHostMap[companionKey] = { hostFigureKey: figureKey, playerNum };
+        await logGameAction(game, client, `👶 **${companionName}** deployed at **${dcName}**'s position (${hostPos}).`, { phase: 'ROUND', icon: 'deployed' });
       }
       break;
     }

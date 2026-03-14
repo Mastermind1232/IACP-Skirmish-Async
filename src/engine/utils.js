@@ -10,17 +10,29 @@ export function shuffleArray(arr) {
   }
 }
 
-/** Filter zone spaces to only those valid as top-left for a unit of given size (all footprint cells in zone and unoccupied). */
-export function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, getFootprintCells) {
+/**
+ * Filter zone spaces to only those valid as top-left for a unit of given size
+ * (all footprint cells in zone, unoccupied, and not blocking terrain).
+ * @param {string[]} zoneSpaces
+ * @param {string[]} occupiedSpaces
+ * @param {string} size - e.g. '1x1', '1x2', '2x3'
+ * @param {Function} getFootprintCells
+ * @param {string[]} [blockingSpaces] - blocking terrain spaces (excluded unless ignoreBlocking)
+ * @param {boolean} [ignoreBlocking] - true for Mobile/Massive figures
+ */
+export function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, getFootprintCells, blockingSpaces, ignoreBlocking) {
   const zoneSet = new Set((zoneSpaces || []).map((s) => String(s).toLowerCase()));
   const occupiedSet = new Set((occupiedSpaces || []).map((s) => String(s).toLowerCase()));
+  const blockingSet = (!ignoreBlocking && blockingSpaces?.length)
+    ? new Set(blockingSpaces.map((s) => String(s).toLowerCase()))
+    : null;
   const sizeNorm = (size || '1x1').toLowerCase();
   if (sizeNorm === '1x1') {
-    return [...zoneSet].filter((s) => !occupiedSet.has(s));
+    return [...zoneSet].filter((s) => !occupiedSet.has(s) && (!blockingSet || !blockingSet.has(s)));
   }
   return [...zoneSet].filter((topLeft) => {
     const cells = getFootprintCells(topLeft, sizeNorm);
-    return cells.every((c) => zoneSet.has(c) && !occupiedSet.has(c));
+    return cells.every((c) => zoneSet.has(c) && !occupiedSet.has(c) && (!blockingSet || !blockingSet.has(c)));
   });
 }
 

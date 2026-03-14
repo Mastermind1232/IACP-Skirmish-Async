@@ -49,6 +49,7 @@ import {
   handleAttachReselect,
   handleAttachDoneConfirm,
   handleAttachDoneRedo,
+  startDeploymentAfterAttachments,
 } from './setup.js';
 import {
   handleDcActivate,
@@ -520,6 +521,7 @@ export {
   handleAttachReselect,
   handleAttachDoneConfirm,
   handleAttachDoneRedo,
+  startDeploymentAfterAttachments,
 } from './setup.js';
 export {
   handleDcActivate,

@@ -246,6 +246,7 @@ import {
   proceedAfterRerolls,
   sendReadyToResolveRolls,
   sendPowerTokenOverflowUI,
+  startDeploymentAfterAttachments as _startDeploymentAfterAttachments,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -683,9 +684,9 @@ async function ensureMovementBankMessage(game, msgId, client) {
 /** Fisher-Yates shuffle. Mutates array in place. */
 function shuffleArray(arr) { return _shuffleArrayPure(arr); }
 
-/** Filter zone spaces to only those valid as top-left for a unit of given size (all footprint cells in zone and unoccupied). */
-function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size) {
-  return _filterValidTopLeftSpacesPure(zoneSpaces, occupiedSpaces, size, getFootprintCells);
+/** Filter zone spaces to only those valid as top-left for a unit of given size (all footprint cells in zone, unoccupied, and not blocking). */
+function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, blockingSpaces, ignoreBlocking) {
+  return _filterValidTopLeftSpacesPure(zoneSpaces, occupiedSpaces, size, getFootprintCells, blockingSpaces, ignoreBlocking);
 }
 
 /** Maps that are play-ready: have deployment zones, map-spaces (spaces/adjacency), and Play ready? checked so the bot can draw from the pool. */
@@ -1112,11 +1113,12 @@ async function reorderPlayAreaAfterAttachments(game, playerNum, client) {
   });
 }
 
-/** Called when all setup attachments are placed: start Round 1 and send shuffle/draw prompts. */
+/** Called when all setup attachments are placed: reorder play area, then start deployment. */
 async function finishSetupAttachments(game, client) {
   return _finishSetupAttachmentsPure(game, client, {
     reorderPlayAreaAfterAttachments, setPhase, PHASES, clearPreGameSetup,
     runPostDeployPhase, logGameAction, saveGames, _sendCcShuffleDrawPrompts,
+    startDeploymentAfterAttachments: (g, c) => _startDeploymentAfterAttachments(g, c, buildAllDeps()),
   });
 }
 

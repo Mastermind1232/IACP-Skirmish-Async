@@ -50,8 +50,8 @@ describe('phase transition audit', () => {
     setPhase(game, PHASES.MAP_SELECTION, null, { strict: true });
     setPhase(game, PHASES.INITIATIVE, null, { strict: true });
     setPhase(game, PHASES.ZONE_SELECTION, null, { strict: true });
-    setPhase(game, PHASES.DEPLOYMENT, null, { strict: true });
     setPhase(game, PHASES.ATTACHMENT, null, { strict: true });
+    setPhase(game, PHASES.DEPLOYMENT, null, { strict: true });
     setPhase(game, PHASES.CC_DRAW, null, { strict: true });
     setPhase(game, PHASES.ROUND_ACTIVE, ROUND_PHASES.START_OF_ROUND, { strict: true });
     assert.equal(game.roundPhase, ROUND_PHASES.START_OF_ROUND);
@@ -60,9 +60,9 @@ describe('phase transition audit', () => {
     assert.equal(game.roundPhase, null);
   });
 
-  it('deployment can skip attachment phase', () => {
-    const game = { phase: PHASES.DEPLOYMENT, roundPhase: null };
-    setPhase(game, PHASES.CC_DRAW, null, { strict: true });
-    assert.equal(game.phase, PHASES.CC_DRAW);
+  it('zone selection can skip attachment phase (no attachments)', () => {
+    const game = { phase: PHASES.ZONE_SELECTION, roundPhase: null };
+    setPhase(game, PHASES.DEPLOYMENT, null, { strict: true });
+    assert.equal(game.phase, PHASES.DEPLOYMENT);
   });
 });

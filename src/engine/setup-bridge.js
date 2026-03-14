@@ -109,7 +109,7 @@ export async function reorderPlayAreaAfterAttachments(game, playerNum, client, d
 }
 
 /**
- * Called when all setup attachments are placed: start Round 1 and send shuffle/draw prompts.
+ * Called when all setup attachments are placed: reorder play area, then start deployment phase.
  * @param {object} game
  * @param {object} client - Discord client
  * @param {object} deps
@@ -122,19 +122,9 @@ export async function finishSetupAttachments(game, client, deps) {
   } catch (err) {
     console.error('Failed to reorder play area after attachments:', err);
   }
-  game.currentRound = 1;
-  deps.setPhase(game, deps.PHASES.CC_DRAW);
-  game.currentActivationTurnPlayerId = game.initiativePlayerId;
-  await deps.clearPreGameSetup(game, client);
-
-  // Run post-deploy effects BEFORE CC draw (per rules: "after deployment" is before CC shuffle)
-  const postDeployActive = await deps.runPostDeployPhase(game, game.gameId, client, { logGameAction: deps.logGameAction, saveGames: deps.saveGames }, async () => {
-    await deps._sendCcShuffleDrawPrompts(game, client);
-    deps.saveGames();
-  });
-
-  if (!postDeployActive) {
-    await deps._sendCcShuffleDrawPrompts(game, client);
+  // Transition to deployment — startDeploymentAfterAttachments sends deploy buttons
+  if (deps.startDeploymentAfterAttachments) {
+    await deps.startDeploymentAfterAttachments(game, client, deps);
   }
   deps.saveGames();
 }

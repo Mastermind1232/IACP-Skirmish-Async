@@ -9,14 +9,9 @@ import {
 } from '../game/phase-gate.js';
 import {
   getPlayerId, getHandChannelId, getInitiativePlayerNum,
-  getDcList, getDcMessageIds, opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
-import {
-  findAutoAttachTarget, applySetupAttachment,
-  _sendAttachDonePrompt, _sendAttachmentDropdown,
-} from './setup.js';
 
 // ── Message builders ────────────────────────────────────────────────────────
 
@@ -295,13 +290,12 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
 // ── advanceFromDeployment (extracted from setup.js) ─────────────────────────
 
 /**
- * Logic formerly in handleDeploymentDone after both players deployed.
- * Checks for setup attachments and either starts attachment phase or sends CC prompts.
+ * Logic after both players have deployed: proceed to CC draw.
+ * Attachments are already placed before deployment, so no attachment check needed.
  */
 async function advanceFromDeployment(game, ctx) {
   const {
     client, logGameAction, saveGames,
-    isDcAttachment, resolveDcName, dcMessageMeta,
     getInitiativePlayerZoneLabel, clearPreGameSetup,
     runPostDeployPhase, getCcShuffleDrawButton,
   } = ctx;
@@ -309,60 +303,7 @@ async function advanceFromDeployment(game, ctx) {
 
   const p1CcList = game.player1Squad?.ccList || [];
   const p2CcList = game.player2Squad?.ccList || [];
-  const p1DcListRaw = game.player1Squad?.dcList || [];
-  const p2DcListRaw = game.player2Squad?.dcList || [];
-  const p1SetupAttachments = p1DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry)));
-  const p2SetupAttachments = p2DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry)));
 
-  if (p1SetupAttachments.length > 0 || p2SetupAttachments.length > 0) {
-    game.setupAttachmentPhase = true;
-    setPhase(game, PHASES.ATTACHMENT);
-    game.setupAttachmentPending = {
-      1: p1SetupAttachments.map((e) => resolveDcName(e)),
-      2: p2SetupAttachments.map((e) => resolveDcName(e)),
-    };
-    game.setupAttachmentOriginal = {
-      1: [...game.setupAttachmentPending[1]],
-      2: [...game.setupAttachmentPending[2]],
-    };
-    game.setupAttachmentApplied = { 1: [], 2: [] };
-    const generalChannel = await client.channels.fetch(game.generalId);
-    await generalChannel.send({
-      content: '**Both players have deployed.** Place your Skirmish Upgrade card(s) on your Deployment cards (see the **Your Hand** thread in your Play Area). When everyone has placed them, shuffle and draw your starting hands.',
-    });
-
-    for (const pn of [1, 2]) {
-      const pending = game.setupAttachmentPending[pn];
-      if (pending.length === 0) {
-        game.setupAttachmentConfirmed = game.setupAttachmentConfirmed || {};
-        game.setupAttachmentConfirmed[pn] = true;
-        continue;
-      }
-      // Auto-attach character-specific attachments (using direct imports from setup.js)
-      const dcList = getDcList(game, pn) || [];
-      const dcMsgIds = getDcMessageIds(game, pn) || [];
-      const attached = new Set((game.setupAttachmentApplied?.[pn] || []).map(a => a.dcMsgId));
-      while (pending.length > 0) {
-        const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds, attached);
-        if (!autoTarget) break;
-        const card = pending[0];
-        await applySetupAttachment(game, pn, card, autoTarget, ctx);
-        pending.shift();
-        game.setupAttachmentApplied[pn].push({ card, dcMsgId: autoTarget });
-        attached.add(autoTarget);
-        await logGameAction(game, client, `**${card}** auto-attached to **${dcMessageMeta?.get(autoTarget)?.displayName || 'DC'}** (setup).`, { phase: 'SETUP', icon: 'card' });
-      }
-      if (pending.length === 0) {
-        await _sendAttachDonePrompt(game, gameId, pn, client);
-        continue;
-      }
-      await _sendAttachmentDropdown(game, gameId, pn, pending[0], client);
-    }
-    if (saveGames) saveGames();
-    return;
-  }
-
-  // No attachments — proceed to CC draw
   game.currentRound = 1;
   setPhase(game, PHASES.CC_DRAW);
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
@@ -376,16 +317,21 @@ async function advanceFromDeployment(game, ctx) {
       content: deployContent,
       allowedMentions: { users: [game.initiativePlayerId] },
     });
+    // Filter out attached CCs from deck lists
+    const p1Placed = (game.p1CcAttachments && Object.values(game.p1CcAttachments).flat()) || [];
+    const p2Placed = (game.p2CcAttachments && Object.values(game.p2CcAttachments).flat()) || [];
+    const p1DeckList = p1CcList.filter((c) => !p1Placed.includes(c));
+    const p2DeckList = p2CcList.filter((c) => !p2Placed.includes(c));
     try {
       const p1HandChannel = await client.channels.fetch(game.p1HandId);
       const p2HandChannel = await client.channels.fetch(game.p2HandId);
       const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
       await p1HandChannel.send({
-        content: `**Your Command Card deck** (${p1CcList.length} cards):\n${ccDeckText(p1CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        content: `**Your Command Card deck** (${p1DeckList.length} cards):\n${ccDeckText(p1DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
         components: [getCcShuffleDrawButton(gameId)],
       });
       await p2HandChannel.send({
-        content: `**Your Command Card deck** (${p2CcList.length} cards):\n${ccDeckText(p2CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        content: `**Your Command Card deck** (${p2DeckList.length} cards):\n${ccDeckText(p2DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
         components: [getCcShuffleDrawButton(gameId)],
       });
     } catch (err) {
