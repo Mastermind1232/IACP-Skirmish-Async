@@ -3559,7 +3559,15 @@ process.on('uncaughtException', (err) => {
   console.error('[Process] Uncaught exception:', err);
 });
 
-if (process.argv.includes('--test-movement')) {
+if (process.env.BOT_STARTUP_SMOKE === '1') {
+  // Dry-boot mode: all modules loaded, deps validated, no Discord connection.
+  // Only exit if this is the main entrypoint (not when imported by smoke-imports.js).
+  const _isMain = process.argv[1] && (process.argv[1].endsWith('index.js') || process.argv[1].endsWith('index'));
+  if (_isMain) {
+    console.log('[smoke] All modules loaded and startup validation passed.');
+    process.exit(0);
+  }
+} else if (process.argv.includes('--test-movement')) {
   runMovementTests()
     .then((code) => process.exit(code || 0))
     .catch((err) => { console.error(err); process.exit(1); });

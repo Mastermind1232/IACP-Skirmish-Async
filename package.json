@@ -22,7 +22,10 @@
     "certify": "node tests/certification/certify-catalog.js",
     "test:regression": "node --test tests/certification/regression.test.js",
     "test:headless": "node --test tests/headless/*.test.js",
-    "test:all": "node --test tests/headless/*.test.js tests/certification/regression.test.js"
+    "test:all": "node --test tests/headless/*.test.js tests/certification/regression.test.js",
+    "smoke:startup": "node scripts/smoke-startup.js",
+    "smoke:imports": "node scripts/smoke-imports.js",
+    "predeploy": "npm run smoke:imports && npm run smoke:startup && npm run test:headless"
   },
   "type": "module",
   "dependencies": {
