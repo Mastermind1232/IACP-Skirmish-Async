@@ -196,9 +196,7 @@ async function resolveAutoAbility(game, ability, client, logGameAction) {
 
   switch (abilityId) {
     case 'beskar_armor': {
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
-      game.figurePowerTokens[figureKey].push('Block', 'Block');
+      grantPowerTokens(game, figureKey, 'Block', 2);
       await logGameAction(game, client, `🛡️ **Beskar Armor** — **${dcName}** gains **2 Block Tokens** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
       break;
     }
@@ -217,9 +215,7 @@ async function resolveAutoAbility(game, ability, client, logGameAction) {
       const leaders = ability.leaders || [];
       if (leaders.length > 0) {
         const leader = leaders[0];
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[leader.figureKey] = game.figurePowerTokens[leader.figureKey] || [];
-        game.figurePowerTokens[leader.figureKey].push('Block');
+        grantPowerTokens(game, leader.figureKey, 'Block', 1);
         await logGameAction(game, client, `🛡️ **Security Detail** — **${leader.dcName}** gains **1 Block Token** (from ${dcName}).`, { phase: 'ROUND', icon: 'deployed' });
       }
       break;
@@ -980,9 +976,7 @@ export async function handleSecurityDetailPick(interaction, ctx) {
   }
   const leaderFk = parts.slice(2).join('_');
   const leaderDcName = dcNameFromFigureKey(leaderFk);
-  game.figurePowerTokens = game.figurePowerTokens || {};
-  game.figurePowerTokens[leaderFk] = game.figurePowerTokens[leaderFk] || [];
-  game.figurePowerTokens[leaderFk].push('Block');
+  grantPowerTokens(game, leaderFk, 'Block', 1);
   await logGameAction(game, client, `🛡️ **Security Detail** — **${leaderDcName}** gains **1 Block Token**.`, { phase: 'ROUND', icon: 'deployed' });
 
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}

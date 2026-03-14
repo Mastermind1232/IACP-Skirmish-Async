@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapSpaces, getFigureSize } from '../data-loader.js';
 import { cleanupActivation } from '../game/activation-state.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp, getMaxPowerTokens } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens } from '../game/index.js';
 import { getRange } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
@@ -1121,9 +1121,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       }
     }
     if (surgeCount > 0) {
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[selfFk] = game.figurePowerTokens[selfFk] || [];
-      for (let i = 0; i < surgeCount; i++) game.figurePowerTokens[selfFk].push('Surge');
+      grantPowerTokens(game, selfFk, 'Surge', surgeCount);
     }
     await thread.send({ content: `🔥 **Into the Fray** — **${displayName}** gains **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).` }).catch(discordCatch);
   }
@@ -2035,9 +2033,7 @@ export async function handleActPassive(interaction, ctx) {
     } else if (choice === 'block') {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const fk = `${meta.dcName}-${dgIndex}-0`;
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-      game.figurePowerTokens[fk].push('Block');
+      grantPowerTokens(game, fk, 'Block', 1);
       await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **1 Block Token**.`, components: [] }).catch(discordCatch);
     }
   } else if (ability === 'responsive') {
@@ -2061,13 +2057,11 @@ export async function handleActPassive(interaction, ctx) {
   } else if (ability === 'hunger') {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const fk = `${meta.dcName}-${dgIndex}-0`;
-    game.figurePowerTokens = game.figurePowerTokens || {};
-    game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
     if (choice === 'block') {
-      game.figurePowerTokens[fk].push('Block');
+      grantPowerTokens(game, fk, 'Block', 1);
       await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Block Token**.`, components: [] }).catch(discordCatch);
     } else if (choice === 'evade') {
-      game.figurePowerTokens[fk].push('Evade');
+      grantPowerTokens(game, fk, 'Evade', 1);
       await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Evade Token**.`, components: [] }).catch(discordCatch);
     }
   } else if (ability === 'tacmove') {
@@ -2114,9 +2108,7 @@ export async function handleActPassive(interaction, ctx) {
     if (!targetFk) return;
     const targetDcName = dcNameFromFigureKey(targetFk);
     const tokenType = choice === 'hit' ? 'Hit' : 'Surge';
-    game.figurePowerTokens = game.figurePowerTokens || {};
-    game.figurePowerTokens[targetFk] = game.figurePowerTokens[targetFk] || [];
-    game.figurePowerTokens[targetFk].push(tokenType);
+    grantPowerTokens(game, targetFk, tokenType, 1);
     delete game.pendingAwr;
     await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
   } else if (ability === 'openminded') {
@@ -2250,9 +2242,7 @@ export async function handleActPassive(interaction, ctx) {
     if (!pending || !pending.pendingTargetFk) return;
     const tokenType = choice.charAt(0).toUpperCase() + choice.slice(1);
     const fk = pending.pendingTargetFk;
-    game.figurePowerTokens = game.figurePowerTokens || {};
-    game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-    game.figurePowerTokens[fk].push(tokenType);
+    grantPowerTokens(game, fk, tokenType, 1);
     pending.remaining--;
     const targetDcName = dcNameFromFigureKey(fk);
     delete pending.pendingTargetFk;
@@ -2688,9 +2678,7 @@ export async function handleActPassive(interaction, ctx) {
         game.imperialCitadelTokens = _icTokens;
         const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
         const fk = `${meta.dcName}-${dgIndex}-0`;
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-        game.figurePowerTokens[fk].push(_icType.charAt(0).toUpperCase() + _icType.slice(1));
+        grantPowerTokens(game, fk, _icType.charAt(0).toUpperCase() + _icType.slice(1), 1);
         await interaction.message.edit({ content: `**Imperial Citadel** — **${displayName}** gained 1 **${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token** from the Citadel.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Imperial Citadel** — **${displayName}** gained 1 ${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token from the Citadel.`, { phase: 'ACTIVATION', icon: 'card' });
       } else {

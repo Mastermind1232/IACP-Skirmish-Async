@@ -5,6 +5,7 @@
 import { awardObjectiveVp } from './vp-helpers.js';
 import { getPlayerId, getCcHand, getInitiativePlayerNum } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
+import { grantPowerTokens } from './game-helpers.js';
 import { getDeploymentZones } from '../data-loader.js';
 import { getPlayerOccupiedCellsForControl } from './board-helpers.js';
 
@@ -240,9 +241,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
               const poses = game.figurePositions?.[pn] || {};
               for (const [figKey, figCoord] of Object.entries(poses)) {
                 if (normalizeCoord(figCoord) === normalizeCoord(coord)) {
-                  game.figurePowerTokens = game.figurePowerTokens || {};
-                  game.figurePowerTokens[figKey] = game.figurePowerTokens[figKey] || [];
-                  game.figurePowerTokens[figKey].push(powerToken);
+                  grantPowerTokens(game, figKey, powerToken, 1);
                   tokensGranted.push(`${figKey} → ${powerToken}`);
                 }
               }
@@ -322,9 +321,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         const nearbyFigs = getFiguresOnOrAdjacentToSpace ? getFiguresOnOrAdjacentToSpace(game, controller, coord, mapId) : [];
         if (nearbyFigs.length > 0) {
           const recipient = nearbyFigs[0];
-          game.figurePowerTokens = game.figurePowerTokens || {};
-          game.figurePowerTokens[recipient] = game.figurePowerTokens[recipient] || [];
-          for (const tok of tokens) game.figurePowerTokens[recipient].push(tok);
+          for (const tok of tokens) grantPowerTokens(game, recipient, tok, 1);
           distributionLog.push(`${coord}: [${tokens.join(', ')}] → ${recipient}`);
         } else {
           distributionLog.push(`${coord}: [${tokens.join(', ')}] — no adjacent friendly, tokens lost`);

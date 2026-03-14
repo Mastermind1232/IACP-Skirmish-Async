@@ -342,11 +342,16 @@ function parseAttachmentRestriction(cardName, dcEffects) {
           }
           return true;
         }
-        // "UNIQUE FIGURE" check (optionally "WITH FIGURE COST N OR MORE")
-        if (altUpper.includes('UNIQUE FIGURE')) {
+        // "UNIQUE ..." check (e.g. "UNIQUE FIGURE", "UNIQUE GUARDIAN", "UNIQUE FIGURE WITH FIGURE COST N OR MORE")
+        if (altUpper.startsWith('UNIQUE ')) {
           if (!isUnique) return false;
+          if (altUpper === 'UNIQUE FIGURE') return true;
           const costMatch = altUpper.match(/FIGURE COST (\d+) OR MORE/);
           if (costMatch && figureCost < parseInt(costMatch[1], 10)) return false;
+          if (altUpper.includes('UNIQUE FIGURE')) return true;
+          // "UNIQUE GUARDIAN", "UNIQUE TROOPER", etc. — check keyword after UNIQUE
+          const kwPart = altUpper.replace(/^UNIQUE\s+/, '').trim();
+          if (kwPart && !_matchesKeywordPhrase(kwPart, dcKw, affiliation)) return false;
           return true;
         }
         // "GROUP WITH N FIGURES" check
@@ -616,6 +621,14 @@ export function validateArmyAffiliation(squad) {
       }
     }
   }
+
+  // Temporary Alliance cards themselves should be excused from affiliation warnings
+  if (hasTempAllianceImperial || hasUnqualifiedTA) excused.add('[Temporary Alliance]');
+  if (hasTempAllianceScum) excused.add('[Temporary Alliance (M)]');
+  excused.add('Temporary Alliance');
+  excused.add('[Temporary Alliance (E)]');
+  excused.add('Temporary Alliance (E)');
+  excused.add('Temporary Alliance (M)');
 
   // ── Warn about any non-primary, non-"Any", non-excused DCs ──
   for (const dc of resolved) {

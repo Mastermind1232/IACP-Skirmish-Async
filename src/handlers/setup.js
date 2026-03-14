@@ -117,15 +117,29 @@ function getAttachmentRestriction(cardName) {
           if (altUpper.includes('NON-MASSIVE') && dcKw.includes('MASSIVE')) return false;
           if (altUpper.includes('NON-UNIQUE') && isUnique) return false;
           // Check remaining positive keywords after stripping NON- conditions and commas
-          const remaining = altUpper.replace(/NON-MASSIVE/g, '').replace(/NON-UNIQUE/g, '').replace(/,/g, '').trim();
-          if (remaining && !_matchesKeywordPhrase(remaining, dcKw, affiliation)) return false;
+          let remaining = altUpper.replace(/NON-MASSIVE/g, '').replace(/NON-UNIQUE/g, '').replace(/,/g, '').trim();
+          if (remaining) {
+            // Extract "GROUP WITH N FIGURES" suffix before keyword matching
+            const grpMatch = remaining.match(/^(.+?)\s+GROUP\s+WITH\s+(\d+)\s+FIGURES?$/);
+            if (grpMatch) {
+              const reqFigs = parseInt(grpMatch[2], 10);
+              if (figures !== reqFigs) return false;
+              remaining = grpMatch[1].trim();
+            }
+            if (remaining && !_matchesKeywordPhrase(remaining, dcKw, affiliation)) return false;
+          }
           return true;
         }
-        // "UNIQUE FIGURE" check (optionally "WITH FIGURE COST N OR MORE")
-        if (altUpper.includes('UNIQUE FIGURE')) {
+        // "UNIQUE ..." check (e.g. "UNIQUE FIGURE", "UNIQUE GUARDIAN", "UNIQUE FIGURE WITH FIGURE COST N OR MORE")
+        if (altUpper.startsWith('UNIQUE ')) {
           if (!isUnique) return false;
+          if (altUpper === 'UNIQUE FIGURE') return true;
           const costMatch = altUpper.match(/FIGURE COST (\d+) OR MORE/);
           if (costMatch && figureCost < parseInt(costMatch[1], 10)) return false;
+          if (altUpper.includes('UNIQUE FIGURE')) return true;
+          // "UNIQUE GUARDIAN", "UNIQUE TROOPER", etc. — check keyword after UNIQUE
+          const kwPart = altUpper.replace(/^UNIQUE\s+/, '').trim();
+          if (kwPart && !_matchesKeywordPhrase(kwPart, dcKw, affiliation)) return false;
           return true;
         }
         // "GROUP WITH N FIGURES" check
@@ -137,12 +151,13 @@ function getAttachmentRestriction(cardName) {
           if (!_matchesKeywordPhrase(kwPart, dcKw, affiliation)) return false;
           return true;
         }
+        // Name-based match first (e.g. "DARTH VADER", "SHORETROOPER", "AT-ST")
+        // Checked before keyword match so names containing keywords (e.g. "SHORETROOPER" contains "TROOPER") resolve correctly.
+        if (dcNameUpper.includes(altUpper) || altUpper.includes(dcNameUpper.replace(/\s*\(.*\)$/, ''))) return true;
         // Simple keyword match: "LEADER", "HUNTER", "DROID", "TROOPER", compound "IMPERIAL TROOPER"
         if (RESTRICTION_KEYWORDS.some(k => altUpper.includes(k))) {
           return _matchesKeywordPhrase(altUpper, dcKw, affiliation);
         }
-        // Name-based match (e.g. "DARTH VADER", "LUKE SKYWALKER", "MAUL", "AT-ST")
-        if (dcNameUpper.includes(altUpper) || altUpper.includes(dcNameUpper.replace(/\s*\(.*\)$/, ''))) return true;
         return false;
       });
     },
