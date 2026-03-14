@@ -15,7 +15,8 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 import { COLORS } from './colors.js';
-import { buildScorecardEmbed, formatHealthSection, FIGURE_LETTERS } from './embeds.js';
+import { buildScorecardEmbed, formatHealthSection } from './embeds.js';
+import { FIGURE_LETTERS } from './components.js';
 import { actionsToButtons, describeContext } from './action-buttons.js';
 import { getAvailableActions } from '../engine/available-actions.js';
 import { PHASES } from '../game/phase.js';
