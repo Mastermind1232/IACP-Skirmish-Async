@@ -984,7 +984,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             if (_icDcList.some(dc => dc.dcName === '[Imperial Citadel]')) {
               const _icTokens = game.figurePowerTokens?.[combat.target.figureKey] || [];
               if (_icTokens.length > 0) {
-                game.imperialCitadelTokens = game.imperialCitadelTokens || { focus: 0, damage: 0, hit: 0, surge: 0, block: 0, evade: 0 };
+                game.imperialCitadelTokens = game.imperialCitadelTokens || { damage: 0, block: 0, hit: 0, surge: 0, evade: 0 };
                 for (const t of _icTokens) {
                   const tLower = String(t).toLowerCase();
                   game.imperialCitadelTokens[tLower] = (game.imperialCitadelTokens[tLower] || 0) + 1;

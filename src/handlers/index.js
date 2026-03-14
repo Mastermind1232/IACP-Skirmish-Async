@@ -18,8 +18,9 @@ import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
-  handlePostDeployMoveSkip,
+  handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
+  handleArmsDistFigPick, handleArmsDistTokenPick,
 } from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleStrainChoice, handleStrainCcPick, handleUnderDuress, handleRogueOneTokenPick } from './combat.js';
@@ -183,8 +184,12 @@ register('pd_strike_adj_', handleStrikeTeamAdjPick, 'postDeploy');
 register('pd_strike_token_done_', handleStrikeTeamTokenDone, 'postDeploy');
 register('pd_strike_token_', handleStrikeTeamTokenPick, 'postDeploy');
 register('pd_move_skip_', handlePostDeployMoveSkip, 'postDeploy');
+register('pd_move_stay_', handlePostDeployMoveStay, 'postDeploy');
+register('pd_sl_pick_', handleSmoothLandingPick, 'postDeploy');
 register('pd_walker_move_', handleWalkerMove, 'postDeploy');
 register('pd_walker_skip_', handleWalkerSkip, 'postDeploy');
+register('pd_arms_dist_fig_', handleArmsDistFigPick, 'postDeploy');
+register('pd_arms_dist_token_', handleArmsDistTokenPick, 'postDeploy');
 
 // --- Movement ---
 register('move_mp_', handleMoveMp, 'move');
@@ -484,8 +489,9 @@ export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
-  handlePostDeployMoveSkip,
+  handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
+  handleArmsDistFigPick, handleArmsDistTokenPick,
 } from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip } from './movement.js';
 export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls, handleStrainChoice, handleStrainCcPick, handleRogueOneTokenPick } from './combat.js';

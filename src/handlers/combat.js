@@ -235,7 +235,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
       rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
     }
     await thread.send({
-      content: `**Strain** — <@${ownerId}>, **${dcName}** suffers ${amount} Strain from **${abilityLabel}** (${sourceLabel}).`
+      content: `**Strain** — <@${ownerId}>, **${dcName}** (${cur}/${max} HP) suffers ${amount} Strain from **${abilityLabel}** (${sourceLabel}).`
         + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
         + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.${udNote}`,
       components: rows,

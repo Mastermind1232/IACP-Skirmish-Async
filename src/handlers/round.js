@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { getDcEffects, getMapSpaces, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
-import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, awardKillVp, deductVp } from '../game/index.js';
+import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, deductVp, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import { getRange } from '../game/spatial.js';
 import { getDeploymentZones, getCcEffect } from '../data-loader.js';
@@ -21,6 +21,7 @@ import {
   removeFigurePosition,
 } from '../game/player-helpers.js';
 import { checkStartOfRoundPassiveRedraws } from '../game/cc-passive-redraw.js';
+import { FIGURE_LETTERS } from '../discord/components.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
@@ -976,17 +977,17 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           }
         }
 
-        // [Imperial Citadel]: At the start of each round, place 1 Focus or Damage token on this card
+        // [Imperial Citadel]: At the start of each round, place 1 Damage or Block token on this card
         if (dcName.includes('Imperial Citadel') && text.includes('At the start of each round')) {
           const btns = [
-            new ButtonBuilder()
-              .setCustomId(`imp_citadel_${gameId}_${playerNum}_focus`)
-              .setLabel('Place Focus Token')
-              .setStyle(ButtonStyle.Primary),
             new ButtonBuilder()
               .setCustomId(`imp_citadel_${gameId}_${playerNum}_damage`)
               .setLabel('Place Damage Token')
               .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+              .setCustomId(`imp_citadel_${gameId}_${playerNum}_block`)
+              .setLabel('Place Block Token')
+              .setStyle(ButtonStyle.Primary),
           ];
           await logGameAction(game, client, `🏰 **Imperial Citadel** — <@${ownerId}>, place 1 token on Imperial Citadel:`, {
             components: [new ActionRowBuilder().addComponents(btns)],
@@ -1323,9 +1324,7 @@ export async function handleExtraArmorConfirm(interaction, ctx) {
     await interaction.followUp({ content: 'Extra Armor tokens already distributed.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  game.figurePowerTokens = game.figurePowerTokens || {};
-  game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
-  game.figurePowerTokens[figureKey].push('Block');
+  grantPowerTokens(game, figureKey, 'Block', 1);
   pending.remaining -= 1;
   const dcName = dcNameFromFigureKey(figureKey);
   await logGameAction(game, client, `🛡️ **Extra Armor** — **${dcName}** gains **1 Block Token** (${pending.remaining} remaining).`);
@@ -1342,7 +1341,7 @@ export async function handleExtraArmorConfirm(interaction, ctx) {
     const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
     const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
       .setCustomId(`extra_armor_pick_${gameId}_${playerNum}_${fk}`)
-      .setLabel(fk.replace(/-\d+-\d+$/, ''))
+      .setLabel(buildFigureButtonLabel(fk, game))
       .setStyle(ButtonStyle.Primary)
     );
     const rows = [];
@@ -1375,7 +1374,7 @@ export async function handleExtraArmorCancel(interaction, ctx) {
   const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
   const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
     .setCustomId(`extra_armor_pick_${gameId}_${playerNum}_${fk}`)
-    .setLabel(fk.replace(/-\d+-\d+$/, ''))
+    .setLabel(buildFigureButtonLabel(fk, game))
     .setStyle(ButtonStyle.Primary)
   );
   const rows = [];
@@ -1480,14 +1479,19 @@ export async function handleImpCitadel(interaction, ctx) {
   const parts = interaction.customId.replace('imp_citadel_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
-  const tokenType = parts[2]; // 'focus' or 'damage'
+  const tokenType = parts[2]; // 'damage' or 'block'
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  game.imperialCitadelTokens = game.imperialCitadelTokens || { focus: 0, damage: 0 };
-  const label = tokenType === 'focus' ? 'Focus' : 'Damage';
+  game.imperialCitadelTokens = game.imperialCitadelTokens || { damage: 0, block: 0 };
+  // Migrate legacy focus→block if present
+  if (game.imperialCitadelTokens.focus != null) {
+    game.imperialCitadelTokens.block = (game.imperialCitadelTokens.block || 0) + (game.imperialCitadelTokens.focus || 0);
+    delete game.imperialCitadelTokens.focus;
+  }
+  const label = tokenType === 'damage' ? 'Damage' : 'Block';
   game.imperialCitadelTokens[tokenType] = (game.imperialCitadelTokens[tokenType] || 0) + 1;
   const total = game.imperialCitadelTokens;
-  await logGameAction(game, client, `🏰 **Imperial Citadel** — placed **1 ${label}** token (now: ${total.focus} Focus, ${total.damage} Damage).`);
+  await logGameAction(game, client, `🏰 **Imperial Citadel** — placed **1 ${label}** token (now: ${total.damage} Damage, ${total.block} Block).`);
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
   saveGames();
   await interaction.followUp({ content: `Placed ${label} token on Imperial Citadel.`, ephemeral: true }).catch(discordCatch);

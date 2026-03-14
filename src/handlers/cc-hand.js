@@ -697,6 +697,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         allowedMentions: { users: [oppId] },
       }).catch(discordCatch);
     }
+    await logGameAction(game, interaction.client, `Waiting for opponent to respond to **${card}**...`, { phase: 'ACTION', icon: 'hourglass' });
     const waitingMsg = await handChannel.send({
       content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
     }).catch(() => null);

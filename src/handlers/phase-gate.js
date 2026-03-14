@@ -20,9 +20,13 @@ import {
 
 // ── Message builders ────────────────────────────────────────────────────────
 
-function buildStatusLine(gate) {
-  const p1 = gate.p1Ready ? 'P1 ✅' : 'P1 ⏳';
-  const p2 = gate.p2Ready ? 'P2 ✅' : 'P2 ⏳';
+function buildStatusLine(gate, game) {
+  const p1Id = getPlayerId(game, 1);
+  const p2Id = getPlayerId(game, 2);
+  const p1Label = p1Id ? `<@${p1Id}>` : 'P1';
+  const p2Label = p2Id ? `<@${p2Id}>` : 'P2';
+  const p1 = gate.p1Ready ? `${p1Label} ✅` : `${p1Label} ⏳`;
+  const p2 = gate.p2Ready ? `${p2Label} ✅` : `${p2Label} ⏳`;
   const suffix = (gate.p1Ready && gate.p2Ready) ? ' — Advancing...' : '';
   return `${p1} | ${p2}${suffix}`;
 }
@@ -34,7 +38,7 @@ function buildGateLabel(phase, game) {
 
 function buildGateContent(phase, gate, game) {
   const label = buildGateLabel(phase, game);
-  const status = buildStatusLine(gate);
+  const status = buildStatusLine(gate, game);
   return `🔔 ${label}\n${status}`;
 }
 

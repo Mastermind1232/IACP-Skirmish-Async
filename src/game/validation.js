@@ -319,8 +319,17 @@ function parseAttachmentRestriction(cardName, dcEffects) {
         if (altUpper.includes('NON-')) {
           if (altUpper.includes('NON-MASSIVE') && dcKw.includes('MASSIVE')) return false;
           if (altUpper.includes('NON-UNIQUE') && isUnique) return false;
-          const remaining = altUpper.replace(/NON-MASSIVE/g, '').replace(/NON-UNIQUE/g, '').replace(/,/g, '').trim();
-          if (remaining && !_matchesKeywordPhrase(remaining, dcKw, affiliation)) return false;
+          let remaining = altUpper.replace(/NON-MASSIVE/g, '').replace(/NON-UNIQUE/g, '').replace(/,/g, '').trim();
+          if (remaining) {
+            // Extract "GROUP WITH N FIGURES" suffix before keyword matching
+            const grpMatch = remaining.match(/^(.+?)\s+GROUP\s+WITH\s+(\d+)\s+FIGURES?$/);
+            if (grpMatch) {
+              const reqFigs = parseInt(grpMatch[2], 10);
+              if (figures !== reqFigs) return false;
+              remaining = grpMatch[1].trim();
+            }
+            if (remaining && !_matchesKeywordPhrase(remaining, dcKw, affiliation)) return false;
+          }
           return true;
         }
         // "UNIQUE FIGURE" check (optionally "WITH FIGURE COST N OR MORE")
@@ -339,12 +348,13 @@ function parseAttachmentRestriction(cardName, dcEffects) {
           if (!_matchesKeywordPhrase(kwPart, dcKw, affiliation)) return false;
           return true;
         }
+        // Name-based match first (e.g. "DARTH VADER", "SHORETROOPER", "AT-ST")
+        // Checked before keyword match so names containing keywords (e.g. "SHORETROOPER" contains "TROOPER") resolve correctly.
+        if (dcNameUpper.includes(altUpper) || altUpper.includes(dcNameUpper.replace(/\s*\(.*\)$/, ''))) return true;
         // Simple keyword match
         if (ATTACHMENT_RESTRICTION_KEYWORDS.some(k => altUpper.includes(k))) {
           return _matchesKeywordPhrase(altUpper, dcKw, affiliation);
         }
-        // Name-based match (e.g. "DARTH VADER", "LUKE SKYWALKER", "MAUL", "AT-ST")
-        if (dcNameUpper.includes(altUpper) || altUpper.includes(dcNameUpper.replace(/\s*\(.*\)$/, ''))) return true;
         return false;
       });
     },
@@ -490,6 +500,10 @@ export function validateArmyAffiliation(squad) {
   const hasDoctorAphra = nameSet.has('Doctor Aphra') || nameSet.has('Dr. Aphra');
   const hasEliteJawaScavenger = nameSet.has('Jawa Scavenger (Elite)');
   const hasHeavyStormtrooperElite = nameSet.has('Heavy Stormtrooper (Elite)');
+  // Temporary Alliance (Imperial): up to 2 Scum DCs allowed
+  const hasTempAllianceImperial = nameSet.has('[Temporary Alliance]') || nameSet.has('[Temporary Alliance (E)]');
+  // Temporary Alliance (Scum/Mercenary): up to 2 Rebel DCs allowed
+  const hasTempAllianceScum = nameSet.has('[Temporary Alliance (M)]');
 
   // ── Bib Fortuna — Dirty Dealing: army CANNOT include Rebel DCs ──
   if (hasBibFortuna) {
@@ -547,6 +561,32 @@ export function validateArmyAffiliation(squad) {
             excused.add(dc.name);
             droidExcusedCount++;
           }
+        }
+      }
+    }
+  }
+
+  // Temporary Alliance (Imperial) — up to 2 Scum DCs allowed
+  if (hasTempAllianceImperial && primaryAffiliation !== 'Scum') {
+    let taScumCount = 0;
+    for (const dc of resolved) {
+      if (dc.affiliation === 'Scum' && !excused.has(dc.name) && !dc.isAttachment) {
+        if (taScumCount < 2) {
+          excused.add(dc.name);
+          taScumCount++;
+        }
+      }
+    }
+  }
+
+  // Temporary Alliance (Mercenary) — up to 2 Rebel DCs allowed
+  if (hasTempAllianceScum && primaryAffiliation !== 'Rebel') {
+    let taRebelCount = 0;
+    for (const dc of resolved) {
+      if (dc.affiliation === 'Rebel' && !excused.has(dc.name) && !dc.isAttachment) {
+        if (taRebelCount < 2) {
+          excused.add(dc.name);
+          taRebelCount++;
         }
       }
     }

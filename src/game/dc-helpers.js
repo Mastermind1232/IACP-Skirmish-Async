@@ -107,3 +107,28 @@ export function getMaxPowerTokens(figureKey) {
   if (eff?.specialAbilityIds?.includes('locked_and_loaded')) return 3;
   return 2;
 }
+
+const FIGURE_LETTERS = 'abcdefghij';
+
+/**
+ * Build a display label for a figure button, including group label (e.g. "1a")
+ * and current token count when relevant.
+ * @param {string} figureKey - e.g. "Stormtrooper-1-2"
+ * @param {object} [game] - game state for token info
+ * @returns {string} e.g. "Stormtrooper (1c) [1/2 tokens]"
+ */
+export function buildFigureButtonLabel(figureKey, game) {
+  const dcName = dcNameFromFigureKey(figureKey);
+  const { dgIndex, figureIndex } = parseFigureKey(figureKey);
+  const letter = FIGURE_LETTERS[figureIndex] || 'a';
+  let label = `${dcName} (${dgIndex}${letter})`;
+  if (game?.figurePowerTokens) {
+    const tokens = game.figurePowerTokens[figureKey] || [];
+    const max = getMaxPowerTokens(figureKey);
+    if (tokens.length > 0 || max > 0) {
+      label += ` [${tokens.length}/${max}]`;
+    }
+  }
+  // Discord button labels max 80 chars
+  return label.length > 80 ? label.slice(0, 77) + '...' : label;
+}

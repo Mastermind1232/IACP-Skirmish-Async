@@ -4,12 +4,14 @@
  * Initiative player resolves first, then the other player.
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDcEffects, getMapSpaces, getDeploymentZones } from '../data-loader.js';
-import { dcNameFromFigureKey, applyCondition } from '../game/index.js';
+import { getDcEffects, getMapSpaces, getDeploymentZones, getFigureSize } from '../data-loader.js';
+import { dcNameFromFigureKey, applyCondition, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getInitiativePlayerNum, opponentPlayerNum, getHandChannelId,
 } from '../game/player-helpers.js';
+import { normalizeCoord, getFootprintCells } from '../game/coords.js';
+import { getRange } from '../game/spatial.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
@@ -52,15 +54,28 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
     }
     if (passives.includes('Smooth Landing')) {
       // Bodhi + each adjacent friendly gains 1 MP — all need to move immediately
+      // Use multi-cell adjacency: check ALL cells of both trigger and candidate figures
       const ms = getMapSpaces(game.selectedMap?.id);
-      const adj = (ms?.adjacency?.[String(pos).toLowerCase()] || []).map(a => String(a).toLowerCase());
+      const adjacency = ms?.adjacency || {};
+      // Build set of all cells adjacent to any cell of the triggering figure's footprint
+      const triggerSize = game.figureOrientations?.[fk] || getFigureSize(dcName) || '1x1';
+      const triggerCells = getFootprintCells(pos, triggerSize).map(c => normalizeCoord(c));
+      const adjSet = new Set();
+      for (const tc of triggerCells) {
+        for (const n of (adjacency[tc] || [])) adjSet.add(normalizeCoord(n));
+      }
       const moveFigures = [{ figureKey: fk, dcName, mp: 1 }];
       const done = new Set([fk]);
       for (const [afk, apos] of figEntries) {
         if (!apos || done.has(afk)) continue;
-        if (!adj.includes(String(apos).toLowerCase())) continue;
+        // Get all cells the candidate figure occupies
+        const aDcName = dcNameFromFigureKey(afk);
+        const aSize = game.figureOrientations?.[afk] || getFigureSize(aDcName) || '1x1';
+        const aCells = getFootprintCells(apos, aSize).map(c => normalizeCoord(c));
+        // Adjacent if ANY cell of candidate is adjacent to ANY cell of trigger
+        if (!aCells.some(c => adjSet.has(c))) continue;
         done.add(afk);
-        moveFigures.push({ figureKey: afk, dcName: dcNameFromFigureKey(afk), mp: 1 });
+        moveFigures.push({ figureKey: afk, dcName: aDcName, mp: 1 });
       }
       abilities.push({ abilityId: 'smooth_landing', label: 'Smooth Landing', dcName, figureKey: fk, playerNum, interactive: true, type: 'multi_movement', moveFigures });
     }
@@ -91,6 +106,10 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
     // Strike Team: check specialAbilityIds
     if (sIds.includes('strike_team_cassian') && !abilities.some(a => a.abilityId === 'strike_team' && a.playerNum === playerNum)) {
       abilities.push({ abilityId: 'strike_team', label: 'Strike Team', dcName, figureKey: fk, playerNum, interactive: true, type: 'complex' });
+    }
+    // Ko-Tun Arms Distribution post-deploy: pick 1 friendly within 3 spaces → gain 1 Power Token
+    if (sIds.includes('arms_distribution_kotun') && !game[`armsDistDeployFired_p${playerNum}`]) {
+      abilities.push({ abilityId: 'arms_distribution_deploy', label: 'Arms Distribution (Deploy)', dcName, figureKey: fk, playerNum, interactive: true, type: 'token_pick' });
     }
   }
 
@@ -197,33 +216,99 @@ async function resolveAutoAbility(game, ability, client, logGameAction) {
 /**
  * Start movement for the next figure in a multi-movement flow.
  * Used by Smooth Landing, Forward Emplacement, Strike Team (after adj pick).
+ * For smooth_landing: shows a picker so the player chooses which figure moves next.
+ * For other abilities: uses currentFigureIdx to auto-advance.
  */
 async function _startNextMovement(game, gameId, client, ctx) {
-  const { logGameAction, saveGames, dcMessageMeta, getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementMinimapAttachment, getMoveSpaceGridRows } = ctx;
+  const { logGameAction, saveGames } = ctx;
   const q = game.postDeployQueue;
   if (!q) return;
   const active = q.activeAbility;
   if (!active || !active.moveFigures) return;
 
-  const idx = active.currentFigureIdx || 0;
-  if (idx >= active.moveFigures.length) {
-    // All figures done
+  // For smooth_landing with player-chosen order: show picker when >1 figures remain
+  if (active.abilityId === 'smooth_landing' && !active._pickedFigureKey) {
+    // Filter to remaining figures (not yet resolved)
+    const remaining = active.moveFigures.filter(f => !active._resolvedFigures?.includes(f.figureKey));
+    if (remaining.length === 0) {
+      // All figures done
+      q.activeAbility = null;
+      await postAbilityPicker(game, gameId, client, logGameAction);
+      if (saveGames) saveGames();
+      return;
+    }
+    if (remaining.length === 1) {
+      // Only one left — auto-pick it
+      active._pickedFigureKey = remaining[0].figureKey;
+    } else {
+      // Show picker buttons for remaining figures
+      const playerNum = active.playerNum;
+      const ownerId = getPlayerId(game, playerNum);
+      const btns = remaining.slice(0, 20).map(f => new ButtonBuilder()
+        .setCustomId(`pd_sl_pick_${gameId}_${playerNum}_${f.figureKey}`)
+        .setLabel(buildFigureButtonLabel(f.figureKey, game))
+        .setStyle(ButtonStyle.Primary)
+      );
+      const rows = [];
+      for (let i = 0; i < btns.length; i += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+      const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+      if (generalChannel) {
+        await generalChannel.send({
+          content: `🛬 **Smooth Landing** — <@${ownerId}>, choose which figure moves next (${remaining.length} remaining):`,
+          components: rows.slice(0, 5),
+          allowedMentions: { users: [ownerId] },
+        }).catch(() => null);
+      }
+      if (saveGames) saveGames();
+      return;
+    }
+  }
+
+  // Determine which figure to move
+  let fig;
+  if (active._pickedFigureKey) {
+    fig = active.moveFigures.find(f => f.figureKey === active._pickedFigureKey);
+    delete active._pickedFigureKey;
+  } else {
+    const idx = active.currentFigureIdx || 0;
+    if (idx >= active.moveFigures.length) {
+      q.activeAbility = null;
+      await postAbilityPicker(game, gameId, client, logGameAction);
+      if (saveGames) saveGames();
+      return;
+    }
+    fig = active.moveFigures[idx];
+  }
+
+  if (!fig) {
     q.activeAbility = null;
     await postAbilityPicker(game, gameId, client, logGameAction);
     if (saveGames) saveGames();
     return;
   }
 
-  const fig = active.moveFigures[idx];
+  await _startMovementForFigure(game, gameId, client, ctx, fig);
+}
+
+/**
+ * Start movement UI for a specific figure. Extracted from _startNextMovement
+ * so it can be called by both the auto-advance and picker flows.
+ */
+async function _startMovementForFigure(game, gameId, client, ctx, fig) {
+  const { logGameAction, saveGames, dcMessageMeta, getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementMinimapAttachment, getMoveSpaceGridRows } = ctx;
+  const q = game.postDeployQueue;
+  if (!q) return;
+  const active = q.activeAbility;
+  if (!active) return;
+
   const { figureKey, dcName, mp } = fig;
   const playerNum = active.playerNum;
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   const ownerId = getPlayerId(game, playerNum);
 
   if (!pos) {
-    // Figure has no position — skip
-    active.currentFigureIdx = idx + 1;
-    await _startNextMovement(game, gameId, client, ctx);
+    // Figure has no position — advance
+    await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
     return;
   }
 
@@ -233,25 +318,36 @@ async function _startNextMovement(game, gameId, client, ctx) {
     if (meta.dcName === dcName && meta.playerNum === playerNum) { msgId = mid; break; }
   }
   if (!msgId) {
-    // Can't find DC message — skip this figure
     await logGameAction(game, client, `⚠️ Could not find play area message for **${dcName}** — skipping movement.`, { phase: 'ROUND', icon: 'deployed' });
-    active.currentFigureIdx = idx + 1;
-    await _startNextMovement(game, gameId, client, ctx);
+    await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
     return;
   }
 
   const boardState = getBoardStateForMovement(game, figureKey);
   if (!boardState) {
-    active.currentFigureIdx = idx + 1;
-    await _startNextMovement(game, gameId, client, ctx);
+    await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
     return;
   }
   const profile = getMovementProfile(dcName, figureKey, game);
   const cache = computeMovementCache(pos, mp, boardState, profile);
+
+  // Fix 1: When no valid movement spaces, show a Stay button instead of auto-skipping
   if (cache.cells.size === 0) {
-    await logGameAction(game, client, `🛬 **${active.abilityLabel || 'Post-Deploy'}** — **${dcName}** has no valid movement spaces (${mp} MP). Skipping.`, { phase: 'ROUND', icon: 'deployed' });
-    active.currentFigureIdx = idx + 1;
-    await _startNextMovement(game, gameId, client, ctx);
+    const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+    if (!generalChannel) {
+      await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
+      return;
+    }
+    const stayBtn = new ButtonBuilder()
+      .setCustomId(`pd_move_stay_${gameId}_${playerNum}_${figureKey}`)
+      .setLabel('Stay (Skip Movement)')
+      .setStyle(ButtonStyle.Secondary);
+    await generalChannel.send({
+      content: `🛬 **${active.abilityLabel || 'Post-Deploy'}** — <@${ownerId}>, **${dcName}** has no valid movement spaces (${mp} MP). Figure may stay in place.`,
+      components: [new ActionRowBuilder().addComponents(stayBtn)],
+      allowedMentions: { users: [ownerId] },
+    }).catch(() => null);
+    if (saveGames) saveGames();
     return;
   }
 
@@ -285,7 +381,9 @@ async function _startNextMovement(game, gameId, client, ctx) {
   const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
 
   const totalFigs = active.moveFigures.length;
-  const figLabel = totalFigs > 1 ? ` (figure ${idx + 1}/${totalFigs})` : '';
+  const resolvedCount = active._resolvedFigures?.length || 0;
+  const remainingCount = totalFigs - resolvedCount;
+  const figLabel = totalFigs > 1 ? ` (${remainingCount} remaining)` : '';
   const skipBtn = new ButtonBuilder()
     .setCustomId(`pd_move_skip_${gameId}_${playerNum}_${moveKey}`)
     .setLabel('Skip Movement')
@@ -297,8 +395,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
   // Find the game-log channel to post the movement UI
   const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
   if (!generalChannel) {
-    active.currentFigureIdx = idx + 1;
-    await _startNextMovement(game, gameId, client, ctx);
+    await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
     return;
   }
 
@@ -322,6 +419,40 @@ async function _startNextMovement(game, gameId, client, ctx) {
   }
 
   if (saveGames) saveGames();
+}
+
+/**
+ * Advance after a figure finishes movement (or is skipped).
+ * For smooth_landing: uses _resolvedFigures tracking and shows picker.
+ * For other abilities: uses currentFigureIdx.
+ */
+async function _advanceAfterFigure(game, gameId, client, ctx, figureKey) {
+  const { logGameAction, saveGames } = ctx;
+  const q = game.postDeployQueue;
+  if (!q) return;
+  const active = q.activeAbility;
+  if (!active || !active.moveFigures) return;
+
+  if (active.abilityId === 'smooth_landing') {
+    // Track resolved figures
+    active._resolvedFigures = active._resolvedFigures || [];
+    if (!active._resolvedFigures.includes(figureKey)) {
+      active._resolvedFigures.push(figureKey);
+    }
+    const remaining = active.moveFigures.filter(f => !active._resolvedFigures.includes(f.figureKey));
+    if (remaining.length === 0) {
+      q.activeAbility = null;
+      await postAbilityPicker(game, gameId, client, logGameAction);
+      if (saveGames) saveGames();
+      return;
+    }
+    // Show picker for remaining figures
+    await _startNextMovement(game, gameId, client, ctx);
+  } else {
+    // Legacy path: auto-advance via currentFigureIdx
+    active.currentFigureIdx = (active.currentFigureIdx || 0) + 1;
+    await _startNextMovement(game, gameId, client, ctx);
+  }
 }
 
 // ── Interactive ability posting ──────────────────────────────────────────────
@@ -467,7 +598,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         game.postDeployQueue.activeAbility = { abilityId: 'extra_armor', playerNum: ability.playerNum, remaining: 4 };
         const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
           .setCustomId(`extra_armor_pick_${gameId}_${ability.playerNum}_${fk}`)
-          .setLabel(fk.replace(/-\d+-\d+$/, ''))
+          .setLabel(buildFigureButtonLabel(fk, game))
           .setStyle(ButtonStyle.Primary)
         );
         const rows = [];
@@ -489,6 +620,46 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
           console.error('Extra Armor hand channel send failed:', err);
         }
       }
+      break;
+    }
+    case 'arms_distribution_deploy': {
+      game[`armsDistDeployFired_p${ability.playerNum}`] = true;
+      // Find all friendly figures within 3 spaces of Ko-Tun
+      const kotunPos = game.figurePositions?.[ability.playerNum]?.[ability.figureKey];
+      const ms = getMapSpaces(game.selectedMap?.id);
+      const eligible = [];
+      for (const [fk, fpos] of Object.entries(game.figurePositions?.[ability.playerNum] || {})) {
+        if (!fpos || fk === ability.figureKey) continue;
+        const dist = getRange(kotunPos, fpos, ms, game);
+        if (dist != null && dist <= 3) {
+          eligible.push(fk);
+        }
+      }
+      if (eligible.length === 0) {
+        await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — No friendly figures within 3 spaces of **${ability.dcName}**.`, { phase: 'ROUND', icon: 'deployed' });
+        game.postDeployQueue.activeAbility = null;
+        await postAbilityPicker(game, gameId, client, logGameAction);
+        break;
+      }
+      game.postDeployQueue.activeAbility = {
+        abilityId: 'arms_distribution_deploy',
+        playerNum: ability.playerNum,
+        figureKey: ability.figureKey,
+        dcName: ability.dcName,
+        eligibleFigures: eligible,
+        step: 'pick_figure',
+      };
+      const btns = eligible.slice(0, 20).map(fk => new ButtonBuilder()
+        .setCustomId(`pd_arms_dist_fig_${gameId}_${ability.playerNum}_${fk}`)
+        .setLabel(buildFigureButtonLabel(fk, game))
+        .setStyle(ButtonStyle.Primary)
+      );
+      const rows = [];
+      for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+      await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — <@${ownerId}>, choose **1 friendly figure** within 3 spaces of **${ability.dcName}** to gain **1 Power Token**:`, {
+        components: rows.slice(0, 5),
+        allowedMentions: { users: [ownerId] },
+      });
       break;
     }
     case 'scavenged_walker_move': {
@@ -549,7 +720,7 @@ async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGa
 
   const btns = outsideZone.slice(0, 20).map(f => new ButtonBuilder()
     .setCustomId(`pd_strike_token_${gameId}_${playerNum}_${f.figureKey}`)
-    .setLabel(f.dcName)
+    .setLabel(buildFigureButtonLabel(f.figureKey, game))
     .setStyle(ButtonStyle.Primary)
   );
   btns.push(new ButtonBuilder()
@@ -849,9 +1020,7 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
   if (!active || active.abilityId !== 'strike_team') return;
 
   const dcName = dcNameFromFigureKey(figureKey);
-  game.figurePowerTokens = game.figurePowerTokens || {};
-  game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
-  game.figurePowerTokens[figureKey].push('Hit');
+  grantPowerTokens(game, figureKey, 'Hit', 1);
   active.tokenRemaining -= 1;
 
   await logGameAction(game, client, `⚡ **Strike Team** — **${dcName}** gains **1 Hit Token** (${active.tokenRemaining} remaining).`, { phase: 'ROUND', icon: 'deployed' });
@@ -933,19 +1102,28 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
 
   const active = q.activeAbility;
   if (active && active.moveFigures) {
-    active.currentFigureIdx = (active.currentFigureIdx || 0) + 1;
-    if (active.currentFigureIdx >= active.moveFigures.length) {
-      // Movement phase done — check if Strike Team needs tokens next
-      if (active.abilityId === 'strike_team' && active.tokenRemaining > 0) {
-        active.step = 'tokens';
-        active.moveFigures = null;
-        await _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction);
-      } else {
-        q.activeAbility = null;
-        await postAbilityPicker(game, gameId, client, logGameAction);
-      }
+    // Determine which figure was skipped from the moveKey
+    const moveState = game.moveInProgress?.[moveKey];
+    const skippedFigureKey = moveState?.figureKey || null;
+
+    if (active.abilityId === 'smooth_landing') {
+      // Use resolved-figure tracking + picker
+      await _advanceAfterFigure(game, gameId, client, ctx, skippedFigureKey);
     } else {
-      await _startNextMovement(game, gameId, client, ctx);
+      active.currentFigureIdx = (active.currentFigureIdx || 0) + 1;
+      if (active.currentFigureIdx >= active.moveFigures.length) {
+        // Movement phase done — check if Strike Team needs tokens next
+        if (active.abilityId === 'strike_team' && active.tokenRemaining > 0) {
+          active.step = 'tokens';
+          active.moveFigures = null;
+          await _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction);
+        } else {
+          q.activeAbility = null;
+          await postAbilityPicker(game, gameId, client, logGameAction);
+        }
+      } else {
+        await _startNextMovement(game, gameId, client, ctx);
+      }
     }
   } else {
     q.activeAbility = null;
@@ -1007,10 +1185,65 @@ export async function handleWalkerSkip(interaction, ctx) {
 }
 
 /**
+ * Smooth Landing figure picker: player chooses which figure moves next.
+ */
+export async function handleSmoothLandingPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('pd_sl_pick_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const figureKey = parts.slice(2).join('_');
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+
+  const active = game.postDeployQueue?.activeAbility;
+  if (!active || active.abilityId !== 'smooth_landing') return;
+
+  // Set the picked figure and start its movement
+  active._pickedFigureKey = figureKey;
+  await _startNextMovement(game, gameId, client, ctx);
+  saveGames();
+}
+
+/**
+ * Post-deploy movement Stay: figure stays in place (no valid movement spaces).
+ */
+export async function handlePostDeployMoveStay(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('pd_move_stay_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const figureKey = parts.slice(2).join('_');
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can skip.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+
+  const dcName = dcNameFromFigureKey(figureKey);
+  const active = game.postDeployQueue?.activeAbility;
+  await logGameAction(game, client, `🛬 **${active?.abilityLabel || 'Post-Deploy'}** — **${dcName}** stays in place.`, { phase: 'ROUND', icon: 'deployed' });
+
+  await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
+  saveGames();
+}
+
+/**
  * Called from movement.js handleMovePick when a postDeployReturn move finishes.
  * Advances the multi-figure movement flow or the overall queue.
  */
-export async function onPostDeployMovementComplete(game, gameId, client, ctx) {
+export async function onPostDeployMovementComplete(game, gameId, client, ctx, completedFigureKey) {
   const { logGameAction, saveGames } = ctx;
   const q = game.postDeployQueue;
   if (!q) return;
@@ -1023,20 +1256,32 @@ export async function onPostDeployMovementComplete(game, gameId, client, ctx) {
   }
 
   if (active.moveFigures) {
-    // Advance to next figure in the movement list
-    active.currentFigureIdx = (active.currentFigureIdx || 0) + 1;
-    if (active.currentFigureIdx >= active.moveFigures.length) {
-      // All figures moved — check if Strike Team needs tokens next
-      if (active.abilityId === 'strike_team' && active.tokenRemaining > 0) {
-        active.step = 'tokens';
-        active.moveFigures = null;
-        await _postStrikeTeamTokenPicker(game, gameId, active.playerNum, client, logGameAction);
-      } else {
-        q.activeAbility = null;
-        await postAbilityPicker(game, gameId, client, logGameAction);
-      }
+    // Determine the completed figure key: passed explicitly, or infer from currentFigureIdx
+    let resolvedKey = completedFigureKey;
+    if (!resolvedKey && active.moveFigures) {
+      const idx = active.currentFigureIdx || 0;
+      resolvedKey = active.moveFigures[idx]?.figureKey;
+    }
+
+    if (active.abilityId === 'smooth_landing') {
+      // Use resolved-figure tracking + picker
+      await _advanceAfterFigure(game, gameId, client, ctx, resolvedKey);
     } else {
-      await _startNextMovement(game, gameId, client, ctx);
+      // Legacy path: auto-advance via currentFigureIdx
+      active.currentFigureIdx = (active.currentFigureIdx || 0) + 1;
+      if (active.currentFigureIdx >= active.moveFigures.length) {
+        // All figures moved — check if Strike Team needs tokens next
+        if (active.abilityId === 'strike_team' && active.tokenRemaining > 0) {
+          active.step = 'tokens';
+          active.moveFigures = null;
+          await _postStrikeTeamTokenPicker(game, gameId, active.playerNum, client, logGameAction);
+        } else {
+          q.activeAbility = null;
+          await postAbilityPicker(game, gameId, client, logGameAction);
+        }
+      } else {
+        await _startNextMovement(game, gameId, client, ctx);
+      }
     }
   } else {
     q.activeAbility = null;
@@ -1058,4 +1303,75 @@ export async function onExtraArmorComplete(game, gameId, client, ctx) {
   q.activeAbility = null;
   await postAbilityPicker(game, gameId, client, logGameAction);
   if (saveGames) saveGames();
+}
+
+/**
+ * Arms Distribution (Deploy): player picks a friendly figure within 3 spaces of Ko-Tun.
+ */
+export async function handleArmsDistFigPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('pd_arms_dist_fig_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const figureKey = parts.slice(2).join('_');
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const active = game.postDeployQueue?.activeAbility;
+  if (!active || active.abilityId !== 'arms_distribution_deploy') return;
+
+  // Store selected figure, show token type picker
+  active.selectedFigure = figureKey;
+  active.step = 'pick_token';
+  const dcName = dcNameFromFigureKey(figureKey);
+
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+
+  const tokenBtns = ['Hit', 'Surge', 'Block', 'Evade'].map(t => new ButtonBuilder()
+    .setCustomId(`pd_arms_dist_token_${gameId}_${playerNum}_${t}`)
+    .setLabel(t)
+    .setStyle(t === 'Hit' || t === 'Surge' ? ButtonStyle.Danger : ButtonStyle.Primary)
+  );
+  await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — Choose a Power Token type for **${dcName}**:`, {
+    components: [new ActionRowBuilder().addComponents(tokenBtns)],
+  });
+  saveGames();
+}
+
+/**
+ * Arms Distribution (Deploy): player picks token type (Hit/Surge/Block/Evade).
+ */
+export async function handleArmsDistTokenPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('pd_arms_dist_token_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const tokenType = parts[2]; // 'Hit', 'Surge', 'Block', or 'Evade'
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const active = game.postDeployQueue?.activeAbility;
+  if (!active || active.abilityId !== 'arms_distribution_deploy' || !active.selectedFigure) return;
+
+  const figureKey = active.selectedFigure;
+  const dcName = dcNameFromFigureKey(figureKey);
+
+  grantPowerTokens(game, figureKey, tokenType, 1);
+  await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — **${dcName}** gains **1 ${tokenType} Token**.`, { phase: 'ROUND', icon: 'deployed' });
+
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+
+  game.postDeployQueue.activeAbility = null;
+  await postAbilityPicker(game, gameId, client, logGameAction);
+  saveGames();
 }

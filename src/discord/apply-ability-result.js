@@ -33,6 +33,7 @@ export async function applyAbilityResult(result, opts) {
     dcHealthState,
     buildDcEmbedAndFiles,
     getConditionsForDcMessage,
+    getTokensForDcMessage,
     getNicknamesForDcMessage,
     getDcPlayAreaComponents,
     buildBoardMapPayload,
@@ -59,7 +60,7 @@ export async function applyAbilityResult(result, opts) {
           const msg = await ch.messages.fetch(id);
           const healthState = dcHealthState?.get(id) || [];
           const { embed, files } = await buildDcEmbedAndFiles(
-            meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), null, null, null, getNicknamesForDcMessage?.(game, meta)
+            meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), null, getTokensForDcMessage?.(game, meta), null, getNicknamesForDcMessage?.(game, meta)
           );
           const components = getDcPlayAreaComponents(id, false, game, meta.dcName);
           await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
@@ -135,7 +136,7 @@ export async function applyAbilityResult(result, opts) {
         const healthState = dcHealthState?.get(id) || [];
         const exhausted = dcExhaustedState?.get(id) || false;
         const { embed, files } = await buildDcEmbedAndFiles(
-          meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), null, null, null, getNicknamesForDcMessage?.(game, meta)
+          meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), null, getTokensForDcMessage?.(game, meta), null, getNicknamesForDcMessage?.(game, meta)
         );
         const components = getDcPlayAreaComponents(id, exhausted, game, meta.dcName);
         await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);

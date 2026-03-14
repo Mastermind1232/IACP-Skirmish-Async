@@ -269,7 +269,7 @@
       "affiliation": "Rebel"
     },
     "[Imperial Citadel]": {
-      "abilityText": "Whenever a friendly Imperial figure is defeated, for each Power Token on that figure, place a matching Power Token on this card.\n\nAt the start of a friendly Imperial figure's activation, it may gain 1 Power Token from this card.\n\nAt the start of each round, place 1 Focus or Damage on this card.",
+      "abilityText": "Whenever a friendly Imperial figure is defeated, for each Power Token on that figure, place a matching Power Token on this card.\n\nAt the start of a friendly Imperial figure's activation, it may gain 1 Power Token from this card.\n\nAt the start of each round, place 1 Damage or Block on this card.",
       "keywords": [],
       "cost": 1,
       "attachment": false,
@@ -505,6 +505,14 @@
       "attachment": false,
       "unique": true,
       "affiliation": "Imperial"
+    },
+    "[Temporary Alliance (M)]": {
+      "abilityText": "You may include up to 2 REBEL Deployment cards in your army.",
+      "keywords": [],
+      "cost": 1,
+      "attachment": false,
+      "unique": true,
+      "affiliation": "Scum"
     },
     "[The Darksaber]": {
       "abilityText": "MAUL OR SABINE WREN ONLY\n\nIf you are a FORCE USER, you may use IMPERIAL Command cards. \n\nExhaust this card while attacking to reroll 1 attack die.\n\nSpecial Action: Perform a Melee attack with 1 red die. Treat Blast X as Cleave X during this attack. Then you may perform an attack.",

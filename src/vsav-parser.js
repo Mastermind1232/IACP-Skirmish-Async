@@ -7,19 +7,36 @@
  * Normalize a card name exported by IACP List Builder to match bot data keys.
  *   - Strip trailing " IACP" suffix (e.g. "Leia Organa IACP" → "Leia Organa")
  *   - Strip single-letter faction/variant suffix like " (M)", " (F)", " (I)" etc.
- *     (e.g. "Temporary Alliance (M)" → "Temporary Alliance")
+ *     EXCEPT for cards where the suffix is part of the canonical name (e.g.
+ *     "Temporary Alliance (M)" stays as-is since it's a distinct card).
  *   - Convert " [E]" → " (Elite)"  (e.g. "Hired Gun [E]" → "Hired Gun (Elite)")
  *   - Convert " [R]" → " (Regular)"
  * Bracket-prefixed attachment names ("[Black Market]") are handled by the lookup
  * fallback in validation.js and getDcStats().
  */
+// Cards where the faction/variant suffix is part of the canonical card name
+const VARIANT_SUFFIX_CARDS = ['Temporary Alliance'];
+
 function normalizeCardName(name) {
   let n = name.replace(/\s+IACP$/i, '').trim();
-  // Strip faction/variant suffixes:
-  //   Single-letter: " (M)", " (F)", " (R)", " (I)"
-  //   Full-word: " (Mercenary)", " (Imperial)", " (Rebel)"
-  n = n.replace(/\s+\([A-Z]\)$/i, '').trim();
-  n = n.replace(/\s+\((?:Mercenary|Imperial|Rebel)\)$/i, '').trim();
+  // Check if this card has a meaningful variant suffix before stripping
+  // e.g. "Temporary Alliance (M)" or "[Temporary Alliance (M)]" should keep the "(M)"
+  // Note: "(E)" suffix is stripped so it resolves to canonical "[Temporary Alliance]"
+  const hasVariantSuffix = VARIANT_SUFFIX_CARDS.some(card => {
+    const bare = n.replace(/^\[/, '').replace(/\]$/, '');
+    if (!bare.startsWith(card + ' (')) return false;
+    // Only preserve (M) suffix; strip (E), (I), and full-word faction suffixes
+    // so they resolve to the canonical "[Temporary Alliance]" key
+    const suffix = bare.slice(card.length).trim();
+    return suffix === '(M)';
+  });
+  if (!hasVariantSuffix) {
+    // Strip faction/variant suffixes:
+    //   Single-letter: " (M)", " (F)", " (R)", " (I)"
+    //   Full-word: " (Mercenary)", " (Imperial)", " (Rebel)"
+    n = n.replace(/\s+\([A-Z]\)$/i, '').trim();
+    n = n.replace(/\s+\((?:Mercenary|Imperial|Rebel)\)$/i, '').trim();
+  }
   // Convert elite/regular bracket notation to paren notation used in the data
   n = n.replace(/\s+\[E\]$/i, ' (Elite)');
   n = n.replace(/\s+\[R\]$/i, ' (Regular)');

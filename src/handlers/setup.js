@@ -1016,18 +1016,30 @@ export async function handleDeploymentFig(interaction, ctx) {
   const dcName = figMeta?.dcName;
   const figureSize = dcName ? getFigureSize(dcName) : '1x1';
   const isLarge = figureSize !== '1x1';
-  const needsOrientation = figureSize === '2x3';
+  const needsOrientation = figureSize === '2x3' || figureSize === '1x2';
   if (zoneSpaces.length > 0 && needsOrientation) {
-    const orientationRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`deployment_orient_${gameId}_${playerNum}_${flatIndex}_2x3`)
-        .setLabel('2×3 (2 wide, 3 tall)')
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(`deployment_orient_${gameId}_${playerNum}_${flatIndex}_3x2`)
-        .setLabel('3×2 (3 wide, 2 tall)')
-        .setStyle(ButtonStyle.Primary)
-    );
+    const orientationButtons = figureSize === '2x3'
+      ? [
+          new ButtonBuilder()
+            .setCustomId(`deployment_orient_${gameId}_${playerNum}_${flatIndex}_2x3`)
+            .setLabel('2\u00d73 (2 wide, 3 tall)')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(`deployment_orient_${gameId}_${playerNum}_${flatIndex}_3x2`)
+            .setLabel('3\u00d72 (3 wide, 2 tall)')
+            .setStyle(ButtonStyle.Primary),
+        ]
+      : [
+          new ButtonBuilder()
+            .setCustomId(`deployment_orient_${gameId}_${playerNum}_${flatIndex}_1x2`)
+            .setLabel('1\u00d72 (1 wide, 2 tall)')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(`deployment_orient_${gameId}_${playerNum}_${flatIndex}_2x1`)
+            .setLabel('2\u00d71 (2 wide, 1 tall)')
+            .setStyle(ButtonStyle.Primary),
+        ];
+    const orientationRow = new ActionRowBuilder().addComponents(...orientationButtons);
     await interaction.followUp({
       content: `Choose orientation for **${label.replace(/^Deploy /, '')}** (large unit):`,
       components: [orientationRow],
