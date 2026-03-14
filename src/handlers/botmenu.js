@@ -1,10 +1,12 @@
 /**
- * F16/F11: Bot Stuff menu (Kill Game) via /botmenu in Game Log.
+ * F16/F11: Bot Stuff menu (Kill Game, Forfeit) via /botmenu in Game Log.
  * Kill Game: participants or Admin/Bothelpers only. First confirm wins.
+ * Forfeit: participants only. Ends game cleanly with opponent as winner.
  */
 import {
   getBotmenuButtons,
   getBotmenuKillConfirmButtons,
+  getForfeitConfirmButtons,
 } from '../discord/components.js';
 import { cleanupGameLock } from '../game/action-queue.js';
 import { discordCatch } from '../error-handling.js';
@@ -17,6 +19,11 @@ function canKillGame(interaction, game) {
   const member = interaction.member;
   if (!member?.roles?.cache) return false;
   return member.roles.cache.some((r) => BOTMENU_ALLOWED_KILL_ROLES.includes(r.name));
+}
+
+/** True if user is a participant in this game. */
+function isParticipant(interaction, game) {
+  return game.player1Id === interaction.user.id || game.player2Id === interaction.user.id;
 }
 
 /**
@@ -124,4 +131,66 @@ export async function handleBotmenuKillYes(interaction, ctx) {
 /** Kill Game No: cancel. */
 export async function handleBotmenuKillNo(interaction, ctx) {
   await interaction.editReply({ content: 'Kill game cancelled.', components: [] }).catch(discordCatch);
+}
+
+// ── Forfeit ─────────────────────────────────────────────────────────────────
+
+/** Forfeit clicked: check participant, show confirmation. */
+export async function handleForfeit(interaction, ctx) {
+  const { getGame } = ctx;
+  const gameId = interaction.customId.replace('forfeit_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.editReply({ content: 'Game not found.', components: [] }).catch(discordCatch);
+    return;
+  }
+  if (game.ended) {
+    await interaction.editReply({ content: 'This game has already ended.', components: [] }).catch(discordCatch);
+    return;
+  }
+  if (!isParticipant(interaction, game)) {
+    await interaction.editReply({ content: 'Only game participants can forfeit.', components: [] }).catch(discordCatch);
+    return;
+  }
+  await interaction.editReply({
+    content: '**Are you sure you want to forfeit?** This will end the game and award the win to your opponent. Channels will be preserved for review.',
+    components: [getForfeitConfirmButtons(gameId)],
+  }).catch(discordCatch);
+}
+
+/** Forfeit Yes: end game cleanly via postGameOver. */
+export async function handleForfeitYes(interaction, ctx) {
+  const { getGame, postGameOver, logGameErrorToBotLogs } = ctx;
+  const gameId = interaction.customId.replace('forfeit_yes_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.editReply({ content: 'Game not found.', components: [] }).catch(discordCatch);
+    return;
+  }
+  if (game.ended) {
+    await interaction.editReply({ content: 'This game has already ended.', components: [] }).catch(discordCatch);
+    return;
+  }
+  if (!isParticipant(interaction, game)) {
+    await interaction.editReply({ content: 'Only game participants can forfeit.', components: [] }).catch(discordCatch);
+    return;
+  }
+  const forfeiterId = interaction.user.id;
+  const winnerId = forfeiterId === game.player1Id ? game.player2Id : game.player1Id;
+  await interaction.editReply({
+    content: `<@${forfeiterId}> has forfeited. **<@${winnerId}> wins!**`,
+    components: [],
+    allowedMentions: { users: [forfeiterId, winnerId] },
+  }).catch(discordCatch);
+  try {
+    await postGameOver(game, interaction.client, winnerId, 'forfeit');
+  } catch (err) {
+    console.error('[botmenu] Forfeit postGameOver error:', err);
+    await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'forfeit');
+  }
+}
+
+/** Forfeit No: cancel. */
+export async function handleForfeitNo(interaction, ctx) {
+  await interaction.editReply({ content: 'Forfeit cancelled.', components: [] }).catch(discordCatch);
 }

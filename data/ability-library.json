@@ -21,6 +21,11 @@
       "surgeCost": 1,
       "label": "+2 Hits"
     },
+    "+3 damage": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "+3 Damage"
+    },
     "accuracy 1": {
       "type": "surge",
       "surgeCost": 1,
@@ -633,11 +638,23 @@
       },
       "wiredStatus": "wired"
     },
+    "cc:dioxis_fumes": {
+      "type": "ccEffect",
+      "label": "Dioxis Fumes"
+    },
+    "cc:eyes_on_the_prize": {
+      "type": "ccEffect",
+      "label": "Eyes on the Prize"
+    },
     "cc:fleet_footed": {
       "type": "ccEffect",
       "label": "Gain 1 movement point",
       "mpBonus": 1,
       "wiredStatus": "wired"
+    },
+    "cc:gauntlet_blade": {
+      "type": "ccEffect",
+      "label": "Gauntlet Blade"
     },
     "cassian_said_i_had_to": {
       "type": "dcSpecial",
@@ -1099,6 +1116,10 @@
       "description": "While attacking, if you did not move during this activation, apply +2 Accuracy.",
       "wiredStatus": "wired"
     },
+    "dead_weight_pardon_bokatan": {
+      "type": "dcPassive",
+      "label": "Dead Weight Pardon"
+    },
     "Deadeye": {
       "type": "ccEffect",
       "label": "+2 Accuracy to attack results",
@@ -1137,6 +1158,10 @@
       "label": "Defensible",
       "description": "While defending, you may apply either +1 Block or +1 Evade to your defense results.",
       "wiredStatus": "wired"
+    },
+    "defensive_fire_bokatan": {
+      "type": "dcPassive",
+      "label": "Defensive Fire"
     },
     "defensive_stance": {
       "type": "dcSpecial",
@@ -1379,6 +1404,10 @@
       "droidMasteryEffect": true,
       "label": "J4X-7 becomes Focused, then interrupts to attack; or deploy J4X-7 if not in play",
       "wiredStatus": "wired"
+    },
+    "droid_kit_iden": {
+      "type": "dcPassive",
+      "label": "Droid Kit (Iden)"
     },
     "dual_bladed_fury": {
       "type": "dcSpecial",
@@ -2757,6 +2786,10 @@
       "wiredStatus": "wired",
       "freeAction": true
     },
+    "last_wielder_darksaber_bokatan": {
+      "type": "dcPassive",
+      "label": "The Last Wielder of the Darksaber"
+    },
     "leaping_slash": {
       "type": "dcSpecial",
       "label": "Leaping Slash",
@@ -3451,6 +3484,10 @@
       "description": "Whenever you spend a Block while defending, apply +1 Evade to the defense results.",
       "wiredStatus": "wired"
     },
+    "personal_combat_shield_bokatan": {
+      "type": "dcPassive",
+      "label": "Personal Combat Shield"
+    },
     "Pickpocket": {
       "type": "ccEffect",
       "label": "During activation while adjacent to hostile: roll green die; opponent loses VP and you gain VP = Accuracy",
@@ -3461,6 +3498,11 @@
       "type": "surge",
       "surgeCost": 1,
       "label": "Pierce 1"
+    },
+    "pierce 1, hide": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Pierce 1, Hide"
     },
     "pierce 1, weaken": {
       "type": "surge",
@@ -3575,6 +3617,10 @@
       "label": "Prowl: You become Hidden.",
       "applySelfCondition": "Hide",
       "wiredStatus": "wired"
+    },
+    "pulse_cannon_iden": {
+      "type": "dcPassive",
+      "label": "Pulse Cannon (Iden)"
     },
     "Pummel": {
       "type": "ccEffect",

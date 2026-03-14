@@ -1,0 +1,18 @@
+{
+  "description": "Tracks which cards have had their images upgraded with better quality versions",
+  "dc_figures": [
+    "74-Z Speeder Bike (Elite)",
+    "Bantha Rider",
+    "Bo-Katan Kryze",
+    "CT-1701",
+    "KX-Series Security Droid (Elite)",
+    "Leia Organa",
+    "Rebel Trooper (Elite)",
+    "The Armorer",
+    "Wookiee Warrior (Regular)",
+    "Yoda"
+  ],
+  "dc_upgrades": [],
+  "cc": [],
+  "companions": []
+}

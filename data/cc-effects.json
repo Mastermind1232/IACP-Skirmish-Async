@@ -5,8 +5,7 @@
       "cost": 2,
       "playableBy": "REBEL FORCE USER",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. Until the start of the next round, hostile figures within 3 spaces of you cannot interact and are not counted for the purposes of control.",
-      "abilityId": "A Powerful Influence"
+      "effect": "Use at the start of a round. Until the start of the next round, hostile figures within 3 spaces of you cannot interact and are not counted for the purposes of control."
     },
     "Adrenaline": {
       "cost": 2,
@@ -490,6 +489,13 @@
       "effect": "Use when a hostile figure enters an adjacent space. That figure must choose to either suffer 3 Strain or become Stunned.",
       "abilityId": "Dirty Trick"
     },
+    "Dioxis Fumes": {
+      "cost": 1,
+      "playableBy": "DROID or HUNTER",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. Each non-DROID figure suffers 1 Strain. Until the end of the round, non-Droid figures cannot recover Strain.",
+      "abilityId": "cc:dioxis_fumes"
+    },
     "Disable": {
       "cost": 2,
       "playableBy": "TECHNICIAN or SMUGGLER",
@@ -633,6 +639,13 @@
       "timing": "whenFriendlyFigureWithin2SpacesSuffers3PlusDamage",
       "effect": "Use when another friendly figure within 2 spaces suffers 3 or more Damage. Move up to 2 spaces, then perform an attack.",
       "abilityId": "Extra Protection"
+    },
+    "Eyes on the Prize": {
+      "cost": 1,
+      "playableBy": "SCUM",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round if your affiliation is Scum. Each friendly figure that is carrying or controlling a crate or mission token may either recover 1 Damage, or gain 1 Power Token, or discard 1 HARMFUL condition.",
+      "abilityId": "cc:eyes_on_the_prize"
     },
     "Face Me!": {
       "cost": 1,
@@ -821,6 +834,13 @@
       "timing": "afterAttackTargetingYouResolved",
       "effect": "Use after an attack targeting you resolves. If you suffered 3 or more Damage, ready your Deployment card.",
       "abilityId": "Furious Charge"
+    },
+    "Gauntlet Blade": {
+      "cost": 1,
+      "playableBy": "Bo-Katan Kryze",
+      "timing": "afterAttackTargetingYouResolved",
+      "effect": "Use after an attack targeting you resolves. Choose an adjacent hostile figure and roll 1 green die. That figure suffers Damage equal to the Hit results. Then, if you rolled a Surge, gain a Power Token.",
+      "abilityId": "cc:gauntlet_blade"
     },
     "Get Behind Me!": {
       "cost": 2,
@@ -1125,8 +1145,7 @@
       "cost": 2,
       "playableBy": "WOOKIE",
       "timing": "specialAction",
-      "effect": "Special Action: Choose an adjacent hostile figure. The chosen figure suffers 1 Damage for each Damage you have suffered, to a maximum of 3 Damage.",
-      "abilityId": "Wookiee Rage"
+      "effect": "Special Action: Choose up to 3 hostile figures adjacent to you. Each chosen figure suffers 1 Damage for each Damage you have suffered, to a maximum of 3 Damage."
     },
     "Mandalorian Tactics": {
       "cost": 3,
@@ -1221,7 +1240,7 @@
       "cost": 2,
       "playableBy": "The Armorer",
       "timing": "startOfRound",
-      "effect": "Use at the start of the round. During this round, after an attack resolves targeting a friendly figure, if that figure spent a Block Token during that attack, it recovers 1 Damage."
+      "effect": "Use at the start of the round. During this round, after an attack targeting a friendly figure within 4 spaces resolves, if that figure spent a Power Token, that figure recovers 1 Damage."
     },
     "Marked Territory": {
       "cost": 0,
@@ -1765,10 +1784,9 @@
     },
     "Stimulants": {
       "cost": 0,
-      "playableBy": "SMUGGLER",
-      "timing": "specialAction",
-      "effect": "Special Action: You or an adjacent figure suffers 1 Damage, then gains 1 movement point and becomes Focused.",
-      "abilityId": "Stimulants"
+      "playableBy": "SMUGGLER or TECHNICIAN",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. An adjacent figure suffers 1 Damage, then gains 1 movement point and becomes Focused."
     },
     "Strategic Shift": {
       "cost": 1,

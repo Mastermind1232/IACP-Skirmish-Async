@@ -341,12 +341,15 @@ export async function runDraftRandom(game, client, deps, options = {}) {
       });
     }
     const handPayload = deps.buildHandDisplayPayload(hand, deck, game.gameId, game, playerNum);
-    await handChannel.send({
+    const handMsg = await handChannel.send({
       content: handPayload.content,
       embeds: handPayload.embeds,
       files: handPayload.files || [],
       components: handPayload.components,
     });
+    // Store hand message ID for reliable future edits
+    if (playerNum === 1) game.p1HandMessageId = handMsg.id;
+    else game.p2HandMessageId = handMsg.id;
     await deps.updateHandVisualMessage(game, playerNum, client);
   };
   await drawStartingHand(1);

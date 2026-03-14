@@ -286,8 +286,28 @@ function alternativeMatchesDc(alt, dcBaseLower, dispLower, affiliationLower, kwL
   // Name match (existing logic)
   if (dcBaseLower.includes(alt) || alt.includes(dcBaseLower) || dispLower.includes(alt) || alt.includes(dispLower))
     return true;
+
+  // Synonym expansions: "large creature" means MASSIVE + CREATURE
+  const COMPOUND_SYNONYMS = {
+    'large creature': ['massive', 'creature'],
+  };
+  if (COMPOUND_SYNONYMS[alt]) {
+    return COMPOUND_SYNONYMS[alt].every(kw => kwLower.includes(kw));
+  }
+
+  // State-qualifier stripping: "readied vehicle" → check "vehicle" keyword
+  // (the "readied" part is a game-state check handled separately)
+  const STATE_QUALIFIERS = ['readied', 'exhausted', 'focused', 'hidden', 'stunned', 'weakened', 'bleeding'];
+  let strippedAlt = alt;
+  for (const q of STATE_QUALIFIERS) {
+    if (strippedAlt.startsWith(q + ' ')) {
+      strippedAlt = strippedAlt.slice(q.length + 1).trim();
+      break;
+    }
+  }
+
   // Decompose alternative into affiliation part and keyword parts
-  const words = alt.split(/\s+/);
+  const words = strippedAlt.split(/\s+/);
   let reqAffiliation = null;
   const reqKeywordWords = [];
   for (const w of words) {

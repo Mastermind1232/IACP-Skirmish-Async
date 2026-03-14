@@ -6691,14 +6691,16 @@ export function resolveAbility(abilityId, context) {
     const matchingMsgIds = [];
     const matchingNames = [];
     for (let i = 0; i < squadDcList.length; i++) {
-      const dcName = squadDcList[i];
-      if (!dcIds?.[i]) continue;
-      const eff = dcEffects[dcName] || dcEffects[dcName?.replace(/\s*\[.*\]\s*$/, '')] || {};
+      const entry = squadDcList[i];
+      const dcName = typeof entry === 'object' ? (entry.dcName || entry.displayName) : entry;
+      if (!dcName || !dcIds?.[i]) continue;
+      const dcBase = String(dcName).replace(/\s*\[.*\]\s*$/, '');
+      const eff = dcEffects[dcName] || dcEffects[dcBase] || {};
       const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
-      const matchesTrait = traits.some((t) => kws.includes(t.toUpperCase()) || dcName?.toUpperCase().includes(t.toUpperCase()));
+      const matchesTrait = traits.some((t) => kws.includes(t.toUpperCase()) || dcBase.toUpperCase().includes(t.toUpperCase()));
       if (matchesTrait) {
         matchingMsgIds.push(dcIds[i]);
-        matchingNames.push(dcName);
+        matchingNames.push(dcBase);
       }
     }
     if (matchingMsgIds.length === 0) {

@@ -24,9 +24,9 @@ function normalizeInputName(raw) {
   return s;
 }
 
-/** Normalize string for fuzzy comparison: lowercase, strip apostrophes/special chars. */
+/** Normalize string for fuzzy comparison: lowercase, strip apostrophes/special chars, normalize hyphens to spaces. */
 function fuzzyKey(s) {
-  return s.toLowerCase().replace(/[''`]/g, '').replace(/\s+/g, ' ').trim();
+  return s.toLowerCase().replace(/[''`]/g, '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -40,6 +40,14 @@ function resolveDcInput(raw, dcEffects) {
   // Bracket-wrapped (skirmish upgrades)
   const bracketed = `[${name}]`;
   if (dcEffects[bracketed]) return bracketed;
+  // Strip (Elite)/(Regular) suffix for skirmish upgrade bracket lookup
+  // e.g. "Cross-Training (Elite)" → "[Cross-Training]", "Extra Armor (Elite)" → "[Extra Armor]"
+  const strippedName = name.replace(/\s*\((Elite|Regular)\)\s*$/i, '').trim();
+  if (strippedName !== name) {
+    if (dcEffects[strippedName]) return strippedName;
+    const strippedBracketed = `[${strippedName}]`;
+    if (dcEffects[strippedBracketed]) return strippedBracketed;
+  }
   // Build lookup caches
   const keys = Object.keys(dcEffects);
   const lowerMap = {};
@@ -52,10 +60,22 @@ function resolveDcInput(raw, dcEffects) {
   const lower = name.toLowerCase();
   if (lowerMap[lower]) return lowerMap[lower];
   if (lowerMap[bracketed.toLowerCase()]) return lowerMap[bracketed.toLowerCase()];
+  // Case-insensitive with stripped suffix (handles "Dewback Rider (Elite)" → "Dewback Rider")
+  const strippedLower = strippedName.toLowerCase();
+  if (strippedName !== name) {
+    if (lowerMap[strippedLower]) return lowerMap[strippedLower];
+    if (lowerMap[`[${strippedLower}]`]) return lowerMap[`[${strippedLower}]`];
+  }
   // Fuzzy (strip apostrophes)
   const fk = fuzzyKey(name);
   if (fuzzyMap[fk]) return fuzzyMap[fk];
   if (fuzzyMap[fuzzyKey(bracketed)]) return fuzzyMap[fuzzyKey(bracketed)];
+  // Fuzzy with stripped suffix + bracket (handles hyphens: "cross-training" → "cross training")
+  if (strippedName !== name) {
+    const strippedFk = fuzzyKey(strippedName);
+    if (fuzzyMap[strippedFk]) return fuzzyMap[strippedFk];
+    if (fuzzyMap[fuzzyKey(`[${strippedName}]`)]) return fuzzyMap[fuzzyKey(`[${strippedName}]`)];
+  }
   // Bare name without (Regular)/(Elite): prefer non-hidden variant; skip hidden cards
   const regMatch = keys.find((k) => k.toLowerCase() === `${lower} (regular)`);
   const eliteMatch = keys.find((k) => k.toLowerCase() === `${lower} (elite)`);
@@ -88,6 +108,12 @@ function resolveDcInput(raw, dcEffects) {
       });
       if (abbrMatch) return abbrMatch;
     }
+  }
+  // Hyphen/space normalization: "Cross-Training" → "Cross Training" (and vice versa)
+  const dehyphenated = lower.replace(/-/g, ' ');
+  if (dehyphenated !== lower) {
+    if (lowerMap[dehyphenated]) return lowerMap[dehyphenated];
+    if (lowerMap[`[${dehyphenated}]`]) return lowerMap[`[${dehyphenated}]`];
   }
   return name; // unresolved — will produce error in validation
 }

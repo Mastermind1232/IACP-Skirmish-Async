@@ -156,6 +156,9 @@
 
   <div class="entries">
     <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Total: <span id="totalCount">0</span> — Shrink unverified to 0 by clicking VERIFIED</h2>
+    <div style="margin:8px 0;">
+      <button type="button" id="filterS12" class="secondary-btn" style="background:#e85;color:#fff;">S12 Only</button>
+    </div>
     <p id="debugHint" class="hint" style="display:none; margin-top:4px;"></p>
     <div id="list"></div>
   </div>
@@ -218,11 +221,24 @@
     function isPlaceholderCard(name, _data) {
       return TRAIT_PLACEHOLDER_NAMES.has(name);
     }
+
+    // S12 filter
+    const S12_CC_CARDS = new Set([
+      'Dioxis Fumes', 'Eyes on the Prize', 'Gauntlet Blade',
+      'Mandalorian Steel', 'Stimulants', 'Wookiee Rage',
+    ]);
+    let filterS12Active = localStorage.getItem('cc-filter-s12') === 'true';
+
     function getUnverifiedCards() {
       const source = (names && names.length > 0) ? names : Object.keys(cards);
-      return source
-        .filter((n) => !verified.has(n) && !isPlaceholderCard(n, cards[n]))
-        .sort((a, b) => a.localeCompare(b));
+      let arr;
+      if (filterS12Active) {
+        // S12 mode: show ALL S12 cards (even verified) so user can re-verify with updated art
+        arr = source.filter((n) => S12_CC_CARDS.has(n) && !isPlaceholderCard(n, cards[n]));
+      } else {
+        arr = source.filter((n) => !verified.has(n) && !isPlaceholderCard(n, cards[n]));
+      }
+      return arr.sort((a, b) => a.localeCompare(b));
     }
 
     function updateCardSelect() {
@@ -490,6 +506,21 @@
         onCardChange();
       }
     }
+
+    // S12 filter toggle
+    const s12Btn = document.getElementById('filterS12');
+    function updateS12Btn() {
+      s12Btn.style.background = filterS12Active ? '#0d6' : '';
+      s12Btn.style.color = filterS12Active ? '#000' : '';
+      s12Btn.textContent = filterS12Active ? 'S12 Only ✓' : 'S12 Only';
+    }
+    s12Btn.addEventListener('click', () => {
+      filterS12Active = !filterS12Active;
+      localStorage.setItem('cc-filter-s12', filterS12Active);
+      updateS12Btn();
+      render();
+    });
+    updateS12Btn();
 
     render();
     (async () => {

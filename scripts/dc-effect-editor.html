@@ -465,6 +465,8 @@
       <span class="form-section-title" style="margin:0;">Sort:</span>
       <button type="button" id="sortName" class="secondary-btn">A–Z</button>
       <button type="button" id="sortCost" class="secondary-btn">Cost</button>
+      <span style="margin-left:16px;" class="form-section-title">Filter:</span>
+      <button type="button" id="filterS12" class="secondary-btn" style="background:#e85;color:#fff;">S12 Only</button>
     </div>
     <div id="list"></div>
   </div>
@@ -520,6 +522,19 @@
     let verified = new Set(JSON.parse(localStorage.getItem(VERIFIED_KEY) || '[]'));
     let listSort = localStorage.getItem('dc-list-sort') || 'name'; // 'name' | 'cost_asc' | 'cost_desc'
     if (listSort === 'cost') listSort = 'cost_asc'; // migrate legacy
+
+    // S12 filter
+    const S12_CARDS = new Set([
+      '74-Z Speeder Bike (Elite)', 'Bantha Rider', 'Bo-Katan Kryze', 'CT-1701',
+      'Clawdite Shapeshifter (Elite)', 'Clawdite Shapeshifter (Regular)',
+      'Jabba the Hutt', 'Jawa Scavenger (Elite)', 'Jawa Scavenger (Regular)',
+      'KX-Series Security Droid (Elite)', 'Leia Organa', 'Mortar Trooper',
+      'Rancor', 'Rebel Trooper (Elite)',
+      'Stormtrooper (Elite)', 'Stormtrooper (Regular)',
+      'The Armorer', 'Vinto Hreeda',
+      'Wookiee Warrior (Elite)', 'Wookiee Warrior (Regular)', 'Yoda',
+    ]);
+    let filterS12Active = localStorage.getItem('dc-filter-s12') === 'true';
     let names = [];
     let cards = {};
     let dcStats = {};
@@ -737,7 +752,13 @@
     }
 
     function getUnverifiedCards() {
-      const arr = names.filter((n) => !verified.has(n));
+      let arr;
+      if (filterS12Active) {
+        // S12 mode: show ALL S12 cards (even verified) so user can re-verify with updated art
+        arr = names.filter((n) => S12_CARDS.has(n));
+      } else {
+        arr = names.filter((n) => !verified.has(n));
+      }
       if (listSort === 'cost_asc' || listSort === 'cost_desc') {
         const dir = listSort === 'cost_asc' ? 1 : -1;
         return arr.sort((a, b) => {
@@ -1180,6 +1201,21 @@
       else if (listSort === 'cost_desc') setSort('cost_asc');
       else setSort('cost_asc');
     });
+
+    // S12 filter toggle
+    const s12Btn = document.getElementById('filterS12');
+    function updateS12Btn() {
+      s12Btn.style.background = filterS12Active ? '#0d6' : '';
+      s12Btn.style.color = filterS12Active ? '#000' : '';
+      s12Btn.textContent = filterS12Active ? 'S12 Only ✓' : 'S12 Only';
+    }
+    s12Btn.addEventListener('click', () => {
+      filterS12Active = !filterS12Active;
+      localStorage.setItem('dc-filter-s12', filterS12Active);
+      updateS12Btn();
+      render();
+    });
+    updateS12Btn();
 
     setSort(listSort);
     (async () => {

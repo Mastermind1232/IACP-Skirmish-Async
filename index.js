@@ -220,6 +220,7 @@ import { canActAsPlayer } from './src/utils/can-act-as-player.js';
 import { requirePlayer } from './src/utils/guards.js';
 import { findGameByChannel, findGameByCommonChannel } from './src/discord/game-channel-lookup.js';
 import { checkAndPostAchievements } from './src/discord/achievement-helpers.js';
+import { updateGameView } from './src/discord/pvp-thread.js';
 import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS, MAX_UNDO_DEPTH } from './src/constants.js';
 import { withGameLock, cleanupGameLock } from './src/game/action-queue.js';
 import {
@@ -2387,6 +2388,9 @@ function buildAllDeps() {
     filterCondition, isConditionImmune,
     applyCondition: _applyCondition, HARMFUL_CONDITIONS,
 
+    // Game lifecycle
+    postGameOver,
+
     // Lobby
     lobbies: getLobbiesMap(),
     createGameChannels,
@@ -2451,9 +2455,10 @@ client.on('interactionCreate', async (interaction) => {
         }).catch(discordCatch);
         return;
       }
+      const showForfeit = !gameByChannel.ended && (gameByChannel.player1Id === interaction.user.id || gameByChannel.player2Id === interaction.user.id);
       await interaction.reply({
         content: '**Bot Stuff** — Choose an action:',
-        components: [getBotmenuButtons(gameByChannel.gameId)],
+        components: [getBotmenuButtons(gameByChannel.gameId, { showForfeit })],
         ephemeral: false,
       }).catch(discordCatch);
       return;
@@ -3362,6 +3367,18 @@ client.on('interactionCreate', async (interaction) => {
         await _handler(interaction, _ctx);
       } else {
         await _handler(interaction);
+      }
+
+      // PvP thread refresh: edit both pinned messages to reflect new state
+      if (_evtGameId) {
+        const _pvpGame = getGame(_evtGameId);
+        if (_pvpGame?.pvpThreadId) {
+          try {
+            await updateGameView(_pvpGame, client, { dcMessageMeta, dcExhaustedState });
+          } catch (_pvpErr) {
+            console.error('[pvp-thread] Post-handler updateGameView failed:', _pvpErr?.message ?? _pvpErr);
+          }
+        }
       }
 
       // Event log: capture after snapshot and record diff

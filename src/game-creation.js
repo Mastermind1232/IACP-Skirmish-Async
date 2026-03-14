@@ -413,6 +413,20 @@ export async function postBothSquadsReady(game, client, deps, opts = {}) {
   // Set flag AFTER message sent — prevents stuck state where flag is
   // true but the initiative button was never posted.
   game.bothReadyPosted = true;
+
+  // ── Create PvP thread (if wired) ──────────────────────────────────
+  if (deps.createGameThread) {
+    try {
+      await deps.createGameThread({
+        parentChannel: generalChannel,
+        game,
+        client,
+        deps: deps.pvpDeps || {},
+      });
+    } catch (err) {
+      console.error('[pvp-thread] Failed to create game thread:', err.message);
+    }
+  }
 }
 
 /**

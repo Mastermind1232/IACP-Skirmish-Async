@@ -18,7 +18,11 @@
     "normalize-cc-images": "node scripts/normalize-cc-images.js",
     "test-db": "node scripts/test-db-connection.js",
     "test-movement": "node index.js --test-movement",
-    "test": "node --test src/game/"
+    "test": "node --test src/game/",
+    "certify": "node tests/certification/certify-catalog.js",
+    "test:regression": "node --test tests/certification/regression.test.js",
+    "test:headless": "node --test tests/headless/*.test.js",
+    "test:all": "node --test tests/headless/*.test.js tests/certification/regression.test.js"
   },
   "type": "module",
   "dependencies": {

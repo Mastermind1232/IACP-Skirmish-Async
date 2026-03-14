@@ -204,6 +204,10 @@ const CONTEXT_GROUPS = {
     'dcHealthState', 'logGameErrorToBotLogs', 'client', 'deleteGameFromDb',
   ],
 
+  forfeit: [
+    'getGame', 'postGameOver', 'logGameErrorToBotLogs', 'client',
+  ],
+
   fastForward: [
     'getGame', 'saveGames', 'client', 'dcExhaustedState', 'dcHealthState',
     'dcMessageMeta', 'buildDcEmbedAndFiles', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',

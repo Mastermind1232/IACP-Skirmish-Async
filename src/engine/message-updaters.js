@@ -231,8 +231,22 @@ export async function updateHandChannelMessages(game, client, deps) {
     if (!handId) continue;
     try {
       const handCh = await client.channels.fetch(handId);
-      const msgs = await handCh.messages.fetch({ limit: 20 });
-      const handMsg = msgs.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+      // Try stored message ID first (reliable path)
+      const storedMsgId = pn === 1 ? game.p1HandMessageId : game.p2HandMessageId;
+      let handMsg = null;
+      if (storedMsgId) {
+        handMsg = await handCh.messages.fetch(storedMsgId).catch(() => null);
+      }
+      // Fallback: heuristic search with raised limit for legacy games
+      if (!handMsg) {
+        const msgs = await handCh.messages.fetch({ limit: 50 });
+        handMsg = msgs.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+        // Repair: store the found ID for future fetches
+        if (handMsg) {
+          if (pn === 1) game.p1HandMessageId = handMsg.id;
+          else game.p2HandMessageId = handMsg.id;
+        }
+      }
       if (handMsg) {
         const payload = deps.buildHandDisplayPayload(hand, deck, game.gameId, game, pn);
         await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch(deps.discordCatch);

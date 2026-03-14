@@ -294,8 +294,8 @@ export function getMissionSelectionPickMenu(gameId, options, selectedValue) {
 }
 
 /** F16/F11: Bot Stuff menu — Kill Game + Refresh All (shown via /botmenu in Game Log). */
-export function getBotmenuButtons(gameId) {
-  return new ActionRowBuilder().addComponents(
+export function getBotmenuButtons(gameId, { showForfeit = false } = {}) {
+  const buttons = [
     new ButtonBuilder()
       .setCustomId(`refresh_all_${gameId}`)
       .setLabel('Refresh All')
@@ -304,10 +304,35 @@ export function getBotmenuButtons(gameId) {
       .setCustomId(`botmenu_recover_${gameId}`)
       .setLabel('Recover')
       .setStyle(ButtonStyle.Secondary),
+  ];
+  if (showForfeit) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`forfeit_${gameId}`)
+        .setLabel('Forfeit')
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
+  buttons.push(
     new ButtonBuilder()
       .setCustomId(`botmenu_kill_${gameId}`)
       .setLabel('Kill Game')
       .setStyle(ButtonStyle.Danger)
+  );
+  return new ActionRowBuilder().addComponents(buttons);
+}
+
+/** Confirm forfeit: requires confirmation before ending game. */
+export function getForfeitConfirmButtons(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`forfeit_yes_${gameId}`)
+      .setLabel('Yes, I forfeit')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`forfeit_no_${gameId}`)
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Secondary)
   );
 }
 

@@ -1357,6 +1357,9 @@ export async function handleCcShuffleDraw(interaction, ctx) {
     files: handPayload.files || [],
     components: handPayload.components,
   }).catch(discordCatch);
+  // Store hand message ID for reliable future edits
+  if (playerNum === 1) game.p1HandMessageId = interaction.message.id;
+  else game.p2HandMessageId = interaction.message.id;
   await updateHandVisualMessage(game, playerNum, client);
   if (game.player1CcDrawn && game.player2CcDrawn) {
     await updatePlayAreaDcButtons(game, client);

@@ -113,6 +113,9 @@ import {
   handleBotmenuKill,
   handleBotmenuKillYes,
   handleBotmenuKillNo,
+  handleForfeit,
+  handleForfeitYes,
+  handleForfeitNo,
 } from './botmenu.js';
 import { handleBotmenuRecover } from './recover.js';
 import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
@@ -324,6 +327,9 @@ register('botmenu_recover_', handleBotmenuRecover, 'recover');
 register('botmenu_kill_', handleBotmenuKill, 'botmenu');
 register('botmenu_kill_yes_', handleBotmenuKillYes, 'botmenu');
 register('botmenu_kill_no_', handleBotmenuKillNo, 'botmenu');
+register('forfeit_yes_', handleForfeitYes, 'forfeit');
+register('forfeit_no_', handleForfeitNo, 'forfeit');
+register('forfeit_', handleForfeit, 'forfeit');
 
 // --- Fast-forward & defender CC ---
 register('fast_forward_', handleFastForward, 'fastForward');
@@ -571,6 +577,9 @@ export {
   handleBotmenuKill,
   handleBotmenuKillYes,
   handleBotmenuKillNo,
+  handleForfeit,
+  handleForfeitYes,
+  handleForfeitNo,
 } from './botmenu.js';
 export { handleBotmenuRecover, runRecovery } from './recover.js';
 export { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
