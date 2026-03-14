@@ -25,6 +25,26 @@ import { isDcCompanion, getDcEffects } from '../data-loader.js';
 export function getAvailableActions(game, playerNum, deps = {}) {
   if (!game || game.ended) return [];
 
+  // Combat side-effect pending states must resolve before any phase gate.
+  // These are set during combat/activation resolution and could persist into
+  // a round-end phase gate if the triggering action was the last of the round.
+  if (game.pendingCelebration) {
+    const celebActions = getCelebrationActions(game, playerNum);
+    if (celebActions.length > 0) return celebActions;
+  }
+  if (game.pendingPowerTokenGrant) {
+    const tokenActions = getPowerTokenActions(game, playerNum);
+    if (tokenActions.length > 0) return tokenActions;
+  }
+  if (game.pendingSpreadThePainCondPick) {
+    const spreadActions = getSpreadThePainActions(game, playerNum);
+    if (spreadActions.length > 0) return spreadActions;
+  }
+  if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) {
+    const choiceActions = getDcAbilityChoiceActions(game, playerNum);
+    if (choiceActions.length > 0) return choiceActions;
+  }
+
   // Phase gate takes priority — only ready/unready allowed
   if (game.phaseGate) {
     return getPhaseGateActions(game, playerNum);

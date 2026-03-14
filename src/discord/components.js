@@ -705,6 +705,16 @@ export function buildSpaceSelectMenu(selectPrefix, contextSuffix, available, lab
     label: (labelMap[space] || space).toUpperCase(),
     value: space,
   }));
+  if (options.length === 0) {
+    // Defensive: return a disabled button instead of an empty select menu (Discord API rejects 0 options)
+    return new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${selectPrefix}${contextSuffix}_none`)
+        .setLabel('No valid spaces')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true)
+    );
+  }
   const select = new StringSelectMenuBuilder()
     .setCustomId(`${selectPrefix}${contextSuffix}`)
     .setPlaceholder('Pick a space…')

@@ -407,7 +407,10 @@ export function assertSurfaceInvariants(game, surface, step) {
         }
 
         if (d.type === 3) { // StringSelectMenu
-          const options = d.options || [];
+          // Discord.js builders store options at child.options (array of OptionBuilder),
+          // while plain objects store them at child.data.options or child.options.
+          const rawOpts = child?.options || d.options || [];
+          const options = Array.isArray(rawOpts) ? rawOpts : [];
           if (options.length > DISCORD_MAX_SELECT_OPTIONS) {
             errors.push(
               `DS-8: Select menu has ${options.length} options at step ${entry.step} row ${rowIdx} ` +

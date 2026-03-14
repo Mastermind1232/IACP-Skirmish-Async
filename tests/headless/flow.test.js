@@ -936,3 +936,115 @@ describe('Flow: payload shape in real game flow (DS-7/8/9/10)', () => {
     console.log(`  [info] ${fh.getStepLog().length} steps, 0 payload violations`);
   });
 });
+
+// ── Suite 14: Regression — Sim Farm Bug Fixes ───────────────────────────────
+
+describe('Flow: sim farm regressions', () => {
+
+  it('pendingCelebration resolves during phase gate (GS-8 fix)', async () => {
+    // Regression: pendingCelebration was orphaned when a phase gate was active because
+    // the phase gate short-circuited getAvailableActions before getCelebrationActions ran.
+    // Fix: check pendingCelebration before phase gate in getAvailableActions.
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Darth Vader' }],
+    });
+
+    const game = fh.getGame();
+    // Simulate the orphan condition: pendingCelebration + active phaseGate
+    game.pendingCelebration = { attackerPlayerNum: 1, combatThreadId: 'test' };
+    game.phaseGate = { phase: 'round_end', p1Ready: false, p2Ready: false };
+
+    // getAvailableActions should either provide celebration actions or auto-clear
+    const p1Actions = fh.getActions(1);
+    const hasCelebration = (game.player1CcHand || []).includes('Celebration');
+
+    if (hasCelebration) {
+      // Player has Celebration: should see play/pass options
+      const celebAction = p1Actions.find(a => a.type === 'celebration_play' || a.type === 'celebration_pass');
+      assert.ok(celebAction, 'Expected celebration actions when player has Celebration card');
+    } else {
+      // Player lacks Celebration: pendingCelebration should be auto-cleared
+      assert.equal(game.pendingCelebration, undefined,
+        'pendingCelebration should be auto-cleared when player lacks the card');
+    }
+  });
+
+  it('pendingPowerTokenGrant resolves during phase gate (GS-8 fix)', async () => {
+    // Regression: pendingPowerTokenGrant was orphaned when a phase gate was active.
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Darth Vader' }],
+    });
+
+    const game = fh.getGame();
+    game.pendingPowerTokenGrant = { playerNum: 1, figureKey: 'Luke Skywalker-1-0' };
+    game.phaseGate = { phase: 'round_end', p1Ready: false, p2Ready: false };
+
+    const p1Actions = fh.getActions(1);
+    const tokenAction = p1Actions.find(a => a.type === 'power_token_choice');
+    assert.ok(tokenAction, 'Expected power_token_choice actions above phase gate');
+  });
+
+  it('pendingDcAbilityChoice resolves during phase gate (GS-8 fix)', async () => {
+    // Regression: pendingDcAbilityChoice was orphaned when a phase gate was active.
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Darth Vader' }],
+    });
+
+    const game = fh.getGame();
+    game.pendingDcAbilityChoice = {
+      test_key: { playerNum: 1, msgId: 'hl1dc0', specialIdx: 0, choiceOptions: ['Option A', 'Option B'] }
+    };
+    game.phaseGate = { phase: 'round_end', p1Ready: false, p2Ready: false };
+
+    const p1Actions = fh.getActions(1);
+    const choiceAction = p1Actions.find(a => a.type === 'dc_ability_choice');
+    assert.ok(choiceAction, 'Expected dc_ability_choice actions above phase gate');
+  });
+
+  it('pendingSpreadThePainCondPick resolves during phase gate (GS-8 fix)', async () => {
+    // Regression: pendingSpreadThePainCondPick was orphaned when a phase gate was active.
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Darth Vader' }],
+    });
+
+    const game = fh.getGame();
+    game.pendingSpreadThePainCondPick = { attackerPlayerNum: 1 };
+    game.phaseGate = { phase: 'round_end', p1Ready: false, p2Ready: false };
+
+    const p1Actions = fh.getActions(1);
+    const spreadAction = p1Actions.find(a => a.type === 'spread_pain_cond');
+    assert.ok(spreadAction, 'Expected spread_pain_cond actions above phase gate');
+  });
+
+  it('seed=10 pounce select menu has valid options (DS-8 fix)', async () => {
+    // Regression: DS-8 invariant checker failed to read options from Discord.js
+    // StringSelectMenuBuilder objects (options stored at child.options, not child.data.options)
+    const { createFlowHarness: createFH } = await import('./flow-harness.js');
+    const fh = createFH({
+      mapId: 'development-facility',
+      p1Army: [{ dcName: 'AT-RT' }, { dcName: 'Purge Commander (Elite)' }, { dcName: 'Agent Kallus' }],
+      p2Army: [{ dcName: 'Chirrut Imwe' }, { dcName: 'Leia Organa' }, { dcName: 'C-3P0' }],
+    });
+
+    // Run 30 steps with random-ish action selection (enough to trigger pounce if available)
+    let ds8Errors = [];
+    for (let step = 0; step < 30; step++) {
+      if (fh.getGame().ended) break;
+      const p1 = fh.getActions(1);
+      const p2 = fh.getActions(2);
+      const all = [...p1.map(a => ({ ...a, _uid: 'player1' })), ...p2.map(a => ({ ...a, _uid: 'player2' }))];
+      if (all.length === 0) break;
+      const action = all[step % all.length];
+      const result = await fh.act(action.customId, action._uid);
+      const ds8 = result.invariantErrors.filter(e => e.startsWith('DS-8'));
+      ds8Errors.push(...ds8);
+    }
+
+    assert.deepEqual(ds8Errors, [],
+      `DS-8 violations (select menu options):\n  ${ds8Errors.join('\n  ')}`);
+  });
+});
