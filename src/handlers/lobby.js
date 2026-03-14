@@ -82,6 +82,10 @@ export async function handleLobbyStart(interaction, ctx) {
     await interaction.followUp({ content: 'Both players must join before starting. Player 2 has not joined yet.', ephemeral: true });
     return;
   }
+  if (lobby.status === 'Launched') {
+    await interaction.followUp({ content: 'This game is already being created. Please wait.', ephemeral: true });
+    return;
+  }
   if (interaction.user.id !== lobby.creatorId && interaction.user.id !== lobby.joinedId) {
     await interaction.followUp({ content: 'Only players in this game can start it.', ephemeral: true });
     return;
@@ -100,6 +104,9 @@ export async function handleLobbyStart(interaction, ctx) {
     return;
   }
   lobby.status = 'Launched';
+
+  // Remove Start button immediately to prevent double-clicks
+  await interaction.message?.edit({ components: [] }).catch(() => {});
 
   await interaction.followUp({ content: 'Creating your game channels...', ephemeral: true });
   let gameId;
