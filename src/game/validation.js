@@ -219,6 +219,16 @@ export function validateDeckLegal(squad) {
       }
     }
   }
+  // Heavy Stormtrooper (Elite) — Modular: one attachment costs 1 less
+  const hasHSE = dcList.some(e => resolveDcName(e) === 'Heavy Stormtrooper (Elite)');
+  if (hasHSE) {
+    const hasAttachment = dcList.some(e => {
+      const n = resolveDcName(e);
+      const s = dcEffects[n] || dcEffects[`[${n}]`];
+      return s?.attachment;
+    });
+    if (hasAttachment) dcTotal -= 1;
+  }
   if (dcTotal !== DC_POINTS_LEGAL) {
     errors.push(`Deployment total is ${dcTotal} points. Legal total is exactly ${DC_POINTS_LEGAL}.`);
   }
@@ -478,7 +488,8 @@ export function validateArmyAffiliation(squad) {
     const affiliation = stats?.affiliation || 'Any';
     const keywords = dcKeywords[resolvedName] || dcKeywords[name] || dcKeywords[`[${name}]`] || stats?.keywords || [];
     const isAttachment = stats?.attachment === true;
-    return { name, affiliation, keywords, isAttachment };
+    const cost = stats?.cost ?? 0;
+    return { name, affiliation, keywords, isAttachment, cost };
   });
 
   // ── Determine primary affiliation (most common non-"Any" affiliation) ──
@@ -500,10 +511,24 @@ export function validateArmyAffiliation(squad) {
   const hasDoctorAphra = nameSet.has('Doctor Aphra') || nameSet.has('Dr. Aphra');
   const hasEliteJawaScavenger = nameSet.has('Jawa Scavenger (Elite)');
   const hasHeavyStormtrooperElite = nameSet.has('Heavy Stormtrooper (Elite)');
-  // Temporary Alliance (Imperial): up to 2 Scum DCs allowed
-  const hasTempAllianceImperial = nameSet.has('[Temporary Alliance]') || nameSet.has('[Temporary Alliance (E)]');
-  // Temporary Alliance (Scum/Mercenary): up to 2 Rebel DCs allowed
-  const hasTempAllianceScum = nameSet.has('[Temporary Alliance (M)]');
+  // Temporary Alliance: auto-resolve unqualified "[Temporary Alliance]" based on primary affiliation
+  const hasUnqualifiedTA = nameSet.has('[Temporary Alliance]') || nameSet.has('Temporary Alliance');
+  const hasExplicitTAE = nameSet.has('[Temporary Alliance (E)]') || nameSet.has('Temporary Alliance (E)');
+  const hasExplicitTAM = nameSet.has('[Temporary Alliance (M)]') || nameSet.has('Temporary Alliance (M)');
+  let hasTempAllianceImperial = hasExplicitTAE;
+  let hasTempAllianceScum = hasExplicitTAM;
+  if (hasUnqualifiedTA && !hasExplicitTAE && !hasExplicitTAM) {
+    // Auto-detect: Imperial armies get TA(E), Scum armies get TA(M)
+    if (primaryAffiliation === 'Imperial') {
+      hasTempAllianceImperial = true;
+      warnings.push('Temporary Alliance detected in Imperial army → resolved as TA (Imperial): allows up to 2 Scum DCs.');
+    } else if (primaryAffiliation === 'Scum') {
+      hasTempAllianceScum = true;
+      warnings.push('Temporary Alliance detected in Scum army → resolved as TA (Mercenary): allows up to 2 Rebel DCs.');
+    } else {
+      warnings.push('Temporary Alliance detected but army affiliation is ambiguous. Specify "[Temporary Alliance (E)]" or "[Temporary Alliance (M)]" for correct validation.');
+    }
+  }
 
   // ── Bib Fortuna — Dirty Dealing: army CANNOT include Rebel DCs ──
   if (hasBibFortuna) {
@@ -515,12 +540,12 @@ export function validateArmyAffiliation(squad) {
     }
   }
 
-  // ── Heavy Stormtrooper (Elite) — Modular: note if attachment exists ──
+  // ── Heavy Stormtrooper (Elite) — Modular: note attachment discount ──
   if (hasHeavyStormtrooperElite) {
     const attachments = resolved.filter((d) => d.isAttachment);
     if (attachments.length) {
       warnings.push(
-        `Heavy Stormtrooper (Elite) (Modular): attachment "${attachments[0].name}" present — may include at -1 cost (cost validation unchanged).`
+        `Heavy Stormtrooper (Elite) — Modular: "${attachments[0].name}" included at -1 cost discount (${attachments[0].cost ?? '?'} → ${(attachments[0].cost ?? 1) - 1} points).`
       );
     }
   }
