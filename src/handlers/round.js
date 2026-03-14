@@ -598,6 +598,8 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     const figKeys = Object.keys(figs);
     for (const dc of dcList) {
       const dcName = dc.dcName || dc;
+      // Skip figureless DCs (upgrades like [Extra Armor]) — they never have figures
+      if (/^\[.+\]$/.test(dcName)) continue;
       if (!figKeys.some(fk => fk.startsWith(dcName + '-'))) {
         total = Math.max(0, total - 1);
       }

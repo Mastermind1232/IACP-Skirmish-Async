@@ -16,12 +16,48 @@ const HIDDEN_SIZE = 32;      // Hidden layer width
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
 
+const REPLAY_BUFFER_SIZE = 10000;   // Max transitions in ring buffer
+const REPLAY_BATCH_SIZE = 32;       // Transitions per mini-batch
+const REPLAY_UPDATES_PER_GAME = 4;  // Mini-batch updates after each game
+const REPLAY_MIN_SIZE = 256;        // Min buffer fill before replay starts
+const REPLAY_ALPHA = 0.001;         // Half of online ALPHA — guards against stale data
+
+// ── Within-Group Scorer (Phase 5) ───────────────────────────────────────────
+const ALPHA_WG = 0.01;           // Learning rate for within-group scorers (5x main)
+const WG_WEIGHT_CLAMP = 5.0;    // Max absolute weight value
+const WG_EPSILON_START = 0.10;   // Within-group exploration rate (start)
+const WG_EPSILON_MIN = 0.02;     // Within-group exploration rate (floor)
+const WG_EPSILON_DECAY = 3000;   // Games to decay within-group epsilon
+
+const ATTACK_FEATURE_NAMES = [
+  'targetHpRatio', 'targetDistNorm', 'targetIsolated',
+  'targetThreat', 'killPotential', 'bias',
+];
+
+const MOVE_FEATURE_NAMES = [
+  'distToNearestEnemy', 'threatAtDest', 'objectiveProximity',
+  'allySupport', 'mpEfficiency', 'bias',
+];
+
+function getGroupCategory(absType) {
+  if (absType === 'attack_close' || absType === 'attack_ranged') return 'attack';
+  if (absType === 'move_toward' || absType === 'move_away' || absType === 'move_lateral') return 'move';
+  if (absType === 'surge_damage' || absType === 'surge_special' || absType === 'spend_surge') return 'surge';
+  if (absType === 'play_cc') return 'cc';
+  return null;
+}
+
+function getWgEpsilon(totalGames) {
+  return Math.max(WG_EPSILON_MIN, WG_EPSILON_START * Math.exp(-totalGames / WG_EPSILON_DECAY));
+}
+
 const REWARD_WEIGHTS = {
   vp: 10.0,               // VP gained (primary win condition)
   dmg: 0.5,               // Enemy HP removed
   hp: -0.5,               // Own HP lost (negative = penalty)
   dist: 0.1,              // Distance reduction to enemies
   terminal: 50.0,         // Win/loss bonus at game end
+  step: -0.02,            // Per-action cost — pushes toward faster game completion
 };
 
 const NUM_FEATURES = 16;
@@ -35,9 +71,15 @@ const FEATURE_NAMES = [
 ];
 
 const ABSTRACT_TYPES = [
+  // Original 15 (indices 0-14 preserved for network weight compatibility)
   'attack_close', 'attack_ranged', 'move_toward', 'move_away', 'move_lateral',
   'move_done', 'start_move', 'activate', 'end_activation', 'pass',
   'ability', 'spend_surge', 'skip_surges', 'reroll', 'other',
+  // A2 splits — dedicated types for high-frequency tactical decisions
+  'play_cc', 'react_use', 'react_skip', 'surge_damage', 'surge_special',
+  'token_offense', 'token_defense',
+  // A3 — interact (mission objectives, terminals, doors)
+  'interact',
 ];
 
 const NUM_ACTIONS = ABSTRACT_TYPES.length;
@@ -72,6 +114,168 @@ function getHpTotals(dcHealthState, dcMessageMeta, playerNum) {
     }
   }
   return { current, max };
+}
+
+function lookupFigureHp(figureKey, playerNum, dcHealthState, dcMessageMeta) {
+  if (!figureKey || !dcHealthState || !dcMessageMeta) return null;
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const parts = figureKey.split('-');
+  const figureIndex = parseInt(parts[parts.length - 1], 10) || 0;
+  for (const [msgId, healthArr] of dcHealthState) {
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta || meta.playerNum !== playerNum) continue;
+    if (meta.dcName !== dcName && meta.dcName?.toLowerCase() !== dcName.toLowerCase()) continue;
+    if (healthArr && healthArr[figureIndex]) {
+      return { current: healthArr[figureIndex][0], max: healthArr[figureIndex][1] };
+    }
+  }
+  return null;
+}
+
+function getAttackerPosition(action, game, dcMessageMeta) {
+  const msgId = action.params?.msgId;
+  const actingPN = action.actingPlayer;
+  if (!msgId || !game.dcActionsData?.[msgId]) return null;
+  const meta = dcMessageMeta?.get(msgId);
+  if (!meta) return null;
+  const actionsData = game.dcActionsData[msgId];
+  const figureIndex = actionsData.selectedFigure ?? 0;
+  const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  return game.figurePositions?.[actingPN]?.[figureKey] || null;
+}
+
+function extractAttackFeatures(action, game, dcHealthState, dcMessageMeta) {
+  const features = new Float64Array(6);
+  features[5] = 1.0; // bias
+  const targetFk = action.params?.targetFigureKey;
+  if (!targetFk) return features;
+  const actingPN = action.actingPlayer;
+  const oppNum = actingPN === 1 ? 2 : 1;
+
+  // [0] targetHpRatio — how wounded the target is (lower = more wounded)
+  const hp = lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta);
+  if (hp && hp.max > 0) features[0] = hp.current / hp.max;
+
+  // [1] targetDistNorm — distance from THIS attacker to target (not nearest ally)
+  const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+  const attackerPos = getAttackerPosition(action, game, dcMessageMeta);
+  if (targetPos && attackerPos) {
+    const dist = coordDistance(attackerPos, targetPos);
+    features[1] = 1 - Math.min(dist, 10) / 10;
+  }
+
+  // [2] targetIsolated — fewer adjacent enemy allies = more isolated
+  if (targetPos) {
+    const oppFigs = Object.entries(game.figurePositions?.[oppNum] || {});
+    let adjacentAllies = 0;
+    for (const [fk, pos] of oppFigs) {
+      if (fk === targetFk) continue;
+      if (coordDistance(pos, targetPos) <= 2) adjacentAllies++;
+    }
+    features[2] = 1 - Math.min(adjacentAllies, 3) / 3;
+  }
+
+  // [3] targetThreat — how dangerous the target DC is
+  let dcEffects;
+  try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
+  if (dcEffects) {
+    const targetDcName = targetFk.replace(/-\d+-\d+$/, '');
+    features[3] = Math.min(1, getExpectedDamage(dcEffects, targetDcName) / 8);
+  }
+
+  // [4] killPotential — can THIS attacker finish it off?
+  if (hp && dcEffects) {
+    const myDcName = action.params?.dcName;
+    const myExpDmg = myDcName ? getExpectedDamage(dcEffects, myDcName) : 0;
+    features[4] = hp.current <= myExpDmg ? 1.0 : 0.0;
+  }
+
+  return features;
+}
+
+/**
+ * Extract per-space features for move scoring (Phase 5 Slice 2).
+ * Precomputes shared data (enemy positions, objectives) once, then scores each coord.
+ */
+function extractMoveFeatures(action, game, playerNum) {
+  const features = new Float64Array(6);
+  features[5] = 1.0; // bias
+
+  const coord = action.params?.coord;
+  if (!coord || action.params?.done) return features;
+
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const oppFigs = Object.entries(game.figurePositions?.[oppNum] || {});
+  const myFigs = Object.values(game.figurePositions?.[playerNum] || {});
+
+  // [0] distToNearestEnemy — closer to enemy = higher (aggression)
+  let minEnemyDist = 10;
+  for (const [, pos] of oppFigs) {
+    const d = coordDistance(coord, pos);
+    if (d < minEnemyDist) minEnemyDist = d;
+  }
+  features[0] = 1 - Math.min(minEnemyDist, 10) / 10;
+
+  // [1] threatAtDest — sum of expected damage from enemies that can attack this coord
+  let dcEffects;
+  try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
+  if (dcEffects && oppFigs.length > 0) {
+    let threat = 0;
+    for (const [fk, pos] of oppFigs) {
+      const dcName = fk.replace(/-\d+-\d+$/, '');
+      const range = getAttackRange(dcEffects, dcName);
+      const dist = coordDistance(pos, coord);
+      if (dist <= range) {
+        threat += getExpectedDamage(dcEffects, dcName);
+      }
+    }
+    features[1] = Math.min(1, threat / 10);
+  }
+
+  // [2] objectiveProximity — distance to nearest objective (terminals + mission tokens)
+  let mapTokens;
+  try { mapTokens = getMapTokensData(); } catch { mapTokens = null; }
+  const mapId = game.selectedMap?.id;
+  if (mapTokens && mapId && mapTokens[mapId]) {
+    const mapData = mapTokens[mapId];
+    const objCoords = [];
+    if (Array.isArray(mapData.terminals)) objCoords.push(...mapData.terminals);
+    const variant = game.selectedMission?.variant;
+    const missionKey = variant ? `mission${variant.toUpperCase()}` : null;
+    if (missionKey && mapData[missionKey]?.positions) {
+      for (const coords of Object.values(mapData[missionKey].positions)) {
+        if (Array.isArray(coords)) objCoords.push(...coords);
+      }
+    }
+    if (objCoords.length > 0) {
+      let minObjDist = 10;
+      for (const oc of objCoords) {
+        try {
+          const d = coordDistance(coord, oc);
+          if (d < minObjDist) minObjDist = d;
+        } catch { /* skip invalid */ }
+      }
+      features[2] = 1 - Math.min(minObjDist, 10) / 10;
+    }
+  }
+
+  // [3] allySupport — friendly figures within 3 spaces of destination
+  let nearbyAllies = 0;
+  for (const pos of myFigs) {
+    if (coordDistance(coord, pos) <= 3) nearbyAllies++;
+  }
+  features[3] = Math.min(nearbyAllies, 4) / 4;
+
+  // [4] mpEfficiency — movement cost relative to total MP (lower cost = higher efficiency)
+  const moveKey = action.params?.moveKey;
+  const moveState = moveKey ? game.moveInProgress?.[moveKey] : null;
+  const totalMp = moveState?.totalMp || moveState?.mpRemaining || 4;
+  const cost = action.params?.cost || 1;
+  features[4] = 1 - Math.min(cost, totalMp) / totalMp;
+
+  return features;
 }
 
 function getAvgDistToEnemy(game, playerNum) {
@@ -377,9 +581,10 @@ function forwardPass(network, features) {
   }
 
   // Advantage head: A[k] = Wa[k] · h + ba[k]
-  const A = new Array(NUM_ACTIONS);
+  const nActions = Wa.length; // Use actual network size
+  const A = new Array(nActions);
   let meanA = 0;
-  for (let k = 0; k < NUM_ACTIONS; k++) {
+  for (let k = 0; k < nActions; k++) {
     let sum = ba[k];
     for (let j = 0; j < HIDDEN_SIZE; j++) {
       sum += Wa[k][j] * h[j];
@@ -387,11 +592,11 @@ function forwardPass(network, features) {
     A[k] = sum;
     meanA += sum;
   }
-  meanA /= NUM_ACTIONS;
+  meanA /= nActions;
 
   // Combine: Q[k] = V + A[k] - mean(A)
-  const Q = new Array(NUM_ACTIONS);
-  for (let k = 0; k < NUM_ACTIONS; k++) {
+  const Q = new Array(nActions);
+  for (let k = 0; k < nActions; k++) {
     Q[k] = V + A[k] - meanA;
   }
 
@@ -406,9 +611,11 @@ function sanitizeParam(value) {
 
 function sanitizeNetwork(network, stats) {
   let resets = 0;
+  const nHidden = network.b1.length;
+  const nActions = network.Wa.length;
 
-  for (let j = 0; j < HIDDEN_SIZE; j++) {
-    for (let i = 0; i < NUM_FEATURES; i++) {
+  for (let j = 0; j < nHidden; j++) {
+    for (let i = 0; i < network.W1[j].length; i++) {
       if (!isFinite(network.W1[j][i])) { network.W1[j][i] = 0; resets++; }
     }
     if (!isFinite(network.b1[j])) { network.b1[j] = 0; resets++; }
@@ -416,8 +623,8 @@ function sanitizeNetwork(network, stats) {
   }
   if (!isFinite(network.bv)) { network.bv = 0; resets++; }
 
-  for (let k = 0; k < NUM_ACTIONS; k++) {
-    for (let j = 0; j < HIDDEN_SIZE; j++) {
+  for (let k = 0; k < nActions; k++) {
+    for (let j = 0; j < network.Wa[k].length; j++) {
       if (!isFinite(network.Wa[k][j])) { network.Wa[k][j] = 0; resets++; }
     }
     if (!isFinite(network.ba[k])) { network.ba[k] = 0; resets++; }
@@ -436,10 +643,13 @@ function sanitizeNetwork(network, stats) {
  */
 function backpropUpdate(network, actionIdx, delta, alpha, h_pre, h, features) {
   const { W1, b1, Wv, Wa, ba } = network;
+  const nActions = Wa.length; // Use actual network size, not constant
+  const dAChosen = delta * ((nActions - 1) / nActions);
+  const dAOther = delta * (-1 / nActions);
 
   // Advantage head gradients
-  for (let m = 0; m < NUM_ACTIONS; m++) {
-    const dA = (m === actionIdx) ? delta * (14 / 15) : delta * (-1 / 15);
+  for (let m = 0; m < nActions; m++) {
+    const dA = (m === actionIdx) ? dAChosen : dAOther;
     for (let j = 0; j < HIDDEN_SIZE; j++) {
       Wa[m][j] += alpha * dA * h[j];
     }
@@ -455,8 +665,8 @@ function backpropUpdate(network, actionIdx, delta, alpha, h_pre, h, features) {
   // Hidden layer gradients (sum V + A head contributions, gate through ReLU)
   for (let j = 0; j < HIDDEN_SIZE; j++) {
     let grad_h = delta * Wv[j];
-    for (let m = 0; m < NUM_ACTIONS; m++) {
-      const dA = (m === actionIdx) ? delta * (14 / 15) : delta * (-1 / 15);
+    for (let m = 0; m < nActions; m++) {
+      const dA = (m === actionIdx) ? dAChosen : dAOther;
       grad_h += dA * Wa[m][j];
     }
     const grad_pre = h_pre[j] > 0 ? grad_h : 0; // ReLU gate
@@ -480,7 +690,7 @@ function getMaskedBestQ(network, features, nextActionIdxs) {
   const { Q } = forwardPass(network, features);
   let maxQ = -Infinity;
   for (const idx of nextActionIdxs) {
-    if (idx >= 0 && idx < NUM_ACTIONS && Q[idx] > maxQ) {
+    if (idx >= 0 && idx < Q.length && Q[idx] > maxQ) {
       maxQ = Q[idx];
     }
   }
@@ -535,6 +745,18 @@ function updateTraceNeural(learnings, trace) {
     // NaN safety
     sanitizeNetwork(network, stats);
 
+    // Within-group scorer update (Phase 5)
+    if (entry.wgFeatures && entry.wgType && learnings.withinGroupWeights) {
+      const wgW = learnings.withinGroupWeights[entry.wgType];
+      if (wgW) {
+        for (let fi = 0; fi < wgW.length; fi++) {
+          wgW[fi] += ALPHA_WG * delta * (entry.wgFeatures[fi] || 0);
+          wgW[fi] = Math.max(-WG_WEIGHT_CLAMP, Math.min(WG_WEIGHT_CLAMP, wgW[fi]));
+          if (!isFinite(wgW[fi])) wgW[fi] = 0;
+        }
+      }
+    }
+
     deltaSum += Math.abs(rawDelta);
     count++;
     stats.totalUpdates++;
@@ -553,6 +775,26 @@ function updateTraceNeural(learnings, trace) {
       stats.lastTargetSync = stats.totalUpdates;
       stats.targetSyncs = (stats.targetSyncs || 0) + 1;
     }
+
+    // Store transition in replay buffer
+    if (learnings.replayBuffer) {
+      const buf = learnings.replayBuffer;
+      const transition = {
+        features: features.slice(),
+        actionIdx,
+        reward,
+        nextFeatures: nextFeatures ? nextFeatures.slice() : null,
+        nextActionIdxs: nextActionIdxs ? nextActionIdxs.slice() : null,
+        done: !!done,
+      };
+      if (buf.transitions.length < REPLAY_BUFFER_SIZE) {
+        buf.transitions.push(transition);
+      } else {
+        buf.transitions[buf.writeIdx] = transition;
+      }
+      buf.writeIdx = (buf.writeIdx + 1) % REPLAY_BUFFER_SIZE;
+      buf.count++;
+    }
   }
 
   if (count > 0) {
@@ -561,7 +803,77 @@ function updateTraceNeural(learnings, trace) {
   }
 }
 
+// ── Experience Replay ────────────────────────────────────────────────────
+
+export function replayUpdate(learnings) {
+  const buf = learnings.replayBuffer;
+  if (!buf || buf.transitions.length < REPLAY_MIN_SIZE) return;
+
+  const network = learnings.network;
+  const targetNetwork = learnings.targetNetwork;
+  const stats = learnings.trainingStats;
+  if (!network || !targetNetwork) return;
+
+  const bufLen = buf.transitions.length;
+
+  for (let batch = 0; batch < REPLAY_UPDATES_PER_GAME; batch++) {
+    let deltaSum = 0;
+    for (let b = 0; b < REPLAY_BATCH_SIZE; b++) {
+      const idx = Math.floor(Math.random() * bufLen);
+      const t = buf.transitions[idx];
+      if (!t || !t.features) continue;
+
+      const { features, actionIdx, reward, nextFeatures, nextActionIdxs, done } = t;
+      const { Q, h_pre, h } = forwardPass(network, features);
+
+      let target;
+      if (done || !nextFeatures) {
+        target = reward;
+      } else {
+        const maxQNext = getMaskedBestQ(targetNetwork, nextFeatures, nextActionIdxs);
+        target = reward + GAMMA * maxQNext;
+      }
+
+      const rawDelta = target - Q[actionIdx];
+      const delta = Math.max(-DELTA_CLAMP, Math.min(DELTA_CLAMP, rawDelta));
+      backpropUpdate(network, actionIdx, delta, REPLAY_ALPHA, h_pre, h, features);
+      sanitizeNetwork(network, stats);
+
+      deltaSum += Math.abs(rawDelta);
+      stats.totalUpdates++;
+
+      if (stats.totalUpdates > 0 && stats.totalUpdates % TARGET_UPDATE_INTERVAL === 0) {
+        learnings.targetNetwork = deepCopyNetwork(network);
+        stats.lastTargetSync = stats.totalUpdates;
+        stats.targetSyncs = (stats.targetSyncs || 0) + 1;
+      }
+    }
+    const batchAvg = deltaSum / REPLAY_BATCH_SIZE;
+    stats.avgAbsDelta = (stats.avgAbsDelta || 0) * 0.95 + batchAvg * 0.05;
+  }
+}
+
 // ── Action Abstraction ──────────────────────────────────────────────────────
+
+/**
+ * Classify a surge key as damage-increasing or utility/special.
+ * Damage: +damage, pierce, blast, cleave, and named damage specials.
+ * Special: accuracy, recover, conditions, tokens, and everything else.
+ */
+function classifySurge(surgeKey) {
+  if (!surgeKey) return 'spend_surge'; // fallback for missing key
+  const k = String(surgeKey).replace(/^double:/, '').replace(/\s*\([^)]*\)/g, '').toLowerCase().trim();
+  // Direct damage effects
+  if (/^damage\s+\d+$/.test(k) || /^\+\d+\s+hits?$/.test(k)) return 'surge_damage';
+  if (/^pierce\s+\d+$/.test(k)) return 'surge_damage';
+  if (/^blast\s+\d+$/.test(k)) return 'surge_damage';
+  if (/^cleave\s+\d+$/.test(k)) return 'surge_damage';
+  if (k === 'critical_hit' || k === 'deadly_spin' || k === 'shrapnel' || k === 'deadly') return 'surge_damage';
+  // Multi-part combos containing damage/pierce/blast/cleave
+  if (/damage|pierce|blast|cleave/.test(k)) return 'surge_damage';
+  // Everything else: accuracy, recover, conditions, tokens, specials
+  return 'surge_special';
+}
 
 export function abstractActionType(action, game) {
   const t = action.type;
@@ -572,10 +884,11 @@ export function abstractActionType(action, game) {
   // Strategic combat actions
   if (t === 'combat_resolve' || t === 'combat_skip_surges') return 'skip_surges';
   if (t?.startsWith('combat_reroll')) return 'reroll';
-  if (t?.startsWith('combat_surge')) return 'spend_surge';
-  // DC specials and CC play
+  if (t?.startsWith('combat_surge')) return classifySurge(action.params?.surgeKey);
+  // DC specials
   if (t === 'dc_special') return 'ability';
-  if (t === 'play_cc') return 'ability';
+  // CC play (dedicated type — hand management decision)
+  if (t === 'play_cc') return 'play_cc';
   // Attacks
   if (t === 'attack_target') {
     if (action.params?.targetFigureKey && game) {
@@ -620,12 +933,39 @@ export function abstractActionType(action, game) {
   if (t === 'activate_dc') return 'activate';
   if (t === 'dc_end_activation') return 'end_activation';
   if (t === 'pass_activation_turn') return 'pass';
-  // Pending sub-state actions (ability choices / gates)
+  // Interact (mission objectives, terminals, doors)
+  if (t === 'interact') return 'interact';
+  // Reactive counterplay — use vs skip (learned binary decision)
+  if (t === 'negation_play' || t === 'celebration_play' || t === 'cover_fire_block') return 'react_use';
+  if (t === 'negation_let_resolve' || t === 'celebration_pass' || t === 'cover_fire_skip') return 'react_skip';
+  // Strain choice — discard CCs (react_use) vs take all damage (react_skip)
+  if (t === 'strain_choice_discard') return 'react_use';
+  if (t === 'strain_choice_alldmg') return 'react_skip';
+  // Interrupt use/skip decisions (reuse react_use/react_skip from A2)
+  if (t === 'still_faster_use' || t === 'hunter_protocol_trigger' || t === 'last_resort_use') return 'react_use';
+  if (t === 'still_faster_skip' || t === 'hunter_protocol_skip' || t === 'last_resort_skip') return 'react_skip';
+  if (t === 'still_faster_dc_pick') return 'ability';
+  // Combat-reaction defensive abilities — use vs skip (learned binary decision)
+  if (t === 'strike_me_down_yes' || t === 'slow_on_draw_yes' || t === 'force_exhaustion_yes' ||
+      t === 'tough_luck_remove' || t === 'power_converter_approve' ||
+      t === 'illicit_arms_pick' || t === 'there_is_no_try_die') return 'react_use';
+  if (t === 'strike_me_down_no' || t === 'slow_on_draw_no' || t === 'force_exhaustion_no' ||
+      t === 'tough_luck_skip' || t === 'power_converter_skip' ||
+      t === 'illicit_arms_skip' || t === 'there_is_no_try_skip') return 'react_skip';
+  // Multi-step sub-actions for defensive abilities (stay in ability bucket)
+  if (t === 'there_is_no_try_face' || t === 'illicit_arms_use' ||
+      t === 'power_converter_die' || t === 'power_converter_color') return 'ability';
+  // Power token choice — offensive vs defensive (learned)
+  if (t === 'power_token_choice') {
+    const tt = action.params?.tokenType;
+    return (tt === 'hit' || tt === 'surge') ? 'token_offense' : 'token_defense';
+  }
+  // Force Vision pick (Kanan Jarrus) — choosing which group activates next
+  if (t === 'force_vision_pick') return 'ability';
+  // Remaining pending sub-state actions (DC-specific, stay in ability bucket)
   if (t === 'dc_ability_choice' || t === 'pounce_space' ||
-      t === 'celebration_play' || t === 'celebration_pass' ||
       t === 'missile_salvo_die' || t === 'missile_salvo_done' ||
-      t === 'power_token_choice' || t === 'cover_fire_block' || t === 'cover_fire_skip' ||
-      t === 'spread_pain_cond' || t === 'negation_play' || t === 'negation_let_resolve') return 'ability';
+      t === 'spread_pain_cond') return 'ability';
   // Fallback
   return 'other';
 }
@@ -658,7 +998,7 @@ export function computeReward(before, after, isTerminal, didWin) {
   const deltaMyHP = after.myHpCurrent - before.myHpCurrent;
   const deltaDist = before.avgDist - after.avgDist;
 
-  let reward = w.vp * deltaVP + w.dmg * deltaEnemyDmg + w.hp * deltaMyHP + w.dist * deltaDist;
+  let reward = w.vp * deltaVP + w.dmg * deltaEnemyDmg + w.hp * deltaMyHP + w.dist * deltaDist + (w.step || 0);
   if (isTerminal) {
     reward += didWin ? w.terminal : -w.terminal;
   }
@@ -672,6 +1012,8 @@ function getEpsilon(totalGames) {
 }
 
 export function pickSmartAction(allActions, game, learnings, playerNum, dcHealthState, dcMessageMeta) {
+  pickSmartAction._lastWgFeatures = null;
+  pickSmartAction._lastWgType = null;
   if (allActions.length === 0) return null;
   if (allActions.length === 1) return allActions[0];
 
@@ -722,44 +1064,75 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   }
 
   if (bestType === null) return heuristicPick(strategicActions, game);
-  return pickWithinGroup(groups[bestType], bestType, game);
+  const wgResult = pickWithinGroup(groups[bestType], bestType, game,
+    learnings.withinGroupWeights, dcHealthState, dcMessageMeta, learnings.meta.totalGames);
+  pickSmartAction._lastWgFeatures = wgResult.wgFeatures;
+  pickSmartAction._lastWgType = wgResult.wgType;
+  return wgResult.action;
 }
 
-function pickWithinGroup(actions, absType, game) {
-  if (actions.length <= 1) return actions[0];
+function dotProductWg(weights, features) {
+  let sum = 0;
+  for (let i = 0; i < weights.length && i < features.length; i++) {
+    sum += weights[i] * features[i];
+  }
+  return sum;
+}
+
+function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMessageMeta, totalGames) {
+  if (actions.length <= 1) return { action: actions[0], wgFeatures: null, wgType: null };
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
+  // Attack scorer (Phase 5 learned)
   if (absType === 'attack_close' || absType === 'attack_ranged') {
-    const scored = actions.map(a => {
-      const fk = a.params?.targetFigureKey;
-      let priority = 0;
-      if (fk) {
-        const oppNum = a.actingPlayer === 1 ? 2 : 1;
-        const oppFigs = Object.keys(game.figurePositions?.[oppNum] || {});
-        priority = 10 - oppFigs.length;
+    const group = 'attack';
+    const weights = wgWeights?.[group];
+    if (weights && Math.random() >= getWgEpsilon(totalGames || 0)) {
+      let bestScore = -Infinity, bestAction = null, bestFeatures = null;
+      for (const a of actions) {
+        const f = extractAttackFeatures(a, game, dcHealthState, dcMessageMeta);
+        const score = dotProductWg(weights, f);
+        if (score > bestScore) { bestScore = score; bestAction = a; bestFeatures = f; }
       }
-      return { action: a, priority };
-    });
-    scored.sort((a, b) => b.priority - a.priority);
-    return scored[0].action;
+      return { action: bestAction, wgFeatures: bestFeatures, wgType: group };
+    }
+    return { action: pick(actions), wgFeatures: null, wgType: null };
   }
+
+  // Move scorer (Phase 5 Slice 2 — learned)
   if (absType === 'move_toward' || absType === 'move_away' || absType === 'move_lateral') {
-    const oppNum = actions[0].actingPlayer === 1 ? 2 : 1;
-    const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
-    if (oppFigs.length > 0) {
-      const scored = actions.map(a => {
-        const coord = a.params?.coord || '';
-        if (!coord || a.params?.done) return { action: a, dist: 999 };
-        const dist = Math.min(...oppFigs.map(p => coordDistance(coord, p)));
-        return { action: a, dist };
-      });
-      scored.sort((a, b) => a.dist - b.dist);
-      const best = scored[0].dist;
-      const tied = scored.filter(s => s.dist === best);
-      return pick(tied).action;
+    const group = 'move';
+    const weights = wgWeights?.[group];
+    const playerNum = actions[0].actingPlayer;
+    // Filter out "done" actions for scoring — they have no coord to evaluate
+    const spaceActions = actions.filter(a => a.params?.coord && !a.params?.done);
+    if (weights && spaceActions.length > 0 && Math.random() >= getWgEpsilon(totalGames || 0)) {
+      let bestScore = -Infinity, bestAction = null, bestFeatures = null;
+      for (const a of spaceActions) {
+        const f = extractMoveFeatures(a, game, playerNum);
+        const score = dotProductWg(weights, f);
+        if (score > bestScore) { bestScore = score; bestAction = a; bestFeatures = f; }
+      }
+      return { action: bestAction, wgFeatures: bestFeatures, wgType: group };
+    }
+    // Fallback: heuristic (nearest enemy)
+    if (spaceActions.length > 0) {
+      const oppNum = playerNum === 1 ? 2 : 1;
+      const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
+      if (oppFigs.length > 0) {
+        const scored = spaceActions.map(a => {
+          const dist = Math.min(...oppFigs.map(p => coordDistance(a.params.coord, p)));
+          return { action: a, dist };
+        });
+        scored.sort((a, b) => a.dist - b.dist);
+        const best = scored[0].dist;
+        const tied = scored.filter(s => s.dist === best);
+        return { action: pick(tied).action, wgFeatures: null, wgType: null };
+      }
     }
   }
-  return pick(actions);
+
+  return { action: pick(actions), wgFeatures: null, wgType: null };
 }
 
 function heuristicPick(allActions, game) {
@@ -771,10 +1144,30 @@ function heuristicPick(allActions, game) {
     a.type === 'end_end_of_round' || a.type === 'end_start_of_round' || a.type === 'end_activation_phase');
   if (transitions.length > 0) return pick(transitions);
 
-  const pendingTypes = ['dc_ability_choice', 'celebration_play', 'celebration_pass',
-    'pounce_space', 'missile_salvo_die', 'missile_salvo_done',
-    'power_token_choice', 'cover_fire_block', 'cover_fire_skip',
-    'spread_pain_cond', 'negation_play', 'negation_let_resolve'];
+  // Reactive counterplay, interrupts & defensive abilities — respond to pending states
+  const reactiveTypes = ['negation_play', 'negation_let_resolve',
+    'celebration_play', 'celebration_pass',
+    'cover_fire_block', 'cover_fire_skip',
+    'still_faster_use', 'still_faster_skip', 'still_faster_dc_pick',
+    'hunter_protocol_trigger', 'hunter_protocol_skip',
+    'last_resort_use', 'last_resort_skip',
+    'strike_me_down_yes', 'strike_me_down_no',
+    'slow_on_draw_yes', 'slow_on_draw_no',
+    'force_exhaustion_yes', 'force_exhaustion_no',
+    'illicit_arms_pick', 'illicit_arms_skip', 'illicit_arms_use',
+    'tough_luck_remove', 'tough_luck_skip',
+    'power_converter_approve', 'power_converter_skip',
+    'power_converter_die', 'power_converter_color',
+    'there_is_no_try_die', 'there_is_no_try_face', 'there_is_no_try_skip',
+    'strain_choice_alldmg', 'strain_choice_discard',
+    'force_vision_pick'];
+  const reactive = allActions.filter(a => reactiveTypes.includes(a.type));
+  if (reactive.length > 0) return pick(reactive);
+
+  // Other pending sub-states
+  const pendingTypes = ['dc_ability_choice', 'pounce_space',
+    'missile_salvo_die', 'missile_salvo_done',
+    'power_token_choice', 'spread_pain_cond'];
   const pending = allActions.filter(a => pendingTypes.includes(a.type));
   if (pending.length > 0) return pick(pending);
 
@@ -782,13 +1175,17 @@ function heuristicPick(allActions, game) {
   if (combat.length > 0) return pick(combat);
 
   const attacks = allActions.filter(a => a.type === 'attack_target' && a.params?.targetFigureKey);
-  if (attacks.length > 0) return pickWithinGroup(attacks, 'attack_close', game);
+  if (attacks.length > 0) return pickWithinGroup(attacks, 'attack_close', game, null, null, null, 0).action;
+
+  // CC play — try before movement/activation
+  const ccPlay = allActions.filter(a => a.type === 'play_cc');
+  if (ccPlay.length > 0) return pick(ccPlay);
 
   const specials = allActions.filter(a => a.type === 'dc_special');
   if (specials.length > 0) return pick(specials);
 
   const moveSpaces = allActions.filter(a => a.type === 'move_pick_space' && !a.params?.done);
-  if (moveSpaces.length > 0) return pickWithinGroup(moveSpaces, 'move_toward', game);
+  if (moveSpaces.length > 0) return pickWithinGroup(moveSpaces, 'move_toward', game, null, null, null, 0).action;
 
   const moveStart = allActions.filter(a => a.type === 'move_figure');
   if (moveStart.length > 0) return pick(moveStart);
@@ -853,9 +1250,12 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       const nextFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
       const reward = computeReward(lastSnapshot, afterSnap, false, false);
       const actionIdx = ABSTRACT_TYPES.indexOf(absType);
+      const wgFeatures = pickSmartAction._lastWgFeatures || null;
+      const wgType = pickSmartAction._lastWgType || null;
       trace.push({
         features: lastFeatures, actionIdx, reward, nextFeatures,
         nextActionIdxs: null, done: false,
+        wgFeatures, wgType,
       });
       lastSnapshot = null;
       lastFeatures = null;
@@ -905,6 +1305,18 @@ export function loadLearnings(filePath) {
           nanResets: 0, tdErrorHistory: [],
         };
       }
+      // Migrate network from fewer action types to current NUM_ACTIONS
+      // (e.g., 15 → 22 when A2 splits were added)
+      if (data.network && data.network.Wa.length < NUM_ACTIONS) {
+        const oldCount = data.network.Wa.length;
+        const xavierA = Math.sqrt(2 / (HIDDEN_SIZE + NUM_ACTIONS));
+        for (let k = oldCount; k < NUM_ACTIONS; k++) {
+          const row = [];
+          for (let j = 0; j < HIDDEN_SIZE; j++) row.push(randn() * xavierA);
+          data.network.Wa.push(row);
+          data.network.ba.push(0);
+        }
+      }
       // Ensure Phase 3 stats fields exist
       data.trainingStats.featureNames = FEATURE_NAMES;
       data.trainingStats.hiddenSize = HIDDEN_SIZE;
@@ -918,12 +1330,20 @@ export function loadLearnings(filePath) {
       if (!data.dcStats) data.dcStats = {};
       if (!data.affiliationStats) data.affiliationStats = {};
       if (!data.matchups) data.matchups = [];
+      if (!data.replayBuffer) data.replayBuffer = { transitions: [], writeIdx: 0, count: 0 };
+      if (!data.withinGroupWeights) {
+        data.withinGroupWeights = {
+          attack: new Array(6).fill(0), move: new Array(6).fill(0),
+          surge: new Array(4).fill(0), cc: new Array(4).fill(0),
+        };
+      }
+      data.brainPhase = 5;
       return data;
     }
   } catch { /* start fresh */ }
   const network = initializeNetwork();
   return {
-    brainPhase: 3,
+    brainPhase: 5,
     meta: { totalGames: 0, p1Wins: 0, p2Wins: 0, lastUpdated: null },
     network,
     targetNetwork: deepCopyNetwork(network),
@@ -935,6 +1355,11 @@ export function loadLearnings(filePath) {
     dcStats: {},
     affiliationStats: {},
     matchups: [],
+    replayBuffer: { transitions: [], writeIdx: 0, count: 0 },
+    withinGroupWeights: {
+      attack: new Array(6).fill(0), move: new Array(6).fill(0),
+      surge: new Array(4).fill(0), cc: new Array(4).fill(0),
+    },
   };
 }
 
@@ -942,15 +1367,43 @@ export function saveLearnings(learnings, filePath) {
   learnings.meta.lastUpdated = new Date().toISOString();
   // Exclude targetNetwork from persistence (in-memory only)
   const toSave = {
-    brainPhase: 3,
+    brainPhase: 5,
     meta: learnings.meta,
     network: learnings.network,
     trainingStats: learnings.trainingStats,
     dcStats: learnings.dcStats,
     affiliationStats: learnings.affiliationStats,
     matchups: learnings.matchups,
+    withinGroupWeights: learnings.withinGroupWeights,
   };
   writeFileSync(filePath, JSON.stringify(toSave));
+}
+
+// ── Replay Buffer Persistence ────────────────────────────────────────────
+
+export function saveReplayBuffer(learnings, filePath) {
+  const buf = learnings.replayBuffer;
+  if (!buf || buf.transitions.length === 0) return;
+  writeFileSync(filePath, JSON.stringify({
+    transitions: buf.transitions,
+    writeIdx: buf.writeIdx,
+    count: buf.count,
+  }));
+}
+
+export function loadReplayBuffer(learnings, filePath) {
+  try {
+    if (existsSync(filePath)) {
+      const data = JSON.parse(readFileSync(filePath, 'utf8'));
+      learnings.replayBuffer = {
+        transitions: data.transitions || [],
+        writeIdx: data.writeIdx || 0,
+        count: data.count || 0,
+      };
+      return;
+    }
+  } catch { /* start fresh */ }
+  learnings.replayBuffer = { transitions: [], writeIdx: 0, count: 0 };
 }
 
 // ── Per-DC / Affiliation Tracking ────────────────────────────────────────
@@ -1020,6 +1473,8 @@ export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcS
 // ── Agent-Specific Action Selection (Arena) ─────────────────────────────────
 
 export function pickAgentAction(agent, allActions, game, learnings, playerNum, dcHealthState, dcMessageMeta) {
+  pickAgentAction._lastWgFeatures = null;
+  pickAgentAction._lastWgType = null;
   if (allActions.length === 0) return null;
   if (allActions.length === 1) return allActions[0];
 
@@ -1069,7 +1524,11 @@ export function pickAgentAction(agent, allActions, game, learnings, playerNum, d
   }
 
   if (bestType === null) return heuristicPick(strategicActions, game);
-  return pickWithinGroup(groups[bestType], bestType, game);
+  const wgResult = pickWithinGroup(groups[bestType], bestType, game,
+    learnings.withinGroupWeights, dcHealthState, dcMessageMeta, learnings.meta.totalGames);
+  pickAgentAction._lastWgFeatures = wgResult.wgFeatures;
+  pickAgentAction._lastWgType = wgResult.wgType;
+  return wgResult.action;
 }
 
 /**
@@ -1132,9 +1591,12 @@ export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessage
       const nextFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
       const reward = computeAgentReward(lastSnapshot, afterSnap, false, false, rewardMultipliers);
       const actionIdx = ABSTRACT_TYPES.indexOf(absType);
+      const wgFeatures = pickAgentAction._lastWgFeatures || null;
+      const wgType = pickAgentAction._lastWgType || null;
       trace.push({
         features: lastFeatures, actionIdx, reward, nextFeatures,
         nextActionIdxs: null, done: false,
+        wgFeatures, wgType,
       });
       lastSnapshot = null;
       lastFeatures = null;
@@ -1197,14 +1659,17 @@ export function getLearningsStats(learnings) {
     if (av > maxAbsWeight) maxAbsWeight = av;
   }
 
-  for (let j = 0; j < HIDDEN_SIZE; j++) {
-    for (let i = 0; i < NUM_FEATURES; i++) accum(network.W1[j][i]);
+  const nHidden = network.b1.length;
+  const nActions = network.Wa.length;
+
+  for (let j = 0; j < nHidden; j++) {
+    for (let i = 0; i < network.W1[j].length; i++) accum(network.W1[j][i]);
     accum(network.b1[j]);
     accum(network.Wv[j]);
   }
   accum(network.bv);
-  for (let k = 0; k < NUM_ACTIONS; k++) {
-    for (let j = 0; j < HIDDEN_SIZE; j++) accum(network.Wa[k][j]);
+  for (let k = 0; k < nActions; k++) {
+    for (let j = 0; j < network.Wa[k].length; j++) accum(network.Wa[k][j]);
     accum(network.ba[k]);
   }
 
@@ -1212,9 +1677,9 @@ export function getLearningsStats(learnings) {
   const featureImportance = [];
   for (let i = 0; i < NUM_FEATURES; i++) {
     let importance = 0;
-    for (let j = 0; j < HIDDEN_SIZE; j++) {
+    for (let j = 0; j < nHidden; j++) {
       let outputMag = Math.abs(network.Wv[j]);
-      for (let k = 0; k < NUM_ACTIONS; k++) {
+      for (let k = 0; k < nActions; k++) {
         outputMag += Math.abs(network.Wa[k][j]);
       }
       importance += Math.abs(network.W1[j][i]) * outputMag;
@@ -1238,6 +1703,9 @@ export function getLearningsStats(learnings) {
     lastTargetSync: ts.lastTargetSync || 0,
     targetSyncs: ts.targetSyncs || 0,
     featureImportance,
+    replayBufferSize: learnings.replayBuffer ? learnings.replayBuffer.transitions.length : 0,
+    replayTotalStored: learnings.replayBuffer ? learnings.replayBuffer.count : 0,
+    withinGroupWeights: learnings.withinGroupWeights || null,
   };
 }
 

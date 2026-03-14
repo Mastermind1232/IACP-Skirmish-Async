@@ -3248,7 +3248,7 @@ export function resolveAbility(abilityId, context) {
       applied: false,
       requiresChoice: true,
       requiresPowerTokenChoice: ptToAdd > 0,
-      choiceOptions: eligible.map((efk) => edcNameFromFigureKey(fk)),
+      choiceOptions: eligible.map((efk) => dcNameFromFigureKey(efk)),
       targetFigureKeys: eligible,
       logMessage: `Gained ${ptToAdd} Power Token(s). Distribute ${roundNum} Hit Token(s) among friendly figures within 3 spaces (round ${roundNum}). Pick a figure:`,
     };
@@ -3447,8 +3447,20 @@ export function resolveAbility(abilityId, context) {
     }
     const adjacent = [...adjacentSet];
     if (adjacent.length === 0) return { applied: true, logMessage: 'No adjacent friendly figures.' };
-    if (adjacent.length > 1) return { applied: false, manualMessage: `Resolve manually: choose which of ${adjacent.length} adjacent figures recovers.` };
-    const targetFk = adjacent[0];
+    if (adjacent.length > 1 && !context.chosenFigureKey) {
+      let nPreview = entry.recoverDamageToAdjacent;
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: adjacent.map((fk) => dcNameFromFigureKey(fk)),
+        choiceValues: adjacent,
+        targetFigureKeys: adjacent,
+        logMessage: `Choose which of ${adjacent.length} adjacent figures recovers ${nPreview} Damage:`,
+      };
+    }
+    const targetFk = context.chosenFigureKey && adjacent.includes(context.chosenFigureKey)
+      ? context.chosenFigureKey
+      : adjacent[0];
     let n = entry.recoverDamageToAdjacent;
     const ifTrait = entry.recoverDamageToAdjacentIfTrait;
     if (ifTrait && meta?.dcName) {

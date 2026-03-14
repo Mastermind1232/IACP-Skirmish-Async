@@ -34,6 +34,7 @@ import { translateDiffToEvents } from '../domain/diff-translator.js';
  * @returns {object} Harness with submitAction, getGame, getMessages, getDeps
  */
 export function createHarness(initialGame, options = {}) {
+  const lightweight = !!options.lightweight;
   const gamesMap = new Map();
   if (initialGame) {
     gamesMap.set(initialGame.gameId, structuredClone(initialGame));
@@ -97,7 +98,7 @@ export function createHarness(initialGame, options = {}) {
       }
 
       const gameId = initialGame?.gameId;
-      const beforeSnap = gameId ? captureSnapshot(gamesMap.get(gameId)) : null;
+      const beforeSnap = lightweight ? null : (gameId ? captureSnapshot(gamesMap.get(gameId)) : null);
 
       const group = getHandlerGroup(handlerKey);
       if (!group) {
@@ -109,17 +110,16 @@ export function createHarness(initialGame, options = {}) {
         });
         try {
           await handler(interaction);
-          allMessages.push(...interaction.sentMessages);
-          const events = _translateEvents(gameId, handlerKey, userId, beforeSnap, gamesMap);
-          return {
-            game: gamesMap.get(gameId),
-            messages: interaction.sentMessages,
-            events,
-          };
+          if (!lightweight) {
+            allMessages.push(...interaction.sentMessages);
+            const events = _translateEvents(gameId, handlerKey, userId, beforeSnap, gamesMap);
+            return { game: gamesMap.get(gameId), messages: interaction.sentMessages, events };
+          }
+          return { game: gamesMap.get(gameId), messages: [], events: [] };
         } catch (err) {
           return {
             game: gamesMap.get(gameId),
-            messages: interaction.sentMessages,
+            messages: lightweight ? [] : interaction.sentMessages,
             error: err.message,
             events: [],
           };
@@ -131,17 +131,16 @@ export function createHarness(initialGame, options = {}) {
 
       try {
         await handler(interaction, context);
-        allMessages.push(...interaction.sentMessages);
-        const events = _translateEvents(gameId, handlerKey, userId, beforeSnap, gamesMap);
-        return {
-          game: gamesMap.get(gameId),
-          messages: interaction.sentMessages,
-          events,
-        };
+        if (!lightweight) {
+          allMessages.push(...interaction.sentMessages);
+          const events = _translateEvents(gameId, handlerKey, userId, beforeSnap, gamesMap);
+          return { game: gamesMap.get(gameId), messages: interaction.sentMessages, events };
+        }
+        return { game: gamesMap.get(gameId), messages: [], events: [] };
       } catch (err) {
         return {
           game: gamesMap.get(gameId),
-          messages: interaction.sentMessages,
+          messages: lightweight ? [] : interaction.sentMessages,
           error: err.message,
           events: [],
         };

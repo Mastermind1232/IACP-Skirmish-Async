@@ -14,7 +14,7 @@
 import { createHarness } from '../../src/headless/game-harness.js';
 import { buildHeadlessDeps } from '../../src/headless/headless-deps.js';
 import { initializeDcState, initializeFigurePositions } from '../../src/headless/init-dc-state.js';
-import { getDcStats, getDeploymentZones, getMapSpaces } from '../../src/data-loader.js';
+import { getDcStats, getDeploymentZones, getMapSpaces, getMissionCardsData } from '../../src/data-loader.js';
 import { PHASES, ROUND_PHASES } from '../../src/game/phase.js';
 import { isFigurelessDc } from '../../src/game/dc-helpers.js';
 
@@ -38,8 +38,11 @@ class GameBuilder {
     this._p2CcDeck = [];
     this._p1CcHand = [];
     this._p2CcHand = [];
+    this._missionVariant = null;
+    this._lightweight = false;
   }
 
+  lightweight() { this._lightweight = true; return this; }
   withMap(mapId) { this._mapId = mapId; return this; }
   withGameId(id) { this._gameId = id; return this; }
   withPlayer1Id(id) { this._p1Id = id; return this; }
@@ -48,6 +51,7 @@ class GameBuilder {
   withPlayer1Army(army) { this._p1Army = army; return this; }
   withPlayer2Army(army) { this._p2Army = army; return this; }
 
+  withMissionVariant(variant) { this._missionVariant = variant; return this; }
   withPlayer1CcHand(cards) { this._p1CcHand = cards; return this; }
   withPlayer2CcHand(cards) { this._p2CcHand = cards; return this; }
   withPlayer1CcDeck(cards) { this._p1CcDeck = cards; return this; }
@@ -70,6 +74,7 @@ class GameBuilder {
       dcMessageMeta,
       dcExhaustedState,
       dcHealthState,
+      lightweight: this._lightweight,
     });
 
     // If deployed, initialize figure positions
@@ -84,7 +89,7 @@ class GameBuilder {
       this._setupActivations(game, dcMessageMeta);
     }
 
-    const harness = createHarness(game, { deps, dcMessageMeta, dcExhaustedState, dcHealthState });
+    const harness = createHarness(game, { deps, dcMessageMeta, dcExhaustedState, dcHealthState, lightweight: this._lightweight });
 
     return { game: harness.getGame(), harness, deps, dcMessageMeta, dcExhaustedState, dcHealthState };
   }
@@ -123,6 +128,7 @@ class GameBuilder {
       player1Id: this._p1Id,
       player2Id: this._p2Id,
       selectedMap: { id: this._mapId },
+      selectedMission: this._buildMission(),
       round: this._round || 1,
       currentRound: this._round || 1,
       ended: false,
@@ -140,15 +146,10 @@ class GameBuilder {
       // Figure positions
       figurePositions: { 1: {}, 2: {} },
 
-      // CC state
-      player1CcHand: [...this._p1CcHand],
-      player2CcHand: [...this._p2CcHand],
-      player1CcDeck: [...this._p1CcDeck],
-      player2CcDeck: [...this._p2CcDeck],
-      player1CcDiscard: [],
-      player2CcDiscard: [],
-      player1CcDrawn: true,
-      player2CcDrawn: true,
+      // CC state — if a deck is provided and we're starting in-round,
+      // shuffle and draw the standard 3-card starting hand automatically
+      // (mirrors setup-bridge.js drawStartingHand logic).
+      ...this._buildCcState(),
 
       // Initiative
       initiativePlayerId: this._p1Id,
@@ -177,6 +178,58 @@ class GameBuilder {
     }
 
     return game;
+  }
+
+  _buildCcState() {
+    const buildForPlayer = (deck, hand) => {
+      // If explicit hand was provided, use it as-is
+      if (hand.length > 0) return { deck: [...deck], hand: [...hand] };
+      // If deck provided and we're skipping to in-round, draw starting hand
+      if (deck.length > 0 && this._round >= 1) {
+        const shuffled = [...deck];
+        // Fisher-Yates shuffle
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        const drawn = shuffled.splice(0, 3);
+        return { deck: shuffled, hand: drawn };
+      }
+      return { deck: [...deck], hand: [] };
+    };
+
+    const p1 = buildForPlayer(this._p1CcDeck, this._p1CcHand);
+    const p2 = buildForPlayer(this._p2CcDeck, this._p2CcHand);
+
+    return {
+      player1CcHand: p1.hand,
+      player2CcHand: p2.hand,
+      player1CcDeck: p1.deck,
+      player2CcDeck: p2.deck,
+      player1CcDiscard: [],
+      player2CcDiscard: [],
+      player1CcDrawn: true,
+      player2CcDrawn: true,
+    };
+  }
+
+  _buildMission() {
+    if (!this._missionVariant) return null;
+    const missionCards = getMissionCardsData();
+    const mapMissions = missionCards?.[this._mapId];
+    const missionData = mapMissions?.[this._missionVariant];
+    if (missionData) {
+      return {
+        variant: this._missionVariant,
+        name: missionData.name,
+        fullName: missionData.name,
+        tokenLabel: missionData.tokenLabel || '',
+        interactLabel: missionData.interactLabel || '',
+        mechanics: missionData.mechanics || {},
+        rules: missionData.rules || {},
+      };
+    }
+    return { variant: this._missionVariant };
   }
 
   _setupActivations(game, dcMessageMeta) {

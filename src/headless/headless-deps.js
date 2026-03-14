@@ -182,6 +182,7 @@ import { sendPhaseGateMessages } from '../handlers/phase-gate.js';
  * @returns {object} allDeps — satisfies every key in getAllRequiredDepKeys()
  */
 export function buildHeadlessDeps(options = {}) {
+  const lightweight = !!options.lightweight;
   const gamesMap = options.gamesMap || new Map();
   const client = options.client || createFakeClient();
 
@@ -199,11 +200,13 @@ export function buildHeadlessDeps(options = {}) {
   const deleteGame = (id) => { gamesMap.delete(id); };
   const deleteGameFromDb = async () => {};
 
-  // Action log capture
+  // Action log capture (disabled in lightweight mode to prevent OOM)
   const actionLog = [];
-  const logGameAction = async (game, clientArg, msg, opts) => {
-    actionLog.push({ gameId: game?.gameId, msg, opts });
-  };
+  const logGameAction = lightweight
+    ? async () => {}
+    : async (game, clientArg, msg, opts) => {
+        actionLog.push({ gameId: game?.gameId, msg, opts });
+      };
   const logGameErrorToBotLogs = async () => {};
 
   // UI functions that send Discord messages → no-op stubs
@@ -219,13 +222,16 @@ export function buildHeadlessDeps(options = {}) {
     return false;
   };
 
-  const pushUndo = (game) => {
-    if (!game) return;
-    game.undoStack = game.undoStack || [];
-    const { undoStack: _, ...rest } = game;
-    game.undoStack.push(JSON.parse(JSON.stringify(rest)));
-    if (game.undoStack.length > 5) game.undoStack.shift();
-  };
+  // pushUndo: disabled in lightweight mode to prevent OOM from JSON.stringify of full game state
+  const pushUndo = lightweight
+    ? () => {}
+    : (game) => {
+        if (!game) return;
+        game.undoStack = game.undoStack || [];
+        const { undoStack: _, ...rest } = game;
+        game.undoStack.push(JSON.parse(JSON.stringify(rest)));
+        if (game.undoStack.length > 5) game.undoStack.shift();
+      };
 
   const extractGameIdFromInteraction = (interaction) => {
     if (!interaction?.customId) return null;

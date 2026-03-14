@@ -9,13 +9,14 @@ import { getDcStats, getMapSpaces, getDcEffects } from '../../src/data-loader.js
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { parseCoord } from '../../src/game/coords.js';
-import { loadLearnings, saveLearnings, createGameTracer, pickSmartAction, recordMatchResult } from './learnings.js';
+import { loadLearnings, saveLearnings, createGameTracer, pickSmartAction, recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer } from './learnings.js';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const REPLAY_BUFFER_PATH = join(__dirname, 'replay-buffer.json');
 
 function captureState(game, dcHealthState, dcMessageMeta) {
   const figures = { 1: {}, 2: {} };
@@ -198,6 +199,7 @@ async function recordGame() {
   // Load learned strategy
   const learningsPath = join(__dirname, 'learnings-data.json');
   const learnings = loadLearnings(learningsPath);
+  loadReplayBuffer(learnings, REPLAY_BUFFER_PATH);
   const useLearnings = learnings.meta.totalGames > 0;
   if (useLearnings) {
     console.log(`Using learned strategy (${learnings.meta.totalGames} games trained)`);
@@ -338,10 +340,12 @@ async function recordGame() {
   if (useLearnings) {
     tracer1.finalize(finalGame, true);
     tracer2.finalize(finalGame, false);
+    replayUpdate(learnings);
     const winLabel = finalGame.winnerId === finalGame.player1Id ? 'P1' :
                      finalGame.winnerId === finalGame.player2Id ? 'P2' : null;
     recordMatchResult(learnings, p1Army, p2Army, winLabel, getDcStats, getDcEffects);
     saveLearnings(learnings, learningsPath);
+    saveReplayBuffer(learnings, REPLAY_BUFFER_PATH);
   }
 
   // Final summary

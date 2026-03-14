@@ -5533,6 +5533,7 @@ export async function handleCoverFireBlock(interaction, ctx) {
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the attacker can choose.')) return;
   grantPowerTokens(game, figureKey, 'Block', 1);
+  game.pendingCoverFire = null;
   const dcName = dcNameFromFigureKey(figureKey);
   await interaction.message.edit({ content: `🛡️ **Cover Fire** — **${dcName}** received 1 Block Token.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `🛡️ **Cover Fire** — **${dcName}** gained 1 Block Token.`, { phase: 'ROUND', icon: 'card' });
@@ -5555,7 +5556,11 @@ export async function handleCoverFireDiscard(interaction, ctx) {
   const { getGame, saveGames, logGameAction, client } = ctx;
   // Skip button
   if (interaction.customId.startsWith('cover_fire_discard_skip_')) {
+    const skipGameId = interaction.customId.replace('cover_fire_discard_skip_', '');
+    const skipGame = await requireGame(interaction, getGame, skipGameId, { silent: true });
+    if (skipGame) skipGame.pendingCoverFire = null;
     await interaction.message.edit({ content: '🛡️ **Cover Fire** — Skipped condition/token removal.', components: [] }).catch(discordCatch);
+    if (skipGame) saveGames();
     return;
   }
   const match = interaction.customId.match(/^cover_fire_discard_(\d+)_(condition|token)_(\d+)_(.+)$/);
@@ -5564,6 +5569,7 @@ export async function handleCoverFireDiscard(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   const dcName = dcNameFromFigureKey(figureKey);
+  game.pendingCoverFire = null;
   if (type === 'condition') {
     const conds = game.figureConditions?.[figureKey] || [];
     const idx = parseInt(indexStr, 10);

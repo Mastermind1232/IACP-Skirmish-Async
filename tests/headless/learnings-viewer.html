@@ -424,11 +424,11 @@ Chart.defaults.borderColor = '#1a2744';
 Chart.defaults.font.family = 'Rajdhani';
 
 // ═══ LABELS ═══
-const AL={attack_close:'Melee',attack_ranged:'Ranged',move_toward:'Advance',move_away:'Retreat',move_lateral:'Reposition',move_done:'Finish Move',start_move:'Start Move',activate:'Activate',end_activation:'End Turn',pass:'Pass',gate:'Phase Gate',combat_flow:'Combat',ability:'Ability',spend_surge:'Surge',reroll:'Reroll',skip_surges:'Skip Surges',other:'Other'};
-const AC={attack_close:'#e74c3c',attack_ranged:'#e67e22',move_toward:'#3498db',move_away:'#9b59b6',move_lateral:'#1abc9c',move_done:'#16a085',start_move:'#2980b9',activate:'#2ecc71',end_activation:'#f1c40f',pass:'#7f8c8d',gate:'#8e44ad',combat_flow:'#d35400',ability:'#e84393',spend_surge:'#00cec9',reroll:'#6c5ce7',skip_surges:'#636e72',other:'#555'};
+const AL={attack_close:'Melee',attack_ranged:'Ranged',move_toward:'Advance',move_away:'Retreat',move_lateral:'Reposition',move_done:'Finish Move',start_move:'Start Move',activate:'Activate',end_activation:'End Turn',pass:'Pass',gate:'Phase Gate',combat_flow:'Combat',ability:'Ability',spend_surge:'Surge',reroll:'Reroll',skip_surges:'Skip Surges',other:'Other',play_cc:'Play CC',react_use:'React: Use',react_skip:'React: Skip',surge_damage:'Surge: Dmg',surge_special:'Surge: Util',token_offense:'Token: Off',token_defense:'Token: Def'};
+const AC={attack_close:'#e74c3c',attack_ranged:'#e67e22',move_toward:'#3498db',move_away:'#9b59b6',move_lateral:'#1abc9c',move_done:'#16a085',start_move:'#2980b9',activate:'#2ecc71',end_activation:'#f1c40f',pass:'#7f8c8d',gate:'#8e44ad',combat_flow:'#d35400',ability:'#e84393',spend_surge:'#00cec9',reroll:'#6c5ce7',skip_surges:'#636e72',other:'#555',play_cc:'#fd79a8',react_use:'#00b894',react_skip:'#d63031',surge_damage:'#e17055',surge_special:'#0984e3',token_offense:'#fdcb6e',token_defense:'#74b9ff'};
 const FL={vpAdv:'VP Adv',myHpRatio:'My HP%',oppHpRatio:'Opp HP%',hpAdv:'HP Adv',myFigsRatio:'My Figs%',figsAdv:'Figs Adv',closeness:'Closeness',nearestEnemy:'Nearest',roundProgress:'Round',activationsRatio:'Acts Left',inCombat:'In Combat',inMovement:'In Move',attackPower:'Atk Power',bias:'Bias',enemyThreat:'Threat',objectivePotential:'Objective'};
 const FEATURE_NAMES=['vpAdv','myHpRatio','oppHpRatio','hpAdv','myFigsRatio','figsAdv','closeness','nearestEnemy','roundProgress','activationsRatio','inCombat','inMovement','attackPower','bias','enemyThreat','objectivePotential'];
-const ABSTRACT_TYPES=['attack_close','attack_ranged','move_toward','move_away','move_lateral','move_done','start_move','activate','end_activation','pass','ability','spend_surge','skip_surges','reroll','other'];
+const ABSTRACT_TYPES=['attack_close','attack_ranged','move_toward','move_away','move_lateral','move_done','start_move','activate','end_activation','pass','ability','spend_surge','skip_surges','reroll','other','play_cc','react_use','react_skip','surge_damage','surge_special','token_offense','token_defense'];
 const HIDDEN_SIZE=32;
 const NUM_ACTIONS=ABSTRACT_TYPES.length;
 
@@ -482,7 +482,7 @@ function buildCtx(){
   const s=latestStats;
   let c=`You are Skirbo, an AI learning Imperial Assault skirmish. Be direct — answer the question, skip the preamble. No filler, no restating the question. Casual tone. Call yourself "I" and the user "commander."\n\n`;
   c+=`Stats: ${s.meta.totalGames} games, ${s.weightCount} weights (1072 params), ${s.totalUpdates} updates, avg|w| ${s.avgAbsWeight.toFixed(3)}, ${(s.epsilon*100).toFixed(0)}% exploration, ${((s.meta.p1Wins+s.meta.p2Wins)/(s.meta.totalGames||1)*100).toFixed(0)}% completion.${s.nanResets?' NaN resets: '+s.nanResets:''}\n`;
-  c+=`Brain: Dueling Neural Network (Phase 3). 16 inputs, 32 hidden (ReLU), dueling V+A heads, target network. 1,072 parameters. I learn feature interactions — like "attack when close AND enemy is wounded."\n`;
+  c+=`Brain: Dueling Neural Network (Phase 3). 16 inputs, 32 hidden (ReLU), dueling V+A heads, target network. ${s.weightCount} parameters, 22 action types. I learn feature interactions — like "attack when close AND enemy is wounded" — and make tactical decisions about surges, CC play, reactive counters, and power tokens.\n`;
   if(s.topPatterns&&s.topPatterns.length>0){c+='Top patterns: '+s.topPatterns.slice(0,5).map(p=>`${p.action}×${p.feature}=${p.weight>0?'+':''}${p.weight.toFixed(2)}`).join(', ')+'\n';}
   const dcArr=Object.entries(s.dcStats).map(([n,d])=>({n,...d,wr:d.games>0?d.wins/d.games:0})).sort((a,b)=>b.wr-a.wr);
   if(dcArr.length>0){c+='Top DCs: '+dcArr.slice(0,5).map(d=>`${d.n} ${(d.wr*100).toFixed(0)}%`).join(', ')+'\n';}
@@ -563,7 +563,8 @@ function computeStats(data){
   function accum(v){const a=Math.abs(v);wc++;totalAbs+=a;if(a>maxAbs)maxAbs=a;}
   for(let j=0;j<HIDDEN_SIZE;j++){for(let i=0;i<FEATURE_NAMES.length;i++)accum(net.W1[j][i]);accum(net.b1[j]);accum(net.Wv[j]);}
   accum(net.bv);
-  for(let k=0;k<NUM_ACTIONS;k++){for(let j=0;j<HIDDEN_SIZE;j++)accum(net.Wa[k][j]);accum(net.ba[k]);}
+  const nAct=net.Wa.length; // Use actual network size (handles old 15-action files)
+  for(let k=0;k<nAct;k++){for(let j=0;j<HIDDEN_SIZE;j++)accum(net.Wa[k][j]);accum(net.ba[k]);}
   const avgAbsWeight=wc>0?totalAbs/wc:0;
 
   // Feature importance: importance[i] = Σ_j |W1[j][i]| × (|Wv[j]| + Σ_k |Wa[k][j]|)
@@ -571,7 +572,7 @@ function computeStats(data){
     let imp=0;
     for(let j=0;j<HIDDEN_SIZE;j++){
       let outMag=Math.abs(net.Wv[j]);
-      for(let k=0;k<NUM_ACTIONS;k++)outMag+=Math.abs(net.Wa[k][j]);
+      for(let k=0;k<nAct;k++)outMag+=Math.abs(net.Wa[k][j]);
       imp+=Math.abs(net.W1[j][i])*outMag;
     }
     return{name,importance:imp};
@@ -582,12 +583,12 @@ function computeStats(data){
   const hiddenNeurons=[];
   for(let j=0;j<HIDDEN_SIZE;j++){
     let totalOut=Math.abs(net.Wv[j]);
-    for(let k=0;k<NUM_ACTIONS;k++)totalOut+=Math.abs(net.Wa[k][j]);
+    for(let k=0;k<nAct;k++)totalOut+=Math.abs(net.Wa[k][j]);
     // Strongest input features
     const inputs=FEATURE_NAMES.map((name,i)=>({name,w:net.W1[j][i],aw:Math.abs(net.W1[j][i])})).sort((a,b)=>b.aw-a.aw);
     // Output connections
     const valW=net.Wv[j];
-    const advConns=ABSTRACT_TYPES.map((t,k)=>({type:t,w:net.Wa[k][j],aw:Math.abs(net.Wa[k][j])})).sort((a,b)=>b.aw-a.aw);
+    const advConns=ABSTRACT_TYPES.slice(0,nAct).map((t,k)=>({type:t,w:net.Wa[k][j],aw:Math.abs(net.Wa[k][j])})).sort((a,b)=>b.aw-a.aw);
     hiddenNeurons.push({idx:j,totalOut,inputs:inputs.slice(0,3),valW,advConns:advConns.slice(0,3)});
   }
   hiddenNeurons.sort((a,b)=>b.totalOut-a.totalOut);
@@ -598,7 +599,7 @@ function computeStats(data){
     const fi=FEATURE_NAMES.indexOf(feat.name);
     // Find which action benefits most from this feature
     let bestAction=null,bestMag=0;
-    for(let k=0;k<NUM_ACTIONS;k++){
+    for(let k=0;k<nAct;k++){
       let pathMag=0;
       for(let j=0;j<HIDDEN_SIZE;j++){
         pathMag+=net.W1[j][fi]*net.Wa[k][j];
@@ -668,16 +669,18 @@ function renderWeightHeatmaps(s) {
   document.getElementById('heatmapWv').innerHTML=hv;
   document.getElementById('wvRangeLabel').textContent=`Max |w|: ${wvMax.toFixed(3)} | bv: ${(net.bv||0).toFixed(3)}`;
 
-  // Wa: 15×32 (advantage head)
+  // Wa: nAct×32 (advantage head)
+  const nAct=net.Wa.length;
   const waMax=maxAbsMat(net.Wa);
   let ha='<thead><tr><th></th>';
   for(let j=0;j<HIDDEN_SIZE;j++)ha+=`<th>H${j}</th>`;
   ha+='</tr></thead><tbody>';
-  for(let k=0;k<NUM_ACTIONS;k++){
-    ha+=`<tr><td class="wt-action">${AL[ABSTRACT_TYPES[k]]||ABSTRACT_TYPES[k]}</td>`;
+  for(let k=0;k<nAct;k++){
+    const aName=ABSTRACT_TYPES[k]||`action_${k}`;
+    ha+=`<tr><td class="wt-action">${AL[aName]||aName}</td>`;
     for(let j=0;j<HIDDEN_SIZE;j++){
       const w=net.Wa[k][j]||0;
-      ha+=`<td style="${weightColor(w,waMax)}" data-tip="${ABSTRACT_TYPES[k]}×H${j}: ${w.toFixed(3)}">${w===0?'·':w.toFixed(2)}</td>`;
+      ha+=`<td style="${weightColor(w,waMax)}" data-tip="${aName}×H${j}: ${w.toFixed(3)}">${w===0?'·':w.toFixed(2)}</td>`;
     }
     ha+='</tr>';
   }
@@ -723,10 +726,11 @@ function render(s){
 
   // Action pie — compute from Wa rows (advantage head weight magnitude per action)
   const net=s.network;
-  const actionMag=net?ABSTRACT_TYPES.map((a,k)=>{
+  const nActPie=net?net.Wa.length:0;
+  const actionMag=net?ABSTRACT_TYPES.slice(0,nActPie).map((a,k)=>{
     let mag=0;for(let j=0;j<HIDDEN_SIZE;j++)mag+=Math.abs(net.Wa[k][j]);
     return{type:a,mag};
-  }).sort((a,b)=>b.mag-a.mag).slice(0,10):[];
+  }).sort((a,b)=>b.mag-a.mag).slice(0,12):[];
   const pieLabels=actionMag.map(a=>AL[a.type]||a.type);
   const pieData=actionMag.map(a=>parseFloat(a.mag.toFixed(3)));
   const pieColors=actionMag.map(a=>AC[a.type]||'#555');

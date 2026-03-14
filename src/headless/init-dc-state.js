@@ -30,7 +30,7 @@ export function initializeDcState(game, dcMessageMeta, dcExhaustedState, dcHealt
       const dc = dcList[i];
       const dcName = typeof dc === 'object' ? dc.dcName : dc;
       const displayName = typeof dc === 'object' ? (dc.displayName || dcName) : dcName;
-      const msgId = `headless_p${playerNum}_dc${i}`;
+      const msgId = `hl${playerNum}dc${i}`;
 
       dcMessageMeta.set(msgId, {
         dcName,

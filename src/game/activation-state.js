@@ -295,6 +295,7 @@ const ROUND_NULL_FLAGS = [
   'pendingNegation',
   'pendingCommDisruptionPrompt',
   'pendingCoverFire',
+  'pendingStrainChoice',
   'pendingVoracious',
   'pendingAssassinsBlade',
   'pendingPunishingStrike',

@@ -31,6 +31,7 @@ export const ACTION_TYPES = {
   DC_ACTION: 'dc_action',
   SPECIAL_ACTION: 'special_action',
   DC_SPECIAL: 'dc_special',
+  INTERACT: 'interact',
   END_TURN: 'end_turn',
   DC_END_ACTIVATION: 'dc_end_activation',
   PASS_ACTIVATION_TURN: 'pass_activation_turn',
@@ -68,6 +69,8 @@ export const ACTION_TYPES = {
   COVER_FIRE_BLOCK: 'cover_fire_block',
   COVER_FIRE_SKIP: 'cover_fire_skip',
   SPREAD_PAIN_COND: 'spread_pain_cond',
+  STRAIN_CHOICE_ALLDMG: 'strain_choice_alldmg',
+  STRAIN_CHOICE_DISCARD: 'strain_choice_discard',
 
   // Misc
   REFRESH_MAP: 'refresh_map',
@@ -129,6 +132,10 @@ export function buildCustomId(type, params = {}) {
     case ACTION_TYPES.DC_SPECIAL:
       return `dc_special_${params.specialIdx}_${msgId}`;
 
+    // Interact
+    case ACTION_TYPES.INTERACT:
+      return `interact_choice_${gameId}_${msgId}_${figureIndex}_${params.optionId}`;
+
     // Setup
     case ACTION_TYPES.DRAFT_RANDOM:
       return `draft_random_${gameId}`;
@@ -172,6 +179,10 @@ export function buildCustomId(type, params = {}) {
       return `cover_fire_discard_skip_${gameId}`;
     case ACTION_TYPES.SPREAD_PAIN_COND:
       return `spread_pain_cond_${gameId}_${params.condition}`;
+    case ACTION_TYPES.STRAIN_CHOICE_ALLDMG:
+      return `strain_choice_alldmg_${gameId}`;
+    case ACTION_TYPES.STRAIN_CHOICE_DISCARD:
+      return `strain_choice_discard_${gameId}_${params.discardCount}`;
 
     // Misc
     case ACTION_TYPES.REFRESH_MAP:

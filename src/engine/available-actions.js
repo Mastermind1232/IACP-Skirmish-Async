@@ -7,11 +7,13 @@
  */
 
 import { ACTION_TYPES, buildCustomId } from './action-types.js';
-import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum } from '../game/player-helpers.js';
+import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum, getCcHand, getDcList, getActivatedDcIndices } from '../game/player-helpers.js';
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
 import { getRange, hasLineOfSight } from '../game/spatial.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
+import { getLegalInteractOptions } from '../game/board-helpers.js';
+import { isDcCompanion, getDcEffects } from '../data-loader.js';
 
 /**
  * Get all available actions for a player in the current game state.
@@ -269,10 +271,36 @@ function getRoundActiveActions(game, playerNum, deps) {
     if (coverActions.length > 0) return coverActions;
   }
 
+  // Pending Strain Choice (player must resolve strain allocation before continuing)
+  if (game.pendingStrainChoice && Object.keys(game.pendingStrainChoice).length > 0) {
+    const strainActions = getStrainChoiceActions(game, playerNum);
+    if (strainActions.length > 0) return strainActions;
+  }
+
+  // Force Vision pending: blocked player must pick a group
+  if (game.forceVisionPending && game.forceVisionPending === playerNum) {
+    const fvActions = getForceVisionPickActions(game, playerNum);
+    if (fvActions.length > 0) return fvActions;
+    // Safety: no ready groups remain — clear the stale pending
+    game.forceVisionPending = null;
+  }
+
   // Pending Spread the Pain condition pick
   if (game.pendingSpreadThePainCondPick) {
     const spreadActions = getSpreadThePainActions(game, playerNum);
     if (spreadActions.length > 0) return spreadActions;
+  }
+
+  // Pending Still Faster Than You interrupt
+  if (game.pendingStillFaster) {
+    const sfActions = getStillFasterActions(game, playerNum);
+    if (sfActions.length > 0) return sfActions;
+  }
+
+  // Pending Last Resort interrupt (figure about to die)
+  if (game.pendingLastResort) {
+    const lrActions = getLastResortActions(game, playerNum);
+    if (lrActions.length > 0) return lrActions;
   }
 
   // Check round phase
@@ -336,7 +364,11 @@ function getActivationActions(game, playerNum, deps) {
   // Check if player has readied DCs to activate
   const activationsRemaining = playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
 
-  if (activationsRemaining > 0) {
+  // Check if there's already an active DC for this player (blocks new activations)
+  const hasActiveDc = deps.dcMessageMeta && [...deps.dcMessageMeta].some(([msgId, meta]) =>
+    meta.gameId === gameId && meta.playerNum === playerNum && game.dcActionsData?.[msgId] != null);
+
+  if (activationsRemaining > 0 && !hasActiveDc) {
     // Can activate a DC — need dcMessageMeta to list available DCs
     let hasActivatableDc = false;
     if (deps.dcMessageMeta) {
@@ -382,7 +414,7 @@ function getActivationActions(game, playerNum, deps) {
         });
       }
     }
-  } else if (!noActivations) {
+  } else if (!noActivations && !hasActiveDc) {
     // Player has 0 activations but opponent still has some — must pass turn
     actions.push({
       type: ACTION_TYPES.PASS_ACTIVATION_TURN,
@@ -435,6 +467,36 @@ function getActivationActions(game, playerNum, deps) {
           description: `Attack with ${displayName}`,
           params: { msgId, dcName: meta.dcName },
         });
+      }
+
+      // Interact — compute legal interact options for each figure of this DC
+      const mapId = game.selectedMap?.id;
+      if (mapId) {
+        const dcEff = getDcEffects()?.[meta.dcName];
+        const abilityText = dcEff?.abilityText || '';
+        const isNonSentient = abilityText.includes('Non-Sentient') && !game.beastTamerInteractOverride?.[msgId];
+        const isCompanion = isDcCompanion(meta.dcName);
+        if (!isNonSentient && !isCompanion) {
+          const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+          const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+          const pos = game.figurePositions?.[playerNum]?.[figureKey];
+          if (pos) {
+            const interactOpts = getLegalInteractOptions(game, playerNum, figureKey, mapId);
+            for (const opt of interactOpts) {
+              actions.push({
+                type: ACTION_TYPES.INTERACT,
+                customId: buildCustomId(ACTION_TYPES.INTERACT, {
+                  gameId: game.gameId, msgId, figureIndex, optionId: opt.id,
+                }),
+                description: `${opt.label} (${displayName})`,
+                params: {
+                  msgId, dcName: meta.dcName, figureIndex, figureKey,
+                  optionId: opt.id, optionLabel: opt.label, missionSpecific: opt.missionSpecific,
+                },
+              });
+            }
+          }
+        }
       }
 
       // DC Specials — list available special abilities
@@ -520,6 +582,131 @@ function getCombatActions(game, playerNum, deps) {
   const attackerPn = combat.attackerPlayerNum || 1;
   const defenderPn = opponentPlayerNum(attackerPn);
 
+  // ── Combat-reaction pending states ─────────────────────────────────────────
+  // These block normal combat flow until resolved. Check in priority order.
+
+  // Pre-roll defensive reactions (set during attack declaration)
+  if (game.pendingStrikeMeDown) {
+    if (playerNum === game.pendingStrikeMeDown.defenderPlayerNum) {
+      return [
+        { type: 'strike_me_down_yes', customId: `strike_me_down_yes_${gameId}`, description: 'Use Strike Me Down (reduce VP cost, be defeated)' },
+        { type: 'strike_me_down_no', customId: `strike_me_down_no_${gameId}`, description: 'Decline Strike Me Down' },
+      ];
+    }
+    return [];
+  }
+
+  if (game.pendingSlowOnTheDraw) {
+    if (playerNum === game.pendingSlowOnTheDraw.defenderPlayerNum) {
+      return [
+        { type: 'slow_on_draw_yes', customId: `slow_on_draw_yes_${gameId}`, description: 'Interrupt: Attack Greedo first' },
+        { type: 'slow_on_draw_no', customId: `slow_on_draw_no_${gameId}`, description: 'Decline Slow on the Draw' },
+      ];
+    }
+    return [];
+  }
+
+  if (game.pendingForceExhaustion) {
+    if (playerNum === game.pendingForceExhaustion.defenderPlayerNum) {
+      return [
+        { type: 'force_exhaustion_yes', customId: `force_exhaustion_yes_${gameId}`, description: 'Use Force Exhaustion (Incapacitate The Child)' },
+        { type: 'force_exhaustion_no', customId: `force_exhaustion_no_${gameId}`, description: 'Decline Force Exhaustion' },
+      ];
+    }
+    return [];
+  }
+
+  if (game.pendingIllicitArms) {
+    const ia = game.pendingIllicitArms;
+    if (playerNum === ia.playerNum) {
+      const iaActions = [];
+      // Generate CC pick options directly (bypass intermediate "use" step)
+      const hand = (ia.playerNum === 1 ? game.player1CcHand : game.player2CcHand) || [];
+      for (let i = 0; i < hand.length; i++) {
+        iaActions.push({
+          type: 'illicit_arms_pick',
+          customId: `illicit_arms_pick_${gameId}_${i}`,
+          description: `Illicit Arms: Discard ${hand[i]} for +1 Hit`,
+          params: { ccIndex: i, ccName: hand[i] },
+        });
+      }
+      iaActions.push({
+        type: 'illicit_arms_skip',
+        customId: `illicit_arms_skip_${gameId}`,
+        description: 'Decline Illicit Arms',
+      });
+      return iaActions;
+    }
+    return [];
+  }
+
+  // Post-attack-roll reactions
+  if (game.pendingPowerConverter) {
+    if (playerNum === attackerPn) {
+      return [
+        { type: 'power_converter_approve', customId: `power_converter_approve_${gameId}`, description: 'Use Power Converter (swap/reroll attack die)' },
+        { type: 'power_converter_skip', customId: `power_converter_skip_${gameId}`, description: 'Skip Power Converter' },
+      ];
+    }
+    return [];
+  }
+
+  // Post-defense-roll reactions
+  if (game.pendingThereIsNoTry) {
+    const tint = game.pendingThereIsNoTry;
+    const tintPn = tint.defenderPlayerNum ?? defenderPn;
+    if (playerNum === tintPn) {
+      const tintActions = [];
+      if (tint.pickedDieIdx == null) {
+        // Step 1: skip or pick a defense die
+        const defDice = combat.defenseDiceResults || [];
+        for (let i = 0; i < defDice.length; i++) {
+          tintActions.push({
+            type: 'there_is_no_try_die',
+            customId: `there_is_no_try_die_${gameId}_${i}`,
+            description: `There Is No Try: Set die #${i + 1} (${defDice[i]?.color || 'white'})`,
+            params: { dieIndex: i },
+          });
+        }
+        tintActions.push({
+          type: 'there_is_no_try_skip',
+          customId: `there_is_no_try_skip_${gameId}`,
+          description: 'Skip There Is No Try',
+        });
+      } else {
+        // Step 2: pick a face for the chosen die
+        const dieIdx = tint.pickedDieIdx;
+        const die = (combat.defenseDiceResults || [])[dieIdx];
+        const color = die?.color || 'white';
+        const faces = color === 'black'
+          ? [{ b: 0, e: 0, d: 0 }, { b: 1, e: 0, d: 0 }, { b: 2, e: 0, d: 0 }, { b: 1, e: 1, d: 0 }, { b: 0, e: 1, d: 0 }, { b: 0, e: 0, d: 1 }]
+          : [{ b: 0, e: 0, d: 0 }, { b: 1, e: 0, d: 0 }, { b: 1, e: 1, d: 0 }, { b: 0, e: 0, d: 1 }];
+        for (const face of faces) {
+          tintActions.push({
+            type: 'there_is_no_try_face',
+            customId: `there_is_no_try_face_${gameId}_${dieIdx}_${face.b}_${face.e}_${face.d}`,
+            description: `Set to ${face.b}B/${face.e}E${face.d ? '/Dodge' : ''}`,
+            params: { dieIndex: dieIdx, block: face.b, evade: face.e, dodge: face.d },
+          });
+        }
+      }
+      return tintActions;
+    }
+    return [];
+  }
+
+  // During-reroll reactions
+  if (game.pendingToughLuck) {
+    const tl = game.pendingToughLuck;
+    if (playerNum === game.toughLuckPlayerNum) {
+      return [
+        { type: 'tough_luck_remove', customId: `tough_luck_remove_${gameId}_${tl.idx}`, description: 'Tough Luck: Remove rerolled die' },
+        { type: 'tough_luck_skip', customId: `tough_luck_skip_${gameId}`, description: 'Skip Tough Luck' },
+      ];
+    }
+    return [];
+  }
+
   // Combat ready check — both players must confirm
   if (!combat.p1Ready || !combat.p2Ready) {
     const isReady = playerNum === 1 ? combat.p1Ready : combat.p2Ready;
@@ -581,6 +768,23 @@ function getCombatActions(game, playerNum, deps) {
         type: ACTION_TYPES.COMBAT_RESOLVE,
         customId: buildCustomId(ACTION_TYPES.COMBAT_RESOLVE, { gameId }),
         description: 'Done rerolling',
+      });
+    }
+    return actions;
+  }
+
+  // Pending Hunter Protocol — attacker may re-trigger a surge ability
+  if (game.pendingHunterProtocol) {
+    if (playerNum === attackerPn) {
+      actions.push({
+        type: 'hunter_protocol_trigger',
+        customId: `hunter_protocol_trigger_${gameId}`,
+        description: 'Trigger Hunter Protocol (re-use surge)',
+      });
+      actions.push({
+        type: 'hunter_protocol_skip',
+        customId: `hunter_protocol_skip_${gameId}`,
+        description: 'Skip Hunter Protocol',
       });
     }
     return actions;
@@ -781,6 +985,15 @@ function getCelebrationActions(game, playerNum) {
   const pending = game.pendingCelebration;
   if (!pending || pending.attackerPlayerNum !== playerNum) return [];
 
+  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const hasCelebration = (game[handKey] || []).includes('Celebration');
+
+  // If the player doesn't have Celebration, auto-pass (clear pending state)
+  if (!hasCelebration) {
+    delete game.pendingCelebration;
+    return [];
+  }
+
   return [
     {
       type: ACTION_TYPES.CELEBRATION_PLAY,
@@ -894,6 +1107,64 @@ function getCoverFireActions(game, playerNum) {
   return actions;
 }
 
+// ── Strain Choice ─────────────────────────────────────────────────────────
+
+function getStrainChoiceActions(game, playerNum) {
+  const pending = game.pendingStrainChoice;
+  if (!pending || !pending.playerNum || pending.playerNum !== playerNum) return [];
+
+  const gameId = game.gameId;
+  const actions = [];
+
+  // Always offer "take all as damage"
+  actions.push({
+    type: ACTION_TYPES.STRAIN_CHOICE_ALLDMG,
+    customId: buildCustomId(ACTION_TYPES.STRAIN_CHOICE_ALLDMG, { gameId }),
+    description: `Take all strain as damage (${pending.amount} HP)`,
+    params: { amount: pending.amount },
+  });
+
+  // Offer CC discard options (1..maxDiscards)
+  const hand = getCcHand(game, pending.playerNum) || [];
+  const ccCostPerStrain = pending.ccCostPerStrain || 1;
+  const maxDiscards = pending.amount > 0 ? Math.min(pending.amount, Math.floor(hand.length / ccCostPerStrain)) : 0;
+  for (let i = 1; i <= maxDiscards; i++) {
+    const hpRemaining = pending.amount - i;
+    const ccCost = i * ccCostPerStrain;
+    actions.push({
+      type: ACTION_TYPES.STRAIN_CHOICE_DISCARD,
+      customId: buildCustomId(ACTION_TYPES.STRAIN_CHOICE_DISCARD, { gameId, discardCount: i }),
+      description: `Discard ${ccCost} CC${ccCost > 1 ? 's' : ''}${hpRemaining > 0 ? ` + ${hpRemaining} HP` : ''}`,
+      params: { discardCount: i, ccCost, hpRemaining },
+    });
+  }
+
+  return actions;
+}
+
+// ── Force Vision (Kanan Jarrus) ───────────────────────────────────────────
+
+function getForceVisionPickActions(game, playerNum) {
+  const actions = [];
+  const gameId = game.gameId;
+  const dcList = getDcList(game, playerNum) || [];
+  const activatedIndices = getActivatedDcIndices(game, playerNum) || [];
+  for (let i = 0; i < dcList.length; i++) {
+    if (activatedIndices.includes(i)) continue;
+    const dc = dcList[i];
+    const figs = game.figurePositions?.[playerNum] || {};
+    const alive = Object.keys(figs).some(fk => fk.startsWith(dc.dcName + '-'));
+    if (!alive) continue;
+    actions.push({
+      type: 'force_vision_pick',
+      customId: `fv_pick_${gameId}_${playerNum}_${i}`,
+      description: `Force Vision: choose ${dc.displayName || dc.dcName}`,
+      params: { dcIndex: i, dcName: dc.dcName },
+    });
+  }
+  return actions;
+}
+
 // ── Spread the Pain ───────────────────────────────────────────────────────
 
 function getSpreadThePainActions(game, playerNum) {
@@ -909,6 +1180,52 @@ function getSpreadThePainActions(game, playerNum) {
     description: condition === 'skip' ? 'Skip Spread the Pain' : `Spread the Pain: ${condition}`,
     params: { condition },
   }));
+}
+
+// ── Still Faster Than You ─────────────────────────────────────────────────
+
+function getStillFasterActions(game, playerNum) {
+  const pending = game.pendingStillFaster;
+  if (!pending || pending.sftPlayerNum !== playerNum) return [];
+
+  const gameId = game.gameId;
+  const actMsgId = pending.activatingMsgId;
+
+  return [
+    {
+      type: 'still_faster_use',
+      customId: `still_faster_use_${gameId}_${actMsgId}`,
+      description: 'Interrupt: Still Faster Than You',
+    },
+    {
+      type: 'still_faster_skip',
+      customId: `still_faster_skip_${gameId}_${actMsgId}`,
+      description: 'Skip Still Faster Than You',
+    },
+  ];
+}
+
+// ── Last Resort ──────────────────────────────────────────────────────────
+
+function getLastResortActions(game, playerNum) {
+  const pending = game.pendingLastResort;
+  if (!pending || pending.defenderPlayerNum !== playerNum) return [];
+
+  const gameId = game.gameId;
+  const targetMsgId = pending.targetMsgId;
+
+  return [
+    {
+      type: 'last_resort_use',
+      customId: `last_resort_use_${gameId}_${targetMsgId}`,
+      description: 'Use Last Resort (AoE damage before defeat)',
+    },
+    {
+      type: 'last_resort_skip',
+      customId: `last_resort_skip_${gameId}_${targetMsgId}`,
+      description: 'Skip Last Resort',
+    },
+  ];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

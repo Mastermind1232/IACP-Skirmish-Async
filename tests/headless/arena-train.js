@@ -12,6 +12,7 @@ import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { getDcStats, getMapSpaces, getDcEffects } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
+import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
 import { parseCoord } from '../../src/game/coords.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -21,8 +22,9 @@ import {
   loadLearnings, saveLearnings,
   pickAgentAction, createAgentTracer,
   abstractActionType, getLearningsStats,
-  recordMatchResult,
+  recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
 } from './learnings.js';
+import { unlinkSync } from 'fs';
 
 import {
   loadArenaData, saveArenaData, initializePopulation, evolve,
@@ -37,8 +39,9 @@ const __dirname = dirname(__filename);
 
 const ARENA_PATH = join(__dirname, 'arena-data.json');
 const LEARNINGS_PATH = join(__dirname, 'learnings-data.json');
+const REPLAY_BUFFER_PATH = join(__dirname, 'replay-buffer.json');
 const TEST_DECKS_PATH = join(__dirname, '../../data/destruct-test-decks.json');
-const MAX_ITERATIONS = 2000;
+const MAX_ITERATIONS = 50000;
 
 function loadTestDecks() {
   return JSON.parse(readFileSync(TEST_DECKS_PATH, 'utf8'));
@@ -51,6 +54,7 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
 
   let builder = createTestGame()
     .withMap('mos-eisley-outskirts')
+    .withMissionVariant('a')
     .withPlayer1Army(p1Army)
     .withPlayer2Army(p2Army);
 
@@ -66,6 +70,8 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
     .inRound(1)
     .build();
 
+  const hDeps = harness.getDeps();
+
   const actionDeps = {
     dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
@@ -78,10 +84,29 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
   let consecutiveEmpty = 0;
   const failedMoves = new Set();
   let lastMoveId = null;
+  let sameTypeCount = 0;
+  let lastActionType = null;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const g = harness.getGame();
     if (g.ended) break;
+
+    // Prevent OOM: clear accumulated state every 200 iterations
+    if (i > 0 && i % 200 === 0) {
+      if (g.undoStack) g.undoStack = [];
+      if (g.eventLog) g.eventLog = [];
+      if (g.actionHistory) g.actionHistory = [];
+      if (hDeps._actionLog) hDeps._actionLog.length = 0;
+      if (hDeps._client?._sentMessages) hDeps._client._sentMessages.length = 0;
+      if (hDeps._client?._channelCache) {
+        for (const ch of hDeps._client._channelCache.values()) {
+          if (ch._sentMessages) ch._sentMessages.length = 0;
+          if (ch._messageStore) ch._messageStore.clear();
+        }
+      }
+      const hMessages = harness.getMessages();
+      if (hMessages) hMessages.length = 0;
+    }
 
     const p1Actions = getAvailableActions(g, 1, actionDeps);
     const p2Actions = getAvailableActions(g, 2, actionDeps);
@@ -90,6 +115,12 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
       ...p2Actions.map(a => ({ ...a, actingPlayer: 2 })),
     ].filter(a => {
       if (a.type === 'attack_target' && !a.params?.targetFigureKey) return false;
+      // Never unready a phase gate — wastes iterations in a ready/unready loop
+      if (a.type === 'phase_gate_unready') return false;
+      // Filter CC plays by deep precondition check
+      if (a.type === 'play_cc') {
+        return canResolveCcHeadless(g, a.actingPlayer, a.params.cardName, hDeps);
+      }
       return true;
     });
 
@@ -108,6 +139,32 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
       continue;
     }
     consecutiveEmpty = 0;
+
+    // Stuck-state detection: if the same action type is picked 30+ times in a row,
+    // the game is likely in an unresolvable pending state. Force progress.
+    if (allActions.length > 0 && allActions.every(a => a.type === lastActionType)) {
+      sameTypeCount++;
+      if (sameTypeCount > 30) {
+        for (const key of Object.keys(g)) {
+          if (key.startsWith('pending') && g[key] != null && key !== 'pendingCombat') {
+            g[key] = key.endsWith('Choice') ? {} : null;
+          }
+        }
+        const p2Figs = Object.keys(g.figurePositions?.[2] || {});
+        const p1Figs = Object.keys(g.figurePositions?.[1] || {});
+        if (p2Figs.length > 0) {
+          await deps.applyNpcDamageToFigure(g, 2, p2Figs[0], 999, 'Stuck-state breaker');
+        } else if (p1Figs.length > 0) {
+          await deps.applyNpcDamageToFigure(g, 1, p1Figs[0], 999, 'Stuck-state breaker');
+        }
+        sameTypeCount = 0;
+        lastActionType = null;
+        continue;
+      }
+    } else {
+      sameTypeCount = 0;
+      lastActionType = allActions[0]?.type;
+    }
 
     // Track failed moves
     const hasMoveSpaces = allActions.some(a => a.type === 'move_pick_space');
@@ -155,6 +212,17 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
 
     if (action.type === 'move_figure') lastMoveId = action.customId;
 
+    // Intercept CC plays — resolve directly via headless path
+    if (action.type === 'play_cc') {
+      try {
+        await playCommandCardHeadless(g, action.actingPlayer, action.params.cardName, hDeps);
+      } catch (err) {
+        // CC play failed — continue (canResolveCcHeadless should prevent most failures)
+      }
+      tracer.afterAction(harness.getGame(), action);
+      continue;
+    }
+
     const userId = action.actingPlayer === 1 ? g.player1Id : g.player2Id;
     try {
       await harness.submitAction(action.customId, userId);
@@ -168,6 +236,7 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
   const finalGame = harness.getGame();
   tracer1.finalize(finalGame, true);
   tracer2.finalize(finalGame, false);
+  replayUpdate(learnings);
 
   const winnerId = finalGame.winnerId;
   let agent1Score, agent2Score, winnerAgentId;
@@ -226,6 +295,11 @@ async function main() {
   }
 
   const learnings = loadLearnings(LEARNINGS_PATH);
+  if (reset) {
+    try { unlinkSync(REPLAY_BUFFER_PATH); } catch {}
+  } else {
+    loadReplayBuffer(learnings, REPLAY_BUFFER_PATH);
+  }
   const roster = Object.values(arenaData.agents);
   console.log(`Arena: ${roster.length} agents | Game ${arenaData.meta.totalGames} | Gen ${arenaData.meta.totalGenerations} | Training ${numGames}`);
 
@@ -308,12 +382,14 @@ async function main() {
       console.log(`  [${i + 1}/${numGames}] ${elapsed}s | ${sorted[0]?.name} (${Math.round(sorted[0]?.elo)}) | ${completed}/${i + 1} done`);
       saveArenaData(arenaData, ARENA_PATH);
       saveLearnings(learnings, LEARNINGS_PATH);
+      saveReplayBuffer(learnings, REPLAY_BUFFER_PATH);
     }
   }
 
   // Final save
   saveArenaData(arenaData, ARENA_PATH);
   saveLearnings(learnings, LEARNINGS_PATH);
+  saveReplayBuffer(learnings, REPLAY_BUFFER_PATH);
 
   // Final report
   const sorted = Object.values(arenaData.agents).sort((a, b) => b.elo - a.elo);
