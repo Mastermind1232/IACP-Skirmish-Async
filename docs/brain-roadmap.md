@@ -16,7 +16,7 @@ Each phase is a qualitative leap in capability — orders of magnitude smarter, 
 
 ---
 
-## Phase 2 — Generalization (Current)
+## Phase 2 — Generalization (Complete)
 **Linear function approximation.** Generalizes to unseen states via weighted feature vectors. Can evaluate any state, but only sees simple linear relationships — "close is good" or "HP advantage is good" one thing at a time.
 
 ### Core Learning
@@ -87,57 +87,131 @@ Each phase is a qualitative leap in capability — orders of magnitude smarter, 
 - [ ] Learning convergence tests
 - [ ] Arena stability tests
 
-**Result:** 74% game completion (up from ~35-40%). Generalizes to all states. Limited to additive relationships only.
+**Result:** 74% game completion (up from ~35-40%). Generalizes to all states. Limited to additive relationships only. Superseded by Phase 3.
 
 ---
 
-## Phase 3 — Reasoning (Planned)
+## Phase 3 — Reasoning (Complete)
 **Nonlinear function approximation.** Captures feature interactions the linear model can't see. Understands combinations like "attack this wounded figure that's adjacent to me while I have HP advantage" — strategic situational awareness instead of isolated signals.
 
 ### Core Changes
-- [ ] Feature interaction layer (capture "close + low HP = attack now")
-- [ ] Small neural network (single hidden layer) OR manual feature crosses
-- [ ] Nonlinear activation functions (ReLU or similar)
-- [ ] Backpropagation for weight updates
-- [ ] Batch normalization or feature scaling
+- [x] Dueling neural network architecture (separate value V and advantage A heads)
+- [x] Hidden layer: 32 neurons with ReLU activation
+- [x] He/Xavier weight initialization
+- [x] Full manual backpropagation with dueling gradients
+- [x] NaN safety: `sanitizeNetwork()` resets non-finite weights
 
 ### Training Updates
-- [ ] Mini-batch updates (accumulate transitions, update in batches)
-- [ ] Learning rate scheduling (decay alpha over training)
-- [ ] Gradient clipping (prevent exploding gradients)
+- [x] TD error clipping (DELTA_CLAMP = 1.0)
+- [x] TD error history sampling (every 100 updates)
 
 ### Dashboard Updates
-- [ ] Neural network weight visualization
-- [ ] Hidden layer activation patterns
-- [ ] Feature interaction heatmap (which combinations matter most)
+- [x] Feature importance visualization (weighted through hidden + output layers)
+- [x] Learned patterns display
 
-**Goal:** Situational awareness — decisions depend on combinations of factors, not just individual signals.
+**Result:** Situational awareness — decisions depend on combinations of factors, not just individual signals. Superseded by Phase 4.
 
 ---
 
-## Phase 4 — Planning (Planned)
-**Experience replay + look-ahead search.** Learns from past experience efficiently. Thinks multiple steps ahead instead of greedy one-step decisions.
+## Phase 4 — Sample Efficiency (Complete)
+**Experience replay + target network.** Learns from past experience efficiently. Stabilizes training with delayed weight copies.
 
 ### Experience Replay
-- [ ] Replay buffer (store past state→action→reward→next_state transitions)
-- [ ] Batch sampling from buffer for updates (more sample-efficient)
-- [ ] Prioritized replay (revisit surprising/high-reward transitions more often)
-- [ ] Buffer size management (circular buffer, evict oldest)
-
-### Look-Ahead Search
-- [ ] Game state cloning (simulate future states without mutating real game)
-- [ ] Short-horizon search (2-3 ply minimax or MCTS)
-- [ ] Action pruning (only search promising branches)
-- [ ] Time-bounded search (cut off after N milliseconds)
+- [x] Ring buffer: 10,000 transitions (REPLAY_BUFFER_SIZE)
+- [x] Batch sampling: 32 transitions per mini-batch (REPLAY_BATCH_SIZE)
+- [x] 4 replay updates per game (REPLAY_UPDATES_PER_GAME)
+- [x] Minimum 256 transitions before replay starts (REPLAY_MIN_SIZE)
+- [x] Replay learning rate: 0.001 (half of online alpha)
+- [x] Separate persistence for replay buffer
 
 ### Architecture
-- [ ] Deeper network (multiple hidden layers)
-- [ ] Target network (stabilize learning with delayed weight copy)
-- [ ] Dueling architecture (separate value and advantage streams)
+- [x] Target network with deep copy
+- [x] Target sync every 500 updates (TARGET_UPDATE_INTERVAL)
+- [x] Target sync tracking in training stats
 
-### Dashboard Updates
+### Not Implemented
+- [ ] Look-ahead search (MCTS / minimax) — deferred, may revisit in Phase 6
+- [ ] Action pruning / time-bounded search
 - [ ] Search tree visualization
-- [ ] Replay buffer statistics
-- [ ] Planning depth vs decision quality metrics
 
-**Goal:** Multi-step reasoning — "if I move here now, next turn I can attack from behind cover."
+**Result:** Much more stable and sample-efficient training. Plateaued because tactical imprecision inside action categories was losing games. Superseded by Phase 5.
+
+---
+
+## Phase 5 — Tactical Precision (Current)
+**Within-group scorers.** The main brain picks the right action *type* (attack, move, surge, CC). Phase 5 picks the right *specific option* within that type. Lightweight learned linear scorers layered on top of the existing brain.
+
+Phase 5 teaches Skirbo to stop being sloppy.
+
+### Attack Scorer (6 features)
+- [x] targetHpRatio — how wounded the target is
+- [x] targetDistNorm — distance from attacker to target
+- [x] targetIsolated — fewer adjacent allies = more isolated
+- [x] targetThreat — how dangerous the target DC is
+- [x] killPotential — can this attacker finish it off?
+- [x] bias
+
+### Move Scorer (6 features)
+- [x] distToNearestEnemy — closer to enemy = higher
+- [x] threatAtDest — expected damage from enemies at destination
+- [x] objectiveProximity — distance to mission objectives/terminals
+- [x] allySupport — friendly figures within 3 spaces
+- [x] mpEfficiency — movement cost relative to total MP
+- [x] bias
+
+### Surge Scorer (4 features)
+- [x] damageValue — total offensive output
+- [x] isAccuracy — does this surge add accuracy?
+- [x] isRecover — does this surge recover health?
+- [x] bias
+
+### CC Scorer (4 features)
+- [x] ccCost — cost of the command card
+- [x] isAttachment — persistent vs one-shot
+- [x] inCombat — active combat status
+- [x] bias
+
+### Learning
+- [x] Within-group weight updates (ALPHA_WG = 0.01)
+- [x] Delta-based learning from TD signal
+
+### Open Items
+- [ ] More training games for move/surge/CC scorers to become strongly opinionated
+- [ ] Integration of learned weights into live Discord play
+- [ ] Difficulty levels / handicap
+
+**Result:** Initially masked by engine bugs causing a fake ~55% completion ceiling. After structural bug fixes, completion jumped to high 80s/90s. Slices 3+4 pushed to ~98.5% completion. Attack scorer shows meaningful signal; move/surge/CC scorers working but need more games.
+
+---
+
+## Phase 6 — Strategic Understanding (Planned)
+**Strategic state understanding + certification-grade confidence.** Moves from "good local choices" to "good game plans." Not just better micro — better global reasoning, consistency, and knowledge of special cases.
+
+Phase 6 teaches Skirbo to actually think ahead.
+
+### 1. Strategic Features
+- [ ] Activation tempo awareness (when to hold vs activate)
+- [ ] Initiative leverage understanding
+- [ ] VP race state evaluation
+- [ ] Mission pressure sensing
+- [ ] Figure preservation vs trade-off calculus
+- [ ] Attack exposure risk assessment (is attacking worth the positional cost?)
+
+### 2. Matchup / Card-Pool Awareness
+- [ ] DC identity recognition (specific card strengths/weaknesses)
+- [ ] Key synergy detection between cards
+- [ ] Army archetype adaptation (aggressive vs defensive vs control)
+
+### 3. Timing / Pending State Reasoning
+- [ ] Interrupt anticipation
+- [ ] Negation window valuation
+- [ ] Reaction effect sequencing
+- [ ] "If I do X, it opens response Y" reasoning
+
+### 4. Engine Maturity (Certification)
+- [ ] Rules fidelity across all cards/interactions
+- [ ] Data correctness for all DCs, CCs, abilities
+- [ ] No deadlocks or silent illegal states
+- [ ] Runtime correctness under all edge cases
+
+**Goal:** Strategic depth — values tempo, sequencing, matchup context, and mission pressure. Handles card/timing nuance. Moves from "good local choices" toward "good game plans." Partly AI advancement, partly engine maturity — because brain quality depends on rules fidelity.
