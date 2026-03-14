@@ -328,6 +328,13 @@ async function runOneGame(learnings, gameNum) {
   // Track per-DC and per-affiliation results
   recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcStats, getDcEffects);
 
+  // Count iterations used (for efficiency metrics)
+  const finalG = harness.getGame();
+  let iterationsUsed = MAX_ITERATIONS;
+  // Re-derive from game state: if ended, the loop broke early
+  // Use the round as a proxy — more precise iteration tracking below
+  const finalRound = finalG.currentRound || 1;
+
   return {
     ended: finalGame.ended || false,
     winnerId: finalGame.winnerId,
@@ -336,6 +343,7 @@ async function runOneGame(learnings, gameNum) {
     p2Army: p2Deck.name,
     p1VP: finalGame.player1VP?.total || 0,
     p2VP: finalGame.player2VP?.total || 0,
+    finalRound,
   };
 }
 
@@ -392,6 +400,7 @@ async function main() {
       p1VP: result.p1VP || 0,
       p2VP: result.p2VP || 0,
       updates: updatesAfterGame - updatesBeforeGame,
+      finalRound: result.finalRound || 1,
     });
 
     cpGames++;
@@ -476,6 +485,36 @@ async function main() {
   console.log(`Exploration rate: ${(stats.epsilon * 100).toFixed(1)}%`);
   console.log(`Replay buffer size: ${stats.replayBufferSize || 0}`);
   console.log(`Replay total stored: ${stats.replayTotalStored || 0}`);
+
+  // Quality metrics
+  const completedGames = perGameResults.filter(r => r.ended);
+  if (completedGames.length > 0) {
+    const vpDiffs = completedGames.map(r => Math.abs(r.p1VP - r.p2VP));
+    const avgVpDiff = vpDiffs.reduce((s, v) => s + v, 0) / vpDiffs.length;
+    const avgRound = completedGames.reduce((s, r) => s + (r.finalRound || 1), 0) / completedGames.length;
+    const avgUpdates = completedGames.reduce((s, r) => s + r.updates, 0) / completedGames.length;
+    const decisive = completedGames.filter(r => Math.abs(r.p1VP - r.p2VP) >= 10).length;
+    console.log('\n=== Quality Metrics ===');
+    console.log(`Avg VP differential: ${avgVpDiff.toFixed(1)} (higher = more decisive wins)`);
+    console.log(`Avg rounds to finish: ${avgRound.toFixed(1)} (lower = faster resolution)`);
+    console.log(`Avg updates per game: ${avgUpdates.toFixed(0)} (lower = fewer iterations)`);
+    console.log(`Decisive wins (VP diff >= 10): ${decisive}/${completedGames.length} (${(decisive/completedGames.length*100).toFixed(0)}%)`);
+  }
+
+  // Within-group scorer weights (Phase 5)
+  const wg = learnings.withinGroupWeights;
+  if (wg) {
+    console.log('\n=== Within-Group Scorer Weights ===');
+    const fmtW = (names, weights) => names.map((n, i) => `${n}=${(weights[i] || 0).toFixed(3)}`).join(', ');
+    const aN = ['targetHpRatio', 'targetDistNorm', 'targetIsolated', 'targetThreat', 'killPotential', 'bias'];
+    const mN = ['distToNearestEnemy', 'threatAtDest', 'objectiveProximity', 'allySupport', 'mpEfficiency', 'bias'];
+    const sN = ['damageValue', 'isAccuracy', 'isRecover', 'bias'];
+    const cN = ['ccCost', 'isAttachment', 'inCombat', 'bias'];
+    if (wg.attack) console.log(`  attack: ${fmtW(aN, wg.attack)}`);
+    if (wg.move) console.log(`  move:   ${fmtW(mN, wg.move)}`);
+    if (wg.surge) console.log(`  surge:  ${fmtW(sN, wg.surge)}`);
+    if (wg.cc) console.log(`  cc:     ${fmtW(cN, wg.cc)}`);
+  }
 
   // Per-10-game completion windows
   console.log('\n=== Per-Window Completion (10-game windows) ===');

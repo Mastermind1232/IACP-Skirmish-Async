@@ -5,7 +5,8 @@
  * Q(s,a) = V(s) + (A(s,a) - mean(A(s,*)))
  */
 import { parseCoord } from '../../src/game/coords.js';
-import { getDcEffects, getMapTokensData } from '../../src/data-loader.js';
+import { getDcEffects, getMapTokensData, getCcEffect } from '../../src/data-loader.js';
+import { parseSurgeEffect } from '../../src/game/combat.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -38,6 +39,10 @@ const MOVE_FEATURE_NAMES = [
   'distToNearestEnemy', 'threatAtDest', 'objectiveProximity',
   'allySupport', 'mpEfficiency', 'bias',
 ];
+
+const SURGE_FEATURE_NAMES = ['damageValue', 'isAccuracy', 'isRecover', 'bias'];
+
+const CC_FEATURE_NAMES = ['ccCost', 'isAttachment', 'inCombat', 'bias'];
 
 function getGroupCategory(absType) {
   if (absType === 'attack_close' || absType === 'attack_ranged') return 'attack';
@@ -274,6 +279,57 @@ function extractMoveFeatures(action, game, playerNum) {
   const totalMp = moveState?.totalMp || moveState?.mpRemaining || 4;
   const cost = action.params?.cost || 1;
   features[4] = 1 - Math.min(cost, totalMp) / totalMp;
+
+  return features;
+}
+
+/**
+ * Extract per-surge features for surge scoring (Phase 5 Slice 3).
+ * Scores each surge option by its combat value.
+ */
+function extractSurgeFeatures(action) {
+  const features = new Float64Array(4);
+  features[3] = 1.0; // bias
+
+  const surgeKey = action.params?.surgeKey;
+  if (!surgeKey) return features;
+
+  const parsed = parseSurgeEffect(surgeKey);
+
+  // [0] damageValue — total offensive output (damage + pierce + blast + cleave), normalized
+  const totalDmg = (parsed.damage || 0) + (parsed.pierce || 0) + (parsed.blast || 0) + (parsed.cleave || 0);
+  features[0] = Math.min(totalDmg, 8) / 8;
+
+  // [1] isAccuracy — does this surge add accuracy (needed for ranged attacks)
+  features[1] = (parsed.accuracy || 0) > 0 ? 1.0 : 0.0;
+
+  // [2] isRecover — does this surge recover health
+  features[2] = (parsed.recover || 0) > 0 ? 1.0 : 0.0;
+
+  return features;
+}
+
+/**
+ * Extract per-CC features for command card scoring (Phase 5 Slice 4).
+ * Scores each playable CC by cost, type, and game context.
+ */
+function extractCcFeatures(action, game) {
+  const features = new Float64Array(4);
+  features[3] = 1.0; // bias
+
+  const cardName = action.params?.cardName;
+  if (!cardName) return features;
+
+  const ccData = getCcEffect(cardName);
+
+  // [0] ccCost — higher cost CCs tend to be more impactful, normalized to 0-1
+  features[0] = ccData ? Math.min(ccData.cost || 0, 4) / 4 : 0;
+
+  // [1] isAttachment — attachments have persistent value vs one-shot effects
+  features[1] = ccData?.attachment ? 1.0 : 0.0;
+
+  // [2] inCombat — is there an active combat? Combat-timed CCs are more valuable then
+  features[2] = game.pendingCombat ? 1.0 : 0.0;
 
   return features;
 }
@@ -1130,6 +1186,38 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
         return { action: pick(tied).action, wgFeatures: null, wgType: null };
       }
     }
+  }
+
+  // Surge scorer (Phase 5 Slice 3 — learned)
+  if (absType === 'surge_damage' || absType === 'surge_special' || absType === 'spend_surge') {
+    const group = 'surge';
+    const weights = wgWeights?.[group];
+    if (weights && Math.random() >= getWgEpsilon(totalGames || 0)) {
+      let bestScore = -Infinity, bestAction = null, bestFeatures = null;
+      for (const a of actions) {
+        const f = extractSurgeFeatures(a);
+        const score = dotProductWg(weights, f);
+        if (score > bestScore) { bestScore = score; bestAction = a; bestFeatures = f; }
+      }
+      return { action: bestAction, wgFeatures: bestFeatures, wgType: group };
+    }
+    return { action: pick(actions), wgFeatures: null, wgType: null };
+  }
+
+  // CC scorer (Phase 5 Slice 4 — learned)
+  if (absType === 'play_cc') {
+    const group = 'cc';
+    const weights = wgWeights?.[group];
+    if (weights && actions.length > 1 && Math.random() >= getWgEpsilon(totalGames || 0)) {
+      let bestScore = -Infinity, bestAction = null, bestFeatures = null;
+      for (const a of actions) {
+        const f = extractCcFeatures(a, game);
+        const score = dotProductWg(weights, f);
+        if (score > bestScore) { bestScore = score; bestAction = a; bestFeatures = f; }
+      }
+      return { action: bestAction, wgFeatures: bestFeatures, wgType: group };
+    }
+    return { action: pick(actions), wgFeatures: null, wgType: null };
   }
 
   return { action: pick(actions), wgFeatures: null, wgType: null };
