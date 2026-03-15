@@ -356,6 +356,59 @@ function classifyExploration(hits) {
   return { label: 'Never', cls: 'never', pct: 0 };
 }
 
+// Frequency: how often this region fires in actual games (per 1000 sims)
+function frequencyLabel(hits) {
+  if (hits >= 5000) return { label: 'Very frequent', cls: 'freq-vf', color: '#ff6b35' };
+  if (hits >= 500)  return { label: 'Frequent', cls: 'freq-f', color: '#e2b93d' };
+  if (hits >= 50)   return { label: 'Infrequent', cls: 'freq-i', color: '#3d8bfd' };
+  if (hits >= 1)    return { label: 'Almost never', cls: 'freq-an', color: '#6e7681' };
+  return { label: 'Never', cls: 'freq-n', color: '#333' };
+}
+
+// Verification level ordering for max() comparison
+const VERIF_ORDER = { none: 0, weak: 1, partial: 2, strong: 3 };
+function maxVerif(a, b) {
+  return (VERIF_ORDER[a] || 0) >= (VERIF_ORDER[b] || 0) ? a : b;
+}
+
+// Auto-compute testing coverage from telemetry data
+// Uses handler prefix + action type hits (not pending state, which inflates counts)
+function computeAutoVerification(region, telemetry) {
+  if (!telemetry) return 'none';
+  const passRate = Math.min(telemetry.flow?.passRate ?? 0, telemetry.setup?.passRate ?? 1);
+
+  let handlerHits = 0;
+  let actionHits = 0;
+  const declaredPrefixes = region.handlerPrefixes || [];
+  const declaredActions = region.actionTypes || [];
+  const exercisedSet = new Set();
+
+  for (const mode of ['flow', 'setup']) {
+    const t = telemetry[mode];
+    if (!t) continue;
+    for (const prefix of declaredPrefixes) {
+      let prefixHits = 0;
+      for (const [key, count] of Object.entries(t.handlerPrefixHits || {})) {
+        if (key === prefix || key.startsWith(prefix + '_') || prefix.startsWith(key + '_')) prefixHits += count;
+      }
+      if (prefixHits > 0) exercisedSet.add(prefix);
+      handlerHits += prefixHits;
+    }
+    for (const at of declaredActions) actionHits += (t.actionTypeHits || {})[at] || 0;
+  }
+
+  const totalHits = handlerHits + actionHits;
+  if (totalHits === 0) return 'none';
+
+  const prefixRatio = declaredPrefixes.length > 0 ? exercisedSet.size / declaredPrefixes.length : 1;
+
+  // Strong: high pass rate, significant hits, and good prefix coverage
+  if (passRate >= 1.0 && totalHits >= 500 && (prefixRatio >= 0.5 || declaredPrefixes.length <= 2)) return 'strong';
+  // Partial: decent pass rate and meaningful hits
+  if (passRate >= 0.95 && totalHits >= 50) return 'partial';
+  return 'weak';
+}
+
 function coverageLabel(v) {
   return { strong: 'Well covered', partial: 'Partial', weak: 'Weak', none: 'Not covered' }[v] || 'Not covered';
 }
@@ -794,21 +847,25 @@ function renderLegend() {
     <div class="legend-title">How to read this map</div>
     <div style="display:flex;gap:32px;flex-wrap:wrap">
       <div>
-        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Background = Backend Coverage</div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#132e13;border:1px solid #27ae60"></div><span class="legend-label">Well covered</span></div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#2a2210;border:1px solid #d4a017"></div><span class="legend-label">Partial</span></div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#2a1414;border:1px solid #c0392b"></div><span class="legend-label">Weak</span></div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#161620;border:1px solid #333"></div><span class="legend-label">Not covered</span></div>
+        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Coverage = Testing Coverage (auto)</div>
+        <div style="font-size:11px;color:#6e7681;margin-bottom:4px">Auto-computed from sim telemetry: pass rate + handler prefix coverage</div>
+        <div class="legend-row"><div class="legend-swatch" style="background:#132e13;border:1px solid #27ae60"></div><span class="legend-label"><strong style="color:#27ae60">Well covered</strong> — 500+ hits, 100% pass, 50%+ prefixes exercised</span></div>
+        <div class="legend-row"><div class="legend-swatch" style="background:#2a2210;border:1px solid #d4a017"></div><span class="legend-label"><strong style="color:#d4a017">Partial</strong> — 50+ hits, 95%+ pass rate</span></div>
+        <div class="legend-row"><div class="legend-swatch" style="background:#2a1414;border:1px solid #c0392b"></div><span class="legend-label"><strong style="color:#c0392b">Weak</strong> — some hits but low confidence</span></div>
+        <div class="legend-row"><div class="legend-swatch" style="background:#161620;border:1px solid #333"></div><span class="legend-label"><strong style="color:#888">Not covered</strong> — zero telemetry hits</span></div>
       </div>
       <div>
-        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Meter = Sim Exploration</div>
-        <div class="legend-row"><div class="legend-bar-demo" style="width:50px;background:#ff6b35"></div><span class="legend-label">Frequent (500+)</span></div>
-        <div class="legend-row"><div class="legend-bar-demo" style="width:35px;background:#e2b93d"></div><span class="legend-label">Common (50-499)</span></div>
-        <div class="legend-row"><div class="legend-bar-demo" style="width:15px;background:#3d8bfd"></div><span class="legend-label">Rare (1-49)</span></div>
-        <div class="legend-row"><div class="legend-bar-demo" style="width:50px;background:#21262d"></div><span class="legend-label">Never</span></div>
+        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Frequency = In-Game Occurrence</div>
+        <div style="font-size:11px;color:#6e7681;margin-bottom:4px">How often this region fires across sim games</div>
+        <div class="legend-row"><span style="color:#ff6b35;font-weight:bold;min-width:110px">Very frequent</span><span class="legend-label">5,000+ hits — fires many times per game</span></div>
+        <div class="legend-row"><span style="color:#e2b93d;font-weight:bold;min-width:110px">Frequent</span><span class="legend-label">500–4,999 — fires roughly once per game</span></div>
+        <div class="legend-row"><span style="color:#3d8bfd;font-weight:bold;min-width:110px">Infrequent</span><span class="legend-label">50–499 — fires occasionally, not every game</span></div>
+        <div class="legend-row"><span style="color:#6e7681;font-weight:bold;min-width:110px">Almost never</span><span class="legend-label">1–49 — rare edge case</span></div>
+        <div class="legend-row"><span style="color:#333;font-weight:bold;min-width:110px">Never</span><span class="legend-label">0 hits — not reached in sims</span></div>
       </div>
       <div>
-        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Live Status = Discord Testing</div>
+        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Discord = Live Testing Status</div>
+        <div style="font-size:11px;color:#6e7681;margin-bottom:4px">Manually set from real Discord games</div>
         <div class="legend-row"><span class="live-pill untested" style="cursor:default">Untested</span><span class="legend-label">Not checked in Discord</span></div>
         <div class="legend-row"><span class="live-pill partial" style="cursor:default">Partial</span><span class="legend-label">Flaky / incomplete</span></div>
         <div class="legend-row"><span class="live-pill verified" style="cursor:default">Verified</span><span class="legend-label">Works in Discord</span></div>
@@ -816,7 +873,7 @@ function renderLegend() {
         <div class="legend-row"><span class="live-pill stale" style="cursor:default">Stale</span><span class="legend-label">Code changed since check</span></div>
       </div>
     </div>
-    <div style="margin-top:8px;font-size:11px;color:#6e7681">Click any region card to update its live status or report an issue.</div>
+    <div style="margin-top:8px;font-size:11px;color:#6e7681">Click any region card to update its live status or report an issue. Coverage auto-updates from telemetry — no manual ledger edits needed.</div>
   `;
 }
 
@@ -825,13 +882,17 @@ function render(ledger, telemetry) {
   const regionList = Object.entries(regions);
 
   const regionHits = {};
+  const effectiveVerif = {};
   for (const [id, region] of regionList) {
     regionHits[id] = computeRegionHits(region, telemetry);
+    const autoLevel = computeAutoVerification(region, telemetry);
+    const manualLevel = region.verification || 'none';
+    effectiveVerif[id] = maxVerif(autoLevel, manualLevel);
   }
 
-  // Summary
+  // Summary — uses effective (auto-promoted) verification
   const vCounts = { strong: 0, partial: 0, weak: 0, none: 0 };
-  for (const [, r] of regionList) vCounts[r.verification] = (vCounts[r.verification] || 0) + 1;
+  for (const [id] of regionList) vCounts[effectiveVerif[id]] = (vCounts[effectiveVerif[id]] || 0) + 1;
   const totalHits = Object.values(regionHits).reduce((a, b) => a + b, 0);
   const exploredCount = Object.values(regionHits).filter(h => h > 0).length;
   const totalIncidents = (INCIDENTS?.incidents || []).length;
@@ -863,12 +924,10 @@ function render(ledger, telemetry) {
 
     for (const [id, region] of catRegions) {
       const hits = regionHits[id];
-      const expl = classifyExploration(hits);
-      const verif = region.verification || 'none';
+      const freq = frequencyLabel(hits);
+      const verif = effectiveVerif[id];
       const live = region.liveStatus || 'untested';
-      const evidence = region.evidence || [];
       const incidents = getRegionIncidents(id);
-      const siblings = (region.siblings || []).map(s => regions[s]?.name).filter(Boolean);
 
       const card = document.createElement('div');
       card.className = `card cov-${verif}`;
@@ -876,8 +935,9 @@ function render(ledger, telemetry) {
       card.onclick = () => openModal(id);
       card.innerHTML = `
         <div class="card-name">${region.name}${incidents.length > 0 ? `<span class="incident-count">${incidents.length}</span>` : ''}</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px">
-          <span style="color:#6e7681">Backend:</span><span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px;flex-wrap:wrap">
+          <span style="color:#6e7681">Coverage:</span><span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span>
+          <span style="color:#6e7681">Frequency:</span><span style="color:${freq.color};font-size:12px;font-weight:bold">${freq.label}</span>
           <span style="color:#6e7681">Discord:</span><span class="live-pill ${live}" style="cursor:default">${liveLabel(live)}</span>
         </div>
       `;
@@ -916,34 +976,37 @@ function render(ledger, telemetry) {
     incEl.style.display = 'none';
   }
 
-  // Needs More Testing: Frequently reached
+  // Needs More Testing: Frequently reached (uses effective verification)
   const hotList = regionList
-    .filter(([id, r]) => (r.verification === 'none' || r.verification === 'weak') && regionHits[id] >= 50)
+    .filter(([id, r]) => (effectiveVerif[id] === 'none' || effectiveVerif[id] === 'weak') && regionHits[id] >= 50)
     .sort((a, b) => regionHits[b[0]] - regionHits[a[0]]);
 
   const hotEl = document.getElementById('needs-hot');
   if (hotList.length > 0) {
     hotEl.style.display = 'block';
     let html = '<h2 style="color:#ff6b35">Needs More Testing: Frequently Reached</h2>';
-    html += '<div class="section-desc">High sim traffic, weak/no backend coverage.</div>';
+    html += '<div class="section-desc">High sim traffic, weak/no coverage.</div>';
     for (let i = 0; i < hotList.length; i++) {
       const [id, r] = hotList[i];
+      const ev = effectiveVerif[id];
       html += `<div class="needs-item">
         <span class="needs-rank" style="color:#ff6b35">#${i+1}</span>
         <span class="needs-name">${r.name}</span>
         <span class="needs-hits">${regionHits[id].toLocaleString()} hits</span>
-        <span class="cov-pill cov-${r.verification}" style="font-size:9px">${coverageLabel(r.verification)}</span>
+        <span class="cov-pill cov-${ev}" style="font-size:9px">${coverageLabel(ev)}</span>
         <span class="live-pill ${r.liveStatus||'untested'}" style="font-size:9px;cursor:default">${liveLabel(r.liveStatus)}</span>
       </div>`;
     }
     hotEl.innerHTML = html;
+  } else {
+    hotEl.style.display = 'none';
   }
 
-  // Needs More Testing: Rarely reached
+  // Needs More Testing: Rarely reached (uses effective verification)
   const darkList = regionList
-    .filter(([id, r]) => (r.verification === 'none' || r.verification === 'weak') && regionHits[id] < 50)
+    .filter(([id, r]) => (effectiveVerif[id] === 'none' || effectiveVerif[id] === 'weak') && regionHits[id] < 50)
     .sort((a, b) => {
-      if (a[1].verification !== b[1].verification) return a[1].verification === 'none' ? -1 : 1;
+      if (effectiveVerif[a[0]] !== effectiveVerif[b[0]]) return effectiveVerif[a[0]] === 'none' ? -1 : 1;
       return a[1].name.localeCompare(b[1].name);
     });
 
@@ -953,14 +1016,17 @@ function render(ledger, telemetry) {
     let html = '<h2 style="color:#8b949e">Needs More Testing: Rarely Reached</h2>';
     html += '<div class="section-desc">Low/no sim traffic, weak/no coverage.</div>';
     for (const [id, r] of darkList) {
+      const ev = effectiveVerif[id];
       html += `<div class="needs-item">
         <span class="needs-rank" style="color:#555">--</span>
-        <span class="needs-name" style="color:${r.verification === 'none' ? '#555' : '#999'}">${r.name}</span>
+        <span class="needs-name" style="color:${ev === 'none' ? '#555' : '#999'}">${r.name}</span>
         <span class="needs-hits" style="color:#555">${regionHits[id]} hits</span>
-        <span class="cov-pill cov-${r.verification}" style="font-size:9px">${coverageLabel(r.verification)}</span>
+        <span class="cov-pill cov-${ev}" style="font-size:9px">${coverageLabel(ev)}</span>
       </div>`;
     }
     darkEl.innerHTML = html;
+  } else {
+    darkEl.style.display = 'none';
   }
 
   // History
