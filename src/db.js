@@ -764,24 +764,47 @@ export async function deleteSnapshots(gameId) {
 
 // --- Coverage Persistence ---
 
-/** Seed coverage_regions from the JSON ledger file (only if table is empty). */
+/**
+ * Sync coverage_regions from the JSON ledger file on every startup.
+ * Merges ledger data into DB while preserving DB-only fields (liveStatus, lastLiveCheck).
+ * New regions are inserted; existing regions get their code-managed fields updated.
+ * Regions removed from the ledger are left in the DB (no deletes).
+ */
 async function seedCoverageRegions() {
   if (!pool) return;
   try {
-    const count = await pool.query('SELECT COUNT(*)::int AS n FROM coverage_regions');
-    if (count.rows[0].n > 0) return; // already seeded
     const ledgerPath = join(__dbDirname, '..', 'tests', 'headless', 'coverage-ledger.json');
     let ledger;
     try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')); } catch { return; }
     const regions = ledger.regions || {};
-    for (const [id, data] of Object.entries(regions)) {
-      await pool.query(
-        `INSERT INTO coverage_regions (region_id, region_data) VALUES ($1, $2)
-         ON CONFLICT (region_id) DO NOTHING`,
-        [id, JSON.stringify(data)]
-      );
+
+    // Load existing DB rows to preserve live statuses
+    const existing = {};
+    const res = await pool.query('SELECT region_id, region_data FROM coverage_regions');
+    for (const row of res.rows) existing[row.region_id] = row.region_data;
+
+    let inserted = 0, updated = 0;
+    for (const [id, ledgerData] of Object.entries(regions)) {
+      const dbData = existing[id];
+      if (dbData) {
+        // Preserve DB-only fields, overwrite everything else from ledger
+        const merged = { ...ledgerData };
+        if (dbData.liveStatus && dbData.liveStatus !== 'untested') merged.liveStatus = dbData.liveStatus;
+        if (dbData.lastLiveCheck) merged.lastLiveCheck = dbData.lastLiveCheck;
+        await pool.query(
+          `UPDATE coverage_regions SET region_data = $2, updated_at = NOW() WHERE region_id = $1`,
+          [id, JSON.stringify(merged)]
+        );
+        updated++;
+      } else {
+        await pool.query(
+          `INSERT INTO coverage_regions (region_id, region_data) VALUES ($1, $2)`,
+          [id, JSON.stringify(ledgerData)]
+        );
+        inserted++;
+      }
     }
-    console.log(`[DB] Seeded ${Object.keys(regions).length} coverage regions from ledger.`);
+    console.log(`[DB] Coverage sync: ${inserted} new, ${updated} updated from ledger.`);
   } catch (err) {
     console.error('[DB] seedCoverageRegions failed:', err.message);
   }

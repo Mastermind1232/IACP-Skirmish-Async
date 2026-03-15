@@ -1052,27 +1052,23 @@ document.getElementById('incident-modal').addEventListener('click', e => {
 });
 
 (async () => {
-  // Check backend — used for live statuses and incidents only
+  // Check backend — DB is the source of truth (synced from ledger on every deploy)
   await checkBackend();
   updateBackendIndicator();
 
-  // Always use ledger file for region definitions (handler prefixes, verification, etc.)
-  // The ledger is code-managed and pushed with the repo — it's the source of truth for structure.
-  // DB is only used for user-entered data: live statuses and incidents.
-  let ledger = await loadJSON('./coverage-ledger.json');
+  let ledger = null;
   const telemetry = await loadJSON('./coverage-telemetry.json');
 
-  // Overlay DB live statuses onto ledger regions
-  if (backendAvailable && ledger) {
+  if (backendAvailable) {
     const dbData = await apiGet('/api/coverage/regions');
     if (dbData?.regions) {
-      for (const [id, dbRegion] of Object.entries(dbData.regions)) {
-        if (ledger.regions[id] && dbRegion.liveStatus && dbRegion.liveStatus !== 'untested') {
-          ledger.regions[id].liveStatus = dbRegion.liveStatus;
-          ledger.regions[id].lastLiveCheck = dbRegion.lastLiveCheck || ledger.regions[id].lastLiveCheck;
-        }
-      }
+      ledger = { regions: dbData.regions };
     }
+  }
+
+  // Fall back to JSON file if backend unavailable
+  if (!ledger) {
+    ledger = await loadJSON('./coverage-ledger.json');
   }
 
   if (!ledger) {
