@@ -361,7 +361,16 @@ function getActivationActions(game, playerNum, deps) {
 
   // End activation phase — both players must confirm, regardless of turn
   const noActivations = (game.p1ActivationsRemaining ?? 0) === 0 && (game.p2ActivationsRemaining ?? 0) === 0;
-  const noActionsRemaining = !Object.values(game.dcActionsData || {}).some(d => d.remaining > 0);
+  // Check if any alive DC still has actions remaining (skip stale entries for defeated DCs)
+  const noActionsRemaining = !Object.entries(game.dcActionsData || {}).some(([msgId, d]) => {
+    if (d.remaining <= 0) return false;
+    // If we have health state, verify the DC isn't fully defeated
+    if (deps.dcHealthState) {
+      const hs = deps.dcHealthState.get(msgId);
+      if (hs && hs.every(fig => fig && fig.currentHp <= 0)) return false;
+    }
+    return true;
+  });
   if (noActivations && noActionsRemaining) {
     const alreadyEnded = playerNum === 1 ? game.p1ActivationPhaseEnded : game.p2ActivationPhaseEnded;
     if (!alreadyEnded) {
@@ -383,6 +392,11 @@ function getActivationActions(game, playerNum, deps) {
       if (meta.gameId !== gameId || meta.playerNum !== playerNum) continue;
       const data = game.dcActionsData?.[msgId];
       if (data && data.remaining > 0) {
+        // Skip if DC is fully defeated (stale dcActionsData)
+        if (deps.dcHealthState) {
+          const hs = deps.dcHealthState.get(msgId);
+          if (hs && hs.every(fig => fig && fig.currentHp <= 0)) continue;
+        }
         actions.push({
           type: ACTION_TYPES.DC_END_ACTIVATION,
           customId: buildCustomId(ACTION_TYPES.DC_END_ACTIVATION, { msgId }),

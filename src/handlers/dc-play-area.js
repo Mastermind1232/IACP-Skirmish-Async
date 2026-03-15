@@ -2205,10 +2205,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       .setLabel('Done')
       .setStyle(ButtonStyle.Success)
   );
+  // If the ability drew/searched cards, the logMessage may contain private card names — send ephemeral
+  const _revealedPrivateInfo = resolveResult.drewCards?.length > 0 || resolveResult.refreshHand;
   await interaction.followUp({
     content: `**${action}** — ${resolveResult.applied ? (resolveResult.logMessage || 'Resolved.') : manualMsg} Click **Done** when finished.`,
     components: [doneRow],
-    ephemeral: false,
+    ephemeral: !!_revealedPrivateInfo,
   }).catch(discordCatch);
   // Bleeding: trigger after DC Special action resolves
   if (buttonKey === 'dc_special_' && ctx.sendBleedingPrompt) {
