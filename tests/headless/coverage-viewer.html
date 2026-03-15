@@ -39,7 +39,7 @@ h1 { font-size: 26px; margin-bottom: 4px; }
 .region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
 
 /* Region cards — background = backend verification */
-.card { border-radius: 8px; padding: 10px 12px; position: relative; cursor: default; border: 1px solid transparent; overflow: hidden; }
+.card { border-radius: 8px; padding: 10px 12px; position: relative; cursor: default; border: 1px solid transparent; }
 .card.cov-strong { background: #132e13; border-color: #27ae60; }
 .card.cov-partial { background: #2a2210; border-color: #d4a017; }
 .card.cov-weak { background: #2a1414; border-color: #c0392b; }
@@ -935,10 +935,10 @@ function render(ledger, telemetry) {
       card.onclick = () => openModal(id);
       card.innerHTML = `
         <div class="card-name">${region.name}${incidents.length > 0 ? `<span class="incident-count">${incidents.length}</span>` : ''}</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px">
-          <span style="color:#6e7681">Coverage:</span><span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span>
-          <span style="color:#6e7681">Frequency:</span><span style="color:${freq.color};font-size:12px;font-weight:bold">${freq.label}</span>
-          <span style="color:#6e7681">Discord:</span><span class="live-pill ${live}" style="cursor:default">${liveLabel(live)}</span>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;font-size:12px">
+          <div style="display:flex;align-items:center;gap:6px"><span style="color:#6e7681">Coverage:</span><span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="color:#6e7681">Frequency:</span><span style="color:${freq.color};font-size:12px;font-weight:bold">${freq.label}</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="color:#6e7681">Discord:</span><span class="live-pill ${live}" style="cursor:default">${liveLabel(live)}</span></div>
         </div>
       `;
       grid.appendChild(card);
