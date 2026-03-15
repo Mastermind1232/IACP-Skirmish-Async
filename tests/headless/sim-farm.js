@@ -16,7 +16,8 @@
  */
 
 import { createFlowHarness } from './flow-harness.js';
-import { getDcEffects, getDcStats, getMapRegistry, getMapSpaces, getCcEffectsData } from '../../src/data-loader.js';
+import { runSetupSim } from './setup-harness.js';
+import { getDcEffects, getDcStats, getMapRegistry, getMapSpaces, getCcEffectsData, getDeploymentZones } from '../../src/data-loader.js';
 
 // ── Seeded PRNG (mulberry32) ────────────────────────────────────────────────
 
@@ -44,11 +45,16 @@ function buildDataPools() {
   }
 
   const maps = getMapRegistry();
+  const zones = getDeploymentZones();
   const usableMaps = [];
   for (const m of maps) {
     try {
       const spaces = getMapSpaces(m.id);
-      if (spaces && Object.keys(spaces).length > 0) usableMaps.push(m.id);
+      if (!spaces || Object.keys(spaces).length === 0) continue;
+      // For setup sims, require both red and blue deployment zones
+      const z = zones[m.id];
+      if (!z?.red?.length || !z?.blue?.length) continue;
+      usableMaps.push(m.id);
     } catch { /* skip maps without spaces data */ }
   }
 
@@ -222,6 +228,87 @@ async function runSim(seed, pools, opts = {}) {
   };
 }
 
+// ── Setup Sim Run ────────────────────────────────────────────────────────────
+
+async function runSetupSimFromSeed(seed, pools, opts = {}) {
+  const rng = mulberry32(seed);
+  const { verbose } = opts;
+
+  const mapId = pools.usableMaps[Math.floor(rng() * pools.usableMaps.length)];
+  const p1Army = randomArmy(rng, pools.deployable);
+  const p2Army = randomArmy(rng, pools.deployable);
+  // Build CC decks (6-10 cards each for realistic draw)
+  const ccCount = 6 + Math.floor(rng() * 5);
+  const p1CcDeck = randomCcHand(rng, pools.ccNames, ccCount);
+  const p2CcDeck = randomCcHand(rng, pools.ccNames, ccCount);
+
+  const scenario = {
+    seed,
+    mapId,
+    p1Army: p1Army.map(d => d.dcName),
+    p2Army: p2Army.map(d => d.dcName),
+    p1CcDeck,
+    p2CcDeck,
+  };
+
+  try {
+    const result = await runSetupSim({
+      mapId,
+      p1Army,
+      p2Army,
+      p1CcDeck,
+      p2CcDeck,
+      verbose,
+    });
+
+    const violations = [];
+    for (const err of result.errors) {
+      violations.push({
+        step: err.step,
+        invariant: 'SETUP-ERROR',
+        message: `${err.customId}: ${err.error}`,
+      });
+    }
+
+    if (!result.reachedRoundActive) {
+      violations.push({
+        step: result.steps.length,
+        invariant: 'SETUP-INCOMPLETE',
+        message: `Did not reach ROUND_ACTIVE — stuck at phase=${result.game?.phase} roundPhase=${result.game?.roundPhase}`,
+      });
+    }
+
+    // Verify figures were actually deployed
+    if (result.figureCount.p1 === 0 || result.figureCount.p2 === 0) {
+      violations.push({
+        step: result.steps.length,
+        invariant: 'SETUP-NO-FIGURES',
+        message: `Missing figures — P1: ${result.figureCount.p1}, P2: ${result.figureCount.p2}`,
+      });
+    }
+
+    return {
+      seed,
+      scenario,
+      status: violations.length > 0 ? 'failed' : 'passed',
+      violations,
+      steps: result.steps.length,
+      ended: false,
+      phases: result.phases,
+      figureCount: result.figureCount,
+    };
+  } catch (e) {
+    return {
+      seed,
+      scenario,
+      status: 'setup-error',
+      error: e.message,
+      violations: [{ step: 0, invariant: 'SETUP-CRASH', message: e.message }],
+      steps: 0,
+    };
+  }
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -230,9 +317,11 @@ async function main() {
   const seedBase = parseInt((args.find(a => a.startsWith('--seed=')) || '').split('=')[1] || Date.now().toString(), 10);
   const verbose = args.includes('--verbose');
   const stopOnFail = args.includes('--stop-on-fail');
+  const setupMode = args.includes('--setup');
 
-  console.log(`\n🎲 Discord Flow Sim Farm`);
-  console.log(`   Sims: ${count}  Seed base: ${seedBase}  Policy: randomized`);
+  const modeLabel = setupMode ? 'Setup Sim Farm' : 'Discord Flow Sim Farm';
+  console.log(`\n🎲 ${modeLabel}`);
+  console.log(`   Sims: ${count}  Seed base: ${seedBase}${setupMode ? '  Mode: setup' : '  Policy: randomized'}`);
   console.log(`   Flags: ${verbose ? 'verbose ' : ''}${stopOnFail ? 'stop-on-fail' : ''}\n`);
 
   const pools = buildDataPools();
@@ -245,7 +334,9 @@ async function main() {
 
   for (let i = 0; i < count; i++) {
     const seed = seedBase + i;
-    const result = await runSim(seed, pools, { verbose });
+    const result = setupMode
+      ? await runSetupSimFromSeed(seed, pools, { verbose })
+      : await runSim(seed, pools, { verbose });
 
     if (result.status === 'passed') {
       results.passed++;
@@ -307,8 +398,10 @@ async function main() {
       console.log(`\n  seed=${f.seed}  policy=${f.scenario.policy}  map=${f.scenario.mapId}`);
       console.log(`  P1: ${f.scenario.p1Army.join(' + ')}`);
       console.log(`  P2: ${f.scenario.p2Army.join(' + ')}`);
-      if (f.scenario.p1CcHand.length) console.log(`  P1 hand: ${f.scenario.p1CcHand.join(', ')}`);
-      if (f.scenario.p2CcHand.length) console.log(`  P2 hand: ${f.scenario.p2CcHand.join(', ')}`);
+      if (f.scenario.p1CcHand?.length) console.log(`  P1 hand: ${f.scenario.p1CcHand.join(', ')}`);
+      if (f.scenario.p2CcHand?.length) console.log(`  P2 hand: ${f.scenario.p2CcHand.join(', ')}`);
+      if (f.scenario.p1CcDeck?.length) console.log(`  P1 deck: ${f.scenario.p1CcDeck.length} cards`);
+      if (f.scenario.p2CcDeck?.length) console.log(`  P2 deck: ${f.scenario.p2CcDeck.length} cards`);
       console.log(`  step=${v.step}  action=${v.actionType || '?'}  customId=${v.customId || v.lastCustomId || '?'}`);
       console.log(`  ${v.message}`);
     }

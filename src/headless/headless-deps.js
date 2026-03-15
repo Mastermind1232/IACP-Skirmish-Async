@@ -76,6 +76,8 @@ import {
   getIllegalCcPlayButtons, getNegationResponseButtons, getCelebrationButtons,
   getLobbyEmbed, getLobbyStartButton, updateThreadName,
   getDeploySpaceGridRows, buildDeployRowButtons,
+  getDeployFigureLabelsFromDiscord,
+  getDeployButtonRowsFromDiscord,
   getDcActionButtons as getDcActionButtonsFromDiscord,
   getActivateDcButtons as getActivateDcButtonsFromDiscord,
   updateActivationsMessage,
@@ -127,7 +129,7 @@ import { setPhase } from '../game/phase.js';
 
 // ── Extracted engine modules ────────────────────────────────────────────────
 
-import { shuffleArray, filterValidTopLeftSpaces } from '../engine/utils.js';
+import { shuffleArray, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure } from '../engine/utils.js';
 import {
   getMissionTokenLabel, calculateKillVp as _calculateKillVpRaw,
 } from '../engine/mission-helpers.js';
@@ -448,9 +450,13 @@ export function buildHeadlessDeps(options = {}) {
   const postMissionCardAfterMapSelection = noopAsync;
   const postPinnedMissionCardFromGameState = noopAsync;
 
-  // Deployment helpers
-  const getDeployFigureLabels = () => [];
-  const getDeployButtonRows = () => [];
+  // Deployment helpers — wire real Discord UI builders for setup flow
+  const getDeployFigureLabels = (dcList, game) => {
+    return getDeployFigureLabelsFromDiscord(dcList, { resolveDcName: resolveDcName, isFigurelessDc: isFigurelessDc, getDcStats: getDcStats });
+  };
+  const getDeployButtonRows = (gameId, playerNum, dcList, zone, figurePositions, game) => {
+    return getDeployButtonRowsFromDiscord(gameId, playerNum, dcList, zone, figurePositions, { resolveDcName: resolveDcName, isFigurelessDc: isFigurelessDc, getDcStats: getDcStats });
+  };
   const getDeploymentMapAttachmentStub = async () => ({ files: [] });
 
   return {
@@ -527,7 +533,9 @@ export function buildHeadlessDeps(options = {}) {
     getMapAttachmentForSpaces,
 
     // Extracted engine modules (real)
-    shuffleArray, filterValidTopLeftSpaces,
+    shuffleArray,
+    filterValidTopLeftSpaces: (zoneSpaces, occupiedSpaces, size, blockingSpaces, ignoreBlocking) =>
+      _filterValidTopLeftSpacesPure(zoneSpaces, occupiedSpaces, size, getFootprintCells, blockingSpaces, ignoreBlocking),
     getMissionTokenLabel, calculateKillVp,
     // Game readers — wrapped to close over in-memory Maps (matching index.js wrapper signatures)
     hasActionsRemainingInGame: (game, gameId) => _hasActionsRemainingInGameRaw(game, gameId, dcMessageMeta),

@@ -1,0 +1,381 @@
+/**
+ * Setup Harness: drives through the real setup handler chain headlessly.
+ *
+ * Unlike the flow harness (which starts in ROUND_ACTIVE with synthetic figure
+ * positions), this harness starts at ZONE_SELECTION and exercises:
+ *   1. Deployment zone selection (real handler)
+ *   2. Auto-deploy for both players (real handler)
+ *   3. Deployment done + phase gate (real handlers)
+ *   4. CC shuffle draw for both players (real handler)
+ *   5. Phase gate dispatch → ROUND_ACTIVE
+ *
+ * This gives us end-to-end coverage of the real deployment pipeline that
+ * initializeFigurePositions() bypasses.
+ *
+ * Usage:
+ *   const result = await runSetupSim({ mapId, p1Army, p2Army, p1CcDeck, p2CcDeck });
+ *   // result.game is in ROUND_ACTIVE with figures deployed via real handlers
+ *   // result.errors contains any handler errors encountered
+ *   // result.phases tracks which phases were visited
+ */
+
+import { createHarness } from '../../src/headless/game-harness.js';
+import { buildHeadlessDeps } from '../../src/headless/headless-deps.js';
+import { initializeDcState } from '../../src/headless/init-dc-state.js';
+import { createFakeChannel } from '../../src/headless/fake-interaction.js';
+import { getDcStats, getDeploymentZones, getDcEffects } from '../../src/data-loader.js';
+import { PHASES } from '../../src/game/phase.js';
+import { isFigurelessDc } from '../../src/game/dc-helpers.js';
+
+let setupIdCounter = 1;
+
+/**
+ * Build a game state at ZONE_SELECTION phase, ready for deployment.
+ * This mirrors game-builder.js but stops earlier in the pipeline.
+ */
+function buildSetupGame(config) {
+  const {
+    mapId = 'mos-eisley-outskirts',
+    p1Army = [],
+    p2Army = [],
+    p1CcDeck = [],
+    p2CcDeck = [],
+    p1Id = 'player1',
+    p2Id = 'player2',
+    gameId = String(setupIdCounter++).padStart(5, '0'),
+  } = config;
+
+  // Build DC lists (same logic as game-builder)
+  function buildDcList(army) {
+    const dcList = [];
+    for (const entry of army) {
+      const dcName = entry.dcName || entry;
+      const count = entry.count || 1;
+      for (let dg = 0; dg < count; dg++) {
+        const stats = getDcStats(dcName);
+        const displayName = count > 1 ? `${dcName} [DG ${dg + 1}]` : dcName;
+        const figureCount = stats?.figures ?? 1;
+        const maxHp = stats?.health ?? 1;
+        const healthState = [];
+        for (let f = 0; f < figureCount; f++) {
+          healthState.push([maxHp, maxHp]);
+        }
+        dcList.push({ dcName, displayName, healthState, cost: stats?.cost ?? 0 });
+      }
+    }
+    return dcList;
+  }
+
+  const p1DcList = buildDcList(p1Army);
+  const p2DcList = buildDcList(p2Army);
+
+  // Separate attachments from deployable figures for squad ccList
+  const p1SquadDcList = p1DcList.map(d => ({ dcName: d.dcName, displayName: d.displayName }));
+  const p2SquadDcList = p2DcList.map(d => ({ dcName: d.dcName, displayName: d.displayName }));
+
+  const game = {
+    gameId,
+    player1Id: p1Id,
+    player2Id: p2Id,
+    selectedMap: { id: mapId },
+    selectedMission: null,
+    round: 0,
+    currentRound: 0,
+    ended: false,
+    isTestGame: true,
+
+    // Squads
+    player1Squad: { dcList: p1SquadDcList, ccList: p1CcDeck },
+    player2Squad: { dcList: p2SquadDcList, ccList: p2CcDeck },
+    p1DcList,
+    p2DcList,
+
+    // VP
+    player1VP: { total: 0, kills: 0, objectives: 0 },
+    player2VP: { total: 0, kills: 0, objectives: 0 },
+
+    // Figure positions — empty, will be populated by real deploy handlers
+    figurePositions: { 1: {}, 2: {} },
+
+    // CC state — deck provided, hand empty (drawn during CC_DRAW phase)
+    player1CcHand: [],
+    player2CcHand: [],
+    player1CcDeck: [...p1CcDeck],
+    player2CcDeck: [...p2CcDeck],
+    player1CcDiscard: [],
+    player2CcDiscard: [],
+    player1CcDrawn: false,
+    player2CcDrawn: false,
+
+    // Initiative — P1 has initiative
+    initiativePlayerId: p1Id,
+    initiativeDetermined: true,
+
+    // Phase — at zone selection, ready for deployment
+    phase: PHASES.ZONE_SELECTION,
+    roundPhase: null,
+
+    // Damage tracking
+    totalDamageReceived: { 1: 0, 2: 0 },
+
+    // Undo
+    undoStack: [],
+
+    // Channel IDs — fake channels for headless testing
+    generalId: `general-${gameId}`,
+    p1HandId: `p1-hand-${gameId}`,
+    p2HandId: `p2-hand-${gameId}`,
+    boardId: `board-${gameId}`,
+  };
+
+  return game;
+}
+
+/**
+ * Run a complete setup simulation from zone selection through round 1.
+ *
+ * @param {object} config
+ * @param {string} config.mapId
+ * @param {Array} config.p1Army - [{ dcName: 'Stormtrooper', count: 1 }, ...]
+ * @param {Array} config.p2Army
+ * @param {Array} [config.p1CcDeck] - CC deck for player 1
+ * @param {Array} [config.p2CcDeck] - CC deck for player 2
+ * @param {boolean} [config.verbose]
+ * @returns {Promise<{ game, errors, phases, steps, figureCount }>}
+ */
+export async function runSetupSim(config) {
+  const { verbose = false } = config;
+  const errors = [];
+  const phases = [];
+  const steps = [];
+
+  // Build game at ZONE_SELECTION
+  const game = buildSetupGame(config);
+  const gameId = game.gameId;
+  const p1Id = game.player1Id;
+  const p2Id = game.player2Id;
+
+  // Initialize DC state maps
+  const dcMessageMeta = new Map();
+  const dcExhaustedState = new Map();
+  const dcHealthState = new Map();
+  initializeDcState(game, dcMessageMeta, dcExhaustedState, dcHealthState);
+
+  // Build deps and harness
+  const deps = buildHeadlessDeps({
+    dcMessageMeta,
+    dcExhaustedState,
+    dcHealthState,
+    lightweight: true,
+  });
+
+  const harness = createHarness(game, {
+    deps,
+    dcMessageMeta,
+    dcExhaustedState,
+    dcHealthState,
+    lightweight: true,
+  });
+
+  // Helper to submit an action and track results
+  async function submit(customId, userId, opts = {}) {
+    const result = await harness.submitAction(customId, userId, opts);
+    const g = harness.getGame();
+    const stepInfo = { customId, userId, phase: g?.phase, error: result.error };
+    steps.push(stepInfo);
+    if (result.error) {
+      errors.push({ step: steps.length, customId, userId, error: result.error });
+      if (verbose) console.log(`  [setup step ${steps.length}] ERROR: ${result.error}`);
+    }
+    if (verbose) console.log(`  [setup step ${steps.length}] ${customId} → phase=${g?.phase} roundPhase=${g?.roundPhase}`);
+    return result;
+  }
+
+  // Helper to get fake channel for a player's hand
+  function getHandChannel(playerNum) {
+    const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+    return createFakeChannel(handId);
+  }
+
+  try {
+    // ── Phase 1: Zone Selection ─────────────────────────────────────────────
+    phases.push('zone_selection');
+    await submit(`deployment_zone_red_${gameId}`, p1Id);
+
+    let g = harness.getGame();
+
+    // Check if we entered attachment phase (army has skirmish upgrades)
+    if (g.phase === PHASES.ATTACHMENT) {
+      phases.push('attachment');
+      // For armies with skirmish upgrades, handle attachment placement.
+      // Auto-attach logic in handleDeploymentZone may have already placed some.
+      // For each player with pending attachments, confirm done.
+      for (const pn of [1, 2]) {
+        const pending = g.setupAttachmentPending?.[pn] || [];
+        if (pending.length > 0) {
+          // There are unplaced attachments — we need to pick targets.
+          // For now, skip armies with manual attachments (they need select menus).
+          errors.push({
+            step: steps.length,
+            customId: 'attachment_manual',
+            userId: pn === 1 ? p1Id : p2Id,
+            error: `Manual attachment placement needed for ${pending.length} card(s) — not yet supported in setup harness`,
+          });
+        }
+        // If already confirmed (auto-attached), skip
+        if (g.setupAttachmentConfirmed?.[pn]) continue;
+
+        // Confirm attachment done
+        await submit(`attach_done_confirm_${gameId}_${pn}`, pn === 1 ? p1Id : p2Id, {
+          channel: getHandChannel(pn),
+        });
+      }
+
+      g = harness.getGame();
+
+      // Both confirmed → phase gate should fire
+      if (g.phaseGate?.phase === 'attach_done') {
+        await submit(`phase_gate_ready_${gameId}`, p1Id);
+        await submit(`phase_gate_ready_${gameId}`, p2Id);
+        g = harness.getGame();
+      }
+    }
+
+    // ── Phase 2: Deployment ──────────────────────────────────────────────────
+    if (g.phase === PHASES.DEPLOYMENT) {
+      phases.push('deployment');
+      const initPn = g.initiativePlayerId === p1Id ? 1 : 2;
+      const nonInitPn = initPn === 1 ? 2 : 1;
+      const initUserId = initPn === 1 ? p1Id : p2Id;
+      const nonInitUserId = nonInitPn === 1 ? p1Id : p2Id;
+
+      // Auto-deploy initiative player
+      await submit(`auto_deploy_${gameId}_${initPn}`, initUserId, {
+        channel: getHandChannel(initPn),
+      });
+
+      // Deployment done — initiative player
+      await submit(`deployment_done_${gameId}`, initUserId, {
+        channel: getHandChannel(initPn),
+      });
+
+      g = harness.getGame();
+
+      // Auto-deploy non-initiative player
+      await submit(`auto_deploy_${gameId}_${nonInitPn}`, nonInitUserId, {
+        channel: getHandChannel(nonInitPn),
+      });
+
+      // Deployment done — non-initiative player
+      await submit(`deployment_done_${gameId}`, nonInitUserId, {
+        channel: getHandChannel(nonInitPn),
+      });
+
+      g = harness.getGame();
+    }
+
+    // ── Phase 3: Deploy Done Phase Gate ──────────────────────────────────────
+    g = harness.getGame();
+    if (g.phaseGate?.phase === 'deploy_done') {
+      phases.push('deploy_done_gate');
+      await submit(`phase_gate_ready_${gameId}`, p1Id);
+      await submit(`phase_gate_ready_${gameId}`, p2Id);
+      g = harness.getGame();
+    }
+
+    // ── Phase 4: CC Draw ─────────────────────────────────────────────────────
+    if (g.phase === PHASES.CC_DRAW) {
+      phases.push('cc_draw');
+
+      // Draw for each player, handling Moff Gideon's "I Know Everything" interrupts
+      for (const pn of [1, 2]) {
+        const userId = pn === 1 ? p1Id : p2Id;
+        const drawnKey = pn === 1 ? 'player1CcDrawn' : 'player2CcDrawn';
+        g = harness.getGame();
+        if (g[drawnKey]) continue; // Already drawn
+
+        await submit(`cc_shuffle_draw_${gameId}`, userId, {
+          channel: getHandChannel(pn),
+        });
+
+        // Check for I Know Everything interrupt (Moff Gideon)
+        g = harness.getGame();
+        if (g.pendingIKnowEverything) {
+          phases.push('i_know_everything');
+          // The targeted player picks which card to keep (pick 0 = first card)
+          const targetUserId = g.pendingIKnowEverything.targetPlayerNum === 1 ? p1Id : p2Id;
+          await submit(`ike_keep_${gameId}_0`, targetUserId, {
+            channel: getHandChannel(g.pendingIKnowEverything.targetPlayerNum),
+          });
+          g = harness.getGame();
+        }
+
+        // If still not drawn (e.g., both players trigger IKE), retry
+        g = harness.getGame();
+        if (!g[drawnKey]) {
+          await submit(`cc_shuffle_draw_${gameId}`, userId, {
+            channel: getHandChannel(pn),
+          });
+          g = harness.getGame();
+        }
+      }
+
+      g = harness.getGame();
+    }
+
+    // ── Phase 5: CC Drawn Phase Gate ─────────────────────────────────────────
+    g = harness.getGame();
+    if (g.phaseGate?.phase === 'cc_drawn') {
+      phases.push('cc_drawn_gate');
+      await submit(`phase_gate_ready_${gameId}`, p1Id);
+      await submit(`phase_gate_ready_${gameId}`, p2Id);
+      g = harness.getGame();
+    }
+
+    // ── Phase 6: Pre-Activation Phase Gate ──────────────────────────────────
+    g = harness.getGame();
+    if (g.phaseGate?.phase === 'pre_activation') {
+      phases.push('pre_activation_gate');
+      await submit(`phase_gate_ready_${gameId}`, p1Id);
+      await submit(`phase_gate_ready_${gameId}`, p2Id);
+      g = harness.getGame();
+    }
+
+    // ── Phase 7: Start-of-Round Phase Gate (if SOR effects exist) ───────────
+    g = harness.getGame();
+    if (g.phaseGate?.phase === 'post_start_of_round') {
+      phases.push('post_start_of_round_gate');
+      await submit(`phase_gate_ready_${gameId}`, p1Id);
+      await submit(`phase_gate_ready_${gameId}`, p2Id);
+      g = harness.getGame();
+    }
+
+    // Check final state
+    g = harness.getGame();
+    const figureCount = {
+      p1: Object.keys(g.figurePositions?.[1] || {}).length,
+      p2: Object.keys(g.figurePositions?.[2] || {}).length,
+    };
+
+    return {
+      game: g,
+      errors,
+      phases,
+      steps,
+      figureCount,
+      reachedRoundActive: g.phase === PHASES.ROUND_ACTIVE,
+      gameId,
+    };
+  } catch (err) {
+    errors.push({ step: steps.length, customId: 'uncaught', error: err.message, stack: err.stack });
+    return {
+      game: harness.getGame(),
+      errors,
+      phases,
+      steps,
+      figureCount: { p1: 0, p2: 0 },
+      reachedRoundActive: false,
+      gameId,
+    };
+  }
+}
