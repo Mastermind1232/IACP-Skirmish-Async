@@ -303,7 +303,7 @@
     "[Lie in Ambush]": {
       "abilityText": "NON-MASSIVE, NON-UNIQUE ONLY\n\nBefore Deployment, set one of your groups aside, out of play, and attach this to it. This group does not deploy during deployment.\n\nAfter an opponent activates a group, if you have 3 or more exhausted or defeated groups and it is not the first round, deploy this group to any deployment zone.",
       "keywords": [],
-      "cost": 0,
+      "cost": 1,
       "attachment": true,
       "unique": true,
       "affiliation": "Any"
