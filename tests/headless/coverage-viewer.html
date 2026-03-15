@@ -223,7 +223,7 @@ h1 { font-size: 26px; margin-bottom: 4px; }
   <h3 id="modal-title">Update Region</h3>
   <input type="hidden" id="modal-region-id">
 
-  <label>Status</label>
+  <label>Discord Status</label>
   <div class="status-options" id="status-options">
     <div class="status-opt" data-val="untested">Untested</div>
     <div class="status-opt" data-val="partial">Partial</div>
@@ -876,9 +876,9 @@ function render(ledger, telemetry) {
       card.onclick = () => openModal(id);
       card.innerHTML = `
         <div class="card-name">${region.name}${incidents.length > 0 ? `<span class="incident-count">${incidents.length}</span>` : ''}</div>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-          <span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span>
-          <span class="live-pill ${live}" style="cursor:default">${liveLabel(live)}</span>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px">
+          <span style="color:#6e7681">Backend:</span><span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span>
+          <span style="color:#6e7681">Discord:</span><span class="live-pill ${live}" style="cursor:default">${liveLabel(live)}</span>
         </div>
       `;
       grid.appendChild(card);
