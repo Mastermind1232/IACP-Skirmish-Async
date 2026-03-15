@@ -41,6 +41,10 @@ import {
   getEarnedAchievements,
   checkAndGrantAchievements,
   insertGameEvent,
+  upsertCoverageLiveStatus,
+  getCoverageLiveStatuses,
+  insertCoverageIncident,
+  getCoverageIncidents,
 } from './src/db.js';
 import {
   getGame,
@@ -1814,52 +1818,135 @@ client.once('ready', async () => {
   // Local HTTP endpoint to create a test game from Cursor/terminal (no need to type in #lfg)
   const guildId = process.env.DISCORD_GUILD_ID;
   const port = Number(process.env.TESTGAME_PORT) || 3999;
-  if (guildId) {
-    createServer((req, res) => {
-      if (req.method !== 'POST' || req.url !== '/testgame') {
-        res.writeHead(404);
-        res.end();
-        return;
-      }
+  // Helper: read JSON body from request
+  function readBody(req) {
+    return new Promise((resolve) => {
       let body = '';
       req.on('data', (chunk) => { body += chunk; });
-      req.on('end', async () => {
-        try {
-          const data = body ? JSON.parse(body) : {};
-          const userId = data.userId || process.env.TESTGAME_USER_ID;
-          const scenarioId = data.scenarioId || null;
-          if (!userId) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Missing userId (set in body or TESTGAME_USER_ID)' }));
-            return;
-          }
-          const guild = await client.guilds.fetch(guildId).catch(() => null);
-          if (!guild) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Guild not found' }));
-            return;
-          }
-          await guild.channels.fetch();
-          const lfg = guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.name === 'lfg');
-          if (!lfg) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: '#lfg channel not found' }));
-            return;
-          }
-          const player2Id = data.player2Id || undefined;
-          const { gameId } = await createTestGame(client, guild, userId, scenarioId, lfg, { player2Id });
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ gameId, message: 'Test game created. Check #lfg in Discord.' }));
-        } catch (err) {
-          console.error('POST /testgame error:', err);
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message || 'Test game creation failed' }));
-        }
+      req.on('end', () => {
+        try { resolve(body ? JSON.parse(body) : {}); }
+        catch { resolve({}); }
       });
-    }).listen(port, '127.0.0.1', () => {
-      console.log(`Testgame HTTP: POST http://127.0.0.1:${port}/testgame (body: { "userId?", "scenarioId?", "player2Id?" }, or set TESTGAME_USER_ID)`);
     });
   }
+  // Helper: JSON response with CORS
+  function jsonRes(res, status, data) {
+    res.writeHead(status, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    });
+    res.end(JSON.stringify(data));
+  }
+
+  createServer(async (req, res) => {
+    // CORS preflight
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      });
+      res.end();
+      return;
+    }
+
+    // --- Coverage API ---
+
+    // GET /api/coverage/ping — health check for viewer
+    if (req.method === 'GET' && req.url === '/api/coverage/ping') {
+      jsonRes(res, 200, { ok: true, db: isDbConfigured() });
+      return;
+    }
+
+    // GET /api/coverage/statuses — all live statuses
+    if (req.method === 'GET' && req.url === '/api/coverage/statuses') {
+      const statuses = await getCoverageLiveStatuses();
+      jsonRes(res, 200, statuses);
+      return;
+    }
+
+    // POST /api/coverage/status — upsert one live status
+    if (req.method === 'POST' && req.url === '/api/coverage/status') {
+      const data = await readBody(req);
+      if (!data.regionId || !data.status) {
+        jsonRes(res, 400, { error: 'Missing regionId or status' });
+        return;
+      }
+      await upsertCoverageLiveStatus(data.regionId, data.status, data.lastCheck);
+      jsonRes(res, 200, { ok: true });
+      return;
+    }
+
+    // GET /api/coverage/incidents — query incidents
+    if (req.method === 'GET' && req.url?.startsWith('/api/coverage/incidents')) {
+      const url = new URL(req.url, `http://127.0.0.1:${port}`);
+      const opts = {};
+      if (url.searchParams.get('severity')) opts.severity = url.searchParams.get('severity');
+      if (url.searchParams.get('regionId')) opts.regionId = url.searchParams.get('regionId');
+      if (url.searchParams.get('since')) opts.since = url.searchParams.get('since');
+      if (url.searchParams.get('limit')) opts.limit = Number(url.searchParams.get('limit'));
+      const incidents = await getCoverageIncidents(opts);
+      jsonRes(res, 200, incidents);
+      return;
+    }
+
+    // POST /api/coverage/incident — insert one incident
+    if (req.method === 'POST' && req.url === '/api/coverage/incident') {
+      const data = await readBody(req);
+      if (!data.regionId || !data.severity || !data.note) {
+        jsonRes(res, 400, { error: 'Missing regionId, severity, or note' });
+        return;
+      }
+      const row = await insertCoverageIncident(data);
+      if (row) {
+        // Also update the live status for this region
+        await upsertCoverageLiveStatus(data.regionId, data.liveStatus || 'broken', data.lastCheck);
+        jsonRes(res, 200, { ok: true, id: row.id, createdAt: row.created_at });
+      } else {
+        jsonRes(res, 500, { error: 'DB insert failed (DB may not be configured)' });
+      }
+      return;
+    }
+
+    // --- Testgame (existing) ---
+
+    if (req.method === 'POST' && req.url === '/testgame' && guildId) {
+      const data = await readBody(req);
+      try {
+        const userId = data.userId || process.env.TESTGAME_USER_ID;
+        const scenarioId = data.scenarioId || null;
+        if (!userId) {
+          jsonRes(res, 400, { error: 'Missing userId (set in body or TESTGAME_USER_ID)' });
+          return;
+        }
+        const guild = await client.guilds.fetch(guildId).catch(() => null);
+        if (!guild) {
+          jsonRes(res, 500, { error: 'Guild not found' });
+          return;
+        }
+        await guild.channels.fetch();
+        const lfg = guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.name === 'lfg');
+        if (!lfg) {
+          jsonRes(res, 500, { error: '#lfg channel not found' });
+          return;
+        }
+        const player2Id = data.player2Id || undefined;
+        const { gameId } = await createTestGame(client, guild, userId, scenarioId, lfg, { player2Id });
+        jsonRes(res, 200, { gameId, message: 'Test game created. Check #lfg in Discord.' });
+      } catch (err) {
+        console.error('POST /testgame error:', err);
+        jsonRes(res, 400, { error: err.message || 'Test game creation failed' });
+      }
+      return;
+    }
+
+    res.writeHead(404);
+    res.end();
+  }).listen(port, '127.0.0.1', () => {
+    console.log(`Bot HTTP API: http://127.0.0.1:${port} (testgame + coverage API)`);
+  });
   botReady = true;
   console.log('Bot fully ready — accepting interactions.');
 });

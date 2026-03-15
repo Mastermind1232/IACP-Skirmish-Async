@@ -112,8 +112,36 @@ export async function initDb() {
       )
     `);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_game_snapshots_game ON game_snapshots (game_id, version DESC)').catch(() => {});
+    // Coverage / live-incident tables
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS coverage_live_status (
+        region_id   TEXT PRIMARY KEY,
+        status      TEXT NOT NULL DEFAULT 'untested',
+        last_check  DATE,
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS coverage_incidents (
+        id            SERIAL PRIMARY KEY,
+        region_id     TEXT NOT NULL,
+        region_name   TEXT NOT NULL,
+        severity      TEXT NOT NULL,
+        note          TEXT NOT NULL,
+        game_id       TEXT,
+        phase         TEXT,
+        last_action   TEXT,
+        undo_fixed    BOOLEAN DEFAULT FALSE,
+        refresh_fixed BOOLEAN DEFAULT FALSE,
+        siblings      JSONB DEFAULT '[]',
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_coverage_incidents_region ON coverage_incidents(region_id)').catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_coverage_incidents_severity ON coverage_incidents(severity)').catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_coverage_incidents_created ON coverage_incidents(created_at DESC)').catch(() => {});
     await seedAchievements();
-    console.log('[DB] PostgreSQL connected, games and completed_games tables ready.');
+    console.log('[DB] PostgreSQL connected, all tables ready.');
   } catch (err) {
     console.error('[DB] Failed to connect:', err.message);
     pool = null;
@@ -726,5 +754,111 @@ export async function deleteSnapshots(gameId) {
     await pool.query(`DELETE FROM game_snapshots WHERE game_id = $1`, [gameId]);
   } catch (err) {
     console.error('[DB] deleteSnapshots failed:', err.message);
+  }
+}
+
+// --- Coverage / Live-Incident Persistence ---
+
+/** Upsert a region's live Discord testing status. */
+export async function upsertCoverageLiveStatus(regionId, status, lastCheck) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO coverage_live_status (region_id, status, last_check, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (region_id) DO UPDATE SET status = $2, last_check = $3, updated_at = NOW()`,
+      [regionId, status, lastCheck || new Date().toISOString().slice(0, 10)]
+    );
+  } catch (err) {
+    console.error('[DB] upsertCoverageLiveStatus failed:', err.message);
+  }
+}
+
+/** Get all live statuses as { regionId: { status, lastCheck } }. */
+export async function getCoverageLiveStatuses() {
+  if (!pool) return {};
+  try {
+    const res = await pool.query('SELECT region_id, status, last_check FROM coverage_live_status');
+    const out = {};
+    for (const row of res.rows) {
+      out[row.region_id] = { status: row.status, lastCheck: row.last_check };
+    }
+    return out;
+  } catch (err) {
+    console.error('[DB] getCoverageLiveStatuses failed:', err.message);
+    return {};
+  }
+}
+
+/** Insert a coverage incident. Returns the created row id. */
+export async function insertCoverageIncident(incident) {
+  if (!pool) return null;
+  try {
+    const res = await pool.query(
+      `INSERT INTO coverage_incidents (region_id, region_name, severity, note, game_id, phase, last_action, undo_fixed, refresh_fixed, siblings)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, created_at`,
+      [
+        incident.regionId || incident.region,
+        incident.regionName || '',
+        incident.severity,
+        incident.note,
+        incident.gameId || null,
+        incident.phase || null,
+        incident.lastAction || null,
+        !!incident.undoFixed || !!incident.undoFixedIt,
+        !!incident.refreshFixed || !!incident.refreshFixedIt,
+        JSON.stringify(incident.siblings || []),
+      ]
+    );
+    return res.rows[0];
+  } catch (err) {
+    console.error('[DB] insertCoverageIncident failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Query coverage incidents. Options:
+ *   severity: 'blocker' | 'major' | 'minor'
+ *   regionId: filter by region
+ *   since: ISO date string — only incidents after this date
+ *   limit: max rows (default 100)
+ */
+export async function getCoverageIncidents(opts = {}) {
+  if (!pool) return [];
+  try {
+    const conditions = [];
+    const params = [];
+    let idx = 1;
+    if (opts.severity) { conditions.push(`severity = $${idx++}`); params.push(opts.severity); }
+    if (opts.regionId) { conditions.push(`region_id = $${idx++}`); params.push(opts.regionId); }
+    if (opts.since) { conditions.push(`created_at >= $${idx++}`); params.push(opts.since); }
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    const limit = opts.limit || 100;
+    const res = await pool.query(
+      `SELECT id, region_id, region_name, severity, note, game_id, phase, last_action, undo_fixed, refresh_fixed, siblings, created_at
+       FROM coverage_incidents ${where}
+       ORDER BY created_at DESC
+       LIMIT ${limit}`,
+      params
+    );
+    return res.rows.map(r => ({
+      id: r.id,
+      regionId: r.region_id,
+      regionName: r.region_name,
+      severity: r.severity,
+      note: r.note,
+      gameId: r.game_id,
+      phase: r.phase,
+      lastAction: r.last_action,
+      undoFixed: r.undo_fixed,
+      refreshFixed: r.refresh_fixed,
+      siblings: r.siblings || [],
+      createdAt: r.created_at,
+    }));
+  } catch (err) {
+    console.error('[DB] getCoverageIncidents failed:', err.message);
+    return [];
   }
 }

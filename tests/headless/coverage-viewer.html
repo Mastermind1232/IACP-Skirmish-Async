@@ -5,13 +5,13 @@
 <title>Coverage Map</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #0d1117; color: #c9d1d9; font-family: 'Consolas', 'Monaco', monospace; padding: 20px; }
-h1 { font-size: 20px; margin-bottom: 4px; }
-.subtitle { color: #8b949e; font-size: 12px; margin-bottom: 16px; }
+body { background: #0d1117; color: #c9d1d9; font-family: 'Consolas', 'Monaco', monospace; padding: 20px; font-size: 16px; }
+h1 { font-size: 26px; margin-bottom: 4px; }
+.subtitle { color: #8b949e; font-size: 15px; margin-bottom: 16px; }
 
 /* Legend */
-.legend { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 12px; line-height: 1.6; }
-.legend-title { font-weight: bold; color: #c9d1d9; margin-bottom: 6px; font-size: 13px; }
+.legend { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
+.legend-title { font-weight: bold; color: #c9d1d9; margin-bottom: 6px; font-size: 16px; }
 .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
 .legend-swatch { width: 32px; height: 16px; border-radius: 4px; flex-shrink: 0; }
 .legend-bar-demo { height: 6px; border-radius: 3px; flex-shrink: 0; }
@@ -19,7 +19,7 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 
 /* Summary bar */
 .summary { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-.summary-item { padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: bold; }
+.summary-item { padding: 8px 14px; border-radius: 6px; font-size: 15px; font-weight: bold; }
 .summary-item.cov-strong { background: #152c15; border: 1px solid #27ae60; color: #27ae60; }
 .summary-item.cov-partial { background: #2c2515; border: 1px solid #d4a017; color: #d4a017; }
 .summary-item.cov-weak { background: #2c1515; border: 1px solid #c0392b; color: #c0392b; }
@@ -28,12 +28,12 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .summary-item.incident { background: #2c1520; border: 1px solid #f85149; color: #f85149; }
 
 /* Telemetry info */
-.telemetry-info { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 8px 14px; margin-bottom: 20px; font-size: 11px; color: #8b949e; }
+.telemetry-info { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-size: 14px; color: #8b949e; }
 .telemetry-info strong { color: #c9d1d9; }
 
 /* Category sections */
 .category { margin-bottom: 24px; }
-.category-header { font-size: 14px; text-transform: uppercase; color: #8b949e; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid #21262d; padding-bottom: 4px; }
+.category-header { font-size: 17px; text-transform: uppercase; color: #8b949e; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid #21262d; padding-bottom: 4px; }
 
 /* Region grid */
 .region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
@@ -45,14 +45,14 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .card.cov-weak { background: #2a1414; border-color: #c0392b; }
 .card.cov-none { background: #161620; border-color: #333; }
 
-.card-name { font-size: 13px; font-weight: bold; margin-bottom: 5px; }
+.card-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
 .card.cov-none .card-name { color: #666; }
 
 /* Three-layer status row */
 .card-layers { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
-.layer-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
-.layer-label { color: #6e7681; min-width: 56px; font-size: 10px; }
-.cov-pill { font-weight: bold; padding: 1px 6px; border-radius: 3px; font-size: 10px; text-transform: uppercase; }
+.layer-row { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.layer-label { color: #6e7681; min-width: 60px; font-size: 13px; }
+.cov-pill { font-weight: bold; padding: 2px 8px; border-radius: 3px; font-size: 12px; text-transform: uppercase; }
 .cov-pill.cov-strong { background: #27ae60; color: #000; }
 .cov-pill.cov-partial { background: #d4a017; color: #000; }
 .cov-pill.cov-weak { background: #c0392b; color: #fff; }
@@ -66,10 +66,10 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .expl-bar.common { background: #e2b93d; }
 .expl-bar.rare { background: #3d8bfd; }
 .expl-bar.never { background: transparent; }
-.expl-text { font-size: 10px; color: #8b949e; white-space: nowrap; }
+.expl-text { font-size: 13px; color: #8b949e; white-space: nowrap; }
 
 /* Live status pill */
-.live-pill { font-weight: bold; padding: 1px 6px; border-radius: 3px; font-size: 10px; text-transform: uppercase; cursor: pointer; }
+.live-pill { font-weight: bold; padding: 3px 8px; border-radius: 3px; font-size: 13px; text-transform: uppercase; cursor: pointer; }
 .live-pill.untested { background: #333; color: #888; }
 .live-pill.partial { background: #d4a017; color: #000; }
 .live-pill.verified { background: #27ae60; color: #000; }
@@ -81,12 +81,12 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .incident-count { font-size: 9px; padding: 1px 5px; border-radius: 8px; background: #f85149; color: #fff; font-weight: bold; margin-left: 4px; }
 
 /* Report issue button */
-.report-btn { font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #21262d; color: #8b949e; border: 1px solid #30363d; cursor: pointer; margin-left: auto; }
+.report-btn { font-size: 12px; padding: 3px 8px; border-radius: 3px; background: #21262d; color: #8b949e; border: 1px solid #30363d; cursor: pointer; margin-left: auto; }
 .report-btn:hover { background: #30363d; color: #c9d1d9; }
 
 /* Evidence badges */
 .evidence-row { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 3px; }
-.evidence-badge { font-size: 9px; padding: 1px 5px; border-radius: 2px; }
+.evidence-badge { font-size: 12px; padding: 2px 6px; border-radius: 2px; }
 .evidence-badge.setup-harness { background: #1a3a1a; color: #3fb950; }
 .evidence-badge.flow-harness { background: #1a2a3a; color: #58a6ff; }
 .evidence-badge.sim-farm { background: #2a1a3a; color: #bc8cff; }
@@ -97,18 +97,18 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .evidence-badge.synthetic-only { background: #1a1a2e; color: #666; }
 
 /* Siblings row */
-.siblings-row { font-size: 9px; color: #6e7681; margin-top: 2px; }
+.siblings-row { font-size: 12px; color: #6e7681; margin-top: 2px; }
 .siblings-row a { color: #58a6ff; text-decoration: none; cursor: pointer; }
 .siblings-row a:hover { text-decoration: underline; }
 
 /* Card hover detail */
-.card-notes { font-size: 10px; color: #6e7681; margin-top: 4px; max-height: 0; overflow: hidden; transition: max-height 0.2s; }
+.card-notes { font-size: 13px; color: #6e7681; margin-top: 4px; max-height: 0; overflow: hidden; transition: max-height 0.2s; }
 .card:hover .card-notes { max-height: 120px; }
 
 /* Recent incidents section */
 .incidents-section { margin-top: 24px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
 .incidents-section h2 { font-size: 14px; color: #f85149; margin-bottom: 10px; }
-.incident-entry { padding: 6px 0; border-bottom: 1px solid #21262d; font-size: 11px; }
+.incident-entry { padding: 6px 0; border-bottom: 1px solid #21262d; font-size: 14px; }
 .incident-entry:last-child { border-bottom: none; }
 .sev-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: bold; text-transform: uppercase; }
 .sev-badge.blocker { background: #f85149; color: #fff; }
@@ -119,7 +119,7 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .needs-section { margin-top: 24px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
 .needs-section h2 { font-size: 14px; margin-bottom: 4px; }
 .needs-section .section-desc { font-size: 11px; color: #8b949e; margin-bottom: 10px; }
-.needs-item { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid #21262d; font-size: 12px; }
+.needs-item { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid #21262d; font-size: 15px; }
 .needs-item:last-child { border-bottom: none; }
 .needs-rank { font-weight: bold; min-width: 20px; }
 .needs-name { flex: 1; }
@@ -155,12 +155,54 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .status-opt.selected { border-color: #58a6ff; background: #1a2a3a; color: #58a6ff; }
 
 .no-data { color: #6e7681; font-style: italic; padding: 20px; text-align: center; }
+
+/* File I/O toolbar */
+.file-toolbar { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.file-toolbar-title { font-weight: bold; font-size: 14px; color: #c9d1d9; margin-right: 6px; }
+.tb-btn { padding: 6px 14px; border-radius: 5px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.tb-btn:hover { background: #30363d; border-color: #58a6ff; }
+.tb-btn.primary { background: #238636; border-color: #238636; color: #fff; }
+.tb-btn.primary:hover { background: #2ea043; }
+.tb-btn.danger { background: #21262d; border-color: #f85149; color: #f85149; }
+.tb-btn.danger:hover { background: #2c1515; }
+.tb-sep { width: 1px; height: 24px; background: #30363d; }
+.tb-status { font-size: 12px; color: #8b949e; margin-left: auto; }
+.tb-status .unsaved { color: #d4a017; font-weight: bold; }
+.tb-status .saved { color: #27ae60; }
+
+/* Claude handoff section */
+.handoff-section { margin-top: 24px; background: #0d1520; border: 1px solid #1a3a5a; border-radius: 8px; padding: 14px; }
+.handoff-section h2 { font-size: 16px; color: #58a6ff; margin-bottom: 4px; }
+.handoff-desc { font-size: 13px; color: #8b949e; margin-bottom: 10px; }
+.handoff-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; font-size: 13px; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; max-height: 400px; overflow-y: auto; line-height: 1.5; }
+.handoff-actions { display: flex; gap: 8px; margin-top: 10px; }
+.copy-toast { font-size: 12px; color: #27ae60; margin-left: 8px; opacity: 0; transition: opacity 0.3s; }
+.copy-toast.show { opacity: 1; }
+
+/* Hidden file input */
+.hidden-input { display: none; }
 </style>
 </head>
 <body>
 
 <h1>Coverage Map</h1>
 <div class="subtitle">Backend verification + sim exploration + live Discord status. Click any region to update its live status or report an issue.</div>
+
+<!-- File I/O Toolbar -->
+<div class="file-toolbar">
+  <span class="file-toolbar-title">Incidents:</span>
+  <button class="tb-btn primary" onclick="exportIncidents()">Save to File</button>
+  <button class="tb-btn" onclick="document.getElementById('import-file').click()">Load from File</button>
+  <input type="file" id="import-file" class="hidden-input" accept=".json" onchange="importIncidents(this)">
+  <div class="tb-sep"></div>
+  <button class="tb-btn" onclick="exportFullState()">Export All (incidents + statuses)</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn danger" onclick="resetFromFile()">Reset to File</button>
+  <div class="tb-sep"></div>
+  <div id="backend-indicator" style="font-size:13px"></div>
+  <div class="tb-status" id="file-status"></div>
+  <span class="copy-toast" id="save-toast" style="margin-left:8px"></span>
+</div>
 
 <div id="legend" class="legend"></div>
 <div id="summary" class="summary"></div>
@@ -170,6 +212,17 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 <div id="needs-hot" class="needs-section" style="display:none"></div>
 <div id="needs-dark" class="needs-section" style="display:none"></div>
 <div id="history" class="history-section" style="display:none"></div>
+
+<!-- Claude Handoff -->
+<div class="handoff-section">
+  <h2>Claude Handoff</h2>
+  <div class="handoff-desc">Copy this summary and paste it to Claude, or save incidents to file first and tell Claude to read <code>tests/headless/coverage-incidents.json</code>.</div>
+  <div class="handoff-box" id="handoff-box"></div>
+  <div class="handoff-actions">
+    <button class="tb-btn primary" onclick="copyHandoff()">Copy to Clipboard</button>
+    <span class="copy-toast" id="copy-toast">Copied!</span>
+  </div>
+</div>
 
 <!-- Incident Report Modal -->
 <div id="incident-modal" class="modal-overlay">
@@ -198,6 +251,9 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 
   <label>Game ID (optional)</label>
   <input type="text" id="modal-gameid" placeholder="e.g., 00042">
+
+  <label>Phase (optional)</label>
+  <input type="text" id="modal-phase" placeholder="e.g., combat, deployment, activation">
 
   <label>Last action / customId (optional)</label>
   <input type="text" id="modal-action" placeholder="e.g., dc_special_2_abc123">
@@ -229,6 +285,64 @@ const CATEGORIES = [
 ];
 
 let LEDGER = null, TELEMETRY = null, INCIDENTS = null;
+
+// ── Backend API ──
+
+const API_BASE = 'http://127.0.0.1:3999';
+let backendAvailable = false;
+
+async function checkBackend() {
+  try {
+    const r = await fetch(`${API_BASE}/api/coverage/ping`, { signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      const data = await r.json();
+      backendAvailable = data.ok && data.db;
+      return backendAvailable;
+    }
+  } catch {}
+  backendAvailable = false;
+  return false;
+}
+
+async function apiPost(path, body) {
+  if (!backendAvailable) return null;
+  try {
+    const r = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5000),
+    });
+    return r.ok ? r.json() : null;
+  } catch { return null; }
+}
+
+async function apiGet(path) {
+  if (!backendAvailable) return null;
+  try {
+    const r = await fetch(`${API_BASE}${path}`, { signal: AbortSignal.timeout(5000) });
+    return r.ok ? r.json() : null;
+  } catch { return null; }
+}
+
+function updateBackendIndicator() {
+  const el = document.getElementById('backend-indicator');
+  if (!el) return;
+  if (backendAvailable) {
+    el.innerHTML = '<span style="color:#27ae60;font-weight:bold">Backend: Connected</span>';
+  } else {
+    el.innerHTML = '<span style="color:#d4a017">Backend: Offline (local-only mode)</span>';
+  }
+}
+
+function showSaveToast(msg, isBackend) {
+  const el = document.getElementById('save-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isBackend ? '#27ae60' : '#d4a017';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
 
 function classifyExploration(hits) {
   if (hits >= 500) return { label: 'Frequent', cls: 'freq', pct: 100 };
@@ -286,6 +400,7 @@ function openModal(regionId) {
   document.getElementById('modal-title').textContent = `${region.name}`;
   document.getElementById('modal-note').value = '';
   document.getElementById('modal-gameid').value = '';
+  document.getElementById('modal-phase').value = '';
   document.getElementById('modal-action').value = '';
   document.getElementById('modal-undo').checked = false;
   document.getElementById('modal-refresh').checked = false;
@@ -328,26 +443,28 @@ function getSelectedVal(groupId) {
   return sel ? sel.dataset.val : null;
 }
 
-function saveStatusOnly() {
+async function saveStatusOnly() {
   const regionId = document.getElementById('modal-region-id').value;
   const newStatus = getSelectedVal('status-options') || 'untested';
+  const lastCheck = new Date().toISOString().slice(0, 10);
 
-  // Update ledger in memory
   if (LEDGER.regions[regionId]) {
     LEDGER.regions[regionId].liveStatus = newStatus;
-    LEDGER.regions[regionId].lastLiveCheck = new Date().toISOString().slice(0, 10);
+    LEDGER.regions[regionId].lastLiveCheck = lastCheck;
   }
 
-  // Save to localStorage
-  localStorage.setItem('coverage-ledger-live', JSON.stringify(
-    Object.fromEntries(Object.entries(LEDGER.regions).map(([id, r]) => [id, { liveStatus: r.liveStatus, lastLiveCheck: r.lastLiveCheck }]))
-  ));
+  // Try backend first
+  const result = await apiPost('/api/coverage/status', { regionId, status: newStatus, lastCheck });
 
+  syncToLocalStorage();
+  markDirty();
   closeModal();
   render(LEDGER, TELEMETRY);
+  renderHandoff();
+  showSaveToast(result ? 'Saved to backend' : 'Saved locally only', !!result);
 }
 
-function saveIncident() {
+async function saveIncident() {
   const regionId = document.getElementById('modal-region-id').value;
   const severity = getSelectedVal('severity-options');
   const note = document.getElementById('modal-note').value.trim();
@@ -356,37 +473,285 @@ function saveIncident() {
   if (!note) { alert('Please add a short note'); return; }
   if (!severity) { alert('Please select severity'); return; }
 
+  const lastCheck = new Date().toISOString().slice(0, 10);
   const incident = {
     id: Date.now().toString(36),
     timestamp: new Date().toISOString(),
     region: regionId,
+    regionId: regionId,
     regionName: LEDGER.regions[regionId]?.name || regionId,
     severity,
     note,
     gameId: document.getElementById('modal-gameid').value.trim() || null,
+    phase: document.getElementById('modal-phase').value.trim() || null,
     lastAction: document.getElementById('modal-action').value.trim() || null,
     undoFixedIt: document.getElementById('modal-undo').checked,
     refreshFixedIt: document.getElementById('modal-refresh').checked,
+    liveStatus: newStatus,
+    lastCheck,
     siblings: LEDGER.regions[regionId]?.siblings || [],
   };
 
-  // Update in memory
+  // Try backend first
+  const result = await apiPost('/api/coverage/incident', incident);
+
   if (!INCIDENTS) INCIDENTS = { meta: {}, incidents: [] };
   INCIDENTS.incidents.push(incident);
 
   if (LEDGER.regions[regionId]) {
     LEDGER.regions[regionId].liveStatus = newStatus;
-    LEDGER.regions[regionId].lastLiveCheck = new Date().toISOString().slice(0, 10);
+    LEDGER.regions[regionId].lastLiveCheck = lastCheck;
   }
 
-  // Save to localStorage
-  localStorage.setItem('coverage-incidents', JSON.stringify(INCIDENTS.incidents));
+  syncToLocalStorage();
+  markDirty();
+  closeModal();
+  render(LEDGER, TELEMETRY);
+  renderHandoff();
+  showSaveToast(result ? 'Incident saved to backend' : 'Incident saved locally only', !!result);
+}
+
+// ── Dirty tracking ──
+
+let lastExportedAt = null;
+let unsavedChanges = false;
+
+function markDirty() {
+  unsavedChanges = true;
+  updateFileStatus();
+}
+
+function updateFileStatus() {
+  const el = document.getElementById('file-status');
+  if (!el) return;
+  if (unsavedChanges) {
+    const count = (INCIDENTS?.incidents || []).length;
+    el.innerHTML = `<span class="unsaved">${count} incident${count !== 1 ? 's' : ''} — unsaved changes</span>`;
+  } else if (lastExportedAt) {
+    el.innerHTML = `<span class="saved">Last saved: ${lastExportedAt}</span>`;
+  } else {
+    const count = (INCIDENTS?.incidents || []).length;
+    el.innerHTML = count > 0 ? `${count} incident${count !== 1 ? 's' : ''} loaded from file` : 'No incidents';
+  }
+}
+
+// ── File I/O ──
+
+function buildIncidentsJSON() {
+  return JSON.stringify({
+    meta: {
+      description: "Live Discord incident log. Each entry records something that went wrong or felt flaky during a real Discord game. Used to drive class-level investigation, not just point fixes.",
+      severities: ["blocker", "major", "minor"],
+      liveStatuses: ["untested", "partial", "verified", "broken", "stale"],
+      lastExported: new Date().toISOString()
+    },
+    liveStatuses: Object.fromEntries(
+      Object.entries(LEDGER?.regions || {})
+        .filter(([, r]) => r.liveStatus && r.liveStatus !== 'untested')
+        .map(([id, r]) => [id, { liveStatus: r.liveStatus, lastLiveCheck: r.lastLiveCheck, name: r.name }])
+    ),
+    incidents: (INCIDENTS?.incidents || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+  }, null, 2);
+}
+
+function downloadJSON(content, filename) {
+  const blob = new Blob([content], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportIncidents() {
+  const json = buildIncidentsJSON();
+  downloadJSON(json, 'coverage-incidents.json');
+  unsavedChanges = false;
+  lastExportedAt = new Date().toLocaleTimeString();
+  updateFileStatus();
+}
+
+function exportFullState() {
+  const full = {
+    exportedAt: new Date().toISOString(),
+    incidents: JSON.parse(buildIncidentsJSON()),
+    liveStatuses: Object.fromEntries(
+      Object.entries(LEDGER?.regions || {}).map(([id, r]) => [id, { liveStatus: r.liveStatus || 'untested', lastLiveCheck: r.lastLiveCheck }])
+    )
+  };
+  downloadJSON(JSON.stringify(full, null, 2), `coverage-full-export-${new Date().toISOString().slice(0,10)}.json`);
+  unsavedChanges = false;
+  lastExportedAt = new Date().toLocaleTimeString();
+  updateFileStatus();
+}
+
+function importIncidents(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      // Support both formats: direct incidents file or full export
+      const incidents = data.incidents?.incidents || data.incidents || [];
+      const liveStatuses = data.incidents?.liveStatuses || data.liveStatuses || {};
+
+      if (!Array.isArray(incidents)) {
+        alert('Invalid file: no incidents array found');
+        return;
+      }
+
+      // Merge incidents (deduplicate by id)
+      if (!INCIDENTS) INCIDENTS = { meta: {}, incidents: [] };
+      const existingIds = new Set(INCIDENTS.incidents.map(i => i.id));
+      let added = 0;
+      for (const inc of incidents) {
+        if (inc.id && !existingIds.has(inc.id)) {
+          INCIDENTS.incidents.push(inc);
+          existingIds.add(inc.id);
+          added++;
+        }
+      }
+
+      // Merge live statuses
+      let statusUpdated = 0;
+      for (const [id, status] of Object.entries(liveStatuses)) {
+        if (LEDGER?.regions[id] && status.liveStatus) {
+          LEDGER.regions[id].liveStatus = status.liveStatus;
+          LEDGER.regions[id].lastLiveCheck = status.lastLiveCheck || LEDGER.regions[id].lastLiveCheck;
+          statusUpdated++;
+        }
+      }
+
+      // Sync to localStorage
+      syncToLocalStorage();
+      render(LEDGER, TELEMETRY);
+      renderHandoff();
+      updateFileStatus();
+
+      alert(`Imported: ${added} new incidents, ${statusUpdated} status updates.\n${incidents.length - added} duplicates skipped.`);
+    } catch (err) {
+      alert('Failed to parse JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  input.value = ''; // Reset so same file can be re-imported
+}
+
+function resetFromFile() {
+  if (!confirm('Reset all incidents and live statuses to the original file data?\nThis will discard any unsaved changes.')) return;
+  localStorage.removeItem('coverage-incidents');
+  localStorage.removeItem('coverage-ledger-live');
+  location.reload();
+}
+
+function syncToLocalStorage() {
+  localStorage.setItem('coverage-incidents', JSON.stringify((INCIDENTS?.incidents || [])));
   localStorage.setItem('coverage-ledger-live', JSON.stringify(
     Object.fromEntries(Object.entries(LEDGER.regions).map(([id, r]) => [id, { liveStatus: r.liveStatus, lastLiveCheck: r.lastLiveCheck }]))
   ));
+}
 
-  closeModal();
-  render(LEDGER, TELEMETRY);
+// ── Claude Handoff ──
+
+function buildHandoffText() {
+  const incidents = (INCIDENTS?.incidents || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const regions = LEDGER?.regions || {};
+
+  // Broken/stale regions
+  const brokenRegions = Object.entries(regions).filter(([, r]) => r.liveStatus === 'broken');
+  const staleRegions = Object.entries(regions).filter(([, r]) => r.liveStatus === 'stale');
+
+  // Recent incidents (last 14 days)
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 14);
+  const recent = incidents.filter(i => new Date(i.timestamp) >= cutoff);
+
+  // Blockers first
+  const blockers = recent.filter(i => i.severity === 'blocker');
+  const majors = recent.filter(i => i.severity === 'major');
+
+  let text = `COVERAGE INCIDENT REPORT (${new Date().toISOString().slice(0,10)})\n`;
+  text += `Total incidents: ${incidents.length} | Recent (14d): ${recent.length} | Blockers: ${blockers.length} | Majors: ${majors.length}\n`;
+  text += `Broken regions: ${brokenRegions.length} | Stale regions: ${staleRegions.length}\n`;
+
+  if (brokenRegions.length > 0) {
+    text += `\nBROKEN REGIONS:\n`;
+    for (const [id, r] of brokenRegions) {
+      const sibs = (r.siblings || []).map(s => regions[s]?.name).filter(Boolean);
+      text += `  - ${r.name} (${id})${sibs.length ? ' | siblings: ' + sibs.join(', ') : ''}\n`;
+    }
+  }
+
+  if (blockers.length > 0) {
+    text += `\nBLOCKER INCIDENTS:\n`;
+    for (const inc of blockers) {
+      const sibs = (inc.siblings || []).map(s => regions[s]?.name).filter(Boolean);
+      text += `  [${inc.timestamp.slice(0,10)}] ${inc.regionName}: ${inc.note}`;
+      if (inc.gameId) text += ` (game: ${inc.gameId})`;
+      if (inc.phase) text += ` (phase: ${inc.phase})`;
+      if (inc.lastAction) text += ` (action: ${inc.lastAction})`;
+      if (inc.undoFixedIt) text += ` [undo-fixed]`;
+      if (inc.refreshFixedIt) text += ` [refresh-fixed]`;
+      text += `\n`;
+      if (sibs.length) text += `    Also check: ${sibs.join(', ')}\n`;
+    }
+  }
+
+  if (majors.length > 0) {
+    text += `\nMAJOR INCIDENTS:\n`;
+    for (const inc of majors) {
+      const sibs = (inc.siblings || []).map(s => regions[s]?.name).filter(Boolean);
+      text += `  [${inc.timestamp.slice(0,10)}] ${inc.regionName}: ${inc.note}`;
+      if (inc.gameId) text += ` (game: ${inc.gameId})`;
+      if (inc.phase) text += ` (phase: ${inc.phase})`;
+      if (inc.lastAction) text += ` (action: ${inc.lastAction})`;
+      if (inc.undoFixedIt) text += ` [undo-fixed]`;
+      if (inc.refreshFixedIt) text += ` [refresh-fixed]`;
+      text += `\n`;
+      if (sibs.length) text += `    Also check: ${sibs.join(', ')}\n`;
+    }
+  }
+
+  const minors = recent.filter(i => i.severity === 'minor');
+  if (minors.length > 0) {
+    text += `\nMINOR INCIDENTS (${minors.length}):\n`;
+    for (const inc of minors) {
+      text += `  [${inc.timestamp.slice(0,10)}] ${inc.regionName}: ${inc.note}`;
+      if (inc.phase) text += ` (phase: ${inc.phase})`;
+      text += `\n`;
+    }
+  }
+
+  if (staleRegions.length > 0) {
+    text += `\nSTALE REGIONS (code changed since last check):\n`;
+    for (const [id, r] of staleRegions) {
+      text += `  - ${r.name}\n`;
+    }
+  }
+
+  if (incidents.length === 0 && brokenRegions.length === 0) {
+    text += `\nNo incidents or broken regions recorded.`;
+  }
+
+  text += `\nCanonical file: tests/headless/coverage-incidents.json`;
+  return text;
+}
+
+function renderHandoff() {
+  const box = document.getElementById('handoff-box');
+  if (box) box.textContent = buildHandoffText();
+}
+
+function copyHandoff() {
+  const text = buildHandoffText();
+  navigator.clipboard.writeText(text).then(() => {
+    const toast = document.getElementById('copy-toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  });
 }
 
 // ── Load saved state from localStorage ──
@@ -653,8 +1018,54 @@ document.getElementById('incident-modal').addEventListener('click', e => {
   TELEMETRY = telemetry;
   INCIDENTS = incidents;
   loadLocalState();
+
+  // Check backend and merge DB state if available
+  await checkBackend();
+  updateBackendIndicator();
+  if (backendAvailable) {
+    // Load live statuses from DB (authoritative over localStorage)
+    const dbStatuses = await apiGet('/api/coverage/statuses');
+    if (dbStatuses) {
+      for (const [id, data] of Object.entries(dbStatuses)) {
+        if (LEDGER.regions[id]) {
+          LEDGER.regions[id].liveStatus = data.status || LEDGER.regions[id].liveStatus;
+          LEDGER.regions[id].lastLiveCheck = data.lastCheck || LEDGER.regions[id].lastLiveCheck;
+        }
+      }
+    }
+    // Load recent incidents from DB
+    const dbIncidents = await apiGet('/api/coverage/incidents?limit=200');
+    if (dbIncidents && dbIncidents.length > 0) {
+      if (!INCIDENTS) INCIDENTS = { meta: {}, incidents: [] };
+      const existingIds = new Set(INCIDENTS.incidents.map(i => i.id));
+      for (const inc of dbIncidents) {
+        // DB incidents use numeric id; generate a string key for dedup
+        const key = `db-${inc.id}`;
+        if (!existingIds.has(key)) {
+          INCIDENTS.incidents.push({
+            id: key,
+            timestamp: inc.createdAt,
+            region: inc.regionId,
+            regionName: inc.regionName,
+            severity: inc.severity,
+            note: inc.note,
+            gameId: inc.gameId,
+            phase: inc.phase,
+            lastAction: inc.lastAction,
+            undoFixedIt: inc.undoFixed,
+            refreshFixedIt: inc.refreshFixed,
+            siblings: inc.siblings || [],
+          });
+          existingIds.add(key);
+        }
+      }
+    }
+  }
+
   renderLegend();
   render(LEDGER, TELEMETRY);
+  renderHandoff();
+  updateFileStatus();
 })();
 </script>
 </body>
