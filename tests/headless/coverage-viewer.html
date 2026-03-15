@@ -935,7 +935,7 @@ function render(ledger, telemetry) {
       card.onclick = () => openModal(id);
       card.innerHTML = `
         <div class="card-name">${region.name}${incidents.length > 0 ? `<span class="incident-count">${incidents.length}</span>` : ''}</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px;white-space:nowrap">
           <span style="color:#6e7681">Coverage:</span><span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span>
           <span style="color:#6e7681">Frequency:</span><span style="color:${freq.color};font-size:12px;font-weight:bold">${freq.label}</span>
           <span style="color:#6e7681">Discord:</span><span class="live-pill ${live}" style="cursor:default">${liveLabel(live)}</span>
