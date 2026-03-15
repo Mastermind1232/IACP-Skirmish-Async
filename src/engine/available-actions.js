@@ -41,7 +41,7 @@ export function getAvailableActions(game, playerNum, deps = {}) {
     if (spreadActions.length > 0) return spreadActions;
   }
   if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) {
-    const choiceActions = getDcAbilityChoiceActions(game, playerNum);
+    const choiceActions = getDcAbilityChoiceActions(game, playerNum, deps);
     if (choiceActions.length > 0) return choiceActions;
   }
   // Bleeding prompt (headless only): figure owner must accept or prevent
@@ -270,7 +270,7 @@ function getRoundActiveActions(game, playerNum, deps) {
 
   // Pending DC ability choice (chooseOne mechanic)
   if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) {
-    const choiceActions = getDcAbilityChoiceActions(game, playerNum);
+    const choiceActions = getDcAbilityChoiceActions(game, playerNum, deps);
     if (choiceActions.length > 0) return choiceActions;
   }
 
@@ -282,7 +282,7 @@ function getRoundActiveActions(game, playerNum, deps) {
 
   // Pending Pounce space choice (Nexu etc.)
   if (game.pendingPounceSpaceChoice && Object.keys(game.pendingPounceSpaceChoice).length > 0) {
-    const pounceActions = getPounceSpaceActions(game, playerNum);
+    const pounceActions = getPounceSpaceActions(game, playerNum, deps);
     if (pounceActions.length > 0) return pounceActions;
   }
 
@@ -367,7 +367,7 @@ function getActivationActions(game, playerNum, deps) {
     // If we have health state, verify the DC isn't fully defeated
     if (deps.dcHealthState) {
       const hs = deps.dcHealthState.get(msgId);
-      if (hs && hs.every(fig => fig && fig.currentHp <= 0)) return false;
+      if (hs && hs.every(fig => fig && fig[0] <= 0)) return false;
     }
     return true;
   });
@@ -395,7 +395,7 @@ function getActivationActions(game, playerNum, deps) {
         // Skip if DC is fully defeated (stale dcActionsData)
         if (deps.dcHealthState) {
           const hs = deps.dcHealthState.get(msgId);
-          if (hs && hs.every(fig => fig && fig.currentHp <= 0)) continue;
+          if (hs && hs.every(fig => fig && fig[0] <= 0)) continue;
         }
         actions.push({
           type: ACTION_TYPES.DC_END_ACTIVATION,
@@ -412,8 +412,16 @@ function getActivationActions(game, playerNum, deps) {
   const activationsRemaining = playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
 
   // Check if there's already an active DC for this player (blocks new activations)
-  const hasActiveDc = deps.dcMessageMeta && [...deps.dcMessageMeta].some(([msgId, meta]) =>
-    meta.gameId === gameId && meta.playerNum === playerNum && game.dcActionsData?.[msgId] != null);
+  // Skip fully defeated DCs — their stale dcActionsData should not block new activations
+  const hasActiveDc = deps.dcMessageMeta && [...deps.dcMessageMeta].some(([msgId, meta]) => {
+    if (meta.gameId !== gameId || meta.playerNum !== playerNum) return false;
+    if (game.dcActionsData?.[msgId] == null) return false;
+    if (deps.dcHealthState) {
+      const hs = deps.dcHealthState.get(msgId);
+      if (hs && hs.every(fig => fig && fig[0] <= 0)) return false;
+    }
+    return true;
+  });
 
   if (activationsRemaining > 0 && !hasActiveDc) {
     // Can activate a DC — need dcMessageMeta to list available DCs
@@ -1047,16 +1055,24 @@ function getLegacyActions(game, playerNum, deps) {
 
 // ── DC Ability Choice ─────────────────────────────────────────────────────
 
-function getDcAbilityChoiceActions(game, playerNum) {
+function getDcAbilityChoiceActions(game, playerNum, deps) {
   const actions = [];
   const gameId = game.gameId;
 
   for (const [key, pending] of Object.entries(game.pendingDcAbilityChoice)) {
+    // Auto-clear dead-figure entries regardless of playerNum (prevents orphaned states)
+    if (deps?.dcHealthState && pending.msgId) {
+      const hs = deps.dcHealthState.get(pending.msgId);
+      const fi = pending.figureIndex ?? 0;
+      if (hs && hs[fi] && hs[fi][0] <= 0) {
+        delete game.pendingDcAbilityChoice[key];
+        continue;
+      }
+    }
     if (pending.playerNum !== playerNum) continue;
     // Choices can be stored as choiceOptions, choices, or targetFigureKeys
     const choices = pending.choiceOptions || pending.choices || pending.targetFigureKeys || [];
     if (choices.length === 0) {
-      // Stale pending state with no options — auto-clear to prevent deadlock
       delete game.pendingDcAbilityChoice[key];
       continue;
     }
@@ -1107,13 +1123,26 @@ function getCelebrationActions(game, playerNum) {
 
 // ── Pounce Space ──────────────────────────────────────────────────────────
 
-function getPounceSpaceActions(game, playerNum) {
+function getPounceSpaceActions(game, playerNum, deps) {
   const actions = [];
   const gameId = game.gameId;
 
   for (const [msgId, pending] of Object.entries(game.pendingPounceSpaceChoice)) {
+    // Auto-clear dead-figure entries regardless of playerNum (prevents orphaned states)
+    if (deps?.dcHealthState) {
+      const hs = deps.dcHealthState.get(msgId);
+      const fi = pending.figureIndex ?? 0;
+      if (hs && hs[fi] && hs[fi][0] <= 0) {
+        delete game.pendingPounceSpaceChoice[msgId];
+        continue;
+      }
+    }
     if (pending.playerNum !== playerNum) continue;
     const spaces = pending.validSpaces || [];
+    if (spaces.length === 0) {
+      delete game.pendingPounceSpaceChoice[msgId];
+      continue;
+    }
     for (const space of spaces) {
       actions.push({
         type: ACTION_TYPES.POUNCE_SPACE,

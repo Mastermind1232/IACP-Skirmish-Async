@@ -192,9 +192,20 @@ export async function handleBleedResolve(interaction, ctx) {
           }
           // Clean up dcActionsData if entire group is defeated (prevents dead-end)
           const _bleedHs = dcHealthState.get(msgId);
-          if (_bleedHs && _bleedHs.every(fig => fig && fig.currentHp <= 0)) {
+          if (_bleedHs && _bleedHs.every(fig => fig && fig[0] <= 0)) {
             if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
             if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+          }
+          // Clean up pending sub-states referencing this DC/figure (prevents orphaned states)
+          if (game.pendingDcAbilityChoice) {
+            for (const k of Object.keys(game.pendingDcAbilityChoice)) {
+              if (k.startsWith(`${msgId}_`)) delete game.pendingDcAbilityChoice[k];
+            }
+            if (Object.keys(game.pendingDcAbilityChoice).length === 0) delete game.pendingDcAbilityChoice;
+          }
+          if (game.pendingPounceSpaceChoice?.[msgId]) {
+            delete game.pendingPounceSpaceChoice[msgId];
+            if (Object.keys(game.pendingPounceSpaceChoice).length === 0) delete game.pendingPounceSpaceChoice;
           }
           await checkWinConditions(game, interaction.client);
         }

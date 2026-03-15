@@ -1120,6 +1120,19 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             await updateAttachmentMessageForDc(game, defenderPlayerNum, targetMsgId, client);
           }
         }
+        // Clean up pending sub-states referencing this DC (prevents orphaned states after defeat)
+        if (targetMsgId) {
+          if (game.pendingDcAbilityChoice) {
+            for (const k of Object.keys(game.pendingDcAbilityChoice)) {
+              if (k.startsWith(`${targetMsgId}_`)) delete game.pendingDcAbilityChoice[k];
+            }
+            if (Object.keys(game.pendingDcAbilityChoice).length === 0) delete game.pendingDcAbilityChoice;
+          }
+          if (game.pendingPounceSpaceChoice?.[targetMsgId]) {
+            delete game.pendingPounceSpaceChoice[targetMsgId];
+            if (Object.keys(game.pendingPounceSpaceChoice).length === 0) delete game.pendingPounceSpaceChoice;
+          }
+        }
         await checkWinConditions(game, client);
         // Celebration: after unique hostile defeated, offer attacker a chance to play it
         const defeatedDcName = idx >= 0 ? dcList[idx]?.dcName : null;

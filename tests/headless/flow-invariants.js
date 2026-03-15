@@ -142,10 +142,23 @@ export function assertFlowInvariants(game, actionDeps) {
 
   // GS-2: Someone can act
   if (p1Actions.length === 0 && p2Actions.length === 0) {
+    let debugInfo = '';
+    if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) {
+      const entries = Object.entries(game.pendingDcAbilityChoice).map(([k, v]) =>
+        `${k}:pn${v.playerNum},opts=${(v.choiceOptions||v.choices||v.targetFigureKeys||[]).length}`
+      );
+      debugInfo += ` dcAbilityChoice={${entries.join(',')}},`;
+    }
+    if (game.dcActionsData) {
+      const adEntries = Object.entries(game.dcActionsData).map(([k, v]) => `${k}:rem=${v.remaining}`);
+      debugInfo += ` dcActionsData={${adEntries.join(',')}},`;
+    }
+    debugInfo += ` activeTurn=${game.currentActivationTurnPlayerId}, p1Act=${game.p1ActivationsRemaining}, p2Act=${game.p2ActivationsRemaining}`;
     errors.push(
       `GS-2: Dead-end — no player has actions. ` +
       `phase=${game.phase}, roundPhase=${game.roundPhase}, ` +
-      `pending=[${PENDING_STATES.filter(k => game[k]).join(', ')}]`
+      `pending=[${PENDING_STATES.filter(k => game[k]).join(', ')}]` +
+      debugInfo
     );
   }
 
@@ -270,10 +283,20 @@ export function assertSurfaceInvariants(game, surface, step) {
     return pattern.test(text);
   }
 
+  // dc_special followUps legitimately contain DC ability names in bold.
+  // If the bold text appears at the start of the followUp content (**AbilityName** — ...),
+  // it's a DC ability being reported, not a CC card leak. Skip those entries.
+  function isDcSpecialActionName(entry, cardName) {
+    if (!entry.customId?.startsWith('dc_special_')) return false;
+    const content = entry.content || '';
+    return content.startsWith(`**${cardName}**`);
+  }
+
   for (const cardName of p1Hand) {
     if (!cardName) continue;
     for (const entry of currentSharedEntries) {
       if (entry.source !== 'interaction') continue;
+      if (isDcSpecialActionName(entry, cardName)) continue;
       const fullText = (entry.content || '') + JSON.stringify(entry.embeds || []);
       if (cardNameLeaked(cardName, fullText)) {
         errors.push(
@@ -287,6 +310,7 @@ export function assertSurfaceInvariants(game, surface, step) {
     if (!cardName) continue;
     for (const entry of currentSharedEntries) {
       if (entry.source !== 'interaction') continue;
+      if (isDcSpecialActionName(entry, cardName)) continue;
       const fullText = (entry.content || '') + JSON.stringify(entry.embeds || []);
       if (cardNameLeaked(cardName, fullText)) {
         errors.push(
@@ -324,7 +348,9 @@ export function assertSurfaceInvariants(game, surface, step) {
   const sideEffectStates = [
     'pendingCombat', 'pendingCelebration', 'pendingPowerTokenGrant',
     'pendingPowerTokenOverflow', 'pendingSpreadThePainCondPick', 'pendingCoverFire',
-    'pendingPounceSpaceChoice', 'pendingMissileSalvo',
+    'pendingPounceSpaceChoice', 'pendingMissileSalvo', 'pendingStrainChoice',
+    'pendingBleeding', 'pendingStrikeMeDown', 'pendingSlowOnTheDraw',
+    'pendingForceExhaustion', 'pendingIllicitArms', 'pendingDcAbilityChoice',
   ];
 
   for (const trans of surface.pendingTransitions) {
