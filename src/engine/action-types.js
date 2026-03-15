@@ -124,7 +124,7 @@ export function buildCustomId(type, params = {}) {
     case ACTION_TYPES.COMBAT_SURGE:
       return `combat_surge_${gameId}_${params.surgeIndex}`;
     case ACTION_TYPES.COMBAT_REROLL:
-      return `combat_reroll_${gameId}_${params.dieIndex}`;
+      return `combat_reroll_${gameId}_${params.side || 'atk'}_${params.dieIndex}`;
     case ACTION_TYPES.COMBAT_RESOLVE:
       return `combat_resolve_ready_${gameId}`;
 

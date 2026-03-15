@@ -791,29 +791,74 @@ function getCombatActions(game, playerNum, deps) {
 
   // Reroll phase — list each eligible die for reroll + done option
   if (combat.rerollPhase) {
-    const rerollPn = combat.rerollPhase === 'attacker' ? attackerPn : defenderPn;
+    let rerollPn;
+    if (combat.rerollPhase === 'attacker') {
+      rerollPn = attackerPn;
+    } else if (combat.rerollPhase === 'forced') {
+      rerollPn = (combat.forcedRerollQueue || [])[0]?.controlPlayer ?? attackerPn;
+    } else {
+      rerollPn = defenderPn;
+    }
     if (playerNum === rerollPn) {
-      const side = combat.rerollPhase;
-      const rerollsRemaining = side === 'attacker'
-        ? (combat.attackerRerollsRemaining ?? 0)
-        : (combat.defenderRerollsRemaining ?? 0);
-      const roll = side === 'attacker' ? combat.attackRoll : combat.defenseRoll;
+      const phase = combat.rerollPhase;
+      // For forced rerolls, determine which dice pool based on queue entry
+      let sideKey, rerollsRemaining, diceResults, alreadyRerolled;
+      if (phase === 'forced') {
+        const entry = (combat.forcedRerollQueue || [])[0];
+        rerollsRemaining = entry?.remaining ?? 0;
+        // Forced rerolls can target attack, defense, or any
+        const atkDice = combat.attackDiceResults || [];
+        const defDice = combat.defenseDiceResults || [];
+        const atkRerolled = combat.attackerRerolledIndices || [];
+        const defRerolled = combat.defenderRerolledIndices || [];
+        if (entry?.pool === 'attack' || entry?.pool === 'any') {
+          for (let i = 0; i < atkDice.length; i++) {
+            if (atkRerolled.includes(i)) continue;
+            actions.push({
+              type: ACTION_TYPES.COMBAT_REROLL,
+              customId: buildCustomId(ACTION_TYPES.COMBAT_REROLL, { gameId, side: 'atk', dieIndex: i }),
+              description: `Force reroll atk die ${i + 1} (${atkDice[i]?.color || 'unknown'})`,
+              params: { side: 'atk', dieIndex: i },
+            });
+          }
+        }
+        if (entry?.pool === 'defense' || entry?.pool === 'any') {
+          for (let i = 0; i < defDice.length; i++) {
+            if (defRerolled.includes(i)) continue;
+            actions.push({
+              type: ACTION_TYPES.COMBAT_REROLL,
+              customId: buildCustomId(ACTION_TYPES.COMBAT_REROLL, { gameId, side: 'def', dieIndex: i }),
+              description: `Force reroll def die ${i + 1} (${defDice[i]?.color || 'unknown'})`,
+              params: { side: 'def', dieIndex: i },
+            });
+          }
+        }
+        sideKey = 'atk'; // Used for done button
+      } else {
+        sideKey = phase === 'attacker' ? 'atk' : 'def';
+        rerollsRemaining = phase === 'attacker'
+          ? (combat.attackerRerollsRemaining ?? 0)
+          : (combat.defenderRerollsRemaining ?? 0);
+        diceResults = phase === 'attacker' ? combat.attackDiceResults : combat.defenseDiceResults;
+        alreadyRerolled = phase === 'attacker' ? (combat.attackerRerolledIndices || []) : (combat.defenderRerolledIndices || []);
 
-      if (rerollsRemaining > 0 && roll?.dice) {
-        for (let i = 0; i < roll.dice.length; i++) {
-          actions.push({
-            type: ACTION_TYPES.COMBAT_REROLL,
-            customId: buildCustomId(ACTION_TYPES.COMBAT_REROLL, { gameId, dieIndex: i }),
-            description: `Reroll ${side} die ${i + 1} (${roll.dice[i]?.color || 'unknown'})`,
-            params: { side, dieIndex: i },
-          });
+        if (rerollsRemaining > 0 && diceResults?.length) {
+          for (let i = 0; i < diceResults.length; i++) {
+            if (alreadyRerolled.includes(i)) continue;
+            actions.push({
+              type: ACTION_TYPES.COMBAT_REROLL,
+              customId: buildCustomId(ACTION_TYPES.COMBAT_REROLL, { gameId, side: sideKey, dieIndex: i }),
+              description: `Reroll ${phase} die ${i + 1} (${diceResults[i]?.color || 'unknown'})`,
+              params: { side: sideKey, dieIndex: i },
+            });
+          }
         }
       }
 
       // Done rerolling / skip
       actions.push({
-        type: ACTION_TYPES.COMBAT_RESOLVE,
-        customId: buildCustomId(ACTION_TYPES.COMBAT_RESOLVE, { gameId }),
+        type: 'combat_reroll_done',
+        customId: `combat_reroll_${gameId}_${sideKey}_done`,
         description: 'Done rerolling',
       });
     }
