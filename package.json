@@ -4,6 +4,7 @@
   "description": "Discord bot for async Imperial Assault Skirmish",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "extract-maps": "node scripts/extract-map-registry.js",
     "extract-cc-names": "node scripts/extract-cc-names.js",
     "scrape-cc-data": "node scripts/scrape-cc-data.js",

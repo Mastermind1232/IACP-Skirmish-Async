@@ -1984,7 +1984,7 @@ client.once('ready', async () => {
     res.writeHead(404);
     res.end();
   }).listen(port, '0.0.0.0', () => {
-    console.log(`Bot HTTP API: http://127.0.0.1:${port} (testgame + coverage API + viewer)`);
+    console.log(`Bot HTTP API: http://0.0.0.0:${port} (testgame + coverage API + viewer)`);
   });
   botReady = true;
   console.log('Bot fully ready — accepting interactions.');
