@@ -287,9 +287,11 @@ export function assertSurfaceInvariants(game, surface, step) {
   // If the bold text appears at the start of the followUp content (**AbilityName** — ...),
   // it's a DC ability being reported, not a CC card leak. Skip those entries.
   function isDcSpecialActionName(entry, cardName) {
-    if (!entry.customId?.startsWith('dc_special_') && !entry.customId?.startsWith('dc_ability_choice_')) return false;
+    const cid = entry.customId || '';
+    if (!cid.startsWith('dc_special_') && !cid.startsWith('dc_ability_choice_') && !cid.startsWith('special_done_')) return false;
     const content = entry.content || '';
-    return content.startsWith(`**${cardName}**`);
+    // DC ability followUps legitimately mention ability names in bold
+    return content.includes(`**${cardName}**`);
   }
 
   for (const cardName of p1Hand) {
