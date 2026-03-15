@@ -46,12 +46,12 @@ h1 { font-size: 26px; margin-bottom: 4px; }
 .card.cov-none { background: #161620; border-color: #333; }
 
 .card-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
-.card.cov-none .card-name { color: #666; }
+.card.cov-none .card-name { color: #8b949e; }
 
 /* Three-layer status row */
 .card-layers { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
 .layer-row { display: flex; align-items: center; gap: 6px; font-size: 14px; }
-.layer-label { color: #6e7681; min-width: 60px; font-size: 13px; }
+.layer-label { color: #b0b8c1; min-width: 60px; font-size: 13px; }
 .cov-pill { font-weight: bold; padding: 2px 8px; border-radius: 3px; font-size: 12px; text-transform: uppercase; }
 .cov-pill.cov-strong { background: #27ae60; color: #000; }
 .cov-pill.cov-partial { background: #d4a017; color: #000; }
@@ -97,12 +97,12 @@ h1 { font-size: 26px; margin-bottom: 4px; }
 .evidence-badge.synthetic-only { background: #1a1a2e; color: #666; }
 
 /* Siblings row */
-.siblings-row { font-size: 12px; color: #6e7681; margin-top: 2px; }
+.siblings-row { font-size: 12px; color: #b0b8c1; margin-top: 2px; }
 .siblings-row a { color: #58a6ff; text-decoration: none; cursor: pointer; }
 .siblings-row a:hover { text-decoration: underline; }
 
 /* Card hover detail */
-.card-notes { font-size: 13px; color: #6e7681; margin-top: 4px; max-height: 0; overflow: hidden; transition: max-height 0.2s; }
+.card-notes { font-size: 13px; color: #b0b8c1; margin-top: 4px; max-height: 0; overflow: hidden; transition: max-height 0.2s; }
 .card:hover .card-notes { max-height: 120px; }
 
 /* Recent incidents section */
@@ -130,7 +130,7 @@ h1 { font-size: 26px; margin-bottom: 4px; }
 .history-section h2 { font-size: 14px; color: #27ae60; margin-bottom: 10px; }
 .history-item { font-size: 11px; padding: 4px 0; border-bottom: 1px solid #21262d; color: #8b949e; }
 .history-item:last-child { border-bottom: none; }
-.history-item .date { color: #6e7681; }
+.history-item .date { color: #b0b8c1; }
 .history-item .change { color: #c9d1d9; }
 
 /* Modal overlay */
@@ -154,7 +154,7 @@ h1 { font-size: 26px; margin-bottom: 4px; }
 .status-opt:hover { border-color: #58a6ff; color: #c9d1d9; }
 .status-opt.selected { border-color: #58a6ff; background: #1a2a3a; color: #58a6ff; }
 
-.no-data { color: #6e7681; font-style: italic; padding: 20px; text-align: center; }
+.no-data { color: #b0b8c1; font-style: italic; padding: 20px; text-align: center; }
 
 /* File I/O toolbar */
 .file-toolbar { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -267,7 +267,7 @@ h1 { font-size: 26px; margin-bottom: 4px; }
         <label style="margin:0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="modal-refresh"> Refresh fixed it</label>
       </div>
 
-      <div id="modal-siblings" style="font-size:12px;color:#6e7681;margin-top:10px"></div>
+      <div id="modal-siblings" style="font-size:12px;color:#b0b8c1;margin-top:10px"></div>
 
       <div class="modal-btns">
         <button class="btn-save" onclick="saveIncident()">Save Incident</button>
@@ -361,8 +361,8 @@ function frequencyLabel(hits) {
   if (hits >= 5000) return { label: 'Very frequent', cls: 'freq-vf', color: '#ff6b35' };
   if (hits >= 500)  return { label: 'Frequent', cls: 'freq-f', color: '#e2b93d' };
   if (hits >= 50)   return { label: 'Infrequent', cls: 'freq-i', color: '#3d8bfd' };
-  if (hits >= 1)    return { label: 'Almost never', cls: 'freq-an', color: '#6e7681' };
-  return { label: 'Never', cls: 'freq-n', color: '#333' };
+  if (hits >= 1)    return { label: 'Almost never', cls: 'freq-an', color: '#b0b8c1' };
+  return { label: 'Never', cls: 'freq-n', color: '#8b949e' };
 }
 
 // Verification level ordering for max() comparison
@@ -848,7 +848,7 @@ function renderLegend() {
     <div style="display:flex;gap:32px;flex-wrap:wrap">
       <div>
         <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Coverage = Testing Coverage (auto)</div>
-        <div style="font-size:11px;color:#6e7681;margin-bottom:4px">Auto-computed from sim telemetry: pass rate + handler prefix coverage</div>
+        <div style="font-size:11px;color:#b0b8c1;margin-bottom:4px">Auto-computed from sim telemetry: pass rate + handler prefix coverage</div>
         <div class="legend-row"><div class="legend-swatch" style="background:#132e13;border:1px solid #27ae60"></div><span class="legend-label"><strong style="color:#27ae60">Well covered</strong> — 500+ hits, 100% pass, 50%+ prefixes exercised</span></div>
         <div class="legend-row"><div class="legend-swatch" style="background:#2a2210;border:1px solid #d4a017"></div><span class="legend-label"><strong style="color:#d4a017">Partial</strong> — 50+ hits, 95%+ pass rate</span></div>
         <div class="legend-row"><div class="legend-swatch" style="background:#2a1414;border:1px solid #c0392b"></div><span class="legend-label"><strong style="color:#c0392b">Weak</strong> — some hits but low confidence</span></div>
@@ -856,16 +856,16 @@ function renderLegend() {
       </div>
       <div>
         <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Frequency = In-Game Occurrence</div>
-        <div style="font-size:11px;color:#6e7681;margin-bottom:4px">How often this region fires across sim games</div>
+        <div style="font-size:11px;color:#b0b8c1;margin-bottom:4px">How often this region fires across sim games</div>
         <div class="legend-row"><span style="color:#ff6b35;font-weight:bold;min-width:110px">Very frequent</span><span class="legend-label">5,000+ hits — fires many times per game</span></div>
         <div class="legend-row"><span style="color:#e2b93d;font-weight:bold;min-width:110px">Frequent</span><span class="legend-label">500–4,999 — fires roughly once per game</span></div>
         <div class="legend-row"><span style="color:#3d8bfd;font-weight:bold;min-width:110px">Infrequent</span><span class="legend-label">50–499 — fires occasionally, not every game</span></div>
-        <div class="legend-row"><span style="color:#6e7681;font-weight:bold;min-width:110px">Almost never</span><span class="legend-label">1–49 — rare edge case</span></div>
-        <div class="legend-row"><span style="color:#333;font-weight:bold;min-width:110px">Never</span><span class="legend-label">0 hits — not reached in sims</span></div>
+        <div class="legend-row"><span style="color:#b0b8c1;font-weight:bold;min-width:110px">Almost never</span><span class="legend-label">1–49 — rare edge case</span></div>
+        <div class="legend-row"><span style="color:#8b949e;font-weight:bold;min-width:110px">Never</span><span class="legend-label">0 hits — not reached in sims</span></div>
       </div>
       <div>
         <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Discord = Live Testing Status</div>
-        <div style="font-size:11px;color:#6e7681;margin-bottom:4px">Manually set from real Discord games</div>
+        <div style="font-size:11px;color:#b0b8c1;margin-bottom:4px">Manually set from real Discord games</div>
         <div class="legend-row"><span class="live-pill untested" style="cursor:default">Untested</span><span class="legend-label">Not checked in Discord</span></div>
         <div class="legend-row"><span class="live-pill partial" style="cursor:default">Partial</span><span class="legend-label">Flaky / incomplete</span></div>
         <div class="legend-row"><span class="live-pill verified" style="cursor:default">Verified</span><span class="legend-label">Works in Discord</span></div>
@@ -873,7 +873,7 @@ function renderLegend() {
         <div class="legend-row"><span class="live-pill stale" style="cursor:default">Stale</span><span class="legend-label">Code changed since check</span></div>
       </div>
     </div>
-    <div style="margin-top:8px;font-size:11px;color:#6e7681">Click any region card to update its live status or report an issue. Coverage auto-updates from telemetry — no manual ledger edits needed.</div>
+    <div style="margin-top:8px;font-size:11px;color:#b0b8c1">Click any region card to update its live status or report an issue. Coverage auto-updates from telemetry — no manual ledger edits needed.</div>
   `;
 }
 
@@ -936,9 +936,9 @@ function render(ledger, telemetry) {
       card.innerHTML = `
         <div class="card-name">${region.name}${incidents.length > 0 ? `<span class="incident-count">${incidents.length}</span>` : ''}</div>
         <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;font-size:12px">
-          <div style="display:flex;align-items:center;gap:6px"><span style="color:#6e7681">Coverage:</span><span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span></div>
-          <div style="display:flex;align-items:center;gap:6px"><span style="color:#6e7681">Frequency:</span><span style="color:${freq.color};font-size:12px;font-weight:bold">${freq.label}</span></div>
-          <div style="display:flex;align-items:center;gap:6px"><span style="color:#6e7681">Discord:</span><span class="live-pill ${live}" style="cursor:default">${liveLabel(live)}</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="color:#e6edf3">Coverage:</span><span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="color:#e6edf3">Frequency:</span><span style="color:${freq.color};font-size:12px;font-weight:bold">${freq.label}</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="color:#e6edf3">Discord:</span><span class="live-pill ${live}" style="cursor:default">${liveLabel(live)}</span></div>
         </div>
       `;
       grid.appendChild(card);
@@ -960,15 +960,15 @@ function render(ledger, telemetry) {
       const region = regions[inc.region];
       const sibNames = (inc.siblings || []).map(s => regions[s]?.name).filter(Boolean);
       html += `<div class="incident-entry">
-        <span style="color:#6e7681">${date} ${time}</span>
+        <span style="color:#b0b8c1">${date} ${time}</span>
         <span class="sev-badge ${inc.severity}">${inc.severity}</span>
         <strong style="margin:0 6px">${inc.regionName}</strong>
         ${inc.note}
-        ${inc.gameId ? `<span style="color:#6e7681;margin-left:6px">game:${inc.gameId}</span>` : ''}
-        ${inc.lastAction ? `<span style="color:#6e7681;margin-left:4px">action:${inc.lastAction}</span>` : ''}
+        ${inc.gameId ? `<span style="color:#b0b8c1;margin-left:6px">game:${inc.gameId}</span>` : ''}
+        ${inc.lastAction ? `<span style="color:#b0b8c1;margin-left:4px">action:${inc.lastAction}</span>` : ''}
         ${inc.undoFixedIt ? '<span style="color:#58a6ff;margin-left:4px;font-size:10px">undo-fixed</span>' : ''}
         ${inc.refreshFixedIt ? '<span style="color:#58a6ff;margin-left:4px;font-size:10px">refresh-fixed</span>' : ''}
-        ${sibNames.length > 0 ? `<div style="font-size:9px;color:#6e7681;margin-top:2px">Also check: ${sibNames.join(', ')}</div>` : ''}
+        ${sibNames.length > 0 ? `<div style="font-size:9px;color:#b0b8c1;margin-top:2px">Also check: ${sibNames.join(', ')}</div>` : ''}
       </div>`;
     }
     incEl.innerHTML = html;
@@ -1018,9 +1018,9 @@ function render(ledger, telemetry) {
     for (const [id, r] of darkList) {
       const ev = effectiveVerif[id];
       html += `<div class="needs-item">
-        <span class="needs-rank" style="color:#555">--</span>
-        <span class="needs-name" style="color:${ev === 'none' ? '#555' : '#999'}">${r.name}</span>
-        <span class="needs-hits" style="color:#555">${regionHits[id]} hits</span>
+        <span class="needs-rank" style="color:#8b949e">--</span>
+        <span class="needs-name" style="color:${ev === 'none' ? '#8b949e' : '#c9d1d9'}">${r.name}</span>
+        <span class="needs-hits" style="color:#8b949e">${regionHits[id]} hits</span>
         <span class="cov-pill cov-${ev}" style="font-size:9px">${coverageLabel(ev)}</span>
       </div>`;
     }
@@ -1039,7 +1039,7 @@ function render(ledger, telemetry) {
       html += `<div class="history-item">
         <span class="date">${h.date}</span> &mdash;
         <span class="change"><strong>${regions[h.region]?.name || h.region}</strong>: ${h.from || 'new'} &rarr; ${h.to}</span>
-        &mdash; <span style="color:#6e7681">${h.reason}</span>
+        &mdash; <span style="color:#b0b8c1">${h.reason}</span>
       </div>`;
     }
     historyEl.innerHTML = html;
