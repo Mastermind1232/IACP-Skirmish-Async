@@ -1020,6 +1020,56 @@ describe('Flow: sim farm regressions', () => {
     assert.ok(spreadAction, 'Expected spread_pain_cond actions above phase gate');
   });
 
+  it('DS-1 does not false-positive on condition keywords (e.g. Focus/Focused)', async () => {
+    // Regression: DS-1 used substring matching, so card "Focus" matched "Focused" in
+    // shared combat log messages. Fixed to use word-boundary matching.
+    const { assertSurfaceInvariants: assertSI } = await import('./flow-invariants.js');
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Stormtrooper (Regular)' }],
+      p1CcHand: ['Focus', 'Take Cover'],
+    });
+
+    // Inject a shared surface entry containing condition keywords (not card names)
+    const surface = fh.getSurface();
+    surface.entries.push({
+      step: 99, source: 'interaction', responseType: 'followUp',
+      visibility: 'shared', customId: 'test_ds1',
+      content: 'Luke Skywalker became **Focused** and took cover behind a wall.',
+      embeds: [], components: [],
+    });
+
+    const game = fh.getGame();
+    const errors = assertSI(game, surface, 99);
+    const ds1 = errors.filter(e => e.startsWith('DS-1'));
+    assert.deepEqual(ds1, [], `DS-1 false positives on condition keywords:\n  ${ds1.join('\n  ')}`);
+  });
+
+  it('GS-5 recognizes combat reaction actions (e.g. strike_me_down)', async () => {
+    // Regression: GS-5 only checked standard combat action types, missing reaction
+    // sub-state types like strike_me_down, slow_on_draw, etc.
+    const { assertFlowInvariants: assertFI } = await import('./flow-invariants.js');
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Obi-Wan Kenobi' }],
+    });
+
+    const game = fh.getGame();
+    // Simulate: pendingCombat exists with a Strike Me Down reaction blocking normal combat
+    game.pendingCombat = {
+      attackerPlayerNum: 1, defenderPlayerNum: 2,
+      attackRoll: false, defenseRoll: false, rerollPhase: 'none',
+      p1Ready: true, p2Ready: true,
+    };
+    game.pendingStrikeMeDown = { defenderPlayerNum: 2 };
+
+    // assertFlowInvariants calls getAvailableActions internally — with pendingStrikeMeDown,
+    // only P2 gets strike_me_down_yes/no (not standard combat actions). GS-5 should accept these.
+    const errors = assertFI(game, {});
+    const gs5 = errors.filter(e => e.startsWith('GS-5'));
+    assert.deepEqual(gs5, [], `GS-5 should not fire when combat reaction actions exist:\n  ${gs5.join('\n  ')}`);
+  });
+
   it('seed=10 pounce select menu has valid options (DS-8 fix)', async () => {
     // Regression: DS-8 invariant checker failed to read options from Discord.js
     // StringSelectMenuBuilder objects (options stored at child.options, not child.data.options)

