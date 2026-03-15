@@ -29,6 +29,19 @@ const TRACKED_PENDING = [
   'pendingOverwatch', 'pendingPounce', 'pendingMissileSalvo',
   'pendingPowerToken', 'pendingCoverFire', 'pendingSpreadPain',
   'pendingIKnowEverything', 'pendingConditionChoice',
+  // Special ability flows
+  'pendingPounceSpaceChoice', 'pendingRushPush', 'pendingShoulderRush',
+  'pendingOverwatchPlacement', 'pendingOrbitalBombardment', 'pendingBombDrop',
+  'pendingFalseOrders',
+  // Combat interrupts
+  'pendingStrikeMeDown', 'pendingSlowOnTheDraw', 'pendingForceExhaustion',
+  'pendingIllicitArms', 'pendingPowerConverter', 'pendingThereIsNoTry',
+  'pendingToughLuck', 'pendingHunterProtocol',
+  // CC play
+  'pendingCcConfirmation', 'pendingCcChoice', 'pendingCcSpaceChoice',
+  'pendingCommDisruptionPrompt',
+  // Interact/objectives
+  'pendingDoorSelections', 'pendingKryknaPushQueue',
 ];
 
 // Known handler prefixes, sorted longest-first for greedy matching
@@ -57,7 +70,19 @@ const KNOWN_PREFIXES = [
   'map_selection', 'map_type', 'map_confirm', 'map_goback',
   'determine_initiative', 'draft_random',
   'bleed_choice', 'stun_choice', 'weaken_choice',
-  'interact_choice',
+  'interact_choice', 'interact_cancel', 'dc_interact',
+  'devaron_door_open', 'devaron_crate_push', 'krykna_push',
+  // Special ability sub-handlers
+  'special_done',
+  'rush_push_fig', 'rush_push_space', 'rush_push_skip',
+  'shoulder_rush_fig', 'shoulder_rush_space', 'shoulder_rush_skip',
+  'overwatch_space', 'ob_deplete', 'ob_space', 'ob_skip', 'bomb_drop_space',
+  'false_orders_action', 'false_orders_space', 'false_orders_atk',
+  'arsenal_pick', 'ee3_pick_die', 'bo_rifle_pick',
+  // CC play chain
+  'cc_play_select', 'cc_confirm_play', 'cc_cancel_play', 'cc_choice', 'cc_space',
+  'comm_disruption_play', 'comm_disruption_skip',
+  'negation_play',
   // DC-specific ability handlers (discovered via telemetry)
   'fv_pick', 'slow_on', 'illicit_arms', 'strike_me',
 ].sort((a, b) => b.length - a.length);

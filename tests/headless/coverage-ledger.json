@@ -1,8 +1,8 @@
 {
   "meta": {
     "lastUpdated": "2026-03-15",
-    "version": 2,
-    "description": "Coverage ledger v2: exploration heat and verification strength are separate dimensions. Verification is human-authored evidence-based confidence. Exploration is machine-measured telemetry reach."
+    "version": 3,
+    "description": "Coverage ledger v3: added interact-objectives and special-ability-flows regions. Added cc-play region. Corrected taxonomy to cover all first-class gameplay families."
   },
   "regions": {
     "squad-submission": {
@@ -106,7 +106,7 @@
       "category": "setup",
       "verification": "none",
       "evidence": [],
-      "notes": "15 interactive post-deploy handlers (Cassian Strike Team, Bodhi Smooth Landing, Ko-Tun Arms Distribution, Scavenged Walker, Extra Armor, Security Detail, Forward Emplacement, Infiltration). All dark.",
+      "notes": "12 ability families: Beskar Armor (auto), Stealthy/Ambush (auto), Security Detail, Forward Emplacement, Smooth Landing (Hera/Bodhi), Infiltration, Strike Team (Cassian), Arms Distribution (Ko-Tun), Scavenged Walker, Extra Armor, companion deploy. 15 interactive pd_* handlers, all dark.",
       "handlerPrefixes": ["pd_security_pick", "pd_strike_adj", "pd_strike_token", "pd_strike_token_done", "pd_move_skip", "pd_move_stay", "pd_sl_pick", "pd_walker_move", "pd_walker_skip", "pd_arms_dist_fig", "pd_arms_dist_token"],
       "pendingStates": [],
       "actionTypes": [],
@@ -154,10 +154,46 @@
       "category": "activation",
       "verification": "partial",
       "evidence": ["flow-harness", "gs-invariants", "sim-farm"],
-      "notes": "Flow harness exercises dc_attack with random target selection via available-actions. Synthetic positions mean range/LOS not fully realistic.",
-      "handlerPrefixes": ["dc_attack"],
+      "notes": "Flow harness exercises dc_attack with random target selection via available-actions. Synthetic positions mean range/LOS not fully realistic. Arsenal/EE-3/Bo-Rifle weapon choice handlers (arsenal_pick_, ee3_pick_die_, bo_rifle_pick_) are NOT exercised.",
+      "handlerPrefixes": ["dc_attack", "arsenal_pick", "ee3_pick_die", "bo_rifle_pick"],
       "pendingStates": [],
       "actionTypes": ["attack_target"],
+      "liveIncidents": [],
+      "lastColoredIn": null
+    },
+    "interact-objectives": {
+      "name": "Interact / Objectives",
+      "category": "activation",
+      "verification": "weak",
+      "evidence": ["flow-harness"],
+      "notes": "dc_interact_ triggers getLegalInteractOptions() showing terminal, door, contraband, launch panel buttons. interact_choice_ resolves the pick. Flow harness hits dc_interact and interact_choice via available-actions but only on maps with objectives. Map-specific events (devaron_door_open, devaron_crate_push, krykna_push) are completely dark. VP scoring from objectives (carry missions, flip missions) untested. Alter Mind / A Powerful Influence interact-blocking untested.",
+      "handlerPrefixes": ["dc_interact", "interact_choice", "interact_cancel", "devaron_door_open", "devaron_crate_push", "krykna_push"],
+      "pendingStates": ["pendingDoorSelections", "pendingKryknaPushQueue"],
+      "actionTypes": ["interact"],
+      "liveIncidents": [],
+      "lastColoredIn": null
+    },
+    "special-ability-flows": {
+      "name": "Special Abilities (Triggered)",
+      "category": "activation",
+      "verification": "weak",
+      "evidence": ["flow-harness", "sim-farm"],
+      "notes": "dc_special_ triggers pendingDcAbilityChoice → dc_ability_choice_ resolves it. Flow harness hits dc_special and dc_ability_choice via available-actions. But complex chains are rarely fully exercised: Pounce (pounce_space_ → teleport), Rush Push (rush_push_fig/space/skip_ → Onar), Shoulder Rush, Overwatch placement (overwatch_space_), Orbital Bombardment (ob_deplete/space/skip_), Bomb Drop (bomb_drop_space_), False Orders / Lure of Dark Side (false_orders_action/space/atk_). Most sub-handlers never fire in sims because they require specific DCs + specific board states.",
+      "handlerPrefixes": ["dc_special", "dc_ability_choice", "special_done", "pounce_space", "rush_push_fig", "rush_push_space", "rush_push_skip", "shoulder_rush_fig", "shoulder_rush_space", "shoulder_rush_skip", "overwatch_space", "ob_deplete", "ob_space", "ob_skip", "bomb_drop_space", "false_orders_action", "false_orders_space", "false_orders_atk"],
+      "pendingStates": ["pendingDcAbilityChoice", "pendingPounceSpaceChoice", "pendingRushPush", "pendingShoulderRush", "pendingOverwatchPlacement", "pendingOrbitalBombardment", "pendingBombDrop", "pendingFalseOrders"],
+      "actionTypes": ["dc_special", "dc_ability_choice"],
+      "liveIncidents": [],
+      "lastColoredIn": null
+    },
+    "cc-play": {
+      "name": "Command Card Play",
+      "category": "activation",
+      "verification": "weak",
+      "evidence": ["flow-harness"],
+      "notes": "Mid-game CC play chain: cc_play_ → cc_play_select_ → cc_confirm_play_ → may trigger cc_choice_ (chooseOne) → may trigger cc_space_ (space pick). Flow harness hits cc_play via available-actions but cc_choice/cc_space chains are rarely exercised. Comm Disruption (comm_disruption_play/skip_) is completely dark. CC play is a major gameplay family — most CCs have effects triggered via this chain.",
+      "handlerPrefixes": ["cc_play", "cc_play_select", "cc_confirm_play", "cc_cancel_play", "cc_choice", "cc_space", "comm_disruption_play", "comm_disruption_skip"],
+      "pendingStates": ["pendingCcConfirmation", "pendingCcChoice", "pendingCcSpaceChoice", "pendingCommDisruptionPrompt"],
+      "actionTypes": ["play_cc"],
       "liveIncidents": [],
       "lastColoredIn": null
     },
@@ -197,27 +233,15 @@
       "liveIncidents": [],
       "lastColoredIn": null
     },
-    "negation": {
-      "name": "Negation",
+    "combat-interrupts": {
+      "name": "Combat Interrupts (CCs)",
       "category": "combat",
       "verification": "weak",
       "evidence": ["flow-harness"],
-      "notes": "Flow harness has negation action type but Negation CC rarely appears in random hands. No targeted test forces Negation into hand. Handler path exists but verification is opportunistic not deliberate.",
-      "handlerPrefixes": ["negation_let_resolve", "negation_use"],
-      "pendingStates": ["pendingNegation"],
-      "actionTypes": ["negation_let_resolve"],
-      "liveIncidents": [],
-      "lastColoredIn": null
-    },
-    "celebration": {
-      "name": "Celebration",
-      "category": "combat",
-      "verification": "weak",
-      "evidence": ["flow-harness"],
-      "notes": "Flow harness exercises celebration_play/pass via cc-eager policy but celebration is rarely triggered (requires killing a unique figure). Verification is incidental not deliberate.",
-      "handlerPrefixes": ["celebration_play", "celebration_pass"],
-      "pendingStates": ["pendingCelebration"],
-      "actionTypes": ["celebration_play", "celebration_pass"],
+      "notes": "Negation and Celebration are combat-phase CC interrupts. Negation: negation_play/let_resolve — CC rarely in random hands. Celebration: celebration_play/pass — requires killing unique figure. Both hit incidentally by flow harness but never deliberately tested. Strike Me Down, Slow on the Draw, Force Exhaustion, Illicit Arms, Power Converter, There Is No Try, Tough Luck, Hunter Protocol — all pending-state combat interrupts that the flow harness does NOT check for.",
+      "handlerPrefixes": ["negation_let_resolve", "negation_play", "celebration_play", "celebration_pass", "strike_me", "slow_on", "fv_pick", "illicit_arms"],
+      "pendingStates": ["pendingNegation", "pendingCelebration", "pendingStrikeMeDown", "pendingSlowOnTheDraw", "pendingForceExhaustion", "pendingIllicitArms", "pendingPowerConverter", "pendingThereIsNoTry", "pendingToughLuck", "pendingHunterProtocol"],
+      "actionTypes": ["negation_let_resolve", "celebration_play", "celebration_pass"],
       "liveIncidents": [],
       "lastColoredIn": null
     },
@@ -260,12 +284,12 @@
     "push-pull": {
       "name": "Push / Pull / Displacement",
       "category": "effects",
-      "verification": "none",
-      "evidence": [],
-      "notes": "Push/pull effects (Slam, Force Push, Pounce, Cover Fire, Spread Pain). Flow harness hits pounce_space/cover_fire via DC abilities but no targeted verification.",
-      "handlerPrefixes": ["pounce_space", "cover_fire_block", "cover_fire_discard", "spread_pain_cond"],
-      "pendingStates": ["pendingPushChoice", "pendingPounce", "pendingCoverFire", "pendingSpreadPain"],
-      "actionTypes": ["pounce_space"],
+      "verification": "weak",
+      "evidence": ["flow-harness"],
+      "notes": "Push/pull effects (Slam, Force Push, Cover Fire, Spread Pain). Flow harness hits cover_fire/spread_pain via DC abilities but no targeted verification. Pounce teleport now tracked under special-ability-flows.",
+      "handlerPrefixes": ["cover_fire_block", "cover_fire_discard", "spread_pain_cond"],
+      "pendingStates": ["pendingPushChoice", "pendingCoverFire", "pendingSpreadPain"],
+      "actionTypes": [],
       "liveIncidents": [],
       "lastColoredIn": null
     },
@@ -391,11 +415,14 @@
     }
   },
   "history": [
+    { "date": "2026-03-15", "region": "interact-objectives", "from": null, "to": "weak", "reason": "New region: dc_interact, interact_choice, terminal/door/contraband/panel handlers. Flow harness hits interact action type incidentally." },
+    { "date": "2026-03-15", "region": "special-ability-flows", "from": null, "to": "weak", "reason": "New region: dc_special → dc_ability_choice chain + 18 sub-handlers (pounce, rush push, overwatch, orbital bombardment, false orders, etc.). Flow harness hits dc_special/dc_ability_choice incidentally." },
+    { "date": "2026-03-15", "region": "cc-play", "from": null, "to": "weak", "reason": "New region: cc_play → cc_play_select → cc_confirm_play → cc_choice → cc_space chain. Flow harness hits cc_play incidentally." },
+    { "date": "2026-03-15", "region": "combat-interrupts", "from": null, "to": "weak", "reason": "Consolidated: negation + celebration merged with 8 other combat-phase CC interrupt pending states (Strike Me Down, Slow on Draw, etc.) into single region." },
+    { "date": "2026-03-15", "region": "push-pull", "from": "none", "to": "weak", "reason": "Upgraded: flow harness does hit cover_fire and spread_pain incidentally. Moved pounce_space to special-ability-flows." },
     { "date": "2026-03-15", "region": "hand-private-surfaces", "from": "none", "to": "weak", "reason": "Corrected: DS-1/DS-2/DS-3 invariants verify hand privacy at data model level" },
     { "date": "2026-03-15", "region": "stale-component", "from": "none", "to": "weak", "reason": "Corrected: DS-7/DS-9 invariants verify cleanup/stale buttons on surface model" },
     { "date": "2026-03-15", "region": "payload-shape", "from": "none", "to": "weak", "reason": "Corrected: DS-8/DS-10 invariants verify Discord API payload limits every flow sim step" },
-    { "date": "2026-03-15", "region": "negation", "from": "partial", "to": "weak", "reason": "Downgraded: handler path exists but Negation CC rarely appears in random hands. Incidental not deliberate." },
-    { "date": "2026-03-15", "region": "celebration", "from": "partial", "to": "weak", "reason": "Downgraded: celebration rarely triggered (requires unique kill). Incidental not deliberate." },
     { "date": "2026-03-14", "region": "zone-selection", "from": "none", "to": "strong", "reason": "setup-harness.js: real handleDeploymentZone via setup sim farm" },
     { "date": "2026-03-14", "region": "auto-deploy", "from": "none", "to": "strong", "reason": "setup-harness.js: real handleAutoDeploy + getFootprintCells fix for large figures" },
     { "date": "2026-03-14", "region": "cc-draw", "from": "none", "to": "strong", "reason": "setup-harness.js: real handleCcShuffleDraw + I Know Everything (Moff Gideon)" },
