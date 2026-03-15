@@ -2066,6 +2066,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     game.pendingDcAbilityChoice = game.pendingDcAbilityChoice || {};
     game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`] = {
       gameId: game.gameId, playerNum: meta.playerNum, abilityId, msgId, figureIndex, specialIdx,
+      choiceOptions: resolveResult.choiceOptions,
       targetFigureKeys: resolveResult.targetFigureKeys || null,
     };
     // Refund the action since we haven't resolved yet — player commits when they pick
@@ -2361,6 +2362,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     game.pendingDcAbilityChoice = game.pendingDcAbilityChoice || {};
     game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`] = {
       gameId, playerNum, abilityId, msgId, figureIndex, specialIdx,
+      choiceOptions: resolveResult.choiceOptions,
       targetFigureKeys: resolveResult.targetFigureKeys || null,
     };
     const choiceButtons = resolveResult.choiceOptions.map((label, i) =>
@@ -2442,6 +2444,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
     game.pendingDcAbilityChoice = game.pendingDcAbilityChoice || {};
     game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`] = {
       gameId, playerNum, abilityId, msgId, figureIndex: pending.figureIndex, specialIdx,
+      choiceOptions: result.choiceOptions,
       targetFigureKeys: result.targetFigureKeys || null,
     };
     // Refresh board if figure moved during the space choice phase

@@ -229,6 +229,7 @@ export async function handleBleedResolve(interaction, ctx) {
     }
   }
   filterCondition(game, figureKey, 'Bleed');
+  delete game.pendingBleeding; // Clear headless pending state if present
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }

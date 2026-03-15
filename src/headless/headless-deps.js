@@ -332,6 +332,7 @@ export function buildHeadlessDeps(options = {}) {
     updateAttachmentMessageForDc, updateMovementBankMessage, ensureMovementBankMessage,
     updateDcActionsMessage, updateHandChannelMessages, updateHandVisualMessage,
     sendPowerTokenOverflowUI: noopAsync,
+    sendBleedingPrompt,
     applyIndiscriminateFireSplash: noopAsync,
     buildDcEmbedAndFiles, getConditionsForDcMessage, getDcUpgradeAttachments, getNicknamesForDcMessage,
     buildBoardMapPayload,

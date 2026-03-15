@@ -1177,11 +1177,13 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       effectiveBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
       await logGameAction(game, client, `**The Darksaber** — Blast ${_dsConvertedBlast} converted to Cleave ${_dsConvertedBlast}.`, { phase: 'ROUND', icon: 'card' });
     }
+    // Flame Trooper attachment upgrades (for Blast Fireproof check below; also computed at function level for Incinerate)
+    const _ftAtkUpgradesBlast = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
     if (effectiveBlast > 0 && hit && damage > 0 && game.selectedMap?.id) {
       const adjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
       for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
         // Flame Trooper Fireproof: own Blast does not affect friendly figures
-        if (blastPlayerNum === attackerPlayerNum && _ftAtkUpgrades.includes('Flame Trooper')) continue;
+        if (blastPlayerNum === attackerPlayerNum && _ftAtkUpgradesBlast.includes('Flame Trooper')) continue;
         const blastMsgId = findDcMessageIdForFigure(game.gameId, blastPlayerNum, blastFigureKey);
         if (!blastMsgId) continue;
         const { figureIndex: blastFigIndex } = parseFigureKey(blastFigureKey);

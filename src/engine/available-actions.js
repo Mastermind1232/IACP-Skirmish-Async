@@ -44,6 +44,19 @@ export function getAvailableActions(game, playerNum, deps = {}) {
     const choiceActions = getDcAbilityChoiceActions(game, playerNum);
     if (choiceActions.length > 0) return choiceActions;
   }
+  // Bleeding prompt (headless only): figure owner must accept or prevent
+  if (game.pendingBleeding) {
+    const bl = game.pendingBleeding;
+    if (playerNum === bl.playerNum) {
+      const gameId = game.gameId;
+      const ccDeckLen = (game[`p${playerNum}CcDeck`] || []).length;
+      return [
+        { type: 'bleed_accept', customId: `bleed_accept_${gameId}_${playerNum}_${bl.figureKey}`, description: `Bleeding: ${bl.displayName} takes 1 damage` },
+        { type: 'bleed_prevent', customId: `bleed_prevent_${gameId}_${playerNum}_${bl.figureKey}`, description: `Bleeding: prevent (discard CC, ${ccDeckLen} left)`, disabled: ccDeckLen === 0 },
+      ].filter(a => !a.disabled);
+    }
+    return [];
+  }
 
   // Phase gate takes priority — only ready/unready allowed
   if (game.phaseGate) {
@@ -983,6 +996,11 @@ function getDcAbilityChoiceActions(game, playerNum) {
     if (pending.playerNum !== playerNum) continue;
     // Choices can be stored as choiceOptions, choices, or targetFigureKeys
     const choices = pending.choiceOptions || pending.choices || pending.targetFigureKeys || [];
+    if (choices.length === 0) {
+      // Stale pending state with no options — auto-clear to prevent deadlock
+      delete game.pendingDcAbilityChoice[key];
+      continue;
+    }
     for (let i = 0; i < choices.length; i++) {
       const label = typeof choices[i] === 'string' ? choices[i] : choices[i]?.label || `Option ${i + 1}`;
       actions.push({

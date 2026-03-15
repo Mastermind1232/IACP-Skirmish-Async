@@ -188,7 +188,12 @@ export function assertFlowInvariants(game, actionDeps) {
   }
 
   // GS-6: moveInProgress → movement actions exist
-  if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) {
+  // Skip if a higher-priority pending state (combat interrupt, bleeding, etc.) takes precedence
+  const moveSuppressed = game.pendingCombat || game.pendingBleeding
+    || game.pendingCelebration || game.pendingPowerTokenGrant
+    || game.pendingSpreadThePainCondPick
+    || (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0);
+  if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0 && !moveSuppressed) {
     const moveTypes = PENDING_TO_ACTION_TYPES.moveInProgress;
     const all = [...p1Actions, ...p2Actions];
     if (!all.some(a => moveTypes.includes(a.type))) {
@@ -203,7 +208,8 @@ export function assertFlowInvariants(game, actionDeps) {
   // GS-8: For each active pending state, the correct player has matching action types
   // Side-effect states checked above phase gate may temporarily suppress other pending state actions
   const sideEffectPriorityActive = game.pendingCelebration || game.pendingPowerTokenGrant
-    || game.pendingSpreadThePainCondPick || (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0);
+    || game.pendingSpreadThePainCondPick || game.pendingBleeding
+    || (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0);
 
   for (const [pendingKey, actionTypes] of Object.entries(PENDING_TO_ACTION_TYPES)) {
     const val = game[pendingKey];

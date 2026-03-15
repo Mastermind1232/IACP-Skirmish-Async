@@ -36,7 +36,7 @@ const TRACKED_PENDING = [
   // Combat interrupts
   'pendingStrikeMeDown', 'pendingSlowOnTheDraw', 'pendingForceExhaustion',
   'pendingIllicitArms', 'pendingPowerConverter', 'pendingThereIsNoTry',
-  'pendingToughLuck', 'pendingHunterProtocol',
+  'pendingToughLuck', 'pendingHunterProtocol', 'pendingBleeding',
   // CC play
   'pendingCcConfirmation', 'pendingCcChoice', 'pendingCcSpaceChoice',
   'pendingCommDisruptionPrompt',

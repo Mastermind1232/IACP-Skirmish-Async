@@ -33,6 +33,18 @@ export const PENDING_STATE_KEYS = [
   'pendingMissileSalvo',
   'pendingCoverFire',
   'pendingSpreadThePainCondPick',
+  'pendingStrainChoice',
+  'pendingStillFaster',
+  'pendingLastResort',
+  'pendingStrikeMeDown',
+  'pendingSlowOnTheDraw',
+  'pendingForceExhaustion',
+  'pendingIllicitArms',
+  'pendingPowerConverter',
+  'pendingThereIsNoTry',
+  'pendingToughLuck',
+  'pendingHunterProtocol',
+  'pendingBleeding',
   'moveInProgress',
   'endOfRoundWhoseTurn',
 ];
@@ -314,13 +326,19 @@ export function createFlowHarness(opts = {}) {
 
   for (const fn of [
     'updateMovementBankMessage', 'ensureMovementBankMessage',
-    'clearMoveGridMessages', 'sendBleedingPrompt',
+    'clearMoveGridMessages',
     'sendDeckIllegalAlert', 'updateDeployPromptMessages',
   ]) {
     deps[fn] = async (...args) => {
       surface.recordUiCall(stepCount, fn, { visibility: 'shared', args });
     };
   }
+
+  // Bleeding prompt: set a pending state so the sim can exercise bleed handlers
+  deps.sendBleedingPrompt = async (g, channel, figureKey, playerNum, displayName) => {
+    surface.recordUiCall(stepCount, 'sendBleedingPrompt', { visibility: 'shared', args: [figureKey, playerNum, displayName] });
+    g.pendingBleeding = { figureKey, playerNum, displayName };
+  };
 
   // ── Deterministic Dice ────────────────────────────────────────────────────
   if (diceOverrides) {
