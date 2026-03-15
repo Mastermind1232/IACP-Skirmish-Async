@@ -1819,7 +1819,7 @@ client.once('ready', async () => {
 
   // Local HTTP endpoint to create a test game from Cursor/terminal (no need to type in #lfg)
   const guildId = process.env.DISCORD_GUILD_ID;
-  const port = Number(process.env.TESTGAME_PORT) || 3999;
+  const port = Number(process.env.PORT) || Number(process.env.TESTGAME_PORT) || 3999;
   // Helper: read JSON body from request
   function readBody(req) {
     return new Promise((resolve) => {
