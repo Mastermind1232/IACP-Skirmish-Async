@@ -1,0 +1,8 @@
+{
+  "meta": {
+    "description": "Live Discord incident log. Each entry records something that went wrong or felt flaky during a real Discord game. Used to drive class-level investigation, not just point fixes.",
+    "severities": ["blocker", "major", "minor"],
+    "liveStatuses": ["untested", "partial", "verified", "broken", "stale"]
+  },
+  "incidents": []
+}

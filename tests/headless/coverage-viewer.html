@@ -16,7 +16,6 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .legend-swatch { width: 32px; height: 16px; border-radius: 4px; flex-shrink: 0; }
 .legend-bar-demo { height: 6px; border-radius: 3px; flex-shrink: 0; }
 .legend-label { color: #8b949e; }
-.legend-divider { border-top: 1px solid #21262d; margin: 8px 0; }
 
 /* Summary bar */
 .summary { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -26,6 +25,7 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .summary-item.cov-weak { background: #2c1515; border: 1px solid #c0392b; color: #c0392b; }
 .summary-item.cov-none { background: #1a1a2e; border: 1px solid #555; color: #888; }
 .summary-item.meta { background: #161b22; border: 1px solid #30363d; color: #8b949e; }
+.summary-item.incident { background: #2c1520; border: 1px solid #f85149; color: #f85149; }
 
 /* Telemetry info */
 .telemetry-info { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 8px 14px; margin-bottom: 20px; font-size: 11px; color: #8b949e; }
@@ -36,11 +36,10 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .category-header { font-size: 14px; text-transform: uppercase; color: #8b949e; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid #21262d; padding-bottom: 4px; }
 
 /* Region grid */
-.region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
 
-/* Region cards — background = coverage */
-.card { border-radius: 8px; padding: 10px 12px; position: relative; transition: transform 0.1s; cursor: default; border: 1px solid transparent; }
-.card:hover { transform: translateY(-2px); }
+/* Region cards — background = backend verification */
+.card { border-radius: 8px; padding: 10px 12px; position: relative; cursor: default; border: 1px solid transparent; }
 .card.cov-strong { background: #132e13; border-color: #27ae60; }
 .card.cov-partial { background: #2a2210; border-color: #d4a017; }
 .card.cov-weak { background: #2a1414; border-color: #c0392b; }
@@ -49,18 +48,19 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .card-name { font-size: 13px; font-weight: bold; margin-bottom: 5px; }
 .card.cov-none .card-name { color: #666; }
 
-/* Status line: Coverage + Exploration on one row */
-.card-status { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 11px; }
-.cov-label { font-weight: bold; padding: 2px 6px; border-radius: 3px; font-size: 10px; text-transform: uppercase; }
-.cov-label.cov-strong { background: #27ae60; color: #000; }
-.cov-label.cov-partial { background: #d4a017; color: #000; }
-.cov-label.cov-weak { background: #c0392b; color: #fff; }
-.cov-label.cov-none { background: #333; color: #888; }
-.expl-label { color: #8b949e; }
+/* Three-layer status row */
+.card-layers { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+.layer-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.layer-label { color: #6e7681; min-width: 56px; font-size: 10px; }
+.cov-pill { font-weight: bold; padding: 1px 6px; border-radius: 3px; font-size: 10px; text-transform: uppercase; }
+.cov-pill.cov-strong { background: #27ae60; color: #000; }
+.cov-pill.cov-partial { background: #d4a017; color: #000; }
+.cov-pill.cov-weak { background: #c0392b; color: #fff; }
+.cov-pill.cov-none { background: #333; color: #888; }
 
-/* Exploration meter (compact bar + label) */
-.expl-meter { display: flex; align-items: center; gap: 5px; flex: 1; }
-.expl-bar-bg { height: 6px; width: 60px; background: #21262d; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+/* Exploration meter */
+.expl-meter { display: flex; align-items: center; gap: 5px; }
+.expl-bar-bg { height: 6px; width: 50px; background: #21262d; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
 .expl-bar { height: 100%; border-radius: 3px; }
 .expl-bar.freq { background: #ff6b35; }
 .expl-bar.common { background: #e2b93d; }
@@ -68,10 +68,21 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .expl-bar.never { background: transparent; }
 .expl-text { font-size: 10px; color: #8b949e; white-space: nowrap; }
 
-/* Needs-testing badge */
-.needs-testing { position: absolute; top: 6px; right: 8px; font-size: 9px; padding: 2px 6px; border-radius: 3px; font-weight: bold; }
-.needs-testing.hot { background: #ff6b35; color: #000; }
-.needs-testing.dark { background: #444; color: #ccc; }
+/* Live status pill */
+.live-pill { font-weight: bold; padding: 1px 6px; border-radius: 3px; font-size: 10px; text-transform: uppercase; cursor: pointer; }
+.live-pill.untested { background: #333; color: #888; }
+.live-pill.partial { background: #d4a017; color: #000; }
+.live-pill.verified { background: #27ae60; color: #000; }
+.live-pill.broken { background: #f85149; color: #fff; animation: pulse-red 2s infinite; }
+.live-pill.stale { background: #6e40c9; color: #fff; }
+@keyframes pulse-red { 0%,100%{opacity:1} 50%{opacity:0.7} }
+
+/* Incident count badge */
+.incident-count { font-size: 9px; padding: 1px 5px; border-radius: 8px; background: #f85149; color: #fff; font-weight: bold; margin-left: 4px; }
+
+/* Report issue button */
+.report-btn { font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #21262d; color: #8b949e; border: 1px solid #30363d; cursor: pointer; margin-left: auto; }
+.report-btn:hover { background: #30363d; color: #c9d1d9; }
 
 /* Evidence badges */
 .evidence-row { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 3px; }
@@ -83,14 +94,28 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .evidence-badge.gs-invariants { background: #3a1a2a; color: #f778ba; }
 .evidence-badge.production-fix { background: #152c15; color: #27ae60; }
 .evidence-badge.live-incident { background: #2c1515; color: #f85149; }
-.evidence-badge.mutation-tested { background: #1a3a3a; color: #56d4dd; }
 .evidence-badge.synthetic-only { background: #1a1a2e; color: #666; }
 
-/* Card details (hover-expand) */
+/* Siblings row */
+.siblings-row { font-size: 9px; color: #6e7681; margin-top: 2px; }
+.siblings-row a { color: #58a6ff; text-decoration: none; cursor: pointer; }
+.siblings-row a:hover { text-decoration: underline; }
+
+/* Card hover detail */
 .card-notes { font-size: 10px; color: #6e7681; margin-top: 4px; max-height: 0; overflow: hidden; transition: max-height 0.2s; }
 .card:hover .card-notes { max-height: 120px; }
 
-/* Needs More Testing section */
+/* Recent incidents section */
+.incidents-section { margin-top: 24px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
+.incidents-section h2 { font-size: 14px; color: #f85149; margin-bottom: 10px; }
+.incident-entry { padding: 6px 0; border-bottom: 1px solid #21262d; font-size: 11px; }
+.incident-entry:last-child { border-bottom: none; }
+.sev-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: bold; text-transform: uppercase; }
+.sev-badge.blocker { background: #f85149; color: #fff; }
+.sev-badge.major { background: #d4a017; color: #000; }
+.sev-badge.minor { background: #333; color: #8b949e; }
+
+/* Needs More Testing */
 .needs-section { margin-top: 24px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
 .needs-section h2 { font-size: 14px; margin-bottom: 4px; }
 .needs-section .section-desc { font-size: 11px; color: #8b949e; margin-bottom: 10px; }
@@ -99,9 +124,8 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .needs-rank { font-weight: bold; min-width: 20px; }
 .needs-name { flex: 1; }
 .needs-hits { color: #d4a017; font-size: 11px; }
-.needs-why { color: #8b949e; font-size: 10px; }
 
-/* History section */
+/* History */
 .history-section { margin-top: 20px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
 .history-section h2 { font-size: 14px; color: #27ae60; margin-bottom: 10px; }
 .history-item { font-size: 11px; padding: 4px 0; border-bottom: 1px solid #21262d; color: #8b949e; }
@@ -109,22 +133,89 @@ h1 { font-size: 20px; margin-bottom: 4px; }
 .history-item .date { color: #6e7681; }
 .history-item .change { color: #c9d1d9; }
 
-/* No data */
+/* Modal overlay */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; width: 420px; max-width: 95vw; }
+.modal h3 { font-size: 15px; margin-bottom: 12px; }
+.modal label { display: block; font-size: 11px; color: #8b949e; margin-bottom: 3px; margin-top: 10px; }
+.modal select, .modal input, .modal textarea { width: 100%; background: #0d1117; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; padding: 6px 8px; font-family: inherit; font-size: 12px; }
+.modal textarea { height: 60px; resize: vertical; }
+.modal-btns { display: flex; gap: 8px; margin-top: 14px; }
+.modal-btns button { padding: 6px 14px; border-radius: 4px; border: none; font-family: inherit; font-size: 12px; cursor: pointer; }
+.btn-save { background: #238636; color: #fff; }
+.btn-save:hover { background: #2ea043; }
+.btn-cancel { background: #21262d; color: #c9d1d9; }
+.btn-cancel:hover { background: #30363d; }
+
+/* Live status modal */
+.status-options { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.status-opt { padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; border: 1px solid #30363d; background: #0d1117; color: #8b949e; }
+.status-opt:hover { border-color: #58a6ff; color: #c9d1d9; }
+.status-opt.selected { border-color: #58a6ff; background: #1a2a3a; color: #58a6ff; }
+
 .no-data { color: #6e7681; font-style: italic; padding: 20px; text-align: center; }
 </style>
 </head>
 <body>
 
 <h1>Coverage Map</h1>
-<div class="subtitle">How well is each part of the game tested? How often do sims reach it?</div>
+<div class="subtitle">Backend verification + sim exploration + live Discord status. Click any region to update its live status or report an issue.</div>
 
 <div id="legend" class="legend"></div>
 <div id="summary" class="summary"></div>
 <div id="telemetry-info" class="telemetry-info"></div>
 <div id="regions"></div>
+<div id="recent-incidents" class="incidents-section" style="display:none"></div>
 <div id="needs-hot" class="needs-section" style="display:none"></div>
 <div id="needs-dark" class="needs-section" style="display:none"></div>
 <div id="history" class="history-section" style="display:none"></div>
+
+<!-- Incident Report Modal -->
+<div id="incident-modal" class="modal-overlay">
+<div class="modal">
+  <h3 id="modal-title">Report Issue</h3>
+  <input type="hidden" id="modal-region-id">
+
+  <label>Live Discord Status</label>
+  <div class="status-options" id="status-options">
+    <div class="status-opt" data-val="untested">Untested</div>
+    <div class="status-opt" data-val="partial">Partial</div>
+    <div class="status-opt" data-val="verified">Verified</div>
+    <div class="status-opt" data-val="broken">Broken</div>
+    <div class="status-opt" data-val="stale">Stale</div>
+  </div>
+
+  <label>Severity</label>
+  <div class="status-options" id="severity-options">
+    <div class="status-opt" data-val="blocker">Blocker</div>
+    <div class="status-opt" data-val="major">Major</div>
+    <div class="status-opt" data-val="minor">Minor</div>
+  </div>
+
+  <label>What happened? (short note)</label>
+  <textarea id="modal-note" placeholder="e.g., Pounce buttons didn't appear after using dc_special"></textarea>
+
+  <label>Game ID (optional)</label>
+  <input type="text" id="modal-gameid" placeholder="e.g., 00042">
+
+  <label>Last action / customId (optional)</label>
+  <input type="text" id="modal-action" placeholder="e.g., dc_special_2_abc123">
+
+  <div style="display:flex;gap:16px;margin-top:10px">
+    <label style="margin:0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="modal-undo"> Undo fixed it</label>
+    <label style="margin:0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="modal-refresh"> Refresh fixed it</label>
+  </div>
+
+  <div id="modal-siblings" style="font-size:10px;color:#6e7681;margin-top:10px"></div>
+
+  <div class="modal-btns">
+    <button class="btn-save" onclick="saveIncident()">Save</button>
+    <button class="btn-save" onclick="saveStatusOnly()" style="background:#1a2a3a">Status Only</button>
+    <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+</div>
 
 <script>
 const CATEGORIES = [
@@ -137,7 +228,8 @@ const CATEGORIES = [
   { id: 'discord', label: 'Discord / Surface' },
 ];
 
-// Exploration thresholds
+let LEDGER = null, TELEMETRY = null, INCIDENTS = null;
+
 function classifyExploration(hits) {
   if (hits >= 500) return { label: 'Frequent', cls: 'freq', pct: 100 };
   if (hits >= 50)  return { label: 'Common', cls: 'common', pct: 70 };
@@ -145,19 +237,16 @@ function classifyExploration(hits) {
   return { label: 'Never', cls: 'never', pct: 0 };
 }
 
-// Plain-English coverage labels
 function coverageLabel(v) {
-  switch (v) {
-    case 'strong': return 'Well covered';
-    case 'partial': return 'Partially covered';
-    case 'weak': return 'Weakly covered';
-    default: return 'Not covered';
-  }
+  return { strong: 'Well covered', partial: 'Partial', weak: 'Weak', none: 'Not covered' }[v] || 'Not covered';
+}
+
+function liveLabel(s) {
+  return { untested: 'Untested', partial: 'Partial', verified: 'Verified', broken: 'Broken', stale: 'Stale' }[s] || 'Untested';
 }
 
 async function loadJSON(url) {
-  try { const r = await fetch(url); return r.ok ? r.json() : null; }
-  catch { return null; }
+  try { const r = await fetch(url); return r.ok ? r.json() : null; } catch { return null; }
 }
 
 function computeRegionHits(region, telemetry) {
@@ -177,25 +266,187 @@ function computeRegionHits(region, telemetry) {
   return hits;
 }
 
+function getRegionIncidents(regionId) {
+  return (INCIDENTS?.incidents || []).filter(i => i.region === regionId);
+}
+
+function getRecentIncidents(maxAge = 7) {
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - maxAge);
+  return (INCIDENTS?.incidents || [])
+    .filter(i => new Date(i.timestamp) >= cutoff)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
+// ── Modal ──
+
+function openModal(regionId) {
+  const region = LEDGER.regions[regionId];
+  if (!region) return;
+  document.getElementById('modal-region-id').value = regionId;
+  document.getElementById('modal-title').textContent = `${region.name}`;
+  document.getElementById('modal-note').value = '';
+  document.getElementById('modal-gameid').value = '';
+  document.getElementById('modal-action').value = '';
+  document.getElementById('modal-undo').checked = false;
+  document.getElementById('modal-refresh').checked = false;
+
+  // Set current live status
+  document.querySelectorAll('#status-options .status-opt').forEach(el => {
+    el.classList.toggle('selected', el.dataset.val === (region.liveStatus || 'untested'));
+  });
+  document.querySelectorAll('#severity-options .status-opt').forEach(el => el.classList.remove('selected'));
+
+  // Show siblings
+  const siblings = (region.siblings || []).map(s => {
+    const sib = LEDGER.regions[s];
+    return sib ? `<a onclick="closeModal();setTimeout(()=>openModal('${s}'),100)">${sib.name}</a>` : s;
+  });
+  const sibHtml = siblings.length > 0
+    ? `<strong>Related areas to also check:</strong> ${siblings.join(', ')}`
+    : '';
+  document.getElementById('modal-siblings').innerHTML = sibHtml;
+
+  document.getElementById('incident-modal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('incident-modal').classList.remove('active');
+}
+
+// Click handler for status/severity pills
+document.querySelectorAll('.status-options').forEach(group => {
+  group.addEventListener('click', e => {
+    const opt = e.target.closest('.status-opt');
+    if (!opt) return;
+    group.querySelectorAll('.status-opt').forEach(el => el.classList.remove('selected'));
+    opt.classList.add('selected');
+  });
+});
+
+function getSelectedVal(groupId) {
+  const sel = document.querySelector(`#${groupId} .status-opt.selected`);
+  return sel ? sel.dataset.val : null;
+}
+
+function saveStatusOnly() {
+  const regionId = document.getElementById('modal-region-id').value;
+  const newStatus = getSelectedVal('status-options') || 'untested';
+
+  // Update ledger in memory
+  if (LEDGER.regions[regionId]) {
+    LEDGER.regions[regionId].liveStatus = newStatus;
+    LEDGER.regions[regionId].lastLiveCheck = new Date().toISOString().slice(0, 10);
+  }
+
+  // Save to localStorage
+  localStorage.setItem('coverage-ledger-live', JSON.stringify(
+    Object.fromEntries(Object.entries(LEDGER.regions).map(([id, r]) => [id, { liveStatus: r.liveStatus, lastLiveCheck: r.lastLiveCheck }]))
+  ));
+
+  closeModal();
+  render(LEDGER, TELEMETRY);
+}
+
+function saveIncident() {
+  const regionId = document.getElementById('modal-region-id').value;
+  const severity = getSelectedVal('severity-options');
+  const note = document.getElementById('modal-note').value.trim();
+  const newStatus = getSelectedVal('status-options') || 'untested';
+
+  if (!note) { alert('Please add a short note'); return; }
+  if (!severity) { alert('Please select severity'); return; }
+
+  const incident = {
+    id: Date.now().toString(36),
+    timestamp: new Date().toISOString(),
+    region: regionId,
+    regionName: LEDGER.regions[regionId]?.name || regionId,
+    severity,
+    note,
+    gameId: document.getElementById('modal-gameid').value.trim() || null,
+    lastAction: document.getElementById('modal-action').value.trim() || null,
+    undoFixedIt: document.getElementById('modal-undo').checked,
+    refreshFixedIt: document.getElementById('modal-refresh').checked,
+    siblings: LEDGER.regions[regionId]?.siblings || [],
+  };
+
+  // Update in memory
+  if (!INCIDENTS) INCIDENTS = { meta: {}, incidents: [] };
+  INCIDENTS.incidents.push(incident);
+
+  if (LEDGER.regions[regionId]) {
+    LEDGER.regions[regionId].liveStatus = newStatus;
+    LEDGER.regions[regionId].lastLiveCheck = new Date().toISOString().slice(0, 10);
+  }
+
+  // Save to localStorage
+  localStorage.setItem('coverage-incidents', JSON.stringify(INCIDENTS.incidents));
+  localStorage.setItem('coverage-ledger-live', JSON.stringify(
+    Object.fromEntries(Object.entries(LEDGER.regions).map(([id, r]) => [id, { liveStatus: r.liveStatus, lastLiveCheck: r.lastLiveCheck }]))
+  ));
+
+  closeModal();
+  render(LEDGER, TELEMETRY);
+}
+
+// ── Load saved state from localStorage ──
+
+function loadLocalState() {
+  // Merge saved live statuses
+  try {
+    const saved = JSON.parse(localStorage.getItem('coverage-ledger-live') || '{}');
+    for (const [id, data] of Object.entries(saved)) {
+      if (LEDGER.regions[id]) {
+        LEDGER.regions[id].liveStatus = data.liveStatus || LEDGER.regions[id].liveStatus;
+        LEDGER.regions[id].lastLiveCheck = data.lastLiveCheck || LEDGER.regions[id].lastLiveCheck;
+      }
+    }
+  } catch {}
+
+  // Merge saved incidents
+  try {
+    const savedInc = JSON.parse(localStorage.getItem('coverage-incidents') || '[]');
+    if (savedInc.length > 0) {
+      if (!INCIDENTS) INCIDENTS = { meta: {}, incidents: [] };
+      // Deduplicate by id
+      const existingIds = new Set(INCIDENTS.incidents.map(i => i.id));
+      for (const inc of savedInc) {
+        if (!existingIds.has(inc.id)) INCIDENTS.incidents.push(inc);
+      }
+    }
+  } catch {}
+}
+
+// ── Render ──
+
 function renderLegend() {
   document.getElementById('legend').innerHTML = `
     <div class="legend-title">How to read this map</div>
-    <div style="display:flex;gap:40px;flex-wrap:wrap">
+    <div style="display:flex;gap:32px;flex-wrap:wrap">
       <div>
-        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Card background = Coverage (how well tested)</div>
+        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Background = Backend Coverage</div>
         <div class="legend-row"><div class="legend-swatch" style="background:#132e13;border:1px solid #27ae60"></div><span class="legend-label">Well covered</span></div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#2a2210;border:1px solid #d4a017"></div><span class="legend-label">Partially covered</span></div>
-        <div class="legend-row"><div class="legend-swatch" style="background:#2a1414;border:1px solid #c0392b"></div><span class="legend-label">Weakly covered</span></div>
+        <div class="legend-row"><div class="legend-swatch" style="background:#2a2210;border:1px solid #d4a017"></div><span class="legend-label">Partial</span></div>
+        <div class="legend-row"><div class="legend-swatch" style="background:#2a1414;border:1px solid #c0392b"></div><span class="legend-label">Weak</span></div>
         <div class="legend-row"><div class="legend-swatch" style="background:#161620;border:1px solid #333"></div><span class="legend-label">Not covered</span></div>
       </div>
       <div>
-        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Exploration meter = How often sims reach this area</div>
-        <div class="legend-row"><div class="legend-bar-demo" style="width:60px;background:#ff6b35"></div><span class="legend-label">Frequent (500+ hits)</span></div>
-        <div class="legend-row"><div class="legend-bar-demo" style="width:42px;background:#e2b93d"></div><span class="legend-label">Common (50-499)</span></div>
-        <div class="legend-row"><div class="legend-bar-demo" style="width:18px;background:#3d8bfd"></div><span class="legend-label">Rare (1-49)</span></div>
-        <div class="legend-row"><div class="legend-bar-demo" style="width:60px;background:#21262d"></div><span class="legend-label">Never (0 hits)</span></div>
+        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Meter = Sim Exploration</div>
+        <div class="legend-row"><div class="legend-bar-demo" style="width:50px;background:#ff6b35"></div><span class="legend-label">Frequent (500+)</span></div>
+        <div class="legend-row"><div class="legend-bar-demo" style="width:35px;background:#e2b93d"></div><span class="legend-label">Common (50-499)</span></div>
+        <div class="legend-row"><div class="legend-bar-demo" style="width:15px;background:#3d8bfd"></div><span class="legend-label">Rare (1-49)</span></div>
+        <div class="legend-row"><div class="legend-bar-demo" style="width:50px;background:#21262d"></div><span class="legend-label">Never</span></div>
+      </div>
+      <div>
+        <div style="color:#8b949e;font-weight:bold;margin-bottom:4px">Live Status = Discord Testing</div>
+        <div class="legend-row"><span class="live-pill untested" style="cursor:default">Untested</span><span class="legend-label">Not checked in Discord</span></div>
+        <div class="legend-row"><span class="live-pill partial" style="cursor:default">Partial</span><span class="legend-label">Flaky / incomplete</span></div>
+        <div class="legend-row"><span class="live-pill verified" style="cursor:default">Verified</span><span class="legend-label">Works in Discord</span></div>
+        <div class="legend-row"><span class="live-pill broken" style="cursor:default;animation:none">Broken</span><span class="legend-label">Known failing</span></div>
+        <div class="legend-row"><span class="live-pill stale" style="cursor:default">Stale</span><span class="legend-label">Code changed since check</span></div>
       </div>
     </div>
+    <div style="margin-top:8px;font-size:11px;color:#6e7681">Click any region card to update its live status or report an issue.</div>
   `;
 }
 
@@ -204,11 +455,8 @@ function render(ledger, telemetry) {
   const regionList = Object.entries(regions);
 
   const regionHits = {};
-  let maxHits = 1;
   for (const [id, region] of regionList) {
-    const hits = computeRegionHits(region, telemetry);
-    regionHits[id] = hits;
-    if (hits > maxHits) maxHits = hits;
+    regionHits[id] = computeRegionHits(region, telemetry);
   }
 
   // Summary
@@ -216,6 +464,8 @@ function render(ledger, telemetry) {
   for (const [, r] of regionList) vCounts[r.verification] = (vCounts[r.verification] || 0) + 1;
   const totalHits = Object.values(regionHits).reduce((a, b) => a + b, 0);
   const exploredCount = Object.values(regionHits).filter(h => h > 0).length;
+  const totalIncidents = (INCIDENTS?.incidents || []).length;
+  const brokenCount = regionList.filter(([, r]) => r.liveStatus === 'broken').length;
 
   document.getElementById('summary').innerHTML = `
     <div class="summary-item cov-strong">${vCounts.strong} Well Covered</div>
@@ -223,10 +473,10 @@ function render(ledger, telemetry) {
     <div class="summary-item cov-weak">${vCounts.weak} Weak</div>
     <div class="summary-item cov-none">${vCounts.none} Not Covered</div>
     <div class="summary-item meta">${exploredCount}/${regionList.length} explored</div>
-    <div class="summary-item meta">${totalHits.toLocaleString()} total sim hits</div>
+    ${totalIncidents > 0 ? `<div class="summary-item incident">${totalIncidents} incidents${brokenCount > 0 ? ` (${brokenCount} broken)` : ''}</div>` : ''}
   `;
 
-  // Telemetry info
+  // Telemetry
   const flowT = telemetry?.flow, setupT = telemetry?.setup;
   let info = '';
   if (flowT) info += `<strong>Flow:</strong> ${flowT.simCount} sims, ${(flowT.passRate*100).toFixed(0)}% pass (${flowT.timestamp?.slice(0,10)||'?'}) &nbsp; `;
@@ -251,26 +501,38 @@ function render(ledger, telemetry) {
       const hits = regionHits[id];
       const expl = classifyExploration(hits);
       const verif = region.verification || 'none';
+      const live = region.liveStatus || 'untested';
       const evidence = region.evidence || [];
-      const isWeakOrNone = verif === 'none' || verif === 'weak';
-      const needsTesting = isWeakOrNone;
-      const isHot = needsTesting && hits >= 50;
-      const isDark = needsTesting && hits === 0 && verif === 'none';
+      const incidents = getRegionIncidents(id);
+      const siblings = (region.siblings || []).map(s => regions[s]?.name).filter(Boolean);
 
       const card = document.createElement('div');
       card.className = `card cov-${verif}`;
+      card.style.cursor = 'pointer';
+      card.onclick = () => openModal(id);
       card.innerHTML = `
-        <div class="card-name">${region.name}</div>
-        ${isHot ? '<span class="needs-testing hot">Frequently reached, weakly tested</span>' : ''}
-        ${isDark ? '<span class="needs-testing dark">Not explored yet</span>' : ''}
-        <div class="card-status">
-          <span class="cov-label cov-${verif}">${coverageLabel(verif)}</span>
-          <div class="expl-meter">
-            <div class="expl-bar-bg"><div class="expl-bar ${expl.cls}" style="width:${expl.pct}%"></div></div>
-            <span class="expl-text">${expl.label}${hits > 0 ? ' (' + hits.toLocaleString() + ')' : ''}</span>
+        <div class="card-name">${region.name}${incidents.length > 0 ? `<span class="incident-count">${incidents.length}</span>` : ''}</div>
+        <div class="card-layers">
+          <div class="layer-row">
+            <span class="layer-label">Backend</span>
+            <span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span>
+            ${evidence.length > 0 ? `<span style="font-size:9px;color:#6e7681">${evidence.join(', ')}</span>` : ''}
+          </div>
+          <div class="layer-row">
+            <span class="layer-label">Sims</span>
+            <div class="expl-meter">
+              <div class="expl-bar-bg"><div class="expl-bar ${expl.cls}" style="width:${expl.pct}%"></div></div>
+              <span class="expl-text">${expl.label}${hits > 0 ? ' (' + hits.toLocaleString() + ')' : ''}</span>
+            </div>
+          </div>
+          <div class="layer-row">
+            <span class="layer-label">Discord</span>
+            <span class="live-pill ${live}">${liveLabel(live)}</span>
+            ${region.lastLiveCheck ? `<span style="font-size:9px;color:#6e7681">${region.lastLiveCheck}</span>` : ''}
+            <button class="report-btn" onclick="event.stopPropagation();openModal('${id}')">Report issue</button>
           </div>
         </div>
-        ${evidence.length > 0 ? `<div class="evidence-row">${evidence.map(e => `<span class="evidence-badge ${e}">${e}</span>`).join('')}</div>` : ''}
+        ${siblings.length > 0 ? `<div class="siblings-row">Also check: ${siblings.join(', ')}</div>` : ''}
         <div class="card-notes">${region.notes || ''}</div>
       `;
       grid.appendChild(card);
@@ -280,7 +542,35 @@ function render(ledger, telemetry) {
     regionsEl.appendChild(section);
   }
 
-  // Needs More Testing: Frequently reached but weakly tested
+  // Recent Incidents
+  const recent = getRecentIncidents(30);
+  const incEl = document.getElementById('recent-incidents');
+  if (recent.length > 0) {
+    incEl.style.display = 'block';
+    let html = '<h2>Recent Incidents</h2>';
+    for (const inc of recent.slice(0, 20)) {
+      const date = inc.timestamp.slice(0, 10);
+      const time = inc.timestamp.slice(11, 16);
+      const region = regions[inc.region];
+      const sibNames = (inc.siblings || []).map(s => regions[s]?.name).filter(Boolean);
+      html += `<div class="incident-entry">
+        <span style="color:#6e7681">${date} ${time}</span>
+        <span class="sev-badge ${inc.severity}">${inc.severity}</span>
+        <strong style="margin:0 6px">${inc.regionName}</strong>
+        ${inc.note}
+        ${inc.gameId ? `<span style="color:#6e7681;margin-left:6px">game:${inc.gameId}</span>` : ''}
+        ${inc.lastAction ? `<span style="color:#6e7681;margin-left:4px">action:${inc.lastAction}</span>` : ''}
+        ${inc.undoFixedIt ? '<span style="color:#58a6ff;margin-left:4px;font-size:10px">undo-fixed</span>' : ''}
+        ${inc.refreshFixedIt ? '<span style="color:#58a6ff;margin-left:4px;font-size:10px">refresh-fixed</span>' : ''}
+        ${sibNames.length > 0 ? `<div style="font-size:9px;color:#6e7681;margin-top:2px">Also check: ${sibNames.join(', ')}</div>` : ''}
+      </div>`;
+    }
+    incEl.innerHTML = html;
+  } else {
+    incEl.style.display = 'none';
+  }
+
+  // Needs More Testing: Frequently reached
   const hotList = regionList
     .filter(([id, r]) => (r.verification === 'none' || r.verification === 'weak') && regionHits[id] >= 50)
     .sort((a, b) => regionHits[b[0]] - regionHits[a[0]]);
@@ -289,20 +579,21 @@ function render(ledger, telemetry) {
   if (hotList.length > 0) {
     hotEl.style.display = 'block';
     let html = '<h2 style="color:#ff6b35">Needs More Testing: Frequently Reached</h2>';
-    html += '<div class="section-desc">These areas are hit often by sims but have weak or no real test coverage. Best candidates to deepen next.</div>';
+    html += '<div class="section-desc">High sim traffic, weak/no backend coverage.</div>';
     for (let i = 0; i < hotList.length; i++) {
       const [id, r] = hotList[i];
       html += `<div class="needs-item">
         <span class="needs-rank" style="color:#ff6b35">#${i+1}</span>
         <span class="needs-name">${r.name}</span>
         <span class="needs-hits">${regionHits[id].toLocaleString()} hits</span>
-        <span class="cov-label cov-${r.verification}" style="font-size:9px">${coverageLabel(r.verification)}</span>
+        <span class="cov-pill cov-${r.verification}" style="font-size:9px">${coverageLabel(r.verification)}</span>
+        <span class="live-pill ${r.liveStatus||'untested'}" style="font-size:9px;cursor:default">${liveLabel(r.liveStatus)}</span>
       </div>`;
     }
     hotEl.innerHTML = html;
   }
 
-  // Needs More Testing: Rarely reached or never explored
+  // Needs More Testing: Rarely reached
   const darkList = regionList
     .filter(([id, r]) => (r.verification === 'none' || r.verification === 'weak') && regionHits[id] < 50)
     .sort((a, b) => {
@@ -314,13 +605,13 @@ function render(ledger, telemetry) {
   if (darkList.length > 0) {
     darkEl.style.display = 'block';
     let html = '<h2 style="color:#8b949e">Needs More Testing: Rarely Reached</h2>';
-    html += '<div class="section-desc">These areas have low or no sim traffic and weak/no coverage. May need targeted tests or new harness support.</div>';
+    html += '<div class="section-desc">Low/no sim traffic, weak/no coverage.</div>';
     for (const [id, r] of darkList) {
       html += `<div class="needs-item">
         <span class="needs-rank" style="color:#555">--</span>
         <span class="needs-name" style="color:${r.verification === 'none' ? '#555' : '#999'}">${r.name}</span>
         <span class="needs-hits" style="color:#555">${regionHits[id]} hits</span>
-        <span class="cov-label cov-${r.verification}" style="font-size:9px">${coverageLabel(r.verification)}</span>
+        <span class="cov-pill cov-${r.verification}" style="font-size:9px">${coverageLabel(r.verification)}</span>
       </div>`;
     }
     darkEl.innerHTML = html;
@@ -343,17 +634,27 @@ function render(ledger, telemetry) {
   }
 }
 
+// Close modal on overlay click
+document.getElementById('incident-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
 (async () => {
-  const [ledger, telemetry] = await Promise.all([
+  const [ledger, telemetry, incidents] = await Promise.all([
     loadJSON('./coverage-ledger.json'),
     loadJSON('./coverage-telemetry.json'),
+    loadJSON('./coverage-incidents.json'),
   ]);
   if (!ledger) {
     document.getElementById('regions').innerHTML = '<div class="no-data">Could not load coverage-ledger.json. Serve this directory with: npx http-server tests/headless -p 8080</div>';
     return;
   }
+  LEDGER = ledger;
+  TELEMETRY = telemetry;
+  INCIDENTS = incidents;
+  loadLocalState();
   renderLegend();
-  render(ledger, telemetry);
+  render(LEDGER, TELEMETRY);
 })();
 </script>
 </body>
