@@ -186,27 +186,20 @@ h1 { font-size: 26px; margin-bottom: 4px; }
 <body>
 
 <h1>Coverage Map</h1>
-<div class="subtitle">Backend verification + sim exploration + live Discord status. Click any region to update its live status or report an issue.</div>
-
-<!-- File I/O Toolbar -->
-<div class="file-toolbar">
-  <span class="file-toolbar-title">Incidents:</span>
-  <button class="tb-btn primary" onclick="exportIncidents()">Save to File</button>
-  <button class="tb-btn" onclick="document.getElementById('import-file').click()">Load from File</button>
-  <input type="file" id="import-file" class="hidden-input" accept=".json" onchange="importIncidents(this)">
-  <div class="tb-sep"></div>
-  <button class="tb-btn" onclick="exportFullState()">Export All (incidents + statuses)</button>
-  <div class="tb-sep"></div>
-  <button class="tb-btn danger" onclick="resetFromFile()">Reset to File</button>
-  <div class="tb-sep"></div>
-  <div id="backend-indicator" style="font-size:13px"></div>
-  <div class="tb-status" id="file-status"></div>
-  <span class="copy-toast" id="save-toast" style="margin-left:8px"></span>
+<div class="file-toolbar" style="justify-content:space-between">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div id="backend-indicator" style="font-size:13px"></div>
+    <span class="copy-toast" id="save-toast" style="margin-left:8px"></span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <button class="tb-btn" onclick="document.getElementById('legend').style.display = document.getElementById('legend').style.display === 'none' ? 'block' : 'none'">Legend</button>
+    <button class="tb-btn" onclick="exportIncidents()">Export Incidents</button>
+    <input type="file" id="import-file" class="hidden-input" accept=".json" onchange="importIncidents(this)">
+  </div>
 </div>
 
-<div id="legend" class="legend"></div>
+<div id="legend" class="legend" style="display:none"></div>
 <div id="summary" class="summary"></div>
-<div id="telemetry-info" class="telemetry-info"></div>
 <div id="regions"></div>
 <div id="recent-incidents" class="incidents-section" style="display:none"></div>
 <div id="needs-hot" class="needs-section" style="display:none"></div>
@@ -224,13 +217,13 @@ h1 { font-size: 26px; margin-bottom: 4px; }
   </div>
 </div>
 
-<!-- Incident Report Modal -->
+<!-- Region Modal -->
 <div id="incident-modal" class="modal-overlay">
 <div class="modal">
-  <h3 id="modal-title">Report Issue</h3>
+  <h3 id="modal-title">Update Region</h3>
   <input type="hidden" id="modal-region-id">
 
-  <label>Live Discord Status</label>
+  <label>Status</label>
   <div class="status-options" id="status-options">
     <div class="status-opt" data-val="untested">Untested</div>
     <div class="status-opt" data-val="partial">Partial</div>
@@ -239,36 +232,47 @@ h1 { font-size: 26px; margin-bottom: 4px; }
     <div class="status-opt" data-val="stale">Stale</div>
   </div>
 
-  <label>Severity</label>
-  <div class="status-options" id="severity-options">
-    <div class="status-opt" data-val="blocker">Blocker</div>
-    <div class="status-opt" data-val="major">Major</div>
-    <div class="status-opt" data-val="minor">Minor</div>
-  </div>
-
-  <label>What happened? (short note)</label>
-  <textarea id="modal-note" placeholder="e.g., Pounce buttons didn't appear after using dc_special"></textarea>
-
-  <label>Game ID (optional)</label>
-  <input type="text" id="modal-gameid" placeholder="e.g., 00042">
-
-  <label>Phase (optional)</label>
-  <input type="text" id="modal-phase" placeholder="e.g., combat, deployment, activation">
-
-  <label>Last action / customId (optional)</label>
-  <input type="text" id="modal-action" placeholder="e.g., dc_special_2_abc123">
-
-  <div style="display:flex;gap:16px;margin-top:10px">
-    <label style="margin:0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="modal-undo"> Undo fixed it</label>
-    <label style="margin:0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="modal-refresh"> Refresh fixed it</label>
-  </div>
-
-  <div id="modal-siblings" style="font-size:10px;color:#6e7681;margin-top:10px"></div>
-
-  <div class="modal-btns">
-    <button class="btn-save" onclick="saveIncident()">Save</button>
-    <button class="btn-save" onclick="saveStatusOnly()" style="background:#1a2a3a">Status Only</button>
+  <div class="modal-btns" style="margin-top:10px">
+    <button class="btn-save" onclick="saveStatusOnly()">Save Status</button>
     <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+  </div>
+
+  <div style="margin-top:14px;border-top:1px solid #30363d;padding-top:10px">
+    <div style="display:flex;align-items:center;cursor:pointer;color:#8b949e;font-size:13px" onclick="document.getElementById('incident-details').style.display = document.getElementById('incident-details').style.display === 'none' ? 'block' : 'none'">
+      + Report an incident (something broke)
+    </div>
+    <div id="incident-details" style="display:none;margin-top:8px">
+
+      <label>Severity</label>
+      <div class="status-options" id="severity-options">
+        <div class="status-opt" data-val="blocker">Blocker</div>
+        <div class="status-opt" data-val="major">Major</div>
+        <div class="status-opt" data-val="minor">Minor</div>
+      </div>
+
+      <label>What happened?</label>
+      <textarea id="modal-note" placeholder="e.g., Pounce buttons didn't appear after using dc_special"></textarea>
+
+      <label>Game ID (optional)</label>
+      <input type="text" id="modal-gameid" placeholder="e.g., 00042">
+
+      <label>Phase (optional)</label>
+      <input type="text" id="modal-phase" placeholder="e.g., combat, deployment, activation">
+
+      <label>Last action / customId (optional)</label>
+      <input type="text" id="modal-action" placeholder="e.g., dc_special_2_abc123">
+
+      <div style="display:flex;gap:16px;margin-top:10px">
+        <label style="margin:0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="modal-undo"> Undo fixed it</label>
+        <label style="margin:0;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="modal-refresh"> Refresh fixed it</label>
+      </div>
+
+      <div id="modal-siblings" style="font-size:12px;color:#6e7681;margin-top:10px"></div>
+
+      <div class="modal-btns">
+        <button class="btn-save" onclick="saveIncident()">Save Incident</button>
+      </div>
+    </div>
   </div>
 </div>
 </div>
@@ -842,13 +846,7 @@ function render(ledger, telemetry) {
     ${totalIncidents > 0 ? `<div class="summary-item incident">${totalIncidents} incidents${brokenCount > 0 ? ` (${brokenCount} broken)` : ''}</div>` : ''}
   `;
 
-  // Telemetry
-  const flowT = telemetry?.flow, setupT = telemetry?.setup;
-  let info = '';
-  if (flowT) info += `<strong>Flow:</strong> ${flowT.simCount} sims, ${(flowT.passRate*100).toFixed(0)}% pass (${flowT.timestamp?.slice(0,10)||'?'}) &nbsp; `;
-  if (setupT) info += `<strong>Setup:</strong> ${setupT.simCount} sims, ${(setupT.passRate*100).toFixed(0)}% pass (${setupT.timestamp?.slice(0,10)||'?'})`;
-  if (!info) info = 'No telemetry. Run <code>node tests/headless/sim-farm.js 500</code> to generate.';
-  document.getElementById('telemetry-info').innerHTML = info;
+  // Telemetry (hidden from main view, available in legend)
 
   // Region cards
   const regionsEl = document.getElementById('regions');
@@ -878,28 +876,10 @@ function render(ledger, telemetry) {
       card.onclick = () => openModal(id);
       card.innerHTML = `
         <div class="card-name">${region.name}${incidents.length > 0 ? `<span class="incident-count">${incidents.length}</span>` : ''}</div>
-        <div class="card-layers">
-          <div class="layer-row">
-            <span class="layer-label">Backend</span>
-            <span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span>
-            ${evidence.length > 0 ? `<span style="font-size:9px;color:#6e7681">${evidence.join(', ')}</span>` : ''}
-          </div>
-          <div class="layer-row">
-            <span class="layer-label">Sims</span>
-            <div class="expl-meter">
-              <div class="expl-bar-bg"><div class="expl-bar ${expl.cls}" style="width:${expl.pct}%"></div></div>
-              <span class="expl-text">${expl.label}${hits > 0 ? ' (' + hits.toLocaleString() + ')' : ''}</span>
-            </div>
-          </div>
-          <div class="layer-row">
-            <span class="layer-label">Discord</span>
-            <span class="live-pill ${live}">${liveLabel(live)}</span>
-            ${region.lastLiveCheck ? `<span style="font-size:9px;color:#6e7681">${region.lastLiveCheck}</span>` : ''}
-            <button class="report-btn" onclick="event.stopPropagation();openModal('${id}')">Report issue</button>
-          </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <span class="cov-pill cov-${verif}">${coverageLabel(verif)}</span>
+          <span class="live-pill ${live}" style="cursor:default">${liveLabel(live)}</span>
         </div>
-        ${siblings.length > 0 ? `<div class="siblings-row">Also check: ${siblings.join(', ')}</div>` : ''}
-        <div class="card-notes">${region.notes || ''}</div>
       `;
       grid.appendChild(card);
     }
