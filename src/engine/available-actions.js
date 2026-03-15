@@ -354,6 +354,18 @@ function getRoundActiveActions(game, playerNum, deps) {
     if (ccSpaceActions.length > 0) return ccSpaceActions;
   }
 
+  // Pending EE-3 Carbine die pick (Boba Fett)
+  if (game.pendingEe3Carbine && typeof game.pendingEe3Carbine === 'object') {
+    const ee3Actions = getEe3CarbineActions(game, playerNum, deps);
+    if (ee3Actions.length > 0) return ee3Actions;
+  }
+
+  // Pending Bo-Rifle weapon pick (Agent Kallus)
+  if (game.pendingBoRifle && typeof game.pendingBoRifle === 'object') {
+    const brActions = getBoRifleActions(game, playerNum, deps);
+    if (brActions.length > 0) return brActions;
+  }
+
   // Pending Rush (Onar)
   if (game.pendingRushPush) {
     const rushActions = getRushPushActions(game, playerNum);
@@ -535,6 +547,12 @@ function getActivationActions(game, playerNum, deps) {
         description: `Move with ${displayName}`,
         params: { msgId, dcName: meta.dcName },
       });
+
+      // Arsenal / Epic Arsenal: if DC has Arsenal and no override dice yet, offer dice pick
+      const arsenalActions = getArsenalPickActions(game, playerNum, msgId, deps);
+      if (arsenalActions.length > 0) {
+        actions.push(...arsenalActions);
+      }
 
       // Attack: compute individual targets if deps available
       const targets = computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps);
@@ -1400,6 +1418,105 @@ function getLastResortActions(game, playerNum) {
       description: 'Skip Last Resort',
     },
   ];
+}
+
+// ── EE-3 Carbine Die Pick ────────────────────────────────────────────────
+
+function getEe3CarbineActions(game, playerNum, deps) {
+  const pending = game.pendingEe3Carbine;
+  if (!pending || typeof pending !== 'object') return [];
+  for (const [msgId, val] of Object.entries(pending)) {
+    if (!val || val === 'decided' || typeof val !== 'object') continue;
+    if (val.playerNum !== playerNum) continue;
+    const gameId = game.gameId;
+    const figureIndex = val.figureIndex ?? 0;
+    // Get base dice to find non-red colors
+    const dcMeta = deps.dcMessageMeta?.get(msgId);
+    const stats = dcMeta ? deps.getDcStats?.(dcMeta.dcName) : null;
+    const baseDice = stats?.attack?.dice || ['red'];
+    const nonRedColors = [...new Set(baseDice.filter(d => d !== 'red'))];
+    const actions = nonRedColors.map(color => ({
+      type: ACTION_TYPES.EE3_PICK_DIE,
+      customId: buildCustomId(ACTION_TYPES.EE3_PICK_DIE, { gameId, msgId, figureIndex, color }),
+      description: `EE-3 Carbine: upgrade ${color} → Red`,
+      params: { color, msgId, figureIndex },
+    }));
+    actions.push({
+      type: ACTION_TYPES.EE3_PICK_SKIP,
+      customId: buildCustomId(ACTION_TYPES.EE3_PICK_SKIP, { gameId, msgId, figureIndex }),
+      description: 'Skip EE-3 Carbine',
+      params: { msgId, figureIndex },
+    });
+    return actions;
+  }
+  return [];
+}
+
+// ── Bo-Rifle Weapon Pick ─────────────────────────────────────────────────
+
+function getBoRifleActions(game, playerNum, deps) {
+  const pending = game.pendingBoRifle;
+  if (!pending || typeof pending !== 'object') return [];
+  for (const [msgId, val] of Object.entries(pending)) {
+    if (!val || typeof val !== 'object') continue;
+    if (val.playerNum !== playerNum) continue;
+    const gameId = game.gameId;
+    const figureIndex = val.figureIndex ?? 0;
+    return [
+      {
+        type: ACTION_TYPES.BO_RIFLE_USE,
+        customId: buildCustomId(ACTION_TYPES.BO_RIFLE_USE, { gameId, msgId, figureIndex }),
+        description: 'Bo-Rifle: Melee mode',
+        params: { msgId, figureIndex },
+      },
+      {
+        type: ACTION_TYPES.BO_RIFLE_SKIP,
+        customId: buildCustomId(ACTION_TYPES.BO_RIFLE_SKIP, { gameId, msgId, figureIndex }),
+        description: 'Bo-Rifle: Normal ranged',
+        params: { msgId, figureIndex },
+      },
+    ];
+  }
+  return [];
+}
+
+// ── Arsenal Pick ─────────────────────────────────────────────────────────
+
+function getArsenalPickActions(game, playerNum, msgId, deps) {
+  const dcMeta = deps.dcMessageMeta?.get(msgId);
+  if (!dcMeta || dcMeta.playerNum !== playerNum) return [];
+  const dcEffects = getDcEffects()?.[dcMeta.dcName];
+  const specialIds = dcEffects?.specialAbilityIds || [];
+  const hasArsenal = specialIds.includes('arsenal');
+  const hasEpicArsenal = specialIds.includes('epic_arsenal');
+  if (!hasArsenal && !hasEpicArsenal) return [];
+  if (game.pendingOverrideAttackDice?.[msgId]) return []; // already picked
+  const gameId = game.gameId;
+  const data = game.dcActionsData?.[msgId];
+  const figureIndex = data?.selectedFigure ?? 0;
+  // Arsenal: 2 dice combos; Epic Arsenal: 3 dice combos
+  const diceCount = hasEpicArsenal ? 3 : 2;
+  const colors = ['red', 'blue', 'yellow', 'green'];
+  const combos = [];
+  if (diceCount === 2) {
+    for (let i = 0; i < colors.length; i++)
+      for (let j = i; j < colors.length; j++)
+        combos.push(`${colors[i]},${colors[j]}`);
+  } else {
+    for (let i = 0; i < colors.length; i++)
+      for (let j = i; j < colors.length; j++)
+        for (let k = j; k < colors.length; k++) {
+          if (colors[i] === colors[j] && colors[j] === colors[k]) continue;
+          combos.push(`${colors[i]},${colors[j]},${colors[k]}`);
+        }
+  }
+  return combos.map(combo => ({
+    type: ACTION_TYPES.ARSENAL_PICK,
+    customId: buildCustomId(ACTION_TYPES.ARSENAL_PICK, { gameId, msgId, figureIndex }),
+    description: `Arsenal: ${combo}`,
+    params: { msgId, figureIndex, diceCombo: combo },
+    selectValues: [combo],
+  }));
 }
 
 // ── CC Confirmation ──────────────────────────────────────────────────────

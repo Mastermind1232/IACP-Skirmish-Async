@@ -45,6 +45,8 @@ export const PENDING_STATE_KEYS = [
   'pendingToughLuck',
   'pendingHunterProtocol',
   'pendingBleeding',
+  'pendingEe3Carbine',
+  'pendingBoRifle',
   'pendingRushPush',
   'pendingShoulderRush',
   'pendingFalseOrders',

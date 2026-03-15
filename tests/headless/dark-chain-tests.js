@@ -111,6 +111,168 @@ describe('CC Confirmation chain (dark)', () => {
   });
 });
 
+// ── Priority 2: Weapon Choice Handlers ───────────────────────────────────────
+
+describe('Arsenal weapon choice (dark)', () => {
+  it('Arsenal DC shows arsenal_pick actions when activated without dice override', () => {
+    const meta = createTestGame()
+      .withPlayer1Army([{ dcName: 'IG-88' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper' }])
+      .inRound(1)
+      .build();
+    const { game } = meta;
+
+    // Activate IG-88
+    const p1MsgId = [...meta.dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
+    game.dcActionsData = { [p1MsgId]: { remaining: 2, selectedFigure: 0 } };
+    game.currentActivationTurnPlayerId = game.player1Id;
+
+    const actionDeps = buildActionDeps(meta);
+    const actions = getAvailableActions(game, 1, actionDeps);
+    const arsenalPicks = actions.filter(a => a.type === 'arsenal_pick');
+
+    // Arsenal: 2 dice from 4 colors → C(4+1,2) = 10 combos
+    assert.ok(arsenalPicks.length >= 10, `Arsenal offers ${arsenalPicks.length} dice combos (expected ≥10)`);
+    assert.ok(arsenalPicks[0].selectValues?.length > 0, 'Arsenal action has selectValues for select menu');
+
+    // Verify customId matches handler regex: arsenal_pick_{gameId}_{msgId}_{figureIndex}
+    const match = arsenalPicks[0].customId.match(/^arsenal_pick_[^_]+_[^_]+_\d+$/);
+    assert.ok(match, `customId "${arsenalPicks[0].customId}" matches handler format`);
+  });
+
+  it('Arsenal actions disappear once pendingOverrideAttackDice is set', () => {
+    const meta = createTestGame()
+      .withPlayer1Army([{ dcName: 'IG-88' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper' }])
+      .inRound(1)
+      .build();
+    const { game } = meta;
+
+    const p1MsgId = [...meta.dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
+    game.dcActionsData = { [p1MsgId]: { remaining: 2, selectedFigure: 0 } };
+    game.currentActivationTurnPlayerId = game.player1Id;
+
+    // Simulate having already picked dice
+    game.pendingOverrideAttackDice = { [p1MsgId]: { dice: ['red', 'blue'] } };
+
+    const actionDeps = buildActionDeps(meta);
+    const actions = getAvailableActions(game, 1, actionDeps);
+    const arsenalPicks = actions.filter(a => a.type === 'arsenal_pick');
+
+    assert.strictEqual(arsenalPicks.length, 0, 'No Arsenal picks when override dice already set');
+  });
+});
+
+describe('EE-3 Carbine weapon choice (dark)', () => {
+  it('pendingEe3Carbine gates actions and returns die color picks + skip', () => {
+    const meta = createTestGame()
+      .withPlayer1Army([{ dcName: 'Boba Fett' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper' }])
+      .inRound(1)
+      .build();
+    const { game } = meta;
+
+    const p1MsgId = [...meta.dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
+
+    // Simulate EE-3 pending state as the attack handler would set it
+    game.pendingEe3Carbine = {
+      [p1MsgId]: { gameId: game.gameId, playerNum: 1, figureIndex: 0, msgId: p1MsgId },
+    };
+
+    const actionDeps = buildActionDeps(meta);
+    const actions = getAvailableActions(game, 1, actionDeps);
+    const ee3Picks = actions.filter(a => a.type === 'ee3_pick_die');
+    const ee3Skips = actions.filter(a => a.type === 'ee3_pick_skip');
+
+    // Boba Fett has blue + green + green dice → non-red colors: blue, green
+    assert.ok(ee3Picks.length >= 1, `EE-3 offers ${ee3Picks.length} die upgrade options`);
+    assert.strictEqual(ee3Skips.length, 1, 'exactly 1 ee3_pick_skip offered');
+    assert.ok(!actions.some(a => a.type === 'activate_dc'), 'no activate_dc while EE-3 pending');
+
+    // Verify customId matches handler regex: ee3_pick_die_{color}_{gameId}_{msgId}_{figureIndex}
+    const match = ee3Picks[0].customId.match(/^ee3_pick_die_\w+_[^_]+_[^_]+_\d+$/);
+    assert.ok(match, `customId "${ee3Picks[0].customId}" matches handler regex`);
+  });
+
+  it('pendingEe3Carbine with value "decided" does not gate', () => {
+    const meta = createTestGame()
+      .withPlayer1Army([{ dcName: 'Boba Fett' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper' }])
+      .inRound(1)
+      .build();
+    const { game } = meta;
+
+    const p1MsgId = [...meta.dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
+    game.pendingEe3Carbine = { [p1MsgId]: 'decided' };
+    game.currentActivationTurnPlayerId = game.player1Id;
+
+    const actionDeps = buildActionDeps(meta);
+    const actions = getAvailableActions(game, 1, actionDeps);
+
+    // "decided" state should NOT gate — normal activation actions should appear
+    const ee3Actions = actions.filter(a => a.type === 'ee3_pick_die' || a.type === 'ee3_pick_skip');
+    assert.strictEqual(ee3Actions.length, 0, 'no EE-3 actions when already decided');
+  });
+});
+
+describe('Bo-Rifle weapon choice (dark)', () => {
+  it('pendingBoRifle gates actions and returns use/skip', () => {
+    const meta = createTestGame()
+      .withPlayer1Army([{ dcName: 'Agent Kallus' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper' }])
+      .inRound(1)
+      .build();
+    const { game } = meta;
+
+    const p1MsgId = [...meta.dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
+
+    // Simulate Bo-Rifle pending state
+    game.pendingBoRifle = {
+      [p1MsgId]: {
+        gameId: game.gameId,
+        playerNum: 1,
+        figureIndex: 0,
+        msgId: p1MsgId,
+        meleeDice: ['red', 'green', 'green'],
+      },
+    };
+
+    const actionDeps = buildActionDeps(meta);
+    const actions = getAvailableActions(game, 1, actionDeps);
+    const brUse = actions.filter(a => a.type === 'bo_rifle_use');
+    const brSkip = actions.filter(a => a.type === 'bo_rifle_skip');
+
+    assert.strictEqual(brUse.length, 1, 'exactly 1 bo_rifle_use offered');
+    assert.strictEqual(brSkip.length, 1, 'exactly 1 bo_rifle_skip offered');
+    assert.ok(!actions.some(a => a.type === 'activate_dc'), 'no activate_dc while Bo-Rifle pending');
+
+    // Verify customIds match handler regex: bo_rifle_pick_{use|skip}_{gameId}_{msgId}_{figureIndex}
+    const useMatch = brUse[0].customId.match(/^bo_rifle_pick_use_[^_]+_[^_]+_\d+$/);
+    assert.ok(useMatch, `use customId "${brUse[0].customId}" matches handler regex`);
+    const skipMatch = brSkip[0].customId.match(/^bo_rifle_pick_skip_[^_]+_[^_]+_\d+$/);
+    assert.ok(skipMatch, `skip customId "${brSkip[0].customId}" matches handler regex`);
+  });
+
+  it('Bo-Rifle routes to correct player only', () => {
+    const meta = createTestGame()
+      .withPlayer1Army([{ dcName: 'Agent Kallus' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper' }])
+      .inRound(1)
+      .build();
+    const { game } = meta;
+
+    const p1MsgId = [...meta.dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
+    game.pendingBoRifle = {
+      [p1MsgId]: { gameId: game.gameId, playerNum: 1, figureIndex: 0, msgId: p1MsgId, meleeDice: ['red', 'green', 'green'] },
+    };
+
+    const actionDeps = buildActionDeps(meta);
+    const p2Actions = getAvailableActions(game, 2, actionDeps);
+    const p2BoRifle = p2Actions.filter(a => a.type === 'bo_rifle_use' || a.type === 'bo_rifle_skip');
+    assert.strictEqual(p2BoRifle.length, 0, 'P2 does not see Bo-Rifle actions when P1 is choosing');
+  });
+});
+
 // ── Priority 3: Negation ─────────────────────────────────────────────────────
 
 describe('Negation gating (dark)', () => {

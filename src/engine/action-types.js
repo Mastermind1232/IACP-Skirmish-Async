@@ -88,6 +88,13 @@ export const ACTION_TYPES = {
   OB_SPACE: 'ob_space',
   BOMB_DROP_SPACE: 'bomb_drop_space',
 
+  // Weapon choice pending states
+  ARSENAL_PICK: 'arsenal_pick',
+  EE3_PICK_DIE: 'ee3_pick_die',
+  EE3_PICK_SKIP: 'ee3_pick_skip',
+  BO_RIFLE_USE: 'bo_rifle_use',
+  BO_RIFLE_SKIP: 'bo_rifle_skip',
+
   // Misc
   REFRESH_MAP: 'refresh_map',
   UNDO: 'undo',
@@ -229,6 +236,18 @@ export function buildCustomId(type, params = {}) {
       return `ob_space_${gameId}_${msgId}_${params.space}`;
     case ACTION_TYPES.BOMB_DROP_SPACE:
       return `bomb_drop_space_${gameId}_${msgId}_${params.space}`;
+
+    // Weapon choice pending states
+    case ACTION_TYPES.ARSENAL_PICK:
+      return `arsenal_pick_${gameId}_${msgId}_${params.figureIndex}`;
+    case ACTION_TYPES.EE3_PICK_DIE:
+      return `ee3_pick_die_${params.color}_${gameId}_${msgId}_${params.figureIndex}`;
+    case ACTION_TYPES.EE3_PICK_SKIP:
+      return `ee3_pick_die_skip_${gameId}_${msgId}_${params.figureIndex}`;
+    case ACTION_TYPES.BO_RIFLE_USE:
+      return `bo_rifle_pick_use_${gameId}_${msgId}_${params.figureIndex}`;
+    case ACTION_TYPES.BO_RIFLE_SKIP:
+      return `bo_rifle_pick_skip_${gameId}_${msgId}_${params.figureIndex}`;
 
     // Misc
     case ACTION_TYPES.REFRESH_MAP:
