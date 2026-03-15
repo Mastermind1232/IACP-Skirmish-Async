@@ -218,6 +218,9 @@ async function runSim(seed, pools, opts = {}) {
   const p2Army = randomArmy(rng, pools.deployable);
   const p1CcHand = randomCcHand(rng, pools.ccNames, Math.floor(rng() * 4)); // 0-3 cards
   const p2CcHand = randomCcHand(rng, pools.ccNames, Math.floor(rng() * 4));
+  // CC deck (for bleed_prevent, deck-based abilities)
+  const p1CcDeck = randomCcHand(rng, pools.ccNames, 3 + Math.floor(rng() * 5)); // 3-7 cards
+  const p2CcDeck = randomCcHand(rng, pools.ccNames, 3 + Math.floor(rng() * 5));
   const policy = POLICIES[Math.floor(rng() * POLICIES.length)];
 
   const scenario = {
@@ -232,7 +235,7 @@ async function runSim(seed, pools, opts = {}) {
 
   let fh;
   try {
-    fh = createFlowHarness({ mapId, p1Army, p2Army, p1CcHand, p2CcHand });
+    fh = createFlowHarness({ mapId, p1Army, p2Army, p1CcHand, p2CcHand, p1CcDeck, p2CcDeck });
   } catch (e) {
     // Some army/map combos may fail to build (e.g., no deployment zones for army size)
     return { seed, scenario, status: 'setup-error', error: e.message, violations: [], steps: 0, telemetry: { customIds: [], actionTypes: [], pendingStates: {} } };

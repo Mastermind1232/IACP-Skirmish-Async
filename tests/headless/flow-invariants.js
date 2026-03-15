@@ -287,7 +287,7 @@ export function assertSurfaceInvariants(game, surface, step) {
   // If the bold text appears at the start of the followUp content (**AbilityName** — ...),
   // it's a DC ability being reported, not a CC card leak. Skip those entries.
   function isDcSpecialActionName(entry, cardName) {
-    if (!entry.customId?.startsWith('dc_special_')) return false;
+    if (!entry.customId?.startsWith('dc_special_') && !entry.customId?.startsWith('dc_ability_choice_')) return false;
     const content = entry.content || '';
     return content.startsWith(`**${cardName}**`);
   }

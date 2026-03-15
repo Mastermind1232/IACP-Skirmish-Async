@@ -247,6 +247,8 @@ export function createFlowHarness(opts = {}) {
     round = 1,
     p1CcHand = [],
     p2CcHand = [],
+    p1CcDeck = [],
+    p2CcDeck = [],
     diceOverrides = null,
   } = opts;
 
@@ -255,7 +257,9 @@ export function createFlowHarness(opts = {}) {
     .withPlayer1Army(p1Army)
     .withPlayer2Army(p2Army)
     .withPlayer1CcHand(p1CcHand)
-    .withPlayer2CcHand(p2CcHand);
+    .withPlayer2CcHand(p2CcHand)
+    .withPlayer1CcDeck(p1CcDeck)
+    .withPlayer2CcDeck(p2CcDeck);
 
   if (round > 0) builder = builder.inRound(round);
 

@@ -49,7 +49,7 @@ export function getAvailableActions(game, playerNum, deps = {}) {
     const bl = game.pendingBleeding;
     if (playerNum === bl.playerNum) {
       const gameId = game.gameId;
-      const ccDeckLen = (game[`p${playerNum}CcDeck`] || []).length;
+      const ccDeckLen = (game[playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck'] || []).length;
       return [
         { type: 'bleed_accept', customId: `bleed_accept_${gameId}_${playerNum}_${bl.figureKey}`, description: `Bleeding: ${bl.displayName} takes 1 damage` },
         { type: 'bleed_prevent', customId: `bleed_prevent_${gameId}_${playerNum}_${bl.figureKey}`, description: `Bleeding: prevent (discard CC, ${ccDeckLen} left)`, disabled: ccDeckLen === 0 },
