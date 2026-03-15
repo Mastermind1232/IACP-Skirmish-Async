@@ -336,6 +336,42 @@ function getRoundActiveActions(game, playerNum, deps) {
     if (lrActions.length > 0) return lrActions;
   }
 
+  // Pending CC confirmation (player must confirm/cancel before anything else)
+  if (game.pendingCcConfirmation) {
+    const ccConfirmActions = getCcConfirmActions(game, playerNum);
+    if (ccConfirmActions.length > 0) return ccConfirmActions;
+  }
+
+  // Pending CC choice (chooseOne for CC like Retaliation)
+  if (game.pendingCcChoice && game.pendingCcChoice.gameId) {
+    const ccChoiceActions = getCcChoiceActions(game, playerNum);
+    if (ccChoiceActions.length > 0) return ccChoiceActions;
+  }
+
+  // Pending CC space choice (pick-a-space for CC like Smoke Grenade)
+  if (game.pendingCcSpaceChoice && game.pendingCcSpaceChoice.gameId) {
+    const ccSpaceActions = getCcSpaceActions(game, playerNum);
+    if (ccSpaceActions.length > 0) return ccSpaceActions;
+  }
+
+  // Pending Rush (Onar)
+  if (game.pendingRushPush) {
+    const rushActions = getRushPushActions(game, playerNum);
+    if (rushActions.length > 0) return rushActions;
+  }
+
+  // Pending Shoulder Rush (Drokkatta)
+  if (game.pendingShoulderRush) {
+    const srActions = getShoulderRushActions(game, playerNum);
+    if (srActions.length > 0) return srActions;
+  }
+
+  // Pending False Orders / Lure
+  if (game.pendingFalseOrders) {
+    const foActions = getFalseOrdersActions(game, playerNum);
+    if (foActions.length > 0) return foActions;
+  }
+
   // Check round phase
   switch (game.roundPhase) {
     case ROUND_PHASES.START_OF_ROUND:
@@ -620,6 +656,18 @@ function getActivationActions(game, playerNum, deps) {
         });
       }
     }
+  }
+
+  // Non-blocking side prompts: overwatch, bomb drop, orbital bombardment
+  // These appear alongside normal activation actions (player can resolve them at any point)
+  if (game.pendingOverwatchPlacement && Object.keys(game.pendingOverwatchPlacement).length > 0) {
+    actions.push(...getOverwatchPlacementActions(game, playerNum, deps));
+  }
+  if (game.pendingBombDrop && Object.keys(game.pendingBombDrop).length > 0) {
+    actions.push(...getBombDropActions(game, playerNum, deps));
+  }
+  if (game.pendingOrbitalBombardment) {
+    actions.push(...getOrbitalBombardmentActions(game, playerNum, deps));
   }
 
   return actions;
@@ -1352,6 +1400,180 @@ function getLastResortActions(game, playerNum) {
       description: 'Skip Last Resort',
     },
   ];
+}
+
+// ── CC Confirmation ──────────────────────────────────────────────────────
+
+function getCcConfirmActions(game, playerNum) {
+  const pending = game.pendingCcConfirmation;
+  if (!pending || pending.playerNum !== playerNum) return [];
+  const gameId = game.gameId;
+  return [
+    { type: ACTION_TYPES.CC_CONFIRM_PLAY, customId: buildCustomId(ACTION_TYPES.CC_CONFIRM_PLAY, { gameId }), description: `Confirm play: ${pending.card}` },
+    { type: ACTION_TYPES.CC_CANCEL_PLAY, customId: buildCustomId(ACTION_TYPES.CC_CANCEL_PLAY, { gameId }), description: 'Cancel CC play' },
+  ];
+}
+
+// ── CC Choice ────────────────────────────────────────────────────────────
+
+function getCcChoiceActions(game, playerNum) {
+  const pending = game.pendingCcChoice;
+  if (!pending || pending.playerNum !== playerNum) return [];
+  const gameId = game.gameId;
+  const options = pending.choiceOptions || [];
+  return options.map((opt, i) => ({
+    type: ACTION_TYPES.CC_CHOICE,
+    customId: buildCustomId(ACTION_TYPES.CC_CHOICE, { gameId, choiceIndex: i }),
+    description: `CC choice: ${typeof opt === 'string' ? opt : opt.label || `Option ${i}`}`,
+    params: { choiceIndex: i },
+  }));
+}
+
+// ── CC Space Choice ──────────────────────────────────────────────────────
+
+function getCcSpaceActions(game, playerNum) {
+  const pending = game.pendingCcSpaceChoice;
+  if (!pending || pending.playerNum !== playerNum) return [];
+  const gameId = game.gameId;
+  const validSpaces = pending.validSpaces || [];
+  return validSpaces.map(space => ({
+    type: ACTION_TYPES.CC_SPACE,
+    customId: buildCustomId(ACTION_TYPES.CC_SPACE, { gameId, space: String(space).toLowerCase() }),
+    description: `CC space: ${String(space).toUpperCase()}`,
+    params: { space: String(space).toLowerCase() },
+  }));
+}
+
+// ── Rush Push ────────────────────────────────────────────────────────────
+
+function getRushPushActions(game, playerNum) {
+  const pending = game.pendingRushPush;
+  if (!pending || pending.playerNum !== playerNum) return [];
+  const gameId = game.gameId;
+  const msgId = pending.msgId;
+  const targets = pending.targets || [];
+  const actions = targets.map((fk, i) => ({
+    type: ACTION_TYPES.RUSH_PUSH_FIG,
+    customId: buildCustomId(ACTION_TYPES.RUSH_PUSH_FIG, { gameId, msgId, choiceIndex: i }),
+    description: `Rush: target ${dcNameFromFigureKey(fk)}`,
+    params: { choiceIndex: i, figureKey: fk },
+  }));
+  actions.push({
+    type: ACTION_TYPES.RUSH_PUSH_SKIP,
+    customId: buildCustomId(ACTION_TYPES.RUSH_PUSH_SKIP, { gameId, msgId }),
+    description: 'Skip Rush',
+  });
+  return actions;
+}
+
+// ── Shoulder Rush ────────────────────────────────────────────────────────
+
+function getShoulderRushActions(game, playerNum) {
+  const pending = game.pendingShoulderRush;
+  if (!pending || pending.playerNum !== playerNum) return [];
+  const gameId = game.gameId;
+  const msgId = pending.msgId;
+  const targets = pending.targets || [];
+  const actions = targets.map((fk, i) => ({
+    type: ACTION_TYPES.SHOULDER_RUSH_FIG,
+    customId: buildCustomId(ACTION_TYPES.SHOULDER_RUSH_FIG, { gameId, msgId, choiceIndex: i }),
+    description: `Shoulder Rush: target ${dcNameFromFigureKey(fk)}`,
+    params: { choiceIndex: i, figureKey: fk },
+  }));
+  actions.push({
+    type: ACTION_TYPES.SHOULDER_RUSH_SKIP,
+    customId: buildCustomId(ACTION_TYPES.SHOULDER_RUSH_SKIP, { gameId, msgId }),
+    description: 'Skip Shoulder Rush',
+  });
+  return actions;
+}
+
+// ── False Orders / Lure ──────────────────────────────────────────────────
+
+function getFalseOrdersActions(game, playerNum) {
+  const fo = game.pendingFalseOrders;
+  if (!fo || fo.controllerPlayerNum !== playerNum) return [];
+  const gameId = game.gameId;
+  const msgId = fo.murneRinMsgId || fo.msgId;
+  return [
+    { type: ACTION_TYPES.FALSE_ORDERS_MOVE, customId: buildCustomId(ACTION_TYPES.FALSE_ORDERS_MOVE, { gameId, msgId }), description: `False Orders: move ${dcNameFromFigureKey(fo.controlledFigureKey)}` },
+    { type: ACTION_TYPES.FALSE_ORDERS_ATTACK, customId: buildCustomId(ACTION_TYPES.FALSE_ORDERS_ATTACK, { gameId, msgId }), description: `False Orders: attack with ${dcNameFromFigureKey(fo.controlledFigureKey)}` },
+    { type: ACTION_TYPES.FALSE_ORDERS_SKIP, customId: buildCustomId(ACTION_TYPES.FALSE_ORDERS_SKIP, { gameId, msgId }), description: 'Skip False Orders' },
+  ];
+}
+
+// ── Overwatch Placement ──────────────────────────────────────────────────
+
+function getOverwatchPlacementActions(game, playerNum, deps) {
+  const pending = game.pendingOverwatchPlacement;
+  if (!pending) return [];
+  // Find msgId entries for this player
+  const getMapSpacesFn = deps.getMapSpaces;
+  const dcMeta = deps.dcMessageMeta;
+  for (const [msgId, val] of Object.entries(pending)) {
+    if (!val) continue;
+    const meta = dcMeta?.get(msgId);
+    if (meta && meta.playerNum !== playerNum) continue;
+    // Return space options from map
+    const mapId = game.selectedMap?.id;
+    const ms = getMapSpacesFn?.(mapId);
+    const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
+    if (allSpaces.length === 0) continue;
+    const gameId = game.gameId;
+    return allSpaces.slice(0, 25).map(space => ({
+      type: ACTION_TYPES.OVERWATCH_SPACE,
+      customId: buildCustomId(ACTION_TYPES.OVERWATCH_SPACE, { gameId, msgId, space }),
+      description: `Overwatch: place at ${String(space).toUpperCase()}`,
+      params: { space, msgId },
+    }));
+  }
+  return [];
+}
+
+// ── Orbital Bombardment ──────────────────────────────────────────────────
+
+function getOrbitalBombardmentActions(game, playerNum, deps) {
+  const pending = game.pendingOrbitalBombardment;
+  if (!pending || pending.playerNum !== playerNum) return [];
+  const getMapSpacesFn = deps.getMapSpaces;
+  const mapId = game.selectedMap?.id;
+  const ms = getMapSpacesFn?.(mapId);
+  const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
+  if (allSpaces.length === 0) return [];
+  const gameId = game.gameId;
+  const msgId = pending.msgId;
+  return allSpaces.slice(0, 25).map(space => ({
+    type: ACTION_TYPES.OB_SPACE,
+    customId: buildCustomId(ACTION_TYPES.OB_SPACE, { gameId, msgId, space }),
+    description: `Orbital Bombardment: space ${String(space).toUpperCase()}`,
+    params: { space, msgId },
+  }));
+}
+
+// ── Bomb Drop ────────────────────────────────────────────────────────────
+
+function getBombDropActions(game, playerNum, deps) {
+  const pending = game.pendingBombDrop;
+  if (!pending) return [];
+  const dcMeta = deps.dcMessageMeta;
+  for (const [msgId, val] of Object.entries(pending)) {
+    if (!val) continue;
+    const meta = dcMeta?.get(msgId);
+    if (meta && meta.playerNum !== playerNum) continue;
+    const getMapSpacesFn = deps.getMapSpaces;
+    const mapId = game.selectedMap?.id;
+    const ms = getMapSpacesFn?.(mapId);
+    const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
+    if (allSpaces.length === 0) continue;
+    const gameId = game.gameId;
+    return allSpaces.slice(0, 25).map(space => ({
+      type: ACTION_TYPES.BOMB_DROP_SPACE,
+      customId: buildCustomId(ACTION_TYPES.BOMB_DROP_SPACE, { gameId, msgId, space }),
+      description: `Bomb Drop: space ${String(space).toUpperCase()}`,
+      params: { space, msgId },
+    }));
+  }
+  return [];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

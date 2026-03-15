@@ -72,6 +72,22 @@ export const ACTION_TYPES = {
   STRAIN_CHOICE_ALLDMG: 'strain_choice_alldmg',
   STRAIN_CHOICE_DISCARD: 'strain_choice_discard',
 
+  // Dark sub-chain pending states
+  RUSH_PUSH_FIG: 'rush_push_fig',
+  RUSH_PUSH_SKIP: 'rush_push_skip',
+  SHOULDER_RUSH_FIG: 'shoulder_rush_fig',
+  SHOULDER_RUSH_SKIP: 'shoulder_rush_skip',
+  FALSE_ORDERS_MOVE: 'false_orders_move',
+  FALSE_ORDERS_ATTACK: 'false_orders_attack',
+  FALSE_ORDERS_SKIP: 'false_orders_skip',
+  CC_CONFIRM_PLAY: 'cc_confirm_play',
+  CC_CANCEL_PLAY: 'cc_cancel_play',
+  CC_CHOICE: 'cc_choice',
+  CC_SPACE: 'cc_space',
+  OVERWATCH_SPACE: 'overwatch_space',
+  OB_SPACE: 'ob_space',
+  BOMB_DROP_SPACE: 'bomb_drop_space',
+
   // Misc
   REFRESH_MAP: 'refresh_map',
   UNDO: 'undo',
@@ -183,6 +199,36 @@ export function buildCustomId(type, params = {}) {
       return `strain_choice_alldmg_${gameId}`;
     case ACTION_TYPES.STRAIN_CHOICE_DISCARD:
       return `strain_choice_discard_${gameId}_${params.discardCount}`;
+
+    // Dark sub-chain pending states
+    case ACTION_TYPES.RUSH_PUSH_FIG:
+      return `rush_push_fig_${gameId}_${msgId}_${params.choiceIndex}`;
+    case ACTION_TYPES.RUSH_PUSH_SKIP:
+      return `rush_push_skip_${gameId}_${msgId}`;
+    case ACTION_TYPES.SHOULDER_RUSH_FIG:
+      return `shoulder_rush_fig_${gameId}_${msgId}_${params.choiceIndex}`;
+    case ACTION_TYPES.SHOULDER_RUSH_SKIP:
+      return `shoulder_rush_skip_${gameId}_${msgId}`;
+    case ACTION_TYPES.FALSE_ORDERS_MOVE:
+      return `false_orders_action_${gameId}_${msgId}_move`;
+    case ACTION_TYPES.FALSE_ORDERS_ATTACK:
+      return `false_orders_action_${gameId}_${msgId}_attack`;
+    case ACTION_TYPES.FALSE_ORDERS_SKIP:
+      return `false_orders_action_${gameId}_${msgId}_skip`;
+    case ACTION_TYPES.CC_CONFIRM_PLAY:
+      return `cc_confirm_play_${gameId}`;
+    case ACTION_TYPES.CC_CANCEL_PLAY:
+      return `cc_cancel_play_${gameId}`;
+    case ACTION_TYPES.CC_CHOICE:
+      return `cc_choice_${gameId}_${params.choiceIndex}`;
+    case ACTION_TYPES.CC_SPACE:
+      return `cc_space_${gameId}_${params.space}`;
+    case ACTION_TYPES.OVERWATCH_SPACE:
+      return `overwatch_space_${gameId}_${msgId}_${params.space}`;
+    case ACTION_TYPES.OB_SPACE:
+      return `ob_space_${gameId}_${msgId}_${params.space}`;
+    case ACTION_TYPES.BOMB_DROP_SPACE:
+      return `bomb_drop_space_${gameId}_${msgId}_${params.space}`;
 
     // Misc
     case ACTION_TYPES.REFRESH_MAP:
