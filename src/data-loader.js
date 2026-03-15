@@ -395,7 +395,12 @@ export function getDcStats(dcName) {
     if (!specials && eff.specialAbilityIds?.length) {
       const lib = getAbilityLibrary() || {};
       specials = eff.specialAbilityIds
-        .filter((id) => !PASSIVE_ONLY_IDS.has(id))
+        .filter((id) => {
+          if (PASSIVE_ONLY_IDS.has(id)) return false;
+          const entry = lib.abilities?.[id];
+          if (entry?.category === 'passive') return false;
+          return true;
+        })
         .map((id) => {
           const entry = lib.abilities?.[id];
           return entry?.label || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

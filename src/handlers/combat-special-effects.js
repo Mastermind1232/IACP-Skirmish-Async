@@ -190,6 +190,12 @@ export async function handleBleedResolve(interaction, ctx) {
           if (idx >= 0) {
             await decrementActivationIfGroupDefeated(game, playerNum, idx, interaction.client);
           }
+          // Clean up dcActionsData if entire group is defeated (prevents dead-end)
+          const _bleedHs = dcHealthState.get(msgId);
+          if (_bleedHs && _bleedHs.every(fig => fig && fig.currentHp <= 0)) {
+            if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
+            if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+          }
           await checkWinConditions(game, interaction.client);
         }
         // Refresh DC embed
