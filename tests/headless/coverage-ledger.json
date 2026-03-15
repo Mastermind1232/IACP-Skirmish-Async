@@ -128,17 +128,17 @@
     "post-deploy-abilities": {
       "name": "Post-Deploy Abilities",
       "category": "setup",
-      "verification": "none",
-      "evidence": [],
+      "verification": "weak",
+      "evidence": ["post-deploy-tests"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": ["auto-deploy", "companion-deployment", "attachment-placement", "cc-draw"],
-      "notes": "12 ability families: Beskar Armor (auto), Stealthy/Ambush (auto), Security Detail, Forward Emplacement, Smooth Landing (Hera/Bodhi), Infiltration, Strike Team (Cassian), Arms Distribution (Ko-Tun), Scavenged Walker, Extra Armor, companion deploy. 15 interactive pd_* handlers, all dark.",
-      "handlerPrefixes": ["pd_security_pick", "pd_strike_adj", "pd_strike_token", "pd_strike_token_done", "pd_move_skip", "pd_move_stay", "pd_sl_pick", "pd_walker_move", "pd_walker_skip", "pd_arms_dist_fig", "pd_arms_dist_token"],
+      "notes": "43 targeted tests: ability scanning (9), queue state machine (4), customId format (12), auto-apply resolution (3), interactive state (7), player routing (3), handler registration (1), runPostDeployPhase conditions (4). Setup sims still don't reach post-deploy phase (zero telemetry hits). Tests cover scanning + state machine + customId parsing, not full interactive movement flows.",
+      "handlerPrefixes": ["pd_pick", "pd_security_pick", "pd_strike_adj", "pd_strike_token", "pd_strike_token_done", "pd_move_skip", "pd_move_stay", "pd_sl_pick", "pd_walker_move", "pd_walker_skip", "pd_arms_dist_fig", "pd_arms_dist_token"],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "cc-draw": {
       "name": "CC Draw",
@@ -189,16 +189,16 @@
       "name": "Attack Declaration",
       "category": "activation",
       "verification": "partial",
-      "evidence": ["flow-harness", "gs-invariants", "sim-farm"],
+      "evidence": ["flow-harness", "gs-invariants", "sim-farm", "dark-chain-tests"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": ["combat-lifecycle", "surge-spending", "special-ability-flows"],
-      "notes": "Flow harness exercises dc_attack with random target selection via available-actions. Synthetic positions mean range/LOS not fully realistic. Arsenal/EE-3/Bo-Rifle weapon choice handlers (arsenal_pick_, ee3_pick_die_, bo_rifle_pick_) are NOT exercised.",
+      "notes": "Flow harness exercises dc_attack with random target selection. Arsenal wired into available-actions (302 sim hits). EE-3/Bo-Rifle have targeted dark-chain-tests (blocking gate + decided passthrough). Weapon choice is a sub-category within this region.",
       "handlerPrefixes": ["dc_attack", "arsenal_pick", "ee3_pick_die", "bo_rifle_pick"],
-      "pendingStates": [],
-      "actionTypes": ["attack_target"],
+      "pendingStates": ["pendingEe3Carbine", "pendingBoRifle"],
+      "actionTypes": ["attack_target", "arsenal_pick", "ee3_pick_die", "ee3_pick_skip", "bo_rifle_use", "bo_rifle_skip"],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "interact-objectives": {
       "name": "Interact / Objectives",
@@ -218,8 +218,8 @@
     "special-ability-flows": {
       "name": "Special Abilities (Triggered)",
       "category": "activation",
-      "verification": "weak",
-      "evidence": ["flow-harness", "sim-farm"],
+      "verification": "partial",
+      "evidence": ["flow-harness", "sim-farm", "dark-chain-tests"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": ["activate-dc", "attack-declaration", "cc-play", "combat-interrupts", "push-pull"],
@@ -228,13 +228,13 @@
       "pendingStates": ["pendingDcAbilityChoice", "pendingPounceSpaceChoice", "pendingRushPush", "pendingShoulderRush", "pendingOverwatchPlacement", "pendingOrbitalBombardment", "pendingBombDrop", "pendingFalseOrders"],
       "actionTypes": ["dc_special", "dc_ability_choice"],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "cc-play": {
       "name": "Command Card Play",
       "category": "activation",
-      "verification": "weak",
-      "evidence": ["flow-harness"],
+      "verification": "partial",
+      "evidence": ["flow-harness", "dark-chain-tests", "sim-farm"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": ["cc-draw", "combat-interrupts", "special-ability-flows"],
@@ -243,7 +243,7 @@
       "pendingStates": ["pendingCcConfirmation", "pendingCcChoice", "pendingCcSpaceChoice", "pendingCommDisruptionPrompt"],
       "actionTypes": ["play_cc"],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "combat-lifecycle": {
       "name": "Combat Lifecycle",
@@ -517,6 +517,10 @@
     }
   },
   "history": [
+    { "date": "2026-03-15", "region": "post-deploy-abilities", "from": "none", "to": "weak", "reason": "post-deploy-tests.js: 43 targeted tests covering ability scanning, queue state machine, customId parsing, auto-apply resolution, interactive state, player routing, handler registration" },
+    { "date": "2026-03-15", "region": "special-ability-flows", "from": "weak", "to": "partial", "reason": "dark-chain-tests.js: 9 targeted tests for rush push, shoulder rush, false orders, overwatch, orbital bombardment, bomb drop + 2489 telemetry hits across dc_special/dc_ability_choice" },
+    { "date": "2026-03-15", "region": "cc-play", "from": "weak", "to": "partial", "reason": "dark-chain-tests.js: 3 targeted tests for cc_confirm/cc_choice/cc_space chains + 43812 telemetry hits on cc_play handler prefix" },
+    { "date": "2026-03-15", "region": "attack-declaration", "from": "partial", "to": "partial", "reason": "dark-chain-tests.js: weapon choice coverage added (Arsenal 302 sim hits, EE-3/Bo-Rifle targeted tests). Updated evidence and notes." },
     { "date": "2026-03-15", "region": "interact-objectives", "from": null, "to": "weak", "reason": "New region: dc_interact, interact_choice, terminal/door/contraband/panel handlers. Flow harness hits interact action type incidentally." },
     { "date": "2026-03-15", "region": "special-ability-flows", "from": null, "to": "weak", "reason": "New region: dc_special → dc_ability_choice chain + 18 sub-handlers (pounce, rush push, overwatch, orbital bombardment, false orders, etc.). Flow harness hits dc_special/dc_ability_choice incidentally." },
     { "date": "2026-03-15", "region": "cc-play", "from": null, "to": "weak", "reason": "New region: cc_play → cc_play_select → cc_confirm_play → cc_choice → cc_space chain. Flow harness hits cc_play incidentally." },
