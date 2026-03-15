@@ -1955,10 +1955,36 @@ client.once('ready', async () => {
       return;
     }
 
+    // --- Coverage Viewer (static files) ---
+
+    const coverageFiles = {
+      '/coverage': 'tests/headless/coverage-viewer.html',
+      '/coverage-ledger.json': 'tests/headless/coverage-ledger.json',
+      '/coverage-telemetry.json': 'tests/headless/coverage-telemetry.json',
+      '/coverage-incidents.json': 'tests/headless/coverage-incidents.json',
+    };
+    const mimeTypes = { '.html': 'text/html', '.json': 'application/json' };
+
+    const filePath = coverageFiles[req.url?.split('?')[0]];
+    if (req.method === 'GET' && filePath) {
+      try {
+        const __indexDirname = dirname(fileURLToPath(import.meta.url));
+        const fullPath = join(__indexDirname, filePath);
+        const content = readFileSync(fullPath, 'utf8');
+        const ext = filePath.slice(filePath.lastIndexOf('.'));
+        res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
+        res.end(content);
+      } catch (err) {
+        res.writeHead(404);
+        res.end('File not found');
+      }
+      return;
+    }
+
     res.writeHead(404);
     res.end();
-  }).listen(port, '127.0.0.1', () => {
-    console.log(`Bot HTTP API: http://127.0.0.1:${port} (testgame + coverage API)`);
+  }).listen(port, '0.0.0.0', () => {
+    console.log(`Bot HTTP API: http://127.0.0.1:${port} (testgame + coverage API + viewer)`);
   });
   botReady = true;
   console.log('Bot fully ready — accepting interactions.');

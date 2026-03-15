@@ -288,7 +288,8 @@ let LEDGER = null, TELEMETRY = null, INCIDENTS = null;
 
 // ── Backend API ──
 
-const API_BASE = 'http://127.0.0.1:3999';
+// API_BASE: empty string when served by the bot (same origin), falls back to localhost for dev
+const API_BASE = '';
 let backendAvailable = false;
 
 async function checkBackend() {
