@@ -15,9 +15,62 @@
  *   node tests/headless/sim-farm.js 500 --stop-on-fail
  */
 
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createFlowHarness } from './flow-harness.js';
 import { runSetupSim } from './setup-harness.js';
 import { getDcEffects, getDcStats, getMapRegistry, getMapSpaces, getCcEffectsData, getDeploymentZones } from '../../src/data-loader.js';
+
+// ── Telemetry helpers ────────────────────────────────────────────────────────
+
+const TRACKED_PENDING = [
+  'pendingCombat', 'pendingCelebration', 'pendingNegation',
+  'pendingDcAbilityChoice', 'pendingStrainChoice', 'pendingReroll',
+  'pendingTokenOverflow', 'pendingPushChoice', 'moveInProgress',
+  'pendingOverwatch', 'pendingPounce', 'pendingMissileSalvo',
+  'pendingPowerToken', 'pendingCoverFire', 'pendingSpreadPain',
+  'pendingIKnowEverything', 'pendingConditionChoice',
+];
+
+// Known handler prefixes, sorted longest-first for greedy matching
+const KNOWN_PREFIXES = [
+  'phase_gate_ready', 'phase_gate_unready',
+  'deployment_zone_red', 'deployment_zone_blue', 'deployment_done', 'deployment_fig', 'deployment_orient',
+  'auto_deploy', 'deploy_pick', 'deploy_row_back', 'deploy_row',
+  'setup_attach_to', 'attach_done_confirm', 'attach_done_redo', 'attach_confirm', 'attach_reselect',
+  'loadout_pick', 'form_pick',
+  'cc_shuffle_draw', 'cc_play', 'ike_keep',
+  'dc_activate', 'dc_end_activation', 'dc_move', 'dc_attack', 'dc_special', 'dc_ability_choice',
+  'move_mp', 'move_pick', 'move_letter',
+  'attack_target',
+  'combat_ready', 'combat_roll', 'combat_surge', 'combat_skip_surges', 'combat_reroll', 'combat_resolve_ready', 'combat_resolve',
+  'negation_let_resolve', 'negation_use',
+  'celebration_play', 'celebration_pass',
+  'pass_activation_turn', 'end_turn', 'end_end_of_round', 'end_start_of_round', 'status_phase',
+  'strain_choice_alldmg', 'strain_choice_discard',
+  'power_token_choice', 'cover_fire_block', 'cover_fire_discard', 'spread_pain_cond',
+  'pounce_space', 'missile_salvo_die', 'missile_salvo_done',
+  'forfeit_yes', 'forfeit_no', 'forfeit', 'kill_game',
+  'pd_pick', 'pd_security_pick', 'pd_strike_adj', 'pd_strike_token_done', 'pd_strike_token',
+  'pd_move_skip', 'pd_move_stay', 'pd_sl_pick', 'pd_walker_move', 'pd_walker_skip',
+  'pd_arms_dist_fig', 'pd_arms_dist_token',
+  'refresh_map', 'refresh_all', 'undo',
+  'map_selection', 'map_type', 'map_confirm', 'map_goback',
+  'determine_initiative', 'draft_random',
+  'bleed_choice', 'stun_choice', 'weaken_choice',
+  'interact_choice',
+  // DC-specific ability handlers (discovered via telemetry)
+  'fv_pick', 'slow_on', 'illicit_arms', 'strike_me',
+].sort((a, b) => b.length - a.length);
+
+function extractPrefix(customId) {
+  if (!customId) return 'unknown';
+  for (const prefix of KNOWN_PREFIXES) {
+    if (customId.startsWith(prefix)) return prefix;
+  }
+  // Fallback: take first two segments
+  const parts = customId.split('_');
+  return parts.length >= 2 ? parts.slice(0, 2).join('_') : customId;
+}
 
 // ── Seeded PRNG (mulberry32) ────────────────────────────────────────────────
 
@@ -157,13 +210,16 @@ async function runSim(seed, pools, opts = {}) {
     fh = createFlowHarness({ mapId, p1Army, p2Army, p1CcHand, p2CcHand });
   } catch (e) {
     // Some army/map combos may fail to build (e.g., no deployment zones for army size)
-    return { seed, scenario, status: 'setup-error', error: e.message, violations: [], steps: 0 };
+    return { seed, scenario, status: 'setup-error', error: e.message, violations: [], steps: 0, telemetry: { customIds: [], actionTypes: [], pendingStates: {} } };
   }
 
   const violations = [];
   const MAX_STEPS = 150;
   let lastCustomId = null;
   let lastActionType = null;
+  const hitCustomIds = [];
+  const hitActionTypes = [];
+  const hitPendingStates = {};
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const game = fh.getGame();
@@ -186,6 +242,8 @@ async function runSim(seed, pools, opts = {}) {
 
     lastCustomId = action.customId;
     lastActionType = action.type;
+    hitCustomIds.push(action.customId);
+    if (action.type) hitActionTypes.push(action.type);
 
     try {
       const result = await fh.act(action.customId, action._uid);
@@ -200,9 +258,15 @@ async function runSim(seed, pools, opts = {}) {
         });
       }
       if (result.result.error) {
-        // Handler errors are not invariant violations but worth tracking
         if (verbose) {
           console.log(`  [seed=${seed} step=${step}] handler error: ${result.result.error}`);
+        }
+      }
+      // Track pending states for telemetry
+      const gameAfter = fh.getGame();
+      for (const key of TRACKED_PENDING) {
+        if (gameAfter?.[key]) {
+          hitPendingStates[key] = (hitPendingStates[key] || 0) + 1;
         }
       }
     } catch (e) {
@@ -225,6 +289,7 @@ async function runSim(seed, pools, opts = {}) {
     violations,
     steps: fh.getStepLog().length,
     ended: fh.getGame()?.ended || false,
+    telemetry: { customIds: hitCustomIds, actionTypes: hitActionTypes, pendingStates: hitPendingStates },
   };
 }
 
@@ -287,6 +352,7 @@ async function runSetupSimFromSeed(seed, pools, opts = {}) {
       });
     }
 
+    const setupCustomIds = result.steps.map(s => s.customId).filter(Boolean);
     return {
       seed,
       scenario,
@@ -296,6 +362,7 @@ async function runSetupSimFromSeed(seed, pools, opts = {}) {
       ended: false,
       phases: result.phases,
       figureCount: result.figureCount,
+      telemetry: { customIds: setupCustomIds, actionTypes: [], pendingStates: {} },
     };
   } catch (e) {
     return {
@@ -305,6 +372,7 @@ async function runSetupSimFromSeed(seed, pools, opts = {}) {
       error: e.message,
       violations: [{ step: 0, invariant: 'SETUP-CRASH', message: e.message }],
       steps: 0,
+      telemetry: { customIds: [], actionTypes: [], pendingStates: {} },
     };
   }
 }
@@ -330,6 +398,7 @@ async function main() {
   const results = { passed: 0, failed: 0, setupErrors: 0, totalSteps: 0, completed: 0 };
   const failures = [];
   const invariantCounts = {};
+  const telemetryAcc = { handlerHits: {}, actionTypeHits: {}, pendingHits: {} };
   const startTime = Date.now();
 
   for (let i = 0; i < count; i++) {
@@ -337,6 +406,20 @@ async function main() {
     const result = setupMode
       ? await runSetupSimFromSeed(seed, pools, { verbose })
       : await runSim(seed, pools, { verbose });
+
+    // Accumulate telemetry
+    if (result.telemetry) {
+      for (const cid of result.telemetry.customIds) {
+        const prefix = extractPrefix(cid);
+        telemetryAcc.handlerHits[prefix] = (telemetryAcc.handlerHits[prefix] || 0) + 1;
+      }
+      for (const at of result.telemetry.actionTypes) {
+        telemetryAcc.actionTypeHits[at] = (telemetryAcc.actionTypeHits[at] || 0) + 1;
+      }
+      for (const [key, ct] of Object.entries(result.telemetry.pendingStates)) {
+        telemetryAcc.pendingHits[key] = (telemetryAcc.pendingHits[key] || 0) + ct;
+      }
+    }
 
     if (result.status === 'passed') {
       results.passed++;
@@ -408,6 +491,30 @@ async function main() {
   }
 
   console.log(`\n${'─'.repeat(60)}\n`);
+
+  // ── Write telemetry ────────────────────────────────────────────────────────
+  const sortDesc = (obj) => Object.fromEntries(Object.entries(obj).sort((a, b) => b[1] - a[1]));
+  const telemetryData = {
+    timestamp: new Date().toISOString(),
+    simType: setupMode ? 'setup' : 'flow',
+    simCount: count,
+    seedBase,
+    passRate: results.passed / count,
+    completionRate: results.completed / Math.max(1, results.passed + results.failed),
+    handlerPrefixHits: sortDesc(telemetryAcc.handlerHits),
+    actionTypeHits: sortDesc(telemetryAcc.actionTypeHits),
+    pendingStateHits: sortDesc(telemetryAcc.pendingHits),
+  };
+  try {
+    const telemetryPath = new URL('./coverage-telemetry.json', import.meta.url);
+    let existing = {};
+    try { existing = JSON.parse(readFileSync(telemetryPath, 'utf8')); } catch { /* first run */ }
+    existing[telemetryData.simType] = telemetryData;
+    writeFileSync(telemetryPath, JSON.stringify(existing, null, 2));
+    console.log(`  Telemetry → coverage-telemetry.json (${Object.keys(telemetryAcc.handlerHits).length} handler prefixes, ${Object.keys(telemetryAcc.pendingHits).length} pending states)\n`);
+  } catch (e) {
+    console.log(`  Warning: could not write telemetry: ${e.message}\n`);
+  }
 
   // Exit code: 0 if no invariant failures, 1 if any
   process.exit(results.failed > 0 ? 1 : 0);

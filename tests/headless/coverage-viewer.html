@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Coverage & Exploration Map</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d1117; color: #c9d1d9; font-family: 'Consolas', 'Monaco', monospace; padding: 20px; }
+h1 { font-size: 20px; margin-bottom: 4px; }
+.subtitle { color: #8b949e; font-size: 12px; margin-bottom: 16px; }
+
+/* Summary bar */
+.summary { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.summary-item { padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: bold; }
+.summary-item.strong { background: #152c15; border: 1px solid #27ae60; color: #27ae60; }
+.summary-item.partial { background: #2c2515; border: 1px solid #d4a017; color: #d4a017; }
+.summary-item.weak { background: #2c1515; border: 1px solid #c0392b; color: #c0392b; }
+.summary-item.none { background: #1a1a2e; border: 1px solid #555; color: #888; }
+.summary-item.meta { background: #161b22; border: 1px solid #30363d; color: #8b949e; }
+
+/* Telemetry info */
+.telemetry-info { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-size: 12px; color: #8b949e; }
+.telemetry-info strong { color: #c9d1d9; }
+
+/* Category sections */
+.category { margin-bottom: 24px; }
+.category-header { font-size: 14px; text-transform: uppercase; color: #8b949e; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid #21262d; padding-bottom: 4px; }
+
+/* Region grid */
+.region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+
+/* Region cards — border color = verification, background tint = exploration heat */
+.card { border-radius: 8px; padding: 10px 12px; position: relative; transition: transform 0.1s; cursor: default; }
+.card:hover { transform: translateY(-2px); }
+/* Verification border colors */
+.card.v-strong { border: 2px solid #27ae60; }
+.card.v-partial { border: 2px solid #d4a017; }
+.card.v-weak { border: 2px solid #c0392b; }
+.card.v-none { border: 2px solid #333; }
+/* Exploration heat backgrounds */
+.card.h-heavy { background: #1a1510; }
+.card.h-common { background: #17161a; }
+.card.h-rare { background: #141720; }
+.card.h-never { background: #111118; }
+
+.card-name { font-size: 13px; font-weight: bold; margin-bottom: 6px; }
+.card.v-none.h-never .card-name { color: #555; }
+
+/* Two-axis badges row */
+.card-axes { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.axis-badge { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; font-weight: bold; }
+/* Verification badges */
+.axis-badge.v-strong { background: #27ae60; color: #000; }
+.axis-badge.v-partial { background: #d4a017; color: #000; }
+.axis-badge.v-weak { background: #c0392b; color: #fff; }
+.axis-badge.v-none { background: #333; color: #888; }
+/* Heat badges */
+.axis-badge.h-heavy { background: #ff6b35; color: #000; }
+.axis-badge.h-common { background: #9b59b6; color: #fff; }
+.axis-badge.h-rare { background: #3d8bfd; color: #fff; }
+.axis-badge.h-never { background: #222; color: #555; }
+
+/* Evidence badges */
+.evidence-row { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 4px; }
+.evidence-badge { font-size: 9px; padding: 1px 5px; border-radius: 2px; background: #21262d; color: #8b949e; }
+.evidence-badge.setup-harness { background: #1a3a1a; color: #3fb950; }
+.evidence-badge.flow-harness { background: #1a2a3a; color: #58a6ff; }
+.evidence-badge.sim-farm { background: #2a1a3a; color: #bc8cff; }
+.evidence-badge.ds-invariants { background: #3a2a1a; color: #d29922; }
+.evidence-badge.gs-invariants { background: #3a1a2a; color: #f778ba; }
+.evidence-badge.production-fix { background: #152c15; color: #27ae60; }
+.evidence-badge.live-incident { background: #2c1515; color: #f85149; }
+.evidence-badge.mutation-tested { background: #1a3a3a; color: #56d4dd; }
+.evidence-badge.synthetic-only { background: #1a1a2e; color: #666; }
+
+.card-meta { font-size: 11px; color: #8b949e; margin-top: 4px; line-height: 1.4; }
+.card-notes { font-size: 10px; color: #6e7681; margin-top: 4px; max-height: 0; overflow: hidden; transition: max-height 0.2s; }
+.card:hover .card-notes { max-height: 100px; }
+
+/* Heat bar */
+.heat-bar-container { margin-top: 6px; height: 4px; background: #21262d; border-radius: 2px; overflow: hidden; }
+.heat-bar { height: 100%; border-radius: 2px; min-width: 0; transition: width 0.3s; }
+.heat-bar.hot { background: #ff6b35; }
+.heat-bar.warm { background: #e2b93d; }
+.heat-bar.cool { background: #3d8bfd; }
+.heat-bar.zero { background: transparent; }
+
+/* Frontier badges */
+.frontier-badge { position: absolute; top: 6px; right: 8px; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: bold; animation: pulse 2s infinite; }
+.frontier-badge.hot-frontier { background: #ff6b35; color: #000; }
+.frontier-badge.dark-frontier { background: #555; color: #eee; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+/* Frontier section */
+.frontier-section { margin-top: 24px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
+.frontier-section h2 { font-size: 14px; margin-bottom: 10px; }
+.frontier-section h2.hot { color: #ff6b35; }
+.frontier-section h2.dark { color: #8b949e; }
+.frontier-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #21262d; font-size: 12px; }
+.frontier-item:last-child { border-bottom: none; }
+.frontier-rank { font-weight: bold; min-width: 20px; }
+.frontier-rank.hot { color: #ff6b35; }
+.frontier-rank.dark { color: #555; }
+.frontier-name { flex: 1; }
+.frontier-hits { color: #d4a017; }
+
+/* History section */
+.history-section { margin-top: 20px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
+.history-section h2 { font-size: 14px; color: #27ae60; margin-bottom: 10px; }
+.history-item { font-size: 11px; padding: 4px 0; border-bottom: 1px solid #21262d; color: #8b949e; }
+.history-item:last-child { border-bottom: none; }
+.history-item .date { color: #6e7681; }
+.history-item .change { color: #c9d1d9; }
+
+/* No data */
+.no-data { color: #6e7681; font-style: italic; padding: 20px; text-align: center; }
+
+/* Legend */
+.legend { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-size: 11px; display: flex; gap: 24px; flex-wrap: wrap; }
+.legend-group { display: flex; flex-direction: column; gap: 4px; }
+.legend-group-title { color: #8b949e; font-weight: bold; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; margin-bottom: 2px; }
+.legend-entry { display: flex; align-items: center; gap: 6px; color: #8b949e; }
+.legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<h1>Coverage & Exploration Map</h1>
+<div class="subtitle">Two axes: Exploration Heat (Skirbo telemetry reach) vs Verification Strength (human-authored evidence-based confidence)</div>
+
+<div id="legend" class="legend"></div>
+<div id="summary" class="summary"></div>
+<div id="telemetry-info" class="telemetry-info"></div>
+<div id="regions"></div>
+<div id="hot-frontier" class="frontier-section" style="display:none"></div>
+<div id="dark-frontier" class="frontier-section" style="display:none"></div>
+<div id="history" class="history-section" style="display:none"></div>
+
+<script>
+const CATEGORIES = [
+  { id: 'setup', label: 'Setup & Deployment' },
+  { id: 'activation', label: 'Activation' },
+  { id: 'combat', label: 'Combat' },
+  { id: 'effects', label: 'Effects & Conditions' },
+  { id: 'round', label: 'Round Management' },
+  { id: 'game', label: 'Game Lifecycle' },
+  { id: 'discord', label: 'Discord / Surface' },
+];
+
+// Heat thresholds for classifying telemetry hit counts
+const HEAT_THRESHOLDS = { heavy: 500, common: 50, rare: 1 };
+const HEAT_LABELS = { heavy: 'heavy', common: 'common', rare: 'rare', never: 'never' };
+
+async function loadJSON(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+function computeRegionHits(region, telemetry) {
+  if (!telemetry) return 0;
+  let hits = 0;
+  for (const mode of ['flow', 'setup']) {
+    const t = telemetry[mode];
+    if (!t) continue;
+    for (const prefix of (region.handlerPrefixes || [])) {
+      for (const [key, count] of Object.entries(t.handlerPrefixHits || {})) {
+        if (key === prefix || key.startsWith(prefix + '_') || prefix.startsWith(key + '_')) {
+          hits += count;
+        }
+      }
+    }
+    for (const ps of (region.pendingStates || [])) {
+      hits += (t.pendingStateHits || {})[ps] || 0;
+    }
+    for (const at of (region.actionTypes || [])) {
+      hits += (t.actionTypeHits || {})[at] || 0;
+    }
+  }
+  return hits;
+}
+
+function classifyHeat(hits) {
+  if (hits >= HEAT_THRESHOLDS.heavy) return 'heavy';
+  if (hits >= HEAT_THRESHOLDS.common) return 'common';
+  if (hits >= HEAT_THRESHOLDS.rare) return 'rare';
+  return 'never';
+}
+
+function renderLegend() {
+  document.getElementById('legend').innerHTML = `
+    <div class="legend-group">
+      <div class="legend-group-title">Verification (border)</div>
+      <div class="legend-entry"><div class="legend-swatch" style="border:2px solid #27ae60;background:transparent"></div> Strong</div>
+      <div class="legend-entry"><div class="legend-swatch" style="border:2px solid #d4a017;background:transparent"></div> Partial</div>
+      <div class="legend-entry"><div class="legend-swatch" style="border:2px solid #c0392b;background:transparent"></div> Weak</div>
+      <div class="legend-entry"><div class="legend-swatch" style="border:2px solid #333;background:transparent"></div> None</div>
+    </div>
+    <div class="legend-group">
+      <div class="legend-group-title">Exploration Heat (background)</div>
+      <div class="legend-entry"><span class="axis-badge h-heavy">heavy</span> 500+ hits</div>
+      <div class="legend-entry"><span class="axis-badge h-common">common</span> 50-499 hits</div>
+      <div class="legend-entry"><span class="axis-badge h-rare">rare</span> 1-49 hits</div>
+      <div class="legend-entry"><span class="axis-badge h-never">never</span> 0 hits</div>
+    </div>
+    <div class="legend-group">
+      <div class="legend-group-title">Frontier Types</div>
+      <div class="legend-entry"><span class="frontier-badge hot-frontier" style="position:static;animation:none">HOT FRONTIER</span> High heat + weak/none verification</div>
+      <div class="legend-entry"><span class="frontier-badge dark-frontier" style="position:static;animation:none">DARK FRONTIER</span> Low/no heat + weak/none verification</div>
+    </div>
+  `;
+}
+
+function render(ledger, telemetry) {
+  const regions = ledger?.regions || {};
+  const regionList = Object.entries(regions);
+
+  // Compute hits for each region
+  const regionHits = {};
+  let maxHits = 1;
+  for (const [id, region] of regionList) {
+    const hits = computeRegionHits(region, telemetry);
+    regionHits[id] = hits;
+    if (hits > maxHits) maxHits = hits;
+  }
+
+  // Summary counts — use verification (v2)
+  const vCounts = { strong: 0, partial: 0, weak: 0, none: 0 };
+  const hCounts = { heavy: 0, common: 0, rare: 0, never: 0 };
+  for (const [id, r] of regionList) {
+    vCounts[r.verification] = (vCounts[r.verification] || 0) + 1;
+    hCounts[classifyHeat(regionHits[id])]++;
+  }
+
+  const totalHits = Object.values(regionHits).reduce((a, b) => a + b, 0);
+  const exploredCount = Object.values(regionHits).filter(h => h > 0).length;
+
+  document.getElementById('summary').innerHTML = `
+    <div class="summary-item strong">${vCounts.strong} Strong</div>
+    <div class="summary-item partial">${vCounts.partial} Partial</div>
+    <div class="summary-item weak">${vCounts.weak} Weak</div>
+    <div class="summary-item none">${vCounts.none} Dark</div>
+    <div class="summary-item meta">${exploredCount}/${regionList.length} explored</div>
+    <div class="summary-item meta">${totalHits.toLocaleString()} total hits</div>
+  `;
+
+  // Telemetry info
+  const flowT = telemetry?.flow;
+  const setupT = telemetry?.setup;
+  let infoHtml = '';
+  if (flowT) infoHtml += `<strong>Flow:</strong> ${flowT.simCount} sims, ${(flowT.passRate * 100).toFixed(0)}% pass, ${Object.keys(flowT.handlerPrefixHits || {}).length} handler prefixes (${flowT.timestamp?.slice(0, 10) || '?'}) &nbsp; `;
+  if (setupT) infoHtml += `<strong>Setup:</strong> ${setupT.simCount} sims, ${(setupT.passRate * 100).toFixed(0)}% pass, ${Object.keys(setupT.handlerPrefixHits || {}).length} handler prefixes (${setupT.timestamp?.slice(0, 10) || '?'})`;
+  if (!infoHtml) infoHtml = 'No telemetry data. Run <code>node tests/headless/sim-farm.js 500</code> and/or <code>--setup</code> to generate.';
+  document.getElementById('telemetry-info').innerHTML = infoHtml;
+
+  // Region grid by category
+  const regionsEl = document.getElementById('regions');
+  regionsEl.innerHTML = '';
+  for (const cat of CATEGORIES) {
+    const catRegions = regionList.filter(([, r]) => r.category === cat.id);
+    if (catRegions.length === 0) continue;
+
+    const section = document.createElement('div');
+    section.className = 'category';
+    section.innerHTML = `<div class="category-header">${cat.label}</div>`;
+
+    const grid = document.createElement('div');
+    grid.className = 'region-grid';
+
+    for (const [id, region] of catRegions) {
+      const hits = regionHits[id];
+      const heatPct = Math.min(100, (hits / maxHits) * 100);
+      const heatBarClass = hits === 0 ? 'zero' : heatPct > 60 ? 'hot' : heatPct > 20 ? 'warm' : 'cool';
+      const heat = classifyHeat(hits);
+      const verif = region.verification || 'none';
+      const evidence = region.evidence || [];
+
+      // Frontier classification
+      const isWeakOrNone = verif === 'none' || verif === 'weak';
+      const isHotFrontier = isWeakOrNone && (heat === 'heavy' || heat === 'common');
+      const isDarkFrontier = isWeakOrNone && (heat === 'rare' || heat === 'never');
+
+      const card = document.createElement('div');
+      card.className = `card v-${verif} h-${heat}`;
+      card.innerHTML = `
+        <div class="card-name">${region.name}</div>
+        ${isHotFrontier ? '<span class="frontier-badge hot-frontier">HOT FRONTIER</span>' : ''}
+        ${isDarkFrontier && verif === 'none' ? '<span class="frontier-badge dark-frontier">DARK</span>' : ''}
+        <div class="card-axes">
+          <span class="axis-badge v-${verif}">${verif}</span>
+          <span class="axis-badge h-${heat}">${heat}</span>
+        </div>
+        ${evidence.length > 0 ? `<div class="evidence-row">${evidence.map(e => `<span class="evidence-badge ${e}">${e}</span>`).join('')}</div>` : ''}
+        <div class="card-meta">
+          ${hits > 0 ? `${hits.toLocaleString()} telemetry hits` : 'no telemetry hits'}
+        </div>
+        <div class="heat-bar-container"><div class="heat-bar ${heatBarClass}" style="width:${heatPct}%"></div></div>
+        <div class="card-notes">${region.notes || ''}</div>
+      `;
+      grid.appendChild(card);
+    }
+
+    section.appendChild(grid);
+    regionsEl.appendChild(section);
+  }
+
+  // Hot Frontier: high heat + weak/none verification
+  const hotFrontier = regionList
+    .filter(([id, r]) => {
+      const heat = classifyHeat(regionHits[id]);
+      return (r.verification === 'none' || r.verification === 'weak') && (heat === 'heavy' || heat === 'common');
+    })
+    .sort((a, b) => regionHits[b[0]] - regionHits[a[0]]);
+
+  const hotEl = document.getElementById('hot-frontier');
+  if (hotFrontier.length > 0) {
+    hotEl.style.display = 'block';
+    let html = '<h2 class="hot">Hot Frontier</h2>';
+    html += '<div style="font-size:11px;color:#8b949e;margin-bottom:8px">High telemetry heat + weak/none verification = highest-value regions to deepen next</div>';
+    for (let i = 0; i < hotFrontier.length; i++) {
+      const [id, r] = hotFrontier[i];
+      const evidence = (r.evidence || []).map(e => `<span class="evidence-badge ${e}">${e}</span>`).join(' ');
+      html += `<div class="frontier-item">
+        <span class="frontier-rank hot">#${i + 1}</span>
+        <span class="frontier-name">${r.name}</span>
+        <span class="frontier-hits">${regionHits[id].toLocaleString()} hits</span>
+        <span><span class="axis-badge v-${r.verification}">${r.verification}</span></span>
+        <span>${evidence}</span>
+      </div>`;
+    }
+    hotEl.innerHTML = html;
+  }
+
+  // Dark Frontier: low/no heat + weak/none verification
+  const darkFrontier = regionList
+    .filter(([id, r]) => {
+      const heat = classifyHeat(regionHits[id]);
+      return (r.verification === 'none' || r.verification === 'weak') && (heat === 'rare' || heat === 'never');
+    })
+    .sort((a, b) => {
+      // Sort: none before weak, then by name
+      if (a[1].verification !== b[1].verification) return a[1].verification === 'none' ? -1 : 1;
+      return a[1].name.localeCompare(b[1].name);
+    });
+
+  const darkEl = document.getElementById('dark-frontier');
+  if (darkFrontier.length > 0) {
+    darkEl.style.display = 'block';
+    let html = '<h2 class="dark">Dark Frontier</h2>';
+    html += '<div style="font-size:11px;color:#8b949e;margin-bottom:8px">Low/no telemetry heat + weak/none verification = unexplored territory that may need attention</div>';
+    for (const [id, r] of darkFrontier) {
+      const evidence = (r.evidence || []).map(e => `<span class="evidence-badge ${e}">${e}</span>`).join(' ');
+      html += `<div class="frontier-item">
+        <span class="frontier-rank dark">--</span>
+        <span class="frontier-name" style="color:${r.verification === 'none' ? '#555' : '#999'}">${r.name}</span>
+        <span class="frontier-hits" style="color:#555">${regionHits[id]} hits</span>
+        <span><span class="axis-badge v-${r.verification}">${r.verification}</span></span>
+        <span>${evidence}</span>
+      </div>`;
+    }
+    darkEl.innerHTML = html;
+  }
+
+  // History
+  const history = ledger?.history || [];
+  const historyEl = document.getElementById('history');
+  if (history.length > 0) {
+    historyEl.style.display = 'block';
+    let html = '<h2>Coloring-In History</h2>';
+    for (const h of history) {
+      html += `<div class="history-item">
+        <span class="date">${h.date}</span> &mdash;
+        <span class="change"><strong>${regions[h.region]?.name || h.region}</strong>: ${h.from} &rarr; ${h.to}</span>
+        &mdash; <span style="color:#6e7681">${h.reason}</span>
+      </div>`;
+    }
+    historyEl.innerHTML = html;
+  }
+}
+
+(async () => {
+  const [ledger, telemetry] = await Promise.all([
+    loadJSON('./coverage-ledger.json'),
+    loadJSON('./coverage-telemetry.json'),
+  ]);
+  if (!ledger) {
+    document.getElementById('regions').innerHTML = '<div class="no-data">Could not load coverage-ledger.json. Serve this directory with: npx http-server tests/headless -p 8080</div>';
+    return;
+  }
+  renderLegend();
+  render(ledger, telemetry);
+})();
+</script>
+</body>
+</html>
