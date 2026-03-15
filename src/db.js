@@ -4,7 +4,12 @@
  * Falls back to file-based storage when not set (local dev).
  */
 import pg from 'pg';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { getPlayerId, getInitiativePlayerNum } from './game/player-helpers.js';
+
+const __dbDirname = dirname(fileURLToPath(import.meta.url));
 
 const { Pool } = pg;
 
@@ -112,13 +117,12 @@ export async function initDb() {
       )
     `);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_game_snapshots_game ON game_snapshots (game_id, version DESC)').catch(() => {});
-    // Coverage / live-incident tables
+    // Coverage tables
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS coverage_live_status (
-        region_id   TEXT PRIMARY KEY,
-        status      TEXT NOT NULL DEFAULT 'untested',
-        last_check  DATE,
-        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      CREATE TABLE IF NOT EXISTS coverage_regions (
+        region_id    TEXT PRIMARY KEY,
+        region_data  JSONB NOT NULL,
+        updated_at   TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     await pool.query(`
@@ -141,6 +145,7 @@ export async function initDb() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_coverage_incidents_severity ON coverage_incidents(severity)').catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_coverage_incidents_created ON coverage_incidents(created_at DESC)').catch(() => {});
     await seedAchievements();
+    await seedCoverageRegions();
     console.log('[DB] PostgreSQL connected, all tables ready.');
   } catch (err) {
     console.error('[DB] Failed to connect:', err.message);
@@ -757,37 +762,90 @@ export async function deleteSnapshots(gameId) {
   }
 }
 
-// --- Coverage / Live-Incident Persistence ---
+// --- Coverage Persistence ---
 
-/** Upsert a region's live Discord testing status. */
+/** Seed coverage_regions from the JSON ledger file (only if table is empty). */
+async function seedCoverageRegions() {
+  if (!pool) return;
+  try {
+    const count = await pool.query('SELECT COUNT(*)::int AS n FROM coverage_regions');
+    if (count.rows[0].n > 0) return; // already seeded
+    const ledgerPath = join(__dbDirname, '..', 'tests', 'headless', 'coverage-ledger.json');
+    let ledger;
+    try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')); } catch { return; }
+    const regions = ledger.regions || {};
+    for (const [id, data] of Object.entries(regions)) {
+      await pool.query(
+        `INSERT INTO coverage_regions (region_id, region_data) VALUES ($1, $2)
+         ON CONFLICT (region_id) DO NOTHING`,
+        [id, JSON.stringify(data)]
+      );
+    }
+    console.log(`[DB] Seeded ${Object.keys(regions).length} coverage regions from ledger.`);
+  } catch (err) {
+    console.error('[DB] seedCoverageRegions failed:', err.message);
+  }
+}
+
+/** Get all coverage regions as { regionId: regionData }. */
+export async function getCoverageRegions() {
+  if (!pool) return null;
+  try {
+    const res = await pool.query('SELECT region_id, region_data FROM coverage_regions ORDER BY region_id');
+    const out = {};
+    for (const row of res.rows) {
+      out[row.region_id] = row.region_data;
+    }
+    return out;
+  } catch (err) {
+    console.error('[DB] getCoverageRegions failed:', err.message);
+    return null;
+  }
+}
+
+/** Update a region's live Discord testing status in coverage_regions. */
 export async function upsertCoverageLiveStatus(regionId, status, lastCheck) {
   if (!pool) return;
   try {
     await pool.query(
-      `INSERT INTO coverage_live_status (region_id, status, last_check, updated_at)
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (region_id) DO UPDATE SET status = $2, last_check = $3, updated_at = NOW()`,
-      [regionId, status, lastCheck || new Date().toISOString().slice(0, 10)]
+      `UPDATE coverage_regions
+       SET region_data = jsonb_set(jsonb_set(region_data, '{liveStatus}', $2::jsonb), '{lastLiveCheck}', $3::jsonb),
+           updated_at = NOW()
+       WHERE region_id = $1`,
+      [regionId, JSON.stringify(status), JSON.stringify(lastCheck || new Date().toISOString().slice(0, 10))]
     );
   } catch (err) {
     console.error('[DB] upsertCoverageLiveStatus failed:', err.message);
   }
 }
 
-/** Get all live statuses as { regionId: { status, lastCheck } }. */
-export async function getCoverageLiveStatuses() {
-  if (!pool) return {};
+/** Update a region's verification level and evidence in coverage_regions. */
+export async function updateCoverageVerification(regionId, verification, evidence) {
+  if (!pool) return;
   try {
-    const res = await pool.query('SELECT region_id, status, last_check FROM coverage_live_status');
-    const out = {};
-    for (const row of res.rows) {
-      out[row.region_id] = { status: row.status, lastCheck: row.last_check };
-    }
-    return out;
+    await pool.query(
+      `UPDATE coverage_regions
+       SET region_data = jsonb_set(jsonb_set(region_data, '{verification}', $2::jsonb), '{evidence}', $3::jsonb),
+           updated_at = NOW()
+       WHERE region_id = $1`,
+      [regionId, JSON.stringify(verification), JSON.stringify(evidence || [])]
+    );
   } catch (err) {
-    console.error('[DB] getCoverageLiveStatuses failed:', err.message);
-    return {};
+    console.error('[DB] updateCoverageVerification failed:', err.message);
   }
+}
+
+/** Get all live statuses (convenience wrapper for backward compat). */
+export async function getCoverageLiveStatuses() {
+  const regions = await getCoverageRegions();
+  if (!regions) return {};
+  const out = {};
+  for (const [id, data] of Object.entries(regions)) {
+    if (data.liveStatus && data.liveStatus !== 'untested') {
+      out[id] = { status: data.liveStatus, lastCheck: data.lastLiveCheck };
+    }
+  }
+  return out;
 }
 
 /** Insert a coverage incident. Returns the created row id. */

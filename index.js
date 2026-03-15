@@ -43,6 +43,8 @@ import {
   insertGameEvent,
   upsertCoverageLiveStatus,
   getCoverageLiveStatuses,
+  getCoverageRegions,
+  updateCoverageVerification,
   insertCoverageIncident,
   getCoverageIncidents,
 } from './src/db.js';
@@ -1857,6 +1859,17 @@ client.once('ready', async () => {
     // GET /api/coverage/ping — health check for viewer
     if (req.method === 'GET' && req.url === '/api/coverage/ping') {
       jsonRes(res, 200, { ok: true, db: isDbConfigured() });
+      return;
+    }
+
+    // GET /api/coverage/regions — full coverage map from DB
+    if (req.method === 'GET' && req.url === '/api/coverage/regions') {
+      const regions = await getCoverageRegions();
+      if (regions) {
+        jsonRes(res, 200, { regions });
+      } else {
+        jsonRes(res, 503, { error: 'DB not available' });
+      }
       return;
     }
 

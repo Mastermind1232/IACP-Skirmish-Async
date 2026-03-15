@@ -1005,41 +1005,42 @@ document.getElementById('incident-modal').addEventListener('click', e => {
 });
 
 (async () => {
-  const [ledger, telemetry, incidents] = await Promise.all([
-    loadJSON('./coverage-ledger.json'),
-    loadJSON('./coverage-telemetry.json'),
-    loadJSON('./coverage-incidents.json'),
-  ]);
-  if (!ledger) {
-    document.getElementById('regions').innerHTML = '<div class="no-data">Could not load coverage-ledger.json. Serve this directory with: npx http-server tests/headless -p 8080</div>';
-    return;
-  }
-  LEDGER = ledger;
-  TELEMETRY = telemetry;
-  INCIDENTS = incidents;
-  loadLocalState();
-
-  // Check backend and merge DB state if available
+  // Check backend first — if available, load regions from DB (source of truth)
   await checkBackend();
   updateBackendIndicator();
+
+  let ledger = null;
+  const telemetry = await loadJSON('./coverage-telemetry.json');
+
   if (backendAvailable) {
-    // Load live statuses from DB (authoritative over localStorage)
-    const dbStatuses = await apiGet('/api/coverage/statuses');
-    if (dbStatuses) {
-      for (const [id, data] of Object.entries(dbStatuses)) {
-        if (LEDGER.regions[id]) {
-          LEDGER.regions[id].liveStatus = data.status || LEDGER.regions[id].liveStatus;
-          LEDGER.regions[id].lastLiveCheck = data.lastCheck || LEDGER.regions[id].lastLiveCheck;
-        }
-      }
+    const dbData = await apiGet('/api/coverage/regions');
+    if (dbData?.regions) {
+      ledger = { regions: dbData.regions };
     }
-    // Load recent incidents from DB
+  }
+
+  // Fall back to JSON file if backend unavailable
+  if (!ledger) {
+    ledger = await loadJSON('./coverage-ledger.json');
+  }
+
+  if (!ledger) {
+    document.getElementById('regions').innerHTML = '<div class="no-data">Could not load coverage data. Start the bot (DB mode) or serve this directory with: npx http-server tests/headless -p 8080</div>';
+    return;
+  }
+
+  LEDGER = ledger;
+  TELEMETRY = telemetry;
+  INCIDENTS = await loadJSON('./coverage-incidents.json');
+  loadLocalState();
+
+  // Load incidents from DB if available
+  if (backendAvailable) {
     const dbIncidents = await apiGet('/api/coverage/incidents?limit=200');
     if (dbIncidents && dbIncidents.length > 0) {
       if (!INCIDENTS) INCIDENTS = { meta: {}, incidents: [] };
       const existingIds = new Set(INCIDENTS.incidents.map(i => i.id));
       for (const inc of dbIncidents) {
-        // DB incidents use numeric id; generate a string key for dedup
         const key = `db-${inc.id}`;
         if (!existingIds.has(key)) {
           INCIDENTS.incidents.push({
