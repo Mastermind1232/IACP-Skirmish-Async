@@ -3,7 +3,10 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getCcEffectsData, getDcEffects, getMapSpaces, getFigureSize } from '../data-loader.js';
+import { getCcEffectsData, getDcEffects, getMapSpaces, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
+import { isFigurelessDc } from '../game/dc-helpers.js';
+import { filterValidTopLeftSpaces } from '../engine/utils.js';
+import { parseCoord } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens } from '../game/index.js';
 import { getRange } from '../game/spatial.js';
@@ -16,6 +19,7 @@ import {
   getDcList,
   getDcMessageIds,
   getPlayAreaId,
+  getHandChannelId,
   getActivationsRemaining,
   getActivatedDcIndices,
   getCcHand,
@@ -328,6 +332,202 @@ export async function handlePassActivationTurn(interaction, ctx) {
   saveGames();
 }
 
+// ── Lie in Ambush: trigger check + deploy handler ───────────────────────────
+
+/**
+ * After an opponent activates a group, check if the Lie in Ambush trigger fires.
+ * "If you have 3+ exhausted or defeated groups and it is not the first round,
+ *  deploy this group to any deployment zone."
+ * @param {object} game
+ * @param {number} activatingPlayerNum - player who just finished activating
+ * @param {object} ctx - logGameAction, client
+ */
+async function checkLieInAmbushTrigger(game, activatingPlayerNum, ctx) {
+  const { logGameAction, client } = ctx;
+  const liaOwnerNum = opponentPlayerNum(activatingPlayerNum);
+
+  // Not round 1
+  if ((game.currentRound || 1) <= 1) return;
+
+  // Owner has set-aside figures
+  const setAsideKeys = game.lieInAmbushSetAside?.[liaOwnerNum];
+  if (!setAsideKeys?.length) return;
+
+  // Not already deployed (check first figure key)
+  if (game.figurePositions?.[liaOwnerNum]?.[setAsideKeys[0]]) return;
+
+  // Not already pending
+  if (game.pendingLieInAmbush) return;
+
+  // Count exhausted or defeated groups for the LiA owner
+  const dcList = getDcList(game, liaOwnerNum) || [];
+  const activatedIndices = new Set(getActivatedDcIndices(game, liaOwnerNum) || []);
+  const pos = game.figurePositions?.[liaOwnerNum] || {};
+
+  let exhOrDefeated = 0;
+  const figureDcCounts = {};
+  for (let i = 0; i < dcList.length; i++) {
+    const dc = dcList[i];
+    const dcName = dc?.dcName || dc?.displayName;
+    if (!dcName || isFigurelessDc(dcName)) continue;
+
+    figureDcCounts[dcName] = (figureDcCounts[dcName] || 0) + 1;
+    const dgIndex = figureDcCounts[dcName];
+
+    // Skip the set-aside group itself
+    if (setAsideKeys.includes(`${dcName}-${dgIndex}-0`)) continue;
+
+    // Exhausted = activated this round
+    if (activatedIndices.has(i)) { exhOrDefeated++; continue; }
+
+    // Defeated = all figures removed from board
+    const figures = getDcStats(dcName)?.figures ?? 1;
+    let allGone = true;
+    for (let f = 0; f < figures; f++) {
+      if (pos[`${dcName}-${dgIndex}-${f}`]) { allGone = false; break; }
+    }
+    if (allGone) exhOrDefeated++;
+  }
+
+  if (exhOrDefeated < 3) return;
+
+  // Trigger fires — show zone selection in owner's hand channel
+  const dcName = dcNameFromFigureKey(setAsideKeys[0]);
+  game.pendingLieInAmbush = { playerNum: liaOwnerNum, dcName };
+
+  const gameId = game.gameId;
+  const liaOwnerId = getPlayerId(game, liaOwnerNum);
+  const handId = getHandChannelId(game, liaOwnerNum);
+
+  try {
+    const handChannel = await client.channels.fetch(handId);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`lia_deploy_zone_${gameId}_${liaOwnerNum}_red`)
+        .setLabel('Deploy to Red Zone')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`lia_deploy_zone_${gameId}_${liaOwnerNum}_blue`)
+        .setLabel('Deploy to Blue Zone')
+        .setStyle(ButtonStyle.Primary),
+    );
+    await handChannel.send({
+      content: `🎯 **Lie in Ambush** triggered! You have **${exhOrDefeated}** exhausted/defeated groups.\nDeploy **${dcName}** to any deployment zone:`,
+      components: [row],
+    });
+  } catch (err) {
+    console.error('[Lie in Ambush] Failed to send zone selection:', err.message);
+  }
+
+  await logGameAction(game, client, `🎯 **Lie in Ambush** — <@${liaOwnerId}> may deploy **${dcName}** (${exhOrDefeated} exhausted/defeated groups).`, {
+    allowedMentions: { users: [liaOwnerId] },
+    phase: 'ROUND',
+    icon: 'deploy',
+  });
+}
+
+/**
+ * Handle lia_deploy_zone_ button: deploy the set-aside group to chosen zone.
+ */
+export async function handleLiaDeployZone(interaction, ctx) {
+  const { getGame, logGameAction, client, saveGames } = ctx;
+  // customId: lia_deploy_zone_<gameId>_<playerNum>_<zone>
+  const parts = interaction.customId.split('_');
+  const zone = parts[parts.length - 1]; // red or blue
+  const playerNum = parseInt(parts[parts.length - 2], 10);
+  const gameId = parts.slice(3, -2).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+
+  const ownerId = getPlayerId(game, playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owning player can deploy this group.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const setAsideKeys = game.lieInAmbushSetAside?.[playerNum];
+  if (!setAsideKeys?.length) {
+    await interaction.followUp({ content: 'No set-aside group to deploy.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Get zone spaces
+  const mapId = game.selectedMap?.id;
+  const zones = mapId ? getDeploymentZones()[mapId] : null;
+  const zoneSpaces = (zones?.[zone] || []).map(s => String(s).toLowerCase());
+  if (!zoneSpaces.length) {
+    await interaction.followUp({ content: `No spaces in the ${zone} zone.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Build occupied set
+  const occupied = [];
+  for (const p of [1, 2]) {
+    for (const [k, s] of Object.entries(game.figurePositions?.[p] || {})) {
+      const dn = dcNameFromFigureKey(k);
+      const size = game.figureOrientations?.[k] || getFigureSize(dn);
+      occupied.push(...getFootprintCells(s, size));
+    }
+  }
+
+  // Compute opponent zone centroid for entrance-based sorting
+  const oppZone = zone === 'red' ? 'blue' : 'red';
+  const oppCoords = (zones?.[oppZone] || []).map(s => parseCoord(String(s).toLowerCase()));
+  const oppCx = oppCoords.length ? oppCoords.reduce((a, c) => a + c.col, 0) / oppCoords.length : 0;
+  const oppCy = oppCoords.length ? oppCoords.reduce((a, c) => a + c.row, 0) / oppCoords.length : 0;
+
+  const dcName = dcNameFromFigureKey(setAsideKeys[0]);
+  const figureSize = getFigureSize(dcName);
+  const ms = getMapSpaces(mapId);
+  const blocking = ms?.blocking || [];
+
+  if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
+  if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
+
+  let placed = 0;
+  for (const fk of setAsideKeys) {
+    // Rebuild occupied for each figure since previous placements change it
+    const currentOccupied = [];
+    for (const p of [1, 2]) {
+      for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
+        const dn = dcNameFromFigureKey(k);
+        const size = game.figureOrientations?.[k] || getFigureSize(dn);
+        currentOccupied.push(...getFootprintCells(s, size));
+      }
+    }
+
+    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, currentOccupied, figureSize, getFootprintCells, blocking, false);
+    if (!validSpaces.length) continue;
+
+    // Sort by proximity to opponent zone entrance
+    validSpaces.sort((a, b) => {
+      const pa = parseCoord(a), pb = parseCoord(b);
+      return (Math.abs(pa.col - oppCx) + Math.abs(pa.row - oppCy)) -
+             (Math.abs(pb.col - oppCx) + Math.abs(pb.row - oppCy));
+    });
+
+    game.figurePositions[playerNum][fk] = validSpaces[0];
+    placed++;
+  }
+
+  // Clean up set-aside state
+  delete game.lieInAmbushSetAside[playerNum];
+  delete game.pendingLieInAmbush;
+
+  // Remove the zone selection message
+  try {
+    await interaction.message.delete();
+  } catch {}
+
+  await logGameAction(game, client, `🎯 **Lie in Ambush** — **${dcName}** deployed ${placed} figure(s) to the **${zone}** zone!`, {
+    phase: 'ROUND',
+    icon: 'deploy',
+  });
+
+  saveGames();
+  await interaction.followUp({ content: `Deployed **${dcName}** (${placed} figure(s)) to the **${zone}** zone.`, ephemeral: true }).catch(discordCatch);
+}
+
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, replyIfGameEnded, dcMessageMeta, dcHealthState, buildDcEmbedAndFiles, getDcPlayAreaComponents, logGameAction, maybeShowEndActivationPhaseButton, client, saveGames
@@ -573,6 +773,8 @@ export async function handleEndTurn(interaction, ctx) {
   await maybeShowEndActivationPhaseButton(game, client);
   // Field Tactics (Death Trooper): after activation, choose a friendly TROOPER/LEADER within 2 to perform a free attack
   await maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, client, ctx.findDcMessageIdForFigure);
+  // Lie in Ambush: after opponent activates, check if trigger fires
+  await checkLieInAmbushTrigger(game, meta.playerNum, ctx);
   saveGames();
 }
 
@@ -775,34 +977,8 @@ export async function handleDcEndActivation(interaction, ctx) {
     }
   }
 
-  // Lie in Ambush: after opponent activates, if you have 3+ exhausted/defeated groups and it's not round 1, may deploy set-aside group
-  if ((game.currentRound || 1) > 1) {
-    const _liaOppNum = otherPlayerNum;
-    const _liaOppAtts = getDcAttachments(game, _liaOppNum) || {};
-    const _liaOppIds = getDcMessageIds(game, _liaOppNum) || [];
-    const _liaOppList = getDcList(game, _liaOppNum) || [];
-    // Count opponent's exhausted or defeated groups
-    const _liaExhOrDefeated = _liaOppIds.filter((id, i) => {
-      return ctx.dcExhaustedState?.get(id) || _liaOppList[i]?.defeated;
-    }).length;
-    if (_liaExhOrDefeated >= 3) {
-      for (const _liaMid of _liaOppIds) {
-        if (!(_liaOppAtts[_liaMid] || []).includes('Lie in Ambush')) continue;
-        // Check if group already has figures on the board (already deployed)
-        const _liaMeta = ctx.dcMessageMeta?.get(_liaMid);
-        const _liaDcName = _liaMeta?.dcName || '';
-        const _liaDg = (_liaMeta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-        const _liaFk = `${_liaDcName}-${_liaDg}-0`;
-        const _liaHasPos = !!game.figurePositions?.[_liaOppNum]?.[_liaFk];
-        if (_liaHasPos) break; // already deployed, skip
-        const _liaOppOwnerId = game[`player${_liaOppNum}Id`];
-        await logGameAction(game, client, `<@${_liaOppOwnerId}> **Lie in Ambush** — You have **${_liaExhOrDefeated}** exhausted/defeated groups (need 3+). You may now deploy **${_liaMeta?.displayName || _liaDcName}** to **any deployment zone**. Use the Deploy button or coordinate with your opponent.`, {
-          allowedMentions: { users: [_liaOppOwnerId] },
-        });
-        break; // only one prompt needed
-      }
-    }
-  }
+  // Lie in Ambush: after opponent activates, check if trigger fires
+  await checkLieInAmbushTrigger(game, meta.playerNum, ctx);
 
   // Auto-prompt owner for post-activation reaction cards (Change of Plans, Provoke, etc.)
   try {
