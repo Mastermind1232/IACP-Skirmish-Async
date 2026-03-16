@@ -1214,7 +1214,7 @@ async function runDraftRandom(game, client, options = {}) {
     DEFAULT_DECK_REBELS, DEFAULT_DECK_SCUM, retoolDecksForScenario, applySquadSubmission,
     getInitiativePlayerNum, getPlayerDeploymentZones, opponentPlayerNum, logGameAction,
     getDeploymentZones, getSquad, getDeployFigureLabels, parseCoord, dcNameFromFigureKey,
-    getEffectiveFigureSize, getFootprintCells, getFigureSize, filterValidTopLeftSpaces,
+    getEffectiveFigureSize, getFootprintCells, getFigureSize, filterValidTopLeftSpaces, getMapSpaces, getDcKeywords,
     shuffleArray, getScenarioPrimaryCard, ccDeckKey, ccHandKey, ccDrawnKey, getPlayerId,
     getHandChannelId, getHandTooltipEmbed, buildHandDisplayPayload, updateHandVisualMessage,
     updatePlayAreaDcButtons, runStartOfRoundDcEffects, runPostDeployPhase, setRoundPhase,

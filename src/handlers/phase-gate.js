@@ -99,12 +99,8 @@ export async function sendPhaseGateMessages(game, phase, ctx) {
     }
   }
 
-  // Log to general channel with both pings (so players get notified without revealing hand channels)
-  if (logGameAction) {
-    const label = buildGateLabel(phase, game);
-    const status = buildStatusLine(gate, game); // no viewerPn → pings both
-    await logGameAction(game, client, `🔔 **Phase gate:** ${label}\n${status}\nConfirm in your Hand channel when ready.`).catch(discordCatch);
-  }
+  // Hand channel messages are sufficient — no Game Log message needed
+  // (players see Ready/Not Ready buttons in their Hand channels without revealing opponent status)
 
   if (saveGames) saveGames();
 }

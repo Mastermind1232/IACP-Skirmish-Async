@@ -383,6 +383,14 @@ export async function postBothSquadsReady(game, client, deps, opts = {}) {
 
   const generalChannel = await client.channels.fetch(game.generalId);
 
+  // ── Temporary "setting up" message while Play Areas are created ──
+  let settingUpMsg = null;
+  try {
+    settingUpMsg = await generalChannel.send({
+      content: '⏳ Setting up Play Areas and Deployment Cards — one moment...',
+    });
+  } catch {}
+
   // ── Ensure play area + board channels exist ──────────────────────
   try {
     if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
@@ -410,6 +418,9 @@ export async function postBothSquadsReady(game, client, deps, opts = {}) {
   } catch (err) {
     console.error('Failed to create/populate Play Areas:', err);
   }
+
+  // Clean up the temporary message
+  if (settingUpMsg) settingUpMsg.delete().catch(() => {});
 
   // ── Post initiative button ───────────────────────────────────────
   const tag = opts.tag ? `**${opts.tag}** ` : '';

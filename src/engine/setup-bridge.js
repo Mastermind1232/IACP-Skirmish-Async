@@ -257,7 +257,13 @@ export async function runDraftRandom(game, client, deps, options = {}) {
       const baseSize = deps.getFigureSize(meta.dcName);
       const size = baseSize === '2x3' ? (Math.random() < 0.5 ? '2x3' : '3x2') : baseSize;
       const zoneSpaces = (zones?.[zone] || []).map((s) => String(s).toLowerCase());
-      const validSpaces = deps.filterValidTopLeftSpaces(zoneSpaces, occupied, size);
+      // Get blocking terrain and check if figure ignores blocking (Massive/Mobile)
+      const ms = deps.getMapSpaces?.(mapId);
+      const blocking = ms?.blocking || [];
+      const keywords = deps.getDcKeywords?.(game)?.[meta.dcName] || [];
+      const kwUpper = keywords.map(k => String(k).toUpperCase());
+      const ignoreBlocking = kwUpper.includes('MOBILE') || kwUpper.includes('MASSIVE');
+      const validSpaces = deps.filterValidTopLeftSpaces(zoneSpaces, occupied, size, deps.getFootprintCells, blocking, ignoreBlocking);
       if (!validSpaces.length) throw new Error(`No valid deploy spaces for ${meta.dcName} in ${zone} zone.`);
       // Sort by Manhattan distance to opponent zone centroid (ascending = closest to enemy entrance first)
       validSpaces.sort((a, b) => {

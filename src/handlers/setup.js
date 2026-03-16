@@ -1185,7 +1185,7 @@ export async function handleDeploymentFig(interaction, ctx) {
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
   // Zone is NOT extended for Massive — figures must deploy within the zone.
   // ignoreBlocking lets filterValidTopLeftSpaces allow blocking cells inside the zone.
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, getFootprintCells, blocking, ignoreBlocking);
   if (zoneSpaces.length > 0) {
     const { rows, available } = getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
     if (available.length === 0) {
@@ -1309,7 +1309,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
   }
   const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, figMeta.dcName);
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, orientation, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, orientation, getFootprintCells, blocking, ignoreBlocking);
   if (validSpaces.length === 0) {
     delete game.pendingDeployOrientation[`${playerNum}_${flatIndex}`];
     await interaction.followUp({ content: 'No valid spots for this orientation in your zone. Try the other orientation.', ephemeral: true }).catch(discordCatch);
@@ -1402,7 +1402,7 @@ export async function handleDeployRow(interaction, ctx) {
   const dcName = figMeta?.dcName;
   const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, getFootprintCells, blocking, ignoreBlocking);
   // Filter to only spaces in the chosen row
   const rowSpaces = validSpaces.filter((s) => {
     const m = s.match(/^[a-z]+(\d+)$/i);
@@ -1496,7 +1496,7 @@ export async function handleDeployRowBack(interaction, ctx) {
   const dcName = figMeta?.dcName;
   const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
-  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, getFootprintCells, blocking, ignoreBlocking);
   const labels = game[_deployLabelsKey(playerNum)];
   const label = labels?.[flatIndex] || 'figure';
   const isLarge = figureSize !== '1x1';
@@ -1984,7 +1984,7 @@ export async function handleAutoDeploy(interaction, ctx) {
     const size = baseSize === '2x3' ? '2x3' : baseSize;
     const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
     const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, meta.dcName);
-    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, size, blocking, ignoreBlocking);
+    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, size, getFootprintCells, blocking, ignoreBlocking);
     if (!validSpaces.length) continue;
     validSpaces.sort((a, b) => {
       const pa = parseCoord(a), pb = parseCoord(b);
