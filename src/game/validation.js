@@ -15,8 +15,8 @@ export function resolveDcName(entry) {
 /** Strip leading cost number, trailing IACP, convert [E]/[R] to (Elite)/(Regular). */
 function normalizeInputName(raw) {
   let s = raw.trim();
-  // Strip leading cost number (e.g. "7 The Grand Inquisitor IACP" → "The Grand Inquisitor IACP")
-  s = s.replace(/^\d+\s+/, '');
+  // Strip leading cost number (e.g. "7 The Grand Inquisitor IACP" → "The Grand Inquisitor IACP", "-1 Scavenged Walker" → "Scavenged Walker")
+  s = s.replace(/^-?\d+\s+/, '');
   // Strip trailing IACP (case-insensitive)
   s = s.replace(/\s+IACP\s*$/i, '').trim();
   // Convert [E] to (Elite), [R] to (Regular)

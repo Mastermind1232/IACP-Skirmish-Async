@@ -169,13 +169,13 @@ export function parseIacpListPaste(content) {
       const bulletMatch = trimmed.match(/^-\s+(.+)$/);
       if (bulletMatch) {
         let cardText = bulletMatch[1].trim();
-        // Strip leading cost number if present (e.g. "8 Zeb Orrelios" → "Zeb Orrelios")
-        cardText = cardText.replace(/^\d+\s+/, '');
+        // Strip leading cost number if present (e.g. "8 Zeb Orrelios" → "Zeb Orrelios", "-1 Scavenged Walker" → "Scavenged Walker")
+        cardText = cardText.replace(/^-?\d+\s+/, '');
         items.push(normalizeCardName(cardText));
         continue;
       }
-      // "12 Card Name" (cost-prefix format)
-      const costMatch = trimmed.match(/^\d+\s+(.+)$/);
+      // "12 Card Name" or "-1 Card Name" (cost-prefix format)
+      const costMatch = trimmed.match(/^-?\d+\s+(.+)$/);
       if (costMatch) { items.push(normalizeCardName(costMatch[1].trim())); continue; }
       // Plain "Card Name" (no prefix)
       if (/[A-Za-z]/.test(trimmed)) items.push(normalizeCardName(trimmed));
