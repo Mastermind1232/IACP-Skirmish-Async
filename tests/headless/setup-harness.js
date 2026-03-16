@@ -256,9 +256,22 @@ async function drivePostDeployQueue(game, gameId, p1Id, p2Id, submit, harness, g
     // ── Ability picker: choose next ability ──
     const abilities = q.abilities || [];
     if (abilities.length === 0) {
-      // Queue is empty for this player — should auto-advance.
-      // If still here, something went wrong.
-      if (verbose) console.log(`  [post-deploy] Empty abilities but queue still exists`);
+      // Check if there are nextPlayerAbilities to advance to
+      const npa = q.nextPlayerAbilities || [];
+      if (npa.length > 0) {
+        // Manually advance to next player (handler should have done this)
+        if (verbose) console.log(`  [post-deploy] Advancing to next player (${npa.length} abilities)`);
+        q.currentPlayerNum = q.currentPlayerNum === 1 ? 2 : 1;
+        q.abilities = npa;
+        q.nextPlayerAbilities = null;
+        q.activeAbility = null;
+        continue;
+      }
+      // Queue is done — force finish (handler missed calling finishPostDeploy)
+      if (verbose) console.log(`  [post-deploy] Force-finishing stalled queue`);
+      const gg = harness.getGame();
+      delete gg.postDeployQueue;
+      gg.postDeployEffectsFired = true;
       break;
     }
 

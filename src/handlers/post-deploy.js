@@ -744,6 +744,7 @@ async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGa
   if (outsideZone.length === 0 || active.tokenRemaining <= 0) {
     await logGameAction(game, client, `⚡ **Strike Team** — No friendly figures outside deployment zone (or no tokens remaining).`, { phase: 'ROUND', icon: 'deployed' });
     game.postDeployQueue.activeAbility = null;
+    await postAbilityPicker(game, gameId, client, logGameAction);
     return;
   }
 
@@ -1135,6 +1136,9 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
 
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
 
+  // Read figureKey BEFORE cleaning up moveInProgress (needed for smooth_landing tracking)
+  const skippedFigureKey = game.moveInProgress?.[moveKey]?.figureKey || null;
+
   // Clean up moveInProgress
   if (game.moveInProgress?.[moveKey]) {
     delete game.moveInProgress[moveKey];
@@ -1156,9 +1160,6 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
 
   const active = q.activeAbility;
   if (active && active.moveFigures) {
-    // Determine which figure was skipped from the moveKey
-    const moveState = game.moveInProgress?.[moveKey];
-    const skippedFigureKey = moveState?.figureKey || null;
 
     if (active.abilityId === 'smooth_landing') {
       // Use resolved-figure tracking + picker

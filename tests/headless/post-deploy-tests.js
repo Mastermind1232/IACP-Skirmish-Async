@@ -890,6 +890,34 @@ describe('Post-deploy: setup harness integration', { timeout: 30000 }, () => {
     }
   });
 
+  it('Strike Team (Cassian Andor) interactive queue resolves', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Cassian Andor' }, { dcName: 'Rebel Saboteur' }],
+      p2Army: [{ dcName: 'Stormtrooper', count: 2 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set');
+    assert.strictEqual(game.postDeployQueue, undefined, 'Queue cleaned up');
+    assert.ok(result.phases.includes('post_deploy'), 'post_deploy phase was visited');
+  });
+
+  it('Smooth Landing (Bodhi Rook) interactive queue resolves via movement skip', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Bodhi Rook' }, { dcName: 'Rebel Saboteur' }],
+      p2Army: [{ dcName: 'Stormtrooper', count: 2 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set');
+    assert.strictEqual(game.postDeployQueue, undefined, 'Queue cleaned up');
+    assert.ok(result.phases.includes('post_deploy'), 'post_deploy phase was visited');
+  });
+
   it('Ambush (Ewok Warrior Elite) applies Hide condition', async () => {
     const result = await runSetupSim({
       mapId: 'mos-eisley-outskirts',
