@@ -19,6 +19,7 @@ function createFakeMessage(id, channel) {
     embeds: [],
     components: [],
     attachments: new Map(),
+    author: { bot: true, id: 'fake-bot' },
     edit: async (payload) => {
       if (typeof payload === 'string') {
         msg.content = payload;
@@ -62,7 +63,23 @@ export function createFakeChannel(channelId = 'fake-channel-1') {
           }
           return messageStore.get(idOrOpts);
         }
-        return messageStore;
+        // Return a Map-like object with Collection methods (find, filter)
+        // so code expecting Discord Collection works
+        const result = new Map(messageStore);
+        result.find = (fn) => {
+          for (const v of result.values()) {
+            if (fn(v)) return v;
+          }
+          return undefined;
+        };
+        result.filter = (fn) => {
+          const filtered = new Map();
+          for (const [k, v] of result) {
+            if (fn(v, k)) filtered.set(k, v);
+          }
+          return filtered;
+        };
+        return result;
       },
     },
     send: async (payload) => {

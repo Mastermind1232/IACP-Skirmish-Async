@@ -256,16 +256,34 @@ function getRoundActiveActions(game, playerNum, deps) {
   const playerId = getPlayerId(game, playerNum);
 
   // Check for pending sub-states first
+  // Negation must be checked before combat/movement — it blocks all play until resolved
+  if (game.pendingNegation) {
+    return getNegationActions(game, playerNum);
+  }
+
   if (game.pendingCombat) {
-    return getCombatActions(game, playerNum, deps);
+    const combatActions = getCombatActions(game, playerNum, deps);
+    // Append playable CCs alongside combat actions (combat-timing windows)
+    if (deps.getPlayableCcFromHand) {
+      const hand = playerNum === 1 ? game.player1CcHand : game.player2CcHand;
+      if (hand?.length) {
+        const playable = deps.getPlayableCcFromHand(game, playerNum, hand);
+        const gameId = game.gameId;
+        for (let i = 0; i < playable.length; i++) {
+          combatActions.push({
+            type: ACTION_TYPES.PLAY_CC,
+            customId: `cc_play_${gameId}_${playerNum}_${i}`,
+            description: `Play CC: ${playable[i]}`,
+            params: { cardIndex: i, cardName: playable[i] },
+          });
+        }
+      }
+    }
+    return combatActions;
   }
 
   if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) {
     return getMovementActions(game, playerNum, deps);
-  }
-
-  if (game.pendingNegation) {
-    return getNegationActions(game, playerNum);
   }
 
   // Pending DC ability choice (chooseOne mechanic)

@@ -19,6 +19,7 @@ import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { getDcStats, getMapSpaces, getDcEffects } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
+import { createFakeChannel } from '../../src/headless/fake-interaction.js';
 import { assertFlowInvariants, assertSurfaceInvariants } from './flow-invariants.js';
 
 // ── Pending State Keys ──────────────────────────────────────────────────────
@@ -373,6 +374,14 @@ export function createFlowHarness(opts = {}) {
   const surface = new DiscordSurface();
   const client = deps.client || deps._client;
 
+  // Setup hand channels for CC play handlers (they check channelId === game.p1HandId)
+  const p1HandChannel = createFakeChannel('p1-hand');
+  const p2HandChannel = createFakeChannel('p2-hand');
+  client._channelCache.set('p1-hand', p1HandChannel);
+  client._channelCache.set('p2-hand', p2HandChannel);
+  game.p1HandId = 'p1-hand';
+  game.p2HandId = 'p2-hand';
+
   // Register pre-existing messages
   for (const [, channel] of client._channelCache) {
     for (const [msgId] of channel._messageStore) {
@@ -419,6 +428,12 @@ export function createFlowHarness(opts = {}) {
 
   deps.sendRoundActivationPhaseMessage = async (g, c) => {
     surface.recordUiCall(stepCount, 'sendRoundActivationPhaseMessage', { visibility: 'shared' });
+    // Set state that the real version (misc-helpers.js:453-455) sets:
+    // Without these, getCcPlayContext().startOfRound is always false (roundActivationMessageId unset)
+    // and round 2+ activation is broken (currentActivationTurnPlayerId unset)
+    g.roundActivationMessageId = 'headless-activation-msg';
+    g.roundActivationButtonShown = false;
+    g.currentActivationTurnPlayerId = g.initiativePlayerId;
   };
 
   deps.maybeShowEndActivationPhaseButton = async (g, c) => {
@@ -616,5 +631,62 @@ export function createFlowHarness(opts = {}) {
 
     /** Get action deps (for external invariant checks). */
     getActionDeps() { return actionDeps; },
+
+    /**
+     * Auto-complete the CC play UI chain (cc_play → cc_play_select).
+     * After this, game.pendingCcConfirmation is set and getAvailableActions()
+     * will offer cc_confirm_play / cc_cancel_play.
+     * @param {string} cardName - The CC card name to play
+     * @param {string} userId - 'player1' or 'player2'
+     * @returns {{ step1: object, step2: object }} Results from both steps
+     */
+    async playCc(cardName, userId) {
+      const g = harness.getGame();
+      const gameId = g.gameId;
+      const isP1 = userId === g.player1Id || userId === 'player1';
+      const handCh = isP1 ? p1HandChannel : p2HandChannel;
+
+      // Step 1: Open CC menu (cc_play_ handler — UI only, no state change)
+      const step1 = await harness.submitAction(`cc_play_${gameId}`, userId, { channel: handCh });
+
+      // Step 2: Select the card (cc_play_select_ — sets pendingCcConfirmation)
+      const step2 = await harness.submitAction(`cc_play_select_${gameId}`, userId, {
+        type: 'select',
+        values: [cardName],
+        channel: handCh,
+      });
+
+      // Step 3: Confirm the play
+      const step3 = await harness.submitAction(`cc_confirm_play_${gameId}`, userId, { channel: handCh });
+
+      // Step 4: If handler couldn't auto-resolve, auto-click "Ignore and play"
+      const g2 = harness.getGame();
+      let step4 = null;
+      if (g2.pendingIllegalCcPlay) {
+        step4 = await harness.submitAction(`illegal_cc_ignore_${gameId}`, userId, { channel: handCh });
+      }
+
+      // Step 5: If CC is an attachment, auto-select first eligible DC
+      const g3 = harness.getGame();
+      let step5 = null;
+      if (g3.pendingCcAttachment) {
+        const pn = g3.pendingCcAttachment.playerNum;
+        const dcMsgIds = pn === 1 ? (g3.p1DcMessageIds || []) : (g3.p2DcMessageIds || []);
+        if (dcMsgIds.length > 0) {
+          try {
+            step5 = await harness.submitAction(`cc_attach_to_${gameId}`, userId, {
+              type: 'select', values: [dcMsgIds[0]], channel: handCh,
+            });
+          } catch {
+            // Attachment failed — clear orphaned state
+            delete g3.pendingCcAttachment;
+          }
+        } else {
+          delete g3.pendingCcAttachment;
+        }
+      }
+
+      return { step1, step2, step3, step4, step5 };
+    },
   };
 }

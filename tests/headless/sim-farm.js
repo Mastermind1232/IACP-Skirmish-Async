@@ -13,6 +13,7 @@
  *   node tests/headless/sim-farm.js 1000 --seed=42
  *   node tests/headless/sim-farm.js 50 --verbose
  *   node tests/headless/sim-farm.js 500 --stop-on-fail
+ *   node tests/headless/sim-farm.js 100 --cc-eager
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -95,6 +96,30 @@ function extractPrefix(customId) {
   // Fallback: take first two segments
   const parts = customId.split('_');
   return parts.length >= 2 ? parts.slice(0, 2).join('_') : customId;
+}
+
+// ── CC Chain Tracking ──────────────────────────────────────────────────────
+// CC resolution is multi-step: play_cc → cc_play_select → cc_confirm_play → cc_choice/cc_space
+// State mutations happen at step 3+, not step 1. Track across the whole chain.
+
+const CC_CHAIN_PREFIXES = [
+  'cc_play_select', 'cc_confirm_play', 'cc_cancel_play',
+  'cc_choice', 'cc_space',
+  'comm_disruption_play', 'comm_disruption_skip',
+];
+
+const CC_CHAIN_PENDING = [
+  'pendingCcConfirmation', 'pendingCcChoice', 'pendingCcSpaceChoice',
+  'pendingCommDisruptionPrompt',
+];
+
+function isCcChainAction(customId) {
+  if (!customId) return false;
+  return CC_CHAIN_PREFIXES.some(p => customId.startsWith(p));
+}
+
+function hasCcPending(game) {
+  return CC_CHAIN_PENDING.some(k => game?.[k]);
 }
 
 // ── Seeded PRNG (mulberry32) ────────────────────────────────────────────────
@@ -195,7 +220,12 @@ function pickAction(policy, rng, p1Actions, p2Actions, stepNum) {
       return all[Math.floor(rng() * all.length)];
     }
     case 'cc-eager': {
-      // Prefer playing command cards
+      // First: complete any in-progress CC chain
+      const ccChainAction = all.find(a =>
+        a.customId && CC_CHAIN_PREFIXES.some(p => a.customId.startsWith(p))
+      );
+      if (ccChainAction) return ccChainAction;
+      // Then prefer playing new command cards
       const ccAction = all.find(a => a.type === 'play_cc');
       if (ccAction) return ccAction;
       // Then prefer celebration_play over pass (to exercise CC paths)
@@ -215,7 +245,7 @@ function pickAction(policy, rng, p1Actions, p2Actions, stepNum) {
 
 async function runSim(seed, pools, opts = {}) {
   const rng = mulberry32(seed);
-  const { verbose } = opts;
+  const { verbose, ccEager, maxSteps: maxStepsOpt } = opts;
 
   const mapId = pools.usableMaps[Math.floor(rng() * pools.usableMaps.length)];
   const p1Army = randomArmy(rng, pools.deployable);
@@ -225,7 +255,7 @@ async function runSim(seed, pools, opts = {}) {
   // CC deck (for bleed_prevent, deck-based abilities)
   const p1CcDeck = randomCcHand(rng, pools.ccNames, 3 + Math.floor(rng() * 5)); // 3-7 cards
   const p2CcDeck = randomCcHand(rng, pools.ccNames, 3 + Math.floor(rng() * 5));
-  const policy = POLICIES[Math.floor(rng() * POLICIES.length)];
+  const policy = ccEager ? 'cc-eager' : POLICIES[Math.floor(rng() * POLICIES.length)];
 
   const scenario = {
     seed,
@@ -246,7 +276,7 @@ async function runSim(seed, pools, opts = {}) {
   }
 
   const violations = [];
-  const MAX_STEPS = 150;
+  const MAX_STEPS = maxStepsOpt || 150;
   let lastCustomId = null;
   let lastActionType = null;
   const hitCustomIds = [];
@@ -267,6 +297,9 @@ async function runSim(seed, pools, opts = {}) {
   for (const cc of [...p1CcHand, ...p2CcHand, ...p1CcDeck, ...p2CcDeck]) {
     hitCcDealt[cc] = (hitCcDealt[cc] || 0) + 1;
   }
+
+  // finalizeCcChain is now a no-op (playCc handles full chain atomically)
+  function finalizeCcChain() {}
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const game = fh.getGame();
@@ -293,20 +326,31 @@ async function runSim(seed, pools, opts = {}) {
     if (action.type) hitActionTypes.push(action.type);
 
     try {
-      const result = await fh.act(action.customId, action._uid);
-      // Track CC plays and state deltas
+      // ── CC play: playCc() handles full chain (menu → select → confirm → illegal resolve) ──
       if (action.type === 'play_cc') {
+        finalizeCcChain(); // Close any previous active chain
         const ccName = action.params?.cardName || action.params?.ccName;
         if (ccName) {
-          hitCcPlayed[ccName] = (hitCcPlayed[ccName] || 0) + 1;
-          // Check if CC had observable state effect
-          if (result.step?.stateDelta?.hasChanges) {
+          await fh.playCc(ccName, action._uid);
+          // Check if card was consumed from hand (success criterion)
+          const gameAfterCc = fh.getGame();
+          const isP1 = action._uid === gameAfterCc.player1Id || action._uid === 'player1';
+          const hand = isP1 ? (gameAfterCc.player1CcHand || []) : (gameAfterCc.player2CcHand || []);
+          const wasConsumed = !hand.includes(ccName);
+          if (wasConsumed) {
+            hitCcPlayed[ccName] = (hitCcPlayed[ccName] || 0) + 1;
             hitCcEffects[ccName] = (hitCcEffects[ccName] || 0) + 1;
           } else {
+            // Card still in hand — play failed (timing/context mismatch)
             hitCcNoOps[ccName] = (hitCcNoOps[ccName] || 0) + 1;
           }
         }
+        continue;
       }
+
+      const result = await fh.act(action.customId, action._uid);
+      const hasChanges = result.step?.stateDelta?.hasChanges || false;
+
       for (const err of result.invariantErrors) {
         violations.push({
           step,
@@ -342,13 +386,15 @@ async function runSim(seed, pools, opts = {}) {
   }
 
   const status = violations.length > 0 ? 'failed' : 'passed';
+  const finalGame = fh.getGame();
   return {
     seed,
     scenario,
     status,
     violations,
     steps: fh.getStepLog().length,
-    ended: fh.getGame()?.ended || false,
+    ended: finalGame?.ended || false,
+    maxRound: finalGame?.currentRound || 1,
     telemetry: { customIds: hitCustomIds, actionTypes: hitActionTypes, pendingStates: hitPendingStates, dcDeployed: hitDcDeployed, ccDealt: hitCcDealt, ccPlayed: hitCcPlayed, ccNoOps: hitCcNoOps, ccEffects: hitCcEffects },
   };
 }
@@ -456,16 +502,18 @@ async function main() {
   const verbose = args.includes('--verbose');
   const stopOnFail = args.includes('--stop-on-fail');
   const setupMode = args.includes('--setup');
+  const ccEager = args.includes('--cc-eager');
+  const maxStepsArg = parseInt((args.find(a => a.startsWith('--steps=')) || '').split('=')[1] || '0', 10);
 
   const modeLabel = setupMode ? 'Setup Sim Farm' : 'Discord Flow Sim Farm';
   console.log(`\n🎲 ${modeLabel}`);
-  console.log(`   Sims: ${count}  Seed base: ${seedBase}${setupMode ? '  Mode: setup' : '  Policy: randomized'}`);
-  console.log(`   Flags: ${verbose ? 'verbose ' : ''}${stopOnFail ? 'stop-on-fail' : ''}\n`);
+  console.log(`   Sims: ${count}  Seed base: ${seedBase}${setupMode ? '  Mode: setup' : ccEager ? '  Policy: cc-eager (forced)' : '  Policy: randomized'}`);
+  console.log(`   Flags: ${verbose ? 'verbose ' : ''}${stopOnFail ? 'stop-on-fail ' : ''}${maxStepsArg ? 'steps=' + maxStepsArg + ' ' : ''}\n`);
 
   const pools = buildDataPools();
   console.log(`   Pool: ${pools.deployable.length} DCs, ${pools.usableMaps.length} maps, ${pools.ccNames.length} CCs\n`);
 
-  const results = { passed: 0, failed: 0, setupErrors: 0, totalSteps: 0, completed: 0 };
+  const results = { passed: 0, failed: 0, setupErrors: 0, totalSteps: 0, completed: 0, roundDist: {} };
   const failures = [];
   const invariantCounts = {};
   const telemetryAcc = { handlerHits: {}, actionTypeHits: {}, pendingHits: {}, dcDeployed: {}, ccDealt: {}, ccPlayed: {}, ccNoOps: {}, ccEffects: {} };
@@ -475,7 +523,7 @@ async function main() {
     const seed = seedBase + i;
     const result = setupMode
       ? await runSetupSimFromSeed(seed, pools, { verbose })
-      : await runSim(seed, pools, { verbose });
+      : await runSim(seed, pools, { verbose, ccEager, maxSteps: maxStepsArg });
 
     // Accumulate telemetry
     if (result.telemetry) {
@@ -529,6 +577,8 @@ async function main() {
 
     results.totalSteps += result.steps;
     if (result.ended) results.completed++;
+    const mr = result.maxRound || 1;
+    results.roundDist[mr] = (results.roundDist[mr] || 0) + 1;
 
     // Progress indicator every 10%
     if (!verbose && (i + 1) % Math.max(1, Math.floor(count / 10)) === 0) {
@@ -550,6 +600,20 @@ async function main() {
   console.log(`  Completed:    ${results.completed} (${Math.round((results.completed / Math.max(1, results.passed + results.failed)) * 100)}%)`);
   console.log(`  Total steps:  ${results.totalSteps}`);
   console.log(`  Avg steps:    ${Math.round(results.totalSteps / Math.max(1, count))}`);
+
+  // Round progression
+  {
+    const rd = results.roundDist;
+    const total = results.passed + results.failed;
+    const maxR = Math.max(...Object.keys(rd).map(Number));
+    const r2plus = Object.entries(rd).filter(([r]) => Number(r) >= 2).reduce((s, [, c]) => s + c, 0);
+    const r3plus = Object.entries(rd).filter(([r]) => Number(r) >= 3).reduce((s, [, c]) => s + c, 0);
+    console.log(`\n  Round progression:`);
+    console.log(`    Max round reached: ${maxR}`);
+    console.log(`    Reached R2+: ${r2plus}/${total} (${Math.round(r2plus / Math.max(1, total) * 100)}%)`);
+    console.log(`    Reached R3+: ${r3plus}/${total} (${Math.round(r3plus / Math.max(1, total) * 100)}%)`);
+    console.log(`    Distribution: ${Object.entries(rd).sort((a, b) => Number(a[0]) - Number(b[0])).map(([r, c]) => `R${r}:${c}`).join('  ')}`);
+  }
 
   if (Object.keys(invariantCounts).length > 0) {
     console.log(`\nInvariant violation breakdown:`);
