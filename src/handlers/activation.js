@@ -1177,6 +1177,37 @@ export async function handleConfirmActivate(interaction, ctx) {
       break; // Only one Hair Trigger prompt per activation
     }
   }
+  // Swipe (Salacious B. Crumb): when activating in a space containing a hostile, deal 1 Damage
+  if (meta.dcName === 'Salacious B. Crumb') {
+    const _swDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _swFk = `Salacious B. Crumb-${_swDgIndex}-0`;
+    const _swPos = game.figurePositions?.[meta.playerNum]?.[_swFk];
+    if (_swPos) {
+      const _swEnemyPN = opponentPlayerNum(meta.playerNum);
+      const _swEnemyFigs = game.figurePositions?.[_swEnemyPN] || {};
+      for (const [_swEfk, _swEpos] of Object.entries(_swEnemyFigs)) {
+        if (!_swEpos || String(_swEpos).toLowerCase() !== String(_swPos).toLowerCase()) continue;
+        const _swKey = `swipe_${_swFk}_${_swEfk}`;
+        if (game.roundFigureAbilityUsed?.[_swKey]) continue;
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        game.roundFigureAbilityUsed[_swKey] = true;
+        // Apply 1 Damage to the hostile figure
+        const _swTgtMsgId = ctx.findDcMessageIdForFigure(game.gameId, _swEnemyPN, _swEfk);
+        if (_swTgtMsgId) {
+          const _swFkMatch = _swEfk.match(/-(\d+)-(\d+)$/);
+          const _swFigIdx = _swFkMatch ? parseInt(_swFkMatch[2], 10) : 0;
+          const hs = dcHealthState.get(_swTgtMsgId);
+          if (hs?.[_swFigIdx] && Array.isArray(hs[_swFigIdx])) {
+            const [cur, max] = hs[_swFigIdx];
+            hs[_swFigIdx] = [Math.max(0, (cur ?? max) - 1), max];
+          }
+        }
+        const _swTgtName = dcNameFromFigureKey(_swEfk);
+        await thread.send(`**Swipe** — **Salacious B. Crumb** activates in **${_swTgtName}**'s space: **${_swTgtName}** suffers 1 Damage.`).catch(discordCatch);
+        await logGameAction(game, client, `**Swipe** — **Salacious B. Crumb** deals 1 Damage to **${_swTgtName}** on activation.`, { phase: 'ACTIVATION', icon: 'attack' });
+      }
+    }
+  }
   // Mounted (Captain Terro, Kuiil): gain 3 MP at start of activation
   const _mountedEff = getDcEffects()?.[meta.dcName];
   const _mountedIds = _mountedEff?.specialAbilityIds || [];

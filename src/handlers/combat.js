@@ -3921,6 +3921,25 @@ export async function handleCombatPassive(interaction, ctx) {
     }
     combat.elusiveResolved = true;
     delete combat.pendingCombatPassive;
+  } else if (abilityKey === 'negotiate') {
+    const _negDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    if (choice === 'pay') {
+      // Defender pays 2 VP to attacker (Hondo)
+      const defVpKey = `p${_negDefPN}Vp`;
+      const atkVpKey = `p${combat.attackerPlayerNum}Vp`;
+      game[defVpKey] = Math.max(0, (game[defVpKey] || 0) - 2);
+      game[atkVpKey] = (game[atkVpKey] || 0) + 2;
+      await thread.send(`**Negotiate** — Defender paid 2 VP to Hondo. No bonus damage applied.`);
+    } else {
+      // Accept +2 Damage
+      combat.bonusHits = (combat.bonusHits || 0) + 2;
+      await thread.send('**Negotiate** — +2 Damage applied to attack results.');
+    }
+    combat.negotiateResolved = true;
+    delete combat.pendingCombatPassive;
+    saveGames();
+    await proceedAfterTokens(thread, game, combat, ctx);
+    return;
   }
 
   saveGames();
@@ -4312,6 +4331,29 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
       combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
       combat.bonusHits = (combat.bonusHits || 0) + 1;
       await thread.send('**Pulse Cannon** — Iden Versio spent a Power Token: **+4 Accuracy, +1 Hit** applied.');
+    }
+  }
+
+  // Negotiate (Hondo): +2 Damage unless defender pays 2 VP
+  if (!combat.negotiateResolved) {
+    const _negDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _negAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const _negAtkEff = _negDcEff[_negAtkDcName] || _negDcEff[(_negAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((_negAtkEff?.specialAbilityIds || []).includes('negotiate_hondo')) {
+      const _negDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      const _negDefId = getPlayerId(game, _negDefPN);
+      combat.pendingCombatPassive = 'negotiate';
+      const _negRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_pay`).setLabel('Pay 2 VP (avoid +2 Damage)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_accept`).setLabel('Accept +2 Damage').setStyle(ButtonStyle.Danger),
+      );
+      await thread.send({
+        content: `<@${_negDefId}> **Negotiate** — Hondo demands tribute! Pay **2 VP** to avoid +2 Damage, or accept the +2 Damage:`,
+        allowedMentions: { users: [_negDefId] },
+        components: [_negRow],
+      }).catch(discordCatch);
+      saveGames?.();
+      return;
     }
   }
 
