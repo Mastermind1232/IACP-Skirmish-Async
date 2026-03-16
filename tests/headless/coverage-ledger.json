@@ -8,9 +8,10 @@
     "squad-submission": {
       "name": "Squad Submission",
       "category": "setup",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
-        "setup-regions-tests"
+        "setup-regions-tests",
+        "setup-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
@@ -18,21 +19,30 @@
         "map-selection",
         "initiative"
       ],
-      "notes": "setup-regions-tests: customId parsing (squad_modal_{gameId}_{playerNum}), squad structure validation (dcList/ccList/name), DC data integrity (40pt squads buildable, all DCs have cost/affiliation), CC deck completeness (15-card decks from 293 CCs), hasDcInSquad bracketed name detection.",
+      "notes": "setup-regions-tests: customId parsing (squad_modal_{gameId}_{playerNum}), squad structure validation (dcList/ccList/name), DC data integrity (40pt squads buildable, all DCs have cost/affiliation), CC deck completeness (15-card decks from 293 CCs), hasDcInSquad bracketed name detection. PROMOTED: End-to-end modal handler dispatch via harness.submitAction (single DC, multi-DC, attachments, full CC deck, trooper swarm). Real handleSquadModal exercised.",
       "handlerPrefixes": [
         "squad_modal"
       ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": "2026-03-15"
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "map-selection": {
       "name": "Map Selection",
       "category": "setup",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
-        "setup-regions-tests"
+        "setup-regions-tests",
+        "setup-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
@@ -40,7 +50,7 @@
         "squad-submission",
         "initiative"
       ],
-      "notes": "setup-regions-tests: customId format parsing (5 prefixes), state fields (selectedMap, mapSelected), handler registration (handleMapSelection/handleMapTypeChoice/handleMapConfirm exported), map registry data validation (id/name on all maps), deployment zone data presence.",
+      "notes": "setup-regions-tests: customId format parsing (5 prefixes), state fields (selectedMap, mapSelected), handler registration (handleMapSelection/handleMapTypeChoice/handleMapConfirm exported), map registry data validation (id/name on all maps), deployment zone data presence. PROMOTED: Map select/confirm handler dispatch, map registry validation, runSetupSim across multiple maps from registry.",
       "handlerPrefixes": [
         "map_selection",
         "map_type",
@@ -52,7 +62,15 @@
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": "2026-03-15"
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "initiative": {
       "name": "Initiative Determination",
@@ -107,10 +125,11 @@
     "attachment-placement": {
       "name": "Attachment Placement",
       "category": "setup",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
         "setup-harness",
-        "push-pull-tests"
+        "push-pull-tests",
+        "setup-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
@@ -120,7 +139,7 @@
         "manual-deployment",
         "post-deploy-abilities"
       ],
-      "notes": "10 targeted tests: state machine (pending structure, apply moves card, redo restores), customId parsing (setup_attach_to, attach_confirm, attach_reselect, attach_done_confirm, attach_done_redo), dual-player confirm gate, pendingAttachConfirm temporary selection. Handler registration verified.",
+      "notes": "10 targeted tests: state machine (pending structure, apply moves card, redo restores), customId parsing (setup_attach_to, attach_confirm, attach_reselect, attach_done_confirm, attach_done_redo), dual-player confirm gate, pendingAttachConfirm temporary selection. Handler registration verified. PROMOTED: runSetupSim with [Zillo Technique], [Clan of Two], [Indentured Jester] armies. Auto-attach behavior verified, p1/p2DcAttachments populated, multi-DG propagation tested.",
       "handlerPrefixes": [
         "setup_attach_to",
         "attach_confirm",
@@ -135,7 +154,15 @@
       "liveIncidents": [
         "Attachment ordering bugs reported in live games"
       ],
-      "lastColoredIn": "2026-03-15"
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "auto-deploy": {
       "name": "Auto Deploy",
@@ -166,9 +193,10 @@
     "manual-deployment": {
       "name": "Manual Deployment",
       "category": "setup",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
-        "setup-regions-tests"
+        "setup-regions-tests",
+        "setup-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
@@ -177,7 +205,7 @@
         "zone-selection",
         "attachment-placement"
       ],
-      "notes": "setup-regions-tests: customId format parsing (9+ prefixes: deployment_fig, deploy_pick, deploy_row, deploy_row_back, deployment_orient, loadout_pick, form_pick, deployment_done, auto_deploy), state fields (figurePositions, playerZones), handler registration, loadout cards data (Purge Trooper), form cards data (Clawdite Shapeshifter).",
+      "notes": "setup-regions-tests: customId format parsing (9+ prefixes: deployment_fig, deploy_pick, deploy_row, deploy_row_back, deployment_orient, loadout_pick, form_pick, deployment_done, auto_deploy), state fields (figurePositions, playerZones), handler registration, loadout cards data (Purge Trooper), form cards data (Clawdite Shapeshifter). PROMOTED: runSetupSim end-to-end: single/multi-figure armies, massive figures (Rancor, AT-ST), phase transitions (zone→deploy→cc_draw→round_active), CC draw verification, game state integrity (VP, map, healthState, initiative).",
       "handlerPrefixes": [
         "deployment_fig",
         "deploy_pick",
@@ -192,14 +220,23 @@
       ],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": "2026-03-15"
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "companion-deployment": {
       "name": "Companion Deployment",
       "category": "setup",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
-        "setup-regions-tests"
+        "setup-regions-tests",
+        "setup-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
@@ -207,14 +244,22 @@
         "auto-deploy",
         "post-deploy-abilities"
       ],
-      "notes": "setup-regions-tests: companion data validation (The Child, Dio, J4X-7, Junk Droid, BD-1, Salacious B. Crumb exist in dc-effects), companionHostMap structure, companion figureKey format (Name-0-0), companion cost (0 or undefined), post-deploy handler registration.",
+      "notes": "setup-regions-tests: companion data validation (The Child, Dio, J4X-7, Junk Droid, BD-1, Salacious B. Crumb exist in dc-effects), companionHostMap structure, companion figureKey format (Name-0-0), companion cost (0 or undefined), post-deploy handler registration. PROMOTED: runSetupSim with Din Djarin+[Clan of Two], Jabba+[Indentured Jester], Jarrod Kelvin (J4X-7), Iden Versio (Dio). companionHostMap populated, companion figures in figurePositions, both-player scenarios.",
       "handlerPrefixes": [
         "pd_pick"
       ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": "2026-03-15"
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "post-deploy-abilities": {
       "name": "Post-Deploy Abilities",
@@ -896,11 +941,12 @@
     "hand-private-surfaces": {
       "name": "Hand / Private Surfaces",
       "category": "discord",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
         "flow-harness",
         "ds-invariants",
-        "discord-surface-tests"
+        "discord-surface-tests",
+        "discord-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
@@ -908,20 +954,29 @@
         "wrong-player-routing",
         "hidden-info-leak"
       ],
-      "notes": "DS-1 invariant verifies CC hand cards don't leak to shared surface. DS-2/DS-3 track surface model consistency. 5 targeted tests: bold CC name leak detection, plain text non-leak, separate hand arrays, hand size, play-removes-from-hand. Actual Discord thread routing not verified — data model checks only.",
+      "notes": "DS-1 invariant verifies CC hand cards don't leak to shared surface. DS-2/DS-3 track surface model consistency. 5 targeted tests: bold CC name leak detection, plain text non-leak, separate hand arrays, hand size, play-removes-from-hand. Actual Discord thread routing not verified — data model checks only. PROMOTED: Flow harness sims: updateHandVisualMessage/updateHandChannelMessages carry correct visibility tags, CC names never in shared entries, discard pile private, ephemeral responses route correctly.",
       "handlerPrefixes": [],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": "2026-03-15"
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "wrong-player-routing": {
       "name": "Wrong-Player Routing",
       "category": "discord",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
         "flow-harness",
-        "ds-invariants"
+        "ds-invariants",
+        "discord-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
@@ -929,21 +984,30 @@
         "hand-private-surfaces",
         "hidden-info-leak"
       ],
-      "notes": "DS-5 invariant checks that actions don't appear in wrong player's available-actions surface. Detects some routing bugs but not all (e.g., followUp sent to wrong channel).",
+      "notes": "DS-5 invariant checks that actions don't appear in wrong player's available-actions surface. Detects some routing bugs but not all (e.g., followUp sent to wrong channel). PROMOTED: Flow harness sims: P1 gets responses when P1 acts, available actions scoped to acting player, activation turn enforcement, negation/celebration/power-token/EOR routing, combat roll/ready routing.",
       "handlerPrefixes": [],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "hidden-info-leak": {
       "name": "Hidden Info Leak Prevention",
       "category": "discord",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
         "flow-harness",
         "ds-invariants",
-        "live-incident"
+        "live-incident",
+        "discord-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
@@ -951,23 +1015,32 @@
         "hand-private-surfaces",
         "wrong-player-routing"
       ],
-      "notes": "DS-1 invariant checks CC hand cards don't leak to shared surface. Found 1 real leak in 500 flow sims (seed=493, Take Cover via dc_special). That leak is a verified detection — DS-1 caught a real bug.",
+      "notes": "DS-1 invariant checks CC hand cards don't leak to shared surface. Found 1 real leak in 500 flow sims (seed=493, Take Cover via dc_special). That leak is a verified detection — DS-1 caught a real bug. PROMOTED: Flow harness sims: bold CC hand cards never leak to shared, opponent hand never in your visible entries, getVisibleToOpponentOnly never contains hand cards, deck hidden, no cross-contamination across activations.",
       "handlerPrefixes": [],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [
         "DS-1 violation: Take Cover leaked via dc_special followUp"
       ],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "stale-component": {
       "name": "Stale Component Cleanup",
       "category": "discord",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
         "flow-harness",
         "ds-invariants",
-        "discord-surface-tests"
+        "discord-surface-tests",
+        "discord-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
@@ -975,7 +1048,7 @@
         "payload-shape",
         "timing-concurrency"
       ],
-      "notes": "DS-7 checks for cleanup after state transitions. DS-9 checks for stale buttons remaining after phase changes. 4 targeted tests: pendingCombat/pendingNegation/moveInProgress/pendingCcConfirmation lifecycle create→clear patterns. Surface model invariants.",
+      "notes": "DS-7 checks for cleanup after state transitions. DS-9 checks for stale buttons remaining after phase changes. 4 targeted tests: pendingCombat/pendingNegation/moveInProgress/pendingCcConfirmation lifecycle create→clear patterns. Surface model invariants. PROMOTED: Flow harness sims: combat lifecycle (pendingCombat create→clear), activation cleanup, getPendingLifecycle transitions, component history tracking, no orphaned edits.",
       "handlerPrefixes": [
         "refresh_map",
         "refresh_all"
@@ -985,28 +1058,45 @@
         "refresh_map"
       ],
       "liveIncidents": [],
-      "lastColoredIn": "2026-03-15"
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "payload-shape": {
       "name": "Payload Shape Limits",
       "category": "discord",
-      "verification": "partial",
+      "verification": "strong",
       "evidence": [
         "flow-harness",
         "ds-invariants",
-        "discord-surface-tests"
+        "discord-surface-tests",
+        "discord-integration-tests"
       ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": [
         "stale-component"
       ],
-      "notes": "37 targeted tests: validatePayloadShape boundary tests (action rows 5/6, buttons 5/6, select 25/26/0, customId 100/101, content 2000/2001, embed title/desc/fields/field-name/field-value at limits, combo violations). Real-world payload simulations (DC action menu, surge menu, deploy picker). DC/CC name length validation. DS-8/DS-10 fire every flow sim step.",
+      "notes": "37 targeted tests: validatePayloadShape boundary tests (action rows 5/6, buttons 5/6, select 25/26/0, customId 100/101, content 2000/2001, embed title/desc/fields/field-name/field-value at limits, combo violations). Real-world payload simulations (DC action menu, surge menu, deploy picker). DC/CC name length validation. DS-8/DS-10 fire every flow sim step. PROMOTED: Real handler output validation against Discord API limits. Activation/combat/large-army flows validated. 50-action stress test. validatePayloadShape boundary coverage.",
       "handlerPrefixes": [],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": "2026-03-15"
+      "lastColoredIn": "2026-03-15",
+      "history": [
+        {
+          "date": "2026-03-15",
+          "from": "partial",
+          "to": "strong",
+          "reason": "Handler-level integration tests via runSetupSim/createFlowHarness"
+        }
+      ]
     },
     "timing-concurrency": {
       "name": "Timing / Concurrency",
