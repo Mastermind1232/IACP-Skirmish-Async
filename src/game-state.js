@@ -432,6 +432,42 @@ export function getGamesMap() {
   return games;
 }
 
+/**
+ * Rebuild dcMessageMeta, dcExhaustedState, dcHealthState for a single game.
+ * Call after restoring a game snapshot to keep side-channel Maps consistent.
+ */
+export function repopulateDcMapsForGame(gameId) {
+  // Clear existing entries for this game
+  for (const [msgId, meta] of dcMessageMeta) {
+    if (meta?.gameId === gameId) {
+      dcMessageMeta.delete(msgId);
+      dcExhaustedState.delete(msgId);
+      dcHealthState.delete(msgId);
+    }
+  }
+  // Rebuild from current game state
+  const game = games.get(gameId);
+  if (!game) return;
+  for (const playerNum of [1, 2]) {
+    const dcList = getDcList(game, playerNum) || [];
+    const dcMessageIds = getDcMessageIds(game, playerNum) || [];
+    const activatedIndices = new Set(getActivatedDcIndices(game, playerNum) || []);
+    for (let i = 0; i < dcMessageIds.length && i < dcList.length; i++) {
+      const msgId = dcMessageIds[i];
+      const dc = dcList[i];
+      if (!msgId || !dc) continue;
+      dcMessageMeta.set(msgId, {
+        gameId,
+        playerNum,
+        dcName: dc.dcName,
+        displayName: dc.displayName || dc.dcName,
+      });
+      dcExhaustedState.set(msgId, activatedIndices.has(i));
+      dcHealthState.set(msgId, dc.healthState || [[null, null]]);
+    }
+  }
+}
+
 /** Remove all dcMessageMeta/dcExhaustedState/dcHealthState entries for a game. Prevents memory leaks on game end. */
 export function cleanupGameMaps(gameId) {
   for (const [msgId, meta] of dcMessageMeta) {

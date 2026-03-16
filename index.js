@@ -62,6 +62,7 @@ import {
   pendingIllegalSquad,
   pendingSquadConfirm,
   cleanupGameMaps,
+  repopulateDcMapsForGame,
 } from './src/game-state.js';
 import {
   createPlayAreaChannels as _createPlayAreaChannels,
@@ -228,7 +229,7 @@ import { findGameByChannel, findGameByCommonChannel } from './src/discord/game-c
 import { checkAndPostAchievements } from './src/discord/achievement-helpers.js';
 import { updateGameView } from './src/discord/pvp-thread.js';
 import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS, MAX_UNDO_DEPTH } from './src/constants.js';
-import { withGameLock, cleanupGameLock } from './src/game/action-queue.js';
+import { withGameLock, withAtomicGameLock, cleanupGameLock } from './src/game/action-queue.js';
 import {
   getLobby,
   setLobby,
@@ -929,6 +930,14 @@ function resolveGameIdForLock(interaction) {
     findGameByChannel, getGamesMap,
   });
 }
+
+/** Shared options for withAtomicGameLock — snapshot/rollback + commit save. */
+const atomicOpts = {
+  getGame,
+  setGame,
+  commitFn: () => saveGames(),
+  onRollback: (gid) => repopulateDcMapsForGame(gid),
+};
 
 function extractGameIdFromMessage(message) {
   return _extractGameIdFromMessagePure(message, { findGameByChannel, getGamesMap });
@@ -2995,7 +3004,7 @@ client.on('interactionCreate', async (interaction) => {
     const modalKey = getHandlerKey(interaction.customId, 'modal');
     if (!modalKey) return;
     const _modalLockId = resolveGameIdForLock(interaction);
-    await withGameLock(_modalLockId, async () => {
+    await withAtomicGameLock(_modalLockId, atomicOpts, async () => {
     const ccHandContext = {
       getGame,
       saveGames,
@@ -3112,7 +3121,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Figures renamed!', ephemeral: true }).catch(discordCatch);
       saveGames();
     }
-    }); // end withGameLock (modal)
+    }); // end withAtomicGameLock (modal)
     return;
   }
 
@@ -3120,7 +3129,7 @@ client.on('interactionCreate', async (interaction) => {
     const selectKey = getHandlerKey(interaction.customId, 'select');
     if (!selectKey) return;
     const _selectLockId = resolveGameIdForLock(interaction);
-    await withGameLock(_selectLockId, async () => {
+    await withAtomicGameLock(_selectLockId, atomicOpts, async () => {
     if (selectKey === 'dc_fig_select_') {
       const msgId = interaction.customId.replace('dc_fig_select_', '');
       const selectedFigure = parseInt(interaction.values[0], 10);
@@ -3258,7 +3267,7 @@ client.on('interactionCreate', async (interaction) => {
       }
       return;
     }
-    }); // end withGameLock (select)
+    }); // end withAtomicGameLock (select)
     return;
   }
 
@@ -3275,7 +3284,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   const _buttonLockId = resolveGameIdForLock(interaction);
-  await withGameLock(_buttonLockId, async () => {
+  await withAtomicGameLock(_buttonLockId, atomicOpts, async () => {
 
     // ── Command-mode dispatch (event sourcing pipeline) ───────────────
     // Handlers in this set run through the command→event→reducer pipeline
@@ -3654,7 +3663,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
 
-  }); // end withGameLock (button)
+  }); // end withAtomicGameLock (button)
 
   } catch (err) {
     console.error('Interaction error:', err);
