@@ -1783,6 +1783,15 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     if (!los) continue;
 
     const targetDcName = dcNameFromFigureKey(fk);
+    // Insignificant (Dio): can't be targeted if in same space as a friendly figure
+    const _insigEff = getDcEffects()?.[targetDcName];
+    if ((_insigEff?.specialAbilityIds || []).includes('insignificant_dio')) {
+      const friendlyPositions = game.figurePositions?.[enemyPn] || {};
+      const hasFriendlyInSpace = Object.entries(friendlyPositions).some(([ffk, fpos]) =>
+        ffk !== fk && fpos && String(fpos).toLowerCase() === String(coord).toLowerCase()
+      );
+      if (hasFriendlyInSpace) continue;
+    }
     targets.push({ figureKey: fk, coord: String(coord).toLowerCase(), label: targetDcName, hasLOS: los, dist });
   }
 

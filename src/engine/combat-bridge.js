@@ -2548,6 +2548,84 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
+  // Defensive Fire (Bo-Katan): after resolving a ranged attack (as attacker), gain 1 Block Token
+  if (combat.isRanged && combat.attackerFigureKey) {
+    const _dfbEff = getDcEffect(combat.attackerDcName);
+    if ((_dfbEff?.specialAbilityIds || []).includes('defensive_fire_bokatan')) {
+      grantPowerTokens(game, combat.attackerFigureKey, 'Block', 1);
+      await thread.send(`**Defensive Fire** — **${combat.attackerDcName}** gains 1 **Block Token** after ranged attack.`).catch(discordCatch);
+      await logGameAction(game, client, `**Defensive Fire** — **${combat.attackerDcName}** gains 1 Block Token.`, { phase: 'ROUND', icon: 'attack' });
+    }
+  }
+  // Dual-Wield Pistols (Bo-Katan): after resolving a ranged attack, free ranged attack once/round
+  if (combat.isRanged && combat.attackerFigureKey && combat.attackerMsgId) {
+    const _dwpEff = getDcEffect(combat.attackerDcName);
+    if ((_dwpEff?.specialAbilityIds || []).includes('dual_wield_pistols_bokatan')) {
+      const _dwpKey = `dualWieldPistols_${combat.attackerFigureKey}`;
+      if (!game.roundFigureAbilityUsed?.[_dwpKey]) {
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        game.roundFigureAbilityUsed[_dwpKey] = true;
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[combat.attackerMsgId] = true;
+        await thread.send(`**Dual-Wield Pistols** — **${combat.attackerDcName}** may perform a free Ranged attack! Use the **Attack** button.`).catch(discordCatch);
+        await logGameAction(game, client, `**Dual-Wield Pistols** — **${combat.attackerDcName}** earns a free Ranged attack.`, { phase: 'ROUND', icon: 'attack' });
+      }
+    }
+  }
+
+  // Wanton Destruction (Saw Gerrera): after ANY friendly attack resolves, discard 1 CC → up to 2 figures (not defender) within 2 of target suffer 1 Damage
+  if (combat.target?.figureKey && game.selectedMap?.id) {
+    const _wdAtkPN = combat.attackerPlayerNum;
+    const _wdDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(_wdAtkPN);
+    const _wdDcList = getDcList(game, _wdAtkPN) || [];
+    const _wdEffects = getDcEffects();
+    for (let _wdI = 0; _wdI < _wdDcList.length; _wdI++) {
+      const _wdDc = _wdDcList[_wdI];
+      if (!_wdDc || _wdDc.defeated) continue;
+      const _wdEff = _wdEffects[_wdDc.dcName];
+      if (!((_wdEff?.specialAbilityIds || []).includes('wanton_destruction_saw'))) continue;
+      // Check Saw is alive (has a figure on the board)
+      const _wdFigs = game.figurePositions?.[_wdAtkPN] || {};
+      const _wdAlive = Object.keys(_wdFigs).some(fk => fk.startsWith(_wdDc.dcName + '-') && _wdFigs[fk]);
+      if (!_wdAlive) continue;
+      // Check player has at least 1 CC in hand
+      const _wdHand = getCcHand(game, _wdAtkPN) || [];
+      if (_wdHand.length === 0) continue;
+      // Find eligible figures within 2 spaces of target (both teams, excluding defender)
+      const _wdTargetPos = game.figurePositions?.[_wdDefPN]?.[combat.target.figureKey] || combat._savedTargetPos;
+      if (!_wdTargetPos) continue;
+      const _wdEligible = [];
+      for (const pn of [1, 2]) {
+        for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+          if (!pos || fk === combat.target.figureKey) continue;
+          if (!isWithinN(pos, _wdTargetPos, 2, game.selectedMap.id)) continue;
+          const { label: lbl } = getFigureLabel(game, pn, fk);
+          _wdEligible.push({ figureKey: fk, playerNum: pn, label: lbl });
+        }
+      }
+      if (_wdEligible.length === 0) continue;
+      const _wdOwnerId = getPlayerId(game, _wdAtkPN);
+      game.pendingWantonDestruction = {
+        gameId: game.gameId,
+        ownerPlayerNum: _wdAtkPN,
+        combatThreadId: combat.combatThreadId,
+        targets: _wdEligible,
+        chosen: [],
+        maxPicks: 2,
+      };
+      const _wdBtns = [
+        new ButtonBuilder().setCustomId(`wanton_use_${game.gameId}`).setLabel('Use (discard 1 CC)').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`wanton_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      ];
+      await thread.send({
+        content: `<@${_wdOwnerId}> **Wanton Destruction** — **${_wdDc.dcName}**: Discard 1 CC to deal 1 Damage to up to 2 figures within 2 spaces of the target?`,
+        allowedMentions: { users: [_wdOwnerId] },
+        components: [new ActionRowBuilder().addComponents(_wdBtns)],
+      }).catch(discordCatch);
+      break;
+    }
+  }
+
   delete game.pendingCombat;
   delete game.pendingCleave;
   if (combat.rollMessageId) {

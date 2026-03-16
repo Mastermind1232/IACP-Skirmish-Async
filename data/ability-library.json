@@ -1161,7 +1161,17 @@
     },
     "defensive_fire_bokatan": {
       "type": "dcPassive",
-      "label": "Defensive Fire"
+      "label": "Defensive Fire",
+      "wiredStatus": "wired"
+    },
+    "dual_wield_pistols_bokatan": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "after-ranged-attack",
+      "label": "Dual-Wield Pistols",
+      "description": "After resolving a Ranged attack, you may perform a Ranged attack without spending an action. Limit once per round.",
+      "oncePer": "round",
+      "wiredStatus": "wired"
     },
     "defensive_stance": {
       "type": "dcSpecial",
@@ -2595,6 +2605,12 @@
       "chooseFriendlyToFocus": true,
       "choiceRequiresElite": true,
       "logMessage": "**Incentivize** — Choose an elite figure to become **Focused** (enforced).",
+      "wiredStatus": "wired"
+    },
+    "insignificant_dio": {
+      "type": "dcPassive",
+      "label": "Insignificant",
+      "description": "You cannot be the target of an attack while in the same space as a friendly figure.",
       "wiredStatus": "wired"
     },
     "indiscriminate_fire": {

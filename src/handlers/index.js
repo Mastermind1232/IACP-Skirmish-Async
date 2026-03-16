@@ -140,6 +140,7 @@ import {
   handleHeavyFireCondition,
   handleHavocShotUse, handleHavocShotSkip, handleHavocShotPick, handleHavocShotDone,
   handleDeflectPick, handleDeflectSkip,
+  handleWantonUse, handleWantonCcPick, handleWantonPick, handleWantonDone, handleWantonSkip,
 } from './combat-special-effects.js';
 import { getValidGroupNames } from '../context-factory.js';
 
@@ -464,6 +465,11 @@ register('havoc_shot_pick_', handleHavocShotPick, 'combatSpecialEffects');
 register('havoc_shot_done_', handleHavocShotDone, 'combatSpecialEffects');
 register('deflect_pick_', handleDeflectPick, 'combatSpecialEffects');
 register('deflect_skip_', handleDeflectSkip, 'combatSpecialEffects');
+register('wanton_use_', handleWantonUse, 'combatSpecialEffects');
+register('wanton_cc_', handleWantonCcPick, 'combatSpecialEffects');
+register('wanton_pick_', handleWantonPick, 'combatSpecialEffects');
+register('wanton_done_', handleWantonDone, 'combatSpecialEffects');
+register('wanton_skip_', handleWantonSkip, 'combatSpecialEffects');
 
 // --- Select-menu handlers (dispatched via table-driven select dispatch in index.js) ---
 register('arsenal_pick_', handleArsenalPick, 'dcPlayArea');
@@ -633,4 +639,5 @@ export {
   handleHeavyFireCondition,
   handleHavocShotUse, handleHavocShotSkip, handleHavocShotPick, handleHavocShotDone,
   handleDeflectPick, handleDeflectSkip,
+  handleWantonUse, handleWantonCcPick, handleWantonPick, handleWantonDone, handleWantonSkip,
 } from './combat-special-effects.js';

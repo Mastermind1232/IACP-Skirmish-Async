@@ -1038,6 +1038,18 @@ async function buildAndSendAttackTargets(
   for (const [k, coord] of Object.entries(poses)) {
     const targetCondsList = game.figureConditions?.[k] || [];
     if (targetCondsList.includes('Hide')) continue;
+    // Insignificant (Dio): can't be targeted if in same space as a friendly figure
+    {
+      const _insigDcName = dcNameFromFigureKey(k);
+      const _insigEff = getDcEffects()[_insigDcName] || getDcEffects()[_insigDcName.replace(/\s*\[.*\]\s*$/, '')];
+      if ((_insigEff?.specialAbilityIds || []).includes('insignificant_dio')) {
+        const _insigFriendlyPoses = game.figurePositions?.[enemyPlayerNum] || {};
+        const _insigHasFriendly = Object.entries(_insigFriendlyPoses).some(([ffk, fpos]) =>
+          ffk !== k && fpos && String(fpos).toLowerCase() === String(coord).toLowerCase()
+        );
+        if (_insigHasFriendly) continue;
+      }
+    }
     const vanishImmunity = game.vanishImmunityUntilNextActivation?.[enemyPlayerNum];
     if (vanishImmunity) {
       const vanishMeta = dcMessageMeta.get(vanishImmunity.msgId);

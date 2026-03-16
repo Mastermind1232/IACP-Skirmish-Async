@@ -1302,7 +1302,12 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "personal_combat_shield_gar_saxon",
+        "defensive_fire_bokatan",
+        "dual_wield_pistols_bokatan"
+      ]
     },
     "Boba Fett": {
       "abilityText": "Wrist Cord: Once per round, you may spend 2 movement points to choose a SMALL figure within 3 spaces in your line of sight. Push the choses figure up to 3 spaces into a space adjacent to you.\n\nWrist Flamethrower: Once per round, you may spend 2 movement points to choose a space within 2 spaces. Each other figure on or adjacent to that spaces suffers 1 Damage and 1 Strain, then becomes Weakened.\n\nEE-3 Carbine: When you declare an attack, you may spend 2 movement points to change one of your attack die to a red die. Limit once per attack.",
@@ -2276,7 +2281,10 @@
       ],
       "attachment": false,
       "companion": true,
-      "unique": true
+      "unique": true,
+      "specialAbilityIds": [
+        "insignificant_dio"
+      ]
     },
     "Director Krennic": {
       "abilityText": "Advanced Weapons Research: At the start of your activation, a friendly figure within 2 spaces may gain 1 Hit Token or 1 Surge Token.\n\nUnhinged Director: When a friendly TROOPER or GUARDIAN within 2 spaces spends a Hit Token or Surge Token while declaring an attack, it may suffer 1 Strain to apply +2 of the chosen symbol to the results instead of +1.",

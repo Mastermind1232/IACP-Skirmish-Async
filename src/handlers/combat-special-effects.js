@@ -1055,3 +1055,149 @@ export async function handleDeflectSkip(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
+
+// ── Wanton Destruction (Saw Gerrera) ─────────────────────────────────────
+export async function handleWantonUse(interaction, ctx) {
+  const { getGame, saveGames, client, canActAsPlayer, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^wanton_use_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (!game?.pendingWantonDestruction) return;
+  const wd = game.pendingWantonDestruction;
+  if (!await requirePlayer(interaction, game, interaction.user.id, wd.ownerPlayerNum, canActAsPlayer, 'Only the attacker\'s team can use Wanton Destruction.')) return;
+  // Discard the first CC card from hand (auto-pick cheapest)
+  const handKey = wd.ownerPlayerNum === 1 ? 'p1CcHand' : 'p2CcHand';
+  const discKey = wd.ownerPlayerNum === 1 ? 'p1CcDiscard' : 'p2CcDiscard';
+  const hand = game[handKey] || [];
+  if (hand.length === 0) {
+    await interaction.followUp({ content: 'No Command cards in hand to discard.', ephemeral: true }).catch(discordCatch);
+    delete game.pendingWantonDestruction;
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    saveGames(); return;
+  }
+  // Show CC cards as buttons for the player to pick which to discard
+  const ccBtns = [...new Set(hand)].slice(0, 4).map((card, i) =>
+    new ButtonBuilder().setCustomId(`wanton_cc_${game.gameId}_${i}_${card.replace(/\s+/g, '_').slice(0, 40)}`).setLabel(card.slice(0, 80)).setStyle(ButtonStyle.Secondary)
+  );
+  const ccRows = [];
+  for (let r = 0; r < ccBtns.length; r += 5) ccRows.push(new ActionRowBuilder().addComponents(ccBtns.slice(r, r + 5)));
+  await interaction.message.edit({
+    content: `**Wanton Destruction** — Choose a Command card to discard:`,
+    components: ccRows,
+  }).catch(discordCatch);
+  saveGames();
+}
+
+export async function handleWantonCcPick(interaction, ctx) {
+  const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
+    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
+    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  // wanton_cc_{gameId}_{index}_{cardNameSlug}
+  const m = interaction.customId.match(/^wanton_cc_([^_]+)_(\d+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, idxStr, cardSlug] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingWantonDestruction) return;
+  const wd = game.pendingWantonDestruction;
+  if (!await requirePlayer(interaction, game, interaction.user.id, wd.ownerPlayerNum, canActAsPlayer, 'Not your choice.')) return;
+  // Find and discard the CC card
+  const handKey = wd.ownerPlayerNum === 1 ? 'p1CcHand' : 'p2CcHand';
+  const discKey = wd.ownerPlayerNum === 1 ? 'p1CcDiscard' : 'p2CcDiscard';
+  const hand = game[handKey] || [];
+  const uniqueCards = [...new Set(hand)];
+  const cardIdx = parseInt(idxStr, 10);
+  const cardName = uniqueCards[cardIdx];
+  if (!cardName) return;
+  // Remove from hand, add to discard
+  const hIdx = hand.indexOf(cardName);
+  if (hIdx >= 0) hand.splice(hIdx, 1);
+  game[handKey] = hand;
+  game[discKey] = [...(game[discKey] || []), cardName];
+  await logGameAction(game, client, `**Wanton Destruction** — Discarded **${cardName}**.`, { phase: 'ROUND', icon: 'card' });
+  // Show figure picker
+  const btns = wd.targets.slice(0, 4).map((t, i) =>
+    new ButtonBuilder().setCustomId(`wanton_pick_${gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
+  );
+  btns.push(new ButtonBuilder().setCustomId(`wanton_done_${gameId}`).setLabel('Done').setStyle(ButtonStyle.Secondary));
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  await interaction.message.edit({
+    content: `**Wanton Destruction** — CC discarded. Choose up to ${wd.maxPicks} figures to deal 1 Damage:`,
+    components: rows,
+  }).catch(discordCatch);
+  saveGames();
+}
+
+export async function handleWantonPick(interaction, ctx) {
+  const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
+    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
+    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^wanton_pick_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingWantonDestruction) return;
+  const wd = game.pendingWantonDestruction;
+  if (!await requirePlayer(interaction, game, interaction.user.id, wd.ownerPlayerNum, canActAsPlayer, 'Not your pick.')) return;
+  const target = wd.targets[parseInt(idxStr, 10)];
+  if (!target) return;
+  const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
+  if (targetMsgId) {
+    const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
+    reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
+    try {
+      const tMeta = dcMessageMeta.get(targetMsgId);
+      if (tMeta) {
+        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const msg = await ch.messages.fetch(targetMsgId);
+        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
+        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
+      }
+    } catch {}
+  }
+  wd.chosen.push(target.figureKey);
+  const thread = await client.channels.fetch(wd.combatThreadId).catch(() => null);
+  if (thread) await thread.send(`**Wanton Destruction** — **${target.label}** suffers 1 Damage.`).catch(discordCatch);
+  await logGameAction(game, client, `**Wanton Destruction** — **${target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
+  const remaining = wd.maxPicks - wd.chosen.length;
+  const remTargets = wd.targets.filter(t => !wd.chosen.includes(t.figureKey));
+  if (remaining > 0 && remTargets.length > 0) {
+    const btns2 = remTargets.slice(0, 4).map(t => {
+      const origIdx = wd.targets.indexOf(t);
+      return new ButtonBuilder().setCustomId(`wanton_pick_${gameId}_${origIdx}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger);
+    });
+    btns2.push(new ButtonBuilder().setCustomId(`wanton_done_${gameId}`).setLabel('Done').setStyle(ButtonStyle.Secondary));
+    const rows2 = [];
+    for (let r = 0; r < btns2.length; r += 5) rows2.push(new ActionRowBuilder().addComponents(btns2.slice(r, r + 5)));
+    await interaction.message.edit({ content: `**Wanton Destruction** — ${remaining} pick(s) remaining:`, components: rows2 }).catch(discordCatch);
+  } else {
+    delete game.pendingWantonDestruction;
+    await interaction.message.edit({ content: `**Wanton Destruction** — Complete.`, components: [] }).catch(discordCatch);
+  }
+  saveGames();
+}
+
+export async function handleWantonDone(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^wanton_done_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (game) delete game.pendingWantonDestruction;
+  await interaction.message.edit({ content: `**Wanton Destruction** — Complete.`, components: [] }).catch(discordCatch);
+  saveGames();
+}
+
+export async function handleWantonSkip(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^wanton_skip_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (game) delete game.pendingWantonDestruction;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  saveGames();
+}
