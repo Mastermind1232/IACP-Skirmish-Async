@@ -755,15 +755,18 @@ export function getDeployFigureLabels(dcList, helpers = {}) {
   return { labels, metadata };
 }
 
-/** Deploy button rows + done row; helpers = { resolveDcName, isFigurelessDc, getDcStats }. */
+/** Deploy button rows + done row; helpers = { resolveDcName, isFigurelessDc, getDcStats, setAsideFigureKeys }. */
 export function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePositions, helpers = {}) {
   const { labels, metadata } = getDeployFigureLabels(dcList, helpers);
+  const setAsideKeys = helpers.setAsideFigureKeys;
   const zoneStyle = zone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
   const pos = figurePositions?.[playerNum] || {};
   const deployRows = [];
   for (let i = 0; i < labels.length; i++) {
     const meta = metadata[i];
     const figureKey = `${meta.dcName}-${meta.dgIndex}-${meta.figureIndex}`;
+    // Skip Lie in Ambush set-aside figures
+    if (setAsideKeys?.has(figureKey)) continue;
     const space = pos[figureKey];
     const displaySpace = space ? space.toUpperCase() : '';
     const label = space

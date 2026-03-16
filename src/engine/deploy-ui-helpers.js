@@ -21,7 +21,10 @@ export function getDeployFigureLabels(dcList, game, deps) {
 /** Deploy button rows (delegates to discord helper with deps). */
 export function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePositions, game, deps) {
   const getNickname = game ? (dcName, dgIndex, figIdx) => game.figureNicknames?.[`${dcName}-${dgIndex}-${figIdx}`] || null : undefined;
-  return deps.getDeployButtonRowsFromDiscord(gameId, playerNum, dcList, zone, figurePositions, { resolveDcName: deps.resolveDcName, isFigurelessDc: deps.isFigurelessDc, getDcStats: deps.getDcStats, getNickname });
+  // Build set-aside keys from Lie in Ambush state so those figures are excluded from deploy buttons
+  const setAsideArr = game?.lieInAmbushSetAside?.[playerNum];
+  const setAsideFigureKeys = setAsideArr?.length ? new Set(setAsideArr) : undefined;
+  return deps.getDeployButtonRowsFromDiscord(gameId, playerNum, dcList, zone, figurePositions, { resolveDcName: deps.resolveDcName, isFigurelessDc: deps.isFigurelessDc, getDcStats: deps.getDcStats, getNickname, setAsideFigureKeys });
 }
 
 /** Rebuilds deploy prompt messages for a player, removing buttons for already-deployed figures. */

@@ -15,11 +15,17 @@ import { discordCatch } from '../error-handling.js';
 
 // ── Message builders ────────────────────────────────────────────────────────
 
-function buildStatusLine(gate, game) {
+/**
+ * @param {object} gate
+ * @param {object} game
+ * @param {number} [viewerPn] - If provided, only ping this player; show opponent as "Opponent".
+ *                               Omit for game log (pings both).
+ */
+function buildStatusLine(gate, game, viewerPn) {
   const p1Id = getPlayerId(game, 1);
   const p2Id = getPlayerId(game, 2);
-  const p1Label = p1Id ? `<@${p1Id}>` : 'P1';
-  const p2Label = p2Id ? `<@${p2Id}>` : 'P2';
+  const p1Label = (!viewerPn || viewerPn === 1) ? (p1Id ? `<@${p1Id}>` : 'P1') : 'Opponent';
+  const p2Label = (!viewerPn || viewerPn === 2) ? (p2Id ? `<@${p2Id}>` : 'P2') : 'Opponent';
   const p1 = gate.p1Ready ? `${p1Label} ✅` : `${p1Label} ⏳`;
   const p2 = gate.p2Ready ? `${p2Label} ✅` : `${p2Label} ⏳`;
   const suffix = (gate.p1Ready && gate.p2Ready) ? ' — Advancing...' : '';
@@ -31,9 +37,9 @@ function buildGateLabel(phase, game) {
     .replace('{round}', String(game.currentRound || 1));
 }
 
-function buildGateContent(phase, gate, game) {
+function buildGateContent(phase, gate, game, viewerPn) {
   const label = buildGateLabel(phase, game);
-  const status = buildStatusLine(gate, game);
+  const status = buildStatusLine(gate, game, viewerPn);
   return `🔔 ${label}\n${status}`;
 }
 
@@ -54,7 +60,8 @@ function buildGateButtons(gameId, playerNum, gate) {
 }
 
 function buildGatePayload(gameId, playerNum, gate, game) {
-  const content = buildGateContent(gate.phase, gate, game);
+  // Pass playerNum as viewerPn so only the owning player is @-mentioned
+  const content = buildGateContent(gate.phase, gate, game, playerNum);
   const bothReady = gate.p1Ready && gate.p2Ready;
   return {
     content,
@@ -92,10 +99,11 @@ export async function sendPhaseGateMessages(game, phase, ctx) {
     }
   }
 
-  // Log to general channel (informational, no buttons)
+  // Log to general channel with both pings (so players get notified without revealing hand channels)
   if (logGameAction) {
     const label = buildGateLabel(phase, game);
-    await logGameAction(game, client, `🔔 **Phase gate:** ${label} Confirm in your Hand channel when ready.`).catch(discordCatch);
+    const status = buildStatusLine(gate, game); // no viewerPn → pings both
+    await logGameAction(game, client, `🔔 **Phase gate:** ${label}\n${status}\nConfirm in your Hand channel when ready.`).catch(discordCatch);
   }
 
   if (saveGames) saveGames();

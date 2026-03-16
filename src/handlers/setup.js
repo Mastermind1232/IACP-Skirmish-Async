@@ -19,7 +19,7 @@ import {
   deployLabelsKey as _deployLabelsKey, deployMetadataKey as _deployMetadataKey,
   getInitiativePlayerNum, opponentPlayerNum,
 } from '../game/player-helpers.js';
-import { dcNameFromFigureKey } from '../game/index.js';
+import { dcNameFromFigureKey, isFigurelessDc } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
@@ -58,12 +58,12 @@ function getDeployBlockingInfo(game, dcName) {
   return { blocking, ignoreBlocking };
 }
 
-/** Extend zone spaces to include blocking cells when the figure ignores blocking. */
-function extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking) {
-  if (!ignoreBlocking || !blocking?.length) return zoneSpaces;
-  const blockingLower = blocking.map(s => String(s).toLowerCase());
-  return [...new Set([...zoneSpaces, ...blockingLower])];
-}
+/**
+ * @deprecated No longer used — Massive/Mobile figures must still deploy within
+ * the deployment zone.  `filterValidTopLeftSpaces` already handles the
+ * ignoreBlocking flag so blocking cells *inside* the zone are allowed.
+ */
+// function extendZoneForMassive() — removed
 
 /** Keyword tokens recognized as trait/type restrictions (not DC names). */
 const RESTRICTION_KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE', 'TROOPER', 'VEHICLE',
@@ -220,6 +220,7 @@ export function findAutoAttachTarget(cardName, dcList, dcMsgIds, alreadyAttached
       const kwMatches = [];
       for (let i = 0; i < dcList.length; i++) {
         if (alreadyAttached?.has(dcMsgIds[i])) continue;
+        if (isFigurelessDc(dcList[i].dcName)) continue;
         if (kwRestriction.filter(dcList[i].dcName)) kwMatches.push(dcMsgIds[i]);
       }
       return kwMatches.length === 1 ? kwMatches[0] : null;
@@ -230,6 +231,7 @@ export function findAutoAttachTarget(cardName, dcList, dcMsgIds, alreadyAttached
   const matches = [];
   for (let i = 0; i < dcList.length; i++) {
     if (alreadyAttached?.has(dcMsgIds[i])) continue;
+    if (isFigurelessDc(dcList[i].dcName)) continue;
     const name = (dcList[i].dcName || '').toLowerCase();
     for (const alt of alternatives) {
       if (name.includes(alt.toLowerCase())) {
@@ -279,6 +281,33 @@ export async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) 
       game[handKey] = [...(game[handKey] || []), 'Debts Repaid'];
       game.wookieeAvengerDrawPenalty = (game.wookieeAvengerDrawPenalty || 0) + 1;
       if (logGameAction) await logGameAction(game, client, '**Wookiee Avenger** — Searched deck for **Debts Repaid**, added to hand. Will draw 1 fewer starting card.', { phase: 'SETUP', icon: 'card' });
+    }
+  }
+
+  // Lie in Ambush: set the attached group aside — it does NOT deploy during deployment phase
+  if (card === 'Lie in Ambush') {
+    const dcList = getDcList(game, playerNum) || [];
+    const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+    const dcIdx = dcMsgIds.indexOf(dcMsgId);
+    if (dcIdx >= 0 && dcList[dcIdx]) {
+      const dcName = dcList[dcIdx].dcName || dcList[dcIdx].displayName;
+      // Compute dgIndex matching getDeployFigureLabels: count same-name figure DCs up to dcIdx
+      let dgIndex = 0;
+      for (let i = 0; i < dcList.length; i++) {
+        const n = dcList[i]?.dcName || dcList[i]?.displayName;
+        if (!n || isFigurelessDc(n)) continue;
+        if (n === dcName) dgIndex++;
+        if (i === dcIdx) break;
+      }
+      const figures = getDcStats(dcName)?.figures ?? 1;
+      const figureKeys = [];
+      for (let f = 0; f < figures; f++) figureKeys.push(`${dcName}-${dgIndex}-${f}`);
+      game.lieInAmbushSetAside = game.lieInAmbushSetAside || {};
+      game.lieInAmbushSetAside[playerNum] = figureKeys;
+    }
+    if (logGameAction) {
+      const hostName = getDcList(game, playerNum)?.[getDcMessageIds(game, playerNum)?.indexOf(dcMsgId)]?.dcName || 'group';
+      await logGameAction(game, client, `📦 **Lie in Ambush** — **${hostName}** set aside, out of play. Will deploy later.`, { phase: 'SETUP', icon: 'card' });
     }
   }
 
@@ -1102,6 +1131,11 @@ export async function handleDeploymentFig(interaction, ctx) {
   const deployMeta = game[_deployMetadataKey(playerNum)];
   const figMeta = deployMeta?.[flatIndex];
   const figureKey = figMeta ? `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}` : null;
+  // Block deploying Lie in Ambush set-aside figures
+  if (figureKey && game.lieInAmbushSetAside?.[playerNum]?.includes(figureKey)) {
+    await interaction.followUp({ content: 'This group is set aside via **Lie in Ambush** and cannot deploy during the deployment phase.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const occupied = [];
   if (game.figurePositions) {
     for (const p of [1, 2]) {
@@ -1149,8 +1183,9 @@ export async function handleDeploymentFig(interaction, ctx) {
     return;
   }
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
-  const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
-  const validSpaces = filterValidTopLeftSpaces(extZone, occupied, figureSize, blocking, ignoreBlocking);
+  // Zone is NOT extended for Massive — figures must deploy within the zone.
+  // ignoreBlocking lets filterValidTopLeftSpaces allow blocking cells inside the zone.
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
   if (zoneSpaces.length > 0) {
     const { rows, available } = getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
     if (available.length === 0) {
@@ -1176,7 +1211,7 @@ export async function handleDeploymentFig(interaction, ctx) {
         await deployMsg.edit({ attachments: [] });
       } catch {}
     }
-    const mapAttachment = await getDeploymentMapAttachment(game, playerZone, { includeBlocking: ignoreBlocking });
+    const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
     // If too many rows for one message, use two-tier row picker
     const useRowPicker = rows.length > BTM_PER_MSG;
     if (useRowPicker) {
@@ -1274,8 +1309,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
   }
   const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, figMeta.dcName);
-  const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
-  const validSpaces = filterValidTopLeftSpaces(extZone, occupied, orientation, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, orientation, blocking, ignoreBlocking);
   if (validSpaces.length === 0) {
     delete game.pendingDeployOrientation[`${playerNum}_${flatIndex}`];
     await interaction.followUp({ content: 'No valid spots for this orientation in your zone. Try the other orientation.', ephemeral: true }).catch(discordCatch);
@@ -1300,7 +1334,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
         await deployMsg.edit({ attachments: [] });
       } catch {}
     }
-    const mapAttachment = await getDeploymentMapAttachment(game, playerZone, { includeBlocking: ignoreBlocking });
+    const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
     const [oCols, oRows] = orientation.split('x').map(Number);
     const promptText = `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${orientation} unit — ${oCols} wide, ${oRows} tall):`;
     if (useRowPicker) {
@@ -1368,8 +1402,7 @@ export async function handleDeployRow(interaction, ctx) {
   const dcName = figMeta?.dcName;
   const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
-  const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
-  const validSpaces = filterValidTopLeftSpaces(extZone, occupied, figureSize, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
   // Filter to only spaces in the chosen row
   const rowSpaces = validSpaces.filter((s) => {
     const m = s.match(/^[a-z]+(\d+)$/i);
@@ -1463,8 +1496,7 @@ export async function handleDeployRowBack(interaction, ctx) {
   const dcName = figMeta?.dcName;
   const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
   const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, dcName);
-  const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
-  const validSpaces = filterValidTopLeftSpaces(extZone, occupied, figureSize, blocking, ignoreBlocking);
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize, blocking, ignoreBlocking);
   const labels = game[_deployLabelsKey(playerNum)];
   const label = labels?.[flatIndex] || 'figure';
   const isLarge = figureSize !== '1x1';
@@ -1932,9 +1964,13 @@ export async function handleAutoDeploy(interaction, ctx) {
   const oppCx = oppZoneCoords.length ? oppZoneCoords.reduce((s, c) => s + c.col, 0) / oppZoneCoords.length : 0;
   const oppCy = oppZoneCoords.length ? oppZoneCoords.reduce((s, c) => s + c.row, 0) / oppZoneCoords.length : 0;
 
+  // Skip Lie in Ambush set-aside figures
+  const setAsideKeys = new Set(game.lieInAmbushSetAside?.[playerNum] || []);
+
   let placed = 0;
   for (const meta of metadata) {
     const figureKey = `${meta.dcName}-${meta.dgIndex}-${meta.figureIndex}`;
+    if (setAsideKeys.has(figureKey)) continue; // Lie in Ambush — deploys later
     if (game.figurePositions[playerNum][figureKey]) continue; // already deployed
     const occupied = [];
     for (const p of [1, 2]) {
@@ -1948,8 +1984,7 @@ export async function handleAutoDeploy(interaction, ctx) {
     const size = baseSize === '2x3' ? '2x3' : baseSize;
     const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
     const { blocking, ignoreBlocking } = getDeployBlockingInfo(game, meta.dcName);
-    const extZone = extendZoneForMassive(zoneSpaces, blocking, ignoreBlocking);
-    const validSpaces = filterValidTopLeftSpaces(extZone, occupied, size, blocking, ignoreBlocking);
+    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, size, blocking, ignoreBlocking);
     if (!validSpaces.length) continue;
     validSpaces.sort((a, b) => {
       const pa = parseCoord(a), pb = parseCoord(b);
@@ -2346,6 +2381,8 @@ export async function _sendAttachmentDropdown(game, gameId, playerNum, card, cli
   const options = dcList.slice(0, 25).map((dc, i) => {
     const dcName = dc.displayName || dc.dcName || `DC ${i + 1}`;
     if (alreadyAttached.has(dcMsgIds[i])) return null;
+    // Skirmish upgrades cannot be attachment targets
+    if (isFigurelessDc(dc.dcName)) return null;
     if (restriction && !restriction.filter(dc.dcName)) return null;
     return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
   }).filter(Boolean);
