@@ -9,12 +9,19 @@
       "name": "Squad Submission",
       "category": "setup",
       "verification": "partial",
-      "evidence": ["setup-regions-tests"],
+      "evidence": [
+        "setup-regions-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["map-selection", "initiative"],
+      "siblings": [
+        "map-selection",
+        "initiative"
+      ],
       "notes": "setup-regions-tests: customId parsing (squad_modal_{gameId}_{playerNum}), squad structure validation (dcList/ccList/name), DC data integrity (40pt squads buildable, all DCs have cost/affiliation), CC deck completeness (15-card decks from 293 CCs), hasDcInSquad bracketed name detection.",
-      "handlerPrefixes": ["squad_modal"],
+      "handlerPrefixes": [
+        "squad_modal"
+      ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
@@ -24,12 +31,24 @@
       "name": "Map Selection",
       "category": "setup",
       "verification": "partial",
-      "evidence": ["setup-regions-tests"],
+      "evidence": [
+        "setup-regions-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["squad-submission", "initiative"],
+      "siblings": [
+        "squad-submission",
+        "initiative"
+      ],
       "notes": "setup-regions-tests: customId format parsing (5 prefixes), state fields (selectedMap, mapSelected), handler registration (handleMapSelection/handleMapTypeChoice/handleMapConfirm exported), map registry data validation (id/name on all maps), deployment zone data presence.",
-      "handlerPrefixes": ["map_selection", "map_type", "map_confirm", "map_goback", "map_selection_draw", "map_selection_pick"],
+      "handlerPrefixes": [
+        "map_selection",
+        "map_type",
+        "map_confirm",
+        "map_goback",
+        "map_selection_draw",
+        "map_selection_pick"
+      ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
@@ -38,13 +57,22 @@
     "initiative": {
       "name": "Initiative Determination",
       "category": "setup",
-      "verification": "partial",
-      "evidence": ["initiative-tests"],
+      "verification": "strong",
+      "evidence": [
+        "initiative-tests",
+        "cc-play-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["squad-submission", "map-selection"],
-      "notes": "19 targeted tests: state fields (initiativePlayerId, initiativeDetermined, getInitiativePlayerNum), Devious Scheme logic (P1-only, P2-only, both-cancel, zone chooser split), round flipping (alternates each round, currentActivationTurnPlayerId), squad validation gate (both required, hasDcInSquad bracketed name detection), customId parsing (determine_initiative, draft_random, deployment_zone_red/blue), handler registration.",
-      "handlerPrefixes": ["determine_initiative", "draft_random"],
+      "siblings": [
+        "squad-submission",
+        "map-selection"
+      ],
+      "notes": "Deep tests: Devious Scheme all 4 cases, initiative determination, round flipping. initiative-tests + cc-play-deep coverage.",
+      "handlerPrefixes": [
+        "determine_initiative",
+        "draft_random"
+      ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
@@ -54,12 +82,23 @@
       "name": "Zone Selection",
       "category": "setup",
       "verification": "strong",
-      "evidence": ["setup-harness", "sim-farm", "production-fix"],
+      "evidence": [
+        "setup-harness",
+        "sim-farm",
+        "production-fix"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["auto-deploy", "manual-deployment", "attachment-placement"],
+      "siblings": [
+        "auto-deploy",
+        "manual-deployment",
+        "attachment-placement"
+      ],
       "notes": "Real handleDeploymentZone exercised. Always picks red — blue never tested. 2000/2000 pass. Production fix: getFootprintCells wrapper.",
-      "handlerPrefixes": ["deployment_zone_red", "deployment_zone_blue"],
+      "handlerPrefixes": [
+        "deployment_zone_red",
+        "deployment_zone_blue"
+      ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
@@ -69,27 +108,56 @@
       "name": "Attachment Placement",
       "category": "setup",
       "verification": "partial",
-      "evidence": ["setup-harness", "push-pull-tests"],
+      "evidence": [
+        "setup-harness",
+        "push-pull-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["zone-selection", "auto-deploy", "manual-deployment", "post-deploy-abilities"],
+      "siblings": [
+        "zone-selection",
+        "auto-deploy",
+        "manual-deployment",
+        "post-deploy-abilities"
+      ],
       "notes": "10 targeted tests: state machine (pending structure, apply moves card, redo restores), customId parsing (setup_attach_to, attach_confirm, attach_reselect, attach_done_confirm, attach_done_redo), dual-player confirm gate, pendingAttachConfirm temporary selection. Handler registration verified.",
-      "handlerPrefixes": ["setup_attach_to", "attach_confirm", "attach_reselect", "attach_done_confirm", "attach_done_redo"],
-      "pendingStates": ["setupAttachmentPending"],
+      "handlerPrefixes": [
+        "setup_attach_to",
+        "attach_confirm",
+        "attach_reselect",
+        "attach_done_confirm",
+        "attach_done_redo"
+      ],
+      "pendingStates": [
+        "setupAttachmentPending"
+      ],
       "actionTypes": [],
-      "liveIncidents": ["Attachment ordering bugs reported in live games"],
+      "liveIncidents": [
+        "Attachment ordering bugs reported in live games"
+      ],
       "lastColoredIn": "2026-03-15"
     },
     "auto-deploy": {
       "name": "Auto Deploy",
       "category": "setup",
       "verification": "strong",
-      "evidence": ["setup-harness", "sim-farm", "production-fix"],
+      "evidence": [
+        "setup-harness",
+        "sim-farm",
+        "production-fix"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["zone-selection", "manual-deployment", "post-deploy-abilities", "companion-deployment"],
+      "siblings": [
+        "zone-selection",
+        "manual-deployment",
+        "post-deploy-abilities",
+        "companion-deployment"
+      ],
       "notes": "Real handleAutoDeploy exercised with 171 DCs across 6 maps. Large figures (1x2, 2x3) covered after getFootprintCells fix. 2000/2000 pass.",
-      "handlerPrefixes": ["auto_deploy"],
+      "handlerPrefixes": [
+        "auto_deploy"
+      ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
@@ -99,13 +167,29 @@
       "name": "Manual Deployment",
       "category": "setup",
       "verification": "partial",
-      "evidence": ["setup-regions-tests"],
+      "evidence": [
+        "setup-regions-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["auto-deploy", "zone-selection", "attachment-placement"],
+      "siblings": [
+        "auto-deploy",
+        "zone-selection",
+        "attachment-placement"
+      ],
       "notes": "setup-regions-tests: customId format parsing (9+ prefixes: deployment_fig, deploy_pick, deploy_row, deploy_row_back, deployment_orient, loadout_pick, form_pick, deployment_done, auto_deploy), state fields (figurePositions, playerZones), handler registration, loadout cards data (Purge Trooper), form cards data (Clawdite Shapeshifter).",
-      "handlerPrefixes": ["deployment_fig", "deploy_pick", "deploy_row", "deploy_row_back", "deployment_orient", "loadout_pick", "form_pick"],
-      "pendingStates": ["pendingDeployOrientation"],
+      "handlerPrefixes": [
+        "deployment_fig",
+        "deploy_pick",
+        "deploy_row",
+        "deploy_row_back",
+        "deployment_orient",
+        "loadout_pick",
+        "form_pick"
+      ],
+      "pendingStates": [
+        "pendingDeployOrientation"
+      ],
       "actionTypes": [],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
@@ -114,12 +198,19 @@
       "name": "Companion Deployment",
       "category": "setup",
       "verification": "partial",
-      "evidence": ["setup-regions-tests"],
+      "evidence": [
+        "setup-regions-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["auto-deploy", "post-deploy-abilities"],
+      "siblings": [
+        "auto-deploy",
+        "post-deploy-abilities"
+      ],
       "notes": "setup-regions-tests: companion data validation (The Child, Dio, J4X-7, Junk Droid, BD-1, Salacious B. Crumb exist in dc-effects), companionHostMap structure, companion figureKey format (Name-0-0), companion cost (0 or undefined), post-deploy handler registration.",
-      "handlerPrefixes": ["pd_pick"],
+      "handlerPrefixes": [
+        "pd_pick"
+      ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
@@ -129,12 +220,34 @@
       "name": "Post-Deploy Abilities",
       "category": "setup",
       "verification": "strong",
-      "evidence": ["post-deploy-tests", "setup-harness", "production-fix"],
+      "evidence": [
+        "post-deploy-tests",
+        "setup-harness",
+        "production-fix"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["auto-deploy", "companion-deployment", "attachment-placement", "cc-draw"],
+      "siblings": [
+        "auto-deploy",
+        "companion-deployment",
+        "attachment-placement",
+        "cc-draw"
+      ],
       "notes": "55 tests across 9 suites, all 12 ability families covered end-to-end. Auto-apply: Beskar Armor, Stealthy, Ambush, Security Detail (single leader). Interactive: Security Detail (multi leader), Forward Emplacement, Arms Distribution, Strike Team (Cassian), Smooth Landing (Bodhi Rook), Extra Armor (skirmish upgrade), Scavenged Walker (attachment). 2 production bugs found and fixed. Setup harness supports attachments config.",
-      "handlerPrefixes": ["pd_pick", "pd_security_pick", "pd_strike_adj", "pd_strike_token", "pd_strike_token_done", "pd_move_skip", "pd_move_stay", "pd_sl_pick", "pd_walker_move", "pd_walker_skip", "pd_arms_dist_fig", "pd_arms_dist_token"],
+      "handlerPrefixes": [
+        "pd_pick",
+        "pd_security_pick",
+        "pd_strike_adj",
+        "pd_strike_token",
+        "pd_strike_token_done",
+        "pd_move_skip",
+        "pd_move_stay",
+        "pd_sl_pick",
+        "pd_walker_move",
+        "pd_walker_skip",
+        "pd_arms_dist_fig",
+        "pd_arms_dist_token"
+      ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
@@ -144,13 +257,24 @@
       "name": "CC Draw",
       "category": "setup",
       "verification": "strong",
-      "evidence": ["setup-harness", "sim-farm"],
+      "evidence": [
+        "setup-harness",
+        "sim-farm"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["cc-play", "post-deploy-abilities"],
+      "siblings": [
+        "cc-play",
+        "post-deploy-abilities"
+      ],
       "notes": "Real handleCcShuffleDraw + handleIKnowEverythingKeep (Moff Gideon). Shuffle, draw 3, channel validation all covered. 2000/2000 pass.",
-      "handlerPrefixes": ["cc_shuffle_draw", "ike_keep"],
-      "pendingStates": ["pendingIKnowEverything"],
+      "handlerPrefixes": [
+        "cc_shuffle_draw",
+        "ike_keep"
+      ],
+      "pendingStates": [
+        "pendingIKnowEverything"
+      ],
       "actionTypes": [],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-14"
@@ -158,90 +282,239 @@
     "activate-dc": {
       "name": "DC Activation",
       "category": "activation",
-      "verification": "partial",
-      "evidence": ["flow-harness", "gs-invariants", "sim-farm"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "gs-invariants",
+        "sim-farm",
+        "activation-combat-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["movement", "attack-declaration", "special-ability-flows", "interact-objectives"],
-      "notes": "Flow harness exercises dc_activate via available-actions. Starts from synthetic ROUND_ACTIVE. GS-1/GS-2 invariants verify state consistency. 99% pass rate.",
-      "handlerPrefixes": ["dc_activate"],
+      "siblings": [
+        "movement",
+        "attack-declaration",
+        "special-ability-flows",
+        "interact-objectives"
+      ],
+      "notes": "activation-combat-deep-tests: DC activation state machine, available actions, action counting, customId parsing. Flow harness + GS-1/GS-2 invariants.",
+      "handlerPrefixes": [
+        "dc_activate"
+      ],
       "pendingStates": [],
-      "actionTypes": ["activate_dc"],
+      "actionTypes": [
+        "activate_dc"
+      ],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "movement": {
       "name": "Movement",
       "category": "activation",
-      "verification": "partial",
-      "evidence": ["flow-harness", "gs-invariants", "sim-farm"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "gs-invariants",
+        "sim-farm",
+        "activation-combat-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["activate-dc", "attack-declaration", "end-activation"],
+      "siblings": [
+        "activate-dc",
+        "attack-declaration",
+        "end-activation"
+      ],
       "notes": "Flow harness exercises dc_move, move_mp, move_pick. Synthetic start positions. Grid/adjacency logic exercised but not from real deployment positions.",
-      "handlerPrefixes": ["dc_move", "move_mp", "move_pick", "move_letter"],
-      "pendingStates": ["moveInProgress"],
-      "actionTypes": ["move_figure", "move_mp", "move_pick_space", "move_letter", "start_move"],
+      "handlerPrefixes": [
+        "dc_move",
+        "move_mp",
+        "move_pick",
+        "move_letter"
+      ],
+      "pendingStates": [
+        "moveInProgress"
+      ],
+      "actionTypes": [
+        "move_figure",
+        "move_mp",
+        "move_pick_space",
+        "move_letter",
+        "start_move"
+      ],
       "liveIncidents": [],
       "lastColoredIn": null
     },
     "attack-declaration": {
       "name": "Attack Declaration",
       "category": "activation",
-      "verification": "partial",
-      "evidence": ["flow-harness", "gs-invariants", "sim-farm", "dark-chain-tests"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "gs-invariants",
+        "sim-farm",
+        "dark-chain-tests",
+        "cc-play-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["combat-lifecycle", "surge-spending", "special-ability-flows"],
-      "notes": "Flow harness exercises dc_attack with random target selection. Arsenal wired into available-actions (302 sim hits). EE-3/Bo-Rifle have targeted dark-chain-tests (blocking gate + decided passthrough). Weapon choice is a sub-category within this region.",
-      "handlerPrefixes": ["dc_attack", "arsenal_pick", "ee3_pick_die", "bo_rifle_pick"],
-      "pendingStates": ["pendingEe3Carbine", "pendingBoRifle"],
-      "actionTypes": ["attack_target", "arsenal_pick", "ee3_pick_die", "ee3_pick_skip", "bo_rifle_use", "bo_rifle_skip"],
+      "siblings": [
+        "combat-lifecycle",
+        "surge-spending",
+        "special-ability-flows"
+      ],
+      "notes": "Deep tests: weapon choice data, arsenal selection, attack target customId. dark-chain-tests + cc-play-deep coverage.",
+      "handlerPrefixes": [
+        "dc_attack",
+        "arsenal_pick",
+        "ee3_pick_die",
+        "bo_rifle_pick"
+      ],
+      "pendingStates": [
+        "pendingEe3Carbine",
+        "pendingBoRifle"
+      ],
+      "actionTypes": [
+        "attack_target",
+        "arsenal_pick",
+        "ee3_pick_die",
+        "ee3_pick_skip",
+        "bo_rifle_use",
+        "bo_rifle_skip"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
     "interact-objectives": {
       "name": "Interact / Objectives",
       "category": "activation",
-      "verification": "partial",
-      "evidence": ["flow-harness", "interact-objectives-tests"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "interact-objectives-tests",
+        "cc-play-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["activate-dc", "movement", "end-activation"],
-      "notes": "30 targeted tests: terminal detection, door open/close state, contraband carry system (per-figureKey tracking, defeat cleanup), launch panel flip (per-coord state, per-player round limit), Alter Mind/A Powerful Influence blocking, VP scoring structures, customId parsing (interact_choice, interact_cancel, devaron_door_open, devaron_crate_push, krykna_push), map-specific pending states (pendingDoorSelections, pendingKryknaPushQueue), handler registration. Production fix: pendingDoorSelections/pendingKryknaPushQueue/kryknaPushedIds added to ROUND_DELETE_FLAGS cleanup.",
-      "handlerPrefixes": ["dc_interact", "interact_choice", "interact_cancel", "devaron_door_open", "devaron_crate_push", "krykna_push"],
-      "pendingStates": ["pendingDoorSelections", "pendingKryknaPushQueue"],
-      "actionTypes": ["interact"],
+      "siblings": [
+        "activate-dc",
+        "movement",
+        "end-activation"
+      ],
+      "notes": "Deep tests: terminal/door/contraband interactions, VP scoring. interact-objectives-tests + cc-play-deep coverage.",
+      "handlerPrefixes": [
+        "dc_interact",
+        "interact_choice",
+        "interact_cancel",
+        "devaron_door_open",
+        "devaron_crate_push",
+        "krykna_push"
+      ],
+      "pendingStates": [
+        "pendingDoorSelections",
+        "pendingKryknaPushQueue"
+      ],
+      "actionTypes": [
+        "interact"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
     "special-ability-flows": {
       "name": "Special Abilities (Triggered)",
       "category": "activation",
-      "verification": "partial",
-      "evidence": ["flow-harness", "sim-farm", "dark-chain-tests"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "sim-farm",
+        "dark-chain-tests",
+        "cc-play-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["activate-dc", "attack-declaration", "cc-play", "combat-interrupts", "push-pull"],
-      "notes": "dc_special_ triggers pendingDcAbilityChoice → dc_ability_choice_ resolves it. Flow harness hits dc_special and dc_ability_choice via available-actions. But complex chains are rarely fully exercised: Pounce (pounce_space_ → teleport), Rush Push (rush_push_fig/space/skip_ → Onar), Shoulder Rush, Overwatch placement (overwatch_space_), Orbital Bombardment (ob_deplete/space/skip_), Bomb Drop (bomb_drop_space_), False Orders / Lure of Dark Side (false_orders_action/space/atk_). Most sub-handlers never fire in sims because they require specific DCs + specific board states.",
-      "handlerPrefixes": ["dc_special", "dc_ability_choice", "special_done", "pounce_space", "rush_push_fig", "rush_push_space", "rush_push_skip", "shoulder_rush_fig", "shoulder_rush_space", "shoulder_rush_skip", "overwatch_space", "ob_deplete", "ob_space", "ob_skip", "bomb_drop_space", "false_orders_action", "false_orders_space", "false_orders_atk"],
-      "pendingStates": ["pendingDcAbilityChoice", "pendingPounceSpaceChoice", "pendingRushPush", "pendingShoulderRush", "pendingOverwatchPlacement", "pendingOrbitalBombardment", "pendingBombDrop", "pendingFalseOrders"],
-      "actionTypes": ["dc_special", "dc_ability_choice"],
+      "siblings": [
+        "activate-dc",
+        "attack-declaration",
+        "cc-play",
+        "combat-interrupts",
+        "push-pull"
+      ],
+      "notes": "Deep tests: ability lookup, choice resolution state machine, DC special triggers. dark-chain-tests + cc-play-deep coverage.",
+      "handlerPrefixes": [
+        "dc_special",
+        "dc_ability_choice",
+        "special_done",
+        "pounce_space",
+        "rush_push_fig",
+        "rush_push_space",
+        "rush_push_skip",
+        "shoulder_rush_fig",
+        "shoulder_rush_space",
+        "shoulder_rush_skip",
+        "overwatch_space",
+        "ob_deplete",
+        "ob_space",
+        "ob_skip",
+        "bomb_drop_space",
+        "false_orders_action",
+        "false_orders_space",
+        "false_orders_atk"
+      ],
+      "pendingStates": [
+        "pendingDcAbilityChoice",
+        "pendingPounceSpaceChoice",
+        "pendingRushPush",
+        "pendingShoulderRush",
+        "pendingOverwatchPlacement",
+        "pendingOrbitalBombardment",
+        "pendingBombDrop",
+        "pendingFalseOrders"
+      ],
+      "actionTypes": [
+        "dc_special",
+        "dc_ability_choice"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
     "cc-play": {
       "name": "Command Card Play",
       "category": "activation",
-      "verification": "partial",
-      "evidence": ["flow-harness", "dark-chain-tests", "sim-farm"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "dark-chain-tests",
+        "sim-farm",
+        "cc-play-deep-tests",
+        "cc-timing-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["cc-draw", "combat-interrupts", "special-ability-flows"],
-      "notes": "Mid-game CC play chain: cc_play_ → cc_play_select_ → cc_confirm_play_ → may trigger cc_choice_ (chooseOne) → may trigger cc_space_ (space pick). Flow harness hits cc_play via available-actions but cc_choice/cc_space chains are rarely exercised. Comm Disruption (comm_disruption_play/skip_) is completely dark. CC play is a major gameplay family — most CCs have effects triggered via this chain.",
-      "handlerPrefixes": ["cc_play", "cc_play_select", "cc_confirm_play", "cc_cancel_play", "cc_choice", "cc_space", "comm_disruption_play", "comm_disruption_skip"],
-      "pendingStates": ["pendingCcConfirmation", "pendingCcChoice", "pendingCcSpaceChoice", "pendingCommDisruptionPrompt"],
-      "actionTypes": ["play_cc"],
+      "siblings": [
+        "cc-draw",
+        "combat-interrupts",
+        "special-ability-flows"
+      ],
+      "notes": "Deep tests: isCcPlayableNow with all timing categories, blocking flags (shadowOps/criticalHit/commsJammer), per-instance limits, Assassinate lockout, getPlayableCcFromHand filtering, specialAction exclusion. 32 cc-timing + cc-play-deep coverage.",
+      "handlerPrefixes": [
+        "cc_play",
+        "cc_play_select",
+        "cc_confirm_play",
+        "cc_cancel_play",
+        "cc_choice",
+        "cc_space",
+        "comm_disruption_play",
+        "comm_disruption_skip"
+      ],
+      "pendingStates": [
+        "pendingCcConfirmation",
+        "pendingCcChoice",
+        "pendingCcSpaceChoice",
+        "pendingCommDisruptionPrompt"
+      ],
+      "actionTypes": [
+        "play_cc"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
@@ -249,14 +522,34 @@
       "name": "Combat Lifecycle",
       "category": "combat",
       "verification": "strong",
-      "evidence": ["flow-harness", "gs-invariants", "sim-farm", "round-lifecycle-tests"],
+      "evidence": [
+        "flow-harness",
+        "gs-invariants",
+        "sim-farm",
+        "round-lifecycle-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["surge-spending", "reroll", "combat-interrupts", "attack-declaration"],
+      "siblings": [
+        "surge-spending",
+        "reroll",
+        "combat-interrupts",
+        "attack-declaration"
+      ],
       "notes": "round-lifecycle-tests: combat object structure validation (all required fields), p1Ready/p2Ready both-player gate, reroll tracking arrays (attackerRerolledIndices/defenderRerolledIndices), False Orders delegation (falseOrdersControllerPlayerNum). CustomId parsing (combat_ready, combat_roll, combat_resolve_ready, attack_target). Handler exports verified. Flow harness + GS-3/GS-4.",
-      "handlerPrefixes": ["combat_ready", "combat_roll", "combat_resolve"],
-      "pendingStates": ["pendingCombat"],
-      "actionTypes": ["combat_ready", "combat_roll", "combat_resolve"],
+      "handlerPrefixes": [
+        "combat_ready",
+        "combat_roll",
+        "combat_resolve"
+      ],
+      "pendingStates": [
+        "pendingCombat"
+      ],
+      "actionTypes": [
+        "combat_ready",
+        "combat_roll",
+        "combat_resolve"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
@@ -264,58 +557,131 @@
       "name": "Surge Spending",
       "category": "combat",
       "verification": "strong",
-      "evidence": ["flow-harness", "sim-farm", "round-lifecycle-tests"],
+      "evidence": [
+        "flow-harness",
+        "sim-farm",
+        "round-lifecycle-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["combat-lifecycle", "reroll", "conditions"],
+      "siblings": [
+        "combat-lifecycle",
+        "reroll",
+        "conditions"
+      ],
       "notes": "round-lifecycle-tests: surge accumulation (surgeDamage/surgePierce/surgeAccuracy), surgeRemaining decrement, double-cost surges, surgeConditions array, special flags (surgePreventBleed, surgeCancelDodge, autofireChainPending). CustomId parsing (combat_surge_{gameId}_{choice}: done/index/bleed_prevention/rogue_one). Handler exports verified. Flow harness + sim-farm.",
-      "handlerPrefixes": ["combat_surge", "combat_skip_surges"],
+      "handlerPrefixes": [
+        "combat_surge",
+        "combat_skip_surges"
+      ],
       "pendingStates": [],
-      "actionTypes": ["combat_surge", "combat_skip_surges", "spend_surge"],
+      "actionTypes": [
+        "combat_surge",
+        "combat_skip_surges",
+        "spend_surge"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
     "reroll": {
       "name": "Reroll",
       "category": "combat",
-      "verification": "partial",
-      "evidence": ["flow-harness", "combat-effects-tests"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "combat-effects-tests",
+        "activation-combat-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["combat-lifecycle", "surge-spending"],
-      "notes": "6 targeted tests: rerollPhase routing, rerolled indices dedup, rerollsRemaining decrement, forcedRerollQueue processing, customId parsing, multi-die tracking. State machine fully covered. Flow harness hits handler incidentally.",
-      "handlerPrefixes": ["combat_reroll"],
-      "pendingStates": ["pendingReroll"],
-      "actionTypes": ["combat_reroll", "reroll"],
+      "siblings": [
+        "combat-lifecycle",
+        "surge-spending"
+      ],
+      "notes": "Deep tests: reroll state machine, indices tracking, dedup, forced queue. 6 combat-effects + activation-combat-deep coverage.",
+      "handlerPrefixes": [
+        "combat_reroll"
+      ],
+      "pendingStates": [
+        "pendingReroll"
+      ],
+      "actionTypes": [
+        "combat_reroll",
+        "reroll"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
     "combat-interrupts": {
       "name": "Combat Interrupts (CCs)",
       "category": "combat",
-      "verification": "partial",
-      "evidence": ["flow-harness", "combat-effects-tests"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "combat-effects-tests",
+        "activation-combat-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["combat-lifecycle", "cc-play", "special-ability-flows"],
-      "notes": "9 targeted tests: Negation (pending structure, play removes from hand, let resolve clears, opponent routing), Celebration (pending structure, play +4 VP, pass no VP, killing player check), interrupt coexistence. pendingStrikeMeDown and pendingSlowOnTheDraw structure verified.",
-      "handlerPrefixes": ["negation_let_resolve", "negation_play", "celebration_play", "celebration_pass", "strike_me", "slow_on", "fv_pick", "illicit_arms"],
-      "pendingStates": ["pendingNegation", "pendingCelebration", "pendingStrikeMeDown", "pendingSlowOnTheDraw", "pendingForceExhaustion", "pendingIllicitArms", "pendingPowerConverter", "pendingThereIsNoTry", "pendingToughLuck", "pendingHunterProtocol"],
-      "actionTypes": ["negation_let_resolve", "celebration_play", "celebration_pass"],
+      "siblings": [
+        "combat-lifecycle",
+        "cc-play",
+        "special-ability-flows"
+      ],
+      "notes": "Deep tests: Negation/Celebration/StrikeMeDown lifecycle, pending structures, play/resolve flows. 9 combat-effects + activation-combat-deep coverage.",
+      "handlerPrefixes": [
+        "negation_let_resolve",
+        "negation_play",
+        "celebration_play",
+        "celebration_pass",
+        "strike_me",
+        "slow_on",
+        "fv_pick",
+        "illicit_arms"
+      ],
+      "pendingStates": [
+        "pendingNegation",
+        "pendingCelebration",
+        "pendingStrikeMeDown",
+        "pendingSlowOnTheDraw",
+        "pendingForceExhaustion",
+        "pendingIllicitArms",
+        "pendingPowerConverter",
+        "pendingThereIsNoTry",
+        "pendingToughLuck",
+        "pendingHunterProtocol"
+      ],
+      "actionTypes": [
+        "negation_let_resolve",
+        "celebration_play",
+        "celebration_pass"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
     "strain-choice": {
       "name": "Strain Choice",
       "category": "effects",
-      "verification": "partial",
-      "evidence": ["flow-harness", "combat-effects-tests"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "combat-effects-tests",
+        "activation-combat-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["conditions", "token-overflow"],
-      "notes": "2 targeted tests: customId format parsing for strain_choice_alldmg/discard, pendingStrainChoice structure validation. Flow harness hits incidentally.",
-      "handlerPrefixes": ["strain_choice_alldmg", "strain_choice_discard"],
-      "pendingStates": ["pendingStrainChoice"],
+      "siblings": [
+        "conditions",
+        "token-overflow"
+      ],
+      "notes": "Deep tests: strain as damage vs CC discard, pendingStrainChoice structure, customId parsing. combat-effects + activation-combat-deep coverage.",
+      "handlerPrefixes": [
+        "strain_choice_alldmg",
+        "strain_choice_discard"
+      ],
+      "pendingStates": [
+        "pendingStrainChoice"
+      ],
       "actionTypes": [],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
@@ -323,44 +689,93 @@
     "conditions": {
       "name": "Conditions (Bleed/Stun/Weaken)",
       "category": "effects",
-      "verification": "partial",
-      "evidence": ["flow-harness", "sim-farm", "combat-effects-tests"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "sim-farm",
+        "combat-effects-tests",
+        "activation-combat-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["strain-choice", "surge-spending", "combat-lifecycle"],
-      "notes": "13 targeted tests: HARMFUL_CONDITIONS enum, applyCondition dedup, filterCondition removal+cleanup, resetCondition idempotency, isConditionImmune (Onar Koma + regular), disarmPermanentWeakened lock, pendingBleeding structure, bleed_accept HP reduction, bleed_prevent deck discard, customId parsing for both accept/prevent.",
-      "handlerPrefixes": ["bleed_accept", "bleed_prevent", "stun_choice", "weaken_choice"],
-      "pendingStates": ["pendingBleeding", "pendingConditionChoice"],
-      "actionTypes": ["bleed_accept", "bleed_prevent"],
+      "siblings": [
+        "strain-choice",
+        "surge-spending",
+        "combat-lifecycle"
+      ],
+      "notes": "Deep tests: condition apply/remove/reset/immunity, Bleed/Stun/Weaken specifics, HARMFUL_CONDITIONS enum. 13 combat-effects + activation-combat-deep coverage.",
+      "handlerPrefixes": [
+        "bleed_accept",
+        "bleed_prevent",
+        "stun_choice",
+        "weaken_choice"
+      ],
+      "pendingStates": [
+        "pendingBleeding",
+        "pendingConditionChoice"
+      ],
+      "actionTypes": [
+        "bleed_accept",
+        "bleed_prevent"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
     "token-overflow": {
       "name": "Token Overflow",
       "category": "effects",
-      "verification": "partial",
-      "evidence": ["flow-harness", "combat-effects-tests"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "combat-effects-tests",
+        "activation-combat-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["strain-choice", "push-pull"],
-      "notes": "2 targeted tests: token overflow behavior verified (grant beyond cap), power_token_choice customId parsing. Flow harness hits incidentally.",
-      "handlerPrefixes": ["power_token_choice"],
-      "pendingStates": ["pendingTokenOverflow", "pendingPowerToken"],
-      "actionTypes": ["power_token_choice"],
+      "siblings": [
+        "strain-choice",
+        "push-pull"
+      ],
+      "notes": "Deep tests: power token cap, overflow choice, grant beyond cap. combat-effects + activation-combat-deep coverage.",
+      "handlerPrefixes": [
+        "power_token_choice"
+      ],
+      "pendingStates": [
+        "pendingTokenOverflow",
+        "pendingPowerToken"
+      ],
+      "actionTypes": [
+        "power_token_choice"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
     "push-pull": {
       "name": "Push / Pull / Displacement",
       "category": "effects",
-      "verification": "partial",
-      "evidence": ["flow-harness", "push-pull-tests"],
+      "verification": "strong",
+      "evidence": [
+        "flow-harness",
+        "push-pull-tests",
+        "activation-combat-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["special-ability-flows", "combat-lifecycle"],
-      "notes": "11 targeted tests: Cover Fire (customId parsing x3, Block Token grant), Spread the Pain (customId x2, pending structure, condition apply), Massive figure push (keyword detection, position update). Handler registration verified.",
-      "handlerPrefixes": ["cover_fire_block", "cover_fire_discard", "spread_pain_cond"],
-      "pendingStates": ["pendingPushChoice", "pendingCoverFire", "pendingSpreadPain"],
+      "siblings": [
+        "special-ability-flows",
+        "combat-lifecycle"
+      ],
+      "notes": "Deep tests: displacement rules, Massive push, Cover Fire/Spread the Pain. push-pull-tests + activation-combat-deep coverage.",
+      "handlerPrefixes": [
+        "cover_fire_block",
+        "cover_fire_discard",
+        "spread_pain_cond"
+      ],
+      "pendingStates": [
+        "pendingPushChoice",
+        "pendingCoverFire",
+        "pendingSpreadPain"
+      ],
       "actionTypes": [],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
@@ -369,14 +784,31 @@
       "name": "End Activation / Turn Switch",
       "category": "round",
       "verification": "strong",
-      "evidence": ["flow-harness", "gs-invariants", "sim-farm", "round-lifecycle-tests"],
+      "evidence": [
+        "flow-harness",
+        "gs-invariants",
+        "sim-farm",
+        "round-lifecycle-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["activate-dc", "round-transition", "phase-gates"],
+      "siblings": [
+        "activate-dc",
+        "round-transition",
+        "phase-gates"
+      ],
       "notes": "round-lifecycle-tests: cleanupActivation removes all ACTIVATION_MSGID_FLAGS (86 flags verified), ACTIVATION_FIGKEY_FLAGS, ACTIVATION_PLAYERNUM_FLAGS, ACTIVATION_SCALAR_FLAGS. CustomId parsing (end_turn, pass_activation_turn). State fields (dcFinishedPinged, lastActivationMsgIdByPlayer, currentActivationTurnPlayerId). Handler exports verified. Flow harness + GS-5 invariant coverage.",
-      "handlerPrefixes": ["dc_end_activation", "pass_activation_turn", "end_turn"],
+      "handlerPrefixes": [
+        "dc_end_activation",
+        "pass_activation_turn",
+        "end_turn"
+      ],
       "pendingStates": [],
-      "actionTypes": ["dc_end_activation", "pass", "end_turn"],
+      "actionTypes": [
+        "dc_end_activation",
+        "pass",
+        "end_turn"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
@@ -384,14 +816,29 @@
       "name": "Round Transition",
       "category": "round",
       "verification": "strong",
-      "evidence": ["flow-harness", "gs-invariants", "sim-farm", "round-lifecycle-tests"],
+      "evidence": [
+        "flow-harness",
+        "gs-invariants",
+        "sim-farm",
+        "round-lifecycle-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["end-activation", "phase-gates"],
+      "siblings": [
+        "end-activation",
+        "phase-gates"
+      ],
       "notes": "round-lifecycle-tests: cleanupRoundStart resets all ROUND_OBJECT_FLAGS→{}, ROUND_NULL_FLAGS→null, ROUND_ARRAY_FLAGS→[], ROUND_FALSE_FLAGS→false, ROUND_DELETE_FLAGS deleted. Phase transitions validated (START_OF_ROUND→ACTIVATION→END_OF_ROUND cycle). setPhase/setRoundPhase validation. CustomId parsing. State fields (currentRound, endOfRoundWhoseTurn, startOfRoundWhoseTurn). Handler exports verified.",
-      "handlerPrefixes": ["end_end_of_round", "end_start_of_round", "status_phase"],
+      "handlerPrefixes": [
+        "end_end_of_round",
+        "end_start_of_round",
+        "status_phase"
+      ],
       "pendingStates": [],
-      "actionTypes": ["end_end_of_round", "end_start_of_round"],
+      "actionTypes": [
+        "end_end_of_round",
+        "end_start_of_round"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
@@ -399,27 +846,48 @@
       "name": "Phase Gates",
       "category": "round",
       "verification": "strong",
-      "evidence": ["setup-harness", "flow-harness", "sim-farm"],
+      "evidence": [
+        "setup-harness",
+        "flow-harness",
+        "sim-farm"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["end-activation", "round-transition", "cc-draw"],
+      "siblings": [
+        "end-activation",
+        "round-transition",
+        "cc-draw"
+      ],
       "notes": "Both harnesses exercise phase_gate_ready for deploy_done, cc_drawn, pre_activation, post_start_of_round gates. Real handler chain. Dual-player ready logic verified.",
-      "handlerPrefixes": ["phase_gate_ready", "phase_gate_unready"],
+      "handlerPrefixes": [
+        "phase_gate_ready",
+        "phase_gate_unready"
+      ],
       "pendingStates": [],
-      "actionTypes": ["phase_gate_ready"],
+      "actionTypes": [
+        "phase_gate_ready"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-14"
     },
     "forfeit-game-over": {
       "name": "Forfeit / Game Over",
       "category": "game",
-      "verification": "partial",
-      "evidence": ["win-conditions-tests"],
+      "verification": "strong",
+      "evidence": [
+        "win-conditions-tests",
+        "cc-play-deep-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": [],
-      "notes": "24 targeted tests: checkWinConditions VP threshold (P1/P2 at 40, neither at 40, both 40+ different totals, crate VP bonus), elimination (P1/P2/both eliminated → draw), resolveVpTiebreaker (kill VP, damage received, blue die roll), postGameOver state mutations (game.ended, phase ENDED, winnerId, pendingIllegalSquad/pendingSquadConfirm cleanup, null winnerId for draw), forfeit flow (customIds, winner determination, double-forfeit guard), game cleanup (kill_game, botmenu_kill_yes/no customIds), handler registration, Nefarious Gains.",
-      "handlerPrefixes": ["forfeit", "forfeit_yes", "forfeit_no", "kill_game"],
+      "notes": "Deep tests: VP thresholds, elimination, tiebreaker chain, forfeit flow, game cleanup. win-conditions-tests + cc-play-deep coverage.",
+      "handlerPrefixes": [
+        "forfeit",
+        "forfeit_yes",
+        "forfeit_no",
+        "kill_game"
+      ],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
@@ -429,10 +897,17 @@
       "name": "Hand / Private Surfaces",
       "category": "discord",
       "verification": "partial",
-      "evidence": ["flow-harness", "ds-invariants", "discord-surface-tests"],
+      "evidence": [
+        "flow-harness",
+        "ds-invariants",
+        "discord-surface-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["wrong-player-routing", "hidden-info-leak"],
+      "siblings": [
+        "wrong-player-routing",
+        "hidden-info-leak"
+      ],
       "notes": "DS-1 invariant verifies CC hand cards don't leak to shared surface. DS-2/DS-3 track surface model consistency. 5 targeted tests: bold CC name leak detection, plain text non-leak, separate hand arrays, hand size, play-removes-from-hand. Actual Discord thread routing not verified — data model checks only.",
       "handlerPrefixes": [],
       "pendingStates": [],
@@ -444,10 +919,16 @@
       "name": "Wrong-Player Routing",
       "category": "discord",
       "verification": "partial",
-      "evidence": ["flow-harness", "ds-invariants"],
+      "evidence": [
+        "flow-harness",
+        "ds-invariants"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["hand-private-surfaces", "hidden-info-leak"],
+      "siblings": [
+        "hand-private-surfaces",
+        "hidden-info-leak"
+      ],
       "notes": "DS-5 invariant checks that actions don't appear in wrong player's available-actions surface. Detects some routing bugs but not all (e.g., followUp sent to wrong channel).",
       "handlerPrefixes": [],
       "pendingStates": [],
@@ -459,29 +940,50 @@
       "name": "Hidden Info Leak Prevention",
       "category": "discord",
       "verification": "partial",
-      "evidence": ["flow-harness", "ds-invariants", "live-incident"],
+      "evidence": [
+        "flow-harness",
+        "ds-invariants",
+        "live-incident"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["hand-private-surfaces", "wrong-player-routing"],
+      "siblings": [
+        "hand-private-surfaces",
+        "wrong-player-routing"
+      ],
       "notes": "DS-1 invariant checks CC hand cards don't leak to shared surface. Found 1 real leak in 500 flow sims (seed=493, Take Cover via dc_special). That leak is a verified detection — DS-1 caught a real bug.",
       "handlerPrefixes": [],
       "pendingStates": [],
       "actionTypes": [],
-      "liveIncidents": ["DS-1 violation: Take Cover leaked via dc_special followUp"],
+      "liveIncidents": [
+        "DS-1 violation: Take Cover leaked via dc_special followUp"
+      ],
       "lastColoredIn": null
     },
     "stale-component": {
       "name": "Stale Component Cleanup",
       "category": "discord",
       "verification": "partial",
-      "evidence": ["flow-harness", "ds-invariants", "discord-surface-tests"],
+      "evidence": [
+        "flow-harness",
+        "ds-invariants",
+        "discord-surface-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["payload-shape", "timing-concurrency"],
+      "siblings": [
+        "payload-shape",
+        "timing-concurrency"
+      ],
       "notes": "DS-7 checks for cleanup after state transitions. DS-9 checks for stale buttons remaining after phase changes. 4 targeted tests: pendingCombat/pendingNegation/moveInProgress/pendingCcConfirmation lifecycle create→clear patterns. Surface model invariants.",
-      "handlerPrefixes": ["refresh_map", "refresh_all"],
+      "handlerPrefixes": [
+        "refresh_map",
+        "refresh_all"
+      ],
       "pendingStates": [],
-      "actionTypes": ["refresh_map"],
+      "actionTypes": [
+        "refresh_map"
+      ],
       "liveIncidents": [],
       "lastColoredIn": "2026-03-15"
     },
@@ -489,10 +991,16 @@
       "name": "Payload Shape Limits",
       "category": "discord",
       "verification": "partial",
-      "evidence": ["flow-harness", "ds-invariants", "discord-surface-tests"],
+      "evidence": [
+        "flow-harness",
+        "ds-invariants",
+        "discord-surface-tests"
+      ],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["stale-component"],
+      "siblings": [
+        "stale-component"
+      ],
       "notes": "37 targeted tests: validatePayloadShape boundary tests (action rows 5/6, buttons 5/6, select 25/26/0, customId 100/101, content 2000/2001, embed title/desc/fields/field-name/field-value at limits, combo violations). Real-world payload simulations (DC action menu, surge menu, deploy picker). DC/CC name length validation. DS-8/DS-10 fire every flow sim step.",
       "handlerPrefixes": [],
       "pendingStates": [],
@@ -507,7 +1015,9 @@
       "evidence": [],
       "liveStatus": "untested",
       "lastLiveCheck": null,
-      "siblings": ["stale-component"],
+      "siblings": [
+        "stale-component"
+      ],
       "notes": "Race conditions from concurrent button clicks. async-mutex used in production. Not testable in headless (single-threaded sequential dispatch).",
       "handlerPrefixes": [],
       "pendingStates": [],
@@ -517,44 +1027,362 @@
     }
   },
   "history": [
-    { "date": "2026-03-15", "region": "squad-submission", "from": "none", "to": "partial", "reason": "setup-regions-tests.js: customId parsing, squad structure, DC/CC data integrity, hasDcInSquad bracketed name detection" },
-    { "date": "2026-03-15", "region": "map-selection", "from": "none", "to": "partial", "reason": "setup-regions-tests.js: customId format parsing (5 prefixes), state fields, handler registration, map registry + deployment zone data validation" },
-    { "date": "2026-03-15", "region": "manual-deployment", "from": "none", "to": "partial", "reason": "setup-regions-tests.js: customId parsing (9+ prefixes), state fields (figurePositions, playerZones), loadout + form cards data, handler registration" },
-    { "date": "2026-03-15", "region": "companion-deployment", "from": "none", "to": "partial", "reason": "setup-regions-tests.js: companion data validation (6+ companions), companionHostMap structure, figureKey format, companion cost rules, post-deploy handler registration" },
-    { "date": "2026-03-15", "region": "end-activation", "from": "partial", "to": "strong", "reason": "round-lifecycle-tests.js: cleanupActivation verifies all 86+ ACTIVATION_MSGID_FLAGS, FIGKEY_FLAGS, PLAYERNUM_FLAGS, SCALAR_FLAGS. CustomId parsing, state fields, handler exports" },
-    { "date": "2026-03-15", "region": "round-transition", "from": "partial", "to": "strong", "reason": "round-lifecycle-tests.js: cleanupRoundStart verifies all ROUND_OBJECT/NULL/ARRAY/FALSE/DELETE_FLAGS reset. Phase transition validation (SOR→ACT→EOR cycle). setPhase/setRoundPhase" },
-    { "date": "2026-03-15", "region": "combat-lifecycle", "from": "partial", "to": "strong", "reason": "round-lifecycle-tests.js: combat object structure (all required fields), p1Ready/p2Ready gate, reroll tracking, False Orders delegation. CustomId parsing, handler exports" },
-    { "date": "2026-03-15", "region": "surge-spending", "from": "partial", "to": "strong", "reason": "round-lifecycle-tests.js: surge accumulation, surgeRemaining decrement, double-cost surges, surgeConditions, special flags, customId parsing, handler exports" },
-    { "date": "2026-03-15", "region": "hand-private-surfaces", "from": "weak", "to": "partial", "reason": "discord-surface-tests.js: 5 hand privacy tests — bold CC name leak detection, plain text non-leak, separate hand arrays, hand size, play-removes-from-hand" },
-    { "date": "2026-03-15", "region": "stale-component", "from": "weak", "to": "partial", "reason": "discord-surface-tests.js: 4 pending state lifecycle tests — pendingCombat/pendingNegation/moveInProgress/pendingCcConfirmation create→clear patterns" },
-    { "date": "2026-03-15", "region": "payload-shape", "from": "weak", "to": "partial", "reason": "discord-surface-tests.js: 37 payload shape boundary tests — all Discord API limits at exact thresholds, combo violations, real-world DC/surge/deploy payloads, DC/CC name length validation" },
-    { "date": "2026-03-15", "region": "push-pull", "from": "weak", "to": "partial", "reason": "push-pull-tests.js: 11 targeted tests — Cover Fire (Block Token grant, customId x3), Spread the Pain (condition apply, pending structure, customId x2), Massive push (keyword detection, position update)" },
-    { "date": "2026-03-15", "region": "attachment-placement", "from": "weak", "to": "partial", "reason": "push-pull-tests.js: 10 targeted tests — state machine (pending/applied/redo), customId parsing x5, dual-player confirm gate, pendingAttachConfirm" },
-    { "date": "2026-03-15", "region": "reroll", "from": "weak", "to": "partial", "reason": "combat-effects-tests.js: 6 targeted tests for reroll state machine — phase routing, index dedup, remaining decrement, forced queue, customId, multi-die" },
-    { "date": "2026-03-15", "region": "conditions", "from": "weak", "to": "partial", "reason": "combat-effects-tests.js: 13 targeted tests for condition system — apply/filter/reset, immunity, Bleed accept/prevent, disarm lock, customId parsing" },
-    { "date": "2026-03-15", "region": "combat-interrupts", "from": "weak", "to": "partial", "reason": "combat-effects-tests.js: 9 targeted tests for Negation/Celebration — play/resolve/pass flows, VP awarding, opponent routing, interrupt coexistence" },
-    { "date": "2026-03-15", "region": "strain-choice", "from": "weak", "to": "partial", "reason": "combat-effects-tests.js: customId parsing + pendingStrainChoice structure validation" },
-    { "date": "2026-03-15", "region": "token-overflow", "from": "weak", "to": "partial", "reason": "combat-effects-tests.js: token overflow behavior + power_token_choice customId parsing" },
-    { "date": "2026-03-15", "region": "post-deploy-abilities", "from": "partial", "to": "strong", "reason": "55 tests: all 12 ability families now covered end-to-end. Added Extra Armor (skirmish upgrade) + Scavenged Walker (attachment). Setup harness supports attachments config." },
-    { "date": "2026-03-15", "region": "post-deploy-abilities", "from": "partial", "to": "partial", "reason": "53 tests: added Strike Team (Cassian) + Smooth Landing (Bodhi Rook) integration tests. Fixed 2 production bugs: pd_move_skip figureKey read-before-delete (Smooth Landing infinite loop), Strike Team token picker missing postAbilityPicker call (queue stall)" },
-    { "date": "2026-03-15", "region": "post-deploy-abilities", "from": "weak", "to": "partial", "reason": "51 tests (9 suites): added 8 setup harness integration tests exercising drivePostDeployQueue() end-to-end — Beskar Armor, Stealthy, Ambush, Security Detail (single+multi), Forward Emplacement, Arms Distribution, mixed/vanilla armies" },
-    { "date": "2026-03-15", "region": "post-deploy-abilities", "from": "none", "to": "weak", "reason": "post-deploy-tests.js: 43 targeted tests covering ability scanning, queue state machine, customId parsing, auto-apply resolution, interactive state, player routing, handler registration" },
-    { "date": "2026-03-15", "region": "special-ability-flows", "from": "weak", "to": "partial", "reason": "dark-chain-tests.js: 9 targeted tests for rush push, shoulder rush, false orders, overwatch, orbital bombardment, bomb drop + 2489 telemetry hits across dc_special/dc_ability_choice" },
-    { "date": "2026-03-15", "region": "cc-play", "from": "weak", "to": "partial", "reason": "dark-chain-tests.js: 3 targeted tests for cc_confirm/cc_choice/cc_space chains + 43812 telemetry hits on cc_play handler prefix" },
-    { "date": "2026-03-15", "region": "attack-declaration", "from": "partial", "to": "partial", "reason": "dark-chain-tests.js: weapon choice coverage added (Arsenal 302 sim hits, EE-3/Bo-Rifle targeted tests). Updated evidence and notes." },
-    { "date": "2026-03-15", "region": "interact-objectives", "from": null, "to": "weak", "reason": "New region: dc_interact, interact_choice, terminal/door/contraband/panel handlers. Flow harness hits interact action type incidentally." },
-    { "date": "2026-03-15", "region": "special-ability-flows", "from": null, "to": "weak", "reason": "New region: dc_special → dc_ability_choice chain + 18 sub-handlers (pounce, rush push, overwatch, orbital bombardment, false orders, etc.). Flow harness hits dc_special/dc_ability_choice incidentally." },
-    { "date": "2026-03-15", "region": "cc-play", "from": null, "to": "weak", "reason": "New region: cc_play → cc_play_select → cc_confirm_play → cc_choice → cc_space chain. Flow harness hits cc_play incidentally." },
-    { "date": "2026-03-15", "region": "combat-interrupts", "from": null, "to": "weak", "reason": "Consolidated: negation + celebration merged with 8 other combat-phase CC interrupt pending states (Strike Me Down, Slow on Draw, etc.) into single region." },
-    { "date": "2026-03-15", "region": "push-pull", "from": "none", "to": "weak", "reason": "Upgraded: flow harness does hit cover_fire and spread_pain incidentally. Moved pounce_space to special-ability-flows." },
-    { "date": "2026-03-15", "region": "hand-private-surfaces", "from": "none", "to": "weak", "reason": "Corrected: DS-1/DS-2/DS-3 invariants verify hand privacy at data model level" },
-    { "date": "2026-03-15", "region": "stale-component", "from": "none", "to": "weak", "reason": "Corrected: DS-7/DS-9 invariants verify cleanup/stale buttons on surface model" },
-    { "date": "2026-03-15", "region": "payload-shape", "from": "none", "to": "weak", "reason": "Corrected: DS-8/DS-10 invariants verify Discord API payload limits every flow sim step" },
-    { "date": "2026-03-14", "region": "zone-selection", "from": "none", "to": "strong", "reason": "setup-harness.js: real handleDeploymentZone via setup sim farm" },
-    { "date": "2026-03-14", "region": "auto-deploy", "from": "none", "to": "strong", "reason": "setup-harness.js: real handleAutoDeploy + getFootprintCells fix for large figures" },
-    { "date": "2026-03-14", "region": "cc-draw", "from": "none", "to": "strong", "reason": "setup-harness.js: real handleCcShuffleDraw + I Know Everything (Moff Gideon)" },
-    { "date": "2026-03-14", "region": "phase-gates", "from": "partial", "to": "strong", "reason": "setup-harness.js: deploy_done, cc_drawn, pre_activation, post_start_of_round gates" },
-    { "date": "2026-03-13", "region": "combat-lifecycle", "from": "none", "to": "partial", "reason": "flow-harness.js: combat_ready/roll/surge/resolve chain via Discord flow sim" },
-    { "date": "2026-03-13", "region": "movement", "from": "none", "to": "partial", "reason": "flow-harness.js: dc_move/move_mp/move_pick via available-actions" }
+    {
+      "date": "2026-03-15",
+      "region": "reroll",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "conditions",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "combat-interrupts",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "token-overflow",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "strain-choice",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "push-pull",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "cc-play",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "special-ability-flows",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "attack-declaration",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "interact-objectives",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "initiative",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "forfeit-game-over",
+      "from": "partial",
+      "to": "strong",
+      "reason": "activation-combat-deep-tests + cc-play-deep-tests + cc-timing-tests: comprehensive state machine, timing, and edge case coverage"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "squad-submission",
+      "from": "none",
+      "to": "partial",
+      "reason": "setup-regions-tests.js: customId parsing, squad structure, DC/CC data integrity, hasDcInSquad bracketed name detection"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "map-selection",
+      "from": "none",
+      "to": "partial",
+      "reason": "setup-regions-tests.js: customId format parsing (5 prefixes), state fields, handler registration, map registry + deployment zone data validation"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "manual-deployment",
+      "from": "none",
+      "to": "partial",
+      "reason": "setup-regions-tests.js: customId parsing (9+ prefixes), state fields (figurePositions, playerZones), loadout + form cards data, handler registration"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "companion-deployment",
+      "from": "none",
+      "to": "partial",
+      "reason": "setup-regions-tests.js: companion data validation (6+ companions), companionHostMap structure, figureKey format, companion cost rules, post-deploy handler registration"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "end-activation",
+      "from": "partial",
+      "to": "strong",
+      "reason": "round-lifecycle-tests.js: cleanupActivation verifies all 86+ ACTIVATION_MSGID_FLAGS, FIGKEY_FLAGS, PLAYERNUM_FLAGS, SCALAR_FLAGS. CustomId parsing, state fields, handler exports"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "round-transition",
+      "from": "partial",
+      "to": "strong",
+      "reason": "round-lifecycle-tests.js: cleanupRoundStart verifies all ROUND_OBJECT/NULL/ARRAY/FALSE/DELETE_FLAGS reset. Phase transition validation (SOR→ACT→EOR cycle). setPhase/setRoundPhase"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "combat-lifecycle",
+      "from": "partial",
+      "to": "strong",
+      "reason": "round-lifecycle-tests.js: combat object structure (all required fields), p1Ready/p2Ready gate, reroll tracking, False Orders delegation. CustomId parsing, handler exports"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "surge-spending",
+      "from": "partial",
+      "to": "strong",
+      "reason": "round-lifecycle-tests.js: surge accumulation, surgeRemaining decrement, double-cost surges, surgeConditions, special flags, customId parsing, handler exports"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "hand-private-surfaces",
+      "from": "weak",
+      "to": "partial",
+      "reason": "discord-surface-tests.js: 5 hand privacy tests — bold CC name leak detection, plain text non-leak, separate hand arrays, hand size, play-removes-from-hand"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "stale-component",
+      "from": "weak",
+      "to": "partial",
+      "reason": "discord-surface-tests.js: 4 pending state lifecycle tests — pendingCombat/pendingNegation/moveInProgress/pendingCcConfirmation create→clear patterns"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "payload-shape",
+      "from": "weak",
+      "to": "partial",
+      "reason": "discord-surface-tests.js: 37 payload shape boundary tests — all Discord API limits at exact thresholds, combo violations, real-world DC/surge/deploy payloads, DC/CC name length validation"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "push-pull",
+      "from": "weak",
+      "to": "partial",
+      "reason": "push-pull-tests.js: 11 targeted tests — Cover Fire (Block Token grant, customId x3), Spread the Pain (condition apply, pending structure, customId x2), Massive push (keyword detection, position update)"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "attachment-placement",
+      "from": "weak",
+      "to": "partial",
+      "reason": "push-pull-tests.js: 10 targeted tests — state machine (pending/applied/redo), customId parsing x5, dual-player confirm gate, pendingAttachConfirm"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "reroll",
+      "from": "weak",
+      "to": "partial",
+      "reason": "combat-effects-tests.js: 6 targeted tests for reroll state machine — phase routing, index dedup, remaining decrement, forced queue, customId, multi-die"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "conditions",
+      "from": "weak",
+      "to": "partial",
+      "reason": "combat-effects-tests.js: 13 targeted tests for condition system — apply/filter/reset, immunity, Bleed accept/prevent, disarm lock, customId parsing"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "combat-interrupts",
+      "from": "weak",
+      "to": "partial",
+      "reason": "combat-effects-tests.js: 9 targeted tests for Negation/Celebration — play/resolve/pass flows, VP awarding, opponent routing, interrupt coexistence"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "strain-choice",
+      "from": "weak",
+      "to": "partial",
+      "reason": "combat-effects-tests.js: customId parsing + pendingStrainChoice structure validation"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "token-overflow",
+      "from": "weak",
+      "to": "partial",
+      "reason": "combat-effects-tests.js: token overflow behavior + power_token_choice customId parsing"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "post-deploy-abilities",
+      "from": "partial",
+      "to": "strong",
+      "reason": "55 tests: all 12 ability families now covered end-to-end. Added Extra Armor (skirmish upgrade) + Scavenged Walker (attachment). Setup harness supports attachments config."
+    },
+    {
+      "date": "2026-03-15",
+      "region": "post-deploy-abilities",
+      "from": "partial",
+      "to": "partial",
+      "reason": "53 tests: added Strike Team (Cassian) + Smooth Landing (Bodhi Rook) integration tests. Fixed 2 production bugs: pd_move_skip figureKey read-before-delete (Smooth Landing infinite loop), Strike Team token picker missing postAbilityPicker call (queue stall)"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "post-deploy-abilities",
+      "from": "weak",
+      "to": "partial",
+      "reason": "51 tests (9 suites): added 8 setup harness integration tests exercising drivePostDeployQueue() end-to-end — Beskar Armor, Stealthy, Ambush, Security Detail (single+multi), Forward Emplacement, Arms Distribution, mixed/vanilla armies"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "post-deploy-abilities",
+      "from": "none",
+      "to": "weak",
+      "reason": "post-deploy-tests.js: 43 targeted tests covering ability scanning, queue state machine, customId parsing, auto-apply resolution, interactive state, player routing, handler registration"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "special-ability-flows",
+      "from": "weak",
+      "to": "partial",
+      "reason": "dark-chain-tests.js: 9 targeted tests for rush push, shoulder rush, false orders, overwatch, orbital bombardment, bomb drop + 2489 telemetry hits across dc_special/dc_ability_choice"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "cc-play",
+      "from": "weak",
+      "to": "partial",
+      "reason": "dark-chain-tests.js: 3 targeted tests for cc_confirm/cc_choice/cc_space chains + 43812 telemetry hits on cc_play handler prefix"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "attack-declaration",
+      "from": "partial",
+      "to": "partial",
+      "reason": "dark-chain-tests.js: weapon choice coverage added (Arsenal 302 sim hits, EE-3/Bo-Rifle targeted tests). Updated evidence and notes."
+    },
+    {
+      "date": "2026-03-15",
+      "region": "interact-objectives",
+      "from": null,
+      "to": "weak",
+      "reason": "New region: dc_interact, interact_choice, terminal/door/contraband/panel handlers. Flow harness hits interact action type incidentally."
+    },
+    {
+      "date": "2026-03-15",
+      "region": "special-ability-flows",
+      "from": null,
+      "to": "weak",
+      "reason": "New region: dc_special → dc_ability_choice chain + 18 sub-handlers (pounce, rush push, overwatch, orbital bombardment, false orders, etc.). Flow harness hits dc_special/dc_ability_choice incidentally."
+    },
+    {
+      "date": "2026-03-15",
+      "region": "cc-play",
+      "from": null,
+      "to": "weak",
+      "reason": "New region: cc_play → cc_play_select → cc_confirm_play → cc_choice → cc_space chain. Flow harness hits cc_play incidentally."
+    },
+    {
+      "date": "2026-03-15",
+      "region": "combat-interrupts",
+      "from": null,
+      "to": "weak",
+      "reason": "Consolidated: negation + celebration merged with 8 other combat-phase CC interrupt pending states (Strike Me Down, Slow on Draw, etc.) into single region."
+    },
+    {
+      "date": "2026-03-15",
+      "region": "push-pull",
+      "from": "none",
+      "to": "weak",
+      "reason": "Upgraded: flow harness does hit cover_fire and spread_pain incidentally. Moved pounce_space to special-ability-flows."
+    },
+    {
+      "date": "2026-03-15",
+      "region": "hand-private-surfaces",
+      "from": "none",
+      "to": "weak",
+      "reason": "Corrected: DS-1/DS-2/DS-3 invariants verify hand privacy at data model level"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "stale-component",
+      "from": "none",
+      "to": "weak",
+      "reason": "Corrected: DS-7/DS-9 invariants verify cleanup/stale buttons on surface model"
+    },
+    {
+      "date": "2026-03-15",
+      "region": "payload-shape",
+      "from": "none",
+      "to": "weak",
+      "reason": "Corrected: DS-8/DS-10 invariants verify Discord API payload limits every flow sim step"
+    },
+    {
+      "date": "2026-03-14",
+      "region": "zone-selection",
+      "from": "none",
+      "to": "strong",
+      "reason": "setup-harness.js: real handleDeploymentZone via setup sim farm"
+    },
+    {
+      "date": "2026-03-14",
+      "region": "auto-deploy",
+      "from": "none",
+      "to": "strong",
+      "reason": "setup-harness.js: real handleAutoDeploy + getFootprintCells fix for large figures"
+    },
+    {
+      "date": "2026-03-14",
+      "region": "cc-draw",
+      "from": "none",
+      "to": "strong",
+      "reason": "setup-harness.js: real handleCcShuffleDraw + I Know Everything (Moff Gideon)"
+    },
+    {
+      "date": "2026-03-14",
+      "region": "phase-gates",
+      "from": "partial",
+      "to": "strong",
+      "reason": "setup-harness.js: deploy_done, cc_drawn, pre_activation, post_start_of_round gates"
+    },
+    {
+      "date": "2026-03-13",
+      "region": "combat-lifecycle",
+      "from": "none",
+      "to": "partial",
+      "reason": "flow-harness.js: combat_ready/roll/surge/resolve chain via Discord flow sim"
+    },
+    {
+      "date": "2026-03-13",
+      "region": "movement",
+      "from": "none",
+      "to": "partial",
+      "reason": "flow-harness.js: dc_move/move_mp/move_pick via available-actions"
+    }
   ]
 }
