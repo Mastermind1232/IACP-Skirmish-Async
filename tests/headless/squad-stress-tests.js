@@ -179,14 +179,11 @@ describe('Section 1: Setup Simulation — both squads deploy successfully', () =
     assert.ok(crumbKey, `Salacious B. Crumb not found in P1 figures: ${p1Figs}`);
   });
 
-  it('J4X-7 companion for Jarrod Kelvin — companion field set on Jarrod DC', async () => {
-    // J4X-7 is Jarrod's companion but may deploy via post-deploy or activation
-    // rather than during initial deployment. Verify the data linkage is correct.
+  it('J4X-7 companion deployed via Jarrod Kelvin direct companion field', async () => {
     const jarrod = dcEffects['Jarrod Kelvin'];
     assert.strictEqual(jarrod.companion, 'J4X-7', 'Jarrod should have J4X-7 as companion');
     const j4x = dcEffects['J4X-7'];
     assert.strictEqual(j4x.companion, true, 'J4X-7 should be flagged as companion');
-    // Verify setup completes without errors even if J4X-7 deploys later
     const result = await runSetupSim({
       mapId: 'mos-eisley-outskirts',
       p1Army: SQUAD1_ARMY,
@@ -195,6 +192,14 @@ describe('Section 1: Setup Simulation — both squads deploy successfully', () =
       p2CcDeck: SQUAD2_CC_DECK,
     });
     assert.strictEqual(result.errors.length, 0, `Setup errors: ${JSON.stringify(result.errors)}`);
+    // Verify J4X-7 is actually deployed in figurePositions
+    const p2Figs = Object.keys(result.game.figurePositions?.[2] || {});
+    const j4xKey = p2Figs.find(fk => fk.startsWith('J4X-7-'));
+    assert.ok(j4xKey, `J4X-7 should be deployed in P2 figures: ${p2Figs}`);
+    // Verify companionHostMap tracks the relationship
+    const chm = result.game.companionHostMap || {};
+    assert.ok(chm[j4xKey], `J4X-7 should be in companionHostMap`);
+    assert.ok(chm[j4xKey].hostFigureKey.startsWith('Jarrod Kelvin-'), 'J4X-7 host should be Jarrod Kelvin');
   });
 
   it('companionHostMap entries exist for both companions after setup', async () => {

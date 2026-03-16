@@ -114,9 +114,33 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
     }
   }
 
-  // Scan skirmish upgrades (figureless DCs with attachments)
+  // Direct DC companion deployment (e.g., Jarrod Kelvin → J4X-7, Iden Versio → Dio)
+  // These have companion as a string on the DC itself (not via attachment)
   const dcList = getDcList(game, playerNum) || [];
   const msgIds = getDcMessageIds(game, playerNum) || [];
+  for (let i = 0; i < dcList.length; i++) {
+    const dc = dcList[i];
+    if (!dc || dc.defeated) continue;
+    const mid = msgIds[i];
+    const eff = dcEffects[dc.dcName];
+    if (!eff || typeof eff.companion !== 'string') continue;
+    // Skip if already deployed (attachment-based or direct)
+    if (game[`companionDeployed_${mid}`]) continue;
+    // Skip if the companion is already in figurePositions (e.g., via attachment path)
+    const companionName = eff.companion;
+    const alreadyPlaced = Object.keys(figPositions).some(k => k.startsWith(companionName + '-'));
+    if (alreadyPlaced) continue;
+    const hostFk = Object.keys(figPositions).find(k => k.startsWith(dc.dcName + '-'));
+    if (hostFk) {
+      abilities.push({
+        abilityId: 'companion_deploy', label: `Deploy ${companionName}`,
+        dcName: dc.dcName, figureKey: hostFk, msgId: mid, playerNum,
+        companionName, interactive: false, type: 'companion',
+      });
+    }
+  }
+
+  // Scan skirmish upgrades (figureless DCs with attachments)
   const attachments = getDcAttachments(game, playerNum) || {};
 
   for (let i = 0; i < dcList.length; i++) {
