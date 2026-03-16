@@ -47,6 +47,9 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
     if (passives.includes('Ambush')) {
       abilities.push({ abilityId: 'ambush', label: 'Ambush', dcName, figureKey: fk, playerNum, interactive: false, type: 'condition' });
     }
+    if (passives.includes('In The Shadows')) {
+      abilities.push({ abilityId: 'in_the_shadows', label: 'In The Shadows', dcName, figureKey: fk, playerNum, interactive: false, type: 'condition' });
+    }
     if (passives.includes('Forward Emplacement')) {
       const speed = eff.speed || 0;
       if (speed > 0) {
@@ -233,6 +236,11 @@ async function resolveAutoAbility(game, ability, client, logGameAction) {
     case 'ambush': {
       applyCondition(game, figureKey, 'Hide');
       await logGameAction(game, client, `🥷 **Ambush** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+      break;
+    }
+    case 'in_the_shadows': {
+      applyCondition(game, figureKey, 'Hide');
+      await logGameAction(game, client, `🥷 **In The Shadows** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
       break;
     }
     case 'security_detail': {

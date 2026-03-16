@@ -3599,6 +3599,9 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial",
+      "passives": [
+        "In The Shadows"
+      ],
       "specialAbilityIds": [
         "coordinated_raid_elite",
         "comms_jammer_isb"
