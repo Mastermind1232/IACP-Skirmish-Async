@@ -68,17 +68,17 @@
     "attachment-placement": {
       "name": "Attachment Placement",
       "category": "setup",
-      "verification": "weak",
-      "evidence": ["setup-harness", "synthetic-only"],
+      "verification": "partial",
+      "evidence": ["setup-harness", "push-pull-tests"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": ["zone-selection", "auto-deploy", "manual-deployment", "post-deploy-abilities"],
-      "notes": "Setup harness handles auto-attached armies and attach_done_confirm. Manual attachment (setup_attach_to_, attach_confirm_, attach_reselect_) never exercised. Restriction parsing untested. Only auto-attach path, no manual path.",
+      "notes": "10 targeted tests: state machine (pending structure, apply moves card, redo restores), customId parsing (setup_attach_to, attach_confirm, attach_reselect, attach_done_confirm, attach_done_redo), dual-player confirm gate, pendingAttachConfirm temporary selection. Handler registration verified.",
       "handlerPrefixes": ["setup_attach_to", "attach_confirm", "attach_reselect", "attach_done_confirm", "attach_done_redo"],
       "pendingStates": ["setupAttachmentPending"],
       "actionTypes": [],
       "liveIncidents": ["Attachment ordering bugs reported in live games"],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "auto-deploy": {
       "name": "Auto Deploy",
@@ -353,17 +353,17 @@
     "push-pull": {
       "name": "Push / Pull / Displacement",
       "category": "effects",
-      "verification": "weak",
-      "evidence": ["flow-harness"],
+      "verification": "partial",
+      "evidence": ["flow-harness", "push-pull-tests"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": ["special-ability-flows", "combat-lifecycle"],
-      "notes": "Push/pull effects (Slam, Force Push, Cover Fire, Spread Pain). Flow harness hits cover_fire/spread_pain via DC abilities but no targeted verification. Pounce teleport now tracked under special-ability-flows.",
+      "notes": "11 targeted tests: Cover Fire (customId parsing x3, Block Token grant), Spread the Pain (customId x2, pending structure, condition apply), Massive figure push (keyword detection, position update). Handler registration verified.",
       "handlerPrefixes": ["cover_fire_block", "cover_fire_discard", "spread_pain_cond"],
       "pendingStates": ["pendingPushChoice", "pendingCoverFire", "pendingSpreadPain"],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "end-activation": {
       "name": "End Activation / Turn Switch",
@@ -517,6 +517,8 @@
     }
   },
   "history": [
+    { "date": "2026-03-15", "region": "push-pull", "from": "weak", "to": "partial", "reason": "push-pull-tests.js: 11 targeted tests — Cover Fire (Block Token grant, customId x3), Spread the Pain (condition apply, pending structure, customId x2), Massive push (keyword detection, position update)" },
+    { "date": "2026-03-15", "region": "attachment-placement", "from": "weak", "to": "partial", "reason": "push-pull-tests.js: 10 targeted tests — state machine (pending/applied/redo), customId parsing x5, dual-player confirm gate, pendingAttachConfirm" },
     { "date": "2026-03-15", "region": "reroll", "from": "weak", "to": "partial", "reason": "combat-effects-tests.js: 6 targeted tests for reroll state machine — phase routing, index dedup, remaining decrement, forced queue, customId, multi-die" },
     { "date": "2026-03-15", "region": "conditions", "from": "weak", "to": "partial", "reason": "combat-effects-tests.js: 13 targeted tests for condition system — apply/filter/reset, immunity, Bleed accept/prevent, disarm lock, customId parsing" },
     { "date": "2026-03-15", "region": "combat-interrupts", "from": "weak", "to": "partial", "reason": "combat-effects-tests.js: 9 targeted tests for Negation/Celebration — play/resolve/pass flows, VP awarding, opponent routing, interrupt coexistence" },
