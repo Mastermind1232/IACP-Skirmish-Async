@@ -38,17 +38,17 @@
     "initiative": {
       "name": "Initiative Determination",
       "category": "setup",
-      "verification": "none",
-      "evidence": [],
+      "verification": "partial",
+      "evidence": ["initiative-tests"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": ["squad-submission", "map-selection"],
-      "notes": "determine_initiative_ handler never exercised. Includes Devious Scheme CC branch.",
+      "notes": "19 targeted tests: state fields (initiativePlayerId, initiativeDetermined, getInitiativePlayerNum), Devious Scheme logic (P1-only, P2-only, both-cancel, zone chooser split), round flipping (alternates each round, currentActivationTurnPlayerId), squad validation gate (both required, hasDcInSquad bracketed name detection), customId parsing (determine_initiative, draft_random, deployment_zone_red/blue), handler registration.",
       "handlerPrefixes": ["determine_initiative", "draft_random"],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "zone-selection": {
       "name": "Zone Selection",
@@ -203,17 +203,17 @@
     "interact-objectives": {
       "name": "Interact / Objectives",
       "category": "activation",
-      "verification": "weak",
-      "evidence": ["flow-harness"],
+      "verification": "partial",
+      "evidence": ["flow-harness", "interact-objectives-tests"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": ["activate-dc", "movement", "end-activation"],
-      "notes": "dc_interact_ triggers getLegalInteractOptions() showing terminal, door, contraband, launch panel buttons. interact_choice_ resolves the pick. Flow harness hits dc_interact and interact_choice via available-actions but only on maps with objectives. Map-specific events (devaron_door_open, devaron_crate_push, krykna_push) are completely dark. VP scoring from objectives (carry missions, flip missions) untested. Alter Mind / A Powerful Influence interact-blocking untested.",
+      "notes": "30 targeted tests: terminal detection, door open/close state, contraband carry system (per-figureKey tracking, defeat cleanup), launch panel flip (per-coord state, per-player round limit), Alter Mind/A Powerful Influence blocking, VP scoring structures, customId parsing (interact_choice, interact_cancel, devaron_door_open, devaron_crate_push, krykna_push), map-specific pending states (pendingDoorSelections, pendingKryknaPushQueue), handler registration. Production fix: pendingDoorSelections/pendingKryknaPushQueue/kryknaPushedIds added to ROUND_DELETE_FLAGS cleanup.",
       "handlerPrefixes": ["dc_interact", "interact_choice", "interact_cancel", "devaron_door_open", "devaron_crate_push", "krykna_push"],
       "pendingStates": ["pendingDoorSelections", "pendingKryknaPushQueue"],
       "actionTypes": ["interact"],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "special-ability-flows": {
       "name": "Special Abilities (Triggered)",
@@ -413,17 +413,17 @@
     "forfeit-game-over": {
       "name": "Forfeit / Game Over",
       "category": "game",
-      "verification": "none",
-      "evidence": [],
+      "verification": "partial",
+      "evidence": ["win-conditions-tests"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": [],
-      "notes": "forfeit_, forfeit_yes_, kill_game_ handlers never exercised. Game-over via VP/defeat check fires in flow harness when games complete (~5%) but forfeit path is dark.",
+      "notes": "24 targeted tests: checkWinConditions VP threshold (P1/P2 at 40, neither at 40, both 40+ different totals, crate VP bonus), elimination (P1/P2/both eliminated → draw), resolveVpTiebreaker (kill VP, damage received, blue die roll), postGameOver state mutations (game.ended, phase ENDED, winnerId, pendingIllegalSquad/pendingSquadConfirm cleanup, null winnerId for draw), forfeit flow (customIds, winner determination, double-forfeit guard), game cleanup (kill_game, botmenu_kill_yes/no customIds), handler registration, Nefarious Gains.",
       "handlerPrefixes": ["forfeit", "forfeit_yes", "forfeit_no", "kill_game"],
       "pendingStates": [],
       "actionTypes": [],
       "liveIncidents": [],
-      "lastColoredIn": null
+      "lastColoredIn": "2026-03-15"
     },
     "hand-private-surfaces": {
       "name": "Hand / Private Surfaces",

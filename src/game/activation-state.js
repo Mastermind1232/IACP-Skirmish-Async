@@ -72,6 +72,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'focusFireActive',
   'multiFireActive',
   'multiFireBlockedTarget',
+  'spotWeldPending',
 ];
 
 /**
@@ -325,6 +326,9 @@ const ROUND_DELETE_FLAGS = [
   'pendingBlackMarket',
   'deWannaWangaUsedThisRound',
   'arcingShotActiveScalar',
+  'pendingDoorSelections',
+  'pendingKryknaPushQueue',
+  'kryknaPushedIds',
 ];
 
 /**
