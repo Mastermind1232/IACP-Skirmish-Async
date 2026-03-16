@@ -53,7 +53,8 @@ function getDeployBlockingInfo(game, dcName) {
   const ms = getMapSpaces(game.selectedMap?.id);
   const blocking = ms?.blocking || [];
   const keywords = getDcKeywords(game)?.[dcName] || [];
-  const ignoreBlocking = keywords.includes('Mobile') || keywords.includes('Massive');
+  const kwUpper = keywords.map(k => String(k).toUpperCase());
+  const ignoreBlocking = kwUpper.includes('MOBILE') || kwUpper.includes('MASSIVE');
   return { blocking, ignoreBlocking };
 }
 

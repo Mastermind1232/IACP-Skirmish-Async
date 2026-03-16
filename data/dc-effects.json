@@ -990,6 +990,7 @@
     "AT-DP": {
       "abilityText": "Assault: You can perform multiple attacks during your activation. \n\nCharge Generators: While attacking, if you have suffered fewer than 9 Damage, apply +1 Hit to the attack results and you may reroll 1 attack die.",
       "keywords": [
+        "MASSIVE",
         "VEHICLE",
         "HEAVY WEAPON"
       ],
