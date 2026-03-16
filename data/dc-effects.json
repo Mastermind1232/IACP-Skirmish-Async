@@ -4261,7 +4261,11 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "shoulder_rush",
+        "deference_protocol"
+      ]
     },
     "Lando Calrissian": {
       "abilityText": "Resourceful: While attacking or defending, you may reroll 1 of your attack or defense dice.\n\nGambit: Before you reroll a die, you may replace it with another die of the same type. After rolling, the new die is considered rerolled.\n\nShrewd Scoundrel: While attacking or defending, before you reroll a die with \"Resourceful\", you may guess aloud a number from 0-2. After rerolls, if the number of Hits or Block symbols on that die matches the number you guessed, double that die's results. Limit once per activation.",
@@ -4333,7 +4337,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "battlefield_leadership",
+        "military_efficiency"
+      ]
     },
     "Loku Kanoloa": {
       "abilityText": "Set Your Sights: At the start of the mission, place a Recon token on a unique hostile figure. While a friendly figure is attacking a figure with a Recon token, apply Pierce 1 to the attack results.\n\nPriority Target: Figures do not block line of sight for your attacks.\n\nMon Cala Special Forces: When you declare an attack targeting a figure with a Recon token, you become Focused.",

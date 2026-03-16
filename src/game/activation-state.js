@@ -329,6 +329,7 @@ const ROUND_DELETE_FLAGS = [
   'pendingDoorSelections',
   'pendingKryknaPushQueue',
   'kryknaPushedIds',
+  'roundDioxisActive',
 ];
 
 /**

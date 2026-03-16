@@ -1884,6 +1884,25 @@ export function resolveAbility(abilityId, context) {
       msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta) || null;
       meta = msgId ? dcMessageMeta.get(msgId) : null;
     }
+    // Combat-context fallback: for after-attack CCs (e.g. Gauntlet Blade), use defender/attacker figure key
+    const _rollOneDieCombat = context.combat || game?.combat || game?.pendingCombat;
+    let _rollOneDieSelfFigureKey = null;
+    if (entry.type === 'ccEffect' && !meta && _rollOneDieCombat && playerNum) {
+      // The CC player is the defender → use defenderFigureKey; or attacker → use attackerFigureKey
+      if (_rollOneDieCombat.defenderPlayerNum === playerNum && _rollOneDieCombat.defenderFigureKey) {
+        _rollOneDieSelfFigureKey = _rollOneDieCombat.defenderFigureKey;
+      } else if (_rollOneDieCombat.attackerPlayerNum === playerNum && _rollOneDieCombat.attackerFigureKey) {
+        _rollOneDieSelfFigureKey = _rollOneDieCombat.attackerFigureKey;
+      }
+    }
+    // Also set selfFigureKey from activation context if available
+    if (!_rollOneDieSelfFigureKey && meta && game) {
+      const _actD = game.dcActionsData?.[msgId];
+      const _selF = _actD?.selectedFigure ?? 0;
+      const _dgM2 = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _dgI2 = _dgM2 ? _dgM2[1] : '1';
+      _rollOneDieSelfFigureKey = `${meta.dcName}-${_dgI2}-${_selF}`;
+    }
 
     // ── Electrified Knuckledusters style: pick adjacent hostile, then roll + apply ──
     if (entry.rollOneDieTarget === 'adjacentHostile') {
@@ -2039,6 +2058,15 @@ export function resolveAbility(abilityId, context) {
           applyCondition(game, targetFigureKey, surgeCondition);
           resultParts.push(`became **${surgeCondition}**`);
         }
+        // Gauntlet Blade: on Surge, grant self a Power Token (player chooses type)
+        if (entry.rollOneDieSurgeSelfPowerToken && surges >= 1) {
+          const _selfFk = _rollOneDieSelfFigureKey;
+          if (_selfFk) {
+            const selfName = dcNameFromFigureKey(_selfFk);
+            game.pendingPowerTokenGrant = { grants: [{ figureKey: _selfFk, figName: selfName, count: 1 }], channelId: null, playerNum };
+            resultParts.push(`you gain 1 Power Token — choose type`);
+          }
+        }
         const targetName = dcNameFromFigureKey(targetFigureKey);
         // SMALL push check (Smash, Slam, Ram): after damage, offer space picker for push
         if (entry.rollOneDiePushSmall && hits > 0) {
@@ -2072,20 +2100,30 @@ export function resolveAbility(abilityId, context) {
             }
           }
         }
-        return {
+        const _rodResult = {
           applied: true,
           logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
           refreshDcEmbed: true,
         };
+        if (entry.rollOneDieSurgeSelfPowerToken && surges >= 1 && game.pendingPowerTokenGrant) {
+          _rodResult.requiresPowerTokenChoice = true;
+        }
+        return _rodResult;
       }
       // Phase 1: enumerate adjacent hostile figures
-      if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
+      // Use combat-context fallback when no activation (e.g. Gauntlet Blade after attack)
+      let activatingFigureKey;
+      if (meta && game) {
+        const actionsData = game.dcActionsData?.[msgId];
+        const selectedFig = actionsData?.selectedFigure ?? 0;
+        const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const dgIndex = dgMatch ? dgMatch[1] : '1';
+        activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+      } else if (_rollOneDieSelfFigureKey) {
+        activatingFigureKey = _rollOneDieSelfFigureKey;
+      }
+      if (!game || !activatingFigureKey) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
       const mapId = game.selectedMap?.id;
-      const actionsData = game.dcActionsData?.[msgId];
-      const selectedFig = actionsData?.selectedFigure ?? 0;
-      const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-      const dgIndex = dgMatch ? dgMatch[1] : '1';
-      const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
       if (!mapId) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (map not loaded).` };
       const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
       const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
@@ -3373,6 +3411,41 @@ export function resolveAbility(abilityId, context) {
       applyCondition(game, fk, 'Focus');
     }
     return { applied: true, logMessage: `${allKeys.length} figure(s) became Focused.`, refreshBoard: true };
+  }
+
+  // ccEffect: dioxisFumesEffect — each non-DROID figure suffers 1 Strain (damage); set round flag
+  if (entry.type === 'ccEffect' && entry.dioxisFumesEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: '**Dioxis Fumes** — Each non-DROID figure suffers 1 Strain. Non-DROID figures cannot recover Strain this round. Resolve manually.' };
+    const parts = [];
+    const refreshMsgIds = [];
+    for (const pn of [1, 2]) {
+      const poses = game.figurePositions?.[pn] || {};
+      for (const fk of Object.keys(poses)) {
+        const dcName = dcNameFromFigureKey(fk);
+        const stats = getStatsForDc(dcName);
+        const isDroid = (stats?.keywords || []).some(k => /^droid$/i.test(k));
+        if (isDroid) continue;
+        const tMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+        if (!tMsgId) continue;
+        const hs = dcHealthState.get(tMsgId) || [];
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const fIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const hpE = hs[fIdx];
+        if (!Array.isArray(hpE) || hpE.length < 1) continue;
+        const [cur, max] = hpE;
+        const newCur = Math.max(0, (cur ?? max) - 1);
+        hs[fIdx] = [newCur, max ?? cur];
+        dcHealthState.set(tMsgId, hs);
+        syncHealthStateToList(game, pn, tMsgId, hs);
+        parts.push(`**${dcName}** (${cur ?? max}→${newCur})`);
+        if (!refreshMsgIds.includes(tMsgId)) refreshMsgIds.push(tMsgId);
+      }
+    }
+    // Set round flag: non-DROID figures cannot recover Strain this round
+    game.roundDioxisActive = true;
+    const affected = parts.length > 0 ? parts.join(', ') : 'no non-DROID figures on the board';
+    return { applied: true, logMessage: `**Dioxis Fumes** — 1 Strain to each non-DROID: ${affected}.\n⚠️ Non-DROID figures cannot recover Strain for the rest of this round.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshMsgIds };
   }
 
   // ccEffect: vpGainSelf + vpGainOpponent (e.g. Dangerous Bargains — start of round, if self VP ≤ N, both gain VP)

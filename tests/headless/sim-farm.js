@@ -276,7 +276,7 @@ async function runSim(seed, pools, opts = {}) {
   }
 
   const violations = [];
-  const MAX_STEPS = maxStepsOpt || 150;
+  const MAX_STEPS = maxStepsOpt || 300;
   let lastCustomId = null;
   let lastActionType = null;
   const hitCustomIds = [];

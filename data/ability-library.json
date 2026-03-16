@@ -640,11 +640,16 @@
     },
     "cc:dioxis_fumes": {
       "type": "ccEffect",
-      "label": "Dioxis Fumes"
+      "label": "Each non-DROID suffers 1 Strain; non-DROIDs cannot recover Strain this round",
+      "dioxisFumesEffect": true,
+      "wiredStatus": "wired"
     },
     "cc:eyes_on_the_prize": {
       "type": "ccEffect",
-      "label": "Eyes on the Prize"
+      "label": "Each friendly figure carrying/controlling a crate or mission token: recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition",
+      "informational": true,
+      "logMessage": "**Eyes on the Prize** — Each friendly figure carrying or controlling a crate or mission token may either recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition. Resolve manually per figure.",
+      "wiredStatus": "wired"
     },
     "cc:fleet_footed": {
       "type": "ccEffect",
@@ -654,7 +659,11 @@
     },
     "cc:gauntlet_blade": {
       "type": "ccEffect",
-      "label": "Gauntlet Blade"
+      "label": "Roll 1 green die vs adjacent hostile: Dmg = Hits; if Surge, gain Power Token",
+      "rollOneDie": "green",
+      "rollOneDieTarget": "adjacentHostile",
+      "rollOneDieSurgeSelfPowerToken": true,
+      "wiredStatus": "wired"
     },
     "cassian_said_i_had_to": {
       "type": "dcSpecial",
