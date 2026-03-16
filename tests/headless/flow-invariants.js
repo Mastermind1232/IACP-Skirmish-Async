@@ -185,16 +185,20 @@ export function assertFlowInvariants(game, actionDeps) {
   // Skip if a higher-priority pending state (celebration, power token, etc.) is
   // temporarily taking precedence over combat actions in getAvailableActions.
   if (game.pendingCombat) {
-    const higherPriorityActive = game.pendingCelebration || game.pendingPowerTokenGrant
+    const higherPriorityActive = game.pendingNegation || game.pendingCelebration || game.pendingPowerTokenGrant
       || game.pendingSpreadThePainCondPick || (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0);
     if (!higherPriorityActive) {
       const combatTypes = PENDING_TO_ACTION_TYPES.pendingCombat;
       const all = [...p1Actions, ...p2Actions];
       if (!all.some(a => combatTypes.includes(a.type))) {
+        const allTypes = all.map(a => a.type);
         errors.push(
           `GS-5: pendingCombat set but no combat actions. ` +
           `attackRoll=${!!game.pendingCombat.attackRoll}, defenseRoll=${!!game.pendingCombat.defenseRoll}, ` +
-          `rerollPhase=${game.pendingCombat.rerollPhase || 'none'}, surgeRemaining=${game.pendingCombat.surgeRemaining ?? '?'}`
+          `rerollPhase=${game.pendingCombat.rerollPhase || 'none'}, surgeRemaining=${game.pendingCombat.surgeRemaining ?? '?'}, ` +
+          `attackerPn=${game.pendingCombat.attackerPlayerNum}, defenderPn=${game.pendingCombat.defenderPlayerNum}, ` +
+          `p1Ready=${game.pendingCombat.p1Ready}, p2Ready=${game.pendingCombat.p2Ready}, ` +
+          `pendingNegation=${!!game.pendingNegation}, otherActions=[${allTypes.join(',')}]`
         );
       }
     }
@@ -220,7 +224,7 @@ export function assertFlowInvariants(game, actionDeps) {
 
   // GS-8: For each active pending state, the correct player has matching action types
   // Side-effect states checked above phase gate may temporarily suppress other pending state actions
-  const sideEffectPriorityActive = game.pendingCelebration || game.pendingPowerTokenGrant
+  const sideEffectPriorityActive = game.pendingNegation || game.pendingCelebration || game.pendingPowerTokenGrant
     || game.pendingSpreadThePainCondPick || game.pendingBleeding
     || (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0);
 
