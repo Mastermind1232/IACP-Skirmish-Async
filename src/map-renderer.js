@@ -533,7 +533,21 @@ export async function renderMap(mapId, options = {}) {
             roundedRectPath(cx, cy, clipW, clipH, cornerRadius);
           }
           ctx.clip();
-          ctx.drawImage(figImg, cx - dw / 2, cy - dh / 2, dw, dh);
+          // Rotate image 90° when orientation is swapped vs base size (e.g. 3x2 vs base 2x3)
+          const baseSize = (fig.baseSize || size).toLowerCase();
+          const [baseCols = 1, baseRows = 1] = baseSize.split('x').map(Number);
+          const orientationSwapped = baseCols !== baseRows && cols === baseRows && rows === baseCols;
+          if (orientationSwapped) {
+            ctx.translate(cx, cy);
+            ctx.rotate(Math.PI / 2);
+            // Re-scale image to fit the rotated clip area (swap width/height for scaling)
+            const rScale = Math.min((clipH * 2) / tw, (clipW * 2) / th);
+            const rw = Math.round(tw * rScale);
+            const rh = Math.round(th * rScale);
+            ctx.drawImage(figImg, -rw / 2, -rh / 2, rw, rh);
+          } else {
+            ctx.drawImage(figImg, cx - dw / 2, cy - dh / 2, dw, dh);
+          }
           ctx.restore();
           drewImage = true;
         } catch (err) {
@@ -600,7 +614,7 @@ export async function renderMap(mapId, options = {}) {
     const conditionIcons = (fig.conditions || []).slice(0, 5);
     if (conditionIcons.length > 0) {
       const COND_SLOT = { Bleeding: 1, Stunned: 2, Weakened: 3, Focused: 4, Hidden: 5 };
-      const condSizeStr = (fig.figureSize || '1x1');
+      const condSizeStr = (fig.baseSize || fig.figureSize || '1x1');
       const iconSize = Math.max(12, Math.min(clipW, clipH) * 0.5);
       const condImgPromises = conditionIcons.map((cond) => {
         const slot = COND_SLOT[cond] || 1;

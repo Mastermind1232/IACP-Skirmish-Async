@@ -159,6 +159,7 @@ export function getFiguresForRender(game) {
         imagePath: imagePath || undefined,
         dcName,
         figureSize,
+        baseSize,
         label,
         figureKey,
         powerTokens,
