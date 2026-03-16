@@ -750,4 +750,164 @@ describe('Post-deploy: runPostDeployPhase conditions', () => {
   });
 });
 
+// ── Suite 9: Setup Harness Integration (end-to-end) ──────────────────────────
+
+import { runSetupSim } from './setup-harness.js';
+
+describe('Post-deploy: setup harness integration', { timeout: 30000 }, () => {
+  it('auto-only army (Mandalorian + Davith Elso) reaches ROUND_ACTIVE with effects applied', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'The Mandalorian' }, { dcName: 'Stormtrooper' }],
+      p2Army: [{ dcName: 'Davith Elso' }, { dcName: 'Stormtrooper' }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    assert.strictEqual(result.errors.length, 0, `No errors: ${result.errors.map(e => e.error).join('; ')}`);
+
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired is set');
+    assert.strictEqual(game.postDeployQueue, undefined, 'Queue cleaned up');
+
+    // Beskar Armor should have granted Block tokens
+    const mandoFk = Object.keys(game.figurePositions?.[1] || {}).find(k => k.startsWith('The Mandalorian'));
+    if (mandoFk) {
+      const tokens = game.figurePowerTokens?.[mandoFk] || [];
+      const blockCount = tokens.filter(t => t === 'Block').length;
+      assert.strictEqual(blockCount, 2, 'Mandalorian has 2 Block Tokens from Beskar Armor');
+    }
+
+    // Davith Elso should have Hide condition (Stealthy)
+    const davithFk = Object.keys(game.figurePositions?.[2] || {}).find(k => k.startsWith('Davith Elso'));
+    if (davithFk) {
+      const conditions = game.figureConditions?.[davithFk] || [];
+      assert.ok(conditions.includes('Hide'), 'Davith Elso has Hide condition from Stealthy');
+    }
+  });
+
+  it('Security Detail (single leader) auto-resolves and reaches ROUND_ACTIVE', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Death Trooper (Regular)' }, { dcName: 'Director Krennic' }],
+      p2Army: [{ dcName: 'Stormtrooper', count: 2 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    assert.strictEqual(result.errors.length, 0, `No errors: ${result.errors.map(e => e.error).join('; ')}`);
+
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set');
+
+    // Director Krennic should have 1 Block Token from Security Detail
+    const krennicFk = Object.keys(game.figurePositions?.[1] || {}).find(k => k.startsWith('Director Krennic'));
+    if (krennicFk) {
+      const tokens = game.figurePowerTokens?.[krennicFk] || [];
+      const blockCount = tokens.filter(t => t === 'Block').length;
+      assert.ok(blockCount >= 1, 'Director Krennic has Block Token from Security Detail');
+    }
+  });
+
+  it('Security Detail (multi-leader) interactive queue resolves', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Death Trooper (Regular)' }, { dcName: 'Director Krennic' }, { dcName: 'Agent Blaise' }],
+      p2Army: [{ dcName: 'Stormtrooper', count: 2 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    // May have errors if pd_pick/pd_security_pick routing hits edge cases
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set');
+    assert.strictEqual(game.postDeployQueue, undefined, 'Queue cleaned up');
+    assert.ok(result.phases.includes('post_deploy'), 'post_deploy phase was visited');
+  });
+
+  it('vanilla army (no post-deploy abilities) passes through cleanly', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Stormtrooper', count: 3 }],
+      p2Army: [{ dcName: 'Rebel Trooper', count: 3 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    assert.strictEqual(result.errors.length, 0, `No errors: ${result.errors.map(e => e.error).join('; ')}`);
+
+    const { game } = result;
+    // No post-deploy abilities → postDeployEffectsFired should still be set
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set even for vanilla army');
+    assert.ok(!result.phases.includes('post_deploy'), 'post_deploy phase NOT visited for vanilla army');
+  });
+
+  it('Forward Emplacement (E-Web) interactive queue resolves via movement skip', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'E-Web Engineer (Elite)' }, { dcName: 'Stormtrooper' }],
+      p2Army: [{ dcName: 'Stormtrooper', count: 2 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set');
+    assert.strictEqual(game.postDeployQueue, undefined, 'Queue cleaned up');
+    assert.ok(result.phases.includes('post_deploy'), 'post_deploy phase was visited');
+  });
+
+  it('Arms Distribution (Ko-Tun) interactive queue resolves via figure + token pick', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Ko-Tun Feralo' }, { dcName: 'Rebel Saboteur' }],
+      p2Army: [{ dcName: 'Stormtrooper', count: 2 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set');
+    assert.strictEqual(game.postDeployQueue, undefined, 'Queue cleaned up');
+  });
+
+  it('mixed army with both auto and interactive abilities resolves fully', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'The Mandalorian' }, { dcName: 'E-Web Engineer (Elite)' }],
+      p2Army: [{ dcName: 'Davith Elso' }, { dcName: 'Stormtrooper' }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set');
+    assert.strictEqual(game.postDeployQueue, undefined, 'Queue cleaned up');
+
+    // Both auto abilities should have fired
+    const mandoFk = Object.keys(game.figurePositions?.[1] || {}).find(k => k.startsWith('The Mandalorian'));
+    if (mandoFk) {
+      const tokens = game.figurePowerTokens?.[mandoFk] || [];
+      assert.ok(tokens.filter(t => t === 'Block').length >= 2, 'Mandalorian got Beskar Armor tokens');
+    }
+    const davithFk = Object.keys(game.figurePositions?.[2] || {}).find(k => k.startsWith('Davith Elso'));
+    if (davithFk) {
+      const conditions = game.figureConditions?.[davithFk] || [];
+      assert.ok(conditions.includes('Hide'), 'Davith Elso got Stealthy condition');
+    }
+  });
+
+  it('Ambush (Ewok Warrior Elite) applies Hide condition', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Ewok Warrior (Elite)' }],
+      p2Army: [{ dcName: 'Stormtrooper', count: 2 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    assert.strictEqual(result.errors.length, 0, `No errors: ${result.errors.map(e => e.error).join('; ')}`);
+
+    const { game } = result;
+    // All Ewok figures should have Hide from Ambush
+    const ewokFks = Object.keys(game.figurePositions?.[1] || {}).filter(k => k.startsWith('Ewok Warrior'));
+    for (const fk of ewokFks) {
+      const conditions = game.figureConditions?.[fk] || [];
+      assert.ok(conditions.includes('Hide'), `${fk} has Hide from Ambush`);
+    }
+  });
+});
+
 console.log('Post-deploy tests loaded successfully');

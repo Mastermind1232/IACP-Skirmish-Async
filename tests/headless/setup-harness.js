@@ -132,6 +132,161 @@ function buildSetupGame(config) {
 }
 
 /**
+ * Drive through a post-deploy ability queue, resolving each ability.
+ * Handles: pd_pick (ability picker), pd_security_pick (Security Detail leader choice),
+ * pd_arms_dist_fig + pd_arms_dist_token (Arms Distribution), extra_armor_pick (Extra Armor),
+ * pd_move_skip (skip movement for Forward Emplacement / Smooth Landing / Infiltration / Strike Team),
+ * pd_walker_skip (Scavenged Walker skip), pd_strike_token_done (Strike Team token done).
+ *
+ * Movement-based abilities are skipped (pd_move_skip) rather than fully driven,
+ * which still exercises the handler chain and queue advancement.
+ */
+async function drivePostDeployQueue(game, gameId, p1Id, p2Id, submit, harness, getHandChannel, errors, steps, verbose) {
+  let abilitiesResolved = 0;
+  let safety = 0;
+  const MAX_ITERATIONS = 100;
+
+  while (safety++ < MAX_ITERATIONS) {
+    const g = harness.getGame();
+    const q = g.postDeployQueue;
+    if (!q) break; // Queue finished
+
+    const pn = q.currentPlayerNum;
+    const userId = pn === 1 ? p1Id : p2Id;
+
+    // ── Active ability in progress (sub-flow) ──
+    if (q.activeAbility) {
+      const active = q.activeAbility;
+
+      // Movement in progress — find and skip it
+      if (active.moveFigures && g.moveInProgress) {
+        const moveKeys = Object.keys(g.moveInProgress).filter(k => g.moveInProgress[k]?.postDeployReturn);
+        if (moveKeys.length > 0) {
+          const moveKey = moveKeys[0];
+          await submit(`pd_move_skip_${gameId}_${pn}_${moveKey}`, userId);
+          continue;
+        }
+        // No active move but moveFigures set — might be waiting for picker (smooth landing)
+        // or movement hasn't started yet. Check for pd_sl_pick or pd_walker_move
+      }
+
+      // Smooth Landing picker — pick the first remaining figure
+      if (active.abilityId === 'smooth_landing' && !active._pickedFigureKey) {
+        const remaining = (active.moveFigures || []).filter(f => !(active._resolvedFigures || []).includes(f.figureKey));
+        if (remaining.length > 0) {
+          await submit(`pd_sl_pick_${gameId}_${pn}_${remaining[0].figureKey}`, userId);
+          continue;
+        }
+      }
+
+      // Scavenged Walker — skip
+      if (active.abilityId === 'scavenged_walker_move') {
+        // Find the msgId from the active ability
+        const msgId = active.msgId || '';
+        await submit(`pd_walker_skip_${gameId}_${pn}_${msgId}`, userId);
+        continue;
+      }
+
+      // Strike Team adj pick — pick the first adjacent friendly
+      if (active.abilityId === 'strike_team' && active.step === 'adj_pick') {
+        // The buttons were posted — we need to find an adjacent friendly
+        // Look for any figure key that isn't Cassian
+        const friendlies = Object.keys(g.figurePositions?.[pn] || {}).filter(fk => fk !== active.figureKey);
+        if (friendlies.length > 0) {
+          await submit(`pd_strike_adj_${gameId}_${pn}_${friendlies[0]}`, userId);
+          continue;
+        }
+      }
+
+      // Strike Team token distribution — press Done immediately
+      if (active.abilityId === 'strike_team' && active.step === 'tokens') {
+        await submit(`pd_strike_token_done_${gameId}_${pn}`, userId);
+        abilitiesResolved++;
+        continue;
+      }
+
+      // Extra Armor — pick first available figure, repeat 4 times
+      if (active.abilityId === 'extra_armor') {
+        const pendingEa = g[`pendingExtraArmor_p${pn}`];
+        if (pendingEa && pendingEa.remaining > 0) {
+          const allFks = Object.keys(g.figurePositions?.[pn] || {});
+          if (allFks.length > 0) {
+            await submit(`extra_armor_pick_${gameId}_${pn}_${allFks[0]}`, userId, {
+              channel: getHandChannel(pn),
+            });
+            continue;
+          }
+        }
+      }
+
+      // Arms Distribution — pick figure step
+      if (active.abilityId === 'arms_distribution_deploy' && active.step === 'pick_figure') {
+        const eligible = active.eligibleFigures || [];
+        if (eligible.length > 0) {
+          await submit(`pd_arms_dist_fig_${gameId}_${pn}_${eligible[0]}`, userId);
+          continue;
+        }
+      }
+
+      // Arms Distribution — pick token step
+      if (active.abilityId === 'arms_distribution_deploy' && active.step === 'pick_token') {
+        await submit(`pd_arms_dist_token_${gameId}_${pn}_Block`, userId);
+        abilitiesResolved++;
+        continue;
+      }
+
+      // Security Detail — pick first leader
+      if (active.abilityId === 'security_detail') {
+        // Not expected here normally (Security Detail is handled via pd_security_pick directly)
+        // but as a fallback:
+        if (active.leaders?.length > 0) {
+          const leaderFk = active.leaders[0].figureKey;
+          await submit(`pd_security_pick_${gameId}_${pn}_${active.figureKey}_${leaderFk}`, userId);
+          abilitiesResolved++;
+          continue;
+        }
+      }
+
+      // If we're stuck with an active ability we don't know how to handle, skip
+      if (verbose) console.log(`  [post-deploy] Stuck on active ability: ${active.abilityId} step=${active.step}`);
+      errors.push({ step: steps.length, customId: 'pd_stuck', userId, error: `Stuck on post-deploy active ability: ${active.abilityId}` });
+      break;
+    }
+
+    // ── Ability picker: choose next ability ──
+    const abilities = q.abilities || [];
+    if (abilities.length === 0) {
+      // Queue is empty for this player — should auto-advance.
+      // If still here, something went wrong.
+      if (verbose) console.log(`  [post-deploy] Empty abilities but queue still exists`);
+      break;
+    }
+
+    // Remember which ability we're about to pick (before it gets spliced)
+    const nextAbility = abilities[0];
+    await submit(`pd_pick_${gameId}_${pn}_0`, userId);
+    abilitiesResolved++;
+
+    // For Security Detail (interactive, multi-leader), pd_pick shows buttons
+    // but doesn't set activeAbility. We need to immediately submit the leader pick.
+    if (nextAbility?.abilityId === 'security_detail' && nextAbility.interactive) {
+      const g2 = harness.getGame();
+      // Pick the first leader
+      const leaders = nextAbility.leaders || [];
+      if (leaders.length > 0) {
+        await submit(`pd_security_pick_${gameId}_${pn}_${nextAbility.figureKey}_${leaders[0].figureKey}`, userId);
+      }
+    }
+  }
+
+  if (safety >= MAX_ITERATIONS) {
+    errors.push({ step: steps.length, customId: 'pd_loop', userId: p1Id, error: 'Post-deploy queue exceeded max iterations' });
+  }
+
+  return { abilitiesResolved };
+}
+
+/**
  * Run a complete setup simulation from zone selection through round 1.
  *
  * @param {object} config
@@ -280,6 +435,17 @@ export async function runSetupSim(config) {
       phases.push('deploy_done_gate');
       await submit(`phase_gate_ready_${gameId}`, p1Id);
       await submit(`phase_gate_ready_${gameId}`, p2Id);
+      g = harness.getGame();
+    }
+
+    // ── Phase 3b: Post-Deploy Abilities ─────────────────────────────────────
+    g = harness.getGame();
+    if (g.postDeployQueue) {
+      phases.push('post_deploy');
+      const pdResult = await drivePostDeployQueue(g, gameId, p1Id, p2Id, submit, harness, getHandChannel, errors, steps, verbose);
+      if (pdResult.abilitiesResolved > 0 && verbose) {
+        console.log(`  [post-deploy] Resolved ${pdResult.abilitiesResolved} abilities`);
+      }
       g = harness.getGame();
     }
 

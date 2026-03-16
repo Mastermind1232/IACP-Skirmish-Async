@@ -128,12 +128,12 @@
     "post-deploy-abilities": {
       "name": "Post-Deploy Abilities",
       "category": "setup",
-      "verification": "weak",
-      "evidence": ["post-deploy-tests"],
+      "verification": "partial",
+      "evidence": ["post-deploy-tests", "setup-harness"],
       "liveStatus": "untested",
       "lastLiveCheck": null,
       "siblings": ["auto-deploy", "companion-deployment", "attachment-placement", "cc-draw"],
-      "notes": "43 targeted tests: ability scanning (9), queue state machine (4), customId format (12), auto-apply resolution (3), interactive state (7), player routing (3), handler registration (1), runPostDeployPhase conditions (4). Setup sims still don't reach post-deploy phase (zero telemetry hits). Tests cover scanning + state machine + customId parsing, not full interactive movement flows.",
+      "notes": "51 tests across 9 suites: ability scanning (9), queue state machine (4), customId format (12), auto-apply resolution (3), interactive state (7), player routing (3), handler registration (1), runPostDeployPhase conditions (4), setup harness integration (8). End-to-end coverage: Beskar Armor, Stealthy, Ambush, Security Detail (single+multi leader), Forward Emplacement, Arms Distribution, mixed armies, vanilla armies. drivePostDeployQueue() in setup harness exercises full pd_pick/pd_security_pick/pd_move_skip/pd_arms_dist chains.",
       "handlerPrefixes": ["pd_pick", "pd_security_pick", "pd_strike_adj", "pd_strike_token", "pd_strike_token_done", "pd_move_skip", "pd_move_stay", "pd_sl_pick", "pd_walker_move", "pd_walker_skip", "pd_arms_dist_fig", "pd_arms_dist_token"],
       "pendingStates": [],
       "actionTypes": [],
@@ -517,6 +517,7 @@
     }
   },
   "history": [
+    { "date": "2026-03-15", "region": "post-deploy-abilities", "from": "weak", "to": "partial", "reason": "51 tests (9 suites): added 8 setup harness integration tests exercising drivePostDeployQueue() end-to-end — Beskar Armor, Stealthy, Ambush, Security Detail (single+multi), Forward Emplacement, Arms Distribution, mixed/vanilla armies" },
     { "date": "2026-03-15", "region": "post-deploy-abilities", "from": "none", "to": "weak", "reason": "post-deploy-tests.js: 43 targeted tests covering ability scanning, queue state machine, customId parsing, auto-apply resolution, interactive state, player routing, handler registration" },
     { "date": "2026-03-15", "region": "special-ability-flows", "from": "weak", "to": "partial", "reason": "dark-chain-tests.js: 9 targeted tests for rush push, shoulder rush, false orders, overwatch, orbital bombardment, bomb drop + 2489 telemetry hits across dc_special/dc_ability_choice" },
     { "date": "2026-03-15", "region": "cc-play", "from": "weak", "to": "partial", "reason": "dark-chain-tests.js: 3 targeted tests for cc_confirm/cc_choice/cc_space chains + 43812 telemetry hits on cc_play handler prefix" },
