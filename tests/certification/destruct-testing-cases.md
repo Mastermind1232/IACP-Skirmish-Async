@@ -1,0 +1,209 @@
+# Destruct's Asynch Testing Cases (Reference)
+
+Source: Asynch_Testing_Cases.docx + Asynch_Testing_Cases_Cards.docx
+
+## GENERAL MECHANICS
+- Double actions implemented correctly; if bleeding, only 1 strain from double action
+- Passing implemented correctly
+- Attachments: restrictions, cost reductions; do NOT alter figure/group cost
+- Attack sequence: on-declare → roll → rerolls (each die max once) → modifiers → surges → accuracy → damage → defeat → after-attack
+- Lure of Dark Side attacking: attacker must use focus, no figures friendly, can use figure's abilities
+- Bleed timing: after action resolved
+- Movement: Mobile, Efficient Travel, Massive counting
+- Spire tile LOS
+- Ranged Cleave
+- One named CC per timing instance
+- Parting Blow: once per move
+- Jundland Terror: once per EOR
+- Aphra excavate: can play SOR card, cannot play same card twice in same timing
+- Companions: same space, enter/exit play, before/after activation, Junk Droid co-activate, control rules, cost 0, cannot interact, can play CCs
+- Control rules
+- Counting spaces: impassable + blocking terrain
+- Difficult terrain + rubble tokens
+- Doors open/close
+- Energy shields
+- Multi-figure group: figure by figure activation
+- Large figure movement: extra MP for difficult terrain, cannot rotate when pushed, declare target space
+- LOS
+- Massive: no entering other Massive spaces, no LOS blocking, movement lock after ending on figures, push order (friendly first), companions pushed too
+- Power tokens: max 2, choose discard on overflow
+- Discard pile vs gamebox
+- Multi-figure groups: marked correctly, deployment pairing control
+- Phase order: map → initiative → deploy → post-deploy → CC draw → SOR → activations → status → EOR
+- Initiative: <40pts gets initiative, Devious Scheme
+- Deployment zone overflow
+- Strain options: decide up front for multiple strain
+- Start of activation timing: initiative player first
+- Tiebreakers: kill VP → damage received → blue die accuracy
+
+## REBEL DCs
+- Chewbacca: cost 15, Debts Repaid in hand, Slam not action but counts as special, Dodge→evade, needs upgrade
+- Han Solo: cost 12, reroll, Cunning, Return Fire, EOR attack, needs upgrade
+- Luke Jedi: 0-cost attachment, Deflect, Heroic (declare before attack)
+- Cara Dune: Shock and Awe, Smash (no push if no space), Hunker Down
+- Drokkatta: Demolish, Shrapnel, NOT elite for Fury of Kashyyyk
+- Leia Organa: Battlefield Leadership, Military Efficiency
+- Zeb: Bo-Rifle Staff Strike (not action, must declare), Lasat Honor Guard
+- Ahsoka: Twin Sabers (rerolled dice can't be re-rerolled, simultaneous)
+- Ezra: Much to Learn in attacker rerolls phase
+- Gaarkhan: Brutal Cleave before Parting Blow stun
+- Jyn Erso: Trust Goes Both Ways requires adjacent friendly, start OR end activation
+- Kanan: opponent naming group, defeated group → any group, cannot pass instead
+- Ko-Tun: after deployment token, start of activation token, Dead Precise hits friendlies, Squad Cohesion Rebel only
+- Luke Hero: upgrade, reroll + damage + autofocus on sabre strike, global reroll
+- Obi-Wan: Alter Mind, Strike Me Down after opponent on-declare cards
+- Verena Talos: complex
+- Baze: token gains
+- Cassian: defeat friendly trigger (includes companions), Strike Team
+- CT-1701: Barrage white on second, Cover Fire
+- Davith: Cut and Run once per figure per round, Fell Swoop back-and-forth
+- Lando: reroll every attack/defense + switch dice, no switch if rerolled by other effects, guess mechanism
+- Mara Jade: play other unique CCs, trait checking by affiliation
+- Rebel Pathfinder: Infiltration, Light it Up, Distracting Fire
+- Jarrod/J4X, Jyn Odan/Hair Trigger, Loku/Recon token, Tress/Leg Hydraulics+Cleave timing
+- Z-6 Trooper: surge only on autofire second attack
+- Chirrut: start of activation timing
+- Hera: Smooth Landing
+- Murne: Figurehead max 1 strain prevent, False Orders enemy attack
+- Saska: 1 device/round, shared reroll limit, dice switching
+- Mak: Camouflage, Critical Hit
+- Bodhi: Smooth Landing
+- C-3PO: Evade for targeted space not figure
+- Channel the Force: Yoda net draw, no bottom deck required
+- Fury of Kashyyyk: Elite Wookiees get P1, checks any Wookiee in range, focuses
+- Heavy Fire: no damage required, can miss, opponent chooses Harmful conditions
+- Lie in Ambush: timing, enters ready, 3 exhausted+defeated trigger
+- Smuggling Compartment/Heroic Effort: deck order preservation
+- Rogue One: token sharing at modifiers stage
+
+## MERCENARY DCs
+- Boba Fett: Wrist Cord/Flamethrower from special action MP (all at once)
+- IG-88: needs upgrade, Arsenal declare on attack
+- Rancor: Crippling Blow stun even if no damage (not if miss), Voracious different figure activation
+- HK Assassin: reroll before defender, defender can't reroll that die
+- Krrstanan: conditional autofocus
+- Mandalorian: Disruptor Rifle
+- 4-LOM: declare Trait at start of round
+- Bossk: Indiscriminate Fire doesn't affect target
+- Dengar: Spread the Pain, Punishing Strike on any condition
+- Migs Mayfeld: 3 tokens, Droid Arm range from him, Return Fire
+- Paz Visla: strain mechanic
+- Shyla: Whip space by space (Parting Blow trigger)
+- Wing Guard: Keep the Peace adjacent to targeted space not figure
+- Clawdite: form cards unique, assigned at start of round
+- Gar Saxon: aura for Mobile figures attacking
+- Hondo: ask opponent on declare, cannot pay if <2 VP
+- Jabba: Nefarious Gains objective VP, Focus/Order Hit Scum only
+- Maul: Darksaber, Dual-Bladed Fury on Darksaber, Stalk Prey MP banking, Sustained by Rage
+- Onar: Get Down defensive bonus ask
+- Taron: Fallen Master, Rubble+Wasskah interaction
+- Zuckuss: Stun Net no damage required
+- Cad Bane: movement at start of any activation, ask at every opponent activation
+- Hired Guns: focus before defeat for Parting Shot, Stun after defeat timing
+- Nexu: Pounce counts spaces not MP, from any space, 1 space landing
+- Ugnaught/Junk Droid: complex
+- Aphra: BT-1/0-0-0 package, bonus action while alive, Excavation SOR interaction, FMO+RIP
+- Greedo: see Hired Guns
+- Bib: discard in modifiers every attack, focus Merc only
+- Jawa: Take Cover even if no evade, Bargain
+- Kuiil: Hop On
+- Orbital Bombardment, Beast Tamer, Black Market, Clan of Two/The Child
+- Devious Scheme: check before initiative roll
+- Indentured Jester/Salacious B. Crumb
+- Punishing Strike: ask whenever condition dealt
+- Scavenged Weaponry: transfer on defeat
+- Under Duress: deplete on voluntary strain also
+- Scavenged Walker: movement after deployment, push, affiliation change, EOR attack
+- Imperial Citadel, Imperial Retrofitting, General's Ranks, Vader's Finest
+- Zillo Technique: block in modifiers, pierce after surges
+- Overwatch
+
+## IMPERIAL DCs
+- Darth Vader: cost 18, needs upgrade, EOR attack
+- General Weiss: General's Orders, Epic Arsenal 2-color limit counts Focus
+- AT-ST: Awkward limitation
+- RGC: Executor on defeat before after-attack
+- Royal Guard: Sentinel for non-Guardians
+- Fifth Brother: card searching
+- Heavy Stormtrooper: Modular
+- Scout Trooper: Camouflage
+- 74-Z Bikes: movement restrictions, Lined Up calculation
+- Iden Versio: Dio, control after Iden defeated
+- ISBs: Coordinated Raid
+- TGI: Ranged Cleave, Reroll
+- Kallus: Hunt Dissent range + ACS
+- Dark Trooper: ATC
+- Moff Gideon: both abilities
+- Thrawn: deck-seeing
+- Blaise: Interrogate
+- BT-1: Autofocus per Missile Salvo attack
+- Del Meeko: adjacent Droid/Vehicle for Gifted Mechanic
+- Krennic: range + ACS
+- E-Web: Overwatch
+- Flametrooper: Incinerate includes card damage, Rubble+Wasskah, Fireproof includes Bleed
+- Sorin: Droid/Vehicle aura check, usually has ACS
+- Purge Commander: Hunter aura
+- Second Sister: Sabre Orbit, Mastery
+- 0-0-0: Invasive Procedure even if no adjacent (just focus), Death Trooper Field Tactics chain
+- Imperial Officer: FFG vs IACP versions
+- Mortar Trooper: TBD
+- Purge Trooper: Loadouts at game start, NOT unique, Electrohammer large figure, Electrostaff modifying includes innate
+- Cross-Training: die swap, exhaust once per round
+
+## COMMAND CARDS
+- Assassinate: FAQ table for compatible cards
+- Lord of the Sith: after Parting Blow before stun
+- Lure of Dark Side
+- On the Lam: LOS check, Return Fire after
+- Son of Skywalker: after last figure, don't auto-end round
+- Adrenaline: health drops at next round start
+- Blaze of Glory: see SoS
+- Capitalize: defeated figure doesn't gain conditions
+- Cloned Reinforcements: defeated group → readied, existing group → current status
+- Comm Disruption: ask opponent after every card play, hide status
+- Dirty Trick: ask when moving past smuggler/hunter
+- Evacuate: half initial cost then subtract attachment
+- Final Stand: Baze self-target
+- Get Behind Me: complex, cancels defense-affecting cards on target change
+- Jundland Terror: max 1 per EOR
+- Knowledge and Defense: redraw
+- Parting Blow: check each space by Brawler
+- Reduce to Rubble: after dodge
+- Reinforcements: max 1 per SOR
+- Repair: no action if Technician
+- Squad Swarm: cost excludes attachments
+- Stay Down / Close and Personal
+- Still Faster Than You: interrupt during opponent turn
+- Support Specialist: includes special action or CC action
+- Vanish, You Will Not Deny Me
+- Ambush: ask when attacking Cara Dune
+- Arcing Shot, Bodyguard, Built on Hope, Cal's Buddy
+- Change of Plans: figure cost excluding attachments
+- Disarm: no other abilities remove Weakened, Punishing Strike interaction
+- Disengage: ask for every square near Mak
+- Elusive: accuracy numbers not symbols
+- Escalating Hostility, Extra Protection, Ferocity (opponent creatures)
+- Field Tactician: companions can play
+- Force Push: path matters for Parting Blow
+- In the Shadows, Negation (0-cost CC ask)
+- Right Back At Ya: ask if attacking Ahsoka
+- Shared Experience: redraw
+- Smoke Grenade: LOS blocking
+- Sniper Configuration
+- Strength in Numbers: group cost ignores attachments
+- De Wanna Wanga: reshuffle
+- Devotion: deck search
+- Droid Mastery: J4X-7
+- Element of Surprise: start of current activation, not SOR/EOR
+- Fool Me Once: strain before draw, gamebox
+- Harsh Environment: interior/exterior tiles
+- Opportunistic: activating→bank MP, not activating→spend immediately
+- Parry: ask in modifiers
+- Rebel Graffiti: redraw
+- Rest in Peace: affects BOTH players
+- Reverse Engineer: either surge set not both
+- Self-Augmentation: counts as Droid for CCs/abilities
+- Sit Tight: passing rules
+- Targeting Network: redraw
+- To The Limit: extra action can't be Move (gain 4MP then stunned)
+- Urgency: all MP at once
