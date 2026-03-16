@@ -18,7 +18,7 @@ import {
   removeFigurePosition,
 } from '../game/player-helpers.js';
 import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
-import { discordCatch } from '../error-handling.js';
+import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /**
@@ -65,10 +65,10 @@ export async function sendReadyToResolveRolls(thread, gameId) {
       .setLabel('Ready to resolve rolls')
       .setStyle(ButtonStyle.Success)
   );
-  await thread.send({
+  await withDiscordRetry(() => thread.send({
     content: '**Confirm** — When both players have seen the rolls (and any surge), click **Ready to resolve rolls** to apply damage.',
     components: [row],
-  });
+  }));
 }
 
 /**
@@ -200,12 +200,12 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
           .setLabel('Skip')
           .setStyle(ButtonStyle.Secondary),
       ];
-      await thread.send({
+      await withDiscordRetry(() => thread.send({
         content: `**[Under Duress]** — <@${udOwnerId}>, **${dcName}** (opponent) suffers ${amount} Strain from **${abilityLabel}**.`
           + ` You may **deplete** Under Duress to resolve strain choices for your opponent (each CC discard costs 2 CCs).`,
         components: [new ActionRowBuilder().addComponents(udBtns)],
         allowedMentions: { users: [udOwnerId] },
-      }).catch(discordCatch);
+      }));
       // Don't show strain choice yet — wait for UD owner's decision
       return;
     }
@@ -234,22 +234,22 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     for (let r = 0; r < btns.length; r += 5) {
       rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
     }
-    await thread.send({
+    await withDiscordRetry(() => thread.send({
       content: `**Strain** — <@${ownerId}>, **${dcName}** (${cur}/${max} HP) suffers ${amount} Strain from **${abilityLabel}** (${sourceLabel}).`
         + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
         + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.${udNote}`,
       components: rows,
       allowedMentions: { users: [ownerId] },
-    }).catch(discordCatch);
+    }));
     // Don't apply strain HP damage yet — wait for player's choice
     return;
   }
 
   const { newHp: newCur, prevHp: _strainPrev } = reduceHp(dcHealthState, game, msgId, figureIndex, totalHpLoss, playerNum);
   if (!headhunterTriggered) {
-    await thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${_strainPrev} → ${newCur} HP).`);
+    await withDiscordRetry(() => thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${_strainPrev} → ${newCur} HP).`));
   } else {
-    await thread.send(`**${abilityLabel}** — **${dcName}** suffers 1 Damage from Headhunter (${_strainPrev} → ${newCur} HP).`);
+    await withDiscordRetry(() => thread.send(`**${abilityLabel}** — **${dcName}** suffers 1 Damage from Headhunter (${_strainPrev} → ${newCur} HP).`));
   }
   if (logGameAction) {
     await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
@@ -266,11 +266,11 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
           new ButtonBuilder().setCustomId(`submit_fight_use_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Use Submit or Fight').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`submit_fight_skip_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
         ];
-        await thread.send({
+        await withDiscordRetry(() => thread.send({
           content: `🛡️ **Submit or Fight** — <@${_sofOwnerId}>, **${dcName}** may return a CC from discard to game box to heal 1 Strain damage (${_sofDiscard.length} CC${_sofDiscard.length > 1 ? 's' : ''} in discard).`,
           components: [new ActionRowBuilder().addComponents(_sofBtns)],
           allowedMentions: { users: [_sofOwnerId] },
-        }).catch(discordCatch);
+        }));
       }
     }
   }
@@ -341,11 +341,11 @@ async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
           new ButtonBuilder().setCustomId(`submit_fight_use_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Use Submit or Fight').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`submit_fight_skip_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
         ];
-        await thread.send({
+        await withDiscordRetry(() => thread.send({
           content: `🛡️ **Submit or Fight** — <@${_sofOwnerId}>, **${dcName}** may return a CC from discard to game box to heal 1 Strain damage (${_sofDiscard.length} CC${_sofDiscard.length > 1 ? 's' : ''} in discard).`,
           components: [new ActionRowBuilder().addComponents(_sofBtns)],
           allowedMentions: { users: [_sofOwnerId] },
-        }).catch(discordCatch);
+        }));
       }
     }
   }
@@ -478,11 +478,11 @@ async function sendStrainCcPickButtons(game, pending, thread) {
   for (let r = 0; r < btns.length; r += 5) {
     rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
   }
-  await thread.send({
+  await withDiscordRetry(() => thread.send({
     content: `**Strain** — <@${ownerId}>, pick a CC to discard (${remaining} strain point${remaining > 1 ? 's' : ''} remaining, ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} each). Hand: ${hand.length} card${hand.length > 1 ? 's' : ''}.`,
     components: rows,
     allowedMentions: { users: [ownerId] },
-  }).catch(discordCatch);
+  }));
 }
 
 /**
@@ -666,12 +666,12 @@ export async function handleUnderDuress(interaction, ctx) {
     for (let r = 0; r < btns.length; r += 5) {
       rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
     }
-    await thread.send({
+    await withDiscordRetry(() => thread.send({
       content: `**[Under Duress]** — <@${controllerId}>, choose how **${pending.dcName}** allocates ${pending.amount} Strain:`
         + ` take HP damage or discard from opponent's hand (${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''}, costs ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} per strain).`,
       components: rows,
       allowedMentions: { users: [controllerId] },
-    }).catch(discordCatch);
+    }));
   } else {
     // Skip — show normal strain choice to figure owner
     delete pending.underDuressDepleteMsgId;
@@ -713,13 +713,13 @@ export async function handleUnderDuress(interaction, ctx) {
     for (let r = 0; r < btns.length; r += 5) {
       rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
     }
-    await thread.send({
+    await withDiscordRetry(() => thread.send({
       content: `**Strain** — <@${ownerId}>, **${pending.dcName}** suffers ${pending.amount} Strain from **${pending.abilityLabel}** (${pending.sourceLabel}).`
         + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
         + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.${udNote}`,
       components: rows,
       allowedMentions: { users: [ownerId] },
-    }).catch(discordCatch);
+    }));
   }
   saveGames();
 }
@@ -931,7 +931,7 @@ export async function handleAttackTarget(interaction, ctx) {
             else if (cqAttack.attackType?.toLowerCase() === 'ranged') attackInfo = { ...attackInfo, range: [1, 99] };
             game._closeQuartersBonusAcc = 1;
             game._closeQuartersRemoveDefDie = true;
-            await thread.send(`**Close Quarters** — Using **${cqHostileName}**'s attack pool [${cqAttack.dice.join(', ')}], +1 Accuracy, remove 1 defense die.`);
+            await withDiscordRetry(() => thread.send(`**Close Quarters** — Using **${cqHostileName}**'s attack pool [${cqAttack.dice.join(', ')}], +1 Accuracy, remove 1 defense die.`));
           }
         }
       }
@@ -1053,10 +1053,10 @@ export async function handleAttackTarget(interaction, ctx) {
       .setLabel('Ready to roll combat dice')
       .setStyle(ButtonStyle.Secondary)
   );
-  const preCombatMsg = await thread.send({
+  const preCombatMsg = await withDiscordRetry(() => thread.send({
     content: '**Pre-combat window** — Both players: resolve any Command Cards, add/remove dice, apply/block damage, etc. When ready, click **Ready to roll combat dice** below.',
     components: [readyRow],
-  });
+  }));
   if (target.droidArmLOS) await thread.send(`**Droid Arm** — LOS drawn from adjacent space (1 Power Token discarded).`).catch(discordCatch);
   if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(discordCatch);
   if (_fullOfRageFired) await thread.send(`**Full of Rage** — Krrsantan becomes **Focused** before attacking (${_fullOfRageDmg} damage suffered, +1 green die).`).catch(discordCatch);

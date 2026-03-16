@@ -28,7 +28,7 @@ import {
   opponentPlayerNum,
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
-import { discordCatch } from '../error-handling.js';
+import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /**
@@ -972,7 +972,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     allowedMentions: { users: [ownerId] },
   };
   if (actMinimap) actionsPayload.files = [actMinimap];
-  const actionsMsg = await thread.send(actionsPayload);
+  const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
   game.dcActionsData[msgId].messageId = actionsMsg.id;
   // Mounted (Captain Terro, Kuiil): gain 3 MP at start of activation
   const _mountedEff = getDcEffects()?.[meta.dcName];

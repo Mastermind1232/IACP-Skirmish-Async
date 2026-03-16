@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-03-16T14:49:39.946Z",
+  "totalRun": 10,
+  "summary": {
+    "effect": 0,
+    "no-op": 4,
+    "not-reached": 6,
+    "setup-error": 0,
+    "crash": 0,
+    "play-error": 0
+  },
+  "details": [
+    {
+      "ccName": "A Powerful Influence",
+      "scenarioType": "sor",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Adrenaline",
+      "scenarioType": "sor",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Against the Odds",
+      "scenarioType": "eor",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "All in a Day's Work",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Ambush",
+      "scenarioType": "combat",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Arcing Shot",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Armed Escort",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Assassinate",
+      "scenarioType": "combat",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Balancing Force",
+      "scenarioType": "sor",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Battle Scars",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    }
+  ]
+}

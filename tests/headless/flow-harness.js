@@ -76,6 +76,100 @@ function snapshotPendingStates(game) {
   return snap;
 }
 
+// ── State Delta Snapshots (for card-effect detection) ────────────────────────
+
+/** Snapshot HP for all figures across both players. Returns Map<figureKey, {hp, maxHp}>. */
+function snapshotFigureHp(game) {
+  const snap = new Map();
+  for (const pn of [1, 2]) {
+    const positions = game.figurePositions?.[pn];
+    if (!positions) continue;
+    for (const [figKey, pos] of Object.entries(positions)) {
+      if (!pos) continue;
+      const hp = game.figureHp?.[pn]?.[figKey];
+      const maxHp = game.figureMaxHp?.[pn]?.[figKey];
+      snap.set(figKey, { hp: hp ?? null, maxHp: maxHp ?? null });
+    }
+  }
+  return snap;
+}
+
+/** Snapshot conditions for all figures. Returns Map<figureKey, Set<condition>>. */
+function snapshotConditions(game) {
+  const snap = new Map();
+  const conditions = game.figureConditions;
+  if (!conditions) return snap;
+  for (const [figKey, conds] of Object.entries(conditions)) {
+    snap.set(figKey, new Set(Array.isArray(conds) ? conds : Object.keys(conds)));
+  }
+  return snap;
+}
+
+/** Snapshot tokens (focus, evade, power, block) for all figures. Returns Map<figureKey, {focus, evade, power, block}>. */
+function snapshotTokens(game) {
+  const snap = new Map();
+  for (const pn of [1, 2]) {
+    const positions = game.figurePositions?.[pn];
+    if (!positions) continue;
+    for (const figKey of Object.keys(positions)) {
+      snap.set(figKey, {
+        focus: game.focusTokens?.[figKey] || 0,
+        evade: game.evadeTokens?.[figKey] || 0,
+        power: game.powerTokens?.[figKey] || 0,
+        block: game.blockTokens?.[figKey] || 0,
+      });
+    }
+  }
+  return snap;
+}
+
+/** Compute state delta between before/after snapshots. */
+function computeStateDelta(beforeHp, afterHp, beforeCond, afterCond, beforeTok, afterTok) {
+  const delta = { hpChanges: {}, conditionsAdded: {}, conditionsRemoved: {}, tokensChanged: {} };
+  let hasChanges = false;
+
+  // HP changes
+  for (const [fk, after] of afterHp) {
+    const before = beforeHp.get(fk);
+    if (before && before.hp !== after.hp) {
+      delta.hpChanges[fk] = (after.hp ?? 0) - (before.hp ?? 0);
+      hasChanges = true;
+    }
+  }
+  // Defeated figures (in before but not after)
+  for (const [fk] of beforeHp) {
+    if (!afterHp.has(fk)) {
+      delta.hpChanges[fk] = 'defeated';
+      hasChanges = true;
+    }
+  }
+
+  // Condition changes
+  for (const [fk, afterSet] of afterCond) {
+    const beforeSet = beforeCond.get(fk) || new Set();
+    const added = [...afterSet].filter(c => !beforeSet.has(c));
+    const removed = [...beforeSet].filter(c => !afterSet.has(c));
+    if (added.length) { delta.conditionsAdded[fk] = added; hasChanges = true; }
+    if (removed.length) { delta.conditionsRemoved[fk] = removed; hasChanges = true; }
+  }
+
+  // Token changes
+  for (const [fk, afterTk] of afterTok) {
+    const beforeTk = beforeTok.get(fk);
+    if (!beforeTk) continue;
+    const changed = {};
+    let anyTokenChange = false;
+    for (const type of ['focus', 'evade', 'power', 'block']) {
+      const diff = (afterTk[type] || 0) - (beforeTk[type] || 0);
+      if (diff !== 0) { changed[type] = diff; anyTokenChange = true; }
+    }
+    if (anyTokenChange) { delta.tokensChanged[fk] = changed; hasChanges = true; }
+  }
+
+  delta.hasChanges = hasChanges;
+  return delta;
+}
+
 // ── Discord Surface Model ───────────────────────────────────────────────────
 
 class DiscordSurface {
@@ -399,12 +493,19 @@ export function createFlowHarness(opts = {}) {
       const beforeGame = harness.getGame();
       const beforePending = snapshotPendingStates(beforeGame);
       const beforeSnap = snapshotChannelMessages(client);
+      const beforeFigHp = snapshotFigureHp(beforeGame);
+      const beforeCond = snapshotConditions(beforeGame);
+      const beforeTok = snapshotTokens(beforeGame);
 
       const result = await harness.submitAction(customId, userId, actionOpts);
 
       const afterSnap = snapshotChannelMessages(client);
       const afterGame = harness.getGame();
       const afterPending = snapshotPendingStates(afterGame);
+      const afterFigHp = snapshotFigureHp(afterGame);
+      const afterCond = snapshotConditions(afterGame);
+      const afterTok = snapshotTokens(afterGame);
+      const stateDelta = computeStateDelta(beforeFigHp, afterFigHp, beforeCond, afterCond, beforeTok, afterTok);
 
       // Register new messages
       for (const [msgId] of afterSnap) {
@@ -483,6 +584,7 @@ export function createFlowHarness(opts = {}) {
         editsDetected: edits.length,
         pendingCreated: PENDING_STATE_KEYS.filter(k => !beforePending[k] && afterPending[k]),
         pendingCleared: PENDING_STATE_KEYS.filter(k => beforePending[k] && !afterPending[k]),
+        stateDelta,
       };
       stepLog.push(step);
 

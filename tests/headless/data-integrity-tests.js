@@ -461,3 +461,34 @@ describe('Keyword consistency', () => {
     }
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIM-FARM CARD CENSUS
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Sim-farm card census completeness', () => {
+  const allDcNames = Object.keys(eff || {});
+  const allCcNames = Object.keys(cc || {});
+
+  it('DC census includes all DCs (>= 241)', () => {
+    assert.ok(allDcNames.length >= 241, `Only ${allDcNames.length} DCs in census (expected >= 241)`);
+  });
+
+  it('CC census includes all CCs (>= 293)', () => {
+    assert.ok(allCcNames.length >= 293, `Only ${allCcNames.length} CCs in census (expected >= 293)`);
+  });
+
+  it('deployable DCs (with health, cost, attack) >= 130', () => {
+    let deployable = 0;
+    for (const [name, dc] of Object.entries(eff || {})) {
+      if (name.startsWith('[')) continue;
+      if (dc.health > 0 && dc.cost > 0 && dc.attack) deployable++;
+    }
+    assert.ok(deployable >= 130, `Only ${deployable} deployable DCs (expected >= 130)`);
+  });
+
+  it('every CC has timing and playableBy', () => {
+    const missing = Object.entries(cc || {}).filter(([, v]) => !v.timing || !v.playableBy);
+    assert.strictEqual(missing.length, 0, `CCs missing timing/playableBy: ${missing.map(([n]) => n).join(', ')}`);
+  });
+});

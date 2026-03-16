@@ -29,7 +29,7 @@ import {
   opponentPlayerNum,
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
-import { discordCatch } from '../error-handling.js';
+import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /**
@@ -74,11 +74,11 @@ async function promptCommDisruption(game, gameId, playerNum, card, client, logGa
       new ButtonBuilder().setCustomId(`comm_disruption_play_${gameId}`).setLabel('Play Comm Disruption').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`comm_disruption_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
-    await oppHandChannel.send({
+    await withDiscordRetry(() => oppHandChannel.send({
       content: `<@${oppId}> Your opponent played **${card}** (cost ${playedCost}). You have **${spyCount}** friendly SPY group${spyCount !== 1 ? 's' : ''}. Play **Comm Disruption** to cancel it?`,
       components: [row],
       allowedMentions: { users: [oppId] },
-    });
+    }));
     saveGames();
   } catch (err) {
     // Non-fatal: if we can't prompt, the game continues
@@ -262,7 +262,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
   await interaction.message.delete().catch(discordCatch);
   const handId = getHandChannelId(game, playerNum);
   const handChannel = await interaction.client.channels.fetch(handId);
-  await handChannel.send({ embeds: [embed], files, components: [row] });
+  await withDiscordRetry(() => handChannel.send({ embeds: [embed], files, components: [row] }));
 }
 
 /** PLAY CARD confirmed — execute the actual play. */
@@ -330,10 +330,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     game.pendingIllegalCcPlay = { playerNum, card, reason: restriction.reason };
     const handId = getHandChannelId(game, playerNum);
     const handChannel = await client.channels.fetch(handId);
-    const msg = await handChannel.send({
+    const msg = await withDiscordRetry(() => handChannel.send({
       content: `⚠️ The bot thinks playing **${card}** is illegal: ${restriction.reason}\n\nChoose **Ignore and play** to play it anyway, or **Unplay card** to cancel.`,
       components: [getIllegalCcPlayButtons(gameId)],
-    });
+    }));
     game.pendingIllegalCcPlay.messageId = msg.id;
     await interaction.message.delete().catch(discordCatch);
     saveGames();
@@ -345,10 +345,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     game.pendingIllegalCcPlay = { playerNum, card, reason: 'A card with "no other Command cards this attack" (e.g. Assassinate) was already played.' };
     const handId = getHandChannelId(game, playerNum);
     const handChannel = await client.channels.fetch(handId);
-    const msg = await handChannel.send({
+    const msg = await withDiscordRetry(() => handChannel.send({
       content: `⚠️ **${card}** cannot be played: a mutual-exclude CC (Assassinate) is active this attack.\n\nChoose **Ignore and play** to override, or **Unplay card** to cancel.`,
       components: [getIllegalCcPlayButtons(gameId)],
-    });
+    }));
     game.pendingIllegalCcPlay.messageId = msg.id;
     await interaction.message.delete().catch(discordCatch);
     saveGames();
@@ -643,10 +643,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       game.pendingIllegalCcPlay = { playerNum, card, reason: result.manualMessage, fromContext: true };
       const handId = getHandChannelId(game, playerNum);
       const handChannel = await client.channels.fetch(handId);
-      const msg = await handChannel.send({
+      const msg = await withDiscordRetry(() => handChannel.send({
         content: `We don't think you can do this right now: ${result.manualMessage}\n\nChoose **Ignore and play** to play it anyway (resolve manually), or **Unplay** to cancel.`,
         components: [getIllegalCcPlayButtons(gameId)],
-      });
+      }));
       game.pendingIllegalCcPlay.messageId = msg.id;
       await interaction.message.delete().catch(discordCatch);
       saveGames();
@@ -698,9 +698,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       }).catch(discordCatch);
     }
     await logGameAction(game, interaction.client, `Waiting for opponent to respond to **${card}**...`, { phase: 'ACTION', icon: 'hourglass' });
-    const waitingMsg = await handChannel.send({
+    const waitingMsg = await withDiscordRetry(() => handChannel.send({
       content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
-    }).catch(() => null);
+    })).catch(() => null);
     if (waitingMsg) game.pendingNegation.waitingMsgId = waitingMsg.id;
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
     // C14: Comm Disruption — prompt opponent if they have it in hand
@@ -1428,7 +1428,7 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
     try {
       const handChannel = await client.channels.fetch(handChannelId);
       const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
-      await handChannel.send(handPayload);
+      await withDiscordRetry(() => handChannel.send(handPayload));
     } catch {}
   }
   await updateHandVisualMessage(game, playerNum, client);

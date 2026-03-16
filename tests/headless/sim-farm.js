@@ -139,7 +139,11 @@ function buildDataPools() {
   const ccData = getCcEffectsData();
   const ccNames = Object.keys(ccData.cards || {});
 
-  return { deployable, usableMaps, ccNames };
+  // Card census — full set of all cards (including non-deployable upgrades/attachments)
+  const allDcNames = Object.keys(dcEffects);
+  const allCcNames = ccNames; // same set, kept as census reference
+
+  return { deployable, usableMaps, ccNames, allDcNames, allCcNames };
 }
 
 // ── Random Army Builder ─────────────────────────────────────────────────────
@@ -248,6 +252,21 @@ async function runSim(seed, pools, opts = {}) {
   const hitCustomIds = [];
   const hitActionTypes = [];
   const hitPendingStates = {};
+  const hitDcDeployed = {};
+  const hitCcDealt = {};
+  const hitCcPlayed = {};
+  const hitCcNoOps = {};
+  const hitCcEffects = {};
+
+  // Count DCs in armies
+  for (const dc of [...p1Army, ...p2Army]) {
+    const name = dc.dcName;
+    hitDcDeployed[name] = (hitDcDeployed[name] || 0) + 1;
+  }
+  // Count CCs dealt (hand + deck)
+  for (const cc of [...p1CcHand, ...p2CcHand, ...p1CcDeck, ...p2CcDeck]) {
+    hitCcDealt[cc] = (hitCcDealt[cc] || 0) + 1;
+  }
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const game = fh.getGame();
@@ -275,6 +294,19 @@ async function runSim(seed, pools, opts = {}) {
 
     try {
       const result = await fh.act(action.customId, action._uid);
+      // Track CC plays and state deltas
+      if (action.type === 'play_cc') {
+        const ccName = action.params?.cardName || action.params?.ccName;
+        if (ccName) {
+          hitCcPlayed[ccName] = (hitCcPlayed[ccName] || 0) + 1;
+          // Check if CC had observable state effect
+          if (result.step?.stateDelta?.hasChanges) {
+            hitCcEffects[ccName] = (hitCcEffects[ccName] || 0) + 1;
+          } else {
+            hitCcNoOps[ccName] = (hitCcNoOps[ccName] || 0) + 1;
+          }
+        }
+      }
       for (const err of result.invariantErrors) {
         violations.push({
           step,
@@ -317,7 +349,7 @@ async function runSim(seed, pools, opts = {}) {
     violations,
     steps: fh.getStepLog().length,
     ended: fh.getGame()?.ended || false,
-    telemetry: { customIds: hitCustomIds, actionTypes: hitActionTypes, pendingStates: hitPendingStates },
+    telemetry: { customIds: hitCustomIds, actionTypes: hitActionTypes, pendingStates: hitPendingStates, dcDeployed: hitDcDeployed, ccDealt: hitCcDealt, ccPlayed: hitCcPlayed, ccNoOps: hitCcNoOps, ccEffects: hitCcEffects },
   };
 }
 
@@ -334,6 +366,16 @@ async function runSetupSimFromSeed(seed, pools, opts = {}) {
   const ccCount = 6 + Math.floor(rng() * 5);
   const p1CcDeck = randomCcHand(rng, pools.ccNames, ccCount);
   const p2CcDeck = randomCcHand(rng, pools.ccNames, ccCount);
+
+  // Count DCs and CCs for card coverage
+  const hitDcDeployed = {};
+  const hitCcDealt = {};
+  for (const dc of [...p1Army, ...p2Army]) {
+    hitDcDeployed[dc.dcName] = (hitDcDeployed[dc.dcName] || 0) + 1;
+  }
+  for (const cc of [...p1CcDeck, ...p2CcDeck]) {
+    hitCcDealt[cc] = (hitCcDealt[cc] || 0) + 1;
+  }
 
   const scenario = {
     seed,
@@ -390,7 +432,7 @@ async function runSetupSimFromSeed(seed, pools, opts = {}) {
       ended: false,
       phases: result.phases,
       figureCount: result.figureCount,
-      telemetry: { customIds: setupCustomIds, actionTypes: [], pendingStates: {} },
+      telemetry: { customIds: setupCustomIds, actionTypes: [], pendingStates: {}, dcDeployed: hitDcDeployed, ccDealt: hitCcDealt, ccPlayed: {} },
     };
   } catch (e) {
     return {
@@ -400,7 +442,7 @@ async function runSetupSimFromSeed(seed, pools, opts = {}) {
       error: e.message,
       violations: [{ step: 0, invariant: 'SETUP-CRASH', message: e.message }],
       steps: 0,
-      telemetry: { customIds: [], actionTypes: [], pendingStates: {} },
+      telemetry: { customIds: [], actionTypes: [], pendingStates: {}, dcDeployed: hitDcDeployed, ccDealt: hitCcDealt, ccPlayed: {} },
     };
   }
 }
@@ -426,7 +468,7 @@ async function main() {
   const results = { passed: 0, failed: 0, setupErrors: 0, totalSteps: 0, completed: 0 };
   const failures = [];
   const invariantCounts = {};
-  const telemetryAcc = { handlerHits: {}, actionTypeHits: {}, pendingHits: {} };
+  const telemetryAcc = { handlerHits: {}, actionTypeHits: {}, pendingHits: {}, dcDeployed: {}, ccDealt: {}, ccPlayed: {}, ccNoOps: {}, ccEffects: {} };
   const startTime = Date.now();
 
   for (let i = 0; i < count; i++) {
@@ -446,6 +488,21 @@ async function main() {
       }
       for (const [key, ct] of Object.entries(result.telemetry.pendingStates)) {
         telemetryAcc.pendingHits[key] = (telemetryAcc.pendingHits[key] || 0) + ct;
+      }
+      for (const [name, ct] of Object.entries(result.telemetry.dcDeployed || {})) {
+        telemetryAcc.dcDeployed[name] = (telemetryAcc.dcDeployed[name] || 0) + ct;
+      }
+      for (const [name, ct] of Object.entries(result.telemetry.ccDealt || {})) {
+        telemetryAcc.ccDealt[name] = (telemetryAcc.ccDealt[name] || 0) + ct;
+      }
+      for (const [name, ct] of Object.entries(result.telemetry.ccPlayed || {})) {
+        telemetryAcc.ccPlayed[name] = (telemetryAcc.ccPlayed[name] || 0) + ct;
+      }
+      for (const [name, ct] of Object.entries(result.telemetry.ccNoOps || {})) {
+        telemetryAcc.ccNoOps[name] = (telemetryAcc.ccNoOps[name] || 0) + ct;
+      }
+      for (const [name, ct] of Object.entries(result.telemetry.ccEffects || {})) {
+        telemetryAcc.ccEffects[name] = (telemetryAcc.ccEffects[name] || 0) + ct;
       }
     }
 
@@ -532,6 +589,11 @@ async function main() {
     handlerPrefixHits: sortDesc(telemetryAcc.handlerHits),
     actionTypeHits: sortDesc(telemetryAcc.actionTypeHits),
     pendingStateHits: sortDesc(telemetryAcc.pendingHits),
+    dcDeployed: sortDesc(telemetryAcc.dcDeployed),
+    ccDealt: sortDesc(telemetryAcc.ccDealt),
+    ccPlayed: sortDesc(telemetryAcc.ccPlayed),
+    ccNoOps: sortDesc(telemetryAcc.ccNoOps),
+    ccEffects: sortDesc(telemetryAcc.ccEffects),
   };
   try {
     const telemetryPath = new URL('./coverage-telemetry.json', import.meta.url);
@@ -539,7 +601,36 @@ async function main() {
     try { existing = JSON.parse(readFileSync(telemetryPath, 'utf8')); } catch { /* first run */ }
     existing[telemetryData.simType] = telemetryData;
     writeFileSync(telemetryPath, JSON.stringify(existing, null, 2));
-    console.log(`  Telemetry → coverage-telemetry.json (${Object.keys(telemetryAcc.handlerHits).length} handler prefixes, ${Object.keys(telemetryAcc.pendingHits).length} pending states)\n`);
+    console.log(`  Telemetry → coverage-telemetry.json (${Object.keys(telemetryAcc.handlerHits).length} handler prefixes, ${Object.keys(telemetryAcc.pendingHits).length} pending states)`);
+
+    // Card coverage gap report
+    const dcDeployedCount = Object.keys(telemetryAcc.dcDeployed).length;
+    const ccDealtCount = Object.keys(telemetryAcc.ccDealt).length;
+    const ccPlayedCount = Object.keys(telemetryAcc.ccPlayed).length;
+    const neverDeployed = pools.allDcNames.filter(n => !telemetryAcc.dcDeployed[n]);
+    const neverDealt = pools.allCcNames.filter(n => !telemetryAcc.ccDealt[n]);
+    const neverPlayed = pools.allCcNames.filter(n => !telemetryAcc.ccPlayed[n]);
+
+    console.log(`\n  Card coverage: ${dcDeployedCount}/${pools.allDcNames.length} DCs deployed, ${ccDealtCount}/${pools.allCcNames.length} CCs dealt, ${ccPlayedCount}/${pools.allCcNames.length} CCs played`);
+    if (neverDeployed.length > 0 && neverDeployed.length <= 50) {
+      console.log(`  Never deployed (${neverDeployed.length}): ${neverDeployed.join(', ')}`);
+    } else if (neverDeployed.length > 50) {
+      console.log(`  Never deployed: ${neverDeployed.length} DCs`);
+    }
+    if (neverPlayed.length > 0 && neverPlayed.length <= 50) {
+      console.log(`  Never played (${neverPlayed.length}): ${neverPlayed.join(', ')}`);
+    } else if (neverPlayed.length > 50) {
+      console.log(`  Never played: ${neverPlayed.length} CCs`);
+    }
+
+    // No-op report: CCs that were played but never produced a state change
+    const noOpCards = Object.entries(telemetryAcc.ccNoOps).filter(([name]) => !telemetryAcc.ccEffects[name]);
+    const effectCards = Object.keys(telemetryAcc.ccEffects);
+    console.log(`  CC effects: ${effectCards.length} with state change, ${noOpCards.length} no-op (played but zero state change)`);
+    if (noOpCards.length > 0 && noOpCards.length <= 30) {
+      console.log(`  No-op CCs: ${noOpCards.map(([n, ct]) => `${n} (${ct}x)`).join(', ')}`);
+    }
+    console.log();
   } catch (e) {
     console.log(`  Warning: could not write telemetry: ${e.message}\n`);
   }

@@ -20,7 +20,7 @@ import {
   opponentPlayerNum,
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
-import { discordCatch } from '../error-handling.js';
+import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
@@ -178,11 +178,11 @@ export async function handleDcActivate(interaction, ctx) {
       new ButtonBuilder().setCustomId(`confirm_activate_${gameId}_${msgId}_${interaction.message.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`cancel_activate_${gameId}_${ownerId}`).setLabel('No').setStyle(ButtonStyle.Danger)
     );
-    await playAreaCh.send({
+    await withDiscordRetry(() => playAreaCh.send({
       content: `<@${ownerId}> You are not first to act. Activate anyway?`,
       components: [promptRow],
       allowedMentions: { users: [ownerId] },
-    });
+    }));
     return;
   }
   try {
@@ -190,7 +190,7 @@ export async function handleDcActivate(interaction, ctx) {
     const msg = await channel.messages.fetch(msgId);
     dcExhaustedState.set(msgId, true);
     const { embed, files } = await buildDcEmbedAndFiles(dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, { dcName, displayName }), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, { dcName, displayName }));
-    await msg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, dcName) });
+    await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, dcName) }));
     const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
     const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
     game.movementBank = game.movementBank || {};
@@ -207,7 +207,7 @@ export async function handleDcActivate(interaction, ctx) {
       allowedMentions: { users: [ownerId] },
     };
     if (actMinimap) actionsPayload.files = [actMinimap];
-    const actionsMsg = await thread.send(actionsPayload);
+    const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
     game.dcActionsData[msgId].messageId = actionsMsg.id;
     setActivationsRemaining(game, playerNum, getActivationsRemaining(game, playerNum) - 1);
     getActivatedDcIndices(game, playerNum).push(dcIndex);
@@ -506,11 +506,11 @@ export async function handleDcToggle(interaction, ctx) {
         new ButtonBuilder().setCustomId(`confirm_activate_${game.gameId}_${msgId}_0`).setLabel('Yes').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`cancel_activate_${game.gameId}_${playerId}`).setLabel('No').setStyle(ButtonStyle.Danger)
       );
-      await playAreaCh.send({
+      await withDiscordRetry(() => playAreaCh.send({
         content: `<@${playerId}> You are not first to act. Activate anyway?`,
         components: [promptRow],
         allowedMentions: { users: [playerId] },
-      });
+      }));
       return;
     }
     dcExhaustedState.set(msgId, true);
@@ -540,7 +540,7 @@ export async function handleDcToggle(interaction, ctx) {
         allowedMentions: { users: [getPlayerId(game, meta.playerNum)] },
       };
       if (actMinimap) actionsPayload.files = [actMinimap];
-      const actionsMsg = await thread.send(actionsPayload);
+      const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
       game.dcActionsData[msgId].messageId = actionsMsg.id;
       const logCh = await client.channels.fetch(game.generalId);
       const icon = ACTION_ICONS.activate || '⚡';
@@ -646,7 +646,7 @@ export async function handleDcDeplete(interaction, ctx) {
   embed.setTitle(`REMOVED FROM GAME (Depleted) — ${displayName}`);
   embed.setDescription((embed.data.description || '') + '\n\n*This upgrade was depleted and is no longer in play (one-time use).*');
   embed.setColor(COLORS.GRAY);
-  await interaction.message.edit({ embeds: [embed], files, components: [] });
+  await withDiscordRetry(() => interaction.message.edit({ embeds: [embed], files, components: [] }));
   await logGameAction(game, client, `**P${meta.playerNum}:** <@${ownerId}> depleted **${displayName}** — removed from game`, { allowedMentions: { users: [ownerId] }, icon: 'deplete' });
   saveGames();
 }

@@ -23,7 +23,7 @@ import {
 } from '../game/player-helpers.js';
 import { checkStartOfRoundPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { FIGURE_LETTERS } from '../discord/components.js';
-import { discordCatch } from '../error-handling.js';
+import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
 /**
@@ -587,7 +587,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     try {
       const boardChannel = await client.channels.fetch(game.boardId);
       const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
-      await boardChannel.send(payload);
+      await withDiscordRetry(() => boardChannel.send(payload));
     } catch (err) {
       console.error('Failed to refresh board at end of round:', err);
     }
@@ -942,7 +942,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
               );
               const discardRows = [];
               for (let r = 0; r < discardBtns.length; r += 5) discardRows.push(new ActionRowBuilder().addComponents(discardBtns.slice(r, r + 5)));
-              await handCh.send({ content: '**Rule by Fear** — Choose 1 card from your hand to discard:', components: discardRows });
+              await withDiscordRetry(() => handCh.send({ content: '**Rule by Fear** — Choose 1 card from your hand to discard:', components: discardRows }));
             } catch (err) {
               console.error('Rule by Fear discard picker failed:', err);
             }
@@ -981,7 +981,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
               );
               const pickRows = [];
               for (let r = 0; r < pickBtns.length; r += 5) pickRows.push(new ActionRowBuilder().addComponents(pickBtns.slice(r, r + 5)));
-              await handCh.send({ content: '**Rogue One** — Choose a card to place on top of your deck (1 of 2):', components: pickRows });
+              await withDiscordRetry(() => handCh.send({ content: '**Rogue One** — Choose a card to place on top of your deck (1 of 2):', components: pickRows }));
             } catch (err) {
               console.error('Rogue One return picker failed:', err);
             }
@@ -1178,12 +1178,12 @@ export async function handleEndStartOfRound(interaction, ctx) {
   const content = showBtn
     ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
     : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.${passHint}`;
-  const sent = await generalChannel.send({
+  const sent = await withDiscordRetry(() => generalChannel.send({
     content,
     embeds: [roundEmbed],
     components,
     allowedMentions: { users: [game.initiativePlayerId] },
-  });
+  }));
   game.roundActivationMessageId = sent.id;
   game.roundActivationButtonShown = showBtn;
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
