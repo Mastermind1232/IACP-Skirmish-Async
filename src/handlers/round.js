@@ -2,7 +2,7 @@
  * Round handlers: end_end_of_round_, end_start_of_round_
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDcEffects, getMapSpaces, getFormCards } from '../data-loader.js';
+import { getDcEffects, getMapSpaces, getFormCards, getCcEffectsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, deductVp, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
@@ -563,6 +563,47 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       }
     }
   }
+  // [Doubt] SU: at end of round, choose hostile figure, discard 1 condition or Power Token
+  for (const pn of [1, 2]) {
+    const _dbtDcList = getDcList(game, pn) || [];
+    const _dbtMsgIds = getDcMessageIds(game, pn) || [];
+    for (let i = 0; i < _dbtDcList.length; i++) {
+      const _dbtDc = _dbtDcList[i];
+      if (!_dbtDc || _dbtDc.defeated) continue;
+      if ((_dbtDc.dcName || _dbtDc) !== '[Doubt]') continue;
+      const _dbtMid = _dbtMsgIds[i];
+      if (!_dbtMid) continue;
+      if (isDepletedRemovedFromGame(game, _dbtMid)) continue;
+      // Find hostile figures with conditions or power tokens
+      const oppPn = pn === 1 ? 2 : 1;
+      const oppFigs = game.figurePositions?.[oppPn] || {};
+      const _dbtCandidates = [];
+      for (const [fk, pos] of Object.entries(oppFigs)) {
+        if (!pos) continue;
+        const conds = game.figureConditions?.[fk] || [];
+        const tokens = game.figurePowerTokens?.[fk] || [];
+        if (conds.length === 0 && tokens.length === 0) continue;
+        _dbtCandidates.push({ fk, dcName: dcNameFromFigureKey(fk), conds, tokens });
+      }
+      if (_dbtCandidates.length === 0) continue;
+      const _dbtOwnerId = game[`player${pn}Id`];
+      const _dbtBtns = _dbtCandidates.slice(0, 24).map(({ fk, dcName: dn, conds, tokens }) => {
+        const info = [...conds, ...tokens.map(t => `${t} Token`)].join(', ');
+        const label = `${dn}: ${info}`;
+        return new ButtonBuilder()
+          .setCustomId(`doubt_fig_${gameId}_${pn}_${fk}`)
+          .setLabel(label.length > 80 ? label.slice(0, 77) + '...' : label)
+          .setStyle(ButtonStyle.Danger);
+      });
+      _dbtBtns.push(new ButtonBuilder().setCustomId(`doubt_fig_${gameId}_${pn}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+      const _dbtRows = [];
+      for (let r = 0; r < _dbtBtns.length; r += 5) _dbtRows.push(new ActionRowBuilder().addComponents(_dbtBtns.slice(r, r + 5)));
+      await logGameAction(game, client, `<@${_dbtOwnerId}> **[Doubt]** — Choose a hostile figure to discard 1 condition or Power Token:`, {
+        components: _dbtRows.slice(0, 5),
+        allowedMentions: { users: [_dbtOwnerId] },
+      });
+    }
+  }
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId) continue;
     if (isDepletedRemovedFromGame(game, msgId)) continue;
@@ -612,8 +653,30 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   const mapId = game.selectedMap?.id;
   const p1Terminals = mapId ? countTerminalsControlledByPlayer(game, 1, mapId) : 0;
   const p2Terminals = mapId ? countTerminalsControlledByPlayer(game, 2, mapId) : 0;
-  let p1DrawCount = 1 + p1Terminals;
-  let p2DrawCount = 1 + p2Terminals;
+  // Rebel High Command: draw 1 additional CC at end of each round
+  const p1HasRHC = (getDcList(game, 1) || []).some(dc => (dc.dcName || dc) === '[Rebel High Command]');
+  const p2HasRHC = (getDcList(game, 2) || []).some(dc => (dc.dcName || dc) === '[Rebel High Command]');
+  let p1DrawCount = 1 + p1Terminals + (p1HasRHC ? 1 : 0);
+  let p2DrawCount = 1 + p2Terminals + (p2HasRHC ? 1 : 0);
+  // Channel the Force: draw 1 fewer, then search deck for FORCE USER CC
+  const p1HasCtF = (getDcList(game, 1) || []).some(dc => (dc.dcName || dc) === '[Channel the Force]');
+  const p2HasCtF = (getDcList(game, 2) || []).some(dc => (dc.dcName || dc) === '[Channel the Force]');
+  // Check if not already exhausted
+  const _ctfExhCheck = (pn) => {
+    const dcList = getDcList(game, pn) || [];
+    const dcMsgIds = getDcMessageIds(game, pn) || [];
+    for (let i = 0; i < dcList.length; i++) {
+      if ((dcList[i]?.dcName || dcList[i]) === '[Channel the Force]') {
+        const mid = dcMsgIds[i];
+        if (mid && !(game.exhaustedSkirmishUpgrades?.[mid] || []).includes('Channel the Force')) return mid;
+      }
+    }
+    return null;
+  };
+  const p1CtFMsgId = p1HasCtF ? _ctfExhCheck(1) : null;
+  const p2CtFMsgId = p2HasCtF ? _ctfExhCheck(2) : null;
+  if (p1CtFMsgId && p1DrawCount > 0) p1DrawCount = Math.max(0, p1DrawCount - 1);
+  if (p2CtFMsgId && p2DrawCount > 0) p2DrawCount = Math.max(0, p2DrawCount - 1);
   const hadCutLines = !!game.noCommandDrawThisRound;
   if (game.noCommandDrawThisRound) {
     p1DrawCount = 0;
@@ -654,6 +717,54 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   }
   game.player2CcHand = [...(game.player2CcHand || []), ...p2Drawn];
   game.player2CcDeck = p2Deck;
+
+  // Channel the Force: search deck for FORCE USER CC, add to hand, shuffle, suffer Strain
+  for (const _ctfPn of [1, 2]) {
+    const _ctfMid = _ctfPn === 1 ? p1CtFMsgId : p2CtFMsgId;
+    if (!_ctfMid || hadCutLines) continue;
+    // Exhaust the card
+    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+    game.exhaustedSkirmishUpgrades[_ctfMid] = [...(game.exhaustedSkirmishUpgrades[_ctfMid] || []), 'Channel the Force'];
+    // Find FORCE USER cards in deck
+    const _ctfDeckKey = _ctfPn === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const _ctfDeck = game[_ctfDeckKey] || [];
+    const _ctfCcEffData = getCcEffectsData?.()?.cards || {};
+    const _ctfForceCards = [];
+    for (let ci = 0; ci < _ctfDeck.length; ci++) {
+      const ccName = _ctfDeck[ci];
+      const ccEff = _ctfCcEffData[ccName];
+      const playableBy = String(ccEff?.playableBy || '').toUpperCase();
+      if (playableBy.includes('FORCE USER')) _ctfForceCards.push({ name: ccName, deckIdx: ci });
+    }
+    if (_ctfForceCards.length === 0) {
+      await logGameAction(game, client, `**Channel the Force** — P${_ctfPn} searched deck but found no FORCE USER Command cards.`, { phase: 'ROUND', icon: 'card' });
+      continue;
+    }
+    // Dedupe by card name for button display
+    const _ctfUnique = [...new Map(_ctfForceCards.map(c => [c.name, c])).values()];
+    const handChId = getHandChannelId(game, _ctfPn);
+    if (handChId) {
+      try {
+        const handCh = await client.channels.fetch(handChId);
+        const btns = _ctfUnique.slice(0, 20).map((c, i) =>
+          new ButtonBuilder()
+            .setCustomId(`ctf_pick_${gameId}_${_ctfPn}_${i}`)
+            .setLabel(String(c.name).length > 80 ? String(c.name).slice(0, 77) + '...' : String(c.name))
+            .setStyle(ButtonStyle.Primary)
+        );
+        const rows = [];
+        for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+        game[`pendingChannelTheForce_p${_ctfPn}`] = { cards: _ctfUnique };
+        await handCh.send({
+          content: `**Channel the Force** — Choose a FORCE USER Command card from your deck to add to your hand:`,
+          components: rows.slice(0, 5),
+        });
+      } catch (err) {
+        console.error('Channel the Force pick error:', err);
+      }
+    }
+  }
+
   const variant = game.selectedMission?.variant;
   const missionRules = getMissionRules?.(mapId, variant) ?? {};
   const endOfRoundRules = missionRules.endOfRound;
@@ -737,9 +848,11 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
   }
   const generalChannel = await client.channels.fetch(game.generalId);
+  const p1DrawDetail = `${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}${p1HasRHC ? ' + Rebel High Command' : ''}`;
+  const p2DrawDetail = `${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}${p2HasRHC ? ' + Rebel High Command' : ''}`;
   const drawDesc = hadCutLines
     ? 'No Command card draw this round (Cut Lines).'
-    : `P1 drew ${p1DrawCount} card${p1DrawCount !== 1 ? 's' : ''} (${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''} controlled). P2 drew ${p2DrawCount} card${p2DrawCount !== 1 ? 's' : ''} (${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''} controlled). ✓`;
+    : `P1 drew ${p1DrawCount} card${p1DrawCount !== 1 ? 's' : ''} (${p1DrawDetail}). P2 drew ${p2DrawCount} card${p2DrawCount !== 1 ? 's' : ''} (${p2DrawDetail}). ✓`;
   const initZone = getInitiativePlayerZoneLabel(game);
   const initNum = getInitiativePlayerNum(game);
   await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
@@ -1486,6 +1599,163 @@ export async function handleRogueOneReturn(interaction, ctx) {
 }
 
 /**
+ * Channel the Force: player picks a FORCE USER CC from deck to add to hand.
+ */
+export async function handleCtfPick(interaction, ctx) {
+  const { getGame, saveGames, updateHandVisualMessage, logGameAction, client, dcHealthState, dcMessageMeta } = ctx;
+  const parts = interaction.customId.replace('ctf_pick_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const pickIdx = parseInt(parts[2], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game[`pendingChannelTheForce_p${playerNum}`];
+  if (!pending) {
+    await interaction.followUp({ content: 'No Channel the Force pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const picked = pending.cards[pickIdx];
+  if (!picked) {
+    await interaction.followUp({ content: 'Invalid selection.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const deckKey = ccDeckKey(playerNum);
+  const handKey = ccHandKey(playerNum);
+  const deck = game[deckKey] || [];
+  const cardIdx = deck.indexOf(picked.name);
+  if (cardIdx < 0) {
+    await interaction.followUp({ content: 'Card no longer in deck.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Remove from deck, add to hand
+  deck.splice(cardIdx, 1);
+  game[handKey] = [...(game[handKey] || []), picked.name];
+  // Shuffle deck
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  game[deckKey] = deck;
+  delete game[`pendingChannelTheForce_p${playerNum}`];
+  // Determine cost of the chosen card for Strain
+  const ccEffData = getCcEffectsData?.()?.cards || {};
+  const ccEff = ccEffData[picked.name];
+  const cost = ccEff?.cost ?? 0;
+  await interaction.message.edit({
+    content: `**Channel the Force** — Added **${picked.name}** to hand. Deck shuffled.`,
+    components: [],
+  }).catch(discordCatch);
+  await logGameAction(game, client,
+    `**Channel the Force** — P${playerNum} searched deck and added **${picked.name}** (cost ${cost}) to hand. Deck shuffled.`,
+    { phase: 'ROUND', icon: 'card' });
+  // Apply Strain to a friendly FORCE USER figure equal to cost
+  if (cost > 0) {
+    const dcList = getDcList(game, playerNum) || [];
+    const dcEffAll = getDcEffects?.() || {};
+    const fuFigures = [];
+    const figPos = game.figurePositions?.[playerNum] || {};
+    for (const dc of dcList) {
+      const dn = dc?.dcName || dc;
+      if (/^\[.+\]$/.test(dn)) continue;
+      const eff = dcEffAll[dn];
+      const kws = (eff?.keywords || []).map(k => String(k).toUpperCase());
+      if (!kws.includes('FORCE USER')) continue;
+      for (const [fk, pos] of Object.entries(figPos)) {
+        if (fk.startsWith(dn + '-') && pos) fuFigures.push({ fk, dcName: dn });
+      }
+    }
+    if (fuFigures.length === 1) {
+      // Auto-apply strain to only FORCE USER
+      const { fk, dcName: fuName } = fuFigures[0];
+      // Find the DC message ID for this figure
+      const _ctfDcMsgIds = getDcMessageIds(game, playerNum) || [];
+      const _ctfDcList = getDcList(game, playerNum) || [];
+      let _ctfFigMsgId = null;
+      for (let i = 0; i < _ctfDcList.length; i++) {
+        if ((_ctfDcList[i]?.dcName || _ctfDcList[i]) === fuName) { _ctfFigMsgId = _ctfDcMsgIds[i]; break; }
+      }
+      if (_ctfFigMsgId && dcHealthState) {
+        const figMatch = fk.match(/-(\d+)$/);
+        const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
+        reduceHp(dcHealthState, game, _ctfFigMsgId, figIdx, cost, playerNum);
+      }
+      await logGameAction(game, client,
+        `**Channel the Force** — **${fuName}** suffers **${cost} Strain**.`,
+        { phase: 'ROUND', icon: 'condition' });
+    } else if (fuFigures.length > 1) {
+      // Multiple FORCE USER figures — show picker
+      game.pendingChannelTheForceStrain = { playerNum, cost, figures: fuFigures };
+      const handChId = getHandChannelId(game, playerNum);
+      if (handChId) {
+        try {
+          const handCh = await client.channels.fetch(handChId);
+          const btns = fuFigures.slice(0, 10).map((f, i) =>
+            new ButtonBuilder()
+              .setCustomId(`ctf_strain_${gameId}_${playerNum}_${i}`)
+              .setLabel(f.dcName)
+              .setStyle(ButtonStyle.Danger)
+          );
+          const rows = [];
+          for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+          await handCh.send({
+            content: `**Channel the Force** — Choose a FORCE USER figure to suffer **${cost} Strain**:`,
+            components: rows.slice(0, 5),
+          });
+        } catch (err) {
+          console.error('Channel the Force strain pick error:', err);
+        }
+      }
+    }
+  }
+  if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * Channel the Force: player picks which FORCE USER figure suffers Strain.
+ */
+export async function handleCtfStrain(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client, dcHealthState } = ctx;
+  const parts = interaction.customId.replace('ctf_strain_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const figIdx = parseInt(parts[2], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingChannelTheForceStrain;
+  if (!pending || pending.playerNum !== playerNum) {
+    await interaction.followUp({ content: 'No Channel the Force strain pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const fig = pending.figures[figIdx];
+  if (!fig) {
+    await interaction.followUp({ content: 'Invalid selection.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Apply strain via dcHealthState
+  const _ctsDcMsgIds = getDcMessageIds(game, playerNum) || [];
+  const _ctsDcList = getDcList(game, playerNum) || [];
+  let _ctsFigMsgId = null;
+  for (let i = 0; i < _ctsDcList.length; i++) {
+    if ((_ctsDcList[i]?.dcName || _ctsDcList[i]) === fig.dcName) { _ctsFigMsgId = _ctsDcMsgIds[i]; break; }
+  }
+  if (_ctsFigMsgId && dcHealthState) {
+    const figMatch = fig.fk.match(/-(\d+)$/);
+    const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
+    reduceHp(dcHealthState, game, _ctsFigMsgId, figIdx, pending.cost, playerNum);
+  }
+  delete game.pendingChannelTheForceStrain;
+  await interaction.message.edit({
+    content: `**Channel the Force** — **${fig.dcName}** suffered **${pending.cost} Strain**.`,
+    components: [],
+  }).catch(discordCatch);
+  await logGameAction(game, client,
+    `**Channel the Force** — **${fig.dcName}** suffers **${pending.cost} Strain**.`,
+    { phase: 'ROUND', icon: 'condition' });
+  saveGames();
+}
+
+/**
  * Imperial Citadel: player picks Focus or Damage token to place on the card.
  */
 export async function handleImpCitadel(interaction, ctx) {
@@ -1529,5 +1799,115 @@ export async function handleProgrammingOverride(interaction, ctx) {
   game.roundProgrammingOverrideTrait[playerNum] = trait;
   await logGameAction(game, client, `🔧 **Programming Override** — **4-LOM** gains **${trait}** until end of round.`, { phase: 'ROUND', icon: 'round' });
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  saveGames();
+}
+
+/**
+ * Handle doubt_fig_ button: player picks a hostile figure to remove a condition/token from.
+ * customId: doubt_fig_{gameId}_{playerNum}_{figureKey|skip}
+ */
+export async function handleDoubtFigPick(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const full = interaction.customId.replace(/^doubt_fig_/, '');
+  const parts = full.split('_');
+  const gameId = parts[0];
+  const pn = parseInt(parts[1], 10);
+  const target = parts.slice(2).join('_');
+
+  const game = getGame(gameId);
+  if (!game) return;
+
+  if (target === 'skip') {
+    await interaction.message.edit({ content: '**[Doubt]** — Skipped condition/token removal.', components: [] }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
+  const targetFk = target;
+  const targetDcName = dcNameFromFigureKey(targetFk);
+  const conds = game.figureConditions?.[targetFk] || [];
+  const tokens = game.figurePowerTokens?.[targetFk] || [];
+  const removables = [
+    ...conds.map((c, i) => ({ type: 'condition', value: c, index: i })),
+    ...tokens.map((t, i) => ({ type: 'token', value: t, index: i })),
+  ];
+
+  if (removables.length === 1) {
+    // Only one option — auto-remove
+    const item = removables[0];
+    if (item.type === 'condition') {
+      const arr = game.figureConditions[targetFk] || [];
+      arr.splice(item.index, 1);
+      if (arr.length === 0) delete game.figureConditions[targetFk];
+    } else {
+      const arr = game.figurePowerTokens[targetFk] || [];
+      arr.splice(item.index, 1);
+      if (arr.length === 0) delete game.figurePowerTokens[targetFk];
+    }
+    const label = item.type === 'condition' ? item.value : `${item.value} Token`;
+    await interaction.message.edit({ content: `**[Doubt]** — Discarded **${label}** from **${targetDcName}**.`, components: [] }).catch(discordCatch);
+    await logGameAction(game, client, `**[Doubt]** — Discarded ${label} from ${targetDcName}.`, { phase: 'ROUND', icon: 'card' });
+  } else {
+    // Multiple options — show picker
+    const btns = removables.slice(0, 24).map(({ type, value }, i) => {
+      const label = type === 'condition' ? `Discard ${value}` : `Discard ${value} Token`;
+      return new ButtonBuilder()
+        .setCustomId(`doubt_remove_${gameId}_${pn}_${targetFk}_${type}_${i}`)
+        .setLabel(label.length > 80 ? label.slice(0, 77) + '...' : label)
+        .setStyle(ButtonStyle.Danger);
+    });
+    const rows = [];
+    for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+    await interaction.message.edit({
+      content: `**[Doubt]** — Choose a condition or Power Token to discard from **${targetDcName}**:`,
+      components: rows.slice(0, 5),
+    }).catch(discordCatch);
+  }
+  saveGames();
+}
+
+/**
+ * Handle doubt_remove_ button: player picks which condition/token to remove.
+ * customId: doubt_remove_{gameId}_{playerNum}_{figureKey}_{condition|token}_{index}
+ */
+export async function handleDoubtRemove(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const full = interaction.customId.replace(/^doubt_remove_/, '');
+  // Last two parts are type and index; everything before (after gameId and pn) is the figureKey
+  const parts = full.split('_');
+  const gameId = parts[0];
+  const indexStr = parts.pop();
+  const type = parts.pop(); // 'condition' or 'token'
+  const targetFk = parts.slice(2).join('_');
+
+  const game = getGame(gameId);
+  if (!game) return;
+
+  const targetDcName = dcNameFromFigureKey(targetFk);
+  const idx = parseInt(indexStr, 10);
+
+  if (type === 'condition') {
+    const conds = game.figureConditions?.[targetFk] || [];
+    if (idx < conds.length) {
+      const removed = conds[idx];
+      conds.splice(idx, 1);
+      if (conds.length === 0) delete game.figureConditions[targetFk];
+      else game.figureConditions[targetFk] = conds;
+      await interaction.message.edit({ content: `**[Doubt]** — Discarded **${removed}** from **${targetDcName}**.`, components: [] }).catch(discordCatch);
+      await logGameAction(game, client, `**[Doubt]** — Discarded ${removed} from ${targetDcName}.`, { phase: 'ROUND', icon: 'card' });
+    }
+  } else if (type === 'token') {
+    const tokens = game.figurePowerTokens?.[targetFk] || [];
+    if (idx < tokens.length) {
+      const removed = tokens[idx];
+      tokens.splice(idx, 1);
+      if (tokens.length === 0) delete game.figurePowerTokens[targetFk];
+      else game.figurePowerTokens[targetFk] = tokens;
+      await interaction.message.edit({ content: `**[Doubt]** — Discarded **${removed} Token** from **${targetDcName}**.`, components: [] }).catch(discordCatch);
+      await logGameAction(game, client, `**[Doubt]** — Discarded ${removed} Token from ${targetDcName}.`, { phase: 'ROUND', icon: 'card' });
+    }
+  }
   saveGames();
 }

@@ -2706,7 +2706,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "havoc_shot"
+      ]
     },
     "Fennec Shand": {
       "abilityText": "Bounty: When you are defeated, your opponent gains 2 VPs.\n\nSharpshooter: When you declare an attack, if the target is 5 or more spaces away, you become Focused.",

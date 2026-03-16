@@ -11,7 +11,7 @@
 import { normalizeCoord, getFootprintCells } from './coords.js';
 import { getMapSpaces, getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
-import { getCcHand, getPlayerId, opponentPlayerNum } from './player-helpers.js';
+import { getCcHand, getPlayerId, opponentPlayerNum, getDcMessageIds, getDcList } from './player-helpers.js';
 import { getRange } from './spatial.js';
 
 /**
@@ -148,6 +148,43 @@ export function detectPostMoveInterrupts(game, movingPlayerNum, movingFigureKey,
           }
         }
       }
+    }
+
+    // --- Overwatch: hostile enters space on/adjacent to Overwatch token ---
+    for (const [owMsgId, owSpace] of Object.entries(game.overwatchTokenPosition || {})) {
+      const normOwSpace = normalizeCoord(owSpace);
+      // Check entering space is on or adjacent to token
+      const isOnOrAdj = enteringSpace === normOwSpace || enterAdj.has(normOwSpace);
+      if (!isOnOrAdj) continue;
+      // Check was NOT already on or adjacent (only trigger on entering the zone)
+      const wasOnOrAdj = exitingSpace === normOwSpace || exitAdj.has(normOwSpace);
+      if (wasOnOrAdj) continue;
+      // Determine owner of this Overwatch
+      let owPlayerNum = null;
+      if ((getDcMessageIds(game, 1) || []).includes(owMsgId)) owPlayerNum = 1;
+      else if ((getDcMessageIds(game, 2) || []).includes(owMsgId)) owPlayerNum = 2;
+      if (!owPlayerNum || owPlayerNum === movingPlayerNum) continue;
+      // Check not already exhausted
+      if ((game.exhaustedSkirmishUpgrades?.[owMsgId] || []).includes('Overwatch')) continue;
+      // Avoid duplicate triggers for same token in same move
+      if (triggers.some(t => t.type === 'overwatch' && t.owMsgId === owMsgId)) continue;
+      // Find DC name
+      const owDcList = getDcList(game, owPlayerNum) || [];
+      const owMsgIds = getDcMessageIds(game, owPlayerNum) || [];
+      const owIdx = owMsgIds.indexOf(owMsgId);
+      const owDcName = owIdx >= 0 ? (owDcList[owIdx]?.dcName || 'E-Web Engineer') : 'E-Web Engineer';
+      const owDisplayName = owIdx >= 0 ? (owDcList[owIdx]?.displayName || owDcName) : owDcName;
+      triggers.push({
+        type: 'overwatch',
+        cardName: 'Overwatch',
+        candidatePlayerNum: owPlayerNum,
+        candidateFigureKey: null,
+        candidateDcName: owDcName,
+        triggerSpace: enteringSpace,
+        description: `**${owDisplayName}** (Overwatch) — hostile entered space on/adjacent to Overwatch token at **${normOwSpace.toUpperCase()}**. Interrupt attack opportunity.`,
+        owMsgId,
+        owTokenSpace: normOwSpace,
+      });
     }
   }
 

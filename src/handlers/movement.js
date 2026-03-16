@@ -937,21 +937,40 @@ export async function handleMovePick(interaction, ctx) {
     const interruptTriggers = detectPostMoveInterrupts(game, playerNum, figureKey, path);
     for (const trigger of interruptTriggers) {
       const oppId = getPlayerId(game, trigger.candidatePlayerNum);
-      const triggerBtns = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`mvint_play_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`)
-          .setLabel(`Play ${trigger.cardName}`)
-          .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-          .setCustomId(`mvint_skip_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`)
-          .setLabel('Skip')
-          .setStyle(ButtonStyle.Secondary),
-      );
-      await interaction.channel.send({
-        content: `⚠️ <@${oppId}> — ${trigger.description}`,
-        components: [triggerBtns],
-        allowedMentions: { users: oppId ? [oppId] : [] },
-      }).catch(discordCatch);
+      if (trigger.type === 'overwatch') {
+        // Overwatch uses different buttons (DC exhaust, not CC play)
+        const owBtns = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`ow_interrupt_use_${game.gameId}_${trigger.owMsgId}`)
+            .setLabel('Use Overwatch (Interrupt Attack)')
+            .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setCustomId(`ow_interrupt_skip_${game.gameId}_${trigger.owMsgId}`)
+            .setLabel('Skip')
+            .setStyle(ButtonStyle.Secondary),
+        );
+        await interaction.channel.send({
+          content: `⚠️ <@${oppId}> — ${trigger.description}`,
+          components: [owBtns],
+          allowedMentions: { users: oppId ? [oppId] : [] },
+        }).catch(discordCatch);
+      } else {
+        const triggerBtns = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`mvint_play_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`)
+            .setLabel(`Play ${trigger.cardName}`)
+            .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setCustomId(`mvint_skip_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`)
+            .setLabel('Skip')
+            .setStyle(ButtonStyle.Secondary),
+        );
+        await interaction.channel.send({
+          content: `⚠️ <@${oppId}> — ${trigger.description}`,
+          components: [triggerBtns],
+          allowedMentions: { users: oppId ? [oppId] : [] },
+        }).catch(discordCatch);
+      }
       await logGameAction(game, client, `⚠️ Movement interrupt opportunity: ${trigger.description}`, { phase: 'ROUND', icon: 'warn' });
     }
   }
@@ -1018,5 +1037,59 @@ export async function handleMoveInterruptSkip(interaction, ctx) {
   }
 
   await logGameAction(game, client, `**${dcName}** skipped **${cardName}** opportunity.`, { phase: 'ROUND', icon: 'skip' });
+  saveGames();
+}
+
+/**
+ * Handle ow_interrupt_use_ — player chose to use Overwatch interrupt attack.
+ */
+export async function handleOverwatchInterruptUse(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const m = interaction.customId.match(/^ow_interrupt_use_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, owMsgId] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+
+  // Exhaust the Overwatch card
+  game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+  game.exhaustedSkirmishUpgrades[owMsgId] = [...(game.exhaustedSkirmishUpgrades[owMsgId] || []), 'Overwatch'];
+
+  // Remove the token
+  if (game.overwatchTokenPosition) delete game.overwatchTokenPosition[owMsgId];
+
+  // Determine DC name
+  let dcDisplayName = 'E-Web Engineer';
+  for (const pn of [1, 2]) {
+    const dcList = getDcList(game, pn) || [];
+    const msgIds = getDcMessageIds(game, pn) || [];
+    const idx = msgIds.indexOf(owMsgId);
+    if (idx >= 0) {
+      dcDisplayName = dcList[idx]?.displayName || dcList[idx]?.dcName || dcDisplayName;
+      break;
+    }
+  }
+
+  try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
+
+  await logGameAction(game, client, `**Overwatch** — **${dcDisplayName}** interrupts to perform an attack! Use the DC's Attack button. Token removed. (Exhausted)`, { phase: 'ROUND', icon: 'attack' });
+  await interaction.followUp({ content: `✅ **Overwatch** activated — use **${dcDisplayName}**'s Attack button to perform the interrupt attack. The Overwatch token has been removed.`, ephemeral: true }).catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * Handle ow_interrupt_skip_ — player chose to skip Overwatch interrupt.
+ */
+export async function handleOverwatchInterruptSkip(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const m = interaction.customId.match(/^ow_interrupt_skip_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+
+  try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
+
+  await logGameAction(game, client, `**Overwatch** interrupt opportunity skipped.`, { phase: 'ROUND', icon: 'skip' });
   saveGames();
 }

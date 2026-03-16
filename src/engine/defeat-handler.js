@@ -14,6 +14,7 @@
  *  6. Check passive CC redraws (Shared Experience, etc.)
  *  7. Check Nefarious Gains (Jabba VP)
  *  8. Check Hunt Dissent (Kallus block token)
+ *  8b. Check Heroic Effort (draw/return CC on unique defeat)
  *  9. Check win conditions
  *
  * Does NOT handle combat-specific post-defeat abilities (Last Stand,
@@ -35,6 +36,9 @@
  * @param {object} deps - required dependencies (see destructuring below)
  * @returns {{ vp: number, dcName: string }}
  */
+import { getDcEffects } from '../data-loader.js';
+import { getDcList, getDcMessageIds, ccHandKey, ccDeckKey, getHandChannelId, dcAttachmentsKey } from '../game/player-helpers.js';
+
 export async function processFigureDefeat(game, opts, deps) {
   const {
     defeatedPlayerNum,
@@ -119,6 +123,124 @@ export async function processFigureDefeat(game, opts, deps) {
   // 8. Hunt Dissent (Kallus: gain Block token when hostile defeated)
   if (attackerFigureKey && checkHuntDissent) {
     await checkHuntDissent(game, attackerPlayerNum, attackerFigureKey, client);
+  }
+
+  // 8b. Heroic Effort: when unique figure defeated, owner draws 1 CC + must return 1 to deck bottom
+  {
+    const dcList = getDcList(game, defeatedPlayerNum) || [];
+    const hasHeroicEffort = dcList.some(dc => (dc.dcName || dc) === '[Heroic Effort]');
+    if (hasHeroicEffort) {
+      const dcEff = getDcEffects();
+      const effEntry = dcEff?.[dcName] || dcEff?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      if (effEntry?.unique) {
+        const hKey = ccHandKey(defeatedPlayerNum);
+        const dKey = ccDeckKey(defeatedPlayerNum);
+        const deck = game[dKey] || [];
+        if (deck.length > 0) {
+          const drawn = deck.shift();
+          game[hKey] = [...(game[hKey] || []), drawn];
+          game[dKey] = deck;
+          await logGameAction(game, client,
+            `**Heroic Effort** — Drew 1 Command card (unique **${dcName}** defeated). Must return 1 card to deck bottom.`,
+            { phase: 'ROUND', icon: 'card' });
+          // Set pending state for the return-card-to-deck-bottom interaction
+          game.pendingHeroicEffortReturn = game.pendingHeroicEffortReturn || {};
+          game.pendingHeroicEffortReturn[defeatedPlayerNum] = true;
+          // Send pick buttons to hand channel
+          const handChId = getHandChannelId(game, defeatedPlayerNum);
+          if (handChId && client) {
+            try {
+              const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
+              const hand = game[hKey] || [];
+              const btns = hand.slice(0, 25).map((card, idx) =>
+                new ButtonBuilder()
+                  .setCustomId(`heroic_effort_return_${game.gameId}_${defeatedPlayerNum}_${idx}`)
+                  .setLabel(String(card).length > 80 ? String(card).slice(0, 77) + '...' : String(card))
+                  .setStyle(ButtonStyle.Primary)
+              );
+              const rows = [];
+              for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+              const handCh = await client.channels.fetch(handChId);
+              await handCh.send({
+                content: '**Heroic Effort** — Choose 1 Command card from your hand to place on the bottom of your deck:',
+                components: rows.slice(0, 5),
+              });
+            } catch (err) {
+              console.error('Heroic Effort return buttons error:', err);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 8c. Scavenged Weaponry: when group fully defeated, offer transfer to another friendly Droid/Vehicle
+  if (msgId) {
+    const attKey = dcAttachmentsKey(defeatedPlayerNum);
+    const attachments = game[attKey]?.[msgId] || [];
+    if (attachments.includes('Scavenged Weaponry')) {
+      // Check if group is fully defeated (no more figures of this DC on board)
+      const figPos = game.figurePositions?.[defeatedPlayerNum] || {};
+      const groupAlive = Object.keys(figPos).some(fk => fk.startsWith(dcName + '-') && figPos[fk]);
+      if (!groupAlive) {
+        const dcEff = getDcEffects();
+        const dcListArr = getDcList(game, defeatedPlayerNum) || [];
+        const dcMsgIds = getDcMessageIds(game, defeatedPlayerNum) || [];
+        // Find eligible Droid/Vehicle groups (alive, not the defeated group)
+        const eligible = [];
+        for (let i = 0; i < dcListArr.length; i++) {
+          const dc = dcListArr[i];
+          const dn = dc?.dcName || dc;
+          if (dn === dcName) continue; // same DC
+          if (/^\[.+\]$/.test(dn)) continue; // skip upgrades
+          const eff = dcEff?.[dn];
+          const kws = (eff?.keywords || []).map(k => String(k).toUpperCase());
+          if (!kws.includes('DROID') && !kws.includes('VEHICLE')) continue;
+          // Check if group has at least one alive figure
+          const hasFigure = Object.keys(figPos).some(fk => fk.startsWith(dn + '-') && figPos[fk]);
+          if (!hasFigure) continue;
+          eligible.push({ dcName: dn, displayName: dc?.displayName || dn, msgId: dcMsgIds[i] });
+        }
+        if (eligible.length > 0) {
+          // Remove from old group, set pending state
+          const idx = attachments.indexOf('Scavenged Weaponry');
+          attachments.splice(idx, 1);
+          game[attKey][msgId] = attachments;
+          if (eligible.length === 1) {
+            // Auto-transfer to only option
+            const target = eligible[0];
+            game[attKey][target.msgId] = [...(game[attKey][target.msgId] || []), 'Scavenged Weaponry'];
+            await logGameAction(game, client,
+              `**Scavenged Weaponry** — Transferred from defeated **${dcName}** to **${target.displayName}**.`,
+              { phase: 'ROUND', icon: 'card' });
+          } else {
+            // Multiple options — send picker buttons to hand channel
+            game.pendingScavengedWeaponryTransfer = { playerNum: defeatedPlayerNum, eligible };
+            const handChId = getHandChannelId(game, defeatedPlayerNum);
+            if (handChId && client) {
+              try {
+                const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
+                const btns = eligible.slice(0, 10).map((e, i) =>
+                  new ButtonBuilder()
+                    .setCustomId(`scav_weapon_transfer_${game.gameId}_${defeatedPlayerNum}_${i}`)
+                    .setLabel(e.displayName.length > 80 ? e.displayName.slice(0, 77) + '...' : e.displayName)
+                    .setStyle(ButtonStyle.Primary)
+                );
+                const rows = [];
+                for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+                const handCh = await client.channels.fetch(handChId);
+                await handCh.send({
+                  content: `**Scavenged Weaponry** — **${dcName}** was defeated. Choose a friendly Droid/Vehicle to transfer it to:`,
+                  components: rows.slice(0, 5),
+                });
+              } catch (err) {
+                console.error('Scavenged Weaponry transfer buttons error:', err);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   // 9. Check win conditions

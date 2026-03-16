@@ -411,7 +411,7 @@ function getRoundActiveActions(game, playerNum, deps) {
       return getActivationActions(game, playerNum, deps);
 
     case ROUND_PHASES.END_OF_ROUND:
-      return getEndOfRoundActions(game, playerNum);
+      return getEndOfRoundActions(game, playerNum, deps);
 
     default:
       return getActivationActions(game, playerNum, deps);
@@ -1110,18 +1110,37 @@ function getStartOfRoundActions(game, playerNum) {
 
 // ── End of Round ─────────────────────────────────────────────────────────────
 
-function getEndOfRoundActions(game, playerNum) {
+function getEndOfRoundActions(game, playerNum, deps) {
   const playerId = getPlayerId(game, playerNum);
 
   // Only the player whose turn it is in the EoR window can act
   if (!game.endOfRoundWhoseTurn) return [];
   if (game.endOfRoundWhoseTurn !== playerId) return [];
 
-  return [{
+  const actions = [{
     type: ACTION_TYPES.END_END_OF_ROUND,
     customId: buildCustomId(ACTION_TYPES.END_END_OF_ROUND, { gameId: game.gameId }),
     description: 'End "End of Round" window',
   }];
+
+  // Append playable CCs (end-of-round timing window)
+  if (deps?.getPlayableCcFromHand) {
+    const hand = playerNum === 1 ? game.player1CcHand : game.player2CcHand;
+    if (hand?.length) {
+      const playable = deps.getPlayableCcFromHand(game, playerNum, hand);
+      const gameId = game.gameId;
+      for (let i = 0; i < playable.length; i++) {
+        actions.push({
+          type: ACTION_TYPES.PLAY_CC,
+          customId: `cc_play_${gameId}_${playerNum}_${i}`,
+          description: `Play CC: ${playable[i]}`,
+          params: { cardIndex: i, cardName: playable[i] },
+        });
+      }
+    }
+  }
+
+  return actions;
 }
 
 // ── Legacy (no game.phase) ───────────────────────────────────────────────────

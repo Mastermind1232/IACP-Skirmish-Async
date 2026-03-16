@@ -2150,7 +2150,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     reduceHp, healHp,
     getDcList, getDcMessageIds, getDcStats, getDcEffect, getDcEffects, getDcKeywords,
     getPlayerId, getPlayAreaId, getMapSpaces,
-    isWithinN, getRange,
+    isWithinN, hasLineOfSight, getRange,
     findDcMessageIdForFigure, getFigureLabel,
     getCcHand, getCcEffectsData,
     _applyCondition,
@@ -2334,6 +2334,123 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           }
         }
       }
+    }
+  }
+
+  // Havoc Shot (Fenn Signis): after attack that didn't miss, suffer 1 Strain → up to 2 figures within 2 of target in LOS suffer 1 Damage
+  if (pcAttIds.includes('havoc_shot') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) {
+    const _hsTargetPos = game.figurePositions?.[combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum)]?.[combat.target.figureKey] || combat._savedTargetPos;
+    const _hsAtkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
+    if (_hsTargetPos && _hsAtkPos) {
+      const _hsMapSpaces = getMapSpaces(game.selectedMap.id);
+      const _hsAllFigCoords = [];
+      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _hsAllFigCoords.push(String(fp).toLowerCase());
+      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _hsAllFigCoords.push(String(fp).toLowerCase());
+      const _hsEligible = [];
+      for (const pn of [1, 2]) {
+        for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+          if (!pos || fk === combat.attackerFigureKey) continue;
+          if (!isWithinN(pos, _hsTargetPos, 2, game.selectedMap.id)) continue;
+          if (!hasLineOfSight(String(_hsAtkPos).toLowerCase(), String(pos).toLowerCase(), _hsMapSpaces, _hsAllFigCoords)) continue;
+          const { label: lbl } = getFigureLabel(game, pn, fk);
+          _hsEligible.push({ figureKey: fk, playerNum: pn, label: lbl });
+        }
+      }
+      if (_hsEligible.length > 0) {
+        game.pendingHavocShot = {
+          gameId: game.gameId,
+          attackerPlayerNum: combat.attackerPlayerNum,
+          attackerMsgId: combat.attackerMsgId,
+          attackerFigureKey: combat.attackerFigureKey,
+          attackerFigureIndex: combat.attackerFigureIndex ?? 0,
+          combatThreadId: combat.combatThreadId,
+          targets: _hsEligible,
+          chosen: [],
+          maxPicks: 2,
+        };
+        const _hsBtns = [
+          new ButtonBuilder().setCustomId(`havoc_shot_use_${game.gameId}`).setLabel('Use Havoc Shot (1 Strain)').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`havoc_shot_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        ];
+        await thread.send({
+          content: `<@${pcOwnerId}> **Havoc Shot** — Suffer 1 Strain to deal 1 Damage to up to 2 figures within 2 spaces of the target in your LOS?`,
+          allowedMentions: { users: [pcOwnerId] },
+          components: [new ActionRowBuilder().addComponents(_hsBtns)],
+        }).catch(discordCatch);
+      }
+    }
+  }
+
+  // Deflect (Luke Skywalker JK): after ranged attack resolves, hostile in LOS suffers 1 Damage
+  if (combat.isRanged && combat.target?.figureKey && game.selectedMap?.id) {
+    const _dflDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const _dflAtkPN = combat.attackerPlayerNum;
+    // Check defender and adjacent friendlies for deflect
+    const _dflMapSpaces = getMapSpaces(game.selectedMap.id);
+    const _dflAllFigCoords = [];
+    for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _dflAllFigCoords.push(String(fp).toLowerCase());
+    for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _dflAllFigCoords.push(String(fp).toLowerCase());
+    // Gather all figures on the defender's team that have deflect and are either the target or adjacent to the target
+    const _dflTargetPos = game.figurePositions?.[_dflDefPN]?.[combat.target.figureKey];
+    const _dflCandidates = [];
+    if (_dflTargetPos) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[_dflDefPN] || {})) {
+        if (!pos) continue;
+        const dName = dcNameFromFigureKey(fk);
+        const dEff = getDcEffect(dName);
+        if (!(dEff?.specialAbilityIds || []).includes('deflect')) continue;
+        // Must be the target or adjacent to the target
+        const isSelf = fk === combat.target.figureKey;
+        const isAdj = !isSelf && isWithinN(pos, _dflTargetPos, 1, game.selectedMap.id);
+        if (!isSelf && !isAdj) continue;
+        _dflCandidates.push({ figureKey: fk, pos, dcName: dName });
+      }
+    }
+    for (const _dflCand of _dflCandidates) {
+      // Find hostiles in this figure's LOS
+      const _dflHostiles = [];
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[_dflAtkPN] || {})) {
+        if (!pos) continue;
+        if (!hasLineOfSight(String(_dflCand.pos).toLowerCase(), String(pos).toLowerCase(), _dflMapSpaces, _dflAllFigCoords)) continue;
+        const { label: lbl } = getFigureLabel(game, _dflAtkPN, fk);
+        _dflHostiles.push({ figureKey: fk, playerNum: _dflAtkPN, label: lbl });
+      }
+      if (_dflHostiles.length === 0) continue;
+      const _dflOwnerId = getPlayerId(game, _dflDefPN);
+      if (_dflHostiles.length === 1) {
+        // Auto-apply to the only hostile in LOS
+        const _dflTgt = _dflHostiles[0];
+        const _dflTgtMsgId = findDcMessageIdForFigure(game.gameId, _dflTgt.playerNum, _dflTgt.figureKey);
+        if (_dflTgtMsgId) {
+          const { figureIndex: _dflFigIdx } = parseFigureKey(_dflTgt.figureKey);
+          reduceHp(dcHealthState, game, _dflTgtMsgId, _dflFigIdx, 1, _dflTgt.playerNum);
+          embedRefreshMsgIds.add(_dflTgtMsgId);
+        }
+        await thread.send(`**Deflect** — **${_dflCand.dcName}**: **${_dflTgt.label}** suffers 1 Damage.`).catch(discordCatch);
+        await logGameAction(game, client, `**Deflect** — **${_dflCand.dcName}** redirects 1 Damage to **${_dflTgt.label}**.`, { phase: 'ROUND', icon: 'attack' });
+      } else {
+        // Multiple hostiles — show picker
+        game.pendingDeflect = {
+          gameId: game.gameId,
+          deflectorPlayerNum: _dflDefPN,
+          deflectorFigureKey: _dflCand.figureKey,
+          deflectorDcName: _dflCand.dcName,
+          combatThreadId: combat.combatThreadId,
+          hostiles: _dflHostiles,
+        };
+        const _dflBtns = _dflHostiles.slice(0, 4).map((t, i) =>
+          new ButtonBuilder().setCustomId(`deflect_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
+        );
+        _dflBtns.push(new ButtonBuilder().setCustomId(`deflect_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        const _dflRows = [];
+        for (let r = 0; r < _dflBtns.length; r += 5) _dflRows.push(new ActionRowBuilder().addComponents(_dflBtns.slice(r, r + 5)));
+        await thread.send({
+          content: `<@${_dflOwnerId}> **Deflect** — **${_dflCand.dcName}** may redirect 1 Damage to a hostile in LOS:`,
+          allowedMentions: { users: [_dflOwnerId] },
+          components: _dflRows,
+        }).catch(discordCatch);
+      }
+      break; // Only one Deflect trigger per attack
     }
   }
 

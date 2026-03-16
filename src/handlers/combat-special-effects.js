@@ -890,3 +890,168 @@ export async function handleHeavyFireCondition(interaction, ctx) {
   pending.conditionsApplied++;
   await advanceHeavyFireConditionPick(game, pending, ctx);
 }
+
+// ── Havoc Shot (Fenn Signis) ─────────────────────────────────────────────
+export async function handleHavocShotUse(interaction, ctx) {
+  const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
+    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
+    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^havoc_shot_use_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (!game?.pendingHavocShot) return;
+  const hs = game.pendingHavocShot;
+  if (!await requirePlayer(interaction, game, interaction.user.id, hs.attackerPlayerNum, canActAsPlayer, 'Only the attacker can use Havoc Shot.')) return;
+  // Suffer 1 Strain (HP damage) to attacker
+  const atkMsgId = hs.attackerMsgId;
+  if (atkMsgId) {
+    reduceHp(dcHealthState, game, atkMsgId, hs.attackerFigureIndex, 1, hs.attackerPlayerNum);
+    // Refresh attacker embed
+    try {
+      const atkMeta = dcMessageMeta.get(atkMsgId);
+      if (atkMeta) {
+        const ch = await client.channels.fetch(getPlayAreaId(game, atkMeta.playerNum));
+        const msg = await ch.messages.fetch(atkMsgId);
+        const { embed, files } = await buildDcEmbedAndFiles(atkMeta.dcName, dcExhaustedState.get(atkMsgId) ?? false, atkMeta.displayName, dcHealthState.get(atkMsgId) || [], getConditionsForDcMessage(game, atkMeta), getDcUpgradeAttachments(game, atkMsgId), null, null, getNicknamesForDcMessage?.(game, atkMeta));
+        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
+      }
+    } catch {}
+  }
+  // Show figure picker
+  const btns = hs.targets.slice(0, 4).map((t, i) =>
+    new ButtonBuilder().setCustomId(`havoc_shot_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
+  );
+  btns.push(new ButtonBuilder().setCustomId(`havoc_shot_done_${game.gameId}`).setLabel('Done (skip remaining)').setStyle(ButtonStyle.Secondary));
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  await interaction.message.edit({
+    content: `**Havoc Shot** — Suffered 1 Strain. Choose up to ${hs.maxPicks} figure(s) to deal 1 Damage:`,
+    components: rows,
+  }).catch(discordCatch);
+  await logGameAction(game, client, `**Havoc Shot** — **${dcNameFromFigureKey(hs.attackerFigureKey)}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
+  saveGames();
+}
+
+export async function handleHavocShotSkip(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^havoc_shot_skip_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (game) delete game.pendingHavocShot;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  saveGames();
+}
+
+export async function handleHavocShotPick(interaction, ctx) {
+  const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
+    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
+    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^havoc_shot_pick_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingHavocShot) return;
+  const hs = game.pendingHavocShot;
+  if (!await requirePlayer(interaction, game, interaction.user.id, hs.attackerPlayerNum, canActAsPlayer, 'Only the attacker can pick.')) return;
+  const target = hs.targets[parseInt(idxStr, 10)];
+  if (!target) return;
+  // Apply 1 Damage
+  const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
+  if (targetMsgId) {
+    const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
+    reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
+    try {
+      const tMeta = dcMessageMeta.get(targetMsgId);
+      if (tMeta) {
+        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const msg = await ch.messages.fetch(targetMsgId);
+        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
+        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
+      }
+    } catch {}
+  }
+  hs.chosen.push(target.figureKey);
+  const thread = await client.channels.fetch(hs.combatThreadId).catch(() => null);
+  if (thread) await thread.send(`**Havoc Shot** — **${target.label}** suffers 1 Damage.`).catch(discordCatch);
+  await logGameAction(game, client, `**Havoc Shot** — **${target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
+  // If more picks available and more targets
+  const remaining = hs.maxPicks - hs.chosen.length;
+  const remainingTargets = hs.targets.filter((t, i) => !hs.chosen.includes(t.figureKey));
+  const remaining2 = remainingTargets;
+  if (remaining > 0 && remaining2.length > 0) {
+    const btns2 = remaining2.slice(0, 4).map((t) => {
+      const origIdx = hs.targets.indexOf(t);
+      return new ButtonBuilder().setCustomId(`havoc_shot_pick_${gameId}_${origIdx}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger);
+    });
+    btns2.push(new ButtonBuilder().setCustomId(`havoc_shot_done_${gameId}`).setLabel('Done').setStyle(ButtonStyle.Secondary));
+    const rows2 = [];
+    for (let r = 0; r < btns2.length; r += 5) rows2.push(new ActionRowBuilder().addComponents(btns2.slice(r, r + 5)));
+    await interaction.message.edit({ content: `**Havoc Shot** — ${remaining} pick(s) remaining:`, components: rows2 }).catch(discordCatch);
+  } else {
+    delete game.pendingHavocShot;
+    await interaction.message.edit({ content: `**Havoc Shot** — Complete.`, components: [] }).catch(discordCatch);
+  }
+  saveGames();
+}
+
+export async function handleHavocShotDone(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^havoc_shot_done_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (game) delete game.pendingHavocShot;
+  await interaction.message.edit({ content: `**Havoc Shot** — Complete.`, components: [] }).catch(discordCatch);
+  saveGames();
+}
+
+// ── Deflect (Luke Skywalker JK) ──────────────────────────────────────────
+export async function handleDeflectPick(interaction, ctx) {
+  const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
+    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
+    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^deflect_pick_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingDeflect) return;
+  const df = game.pendingDeflect;
+  if (!await requirePlayer(interaction, game, interaction.user.id, df.deflectorPlayerNum, canActAsPlayer, 'Only the Deflect owner can pick.')) return;
+  const target = df.hostiles[parseInt(idxStr, 10)];
+  if (!target) return;
+  const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
+  if (targetMsgId) {
+    const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
+    reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
+    try {
+      const tMeta = dcMessageMeta.get(targetMsgId);
+      if (tMeta) {
+        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const msg = await ch.messages.fetch(targetMsgId);
+        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
+        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
+      }
+    } catch {}
+  }
+  const dfThread = await client.channels.fetch(df.combatThreadId).catch(() => null);
+  if (dfThread) await dfThread.send(`**Deflect** — **${df.deflectorDcName}**: **${target.label}** suffers 1 Damage.`).catch(discordCatch);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `**Deflect** — **${df.deflectorDcName}** redirects 1 Damage to **${target.label}**.`, { phase: 'ROUND', icon: 'attack' });
+  delete game.pendingDeflect;
+  saveGames();
+}
+
+export async function handleDeflectSkip(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^deflect_skip_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (game) delete game.pendingDeflect;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  saveGames();
+}

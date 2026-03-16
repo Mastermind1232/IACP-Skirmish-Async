@@ -1150,6 +1150,33 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (actMinimap) actionsPayload.files = [actMinimap];
   const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
   game.dcActionsData[msgId].messageId = actionsMsg.id;
+  // Hair Trigger (Jyn Odan): at start of hostile activation, interrupt to attack that figure. Once/round.
+  {
+    const _htOpponentPN = opponentPlayerNum(meta.playerNum);
+    const _htDcEffects = getDcEffects();
+    for (const [_htFk, _htPos] of Object.entries(game.figurePositions?.[_htOpponentPN] || {})) {
+      if (!_htPos) continue;
+      const _htDcName = dcNameFromFigureKey(_htFk);
+      const _htEff = _htDcEffects?.[_htDcName];
+      if (!((_htEff?.specialAbilityIds || []).includes('hair_trigger'))) continue;
+      const _htKey = `hairTrigger_${_htFk}`;
+      if (game.roundFigureAbilityUsed?.[_htKey]) continue;
+      // Find the msgId for the Hair Trigger figure
+      const _htMsgId = ctx.findDcMessageIdForFigure(game.gameId, _htOpponentPN, _htFk);
+      if (!_htMsgId) continue;
+      const _htOwnerId = getPlayerId(game, _htOpponentPN);
+      const _htRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`hair_trigger_use_${game.gameId}_${_htMsgId}_${_htFk}`).setLabel(`Use Hair Trigger (${_htDcName})`).setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`hair_trigger_skip_${game.gameId}_${_htFk}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({
+        content: `<@${_htOwnerId}> **Hair Trigger** — **${_htDcName}** may interrupt to perform an attack targeting **${displayName}**. (Once per round)`,
+        allowedMentions: { users: [_htOwnerId] },
+        components: [_htRow],
+      }).catch(discordCatch);
+      break; // Only one Hair Trigger prompt per activation
+    }
+  }
   // Mounted (Captain Terro, Kuiil): gain 3 MP at start of activation
   const _mountedEff = getDcEffects()?.[meta.dcName];
   const _mountedIds = _mountedEff?.specialAbilityIds || [];
@@ -1443,13 +1470,19 @@ export async function handleConfirmActivate(interaction, ctx) {
       await thread.send({ content: `🤖 **Droid Kit** — ${reason}; no Power Token gained.` }).catch(discordCatch);
     }
   }
-  // Advanced Firepower (General Sorin): adjacent DROID/VEHICLE may use your surge abilities
+  // Advanced Firepower (General Sorin): adjacent DROID/VEHICLE may use your surge abilities (within 2 with ACS)
   if (_mountedIds.includes('advanced_firepower_sorin')) {
-    await thread.send({ content: `🔧 **Advanced Firepower** — Adjacent DROID or VEHICLE figures may use Sorin's surge abilities.` }).catch(discordCatch);
+    const _afAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _afHasACS = _afAtts.some(a => a.includes('Advanced Com Systems'));
+    const _afRange = _afHasACS ? 'within 2 spaces (ACS)' : 'adjacent';
+    await thread.send({ content: `🔧 **Advanced Firepower** — ${_afRange} DROID or VEHICLE figures may use Sorin's surge abilities.` }).catch(discordCatch);
   }
-  // Unhinged Director (Director Krennic): TROOPER/GUARDIAN within 2 get +2 bonus from tokens
+  // Unhinged Director (Director Krennic): TROOPER/GUARDIAN within 2 (3 with ACS) get +2 bonus from tokens
   if (_mountedIds.includes('unhinged_director_krennic')) {
-    await thread.send({ content: `📋 **Unhinged Director** — TROOPER or GUARDIAN within 2 spaces gain +2 (instead of +1) when spending power tokens.` }).catch(discordCatch);
+    const _udAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _udHasACS = _udAtts.some(a => a.includes('Advanced Com Systems'));
+    const _udRange = _udHasACS ? '3 (ACS)' : '2';
+    await thread.send({ content: `📋 **Unhinged Director** — TROOPER or GUARDIAN within ${_udRange} spaces gain +2 (instead of +1) when spending power tokens.` }).catch(discordCatch);
   }
   // Squad Cohesion (Ko-Tun): REBEL within 3 can spend another REBEL's token
   if (_mountedIds.includes('squad_cohesion_kotun')) {
@@ -2031,6 +2064,96 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
   }
 
+  // Unshakable: exhaust at start of activation → choose friendly figure cost≥9, discard 1 harmful condition, suffer 1 Strain
+  {
+    const _usDcList = getDcList(game, meta.playerNum) || [];
+    const _usDcMsgIds = getDcMessageIds(game, meta.playerNum) || [];
+    let _usMsgId = null;
+    for (let _usI = 0; _usI < _usDcList.length; _usI++) {
+      if ((_usDcList[_usI]?.dcName || _usDcList[_usI]) === '[Unshakable]') { _usMsgId = _usDcMsgIds[_usI] || null; break; }
+    }
+    if (_usMsgId) {
+      const _usExh = game.exhaustedSkirmishUpgrades?.[_usMsgId] || [];
+      const _usDepleted = (game[`p${meta.playerNum}DepletedDcMessageIds`] || []).includes(_usMsgId);
+      if (!_usExh.includes('Unshakable') && !_usDepleted) {
+        // Find all friendly figures with cost ≥ 9 that have harmful conditions
+        const _usAllFigPos = game.figurePositions?.[meta.playerNum] || {};
+        const _usCandidates = [];
+        for (const [fk, pos] of Object.entries(_usAllFigPos)) {
+          if (!pos) continue;
+          const fkDcName = dcNameFromFigureKey(fk);
+          const fkCost = getDcStats(fkDcName)?.cost ?? 0;
+          if (fkCost < 9) continue;
+          const conds = game.figureConditions?.[fk] || [];
+          const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[fk]));
+          if (harmful.length > 0) _usCandidates.push({ fk, dcName: fkDcName, harmful });
+        }
+        if (_usCandidates.length > 0) {
+          const btns = _usCandidates.slice(0, 4).map(({ fk, dcName: dName, harmful }) => {
+            const label = `${dName}: ${harmful.join(', ')}`;
+            return new ButtonBuilder()
+              .setCustomId(`act_passive_${game.gameId}_${msgId}_unshakable_${fk}`)
+              .setLabel(label.length > 80 ? label.slice(0, 77) + '...' : label)
+              .setStyle(ButtonStyle.Primary);
+          });
+          btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_unshakable_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+          await thread.send({
+            content: `**Unshakable** — Choose a figure (cost ≥ 9) to discard 1 harmful condition (suffers 1 Strain):`,
+            components: [new ActionRowBuilder().addComponents(btns)],
+          }).catch(discordCatch);
+        }
+      }
+    }
+  }
+
+  // Nemik's Manifesto: exhaust during activation → suffer 2 Strain, gain 1 MP
+  {
+    const _nmDcList = getDcList(game, meta.playerNum) || [];
+    const _nmDcMsgIds = getDcMessageIds(game, meta.playerNum) || [];
+    let _nmMsgId = null;
+    for (let _nmI = 0; _nmI < _nmDcList.length; _nmI++) {
+      if ((_nmDcList[_nmI]?.dcName || _nmDcList[_nmI]) === "[Nemik's Manifesto]") { _nmMsgId = _nmDcMsgIds[_nmI] || null; break; }
+    }
+    if (_nmMsgId) {
+      const _nmExh = game.exhaustedSkirmishUpgrades?.[_nmMsgId] || [];
+      const _nmDepleted = (game[`p${meta.playerNum}DepletedDcMessageIds`] || []).includes(_nmMsgId);
+      if (!_nmExh.includes("Nemik's Manifesto") && !_nmDepleted) {
+        const nmRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_nemik_use_${_nmMsgId}`).setLabel("Use Nemik's Manifesto (+1 MP, -2 Strain)").setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_nemik_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({ content: `📜 **Nemik's Manifesto** — Exhaust to grant **${displayName}** +1 MP (suffers 2 Strain)?`, components: [nmRow] }).catch(discordCatch);
+      }
+    }
+  }
+
+  // [Spectre Cell]: exhaust during activation → choose another friendly figure → +2 MP, may interrupt attack
+  {
+    const _scDcList = getDcList(game, meta.playerNum) || [];
+    const _scDcMsgIds = getDcMessageIds(game, meta.playerNum) || [];
+    let _scMsgId = null;
+    for (let _scI = 0; _scI < _scDcList.length; _scI++) {
+      if ((_scDcList[_scI]?.dcName || _scDcList[_scI]) === '[Spectre Cell]') { _scMsgId = _scDcMsgIds[_scI] || null; break; }
+    }
+    if (_scMsgId) {
+      const _scExh = game.exhaustedSkirmishUpgrades?.[_scMsgId] || [];
+      const _scDepleted = (game[`p${meta.playerNum}DepletedDcMessageIds`] || []).includes(_scMsgId);
+      if (!_scExh.includes('Spectre Cell') && !_scDepleted) {
+        // Check that there's at least one other friendly figure on the board
+        const _scAllFigs = game.figurePositions?.[meta.playerNum] || {};
+        const _scActivatingPrefix = `${meta.dcName}-`;
+        const _scHasOther = Object.entries(_scAllFigs).some(([fk, pos]) => pos && !fk.startsWith(_scActivatingPrefix));
+        if (_scHasOther) {
+          const scRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_spectrecell_use`).setLabel('Use Spectre Cell (+2 MP + interrupt attack)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_spectrecell_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await thread.send({ content: `**[Spectre Cell]** — Exhaust to choose another friendly figure: +2 MP and may interrupt to perform an attack.`, components: [scRow] }).catch(discordCatch);
+        }
+      }
+    }
+  }
+
   // Voracious (Rancor): when another figure activates adjacent to the Rancor, offer a free melee attack
   // Scan BOTH teams for any Rancor with the voracious_rancor ability
   for (const rancorPn of [1, 2]) {
@@ -2344,6 +2467,106 @@ export async function handleActPassive(interaction, ctx) {
       const condFkName = dcNameFromFigureKey(condFk);
       await interaction.message.edit({ content: `🧘 **Calming Presence** — Removed **${condName}** from **${condFkName}**. **${displayName}** suffered **1 Strain**.`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `**Calming Presence** (Yoda) — Removed ${condName} from ${condFkName}; ${displayName} suffered 1 Strain.`, { phase: 'ACTIVATION', icon: 'condition' });
+    }
+  // --- Nemik's Manifesto: exhaust for +1 MP, -2 Strain ---
+  } else if (ability === 'nemik') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `📜 **Nemik's Manifesto** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      // choice = 'use_{nmMsgId}'
+      const nmMsgId = interaction.customId.replace(/^act_passive_[^_]+_[^_]+_nemik_use_/, '');
+      // Exhaust the card
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[nmMsgId] = [...(game.exhaustedSkirmishUpgrades[nmMsgId] || []), "Nemik's Manifesto"];
+      // Grant 1 MP
+      game.movementBank = game.movementBank || {};
+      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      game.movementBank[msgId].total += 1;
+      game.movementBank[msgId].remaining += 1;
+      // Apply 2 Strain to the activating figure
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const fk = `${meta.dcName}-${dgIndex}-0`;
+      const figMatch = fk.match(/-(\d+)$/);
+      const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
+      reduceHp(dcHealthState, game, msgId, figIdx, 2, meta.playerNum);
+      await interaction.message.edit({ content: `📜 **Nemik's Manifesto** — **${displayName}** gained **1 MP** and suffered **2 Strain**. (Exhausted)`, components: [] }).catch(discordCatch);
+      await logGameAction?.(game, client, `**Nemik's Manifesto** — ${displayName} gained 1 MP, suffered 2 Strain. (Exhausted)`, { phase: 'ACTIVATION', icon: 'card' });
+    }
+  // --- Unshakable: discard harmful condition from cost≥9 figure, suffer 1 Strain, exhaust ---
+  } else if (ability === 'unshakable') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `**Unshakable** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      // Parse figureKey from remaining parts after 'unshakable'
+      const fullSuffix = interaction.customId.replace(/^act_passive_[^_]+_[^_]+_unshakable_/, '');
+      const targetFk = fullSuffix;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      const conds = game.figureConditions?.[targetFk] || [];
+      const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[targetFk]));
+      if (harmful.length > 0) {
+        const removedCond = harmful[0];
+        filterCondition(game, targetFk, removedCond);
+        // Apply 1 Strain to the chosen figure
+        const targetMsgId = ctx.findDcMessageIdForFigure?.(gameId, meta.playerNum, targetFk);
+        if (targetMsgId) {
+          const figMatch = targetFk.match(/-(\d+)$/);
+          const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
+          reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, meta.playerNum);
+        }
+        // Exhaust Unshakable
+        const _usDcList2 = getDcList(game, meta.playerNum) || [];
+        const _usDcMsgIds2 = getDcMessageIds(game, meta.playerNum) || [];
+        for (let i = 0; i < _usDcList2.length; i++) {
+          if ((_usDcList2[i]?.dcName || _usDcList2[i]) === '[Unshakable]') {
+            const usMsgId2 = _usDcMsgIds2[i];
+            if (usMsgId2) {
+              game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+              game.exhaustedSkirmishUpgrades[usMsgId2] = [...(game.exhaustedSkirmishUpgrades[usMsgId2] || []), 'Unshakable'];
+            }
+            break;
+          }
+        }
+        await interaction.message.edit({ content: `**Unshakable** — Removed **${removedCond}** from **${targetDcName}**. That figure suffered **1 Strain**.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `**Unshakable** — Removed ${removedCond} from ${targetDcName}; suffered 1 Strain. (Exhausted)`, { phase: 'ACTIVATION', icon: 'condition' });
+      } else {
+        await interaction.message.edit({ content: `**Unshakable** — No harmful conditions to remove.`, components: [] }).catch(discordCatch);
+      }
+    }
+  // --- Spectre Cell: exhaust → choose another friendly figure → +2 MP + interrupt attack ---
+  } else if (ability === 'spectrecell') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: '**[Spectre Cell]** — Skipped.', components: [] }).catch(discordCatch);
+    } else if (choice === 'use') {
+      // Show figure picker for other friendly figures
+      const allFigs = game.figurePositions?.[meta.playerNum] || {};
+      const activatingPrefix = `${meta.dcName}-`;
+      const targets = [];
+      const seenDcNames = new Set();
+      for (const [fk, pos] of Object.entries(allFigs)) {
+        if (!pos) continue;
+        if (fk.startsWith(activatingPrefix)) continue;
+        const dn = dcNameFromFigureKey(fk);
+        if (seenDcNames.has(dn)) continue;
+        seenDcNames.add(dn);
+        targets.push({ fk, dcName: dn });
+      }
+      if (targets.length > 0) {
+        const btns = targets.slice(0, 24).map(({ fk, dcName: dn }) =>
+          new ButtonBuilder()
+            .setCustomId(`sc_fig_pick_${game.gameId}_${msgId}_${fk}`)
+            .setLabel(dn.length > 80 ? dn.slice(0, 77) + '...' : dn)
+            .setStyle(ButtonStyle.Primary)
+        );
+        btns.push(new ButtonBuilder().setCustomId(`sc_fig_pick_${game.gameId}_${msgId}_cancel`).setLabel('Cancel').setStyle(ButtonStyle.Secondary));
+        const rows = [];
+        for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+        await interaction.message.edit({
+          content: '**[Spectre Cell]** — Choose another friendly figure to gain 2 MP and may interrupt to attack:',
+          components: rows.slice(0, 5),
+        }).catch(discordCatch);
+      } else {
+        await interaction.message.edit({ content: '**[Spectre Cell]** — No eligible friendly figures.', components: [] }).catch(discordCatch);
+      }
     }
   // --- Wisdom: return 1 CC to bottom of deck ---
   } else if (ability === 'wisdom') {
@@ -3082,4 +3305,190 @@ export async function handleForceVisionPick(interaction, ctx) {
   }).catch(discordCatch);
   await logGameAction(game, client, `👁️ **Force Vision** — **${displayName}** must be activated next by Player ${oppNum}, if possible.`, { phase: 'ROUND', icon: 'activate' });
   saveGames();
+}
+
+/**
+ * Heroic Effort: player picks a CC from hand to place on bottom of deck.
+ */
+export async function handleHeroicEffortReturn(interaction, ctx) {
+  const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('heroic_effort_return_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const cardIdx = parseInt(parts[2], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingHeroicEffortReturn?.[playerNum]) {
+    await interaction.followUp({ content: 'No Heroic Effort return pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const hKey = ccHandKey(playerNum);
+  const dKey = ccDeckKey(playerNum);
+  const hand = game[hKey] || [];
+  if (cardIdx < 0 || cardIdx >= hand.length) {
+    await interaction.followUp({ content: 'Invalid card selection.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const cardName = hand[cardIdx];
+  hand.splice(cardIdx, 1);
+  game[hKey] = hand;
+  game[dKey] = [...(game[dKey] || []), cardName];
+  delete game.pendingHeroicEffortReturn[playerNum];
+  if (Object.keys(game.pendingHeroicEffortReturn).length === 0) delete game.pendingHeroicEffortReturn;
+  await interaction.message.edit({
+    content: `**Heroic Effort** — Placed **${cardName}** on the bottom of your deck.`,
+    components: [],
+  }).catch(discordCatch);
+  await logGameAction(game, client, `**Heroic Effort** — P${playerNum} returned 1 Command card to deck bottom.`, { phase: 'ROUND', icon: 'card' });
+  if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client);
+  saveGames();
+}
+
+/**
+ * Scavenged Weaponry: player picks which friendly Droid/Vehicle to transfer the attachment to.
+ */
+export async function handleScavWeaponTransfer(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('scav_weapon_transfer_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const targetIdx = parseInt(parts[2], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingScavengedWeaponryTransfer;
+  if (!pending || pending.playerNum !== playerNum) {
+    await interaction.followUp({ content: 'No Scavenged Weaponry transfer pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const target = pending.eligible[targetIdx];
+  if (!target) {
+    await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const attKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+  game[attKey][target.msgId] = [...(game[attKey][target.msgId] || []), 'Scavenged Weaponry'];
+  delete game.pendingScavengedWeaponryTransfer;
+  await interaction.message.edit({
+    content: `**Scavenged Weaponry** — Transferred to **${target.displayName}**.`,
+    components: [],
+  }).catch(discordCatch);
+  await logGameAction(game, client, `**Scavenged Weaponry** — Transferred to **${target.displayName}** after defeat.`, { phase: 'ROUND', icon: 'card' });
+  saveGames();
+}
+
+/**
+ * Handle sc_fig_pick_ — player picks target figure for Spectre Cell exhaust ability.
+ * customId: sc_fig_pick_{gameId}_{activatingMsgId}_{figureKey|cancel}
+ */
+export async function handleScFigPick(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, dcMessageMeta, saveGames, logGameAction, client } = ctx;
+  // Parse: sc_fig_pick_{gameId}_{activatingMsgId}_{rest}
+  const full = interaction.customId.replace(/^sc_fig_pick_/, '');
+  const firstUs = full.indexOf('_');
+  const gameId = full.slice(0, firstUs);
+  const rest = full.slice(firstUs + 1);
+  const secondUs = rest.indexOf('_');
+  const activatingMsgId = rest.slice(0, secondUs);
+  const target = rest.slice(secondUs + 1);
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+
+  if (target === 'cancel') {
+    await interaction.message.edit({ content: '**[Spectre Cell]** — Cancelled.', components: [] }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
+  const meta = dcMessageMeta.get(activatingMsgId);
+  if (!meta) return;
+
+  const targetFk = target;
+  const targetDcName = dcNameFromFigureKey(targetFk);
+
+  // Exhaust Spectre Cell
+  const dcList = getDcList(game, meta.playerNum) || [];
+  const dcMsgIds = getDcMessageIds(game, meta.playerNum) || [];
+  for (let i = 0; i < dcList.length; i++) {
+    if ((dcList[i]?.dcName || dcList[i]) === '[Spectre Cell]') {
+      const scMsgId = dcMsgIds[i];
+      if (scMsgId) {
+        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+        game.exhaustedSkirmishUpgrades[scMsgId] = [...(game.exhaustedSkirmishUpgrades[scMsgId] || []), 'Spectre Cell'];
+      }
+      break;
+    }
+  }
+
+  // Grant 2 MP to target figure — find target's msgId
+  let targetMsgId = null;
+  for (const [mId, mMeta] of dcMessageMeta) {
+    if (mMeta.gameId !== gameId) continue;
+    if (mMeta.dcName === targetDcName && mMeta.playerNum === meta.playerNum) {
+      targetMsgId = mId;
+      break;
+    }
+  }
+  if (targetMsgId) {
+    game.movementBank = game.movementBank || {};
+    game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
+    game.movementBank[targetMsgId].total += 2;
+    game.movementBank[targetMsgId].remaining += 2;
+  }
+
+  await interaction.message.edit({
+    content: `**[Spectre Cell]** — **${targetDcName}** gains 2 MP and may interrupt to perform an attack. (Exhausted)`,
+    components: [],
+  }).catch(discordCatch);
+  await logGameAction?.(game, client, `**[Spectre Cell]** — ${targetDcName} gains 2 MP, may interrupt attack. (Exhausted)`, { phase: 'ACTIVATION', icon: 'card' });
+  saveGames();
+}
+
+/**
+ * Hair Trigger: use interrupt attack
+ */
+export async function handleHairTriggerUse(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  // hair_trigger_use_{gameId}_{htMsgId}_{figureKey}
+  const suffix = interaction.customId.replace('hair_trigger_use_', '');
+  const parts = suffix.split('_');
+  const gameId = parts[0];
+  const htMsgId = parts[1];
+  const figureKey = parts.slice(2).join('_');
+  const game = getGame(gameId);
+  if (!game) return;
+  const htOwnerPN = game.figurePositions?.[1]?.[figureKey] ? 1 : (game.figurePositions?.[2]?.[figureKey] ? 2 : null);
+  if (!htOwnerPN) return;
+  if (interaction.user.id !== getPlayerId(game, htOwnerPN)) return;
+  const htKey = `hairTrigger_${figureKey}`;
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  game.roundFigureAbilityUsed[htKey] = true;
+  // Grant free attack
+  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  game.freeAttackBonusPending[htMsgId] = true;
+  const htDcName = dcNameFromFigureKey(figureKey);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  await interaction.followUp({
+    content: `**Hair Trigger** — **${htDcName}** interrupts! Use the **Attack** button on your DC card to perform a free attack.`,
+  }).catch(discordCatch);
+  await logGameAction(game, client, `**Hair Trigger** — **${htDcName}** interrupts to perform a free attack.`, { phase: 'ACTIVATION', icon: 'attack' });
+  saveGames();
+}
+
+/**
+ * Hair Trigger: skip
+ */
+export async function handleHairTriggerSkip(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  // hair_trigger_skip_{gameId}_{figureKey}
+  const suffix = interaction.customId.replace('hair_trigger_skip_', '');
+  const parts = suffix.split('_');
+  const gameId = parts[0];
+  const game = getGame(gameId);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  if (game) saveGames();
 }

@@ -13,7 +13,7 @@ import {
 } from './game-tools.js';
 import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
-import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
+import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove } from './round.js';
 import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
@@ -22,9 +22,9 @@ import {
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
 } from './post-deploy.js';
-import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip } from './movement.js';
+import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleStrainChoice, handleStrainCcPick, handleUnderDuress, handleRogueOneTokenPick } from './combat.js';
-import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone } from './activation.js';
+import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip } from './activation.js';
 import {
   handleMapSelection,
   handleMapTypeChoice,
@@ -122,7 +122,7 @@ import {
 import { handleBotmenuRecover } from './recover.js';
 import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion } from './combat-reactions.js';
+import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
@@ -138,6 +138,8 @@ import {
   handleHeavyFireUse, handleHeavyFireSkip,
   handleHeavyFireTarget, handleHeavyFireDone,
   handleHeavyFireCondition,
+  handleHavocShotUse, handleHavocShotSkip, handleHavocShotPick, handleHavocShotDone,
+  handleDeflectPick, handleDeflectSkip,
 } from './combat-special-effects.js';
 import { getValidGroupNames } from '../context-factory.js';
 
@@ -175,8 +177,12 @@ register('extra_armor_confirm_', handleExtraArmorConfirm, 'round');
 register('extra_armor_cancel_', handleExtraArmorCancel, 'round');
 register('rbf_discard_', handleRbfDiscard, 'round');
 register('rogue_one_return_', handleRogueOneReturn, 'round');
+register('ctf_pick_', handleCtfPick, 'round');
+register('ctf_strain_', handleCtfStrain, 'round');
 register('imp_citadel_', handleImpCitadel, 'round');
 register('prog_override_', handleProgrammingOverride, 'round');
+register('doubt_fig_', handleDoubtFigPick, 'round');
+register('doubt_remove_', handleDoubtRemove, 'round');
 
 // --- Post-deploy ---
 register('pd_pick_', handlePostDeployPick, 'postDeploy');
@@ -200,6 +206,8 @@ register('move_letter_', handleMoveLetter, 'moveLetter');
 register('move_pick_', handleMovePick, 'movePick');
 register('mvint_play_', handleMoveInterruptPlay, 'movePick');
 register('mvint_skip_', handleMoveInterruptSkip, 'movePick');
+register('ow_interrupt_use_', handleOverwatchInterruptUse, 'movePick');
+register('ow_interrupt_skip_', handleOverwatchInterruptSkip, 'movePick');
 
 // --- Combat ---
 register('attack_target_', handleAttackTarget, 'combat');
@@ -245,6 +253,11 @@ register('cancel_activate_', handleCancelActivate, 'activation');
 register('field_tactics_pick_', handleFieldTacticsPick, 'activation');
 register('fv_pick_', handleForceVisionPick, 'activation');
 register('lia_deploy_zone_', handleLiaDeployZone, 'activation');
+register('heroic_effort_return_', handleHeroicEffortReturn, 'activation');
+register('scav_weapon_transfer_', handleScavWeaponTransfer, 'activation');
+register('sc_fig_pick_', handleScFigPick, 'activation');
+register('hair_trigger_use_', handleHairTriggerUse, 'activation');
+register('hair_trigger_skip_', handleHairTriggerSkip, 'activation');
 
 // --- Setup ---
 register('map_selection_', handleMapSelection, 'setup');
@@ -365,6 +378,8 @@ register('illicit_arms_skip_', handleIllicitArms, 'combatReactions');
 register('illicit_arms_pick_', handleIllicitArms, 'combatReactions');
 register('force_exhaustion_yes_', handleForceExhaustion, 'combatReactions');
 register('force_exhaustion_no_', handleForceExhaustion, 'combatReactions');
+register('doubt_reroll_use_', handleDoubtReroll, 'combatReactions');
+register('doubt_reroll_skip_', handleDoubtReroll, 'combatReactions');
 
 // --- Post-combat ---
 register('reaction_skip_', handleReactionSkip, 'postCombat');
@@ -443,6 +458,12 @@ register('heavy_fire_skip_', handleHeavyFireSkip, 'combatSpecialEffects');
 register('heavy_fire_tgt_done_', handleHeavyFireDone, 'combatSpecialEffects');
 register('heavy_fire_tgt_', handleHeavyFireTarget, 'combatSpecialEffects');
 register('heavy_fire_cond_', handleHeavyFireCondition, 'combatSpecialEffects');
+register('havoc_shot_use_', handleHavocShotUse, 'combatSpecialEffects');
+register('havoc_shot_skip_', handleHavocShotSkip, 'combatSpecialEffects');
+register('havoc_shot_pick_', handleHavocShotPick, 'combatSpecialEffects');
+register('havoc_shot_done_', handleHavocShotDone, 'combatSpecialEffects');
+register('deflect_pick_', handleDeflectPick, 'combatSpecialEffects');
+register('deflect_skip_', handleDeflectSkip, 'combatSpecialEffects');
 
 // --- Select-menu handlers (dispatched via table-driven select dispatch in index.js) ---
 register('arsenal_pick_', handleArsenalPick, 'dcPlayArea');
@@ -486,7 +507,7 @@ export {
 } from './game-tools.js';
 export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
-export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
+export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove } from './round.js';
 export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
@@ -495,9 +516,9 @@ export {
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
 } from './post-deploy.js';
-export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip } from './movement.js';
+export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip } from './movement.js';
 export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls, handleStrainChoice, handleStrainCcPick, handleRogueOneTokenPick } from './combat.js';
-export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone } from './activation.js';
+export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip } from './activation.js';
 export {
   handleMapSelection,
   handleMapTypeChoice,
@@ -594,7 +615,7 @@ export { handleBotmenuRecover, runRecovery } from './recover.js';
 export { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 export { getWaitingPlayers } from '../game/phase-gate.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
+export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleDoubtReroll } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
@@ -610,4 +631,6 @@ export {
   handleHeavyFireUse, handleHeavyFireSkip,
   handleHeavyFireTarget, handleHeavyFireDone,
   handleHeavyFireCondition,
+  handleHavocShotUse, handleHavocShotSkip, handleHavocShotPick, handleHavocShotDone,
+  handleDeflectPick, handleDeflectSkip,
 } from './combat-special-effects.js';

@@ -1428,6 +1428,50 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('**Fire Mission** — +Blast 1 applied to this attack.').catch(discordCatch);
   }
 
+  // Spectre Cell: passive +1 Hit for all friendly figures while attacking
+  if ((getDcList(game, attackerPlayerNum) || []).some(dc => (dc.dcName || dc) === '[Spectre Cell]')) {
+    game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+    await thread.send('**Spectre Cell** — +1 Hit (passive).').catch(discordCatch);
+  }
+
+  // Unhinged Director (Krennic): TROOPER/GUARDIAN within 2 (3 with ACS) get +2 from power tokens instead of +1
+  {
+    const _udCheckSide = (pn, figKey) => {
+      const dcList = getDcList(game, pn) || [];
+      const dcMsgIds = getDcMessageIds(game, pn) || [];
+      for (let i = 0; i < dcList.length; i++) {
+        const dc = dcList[i];
+        const dn = dc?.dcName || dc;
+        const eff = getDcEffectsGlobal()[dn];
+        if (!(eff?.specialAbilityIds || []).includes('unhinged_director_krennic')) continue;
+        // Find Krennic's position
+        const dgIdx = (dc?.displayName || dn).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const kFk = `${dn}-${dgIdx}-0`;
+        const kPos = game.figurePositions?.[pn]?.[kFk];
+        if (!kPos || !_getRange) continue;
+        const figPos = game.figurePositions?.[pn]?.[figKey];
+        if (!figPos) continue;
+        // Check ACS on Krennic
+        const kMsgId = dcMsgIds[i];
+        const kAtts = kMsgId ? (game.p1DcAttachments?.[kMsgId] || game.p2DcAttachments?.[kMsgId] || []) : [];
+        const hasACS = kAtts.some(a => a.includes('Advanced Com Systems'));
+        const maxRange = hasACS ? 3 : 2;
+        if (_getRange(kPos, figPos) > maxRange) continue;
+        // Check if figure is TROOPER or GUARDIAN
+        const figDcName = dcNameFromFigureKey(figKey);
+        const figKws = (getDcKeywordsGlobal(game)[figDcName] || []).map(k => String(k).toUpperCase());
+        if (figKws.includes('TROOPER') || figKws.includes('GUARDIAN')) return true;
+      }
+      return false;
+    };
+    if (_udCheckSide(attackerPlayerNum, attackerFigureKey)) {
+      game.pendingCombat.attackerUnhingedBonus = true;
+    }
+    if (!target.isNpc && _udCheckSide(game.pendingCombat.defenderPlayerNum, target.figureKey)) {
+      game.pendingCombat.defenderUnhingedBonus = true;
+    }
+  }
+
   // Fury of Kashyyyk: elite WOOKIEE attacking within 2 + another friendly WOOKIEE within 2 of defender → Pierce 1
   {
     const _fokAtkDcList = getDcList(game, attackerPlayerNum) || [];
@@ -1721,6 +1765,12 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('**Cortosis Weave** — Pierce reduced by 2 (min 0).');
   }
 
+  // Spectre Cell: passive +1 Block for all friendly figures while defending
+  if (!target.isNpc && (getDcList(game, game.pendingCombat.defenderPlayerNum) || []).some(dc => (dc.dcName || dc) === '[Spectre Cell]')) {
+    game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+    await thread.send('**Spectre Cell** — +1 Block (passive).').catch(discordCatch);
+  }
+
   // Gamorrean Honor Guard: +1 Block while defending during Ranged attack
   if (defSpecialIds.includes('gamorrean_honor_guard') && isRanged) {
     game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
@@ -1890,27 +1940,34 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Advanced Firepower (General Sorin): adjacent friendly DROID or VEHICLE may use Sorin's surge abilities
+  // With Advanced Com Systems: extends from adjacent to within 2 spaces
   if (mapSpaces) {
     const atkPosAF = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     const atkKwsAF = (getDcKeywordsGlobal(game)[meta.dcName] || []).map(k => String(k).toUpperCase());
     const attackerIsDroidOrVehicle = atkKwsAF.includes('DROID') || atkKwsAF.includes('VEHICLE');
     if (atkPosAF) {
-      const adjToAtkAF = new Set((mapSpaces.adjacency?.[String(atkPosAF).toLowerCase()] || []).map(s => String(s).toLowerCase()));
       const friendlyPosAF = game.figurePositions?.[attackerPlayerNum] || {};
       for (const [fk, pos] of Object.entries(friendlyPosAF)) {
         if (fk === attackerFigureKey || !pos) continue;
-        if (!adjToAtkAF.has(String(pos).toLowerCase())) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!(fkEff?.specialAbilityIds || []).includes('advanced_firepower_sorin')) continue;
+        // Check range: adjacent normally, within 2 with ACS
+        const _afSorinMsgId = findDcMessageIdForFigure?.(game.gameId, attackerPlayerNum, fk);
+        const _afAtts = _afSorinMsgId ? (game.p1DcAttachments?.[_afSorinMsgId] || game.p2DcAttachments?.[_afSorinMsgId] || []) : [];
+        const _afHasACS = _afAtts.some(a => a.includes('Advanced Com Systems'));
+        const _afMaxRange = _afHasACS ? 2 : 1;
+        const _afDist = _getRange ? _getRange(atkPosAF, pos) : Infinity;
+        if (_afDist > _afMaxRange) continue;
         if (!attackerIsDroidOrVehicle) {
-          await thread.send(`**Advanced Firepower** — ${fkDcName} is adjacent, but **${meta.dcName}** is not a DROID or VEHICLE. Surge sharing skipped.`).catch(discordCatch);
+          await thread.send(`**Advanced Firepower** — ${fkDcName} is within range, but **${meta.dcName}** is not a DROID or VEHICLE. Surge sharing skipped.`).catch(discordCatch);
           break;
         }
         const sorinSurges = fkEff?.surgeAbilities || [];
         if (sorinSurges.length) {
           game.pendingCombat.bonusSurgeAbilities.push(...sorinSurges);
-          await thread.send(`**Advanced Firepower** (${fkDcName}) — **${meta.dcName}** is an adjacent DROID/VEHICLE: Sorin's surge abilities added (${sorinSurges.join(', ')}).`).catch(discordCatch);
+          const rangeNote = _afHasACS && _afDist > 1 ? ' (ACS: extended range)' : '';
+          await thread.send(`**Advanced Firepower** (${fkDcName}) — **${meta.dcName}** is a DROID/VEHICLE within range${rangeNote}: Sorin's surge abilities added (${sorinSurges.join(', ')}).`).catch(discordCatch);
         }
         break; // only one Advanced Firepower source
       }
@@ -2789,6 +2846,32 @@ export async function handleCombatRoll(interaction, ctx) {
       saveGames();
       return;
     }
+    // [Doubt] SU: defender may deplete to force 1 attack die reroll
+    if (!combat.doubtRerollChecked) {
+      const _dbtDcList = getDcList(game, defenderPlayerNum) || [];
+      const _dbtMsgIds = getDcMessageIds(game, defenderPlayerNum) || [];
+      for (let i = 0; i < _dbtDcList.length; i++) {
+        const _dbtDc = _dbtDcList[i];
+        if ((_dbtDc?.dcName || _dbtDc) !== '[Doubt]') continue;
+        const _dbtMid = _dbtMsgIds[i];
+        if (!_dbtMid) continue;
+        const _dbtDepleted = (game.p1DepletedDcMessageIds || []).includes(_dbtMid) || (game.p2DepletedDcMessageIds || []).includes(_dbtMid);
+        if (_dbtDepleted) continue;
+        // Found usable Doubt — prompt defender
+        combat.doubtRerollChecked = true;
+        combat.doubtPendingAtkRerolls = atkRerolls;
+        combat.doubtPendingDefRerolls = defRerolls;
+        combat.doubtMsgId = _dbtMid;
+        const defId = game[`player${defenderPlayerNum}Id`] || '';
+        const _dbtRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`doubt_reroll_use_${gameId}`).setLabel('Use Doubt (Deplete → force 1 ATK reroll)').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`doubt_reroll_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({ content: `**[Doubt]** — <@${defId}> Deplete to force your opponent to reroll 1 attack die?`, components: [_dbtRow] }).catch(discordCatch);
+        saveGames();
+        return;
+      }
+    }
     combat.attackerRerollsRemaining = atkRerolls;
     combat.defenderRerollsRemaining = defRerolls;
     // G12: Track which die indices have been rerolled (each die max once)
@@ -3572,12 +3655,13 @@ async function sendWildTypeWindow(thread, gameId, role) {
   });
 }
 
-/** Apply token bonus to combat state */
-function applyTokenBonus(combat, type) {
-  if (type === 'Hit')   combat.bonusHits  = (combat.bonusHits  || 0) + 1;
-  if (type === 'Surge') combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + 1;
-  if (type === 'Block') combat.bonusBlock = (combat.bonusBlock || 0) + 1;
-  if (type === 'Evade') combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+/** Apply token bonus to combat state. isAttacker flag enables Unhinged Director +2. */
+function applyTokenBonus(combat, type, isAttacker) {
+  const bonus = (isAttacker ? combat.attackerUnhingedBonus : combat.defenderUnhingedBonus) ? 2 : 1;
+  if (type === 'Hit')   combat.bonusHits  = (combat.bonusHits  || 0) + bonus;
+  if (type === 'Surge') combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + bonus;
+  if (type === 'Block') combat.bonusBlock = (combat.bonusBlock || 0) + bonus;
+  if (type === 'Evade') combat.bonusEvade = (combat.bonusEvade || 0) + bonus;
 }
 
 /** Send a 4-button prompt asking the player to choose a power token type (Hit/Surge/Block/Evade) */
@@ -4696,7 +4780,7 @@ export async function handleCombatToken(interaction, ctx) {
     const typeMap = { hit: 'Hit', surge: 'Surge', block: 'Block', evade: 'Evade' };
     const resolvedType = typeMap[choice];
     if (!resolvedType) return;
-    applyTokenBonus(combat, resolvedType);
+    applyTokenBonus(combat, resolvedType, combat.pendingWildRole === 'attacker');
     // Squad Cohesion: if the Wild token came from a cohesion source, use that figure key
     const figKey = combat.pendingWildCohesionFigureKey
       || (combat.pendingWildRole === 'attacker' ? combat.attackerFigureKey : combat.target.figureKey);
@@ -4768,7 +4852,7 @@ export async function handleCombatToken(interaction, ctx) {
       saveGames();
       return;
     }
-    applyTokenBonus(combat, scTokenType);
+    applyTokenBonus(combat, scTokenType, isAttacker);
     removeSpentToken(game, scEntry.figureKey, scEntry.tokenIndex);
     await thread.send(`**Power Token spent (Squad Cohesion):** +1 ${scTokenType} (from ${scEntry.ownerName})`);
     logGameAction?.(game, interaction.client, `🎯 **Power Token spent (Squad Cohesion)** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${scTokenType} from ${scEntry.ownerName}`, { phase: 'ROUND', icon: 'attack' });
@@ -4805,9 +4889,10 @@ export async function handleCombatToken(interaction, ctx) {
     return;
   }
 
-  applyTokenBonus(combat, tokenType);
+  applyTokenBonus(combat, tokenType, isAttacker);
+  const _tokenBonusAmt = (isAttacker ? combat.attackerUnhingedBonus : combat.defenderUnhingedBonus) ? 2 : 1;
   removeSpentToken(game, figureKey, tokenIndex);
-  await thread.send(`**Power Token spent:** +1 ${tokenType}`);
+  await thread.send(`**Power Token spent:** +${_tokenBonusAmt} ${tokenType}${_tokenBonusAmt > 1 ? ' (Unhinged Director)' : ''}`);
   logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
   // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
   if (isAttacker) combat.attackerSpentPowerToken = true;

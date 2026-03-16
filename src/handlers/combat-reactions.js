@@ -831,3 +831,70 @@ export async function handleForceExhaustion(interaction, ctx) {
   delete game.pendingForceExhaustion;
   saveGames();
 }
+
+/**
+ * Handle doubt_reroll_use_ / doubt_reroll_skip_ — defender decides whether to deplete [Doubt] for forced reroll.
+ */
+export async function handleDoubtReroll(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client,
+    sendRerollUI, proceedAfterRerolls,
+  } = ctx;
+  const parts = interaction.customId.split('_');
+  // doubt_reroll_use_{gameId} or doubt_reroll_skip_{gameId}
+  const action = parts[2]; // 'use' or 'skip'
+  const gameId = parts[3];
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const combat = game.pendingCombat;
+  if (!combat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(discordCatch); return; }
+  const defPN = combat.defenderPlayerNum || opponentPlayerNum(combat.attackerPlayerNum);
+  if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, `Only P${defPN} may respond to Doubt.`)) return;
+
+  const thread = await client.channels.fetch(combat.combatThreadId).catch(() => null);
+
+  try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
+
+  if (action === 'use') {
+    // Deplete the Doubt card
+    const dbtMsgId = combat.doubtMsgId;
+    if (dbtMsgId) {
+      const depKey = defPN === 1 ? 'p1DepletedDcMessageIds' : 'p2DepletedDcMessageIds';
+      game[depKey] = game[depKey] || [];
+      if (!game[depKey].includes(dbtMsgId)) game[depKey].push(dbtMsgId);
+    }
+    // Add forced reroll to queue
+    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+    combat.forcedRerollQueue.push({ controlPlayer: defPN, pool: 'attack', remaining: 1, source: 'Doubt' });
+    if (thread) await thread.send('**[Doubt]** — Depleted. Defender forces 1 attack die reroll.').catch(discordCatch);
+  } else {
+    if (thread) await thread.send('**[Doubt]** — Skipped.').catch(discordCatch);
+  }
+
+  // Resume the reroll window (same pattern as Vet Instincts)
+  const atkRem = combat.doubtPendingAtkRerolls || 0;
+  const defRem = combat.doubtPendingDefRerolls || 0;
+  const hasForced = (combat.forcedRerollQueue || []).length > 0;
+  const hasPreRerolls = (combat.pendingPreRerolls || []).length > 0;
+
+  if (thread && (atkRem > 0 || defRem > 0 || hasForced || hasPreRerolls)) {
+    combat.attackerRerollsRemaining = atkRem;
+    combat.defenderRerollsRemaining = defRem;
+    if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
+    if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
+    if (atkRem > 0 || hasPreRerolls) {
+      combat.rerollPhase = 'attacker';
+      await sendRerollUI(thread, game, combat, 'attacker');
+    } else if (hasForced) {
+      combat.rerollPhase = 'forced';
+      await sendRerollUI(thread, game, combat, 'forced');
+    } else {
+      combat.rerollPhase = 'defender';
+      await sendRerollUI(thread, game, combat, 'defender');
+    }
+  } else if (thread) {
+    combat.rerollPhase = null;
+    await proceedAfterRerolls(thread, game, combat, ctx);
+  }
+  saveGames();
+}
