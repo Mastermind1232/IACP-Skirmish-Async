@@ -46,11 +46,14 @@ function buildSetupGame(config) {
   } = config;
 
   // Build DC lists (same logic as game-builder)
+  // Supports: { dcName, count?, attachments?: string[] }
   function buildDcList(army) {
     const dcList = [];
+    const attachmentMap = {}; // dcListIndex → attachment names
     for (const entry of army) {
       const dcName = entry.dcName || entry;
       const count = entry.count || 1;
+      const entryAttachments = entry.attachments || [];
       for (let dg = 0; dg < count; dg++) {
         const stats = getDcStats(dcName);
         const displayName = count > 1 ? `${dcName} [DG ${dg + 1}]` : dcName;
@@ -60,14 +63,30 @@ function buildSetupGame(config) {
         for (let f = 0; f < figureCount; f++) {
           healthState.push([maxHp, maxHp]);
         }
+        const idx = dcList.length;
         dcList.push({ dcName, displayName, healthState, cost: stats?.cost ?? 0 });
+        if (entryAttachments.length > 0) {
+          attachmentMap[idx] = [...entryAttachments];
+        }
       }
     }
-    return dcList;
+    return { dcList, attachmentMap };
   }
 
-  const p1DcList = buildDcList(p1Army);
-  const p2DcList = buildDcList(p2Army);
+  const p1Build = buildDcList(p1Army);
+  const p2Build = buildDcList(p2Army);
+  const p1DcList = p1Build.dcList;
+  const p2DcList = p2Build.dcList;
+
+  // Build attachment maps keyed by msgId (hl{pn}dc{i})
+  const p1DcAttachments = {};
+  for (const [idx, atts] of Object.entries(p1Build.attachmentMap)) {
+    p1DcAttachments[`hl1dc${idx}`] = atts;
+  }
+  const p2DcAttachments = {};
+  for (const [idx, atts] of Object.entries(p2Build.attachmentMap)) {
+    p2DcAttachments[`hl2dc${idx}`] = atts;
+  }
 
   // Separate attachments from deployable figures for squad ccList
   const p1SquadDcList = p1DcList.map(d => ({ dcName: d.dcName, displayName: d.displayName }));
@@ -117,6 +136,10 @@ function buildSetupGame(config) {
 
     // Damage tracking
     totalDamageReceived: { 1: 0, 2: 0 },
+
+    // Attachments (e.g., Scavenged Walker)
+    p1DcAttachments,
+    p2DcAttachments,
 
     // Undo
     undoStack: [],
@@ -205,15 +228,15 @@ async function drivePostDeployQueue(game, gameId, p1Id, p2Id, submit, harness, g
         continue;
       }
 
-      // Extra Armor — pick first available figure, repeat 4 times
+      // Extra Armor — pick first figure then confirm, repeat until 4 tokens distributed
       if (active.abilityId === 'extra_armor') {
         const pendingEa = g[`pendingExtraArmor_p${pn}`];
         if (pendingEa && pendingEa.remaining > 0) {
           const allFks = Object.keys(g.figurePositions?.[pn] || {});
           if (allFks.length > 0) {
-            await submit(`extra_armor_pick_${gameId}_${pn}_${allFks[0]}`, userId, {
-              channel: getHandChannel(pn),
-            });
+            const targetFk = allFks[0];
+            await submit(`extra_armor_pick_${gameId}_${pn}_${targetFk}`, userId);
+            await submit(`extra_armor_confirm_${gameId}_${pn}_${targetFk}`, userId);
             continue;
           }
         }

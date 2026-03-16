@@ -918,6 +918,43 @@ describe('Post-deploy: setup harness integration', { timeout: 30000 }, () => {
     assert.ok(result.phases.includes('post_deploy'), 'post_deploy phase was visited');
   });
 
+  it('Extra Armor (skirmish upgrade) distributes 4 Block Tokens', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Stormtrooper', count: 2 }, { dcName: '[Extra Armor]' }],
+      p2Army: [{ dcName: 'Rebel Saboteur', count: 2 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set');
+    assert.strictEqual(game.postDeployQueue, undefined, 'Queue cleaned up');
+    assert.ok(result.phases.includes('post_deploy'), 'post_deploy phase was visited');
+
+    // Verify Block tokens were distributed (4 total across all figures)
+    const allFks = Object.keys(game.figurePositions?.[1] || {});
+    let totalBlocks = 0;
+    for (const fk of allFks) {
+      const tokens = game.figurePowerTokens?.[fk] || [];
+      totalBlocks += tokens.filter(t => t === 'Block').length;
+    }
+    assert.strictEqual(totalBlocks, 4, 'Total of 4 Block Tokens distributed across figures');
+  });
+
+  it('Scavenged Walker (attachment) interactive queue resolves via walker skip', async () => {
+    const result = await runSetupSim({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'AT-DP', attachments: ['Scavenged Walker'] }, { dcName: 'Stormtrooper' }],
+      p2Army: [{ dcName: 'Stormtrooper', count: 2 }],
+    });
+
+    assert.ok(result.reachedRoundActive, 'Reached ROUND_ACTIVE');
+    const { game } = result;
+    assert.strictEqual(game.postDeployEffectsFired, true, 'postDeployEffectsFired set');
+    assert.strictEqual(game.postDeployQueue, undefined, 'Queue cleaned up');
+    assert.ok(result.phases.includes('post_deploy'), 'post_deploy phase was visited');
+  });
+
   it('Ambush (Ewok Warrior Elite) applies Hide condition', async () => {
     const result = await runSetupSim({
       mapId: 'mos-eisley-outskirts',
