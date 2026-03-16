@@ -907,10 +907,9 @@ describe('Region 4: Stale Component — Pending State Cleanup', () => {
     // After resolution (or attempt), check surface lifecycle
     const surface = fh.getSurface();
     const negTransitions = surface.getPendingTransitions('pendingNegation');
-    // We may get cleared transition if handler succeeds
-    if (negTransitions.length > 0) {
-      assert.ok(true, 'Negation transition recorded');
-    }
+    // Whether handler fully resolved or not, verify the surface model recorded transitions
+    // At minimum, the synthetic set above should be visible if an act() cleared it
+    assert.ok(Array.isArray(negTransitions), 'pendingNegation transitions should be an array');
   });
 
   it('4.10 — combat → celebration lifecycle: both created and cleared', async () => {
@@ -941,11 +940,12 @@ describe('Region 4: Stale Component — Pending State Cleanup', () => {
     const moveAction = findAction(fh, 1, 'move_figure');
     if (!moveAction) return;
     const r = await fh.act(moveAction.customId, P1);
+    // Verify the step tracked whether moveInProgress was created
+    assert.ok(Array.isArray(r.step.pendingCreated), 'pendingCreated should be an array');
     if (r.step.pendingCreated.includes('moveInProgress')) {
-      assert.ok(true, 'moveInProgress created');
       const game = fh.getGame();
       assert.ok(game.moveInProgress && Object.keys(game.moveInProgress).length > 0,
-        'moveInProgress has entries');
+        'moveInProgress should have entries when created');
     }
   });
 
@@ -1353,10 +1353,10 @@ describe('Cross-Region: Full Flow Integration', () => {
       const r2 = await fh.act(attackAction.customId, P1);
       assertNoErrors(r2, 'attack');
 
-      // Region 4: pending state lifecycle
-      if (r2.step.pendingCreated.includes('pendingCombat')) {
-        assert.ok(true, 'pendingCombat created');
-      }
+      // Region 4: pending state lifecycle — verify combat tracking
+      assert.ok(Array.isArray(r2.step.pendingCreated), 'pendingCreated tracked');
+      const combatCreated = r2.step.pendingCreated.includes('pendingCombat');
+      assert.ok(combatCreated, 'pendingCombat should be created on attack');
 
       await driveCombatToCompletion(fh);
       await handlePostCombat(fh);
