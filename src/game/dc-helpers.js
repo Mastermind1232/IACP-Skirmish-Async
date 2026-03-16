@@ -125,7 +125,7 @@ export function buildFigureButtonLabel(figureKey, game) {
   if (game?.figurePowerTokens) {
     const tokens = game.figurePowerTokens[figureKey] || [];
     const max = getMaxPowerTokens(figureKey);
-    if (tokens.length > 0 || max > 0) {
+    if (tokens.length > 0) {
       label += ` [${tokens.length}/${max}]`;
     }
   }
