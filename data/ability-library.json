@@ -2613,6 +2613,14 @@
       "description": "You cannot be the target of an attack while in the same space as a friendly figure.",
       "wiredStatus": "wired"
     },
+    "attached_dio": {
+      "type": "dcPassive",
+      "category": "passive-reactive",
+      "trigger": "friendly-movement",
+      "label": "Attached",
+      "description": "When a friendly Iden Versio exits your space, interrupt to move up to 1 space.",
+      "wiredStatus": "wired"
+    },
     "indiscriminate_fire": {
       "type": "dcSpecial",
       "category": "active",

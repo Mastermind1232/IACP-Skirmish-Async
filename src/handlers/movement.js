@@ -932,6 +932,85 @@ export async function handleMovePick(interaction, ctx) {
       }
     }
   }
+  // Swipe (Salacious B. Crumb): when entering a space containing a hostile figure during movement, deal 1 Damage (limit once per figure per round)
+  if (meta.dcName === 'Salacious B. Crumb' && path && path.length >= 2) {
+    const _swOppPN = opponentPlayerNum(playerNum);
+    const _swEnemyFigs = game.figurePositions?.[_swOppPN] || {};
+    const _swHs = ctx.dcHealthState;
+    // Walk each space entered (skip path[0] which is start position)
+    for (let _swPi = 1; _swPi < path.length; _swPi++) {
+      const _swSpace = String(path[_swPi]).toLowerCase();
+      for (const [_swEfk, _swEpos] of Object.entries(_swEnemyFigs)) {
+        if (!_swEpos || String(_swEpos).toLowerCase() !== _swSpace) continue;
+        const _swKey = `swipe_${figureKey}_${_swEfk}`;
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        if (game.roundFigureAbilityUsed[_swKey]) continue;
+        game.roundFigureAbilityUsed[_swKey] = true;
+        const _swTgtDcName = dcNameFromFigureKey(_swEfk);
+        const _swMatch = _swEfk.match(/^(.+)-(\d+)-(\d+)$/);
+        if (!_swMatch) continue;
+        const [, , _swDgIdx, _swFigIdxStr] = _swMatch;
+        const _swFigIdx = parseInt(_swFigIdxStr, 10);
+        let _swTgtMsgId = null;
+        for (const [mId, mMeta] of dcMessageMeta) {
+          if (mMeta.gameId !== game.gameId || mMeta.playerNum !== _swOppPN || mMeta.dcName !== _swTgtDcName) continue;
+          const dgM = (mMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+          if (String(dgM ? dgM[1] : '1') === String(_swDgIdx)) { _swTgtMsgId = mId; break; }
+        }
+        if (!_swTgtMsgId || !_swHs) continue;
+        const _swEntry = _swHs.get(_swTgtMsgId)?.[_swFigIdx];
+        if (!_swEntry || !Array.isArray(_swEntry)) continue;
+        const [_swCur, _swMax] = _swEntry;
+        if ((_swMax ?? 0) === 0 || ((_swCur ?? _swMax ?? 0) <= 0)) continue;
+        const { prevHp: _swPrev, newHp: _swNew } = reduceHp(_swHs, game, _swTgtMsgId, _swFigIdx, 1, _swOppPN);
+        const _swDefeat = _swNew <= 0 ? ' **(may be defeated)**' : '';
+        await logGameAction(game, client, `**Swipe** — **Salacious B. Crumb** enters **${_swTgtDcName}**'s space: 1 Damage${_swDefeat} (HP: ${_swPrev}→${_swNew}).`, { phase: 'ROUND', icon: 'attack' });
+      }
+    }
+  }
+  // Attached (Dio): when Iden Versio exits Dio's space during movement, Dio may move up to 1 space
+  if (meta.dcName === 'Iden Versio' && startCoord && String(newTopLeft).toLowerCase() !== String(startCoord).toLowerCase()) {
+    const _dioFriendlyFigs = game.figurePositions?.[playerNum] || {};
+    for (const [_dioFk, _dioPos] of Object.entries(_dioFriendlyFigs)) {
+      if (!_dioPos) continue;
+      if (!_dioFk.startsWith('Dio-')) continue;
+      if (String(_dioPos).toLowerCase() !== String(startCoord).toLowerCase()) continue;
+      // Iden was on Dio's space and has now moved away — trigger Attached
+      const _dioMapId = game.selectedMap?.id;
+      if (!_dioMapId) continue;
+      const _dioAdj = getMapSpaces(_dioMapId)?.adjacency?.[_dioPos] || [];
+      if (_dioAdj.length === 0) continue;
+      // Best follow space is path[1] (first step on Iden's path)
+      const _dioDefaultSpace = (path && path.length >= 2) ? String(path[1]).toLowerCase() : _dioAdj[0];
+      game.pendingDioFollow = {
+        dioFigureKey: _dioFk,
+        dioPlayerNum: playerNum,
+        currentSpace: _dioPos,
+        followSpace: _dioDefaultSpace,
+      };
+      const _dioOwnerId = getPlayerId(game, playerNum);
+      const _dioSpaceBtns = _dioAdj.slice(0, 19).map(s =>
+        new ButtonBuilder()
+          .setCustomId(`dio_follow_pick_${game.gameId}_${s}`)
+          .setLabel(s.toUpperCase())
+          .setStyle(s === _dioDefaultSpace ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      );
+      _dioSpaceBtns.push(
+        new ButtonBuilder()
+          .setCustomId(`dio_stay_${game.gameId}`)
+          .setLabel('Stay')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      const _dioRows = [];
+      while (_dioSpaceBtns.length > 0) _dioRows.push(new ActionRowBuilder().addComponents(_dioSpaceBtns.splice(0, 5)));
+      await interaction.followUp({
+        content: `<@${_dioOwnerId}> **Attached** — **Iden Versio** exited **Dio**'s space. Dio may interrupt to move up to 1 space:`,
+        components: _dioRows.slice(0, 5),
+        allowedMentions: { users: _dioOwnerId ? [_dioOwnerId] : [] },
+      }).catch(discordCatch);
+      break;
+    }
+  }
   // --- Post-move interrupt detection: C23 Parting Blow, C15 Dirty Trick, C43 Disengage ---
   if (path && path.length >= 2) {
     const interruptTriggers = detectPostMoveInterrupts(game, playerNum, figureKey, path);
@@ -1091,5 +1170,55 @@ export async function handleOverwatchInterruptSkip(interaction, ctx) {
   try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
 
   await logGameAction(game, client, `**Overwatch** interrupt opportunity skipped.`, { phase: 'ROUND', icon: 'skip' });
+  saveGames();
+}
+
+/**
+ * Handle dio_follow_pick_ — player chose a space for Dio to follow Iden.
+ */
+export async function handleDioFollowPick(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const m = interaction.customId.match(/^dio_follow_pick_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, space] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+
+  const pending = game.pendingDioFollow;
+  if (!pending) {
+    try { await interaction.update({ components: [] }); } catch { /* already handled */ }
+    return;
+  }
+
+  try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
+
+  // Move Dio to the chosen space
+  const { dioFigureKey, dioPlayerNum, currentSpace } = pending;
+  game.figurePositions = game.figurePositions || {};
+  game.figurePositions[dioPlayerNum] = game.figurePositions[dioPlayerNum] || {};
+  game.figurePositions[dioPlayerNum][dioFigureKey] = space;
+  delete game.pendingDioFollow;
+
+  await interaction.message.edit({ content: `**Attached** — **Dio** moved from **${currentSpace.toUpperCase()}** to **${space.toUpperCase()}** (following Iden Versio).`, components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `**Attached** — **Dio** moved to **${space.toUpperCase()}** (following Iden Versio).`, { phase: 'ROUND', icon: 'move' });
+  saveGames();
+}
+
+/**
+ * Handle dio_stay_ — player chose for Dio to stay put.
+ */
+export async function handleDioStay(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const m = interaction.customId.match(/^dio_stay_([^_]+)$/);
+  if (!m) return;
+  const [, gameId] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+
+  try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
+
+  delete game.pendingDioFollow;
+  await interaction.message.edit({ content: `**Attached** — **Dio** stays put.`, components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `**Attached** — Dio chose to stay (did not follow Iden).`, { phase: 'ROUND', icon: 'skip' });
   saveGames();
 }

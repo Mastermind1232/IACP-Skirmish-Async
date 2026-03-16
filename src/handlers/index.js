@@ -22,9 +22,9 @@ import {
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
 } from './post-deploy.js';
-import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip } from './movement.js';
+import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleStrainChoice, handleStrainCcPick, handleUnderDuress, handleRogueOneTokenPick } from './combat.js';
-import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip } from './activation.js';
+import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
   handleMapSelection,
   handleMapTypeChoice,
@@ -209,6 +209,8 @@ register('mvint_play_', handleMoveInterruptPlay, 'movePick');
 register('mvint_skip_', handleMoveInterruptSkip, 'movePick');
 register('ow_interrupt_use_', handleOverwatchInterruptUse, 'movePick');
 register('ow_interrupt_skip_', handleOverwatchInterruptSkip, 'movePick');
+register('dio_follow_pick_', handleDioFollowPick, 'movePick');
+register('dio_stay_', handleDioStay, 'movePick');
 
 // --- Combat ---
 register('attack_target_', handleAttackTarget, 'combat');
@@ -259,6 +261,10 @@ register('scav_weapon_transfer_', handleScavWeaponTransfer, 'activation');
 register('sc_fig_pick_', handleScFigPick, 'activation');
 register('hair_trigger_use_', handleHairTriggerUse, 'activation');
 register('hair_trigger_skip_', handleHairTriggerSkip, 'activation');
+register('iwba_use_', handleItWillBeAlrightUse, 'activation');
+register('iwba_skip_', handleItWillBeAlrightSkip, 'activation');
+register('iwba_pick_', handleItWillBeAlrightPick, 'activation');
+register('iwba_action_', handleItWillBeAlrightAction, 'activation');
 
 // --- Setup ---
 register('map_selection_', handleMapSelection, 'setup');

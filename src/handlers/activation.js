@@ -8,7 +8,7 @@ import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, awardKillVp } from '../game/index.js';
 import { getRange } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
@@ -31,6 +31,7 @@ import {
   ccHandKey,
   opponentPlayerNum,
   getInitiativePlayerNum,
+  removeFigurePosition,
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -1205,6 +1206,43 @@ export async function handleConfirmActivate(interaction, ctx) {
         const _swTgtName = dcNameFromFigureKey(_swEfk);
         await thread.send(`**Swipe** — **Salacious B. Crumb** activates in **${_swTgtName}**'s space: **${_swTgtName}** suffers 1 Damage.`).catch(discordCatch);
         await logGameAction(game, client, `**Swipe** — **Salacious B. Crumb** deals 1 Damage to **${_swTgtName}** on activation.`, { phase: 'ACTIVATION', icon: 'attack' });
+      }
+    }
+  }
+  // It Will Be Alright (Cassian Andor): once during activation, sacrifice a friendly figure within 2 spaces for a free action
+  if (meta.dcName === 'Cassian Andor') {
+    const _iwbaDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _iwbaSelfFk = `Cassian Andor-${_iwbaDgIndex}-0`;
+    const _iwbaSelfPos = game.figurePositions?.[meta.playerNum]?.[_iwbaSelfFk];
+    const _iwbaGetRange = ctx.getRange || getRange;
+    if (_iwbaSelfPos) {
+      // Find friendly figures within 2 spaces that are alive (not self)
+      const _iwbaHs = ctx.dcHealthState;
+      const _iwbaTargets = [];
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[meta.playerNum] || {})) {
+        if (!pos || fk === _iwbaSelfFk) continue;
+        if (_iwbaGetRange(_iwbaSelfPos, pos) > 2) continue;
+        const fkDcName = dcNameFromFigureKey(fk);
+        // Check alive: find msgId and check HP > 0
+        let fkMsgId = ctx.findDcMessageIdForFigure(game.gameId, meta.playerNum, fk);
+        if (!fkMsgId) continue;
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const fkFigIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const fkEntry = _iwbaHs?.get(fkMsgId)?.[fkFigIdx];
+        if (!fkEntry || !Array.isArray(fkEntry)) continue;
+        const [fkCur, fkMax] = fkEntry;
+        if ((fkMax ?? 0) === 0 || ((fkCur ?? fkMax ?? 0) <= 0)) continue;
+        _iwbaTargets.push({ figureKey: fk, dcName: fkDcName, msgId: fkMsgId, figIdx: fkFigIdx });
+      }
+      if (_iwbaTargets.length > 0) {
+        const _iwbaRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`iwba_use_${game.gameId}_${msgId}`).setLabel('It Will Be Alright (sacrifice a friendly)').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`iwba_skip_${game.gameId}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({
+          content: `**It Will Be Alright** — **${displayName}** may sacrifice a friendly figure within 2 spaces to perform a free move or attack.`,
+          components: [_iwbaRow],
+        }).catch(discordCatch);
       }
     }
   }
@@ -3522,4 +3560,201 @@ export async function handleHairTriggerSkip(interaction, ctx) {
   const game = getGame(gameId);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   if (game) saveGames();
+}
+
+/**
+ * It Will Be Alright: Use — show figure picker for friendly figures within 2 spaces to sacrifice.
+ */
+export async function handleItWillBeAlrightUse(interaction, ctx) {
+  const { getGame, dcMessageMeta, dcHealthState, saveGames, logGameAction, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  // iwba_use_{gameId}_{msgId}
+  const m = interaction.customId.match(/^iwba_use_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, msgId] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const meta = dcMessageMeta?.get(msgId);
+  if (!meta) return;
+  const displayName = meta.displayName || meta.dcName;
+
+  const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const selfFk = `Cassian Andor-${dgIndex}-0`;
+  const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
+  const _getRange = ctx.getRange || getRange;
+
+  // Find eligible targets within 2 spaces
+  const targets = [];
+  for (const [fk, pos] of Object.entries(game.figurePositions?.[meta.playerNum] || {})) {
+    if (!pos || fk === selfFk) continue;
+    if (_getRange(selfPos, pos) > 2) continue;
+    const fkDcName = dcNameFromFigureKey(fk);
+    const fkMsgId = ctx.findDcMessageIdForFigure(gameId, meta.playerNum, fk);
+    if (!fkMsgId) continue;
+    const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+    const fkFigIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+    const fkEntry = dcHealthState?.get(fkMsgId)?.[fkFigIdx];
+    if (!fkEntry || !Array.isArray(fkEntry)) continue;
+    const [fkCur, fkMax] = fkEntry;
+    if ((fkMax ?? 0) === 0 || ((fkCur ?? fkMax ?? 0) <= 0)) continue;
+    targets.push({ figureKey: fk, dcName: fkDcName, msgId: fkMsgId, figIdx: fkFigIdx });
+  }
+
+  if (targets.length === 0) {
+    await interaction.message.edit({ content: '**It Will Be Alright** — No eligible friendly figures within 2 spaces.', components: [] }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
+  // Store pending state
+  game.pendingItWillBeAlright = {
+    cassianMsgId: msgId,
+    playerNum: meta.playerNum,
+    targets: targets.map(t => ({ figureKey: t.figureKey, dcName: t.dcName, msgId: t.msgId, figIdx: t.figIdx })),
+  };
+
+  const btns = targets.slice(0, 20).map(t =>
+    new ButtonBuilder()
+      .setCustomId(`iwba_pick_${gameId}_${t.figureKey}`)
+      .setLabel(t.dcName.replace(/_/g, ' '))
+      .setStyle(ButtonStyle.Danger)
+  );
+  const rows = [];
+  while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
+
+  await interaction.message.edit({
+    content: `**It Will Be Alright** — Choose a friendly figure to sacrifice:`,
+    components: rows.slice(0, 5),
+  }).catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * It Will Be Alright: Skip
+ */
+export async function handleItWillBeAlrightSkip(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^iwba_skip_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId] = m;
+  const game = getGame(gameId);
+  await interaction.message.edit({ content: '**It Will Be Alright** — Skipped.', components: [] }).catch(discordCatch);
+  if (game) {
+    delete game.pendingItWillBeAlright;
+    saveGames();
+  }
+}
+
+/**
+ * It Will Be Alright: Pick — defeat chosen figure, then offer free move or attack.
+ */
+export async function handleItWillBeAlrightPick(interaction, ctx) {
+  const { getGame, dcMessageMeta, dcHealthState, saveGames, logGameAction, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  // iwba_pick_{gameId}_{figureKey}
+  const m = interaction.customId.match(/^iwba_pick_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, figureKey] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+
+  const pending = game.pendingItWillBeAlright;
+  if (!pending) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    return;
+  }
+
+  const target = pending.targets.find(t => t.figureKey === figureKey);
+  if (!target) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    return;
+  }
+
+  const { dcName: targetDcName, msgId: targetMsgId, figIdx: targetFigIdx } = target;
+  const playerNum = pending.playerNum;
+  const oppNum = opponentPlayerNum(playerNum);
+
+  // Defeat the figure: set HP to 0
+  const hs = dcHealthState?.get(targetMsgId);
+  if (hs?.[targetFigIdx] && Array.isArray(hs[targetFigIdx])) {
+    hs[targetFigIdx] = [0, hs[targetFigIdx][1]];
+  }
+
+  // Remove from board
+  removeFigurePosition(game, playerNum, figureKey);
+
+  // Award VP to opponent
+  const dcEff = getDcEffects()?.[targetDcName];
+  const isCompanion = dcEff?.companion === true;
+  if (!isCompanion) {
+    const stats = getDcStats(targetDcName);
+    const vp = stats?.cost ?? 0;
+    if (vp > 0) awardKillVp(game, oppNum, vp);
+    await logGameAction(game, client, `**It Will Be Alright** — **${targetDcName}** is sacrificed and defeated! (+${vp} VP to P${oppNum})`, { phase: 'ACTIVATION', icon: 'attack' });
+  } else {
+    await logGameAction(game, client, `**It Will Be Alright** — **${targetDcName}** (companion) is sacrificed and defeated!`, { phase: 'ACTIVATION', icon: 'attack' });
+  }
+
+  // Offer free move or attack
+  const cassianMsgId = pending.cassianMsgId;
+  const cassianMeta = dcMessageMeta?.get(cassianMsgId);
+  const cassianDisplay = cassianMeta?.displayName || 'Cassian Andor';
+
+  game.pendingItWillBeAlright = { ...pending, phase: 'action', sacrificed: targetDcName };
+
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`iwba_action_${gameId}_${cassianMsgId}_move`).setLabel('Free Move').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`iwba_action_${gameId}_${cassianMsgId}_attack`).setLabel('Free Attack').setStyle(ButtonStyle.Danger),
+  );
+
+  await interaction.message.edit({
+    content: `**It Will Be Alright** — **${targetDcName}** defeated. **${cassianDisplay}** may perform a free move or attack:`,
+    components: [actionRow],
+  }).catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * It Will Be Alright: Action — grant free move or attack to Cassian.
+ */
+export async function handleItWillBeAlrightAction(interaction, ctx) {
+  const { getGame, dcMessageMeta, saveGames, logGameAction, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  // iwba_action_{gameId}_{cassianMsgId}_{move|attack}
+  const m = interaction.customId.match(/^iwba_action_([^_]+)_([^_]+)_(move|attack)$/);
+  if (!m) return;
+  const [, gameId, cassianMsgId, actionType] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+
+  const cassianMeta = dcMessageMeta?.get(cassianMsgId);
+  const cassianDisplay = cassianMeta?.displayName || 'Cassian Andor';
+
+  if (actionType === 'move') {
+    // Grant Cassian's speed as movement points
+    const cassianStats = getDcStats('Cassian Andor');
+    const speed = cassianStats?.speed ?? 4;
+    game.movementBank = game.movementBank || {};
+    game.movementBank[cassianMsgId] = game.movementBank[cassianMsgId] || { total: 0, remaining: 0 };
+    game.movementBank[cassianMsgId].total += speed;
+    game.movementBank[cassianMsgId].remaining += speed;
+    await interaction.message.edit({
+      content: `**It Will Be Alright** — **${cassianDisplay}** gains **${speed} MP** (free move).`,
+      components: [],
+    }).catch(discordCatch);
+    await logGameAction(game, client, `**It Will Be Alright** — **${cassianDisplay}** gains ${speed} MP (free move after sacrifice).`, { phase: 'ACTIVATION', icon: 'move' });
+  } else {
+    // Grant free attack
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[cassianMsgId] = true;
+    await interaction.message.edit({
+      content: `**It Will Be Alright** — **${cassianDisplay}** may perform a free attack. Use the **Attack** button.`,
+      components: [],
+    }).catch(discordCatch);
+    await logGameAction(game, client, `**It Will Be Alright** — **${cassianDisplay}** gains a free attack (after sacrifice).`, { phase: 'ACTIVATION', icon: 'attack' });
+  }
+
+  delete game.pendingItWillBeAlright;
+  saveGames();
 }

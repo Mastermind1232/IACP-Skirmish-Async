@@ -2283,7 +2283,8 @@
       "companion": true,
       "unique": true,
       "specialAbilityIds": [
-        "insignificant_dio"
+        "insignificant_dio",
+        "attached_dio"
       ]
     },
     "Director Krennic": {
