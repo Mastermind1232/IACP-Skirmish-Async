@@ -200,6 +200,12 @@ export function createTestGame(client, guild, userId, scenarioId, feedbackChanne
     COLORS: deps.COLORS,
     getGeneralSetupButtons: deps.getGeneralSetupButtons,
     saveGames: deps.saveGames,
+    // Phase-jump mutator deps
+    getScenarioMutator: deps.getScenarioMutator,
+    getScenarioHowToTest: deps.getScenarioHowToTest,
+    mutatorDeps: deps.mutatorDeps,
+    deleteGameChannelsAndGame: deps.deleteGameChannelsAndGame,
+    cleanupCtx: deps.cleanupCtx,
   });
 }
 

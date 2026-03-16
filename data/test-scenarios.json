@@ -230,6 +230,39 @@
         "Shoot the Messenger",
         "Merciless"
       ]
+    },
+    "eor_cc_window": {
+      "status": "testready",
+      "pattern": "phase_jump",
+      "primaryCard": "Against the Odds",
+      "cards": [
+        "Against the Odds",
+        "Celebration",
+        "Desperate Escape"
+      ],
+      "howToTest": "You are in the End of Round CC window. Play CCs from your hand, then click 'End End of Round window'."
+    },
+    "sor_cc_window": {
+      "status": "testready",
+      "pattern": "phase_jump",
+      "primaryCard": "Take Initiative",
+      "cards": [
+        "Take Initiative",
+        "Dangerous Bargains",
+        "Planning"
+      ],
+      "howToTest": "Both players must click Ready to advance past the phase gate into activation."
+    },
+    "mid_combat": {
+      "status": "testready",
+      "pattern": "phase_jump",
+      "primaryCard": "Brace Yourself",
+      "cards": [
+        "Brace Yourself",
+        "Blitz",
+        "Parry"
+      ],
+      "howToTest": "Both players click Ready to begin combat. Then roll dice, apply surges, and resolve."
     }
   }
 }

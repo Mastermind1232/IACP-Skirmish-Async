@@ -92,6 +92,9 @@ import { checkFriendlyDefeatedPassiveRedraws, checkStartOfRoundPassiveRedraws } 
 import { getHandler, getHandlerGroup } from './src/handlers/index.js';
 import { sendPhaseGateMessages } from './src/handlers/phase-gate.js';
 import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from './src/game/phase.js';
+import { SCENARIO_MUTATORS } from './src/engine/scenario-mutators.js';
+import { deleteGameChannelsAndGame } from './src/handlers/botmenu.js';
+import { cleanupRoundStart } from './src/game/activation-state.js';
 import { runRecovery } from './src/handlers/recover.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
@@ -907,7 +910,21 @@ const IMPLEMENTED_SCENARIOS = [
   'strategic_shift', 'inspiring_speech', 'wild_attack', 'stimulants', 'hit_and_run',
   'brace_for_impact', 'against_the_odds', 'force_surge', 'counter_attack', 'negation',
   'celebration', 'flurry_of_blades', 'cut_lines', 'battle_scars', 'shoot_the_messenger',
+  'eor_cc_window', 'sor_cc_window', 'mid_combat',
 ];
+
+// ── Phase-jump scenario mutator helpers ──────────────────────────────────────
+function getScenarioMutator(scenarioId) {
+  return SCENARIO_MUTATORS[scenarioId] || null;
+}
+
+/** Read howToTest for a scenario from test-scenarios.json. */
+function getScenarioHowToTest(scenarioId) {
+  try {
+    const data = JSON.parse(readFileSync(join(rootDir, 'data', 'test-scenarios.json'), 'utf8'));
+    return (data.scenarios || {})[scenarioId]?.howToTest || null;
+  } catch { return null; }
+}
 
 // createTestGame – delegated to src/engine/game-creation-bridge.js
 function createTestGame(client, guild, userId, scenarioId, feedbackChannel, options = {}) {
@@ -916,6 +933,19 @@ function createTestGame(client, guild, userId, scenarioId, feedbackChannel, opti
     createGameChannels, CURRENT_GAME_VERSION, setGame, getScenarioPrimaryCard,
     IMPLEMENTED_SCENARIOS, runDraftRandom, getCcEffect, getTimingTestInfo,
     discordCatch, COLORS, getGeneralSetupButtons, saveGames,
+    // Phase-jump mutator deps
+    getScenarioMutator,
+    getScenarioHowToTest,
+    mutatorDeps: {
+      setRoundPhase, ROUND_PHASES, logGameAction, updatePlayAreaDcButtons,
+      dcExhaustedState, saveGames, cleanupRoundStart, sendPhaseGateMessages,
+      updateHandChannelMessages,
+    },
+    deleteGameChannelsAndGame,
+    cleanupCtx: {
+      client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+      deleteGameFromDb,
+    },
   });
 }
 

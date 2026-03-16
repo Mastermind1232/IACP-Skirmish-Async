@@ -190,6 +190,7 @@ export async function createTestGame(client, guild, userId, scenarioId, feedback
     createGameChannelsFn, CURRENT_GAME_VERSION, setGame, getScenarioPrimaryCard,
     IMPLEMENTED_SCENARIOS, runDraftRandom, getCcEffect, getTimingTestInfo,
     discordCatch, COLORS, getGeneralSetupButtons, saveGames,
+    getScenarioMutator, getScenarioHowToTest, mutatorDeps, deleteGameChannelsAndGame, cleanupCtx,
   } = deps;
 
   if (testGameCreationInProgress.has(userId)) {
@@ -239,6 +240,20 @@ export async function createTestGame(client, guild, userId, scenarioId, feedback
     );
     if (scenarioImplemented) {
       await runDraftRandom(game, client, { scenarioId });
+
+      // Phase-jump mutator: mutate game state to target phase after runDraftRandom setup
+      const mutator = getScenarioMutator?.(scenarioId);
+      if (mutator) {
+        try {
+          await mutator(game, client, mutatorDeps, userId);
+        } catch (err) {
+          // Fail-fast: clean up all channels and game state, then propagate
+          await deleteGameChannelsAndGame?.(game, gameId, cleanupCtx).catch(() => {});
+          const errMsg = err.scenario ? err.message : `Scenario mutation error: ${err.message}`;
+          throw new Error(errMsg);
+        }
+      }
+
       const scenarioPrimaryCard = getScenarioPrimaryCard(scenarioId);
       const ccEffectData = scenarioPrimaryCard ? getCcEffect(scenarioPrimaryCard) : null;
       const effectText = ccEffectData?.effect || '';
@@ -246,16 +261,20 @@ export async function createTestGame(client, guild, userId, scenarioId, feedback
       const costText = ccEffectData?.cost != null ? `Cost: ${ccEffectData.cost}` : '';
       const cardDetails = [costText, timingText].filter(Boolean).join(' · ');
       const timingInfo = scenarioPrimaryCard ? getTimingTestInfo(scenarioPrimaryCard) : null;
-      const howToTest = timingInfo?.prompt || 'Activate a DC, then play the card.';
+
+      // Phase-jump scenarios use howToTest from test-scenarios.json; regular scenarios use timing-based prompt
+      const scenarioHowToTest = mutator ? getScenarioHowToTest?.(scenarioId) : null;
+      const howToTest = scenarioHowToTest || timingInfo?.prompt || 'Activate a DC, then play the card.';
       const opponentNote = timingInfo?.needsOpponent ? '\n⚠️ **This card requires P2 to act.** Switch to your P2 account when instructed.' : '';
       const testPrompt = scenarioPrimaryCard
         ? `🧪 <@${userId}> — **Testing: ${scenarioPrimaryCard}** (scenario: \`${scenarioId}\`)\n${cardDetails ? `*${cardDetails}*\n` : ''}> *${effectText}*\n\n**How to test:** ${howToTest}${opponentNote}\nThe card is in P1's **Your Hand** thread (inside Play Area).`
         : `🧪 <@${userId}> — **Testing scenario: \`${scenarioId}\`**`;
       await generalChannel.send({ content: testPrompt, allowedMentions: { users: [userId] } }).catch(discordCatch);
       await generalChannel.send({ content: `Done testing? Kill the game here:`, components: [killRow] }).catch(discordCatch);
+      const phaseLabel = mutator ? ' (phase-jump)' : '';
       const scenarioDoneText = scenarioPrimaryCard
-        ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}**. **How to test:** ${howToTest}`
-        : `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
+        ? `Test game **IA Game #${gameId}** ready${phaseLabel} (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log**. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}**. **How to test:** ${howToTest}`
+        : `Test game **IA Game #${gameId}** ready${phaseLabel} (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log**. Scenario: **${scenarioId}**.`;
       if (options.editMessageInstead) {
         await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch(discordCatch);
       } else {
