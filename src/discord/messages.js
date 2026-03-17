@@ -215,7 +215,20 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
       await withDiscordRetry(() => ch.send(sendPayload));
     }
   } catch (e) {
-    console.error('Failed to log game error to bot-logs:', e);
+    console.error('Failed to log game error to bot-logs:', e?.message ?? e);
+    // Fallback: try sending a short error summary to ANY accessible channel in the guild
+    try {
+      if (guild) {
+        await guild.channels.fetch().catch(() => null);
+        const fallbackCh = guild.channels.cache.find(c =>
+          c.type === ChannelType.GuildText && c.permissionsFor?.(client.user)?.has?.('SendMessages')
+        );
+        if (fallbackCh) {
+          const shortErr = `⚠️ **Bot Error** (bot-logs inaccessible)${gameId ? ` — Game #${gameId}` : ''}: ${(error?.message || String(error)).slice(0, 500)}`;
+          await fallbackCh.send({ content: shortErr.slice(0, 2000) }).catch(() => null);
+        }
+      }
+    } catch {}
   }
 }
 

@@ -543,7 +543,8 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     try {
       const generalChannel = await client.channels.fetch(game.generalId);
       const setupMsg = await generalChannel.messages.fetch(game.generalSetupMessageId);
-      await setupMsg.edit({ components: [getGeneralSetupButtons(game)] });
+      const _setupRow = getGeneralSetupButtons(game);
+      await setupMsg.edit({ components: _setupRow ? [_setupRow] : [] });
     } catch (err) {
       console.error('Failed to remove Map Selection button:', err);
     }
@@ -800,7 +801,8 @@ export async function handleDraftRandom(interaction, ctx) {
       try {
         const generalChannel = await client.channels.fetch(game.generalId);
         const setupMsg = await generalChannel.messages.fetch(game.generalSetupMessageId);
-        await setupMsg.edit({ components: [getGeneralSetupButtons(game)] });
+        const _setupRow = getGeneralSetupButtons(game);
+      await setupMsg.edit({ components: _setupRow ? [_setupRow] : [] });
       } catch (err) {
         console.error('Failed to update setup buttons after Draft Random:', err);
       }
@@ -1228,20 +1230,12 @@ export async function handleDeploymentFig(interaction, ctx) {
       game.deploySpaceGridMessageIds[gridKey] = gridIds;
     }
   } else {
-    const modal = new ModalBuilder()
-      .setCustomId(`deploy_modal_${gameId}_${playerNum}_${flatIndex}`)
-      .setTitle('Deploy figure');
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('deploy_space')
-          .setLabel('Space (e.g. A1)')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('e.g. A1')
-          .setRequired(true)
-      )
-    );
-    await interaction.showModal(modal).catch(discordCatch);
+    // No deployment zones defined for this map — interaction was already deferred so
+    // showModal() would fail. Fall back to a followUp message instead.
+    await interaction.followUp({
+      content: `No deployment zones found for this map. Please use the deploy command or contact a bothelper.`,
+      ephemeral: true,
+    }).catch(discordCatch);
   }
 }
 
@@ -1511,7 +1505,7 @@ export async function handleDeployRowBack(interaction, ctx) {
  * @param {object} ctx - getGame, logGameAction, pushUndo, updateDeployPromptMessages, buildBoardMapPayload, client, saveGames
  */
 export async function handleDeployPick(interaction, ctx) {
-  const { getGame, logGameAction, pushUndo, updateDeployPromptMessages, buildBoardMapPayload, client, saveGames } = ctx;
+  const { getGame, getFigureSize, getFootprintCells, logGameAction, pushUndo, updateDeployPromptMessages, buildBoardMapPayload, client, saveGames } = ctx;
   const match = interaction.customId.match(/^deploy_pick_([^_]+)_(\d+)_(\d+)_(.+)$/);
   if (!match) {
     await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);

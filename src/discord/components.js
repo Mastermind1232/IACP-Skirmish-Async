@@ -369,6 +369,7 @@ export function getGeneralSetupButtons(game) {
   if (game.isTestGame && !game.mapSelected && !game.draftRandomUsed && !game.initiativeDetermined) {
     components.push(draftBtn);
   }
+  if (components.length === 0) return null;
   return new ActionRowBuilder().addComponents(...components);
 }
 

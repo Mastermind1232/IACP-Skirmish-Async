@@ -240,7 +240,7 @@ function syncHealthStateToGames() {
     const dcMessageIds = getDcMessageIds(game, meta.playerNum) || [];
     const dcList = getDcList(game, meta.playerNum) || [];
     const idx = dcMessageIds.indexOf(msgId);
-    if (idx >= 0 && dcList[idx]) {
+    if (idx >= 0 && dcList[idx] && Array.isArray(healthState)) {
       dcList[idx].healthState = [...healthState];
     }
   }
