@@ -5,7 +5,7 @@
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, getMaxPowerTokens, applyCondition, filterCondition, HARMFUL_CONDITIONS } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, applyCondition, filterCondition, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -556,7 +556,7 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
   // Find the DC message for this figure and apply damage
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId || meta.playerNum !== defenderPlayerNum || meta.dcName !== dcName) continue;
-    const figIdx = parseInt(figureKey.split('-').pop(), 10) || 0;
+    const figIdx = parseFigureKey(figureKey).figureIndex;
     reduceHp(dcHealthState, game, msgId, figIdx, hits, defenderPlayerNum);
     break;
   }

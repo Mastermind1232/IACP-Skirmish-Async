@@ -4,7 +4,7 @@
  */
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapSpaces, getMapTokensData } from '../data-loader.js';
 import { parseCoord, normalizeCoord, getFootprintCells } from './coords.js';
-import { dcNameFromFigureKey, getMaxPowerTokens } from './dc-helpers.js';
+import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 
@@ -4886,8 +4886,8 @@ export function resolveAbility(abilityId, context) {
         const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
         const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
         const baseName = tMeta?.displayName || tMeta?.dcName || fk;
-        const figIdx = parseInt(fk.split('-').pop(), 10);
-        const suffix = isNaN(figIdx) || figIdx === 0 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
+        const figIdx = parseFigureKey(fk).figureIndex;
+        const suffix = figIdx === 0 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
         return `${baseName}${suffix}`;
       });
       return { applied: false, requiresChoice: true, choiceOptions: labels, choiceValues: hostiles };
@@ -5451,8 +5451,8 @@ export function resolveAbility(abilityId, context) {
       const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
       const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
       const baseName = tMeta?.displayName || tMeta?.dcName || fk;
-      const figIdx = parseInt(fk.split('-').pop(), 10);
-      const suffix = isNaN(figIdx) || figIdx === 0 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
+      const figIdx = parseFigureKey(fk).figureIndex;
+      const suffix = figIdx === 0 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
       return `${baseName}${suffix}`;
     };
     // targetAll: apply to every matching figure at once (no picker)

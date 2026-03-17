@@ -481,7 +481,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
           if (!fk.startsWith(`${_svDc.dcName}-${_svDgIdx}-`)) continue;
           if (!_svExterior.has(String(pos).toLowerCase())) continue;
           // Recover 1 HP for this figure
-          const _svFi = parseInt(fk.split('-').pop(), 10);
+          const _svFi = parseFigureKey(fk).figureIndex;
           const { healed: _svHealed } = healHp(dcHealthState, game, _svMid, _svFi, 1, pn);
           if (_svHealed > 0) {
             await logGameAction(game, client, `**Survivalist** — **${_svDc.displayName || _svDc.dcName}** recovers 1 Damage (exterior space).`, { phase: 'ROUND', icon: 'round' });
@@ -522,7 +522,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
             const _bmFkMid = _bmMsgIds[di];
             if (!_bmFkMid) continue;
             const _bmFkHs = dcHealthState.get(_bmFkMid);
-            const _bmFkIdx = parseInt(fk.split('-').pop(), 10) || 0;
+            const _bmFkIdx = parseFigureKey(fk).figureIndex;
             if (_bmFkHs?.[_bmFkIdx] && Array.isArray(_bmFkHs[_bmFkIdx]) && _bmFkHs[_bmFkIdx][0] > 0) {
               _bmSmugglerFk = fk;
               _bmSmugglerMsgId = _bmFkMid;

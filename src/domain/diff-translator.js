@@ -1,4 +1,5 @@
 import { createDomainEvent } from './events.js';
+import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 
 /**
  * Translate a state diff (from event-log.js computeDiff) into domain events.
@@ -105,7 +106,7 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
       const afterPos = after?.figurePositions?.[playerNum] || {};
       for (const figKey of Object.keys(beforePos)) {
         if (!(figKey in afterPos)) {
-          emit('FigureDefeated', { figureKey: figKey, dcName: figKey.split('-')[0], playerNum });
+          emit('FigureDefeated', { figureKey: figKey, dcName: dcNameFromFigureKey(figKey), playerNum });
         }
       }
     }

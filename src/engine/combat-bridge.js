@@ -1436,7 +1436,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const _abDcName = dcNameFromFigureKey(_abFk2);
             for (const [_abMsgId, _abMeta] of dcMessageMeta) {
               if (_abMeta.gameId !== game.gameId || _abMeta.playerNum !== defenderPlayerNum || _abMeta.dcName !== _abDcName) continue;
-              const _abFigIdx = parseInt(_abFk2.split('-').pop(), 10) || 0;
+              const _abFigIdx = parseFigureKey(_abFk2).figureIndex;
               reduceHp(dcHealthState, game, _abMsgId, _abFigIdx, _abHits, defenderPlayerNum);
               break;
             }

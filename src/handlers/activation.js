@@ -8,7 +8,7 @@ import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, awardKillVp } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, awardKillVp } from '../game/index.js';
 import { getRange } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -1275,7 +1275,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         applyCondition(game, fk, 'Focus');
         // Apply 1 Strain (= 1 HP damage)
         const fkMsgId = msgId;
-        const fkIdx = parseInt(fk.split('-').pop(), 10) || 0;
+        const fkIdx = parseFigureKey(fk).figureIndex;
         const hs = dcHealthState.get(fkMsgId);
         if (hs?.[fkIdx] && Array.isArray(hs[fkIdx])) {
           const [cur, max] = hs[fkIdx];
