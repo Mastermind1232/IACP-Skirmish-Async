@@ -131,6 +131,25 @@ export async function initDb() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_coverage_incidents_region ON coverage_incidents(region_id)').catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_coverage_incidents_severity ON coverage_incidents(severity)').catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_coverage_incidents_created ON coverage_incidents(created_at DESC)').catch(() => {});
+    // Favorite decks (personal saved-deck library)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS favorite_decks (
+        id            BIGSERIAL PRIMARY KEY,
+        user_id       TEXT NOT NULL,
+        deck_hash     TEXT NOT NULL,
+        saved_name    TEXT NOT NULL,
+        deck_data     JSONB NOT NULL,
+        raw_list_text TEXT,
+        affiliation   TEXT,
+        point_total   INT,
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ DEFAULT NOW(),
+        last_used_at  TIMESTAMPTZ,
+        use_count     INT NOT NULL DEFAULT 0,
+        UNIQUE(user_id, deck_hash)
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_favorite_decks_user ON favorite_decks (user_id, last_used_at DESC NULLS LAST)').catch(() => {});
     await seedAchievements();
     await seedCoverageRegions();
     console.log('[DB] PostgreSQL connected, all tables ready.');
@@ -900,5 +919,124 @@ export async function getCoverageIncidents(opts = {}) {
   } catch (err) {
     console.error('[DB] getCoverageIncidents failed:', err.message);
     return [];
+  }
+}
+
+// ── Favorite Decks (personal saved-deck library) ──
+
+export function isFavoritesAvailable() {
+  return !!pool;
+}
+
+export async function getFavoriteDecks(userId) {
+  if (!pool) return null;
+  try {
+    const res = await pool.query(
+      `SELECT id, saved_name, deck_hash, deck_data, affiliation, point_total,
+              last_used_at, use_count, created_at
+       FROM favorite_decks
+       WHERE user_id = $1
+       ORDER BY last_used_at DESC NULLS LAST, created_at DESC`,
+      [userId]
+    );
+    return res.rows;
+  } catch (err) {
+    console.error('[DB] getFavoriteDecks failed:', err.message);
+    return null;
+  }
+}
+
+export async function getFavoriteDeckByHash(userId, deckHash) {
+  if (!pool) return null;
+  try {
+    const res = await pool.query(
+      `SELECT id, saved_name, deck_hash, deck_data, affiliation, point_total
+       FROM favorite_decks
+       WHERE user_id = $1 AND deck_hash = $2`,
+      [userId, deckHash]
+    );
+    return res.rows[0] || null;
+  } catch (err) {
+    console.error('[DB] getFavoriteDeckByHash failed:', err.message);
+    return null;
+  }
+}
+
+export async function getFavoriteDeckById(userId, favoriteId) {
+  if (!pool) return null;
+  try {
+    const res = await pool.query(
+      `SELECT id, saved_name, deck_hash, deck_data, raw_list_text,
+              affiliation, point_total, last_used_at, use_count, created_at
+       FROM favorite_decks
+       WHERE user_id = $1 AND id = $2`,
+      [userId, favoriteId]
+    );
+    return res.rows[0] || null;
+  } catch (err) {
+    console.error('[DB] getFavoriteDeckById failed:', err.message);
+    return null;
+  }
+}
+
+export async function insertFavoriteDeck(userId, deckHash, savedName, deckData,
+                                          rawListText, affiliation, pointTotal) {
+  if (!pool) return null;
+  try {
+    const res = await pool.query(
+      `INSERT INTO favorite_decks
+         (user_id, deck_hash, saved_name, deck_data, raw_list_text, affiliation, point_total)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (user_id, deck_hash) DO NOTHING
+       RETURNING id, saved_name`,
+      [userId, deckHash, savedName, JSON.stringify(deckData), rawListText || null,
+       affiliation || null, pointTotal ?? null]
+    );
+    return res.rows[0] || null;
+  } catch (err) {
+    console.error('[DB] insertFavoriteDeck failed:', err.message);
+    return null;
+  }
+}
+
+export async function deleteFavoriteDeck(userId, favoriteId) {
+  if (!pool) return false;
+  try {
+    const res = await pool.query(
+      `DELETE FROM favorite_decks WHERE user_id = $1 AND id = $2`,
+      [userId, favoriteId]
+    );
+    return res.rowCount > 0;
+  } catch (err) {
+    console.error('[DB] deleteFavoriteDeck failed:', err.message);
+    return false;
+  }
+}
+
+export async function renameFavoriteDeck(userId, favoriteId, newName) {
+  if (!pool) return false;
+  try {
+    const res = await pool.query(
+      `UPDATE favorite_decks SET saved_name = $3, updated_at = NOW()
+       WHERE user_id = $1 AND id = $2`,
+      [userId, favoriteId, newName]
+    );
+    return res.rowCount > 0;
+  } catch (err) {
+    console.error('[DB] renameFavoriteDeck failed:', err.message);
+    return false;
+  }
+}
+
+export async function touchFavoriteDeckUsage(userId, favoriteId) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `UPDATE favorite_decks SET last_used_at = NOW(), use_count = use_count + 1
+       WHERE user_id = $1 AND id = $2`,
+      [userId, favoriteId]
+    );
+  } catch (err) {
+    console.error('[DB] touchFavoriteDeckUsage failed:', err.message);
   }
 }

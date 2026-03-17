@@ -12,6 +12,9 @@ import {
 } from 'discord.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
+import { computeDeckHash } from '../game/deck-hash.js';
+import { getFavoriteDeckByHash, isFavoritesAvailable } from '../db.js';
+import { buildFavoriteConfirmButtons, buildFavoriteConfirmContent } from '../handlers/favorites.js';
 
 /**
  * Build embeds and files for the "Attachments" message under a DC.
@@ -387,18 +390,19 @@ export async function sendSquadConfirmation(game, isP1, squad, validation, clien
   const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
   const handChannel = await fetchGameChannel(client, handChannelId);
   const text = deps.buildSquadConfirmText(squad, validation);
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`squad_confirm_${gameId}_${playerNum}`)
-      .setLabel('Confirm')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`squad_cancel_${gameId}_${playerNum}`)
-      .setLabel('Cancel')
-      .setStyle(ButtonStyle.Danger),
-  );
+
+  // Look up existing favorite if DB is available
+  let existingFavorite = null;
+  if (isFavoritesAvailable()) {
+    const deckHash = computeDeckHash(squad);
+    existingFavorite = await getFavoriteDeckByHash(playerId, deckHash);
+  }
+
+  const row = buildFavoriteConfirmButtons(gameId, playerNum, existingFavorite);
+  const content = buildFavoriteConfirmContent(text, existingFavorite);
+
   await handChannel.send({
-    content: text,
+    content,
     components: [row],
     allowedMentions: { users: [playerId] },
   });

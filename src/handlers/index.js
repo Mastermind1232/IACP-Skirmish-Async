@@ -130,6 +130,12 @@ import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPi
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 import {
+  handleFavSave, handleFavRemove, handleFavRename,
+  handleFavChoose, handleFavChooseSelect,
+  handleFavListSelect, handleFavListRename, handleFavListRemove, handleFavListBack,
+  handleFavNameModal, handleFavRenameModal, handleFavListRenameModal,
+} from './favorites.js';
+import {
   handleBleedResolve,
   handleSidewinderApply, handleSidewinderSkip,
   handleBoltslingerTarget, handleBoltslingerSkip,
@@ -349,6 +355,17 @@ register('celebration_play_', handleCelebrationPlay, 'ccHand');
 register('celebration_pass_', handleCelebrationPass, 'ccHand');
 register('comm_disruption_play_', handleCommDisruptionPlay, 'ccHand');
 register('comm_disruption_skip_', handleCommDisruptionSkip, 'ccHand');
+
+// --- Favorites ---
+register('fav_save_', handleFavSave, 'favorites');
+register('fav_remove_', handleFavRemove, 'favorites');
+register('fav_rename_', handleFavRename, 'favorites');
+register('fav_choose_', handleFavChoose, 'favorites');
+register('fav_choose_select_', handleFavChooseSelect, 'favorites');
+register('fav_list_select_', handleFavListSelect, 'favList');
+register('fav_list_rename_', handleFavListRename, 'favList');
+register('fav_list_remove_', handleFavListRemove, 'favList');
+register('fav_list_back_', handleFavListBack, 'favList');
 
 // --- Phase gate ---
 register('phase_gate_ready_', handlePhaseGateReady, 'phaseGate');

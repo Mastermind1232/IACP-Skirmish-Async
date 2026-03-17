@@ -309,6 +309,20 @@ const CONTEXT_GROUPS = {
     'postDevaronDoorButtons', 'postDevaronCratePushPrompts', 'postKryknaPushButtons',
   ],
 
+  favorites: [
+    'getGame', 'pendingSquadConfirm', 'PENDING_ILLEGAL_TTL_MS',
+    'validateDeckLegal', 'sendSquadConfirmation', 'saveGames', 'client',
+  ],
+
+  favorites: [
+    'getGame', 'pendingSquadConfirm', 'PENDING_ILLEGAL_TTL_MS',
+    'validateDeckLegal', 'sendSquadConfirmation', 'saveGames', 'client',
+  ],
+
+  favList: [
+    'validateDeckLegal', 'buildSquadConfirmText',
+  ],
+
   combatSpecialEffects: [
     'getGame', 'saveGames', 'client', 'canActAsPlayer',
     'dcMessageMeta', 'dcHealthState', 'dcExhaustedState',

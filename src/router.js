@@ -27,6 +27,9 @@ const MODAL_PREFIXES = [
   'devaron_crate_modal_',
   'krykna_push_modal_',
   'dc_rename_modal_',
+  'fav_name_modal_',
+  'fav_rename_modal_',
+  'fav_list_rename_modal_',
 ];
 
 /**

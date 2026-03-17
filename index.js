@@ -95,6 +95,7 @@ import { SCENARIO_MUTATORS } from './src/engine/scenario-mutators.js';
 import { deleteGameChannelsAndGame } from './src/handlers/botmenu.js';
 import { cleanupRoundStart } from './src/game/activation-state.js';
 import { runRecovery } from './src/handlers/recover.js';
+import { needsRecovery, getRecoveryReason } from './src/engine/recovery.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
@@ -243,6 +244,8 @@ import {
 import {
   // Still directly called in modal dispatch section
   handleSquadModal, handleDeployModal,
+  handleFavNameModal, handleFavRenameModal, handleFavListRenameModal,
+  buildFavoritesListPayload,
   // Used in allDeps
   runStartOfRoundDcEffects,
   runStatusPhaseAfterEndOfRound,
@@ -976,6 +979,9 @@ const atomicOpts = {
   commitFn: () => saveGames(),
   onRollback: (gid) => repopulateDcMapsForGame(gid),
 };
+
+/** Per-game last-activity timestamp for auto-recovery idle detection. */
+const gameLastActivity = new Map();
 
 function extractGameIdFromMessage(message) {
   return _extractGameIdFromMessagePure(message, { findGameByChannel, getGamesMap });
@@ -1742,6 +1748,9 @@ client.once('ready', async () => {
       .setName('add-ai')
       .setDescription('Replace player 2 with AI in the current game. Use in a Game Log channel.')
       .addIntegerOption((o) => o.setName('player').setDescription('Which player to replace with AI (default: 2)').setMinValue(1).setMaxValue(2));
+    const favorites = new SlashCommandBuilder()
+      .setName('favorites')
+      .setDescription('View, rename, or remove your saved favorite decks.');
     await rest.put(Routes.applicationCommands(client.user.id), {
       body: [
         botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
@@ -1749,10 +1758,10 @@ client.once('ready', async () => {
         affiliationwinrateglobal.toJSON(), affiliationwinratepersonal.toJSON(),
         affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
         dcwinrateglobaltopten.toJSON(), dcwinratepersonaltopten.toJSON(),
-        leaderboard.toJSON(), achievements.toJSON(),
+        leaderboard.toJSON(), achievements.toJSON(), favorites.toJSON(),
       ],
     });
-    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /events, /play-ai, /add-ai, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard, /achievements');
+    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /events, /play-ai, /add-ai, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard, /achievements, /favorites');
   } catch (err) {
     console.error('Failed to register slash commands:', err.message);
   }
@@ -1868,6 +1877,61 @@ client.once('ready', async () => {
     saveGames();
     console.log('Auto-recovery complete.');
   }
+
+  // Initialize last-activity timestamps for all active games
+  for (const game of [...getGamesMap().values()]) {
+    if (game.selectedMap && !game.archived && !game.killed && !game.ended) {
+      gameLastActivity.set(game.gameId, Date.now());
+    }
+  }
+
+  // ── Auto-recovery timer: periodically scan for stuck games ──────────────
+  const RECOVERY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  const IDLE_THRESHOLD_MS = 5 * 60 * 1000;     // 5 minutes of no interaction
+  setInterval(async () => {
+    const allDeps = buildAllDeps();
+    const recoverCtx = buildContext('recover', allDeps);
+    let totalRecovered = 0;
+    let gamesScanned = 0;
+    let gamesAttempted = 0;
+    for (const [gameId, game] of getGamesMap()) {
+      if (game.ended || game.archived || game.killed) continue;
+      if (!game.selectedMap) continue;
+      gamesScanned++;
+
+      // Skip games with recent interaction
+      const lastActive = gameLastActivity.get(gameId) || 0;
+      if (Date.now() - lastActive < IDLE_THRESHOLD_MS) continue;
+
+      // Skip games that don't appear stuck
+      if (!needsRecovery(game)) continue;
+
+      const reason = getRecoveryReason(game) || 'unknown';
+      const idleMin = Math.round((Date.now() - lastActive) / 60000);
+      gamesAttempted++;
+      console.log(`[auto-recover] Attempting game ${gameId}: reason=${reason}, idle=${idleMin}m`);
+
+      try {
+        const recovered = await runRecovery(game, gameId, recoverCtx);
+        if (recovered.length > 0) {
+          console.log(`[auto-recover] Game ${gameId}: ${recovered.join(', ')}`);
+          totalRecovered += recovered.length;
+          // Mark as recently active so we don't re-recover immediately
+          gameLastActivity.set(gameId, Date.now());
+        } else {
+          console.log(`[auto-recover] Game ${gameId}: no prompts recovered (reason=${reason})`);
+        }
+      } catch (err) {
+        console.error(`[auto-recover] Error for game ${gameId}:`, err.message);
+      }
+    }
+    const didSave = totalRecovered > 0;
+    if (didSave) saveGames();
+    if (gamesAttempted > 0) {
+      console.log(`[auto-recover] Sweep done: scanned=${gamesScanned}, attempted=${gamesAttempted}, recovered=${totalRecovered}, saved=${didSave}`);
+    }
+  }, RECOVERY_INTERVAL_MS);
+  console.log(`Auto-recovery timer started (every ${RECOVERY_INTERVAL_MS / 1000}s, idle threshold ${IDLE_THRESHOLD_MS / 1000}s).`);
 
   // Local HTTP endpoint to create a test game from Cursor/terminal (no need to type in #lfg)
   const guildId = process.env.DISCORD_GUILD_ID;
@@ -2866,6 +2930,24 @@ client.on('interactionCreate', async (interaction) => {
       }, 1500);
       return;
     }
+
+    // /favorites — view/rename/remove saved decks
+    if (cmd === 'favorites') {
+      const { isFavoritesAvailable, getFavoriteDecks } = await import('./src/db.js');
+      if (!isFavoritesAvailable()) {
+        await interaction.reply({ content: 'Favorites are unavailable right now.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const favs = await getFavoriteDecks(interaction.user.id);
+      if (favs === null) {
+        await interaction.reply({ content: 'Favorites are unavailable right now.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const payload = buildFavoritesListPayload(favs);
+      await interaction.reply({ ...payload, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
     // Stats commands: only in #statistics channel; require DB
     const statsChannelName = (interaction.channel?.name || '').toLowerCase();
     const statsCmds = ['statcheck', 'affiliationwinrateglobal', 'affiliationwinratepersonal', 'affiliationpickrateglobal', 'affiliationpickratepersonal', 'dcwinrateglobaltopten', 'dcwinratepersonaltopten', 'leaderboard'];
@@ -3165,8 +3247,15 @@ client.on('interactionCreate', async (interaction) => {
       }
       await interaction.reply({ content: 'Figures renamed!', ephemeral: true }).catch(discordCatch);
       saveGames();
+    } else if (modalKey === 'fav_name_modal_' || modalKey === 'fav_rename_modal_' || modalKey === 'fav_list_rename_modal_') {
+      const favGroup = modalKey === 'fav_list_rename_modal_' ? 'favList' : 'favorites';
+      const favCtx = buildContext(favGroup, buildAllDeps());
+      if (modalKey === 'fav_name_modal_') await handleFavNameModal(interaction, favCtx);
+      else if (modalKey === 'fav_rename_modal_') await handleFavRenameModal(interaction, favCtx);
+      else await handleFavListRenameModal(interaction, favCtx);
     }
     }); // end withAtomicGameLock (modal)
+    if (_modalLockId) gameLastActivity.set(_modalLockId, Date.now());
     return;
   }
 
@@ -3313,6 +3402,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     }); // end withAtomicGameLock (select)
+    if (_selectLockId) gameLastActivity.set(_selectLockId, Date.now());
     return;
   }
 
@@ -3710,6 +3800,7 @@ client.on('interactionCreate', async (interaction) => {
 
 
   }); // end withAtomicGameLock (button)
+  if (_buttonLockId) gameLastActivity.set(_buttonLockId, Date.now());
 
   } catch (err) {
     console.error('Interaction error:', err);

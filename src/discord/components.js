@@ -527,8 +527,12 @@ export function getSelectSquadButton(gameId, playerNum) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`squad_select_${gameId}_${playerNum}`)
-      .setLabel('Select Squad')
+      .setLabel('Enter List')
       .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`fav_choose_${gameId}_${playerNum}`)
+      .setLabel('Choose from Favorites')
+      .setStyle(ButtonStyle.Secondary),
   );
 }
 
