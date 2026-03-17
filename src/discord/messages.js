@@ -202,9 +202,16 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
           threadId = null;
         }
       }
-      const target = threadId ? await client.channels.fetch(threadId).catch(() => null) : ch;
-      if (target) await withDiscordRetry(() => target.send(sendPayload));
+      let target = threadId ? await client.channels.fetch(threadId).catch(() => null) : null;
+      if (!target) {
+        // Thread gone/archived or no gameId thread yet — clear stale cache and fall back to channel
+        if (threadId) gameErrorThreads.delete(key);
+        target = ch;
+      }
+      if (sendPayload.content.length > 2000) sendPayload.content = sendPayload.content.slice(0, 1997) + '...';
+      await withDiscordRetry(() => target.send(sendPayload));
     } else {
+      if (sendPayload.content.length > 2000) sendPayload.content = sendPayload.content.slice(0, 1997) + '...';
       await withDiscordRetry(() => ch.send(sendPayload));
     }
   } catch (e) {
