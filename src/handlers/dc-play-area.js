@@ -3,6 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { truncateLabel, getAttachmentSpecials } from '../discord/components.js';
+import { cardNameIncludes } from '../game/card-names.js';
 import { bottomLeftCoord, edgeKey } from '../game/coords.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
 import { COLORS } from '../discord/colors.js';
@@ -1867,7 +1868,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         const getDcEffects = ctx.getDcEffects;
         const suNames = ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'];
         for (const su of suNames) {
-          if (_suUpgrades.includes(su)) {
+          if (cardNameIncludes(_suUpgrades, su)) {
             const suEff = getDcEffects?.()?.[`[${su}]`];
             if (suEff?.attack?.dice) { printedDiceCount = suEff.attack.dice.length; break; }
           }

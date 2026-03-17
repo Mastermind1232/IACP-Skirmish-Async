@@ -7,6 +7,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
+import { cardNameIncludes } from '../game/card-names.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -85,7 +86,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   if (!msgId) return;
   // Flame Trooper Fireproof: cannot suffer Strain
   const _fpUpg = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-  if (_fpUpg.includes('Flame Trooper')) {
+  if (cardNameIncludes(_fpUpg, 'Flame Trooper')) {
     const dcName = dcNameFromFigureKey(figureKey);
     await thread.send(`**Fireproof** — **${dcName}** is immune to Strain from ${abilityLabel}.`).catch(discordCatch);
     return;
@@ -1190,29 +1191,29 @@ export async function handleAttackTarget(interaction, ctx) {
   if (_atkUpgrades.length || _defUpgrades.length) {
     const _pc = game.pendingCombat;
     // Targeting Computer (attachment): +1 atk reroll while attacking
-    if (_atkUpgrades.includes('Targeting Computer')) {
+    if (cardNameIncludes(_atkUpgrades, 'Targeting Computer')) {
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
     }
     // Driven by Hatred (Darth Vader): +1 Hit, reroll 1 atk die (Brutality loss handled separately)
-    if (_atkUpgrades.includes('Driven by Hatred')) {
+    if (cardNameIncludes(_atkUpgrades, 'Driven by Hatred')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
     }
     // Heir to the Jedi (Luke): reroll 1 atk die; +1 Hit on Melee; Saber Strike Focus handled at declaration
-    if (_atkUpgrades.includes('Heir to the Jedi')) {
+    if (cardNameIncludes(_atkUpgrades, 'Heir to the Jedi')) {
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
       if (!isRanged) _pc.bonusHits = (_pc.bonusHits || 0) + 1;
     }
     // Rogue Smuggler (Han Solo): reroll 1 atk die (Distracting loss handled separately)
-    if (_atkUpgrades.includes('Rogue Smuggler')) {
+    if (cardNameIncludes(_atkUpgrades, 'Rogue Smuggler')) {
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
     }
     // Wookiee Avenger (Chewbacca): +1 Hit while attacking
-    if (_atkUpgrades.includes('Wookiee Avenger')) {
+    if (cardNameIncludes(_atkUpgrades, 'Wookiee Avenger')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
     }
     // Cross Training (attacking): replace 1 attack die with a different color (exhaust — once per round)
-    if (_atkUpgrades.includes('Cross Training')) {
+    if (cardNameIncludes(_atkUpgrades, 'Cross Training')) {
       const _ctAtkExh = game.crossTrainingExhausted?.[msgId];
       if (!_ctAtkExh) {
         _pc.crossTrainingAttack = true;
@@ -1221,11 +1222,11 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
     // Guidance Systems (Mortar Trooper): optional -1 Hit, +2 Accuracy per use (multiple times per attack)
-    if (_atkUpgrades.includes('Mortar Trooper')) {
+    if (cardNameIncludes(_atkUpgrades, 'Mortar Trooper')) {
       _pc.guidanceSystemsAvailable = true;
     }
     // Prey on the Weak (HUNTER): Pierce 1 + Accuracy 1 vs lower-cost figure
-    if (_atkUpgrades.includes('Prey on the Weak')) {
+    if (cardNameIncludes(_atkUpgrades, 'Prey on the Weak')) {
       const _potwAtkCost = getDcStats(meta.dcName)?.cost ?? 0;
       const _potwDefCost = _pc.targetStats?.cost ?? 99;
       if (_potwAtkCost > _potwDefCost) {
@@ -1234,15 +1235,15 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
     // Explosive Armaments (HUNTER/DROID): Surge: +1 Damage, Blast 1
-    if (_atkUpgrades.includes('Explosive Armaments')) {
+    if (cardNameIncludes(_atkUpgrades, 'Explosive Armaments')) {
       _pc.bonusSurgeAbilities.push('damage 1, blast 1');
     }
     // Feeding Frenzy (CREATURE): Surge: Recover 2 while attacking adjacent
-    if (_atkUpgrades.includes('Feeding Frenzy') && distanceToTarget <= 1) {
+    if (cardNameIncludes(_atkUpgrades, 'Feeding Frenzy') && distanceToTarget <= 1) {
       _pc.bonusSurgeAbilities.push('recover 2');
     }
     // Focused on the Kill (IG-88): lose Surge: Recover 3, gain Surge: Pierce 1; pre-attack Focus
-    if (_atkUpgrades.includes('Focused on the Kill')) {
+    if (cardNameIncludes(_atkUpgrades, 'Focused on the Kill')) {
       _pc.removeSurgeKeys = (_pc.removeSurgeKeys || []).concat(['recover 3']);
       _pc.bonusSurgeAbilities.push('pierce 1');
       // Pre-attack Focus: apply Focus if not already Focused
@@ -1254,7 +1255,7 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
     // Heir to the Jedi: Saber Strike pre-attack Focus (when using Saber Strike override)
-    if (_atkUpgrades.includes('Heir to the Jedi') && overrideDiceSource === 'saber_strike') {
+    if (cardNameIncludes(_atkUpgrades, 'Heir to the Jedi') && overrideDiceSource === 'saber_strike') {
       if (!attackerConds.includes('Focus')) {
         if (applyCondition(game, attackerFigureKey, 'Focus')) {
           _pc.attackInfo = { ..._pc.attackInfo, dice: [...(_pc.attackInfo.dice || []), 'green'] };
@@ -1264,15 +1265,15 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     // --- Defender attachments ---
     // Combat Suit: reduce Pierce value of attack results by 1 (min 0, handled in computeCombatResult)
-    if (_defUpgrades.includes('Combat Suit')) {
+    if (cardNameIncludes(_defUpgrades, 'Combat Suit')) {
       _pc.defenderReducePierce = (_pc.defenderReducePierce || 0) + 1;
     }
     // Wookiee Avenger (defending): convert Dodge → Evade (handled in computeCombatResult)
-    if (_defUpgrades.includes('Wookiee Avenger')) {
+    if (cardNameIncludes(_defUpgrades, 'Wookiee Avenger')) {
       _pc.wookieeAvengerDefend = true;
     }
     // Cross Training (defending): replace 1 defense die with white die (exhaust — once per round)
-    if (_defUpgrades.includes('Cross Training')) {
+    if (cardNameIncludes(_defUpgrades, 'Cross Training')) {
       const _ctExh = game.crossTrainingExhausted?.[_defMsgId];
       if (!_ctExh) {
         _pc.crossTrainingDefend = true;
@@ -1281,34 +1282,34 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
     // Rogue Smuggler (defender): lose Distracting — negate the passive if present
-    if (_defUpgrades.includes('Rogue Smuggler')) {
+    if (cardNameIncludes(_defUpgrades, 'Rogue Smuggler')) {
       _pc.rougeSmuggler_loseDistracting = true;
     }
     // --- Exhaust-based attacker attachments (auto-applied, once per round) ---
     const _exh = game.exhaustedSkirmishUpgrades?.[msgId] || [];
     // Scavenged Weaponry: exhaust when declare attack → +1 Hit
-    if (_atkUpgrades.includes('Scavenged Weaponry') && !_exh.includes('Scavenged Weaponry')) {
+    if (cardNameIncludes(_atkUpgrades, 'Scavenged Weaponry') && !cardNameIncludes(_exh, 'Scavenged Weaponry')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[msgId] = [..._exh, 'Scavenged Weaponry'];
       await thread.send('**Scavenged Weaponry** — Exhausted: +1 Hit applied to this attack.').catch(discordCatch);
     }
     // Explosive Armaments: exhaust while attacking → Blast 1
-    if (_atkUpgrades.includes('Explosive Armaments') && !_exh.includes('Explosive Armaments')) {
+    if (cardNameIncludes(_atkUpgrades, 'Explosive Armaments') && !cardNameIncludes(_exh, 'Explosive Armaments')) {
       _pc.bonusBlast = (_pc.bonusBlast || 0) + 1;
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Explosive Armaments'];
       await thread.send('**Explosive Armaments** — Exhausted: Blast 1 applied to this attack.').catch(discordCatch);
     }
     // The Darksaber: exhaust while attacking → reroll 1 attack die
-    if (_atkUpgrades.includes('The Darksaber') && !_exh.includes('The Darksaber')) {
+    if (cardNameIncludes(_atkUpgrades, 'The Darksaber') && !cardNameIncludes(_exh, 'The Darksaber')) {
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'The Darksaber'];
       await thread.send('**The Darksaber** — Exhausted: +1 attack reroll.').catch(discordCatch);
     }
     // Feeding Frenzy: exhaust while attacking a damaged figure → +1 Hit
-    if (_atkUpgrades.includes('Feeding Frenzy') && !_exh.includes('Feeding Frenzy')) {
+    if (cardNameIncludes(_atkUpgrades, 'Feeding Frenzy') && !cardNameIncludes(_exh, 'Feeding Frenzy')) {
       const _ffDefHs = _defMsgId ? dcHealthState?.get(_defMsgId) : null;
       const _ffDefFi = target.figureKey ? parseInt((target.figureKey.match(/-(\d+)$/) || [])[1] || '0', 10) : 0;
       const _ffHp = _ffDefHs?.[_ffDefFi];
@@ -1332,7 +1333,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const _ztExh = game.exhaustedSkirmishUpgrades?.[_ztMsgId] || [];
         const _ztDepleted = (game.p1DepletedDcMessageIds || []).includes(_ztMsgId) || (game.p2DepletedDcMessageIds || []).includes(_ztMsgId);
         // Exhaust effect: reduce Pierce by 2
-        if (!_ztExh.includes('Zillo Technique') && !_ztDepleted) {
+        if (!cardNameIncludes(_ztExh, 'Zillo Technique') && !_ztDepleted) {
           _pc.defenderReducePierce = (_pc.defenderReducePierce || 0) + 2;
           game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
           game.exhaustedSkirmishUpgrades[_ztMsgId] = [..._ztExh, 'Zillo Technique'];
@@ -1365,7 +1366,7 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
   // Z-6 Trooper Rotary Cannon: before attacking, become Focused
-  if (_atkUpgrades.includes('Z-6 Trooper')) {
+  if (cardNameIncludes(_atkUpgrades, 'Z-6 Trooper')) {
     const _z6Pc = game.pendingCombat;
     if (!attackerConds.includes('Focus')) {
       if (applyCondition(game, attackerFigureKey, 'Focus')) {
@@ -1375,7 +1376,7 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
   // The General's Ranks: +1 Hit when attacking during a non-activation (not this group's activation)
-  if (_atkUpgrades.includes("The General's Ranks")) {
+  if (cardNameIncludes(_atkUpgrades, "The General's Ranks")) {
     const _tgrActionsData = game.dcActionsData?.[msgId];
     if (!_tgrActionsData?.threadId) {
       // Not in this group's activation — non-activation attack
@@ -1403,10 +1404,10 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('**Driven by Hatred** — 1 die removed from attack pool.').catch(discordCatch);
   }
   // Flame Trooper Fireproof: this figure cannot suffer Strain (mark on combat object for handlers)
-  if (_atkUpgrades.includes('Flame Trooper')) {
+  if (cardNameIncludes(_atkUpgrades, 'Flame Trooper')) {
     game.pendingCombat.attackerFireproof = true;
   }
-  if (_defUpgrades.includes('Flame Trooper')) {
+  if (cardNameIncludes(_defUpgrades, 'Flame Trooper')) {
     game.pendingCombat.defenderFireproof = true;
   }
   // Autofire: add chain attack surge ability + mark on combat
@@ -1454,7 +1455,7 @@ export async function handleAttackTarget(interaction, ctx) {
         // Check ACS on Krennic
         const kMsgId = dcMsgIds[i];
         const kAtts = kMsgId ? (game.p1DcAttachments?.[kMsgId] || game.p2DcAttachments?.[kMsgId] || []) : [];
-        const hasACS = kAtts.some(a => a.includes('Advanced Com Systems'));
+        const hasACS = cardNameIncludes(kAtts, 'Advanced Com Systems');
         const maxRange = hasACS ? 3 : 2;
         if (_getRange(kPos, figPos) > maxRange) continue;
         // Check if figure is TROOPER or GUARDIAN
@@ -1587,7 +1588,7 @@ export async function handleAttackTarget(interaction, ctx) {
       // Rogue Smuggler: "You lose Distracting" — skip if this figure's DC has the attachment
       const _distMsgId = findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, fk);
       const _distUpg = _distMsgId ? (game.p1DcAttachments?.[_distMsgId] || game.p2DcAttachments?.[_distMsgId] || []) : [];
-      if (_distUpg.includes('Rogue Smuggler')) continue;
+      if (cardNameIncludes(_distUpg, 'Rogue Smuggler')) continue;
       game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) + 1;
       await thread.send(`**Distracting** (${fkDcName}) — adjacent to target, +1 Evade for defender.`);
       break; // only one Distracting bonus
@@ -1955,7 +1956,7 @@ export async function handleAttackTarget(interaction, ctx) {
         // Check range: adjacent normally, within 2 with ACS
         const _afSorinMsgId = findDcMessageIdForFigure?.(game.gameId, attackerPlayerNum, fk);
         const _afAtts = _afSorinMsgId ? (game.p1DcAttachments?.[_afSorinMsgId] || game.p2DcAttachments?.[_afSorinMsgId] || []) : [];
-        const _afHasACS = _afAtts.some(a => a.includes('Advanced Com Systems'));
+        const _afHasACS = cardNameIncludes(_afAtts, 'Advanced Com Systems');
         const _afMaxRange = _afHasACS ? 2 : 1;
         const _afDist = _getRange ? _getRange(atkPosAF, pos) : Infinity;
         if (_afDist > _afMaxRange) continue;
@@ -2249,7 +2250,7 @@ export async function handleAttackTarget(interaction, ctx) {
     const _feTargetIsChild = targetDcName === 'The Child';
     const _feDefMsgId = target.isNpc ? null : (findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, target.figureKey) || null);
     const _feDefUpgrades = _feDefMsgId ? (game.p1DcAttachments?.[_feDefMsgId] || game.p2DcAttachments?.[_feDefMsgId] || []) : [];
-    const _feTargetHasClanOfTwo = _feDefUpgrades.includes('Clan of Two');
+    const _feTargetHasClanOfTwo = cardNameIncludes(_feDefUpgrades, 'Clan of Two');
     if (_feTargetIsChild || _feTargetHasClanOfTwo) {
       // Find The Child on the defender's side — must be alive (in figurePositions) and not already incapacitated
       const _feDefPositions = game.figurePositions?.[defenderPlayerNum] || {};
@@ -2767,8 +2768,8 @@ export async function handleCombatRoll(interaction, ctx) {
             if (_taDcList[i]?.dcName !== fn) continue;
             const _taMid = _taMsgIds[i];
             const _taAtts = game.p1DcAttachments?.[_taMid] || game.p2DcAttachments?.[_taMid] || [];
-            if (!_taAtts.includes('Trusted Ally')) break;
-            if ((game.exhaustedSkirmishUpgrades?.[_taMid] || []).includes('Trusted Ally')) break;
+            if (!cardNameIncludes(_taAtts, 'Trusted Ally')) break;
+            if (cardNameIncludes(game.exhaustedSkirmishUpgrades?.[_taMid], 'Trusted Ally')) break;
             // Auto-exhaust and grant reroll
             game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
             game.exhaustedSkirmishUpgrades[_taMid] = [...(game.exhaustedSkirmishUpgrades[_taMid] || []), 'Trusted Ally'];

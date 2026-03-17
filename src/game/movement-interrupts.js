@@ -13,6 +13,7 @@ import { getMapSpaces, getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { getCcHand, getPlayerId, opponentPlayerNum, getDcMessageIds, getDcList } from './player-helpers.js';
 import { getRange } from './spatial.js';
+import { cardNameIncludes } from './card-names.js';
 
 /**
  * Check whether a DC name has any of the given trait keywords (case-insensitive).
@@ -165,7 +166,7 @@ export function detectPostMoveInterrupts(game, movingPlayerNum, movingFigureKey,
       else if ((getDcMessageIds(game, 2) || []).includes(owMsgId)) owPlayerNum = 2;
       if (!owPlayerNum || owPlayerNum === movingPlayerNum) continue;
       // Check not already exhausted
-      if ((game.exhaustedSkirmishUpgrades?.[owMsgId] || []).includes('Overwatch')) continue;
+      if (cardNameIncludes(game.exhaustedSkirmishUpgrades?.[owMsgId], 'Overwatch')) continue;
       // Avoid duplicate triggers for same token in same move
       if (triggers.some(t => t.type === 'overwatch' && t.owMsgId === owMsgId)) continue;
       // Find DC name

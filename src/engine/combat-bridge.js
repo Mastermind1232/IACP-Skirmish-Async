@@ -4,6 +4,7 @@
  */
 
 import { processFigureDefeat } from './defeat-handler.js';
+import { cardNameIncludes } from '../game/card-names.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -393,7 +394,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           const _psAtkDcList = getDcList(game, attackerPlayerNum) || [];
           const _psHasPS = _psAtkDcList.some(dc => dc.dcName === '[Punishing Strike]');
           const _psExhKey = `ps_army_p${attackerPlayerNum}`;
-          const _psAlreadyExhausted = (game.exhaustedSkirmishUpgrades?.[_psExhKey] || []).includes('Punishing Strike');
+          const _psAlreadyExhausted = cardNameIncludes(game.exhaustedSkirmishUpgrades?.[_psExhKey], 'Punishing Strike');
           if (_psHasPS && !_psAlreadyExhausted) {
             // Show prompt for each harmful condition applied (use first one)
             const _psCond = _psHarmful[0];
@@ -422,7 +423,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         if ((_sbAttEff?.passives || []).includes('Stun Batons')) {
           // Flame Trooper Fireproof: cannot suffer Strain
           const _sbTargetUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
-          if (_sbTargetUpgrades.includes('Flame Trooper')) {
+          if (cardNameIncludes(_sbTargetUpgrades, 'Flame Trooper')) {
             await logGameAction(game, client, `**Fireproof** — **${combat.target.label}** is immune to Strain from Stun Batons.`, { phase: 'ROUND', icon: 'card' });
           } else {
           game.figureConditions = game.figureConditions || {};
@@ -805,7 +806,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // Last Resort (Skirmish Upgrade): pre-defeat interrupt — roll 1 red die, adjacent figures suffer Hits as damage
       if (newCur <= 0 && !_sbrImmune && !game.lastResortTriggered?.[targetMsgId]) {
         const _lrUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
-        if (_lrUpgrades.includes('Last Resort')) {
+        if (cardNameIncludes(_lrUpgrades, 'Last Resort')) {
           game.lastResortTriggered = game.lastResortTriggered || {};
           game.lastResortTriggered[targetMsgId] = true;
           game.pendingLastResort = { targetMsgId, defenderPlayerNum, attackerPlayerNum, damage, hit, resultText, totalBlast, ownerId, targetFigIndex };
@@ -1464,7 +1465,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Suppressive Fire (Skirmish Upgrade): exhaust after Ranged attack → Weaken target + 2 MP to SMALL friendly within 3
   const _sfUpgrades = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
   const _sfExh = game.exhaustedSkirmishUpgrades?.[combat.attackerMsgId] || [];
-  if (_sfUpgrades.includes('Suppressive Fire') && !_sfExh.includes('Suppressive Fire') && combat.isRanged && damage > 0) {
+  if (cardNameIncludes(_sfUpgrades, 'Suppressive Fire') && !cardNameIncludes(_sfExh, 'Suppressive Fire') && combat.isRanged && damage > 0) {
     game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
     game.exhaustedSkirmishUpgrades[combat.attackerMsgId] = [..._sfExh, 'Suppressive Fire'];
     // Apply Weaken to the target
@@ -1520,12 +1521,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Flame Trooper Incinerate: after attacking, each figure that suffered damage suffers 1 Strain (HP loss). Place Rubble in target space.
   const _ftAtkUpgrades = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
   const _ftBlastRefreshMsgIds = [];
-  if (_ftAtkUpgrades.includes('Flame Trooper') && hit) {
+  if (cardNameIncludes(_ftAtkUpgrades, 'Flame Trooper') && hit) {
     // Apply 1 Strain (1 HP loss) to target if it suffered damage and survived
     if (damage > 0 && targetMsgId) {
       // Fireproof: target immune to Strain if it also has Flame Trooper attachment
       const _ftTargetUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
-      if (_ftTargetUpgrades.includes('Flame Trooper')) {
+      if (cardNameIncludes(_ftTargetUpgrades, 'Flame Trooper')) {
         await thread.send('**Incinerate** — Target is **Fireproof**, immune to Strain.').catch(discordCatch);
       } else {
         const _ftHsBefore = dcHealthState.get(targetMsgId);
@@ -1553,12 +1554,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const _ftBlastAdj = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
       for (const { figureKey: _ftBlastFk, playerNum: _ftBlastPn } of _ftBlastAdj) {
         // Fireproof: skip friendly figures with Flame Trooper attachment
-        if (_ftBlastPn === attackerPlayerNum && _ftAtkUpgrades.includes('Flame Trooper')) continue;
+        if (_ftBlastPn === attackerPlayerNum && cardNameIncludes(_ftAtkUpgrades, 'Flame Trooper')) continue;
         const _ftBlastMsgId = findDcMessageIdForFigure(game.gameId, _ftBlastPn, _ftBlastFk);
         if (!_ftBlastMsgId) continue;
         // Fireproof: target immune to Strain if it also has Flame Trooper attachment
         const _ftBlastUpgrades = game.p1DcAttachments?.[_ftBlastMsgId] || game.p2DcAttachments?.[_ftBlastMsgId] || [];
-        if (_ftBlastUpgrades.includes('Flame Trooper')) continue;
+        if (cardNameIncludes(_ftBlastUpgrades, 'Flame Trooper')) continue;
         const { figureIndex: _ftBlastFigIdx } = parseFigureKey(_ftBlastFk);
         const _ftBlastHsBefore = dcHealthState.get(_ftBlastMsgId);
         if (!_ftBlastHsBefore?.[_ftBlastFigIdx] || _ftBlastHsBefore[_ftBlastFigIdx][0] <= 0) continue;
@@ -2522,7 +2523,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           const _rfDamage = combat._appliedDamage ?? 0;
           const _rfDefMsgId = findDcMessageIdForFigure(game.gameId, _rfDefPN, _rfDefFk);
           const _rfUpgrades = _rfDefMsgId ? (game.p1DcAttachments?.[_rfDefMsgId] || game.p2DcAttachments?.[_rfDefMsgId] || []) : [];
-          const _rfHasRogue = _rfUpgrades.includes('Rogue Smuggler');
+          const _rfHasRogue = cardNameIncludes(_rfUpgrades, 'Rogue Smuggler');
           if (_rfDamage > 0 && !_rfHasRogue) _rfCanFire = false;
         }
         if (_rfCanFire) {

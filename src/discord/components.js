@@ -2,6 +2,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder }
 import { normalizeCoord, bottomLeftCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
 import { isDcCompanion } from '../data-loader.js';
+import { cardNameIncludes } from '../game/card-names.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
@@ -842,33 +843,33 @@ export function getAttachmentSpecials(attachments, game, msgId) {
   const names = [];
   const costs = [];
   if (!attachments?.length) return { names, costs };
-  if (attachments.includes("Vader's Finest")) {
+  if (cardNameIncludes(attachments, "Vader's Finest")) {
     names.push('VF: Attack+Move');
     costs.push(1);
     names.push('VF: Focus');
     costs.push(1);
   }
-  if (attachments.includes("Smuggler's Run")) {
+  if (cardNameIncludes(attachments, "Smuggler's Run")) {
     names.push("Smuggler's Run");
     costs.push(1);
   }
-  if (attachments.includes('Z-6 Trooper')) {
+  if (cardNameIncludes(attachments, 'Z-6 Trooper')) {
     names.push('Autofire');
     costs.push(1);
   }
-  if (attachments.includes('Mortar Trooper')) {
+  if (cardNameIncludes(attachments, 'Mortar Trooper')) {
     names.push('Fire Mission');
     costs.push(2);
   }
-  if (attachments.includes('The Darksaber')) {
+  if (cardNameIncludes(attachments, 'The Darksaber')) {
     names.push('Darksaber Strike');
     costs.push(1);
   }
-  if (attachments.includes('Orbital Bombardment')) {
+  if (cardNameIncludes(attachments, 'Orbital Bombardment')) {
     names.push('OB: Place Tokens');
     costs.push(1);
   }
-  if (attachments.includes('Overwatch')) {
+  if (cardNameIncludes(attachments, 'Overwatch')) {
     names.push('OW: Place Token');
     costs.push(1);
   }
@@ -889,7 +890,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const _suUpgrades = game ? (game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || []) : [];
   if (_suUpgrades.length) {
     const _lostSpecials = new Set();
-    if (_suUpgrades.includes('Driven by Hatred')) _lostSpecials.add('Brutality');
+    if (cardNameIncludes(_suUpgrades, 'Driven by Hatred')) _lostSpecials.add('Brutality');
     if (_lostSpecials.size) {
       const _filteredPairs = specials.map((s, i) => [s, specialCosts[i] ?? 1]).filter(([s]) => !_lostSpecials.has(s));
       specials = _filteredPairs.map(([s]) => s);

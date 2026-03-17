@@ -38,6 +38,7 @@
  */
 import { getDcEffects } from '../data-loader.js';
 import { getDcList, getDcMessageIds, ccHandKey, ccDeckKey, getHandChannelId, dcAttachmentsKey } from '../game/player-helpers.js';
+import { cardNameIncludes } from '../game/card-names.js';
 
 export async function processFigureDefeat(game, opts, deps) {
   const {
@@ -178,7 +179,7 @@ export async function processFigureDefeat(game, opts, deps) {
   if (msgId) {
     const attKey = dcAttachmentsKey(defeatedPlayerNum);
     const attachments = game[attKey]?.[msgId] || [];
-    if (attachments.includes('Scavenged Weaponry')) {
+    if (cardNameIncludes(attachments, 'Scavenged Weaponry')) {
       // Check if group is fully defeated (no more figures of this DC on board)
       const figPos = game.figurePositions?.[defeatedPlayerNum] || {};
       const groupAlive = Object.keys(figPos).some(fk => fk.startsWith(dcName + '-') && figPos[fk]);

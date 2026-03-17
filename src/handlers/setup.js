@@ -20,6 +20,7 @@ import {
   getInitiativePlayerNum, opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, isFigurelessDc } from '../game/index.js';
+import { stripBrackets, cardNameEquals } from '../game/card-names.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
@@ -252,10 +253,10 @@ export async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) 
   const attachKey = dcAttachmentsKey(playerNum);
   game[attachKey] = game[attachKey] || {};
   if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
-  game[attachKey][dcMsgId].push(card);
+  game[attachKey][dcMsgId].push(stripBrackets(card));
 
   // Focused on the Kill (IG-88): +5 Health applied at setup when attached
-  if (card === 'Focused on the Kill') {
+  if (cardNameEquals(card, 'Focused on the Kill')) {
     const dcHS = dcHealthState;
     const hs = dcHS?.get(dcMsgId);
     if (hs) {
@@ -270,7 +271,7 @@ export async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) 
     }
   }
   // Wookiee Avenger: search deck for "Debts Repaid", put into hand, draw 1 fewer in starting hand
-  if (card === 'Wookiee Avenger') {
+  if (cardNameEquals(card, 'Wookiee Avenger')) {
     const deckKey = ccDeckKey(playerNum);
     const handKey = ccHandKey(playerNum);
     const deck = game[deckKey] || [];
@@ -285,7 +286,7 @@ export async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) 
   }
 
   // Lie in Ambush: set the attached group aside — it does NOT deploy during deployment phase
-  if (card === 'Lie in Ambush') {
+  if (cardNameEquals(card, 'Lie in Ambush')) {
     const dcList = getDcList(game, playerNum) || [];
     const dcMsgIds = getDcMessageIds(game, playerNum) || [];
     const dcIdx = dcMsgIds.indexOf(dcMsgId);
@@ -313,7 +314,7 @@ export async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) 
 
   // Squad Upgrade figures (Z-6 Trooper, Mortar Trooper, Riot Trooper): auto-set nickname for the SU figure
   const SU_FIGURE_CARDS = ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'];
-  if (SU_FIGURE_CARDS.includes(card)) {
+  if (SU_FIGURE_CARDS.some(c => cardNameEquals(c, card))) {
     const dcList = getDcList(game, playerNum) || [];
     const dcMsgIds = getDcMessageIds(game, playerNum) || [];
     const dcIdx = dcMsgIds.indexOf(dcMsgId);
@@ -2272,7 +2273,7 @@ export async function handleAttachDoneRedo(interaction, ctx) {
       if (idx >= 0) arr.splice(idx, 1);
     }
     // Reverse Focused on the Kill HP bonus
-    if (card === 'Focused on the Kill' && ctx.dcHealthState) {
+    if (cardNameEquals(card, 'Focused on the Kill') && ctx.dcHealthState) {
       const hs = ctx.dcHealthState.get(dcMsgId);
       if (hs) {
         for (let fi = 0; fi < hs.length; fi++) {
@@ -2286,7 +2287,7 @@ export async function handleAttachDoneRedo(interaction, ctx) {
       }
     }
     // Reverse Wookiee Avenger — put Debts Repaid back in deck from hand
-    if (card === 'Wookiee Avenger') {
+    if (cardNameEquals(card, 'Wookiee Avenger')) {
       const handKey = ccHandKey(playerNum);
       const deckKey = ccDeckKey(playerNum);
       const hand = game[handKey] || [];

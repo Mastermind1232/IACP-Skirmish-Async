@@ -9,6 +9,7 @@ import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, d
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { getRange } from '../game/spatial.js';
+import { cardNameIncludes } from '../game/card-names.js';
 import { getDeploymentZones, getCcEffect } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import {
@@ -424,7 +425,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     const _swAtts = getDcAttachments(game, pn) || {};
     for (let i = 0; i < _swMsgIds.length; i++) {
       const _swMid = _swMsgIds[i];
-      if (!(_swAtts[_swMid] || []).includes('Scavenged Walker')) continue;
+      if (!cardNameIncludes(_swAtts[_swMid], 'Scavenged Walker')) continue;
       const _swDc = _swDcList[i];
       if (!_swDc?.dcName || _swDc.defeated) continue;
       const _swOwnerId = game[`player${pn}Id`];
@@ -445,7 +446,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     const _dbhAtts = getDcAttachments(game, pn) || {};
     for (let i = 0; i < _dbhMsgIds.length; i++) {
       const _dbhMid = _dbhMsgIds[i];
-      if (!(_dbhAtts[_dbhMid] || []).includes('Driven by Hatred')) continue;
+      if (!cardNameIncludes(_dbhAtts[_dbhMid], 'Driven by Hatred')) continue;
       const _dbhDc = _dbhDcList[i];
       if (!_dbhDc?.dcName || _dbhDc.defeated) continue;
       const _dbhOwnerId = game[`player${pn}Id`];
@@ -470,7 +471,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       const _svAtts = getDcAttachments(game, pn) || {};
       for (let i = 0; i < _svMsgIds.length; i++) {
         const _svMid = _svMsgIds[i];
-        if (!(_svAtts[_svMid] || []).includes('Survivalist')) continue;
+        if (!cardNameIncludes(_svAtts[_svMid], 'Survivalist')) continue;
         const _svDc = _svDcList[i];
         if (!_svDc?.dcName || _svDc.defeated) continue;
         // Check if any figure in this group is in an exterior space
@@ -668,7 +669,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     for (let i = 0; i < dcList.length; i++) {
       if ((dcList[i]?.dcName || dcList[i]) === '[Channel the Force]') {
         const mid = dcMsgIds[i];
-        if (mid && !(game.exhaustedSkirmishUpgrades?.[mid] || []).includes('Channel the Force')) return mid;
+        if (mid && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[mid], 'Channel the Force')) return mid;
       }
     }
     return null;

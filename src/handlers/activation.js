@@ -10,6 +10,7 @@ import { parseCoord } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, awardKillVp } from '../game/index.js';
 import { getRange } from '../game/spatial.js';
+import { cardNameIncludes } from '../game/card-names.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
@@ -924,7 +925,7 @@ export async function handleDcEndActivation(interaction, ctx) {
   {
     const _odmUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
     const _odmExh = game.exhaustedSkirmishUpgrades?.[msgId] || [];
-    if (_odmUpgrades.includes('On a Diplomatic Mission') && !_odmExh.includes('On a Diplomatic Mission') && !game.attackPerformedThisActivation?.[msgId]) {
+    if (cardNameIncludes(_odmUpgrades, 'On a Diplomatic Mission') && !cardNameIncludes(_odmExh, 'On a Diplomatic Mission') && !game.attackPerformedThisActivation?.[msgId]) {
       const _odmRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_mp`).setLabel('+2 MP').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_evade`).setLabel('+1 Evade (rest of round)').setStyle(ButtonStyle.Primary),
@@ -1410,7 +1411,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
     if (selfPos && _getRange) {
       const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-      const _awrRange = _awrAtts.some(a => a.includes('Advanced Com Systems')) ? 3 : 2;
+      const _awrRange = cardNameIncludes(_awrAtts, 'Advanced Com Systems') ? 3 : 2;
       const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
         .filter(([fk, fp]) => fk !== selfFk && fp && _getRange(selfPos, fp) <= _awrRange);
       if (friendlyFigs.length > 0) {
@@ -1542,14 +1543,14 @@ export async function handleConfirmActivate(interaction, ctx) {
   // Advanced Firepower (General Sorin): adjacent DROID/VEHICLE may use your surge abilities (within 2 with ACS)
   if (_mountedIds.includes('advanced_firepower_sorin')) {
     const _afAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-    const _afHasACS = _afAtts.some(a => a.includes('Advanced Com Systems'));
+    const _afHasACS = cardNameIncludes(_afAtts, 'Advanced Com Systems');
     const _afRange = _afHasACS ? 'within 2 spaces (ACS)' : 'adjacent';
     await thread.send({ content: `🔧 **Advanced Firepower** — ${_afRange} DROID or VEHICLE figures may use Sorin's surge abilities.` }).catch(discordCatch);
   }
   // Unhinged Director (Director Krennic): TROOPER/GUARDIAN within 2 (3 with ACS) get +2 bonus from tokens
   if (_mountedIds.includes('unhinged_director_krennic')) {
     const _udAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-    const _udHasACS = _udAtts.some(a => a.includes('Advanced Com Systems'));
+    const _udHasACS = cardNameIncludes(_udAtts, 'Advanced Com Systems');
     const _udRange = _udHasACS ? '3 (ACS)' : '2';
     await thread.send({ content: `📋 **Unhinged Director** — TROOPER or GUARDIAN within ${_udRange} spaces gain +2 (instead of +1) when spending power tokens.` }).catch(discordCatch);
   }
@@ -1870,7 +1871,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   const _suActivationUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
   if (_suActivationUpgrades.length) {
     // Focused on the Kill (IG-88): +2 MP at start of activation
-    if (_suActivationUpgrades.includes('Focused on the Kill')) {
+    if (cardNameIncludes(_suActivationUpgrades, 'Focused on the Kill')) {
       game.movementBank = game.movementBank || {};
       if (!game.movementBank[msgId]) {
         game.movementBank[msgId] = { total: 2, remaining: 2, threadId: thread.id, messageId: null, displayName: meta.displayName || meta.dcName };
@@ -1882,7 +1883,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
     // Survivalist: end-of-round recovery handled in round.js; movement cost ignore handled in movement.js
     // Wookiee Avenger (Chewbacca): free Slam once during activation (choose adjacent hostile, roll 1 red, push if SMALL)
-    if (_suActivationUpgrades.includes('Wookiee Avenger') && !game.wookieeAvengerSlamUsed?.[msgId]) {
+    if (cardNameIncludes(_suActivationUpgrades, 'Wookiee Avenger') && !game.wookieeAvengerSlamUsed?.[msgId]) {
       const _waMapId = game.selectedMap?.id;
       const _waMs = _waMapId ? getMapSpaces(_waMapId) : null;
       const _waDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -1905,7 +1906,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       }
     }
     // Motivation (UNIQUE): exhaust during activation — friendly with lower cost + LOS discards harmful or recovers 1, gains 1 MP
-    if (_suActivationUpgrades.includes('Motivation') && !(game.exhaustedSkirmishUpgrades?.[msgId] || []).includes('Motivation')) {
+    if (cardNameIncludes(_suActivationUpgrades, 'Motivation') && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[msgId], 'Motivation')) {
       const _motGetRange = ctx.getRange || getRange;
       const _motHasLos = ctx.hasLineOfSight;
       const _motMapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
@@ -1938,7 +1939,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       }
     }
     // Trusted Ally (DROID): exhaust during activation — adjacent friendly recovers 1 or discards 1 harmful
-    if (_suActivationUpgrades.includes('Trusted Ally') && !(game.exhaustedSkirmishUpgrades?.[msgId] || []).includes('Trusted Ally')) {
+    if (cardNameIncludes(_suActivationUpgrades, 'Trusted Ally') && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[msgId], 'Trusted Ally')) {
       const _taMapId = game.selectedMap?.id;
       const _taMs = getMapSpaces(_taMapId);
       const _taDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -1962,14 +1963,14 @@ export async function handleConfirmActivate(interaction, ctx) {
     // Vader's Finest, Smuggler's Run, Z-6 Autofire, Mortar Trooper Fire Mission: injected as special action buttons (automated)
     // Headhunter: auto-triggered via applyStrainToFigure hook (automated)
     // Beast Tamer (M69-M70): exhaust at start of CREATURE activation → grant Speed MP; if NON-SENTIENT → allow interact
-    if (_suActivationUpgrades.includes('Beast Tamer') && !(game.exhaustedSkirmishUpgrades?.[msgId] || []).includes('Beast Tamer')) {
+    if (cardNameIncludes(_suActivationUpgrades, 'Beast Tamer') && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[msgId], 'Beast Tamer')) {
       const _btEff = getDcEffects()?.[meta.dcName];
       const _btKws = (_btEff?.keywords || []).map(k => String(k).toUpperCase());
       if (_btKws.includes('CREATURE')) {
         // Exhaust Beast Tamer
         game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
         game.exhaustedSkirmishUpgrades[msgId] = game.exhaustedSkirmishUpgrades[msgId] || [];
-        if (!game.exhaustedSkirmishUpgrades[msgId].includes('Beast Tamer')) {
+        if (!cardNameIncludes(game.exhaustedSkirmishUpgrades[msgId], 'Beast Tamer')) {
           game.exhaustedSkirmishUpgrades[msgId].push('Beast Tamer');
         }
         // Grant Speed MP (perform a move = gain movement points equal to Speed)
@@ -2014,7 +2015,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       }
       if (_irMsgId) {
         const _irDepleted = (game.p1DepletedDcMessageIds || []).includes(_irMsgId) || (game.p2DepletedDcMessageIds || []).includes(_irMsgId);
-        const _irExhausted = (game.exhaustedSkirmishUpgrades?.[_irMsgId] || []).includes('Imperial Retrofitting');
+        const _irExhausted = cardNameIncludes(game.exhaustedSkirmishUpgrades?.[_irMsgId], 'Imperial Retrofitting');
         if (!_irDepleted) {
           const _irBtns = [];
           if (!_irExhausted) {
@@ -2144,7 +2145,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     if (_usMsgId) {
       const _usExh = game.exhaustedSkirmishUpgrades?.[_usMsgId] || [];
       const _usDepleted = (game[`p${meta.playerNum}DepletedDcMessageIds`] || []).includes(_usMsgId);
-      if (!_usExh.includes('Unshakable') && !_usDepleted) {
+      if (!cardNameIncludes(_usExh, 'Unshakable') && !_usDepleted) {
         // Find all friendly figures with cost ≥ 9 that have harmful conditions
         const _usAllFigPos = game.figurePositions?.[meta.playerNum] || {};
         const _usCandidates = [];
@@ -2207,7 +2208,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     if (_scMsgId) {
       const _scExh = game.exhaustedSkirmishUpgrades?.[_scMsgId] || [];
       const _scDepleted = (game[`p${meta.playerNum}DepletedDcMessageIds`] || []).includes(_scMsgId);
-      if (!_scExh.includes('Spectre Cell') && !_scDepleted) {
+      if (!cardNameIncludes(_scExh, 'Spectre Cell') && !_scDepleted) {
         // Check that there's at least one other friendly figure on the board
         const _scAllFigs = game.figurePositions?.[meta.playerNum] || {};
         const _scActivatingPrefix = `${meta.dcName}-`;
@@ -2972,7 +2973,7 @@ export async function handleActPassive(interaction, ctx) {
       // Exhaust the upgrade
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[msgId] = game.exhaustedSkirmishUpgrades[msgId] || [];
-      if (!game.exhaustedSkirmishUpgrades[msgId].includes('Motivation')) {
+      if (!cardNameIncludes(game.exhaustedSkirmishUpgrades[msgId], 'Motivation')) {
         game.exhaustedSkirmishUpgrades[msgId].push('Motivation');
       }
       // Store pending and show heal vs discard choice
@@ -3035,7 +3036,7 @@ export async function handleActPassive(interaction, ctx) {
       // Exhaust the upgrade
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[msgId] = game.exhaustedSkirmishUpgrades[msgId] || [];
-      if (!game.exhaustedSkirmishUpgrades[msgId].includes('Trusted Ally')) {
+      if (!cardNameIncludes(game.exhaustedSkirmishUpgrades[msgId], 'Trusted Ally')) {
         game.exhaustedSkirmishUpgrades[msgId].push('Trusted Ally');
       }
       // Show heal vs discard choice
@@ -3089,7 +3090,7 @@ export async function handleActPassive(interaction, ctx) {
         // Exhaust Imperial Retrofitting
         game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
         game.exhaustedSkirmishUpgrades[_irCardMsgId] = game.exhaustedSkirmishUpgrades[_irCardMsgId] || [];
-        if (!game.exhaustedSkirmishUpgrades[_irCardMsgId].includes('Imperial Retrofitting')) {
+        if (!cardNameIncludes(game.exhaustedSkirmishUpgrades[_irCardMsgId], 'Imperial Retrofitting')) {
           game.exhaustedSkirmishUpgrades[_irCardMsgId].push('Imperial Retrofitting');
         }
         // Allow multiple attacks this activation for the vehicle
@@ -3110,7 +3111,7 @@ export async function handleActPassive(interaction, ctx) {
         // Exhaust Imperial Retrofitting
         game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
         game.exhaustedSkirmishUpgrades[_irCardMsgId] = game.exhaustedSkirmishUpgrades[_irCardMsgId] || [];
-        if (!game.exhaustedSkirmishUpgrades[_irCardMsgId].includes('Imperial Retrofitting')) {
+        if (!cardNameIncludes(game.exhaustedSkirmishUpgrades[_irCardMsgId], 'Imperial Retrofitting')) {
           game.exhaustedSkirmishUpgrades[_irCardMsgId].push('Imperial Retrofitting');
         }
         // Grant Speed MP to the vehicle
