@@ -66,6 +66,11 @@ export async function logPhaseHeader(game, client, phase, roundNum = null) {
 /** Log a game action with icon and clean formatting. Returns the sent message (or null) so callers can store gameLogMessageId for undo (F14). */
 export async function logGameAction(game, client, content, options = {}) {
   try {
+    // Clear the previous ping in the game log (fire-and-forget)
+    if (game._lastPingLogMsgId) {
+      _clearPreviousPing(game, client);
+    }
+
     const ch = await client.channels.fetch(game.generalId);
     const icon = options.icon ? `${ACTION_ICONS[options.icon] || ''} ` : '';
     const phase = options.phase;
@@ -83,11 +88,39 @@ export async function logGameAction(game, client, content, options = {}) {
       game.setupLogMessageIds = game.setupLogMessageIds || [];
       game.setupLogMessageIds.push(sentMsg.id);
     }
+
+    // Track this message if it pings users, so the next action can clear it
+    if (options.allowedMentions?.users?.length > 0) {
+      game._lastPingLogMsgId = sentMsg.id;
+    } else {
+      delete game._lastPingLogMsgId;
+    }
+
     return sentMsg;
   } catch (err) {
     console.error('Game log error:', err);
     return null;
   }
+}
+
+/**
+ * Edit the previous ping message in the game log to strip @mentions.
+ * Replaces <@userId> with bold "P1"/"P2" so the mention highlight disappears.
+ */
+function _clearPreviousPing(game, client) {
+  const msgId = game._lastPingLogMsgId;
+  delete game._lastPingLogMsgId;
+  if (!msgId || !game.generalId) return;
+  client.channels.fetch(game.generalId).then(ch =>
+    ch.messages.fetch(msgId).then(msg => {
+      let text = msg.content;
+      if (game.player1Id) text = text.replaceAll(`<@${game.player1Id}>`, '**P1**');
+      if (game.player2Id) text = text.replaceAll(`<@${game.player2Id}>`, '**P2**');
+      if (text !== msg.content) {
+        msg.edit({ content: text, allowedMentions: { parse: [] } }).catch(discordCatch);
+      }
+    })
+  ).catch(() => {});
 }
 
 const BOTHELPERS_ROLE_NAME = 'bothelpers';

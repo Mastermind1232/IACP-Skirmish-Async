@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-03-16T14:49:39.946Z",
-  "totalRun": 10,
+  "timestamp": "2026-03-16T23:49:32.927Z",
+  "totalRun": 288,
   "summary": {
     "effect": 0,
-    "no-op": 4,
-    "not-reached": 6,
+    "no-op": 193,
+    "not-reached": 95,
     "setup-error": 0,
     "crash": 0,
     "play-error": 0
@@ -13,20 +13,26 @@
     {
       "ccName": "A Powerful Influence",
       "scenarioType": "sor",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Adrenaline",
       "scenarioType": "sor",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Advance Warning",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Against the Odds",
       "scenarioType": "eor",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "All in a Day's Work",
@@ -39,6 +45,12 @@
       "scenarioType": "combat",
       "status": "not-reached",
       "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Apex Predator",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Arcing Shot",
@@ -55,17 +67,1673 @@
     {
       "ccName": "Assassinate",
       "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Balancing Force",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Ballistics Matrix",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Battle Scars",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Battlefield Awareness",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Beatdown",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Behind Enemy Lines",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Black Market Prices",
+      "scenarioType": "activation",
       "status": "not-reached",
       "error": "CC never became playable in this scenario"
     },
     {
-      "ccName": "Balancing Force",
+      "ccName": "Bladestorm",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Blaze of Glory",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Blitz",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Blood Feud",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Bodyguard",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Brace for Impact",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Brace Yourself",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Built on Hope",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Burst Fire",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Cal's Buddy",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Call the Vanguard",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Camouflage",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Capitalize",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Capture the Weary",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Cavalry Charge",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Celebration",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Change of Plans",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Chaotic Force",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Cheat to Win",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Choose a Side",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Cloned Reinforcements",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Close and Personal",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Close the Gap",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Collateral Damage",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Collect Intel",
       "scenarioType": "sor",
       "status": "not-reached",
       "error": "CC never became playable in this scenario"
     },
     {
-      "ccName": "Battle Scars",
+      "ccName": "Combat Resupply",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Comm Disruption",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Concentrated Fire",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Coordinated Attack",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Corrupting Force",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Counter Attack",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Covering Fire",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Cripple",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Cruel Strike",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Crush",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Cut Lines",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Dangerous Bargains",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Dangerous Prey",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Dark Energy",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Data Theft",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "De Wanna Wanga",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Deadeye",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Deadly Precision",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Deathblow",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Debts Repaid",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Definition: 'Love'",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Deflection",
+      "scenarioType": "combat",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Demoralizing Monologue",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Deploy the Garrison",
+      "scenarioType": "sor",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Desperate Escape",
+      "scenarioType": "eor",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Devotion",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Dirty Trick",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Dioxis Fumes",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Disable",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Disarm",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Disengage",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Disorient",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Double or Nothing",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Draw!",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Droid Mastery",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Dying Lunge",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Eerie Visage",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Efficient Travel",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Element of Surprise",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Elusive",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Emergency Aid",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Endless Reserves",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Escalating Hostility",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Espionage Mastery",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Evacuate",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Explosive Weaponry",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Expose Weakness",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Extra Protection",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Eyes on the Prize",
+      "scenarioType": "sor",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Face Me!",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Face to Face",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Fatal Deception",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Feint",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Feral Swipes",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Ferocity",
+      "scenarioType": "eor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Field Promotion",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Field Supply",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Field Tactician",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Final Stand",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Findsman Meditation",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Fleet Footed",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Flurry of Blades",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Focus",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Fool Me Once",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Forbidden Knowledge",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Force Drain",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Force Illusion",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Force Jump",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Force Lightning",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Force Push",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Force Rush",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Force Surge",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Foresee",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Forward March",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Fuel Upgrade",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Furious Charge",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Gauntlet Blade",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Get Behind Me!",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Glory of the Kill",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Grenadier",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Grisly Contest",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Guardian Stance",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Guild Programming",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Hard to Hit",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Harsh Environment",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Heart of Freedom",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Heavy Armor",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Heavy Ordnance",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Heightened Reflexes",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Hidden Trap",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Hide in Plain Sight",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Hit and Run",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Hold Ground",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Honoring the Fallen",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Hostile Negotiation",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Hour of Need",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Hunt Them Down",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Hunter Protocol",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "I Can Feel It",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "I Make My Own Luck",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Iron Will",
+      "scenarioType": "combat",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Jump Jets",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Jundland Terror",
+      "scenarioType": "eor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Just Business",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Knowledge and Defense",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Learn by Example",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Let's Make a Deal",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Lightbow",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Lock On",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Lure of the Dark Side",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Negation",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Marksman",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Ready Weapons",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Size Advantage",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Smoke Grenade",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Take Cover",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Take Initiative",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Urgency",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Wookiee Rage",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Mandalorian Tactics",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Maximum Firepower",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Meditation",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Opportunistic",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Shoot the Messenger",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "I Must Go Alone",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Improvised Weapons",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "In the Shadows",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Induce Rage",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Inspiring Speech",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Intelligence Leak",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Looking for a Fight",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Lord of the Sith",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Mandalorian Steel",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Marked Territory",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Master Operative",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Merciless",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Miracle Worker",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Mitigate",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Navigation Upgrade",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "New Orders",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "No Cheating",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Of No Importance",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Officer's Training",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "On the Lam",
+      "scenarioType": "combat",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "One in a Million",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Optimal Bombardment",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Out of Time",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Overcharged Weapons",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Overdrive",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Overheated",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Overrun",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Overwhelming Impact",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Pack Alpha",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Paid in Beskar",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Parry",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Parting Blow",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Payback",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Personal Energy Shield",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Pickpocket",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Planning",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Positioning Advantage",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Prepared for Battle",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Preservation Protocol",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Price of Glory",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Price on Their Heads",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Primary Target",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Protect the Old Ways",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Provoke",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Pummel",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Rally",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Rally the Troops",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Rank and File",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Rapid Recalibration",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Reactive Loyalties",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Rebel Graffiti",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Recovery",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Reduce to Rubble",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Regroup",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Reinforcements",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Repair",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Reposition",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Rest in Peace",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Retaliation",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Reverse Engineer",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Right Back At Ya!",
+      "scenarioType": "combat",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Roar",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Run for Cover",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Sarlacc Sweep",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Savage Vigor",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Second Chance",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Self-Augmentation",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Self-Defense",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Set a Trap",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Set for Stun",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Set the Charges",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Shadow Ops",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Shared Experience",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Signal Jammer",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Single Purpose",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Sit Tight",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Slippery Target",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Smuggled Supplies",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Smuggler's Tricks",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Sniper Configuration",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Son of Skywalker",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Spinning Kick",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Squad Swarm",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Stall for Time",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Static Pulse",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Stay Down",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Stealth Tactics",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Still Faster Than You",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Stimulants",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Strategic Shift",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Strength in Numbers",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Stroke of Brilliance",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Supercharge",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Support Specialist",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Survival Instincts",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Take it Down",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Take Position",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Targeting Network",
+      "scenarioType": "combat",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Telekinetic Throw",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Terminal Network",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Terminal Protocol",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "There is Another",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "There Is No Try",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "To the Limit",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Tools for the Job",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Tough Luck",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Toxic Dart",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Trandoshan Terror",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Transmit the Plans",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Triangulate",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Unlimited Power",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Utinni!",
+      "scenarioType": "sor",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Vanish",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Veteran Instincts",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Whistling Birds",
+      "scenarioType": "activation",
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
+    },
+    {
+      "ccName": "Wild Attack",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Wild Fire",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Wild Fury",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Windfall",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Worth Every Credit",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "Wreak Vengeance",
+      "scenarioType": "activation",
+      "status": "no-op",
+      "stateChanged": false
+    },
+    {
+      "ccName": "You Will Not Deny Me",
       "scenarioType": "activation",
       "status": "no-op",
       "stateChanged": false

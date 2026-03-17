@@ -358,7 +358,12 @@ export async function runDraftRandom(game, client, deps, options = {}) {
   // Run post-deploy phase (interactive queue); if active, activation phase is deferred
   let postDeployActive = false;
   if (game.currentRound === 1) {
-    postDeployActive = await deps.runPostDeployPhase(game, game.gameId, client, { logGameAction: deps.logGameAction, saveGames: deps.saveGames }, async () => {
+    postDeployActive = await deps.runPostDeployPhase(game, game.gameId, client, {
+      logGameAction: deps.logGameAction, saveGames: deps.saveGames,
+      buildDcEmbedAndFiles: deps.buildDcEmbedAndFiles, dcMessageMeta: deps.dcMessageMeta,
+      dcExhaustedState: deps.dcExhaustedState, dcHealthState: deps.dcHealthState,
+      getDcPlayAreaComponents: deps.getDcPlayAreaComponents, getNicknamesForDcMessage: deps.getNicknamesForDcMessage,
+    }, async () => {
       if (!hasPendingSor) {
         deps.setRoundPhase(game, deps.ROUND_PHASES.ACTIVATION);
         await deps.sendRoundActivationPhaseMessage(game, client);

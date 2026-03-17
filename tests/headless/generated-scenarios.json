@@ -1,6 +1,6 @@
 {
-  "generated": "2026-03-16T14:49:31.968Z",
-  "total": 264,
+  "generated": "2026-03-16T23:49:28.495Z",
+  "total": 288,
   "skipped": 5,
   "scenarios": [
     {
@@ -37,6 +37,25 @@
         ],
         "p1CcHand": [
           "Adrenaline"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Advance Warning",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "Agent Blaise",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Agent Blaise"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Advance Warning"
         ],
         "p2CcHand": []
       }
@@ -94,6 +113,25 @@
         ],
         "p1CcHand": [
           "Ambush"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Apex Predator",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "AT-DP",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "AT-DP"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Apex Predator"
         ],
         "p2CcHand": []
       }
@@ -175,6 +213,25 @@
       }
     },
     {
+      "ccName": "Ballistics Matrix",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "BT-1",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "BT-1"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Ballistics Matrix"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
       "ccName": "Battle Scars",
       "scenarioType": "activation",
       "timing": "duringActivation",
@@ -208,6 +265,25 @@
         ],
         "p1CcHand": [
           "Battlefield Awareness"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Beatdown",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "Agent Kallus",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Agent Kallus"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Beatdown"
         ],
         "p2CcHand": []
       }
@@ -327,6 +403,25 @@
       }
     },
     {
+      "ccName": "Bodyguard",
+      "scenarioType": "activation",
+      "timing": "whenAttackDeclaredOnAdjacentFriendly",
+      "requiredDc": "Baze Malbus",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Baze Malbus"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Bodyguard"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
       "ccName": "Brace for Impact",
       "scenarioType": "activation",
       "timing": "whileDefending",
@@ -398,6 +493,25 @@
         ],
         "p1CcHand": [
           "Burst Fire"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Cal's Buddy",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "Cal Kestis",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Cal Kestis"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Cal's Buddy"
         ],
         "p2CcHand": []
       }
@@ -569,6 +683,25 @@
         ],
         "p1CcHand": [
           "Cheat to Win"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Choose a Side",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "Gar Saxon",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Gar Saxon"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Choose a Side"
         ],
         "p2CcHand": []
       }
@@ -843,11 +976,11 @@
       "ccName": "Crush",
       "scenarioType": "activation",
       "timing": "whenYouEndMovementInSpacesWithOtherFigures",
-      "requiredDc": "AT-RT",
+      "requiredDc": "AT-DP",
       "config": {
         "mapId": "mos-eisley-outskirts",
         "p1Army": [
-          "AT-RT"
+          "AT-DP"
         ],
         "p2Army": [
           "Stormtrooper (Elite)"
@@ -1049,6 +1182,25 @@
       }
     },
     {
+      "ccName": "Definition: 'Love'",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "HK-47",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "HK-47"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Definition: 'Love'"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
       "ccName": "Deflection",
       "scenarioType": "combat",
       "timing": "whenAttackDeclaredOnYou",
@@ -1144,6 +1296,25 @@
       }
     },
     {
+      "ccName": "Dirty Trick",
+      "scenarioType": "activation",
+      "timing": "whenHostileFigureEntersAdjacentSpace",
+      "requiredDc": "Alliance Ranger (Elite)",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Alliance Ranger (Elite)"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Dirty Trick"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
       "ccName": "Dioxis Fumes",
       "scenarioType": "activation",
       "timing": "duringActivation",
@@ -1177,6 +1348,63 @@
         ],
         "p1CcHand": [
           "Disable"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Disarm",
+      "scenarioType": "activation",
+      "timing": "other",
+      "requiredDc": "Krrsantan",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Krrsantan"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Disarm"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Disengage",
+      "scenarioType": "activation",
+      "timing": "whenHostileFigureEntersSpaceWithin3Spaces",
+      "requiredDc": "Mak Eshka'rey",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Mak Eshka'rey"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Disengage"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Disorient",
+      "scenarioType": "activation",
+      "timing": "afterDamage",
+      "requiredDc": "Luke Skywalker",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Luke Skywalker"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Disorient"
         ],
         "p2CcHand": []
       }
@@ -1220,6 +1448,44 @@
       }
     },
     {
+      "ccName": "Droid Mastery",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "Jarrod Kelvin",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Jarrod Kelvin"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Droid Mastery"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Dying Lunge",
+      "scenarioType": "activation",
+      "timing": "other",
+      "requiredDc": "Luke Skywalker",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Luke Skywalker"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Dying Lunge"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
       "ccName": "Eerie Visage",
       "scenarioType": "activation",
       "timing": "specialAction",
@@ -1253,6 +1519,25 @@
         ],
         "p1CcHand": [
           "Efficient Travel"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Element of Surprise",
+      "scenarioType": "activation",
+      "timing": "whenYouDeclareAttack",
+      "requiredDc": "Luke Skywalker",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Luke Skywalker"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Element of Surprise"
         ],
         "p2CcHand": []
       }
@@ -1367,6 +1652,44 @@
         ],
         "p1CcHand": [
           "Evacuate"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Explosive Weaponry",
+      "scenarioType": "activation",
+      "timing": "whenYouDeclareAttack",
+      "requiredDc": "AT-DP",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "AT-DP"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Explosive Weaponry"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Expose Weakness",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "Luke Skywalker",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Luke Skywalker"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Expose Weakness"
         ],
         "p2CcHand": []
       }
@@ -1785,6 +2108,44 @@
         ],
         "p1CcHand": [
           "Force Lightning"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Force Push",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "Ahsoka Tano",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Ahsoka Tano"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Force Push"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Force Rush",
+      "scenarioType": "activation",
+      "timing": "startOfActivation",
+      "requiredDc": "Ahsoka Tano",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Ahsoka Tano"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Force Rush"
         ],
         "p2CcHand": []
       }
@@ -2591,11 +2952,11 @@
       "ccName": "Size Advantage",
       "scenarioType": "activation",
       "timing": "specialAction",
-      "requiredDc": "AT-RT",
+      "requiredDc": "AT-DP",
       "config": {
         "mapId": "mos-eisley-outskirts",
         "p1Army": [
-          "AT-RT"
+          "AT-DP"
         ],
         "p2Army": [
           "Stormtrooper (Elite)"
@@ -4051,6 +4412,25 @@
       }
     },
     {
+      "ccName": "Self-Augmentation",
+      "scenarioType": "activation",
+      "timing": "duringActivation",
+      "requiredDc": "Bodhi Rook",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Bodhi Rook"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Self-Augmentation"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
       "ccName": "Self-Defense",
       "scenarioType": "activation",
       "timing": "whenHostileFigureEntersAdjacentSpace",
@@ -4236,6 +4616,25 @@
         ],
         "p1CcHand": [
           "Slippery Target"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Smuggled Supplies",
+      "scenarioType": "activation",
+      "timing": "startOfActivation",
+      "requiredDc": "Alliance Smuggler (Elite)",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Alliance Smuggler (Elite)"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Smuggled Supplies"
         ],
         "p2CcHand": []
       }
@@ -4735,6 +5134,25 @@
       }
     },
     {
+      "ccName": "Tools for the Job",
+      "scenarioType": "activation",
+      "timing": "whenYouDeclareAttack",
+      "requiredDc": "Alliance Ranger (Elite)",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Alliance Ranger (Elite)"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Tools for the Job"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
       "ccName": "Tough Luck",
       "scenarioType": "activation",
       "timing": "other",
@@ -4920,6 +5338,44 @@
         ],
         "p1CcHand": [
           "Whistling Birds"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Wild Attack",
+      "scenarioType": "activation",
+      "timing": "whenYouDeclareAttack",
+      "requiredDc": "Luke Skywalker",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "Luke Skywalker"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Wild Attack"
+        ],
+        "p2CcHand": []
+      }
+    },
+    {
+      "ccName": "Wild Fire",
+      "scenarioType": "activation",
+      "timing": "whenYouDeclareAttack",
+      "requiredDc": "CT-1701",
+      "config": {
+        "mapId": "mos-eisley-outskirts",
+        "p1Army": [
+          "CT-1701"
+        ],
+        "p2Army": [
+          "Stormtrooper (Elite)"
+        ],
+        "p1CcHand": [
+          "Wild Fire"
         ],
         "p2CcHand": []
       }

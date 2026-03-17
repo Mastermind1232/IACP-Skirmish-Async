@@ -4,7 +4,7 @@
  * Initiative player resolves first, then the other player.
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDcEffects, getMapSpaces, getDeploymentZones, getFigureSize } from '../data-loader.js';
+import { getDcEffects, getDcStats, getMapSpaces, getDeploymentZones, getFigureSize } from '../data-loader.js';
 import { dcNameFromFigureKey, applyCondition, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
@@ -15,6 +15,11 @@ import { getRange } from '../game/spatial.js';
 import { discordCatch } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { requireGame } from '../utils/guards.js';
+
+// Module-level storage for companion DC embed deps (keyed by gameId).
+// Set by runPostDeployPhase when ctx includes embed deps, consumed by resolveAutoAbility,
+// cleaned up in finishPostDeploy.
+const _companionEmbedDeps = new Map();
 
 // ── Ability scanning ────────────────────────────────────────────────────────
 
@@ -266,9 +271,64 @@ async function resolveAutoAbility(game, ability, client, logGameAction) {
         game.companionHostMap = game.companionHostMap || {};
         game.companionHostMap[companionKey] = { hostFigureKey: figureKey, playerNum };
         await logGameAction(game, client, `👶 **${companionName}** deployed at **${dcName}**'s position (${hostPos}).`, { phase: 'ROUND', icon: 'deployed' });
+        // Create DC embed for companion in Play Area
+        const embedDeps = _companionEmbedDeps.get(game.gameId);
+        if (embedDeps) {
+          try {
+            await _createCompanionDcEmbed(game, companionName, playerNum, ability.msgId, client, embedDeps);
+          } catch (err) {
+            console.error(`[post-deploy] Failed to create companion DC embed for ${companionName}:`, err.message);
+          }
+        }
       }
       break;
     }
+  }
+}
+
+// ── Companion DC embed creation ─────────────────────────────────────────────
+
+/**
+ * Create a DC embed for a companion figure in the player's Play Area.
+ * Mirrors the pattern from populatePlayAreas in setup-bridge.js.
+ */
+async function _createCompanionDcEmbed(game, companionName, playerNum, hostMsgId, client, deps) {
+  const {
+    buildDcEmbedAndFiles, dcMessageMeta, dcExhaustedState, dcHealthState,
+    getDcPlayAreaComponents, getNicknamesForDcMessage,
+  } = deps;
+
+  const playAreaId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+  if (!playAreaId) return;
+
+  const stats = getDcStats(companionName);
+  const health = stats?.health ?? '?';
+  const figures = stats?.figures ?? 1;
+  const healthState = Array.from({ length: figures }, () => [health, health]);
+  const displayName = companionName;
+  const dcInfo = { dcName: companionName, displayName };
+
+  const { embed, files } = await buildDcEmbedAndFiles(
+    companionName, false, displayName, healthState, undefined, [], null, null,
+    getNicknamesForDcMessage(game, dcInfo),
+  );
+
+  const playArea = await client.channels.fetch(playAreaId);
+  const msg = await playArea.send({ embeds: [embed], files });
+
+  dcMessageMeta.set(msg.id, { gameId: game.gameId, playerNum, dcName: companionName, displayName });
+  dcExhaustedState.set(msg.id, false);
+  dcHealthState.set(msg.id, healthState);
+
+  const components = getDcPlayAreaComponents(msg.id, false, game, companionName);
+  await msg.edit({ components });
+
+  // Store companion message ID at the host DC's index
+  const hostMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+  const companionMsgIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+  const hostIdx = hostMsgIds?.indexOf(hostMsgId);
+  if (hostIdx >= 0 && companionMsgIds) {
+    companionMsgIds[hostIdx] = msg.id;
   }
 }
 
@@ -878,6 +938,7 @@ async function advanceToNextPlayer(game, gameId, client, logGameAction) {
 async function finishPostDeploy(game, gameId, client, logGameAction) {
   delete game.postDeployQueue;
   game.postDeployEffectsFired = true;
+  _companionEmbedDeps.delete(gameId);
   if (game._postDeployCallback) {
     const cb = game._postDeployCallback;
     delete game._postDeployCallback;
@@ -900,6 +961,11 @@ async function finishPostDeploy(game, gameId, client, logGameAction) {
 export async function runPostDeployPhase(game, gameId, client, ctx, onComplete) {
   const { logGameAction, saveGames } = ctx;
 
+  // Store companion DC embed deps if provided (consumed by resolveAutoAbility)
+  if (ctx.buildDcEmbedAndFiles) {
+    _companionEmbedDeps.set(gameId, ctx);
+  }
+
   if (game.postDeployEffectsFired) return false;
 
   const initPn = getInitiativePlayerNum(game);
@@ -911,6 +977,7 @@ export async function runPostDeployPhase(game, gameId, client, ctx, onComplete) 
   // No abilities at all — skip
   if (initAbilities.length === 0 && otherAbilities.length === 0) {
     game.postDeployEffectsFired = true;
+    _companionEmbedDeps.delete(gameId);
     return false;
   }
 
@@ -922,6 +989,7 @@ export async function runPostDeployPhase(game, gameId, client, ctx, onComplete) 
     game.postDeployEffectsFired = true;
     for (const ab of initAbilities) await resolveAutoAbility(game, ab, client, logGameAction);
     for (const ab of otherAbilities) await resolveAutoAbility(game, ab, client, logGameAction);
+    _companionEmbedDeps.delete(gameId);
     // Check for overflow after batch auto-resolve
     if (game.pendingPowerTokenOverflow?.length > 0) {
       const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);

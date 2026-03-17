@@ -1219,6 +1219,9 @@ async function runDraftRandom(game, client, options = {}) {
     getHandChannelId, getHandTooltipEmbed, buildHandDisplayPayload, updateHandVisualMessage,
     updatePlayAreaDcButtons, runStartOfRoundDcEffects, runPostDeployPhase, setRoundPhase,
     sendRoundActivationPhaseMessage, clearPreGameSetup, saveGames,
+    // Companion DC embed deps (threaded to runPostDeployPhase → resolveAutoAbility)
+    buildDcEmbedAndFiles, dcMessageMeta, dcExhaustedState, dcHealthState,
+    getDcPlayAreaComponents, getNicknamesForDcMessage,
   }, options);
 }
 

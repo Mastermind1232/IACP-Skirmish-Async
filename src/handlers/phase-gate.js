@@ -128,6 +128,25 @@ async function updateGateMessages(game, ctx) {
   }
 }
 
+async function deleteGateMessages(game, ctx) {
+  const { client } = ctx;
+  const gate = game.phaseGate;
+  if (!gate) return;
+
+  for (const pn of [1, 2]) {
+    const handId = getHandChannelId(game, pn);
+    const msgId = pn === 1 ? gate.p1MsgId : gate.p2MsgId;
+    if (!handId || !msgId) continue;
+    try {
+      const handCh = await client.channels.fetch(handId);
+      const msg = await handCh.messages.fetch(msgId);
+      await msg.delete().catch(discordCatch);
+    } catch {
+      // Message already gone — fine
+    }
+  }
+}
+
 // ── Ready handler ───────────────────────────────────────────────────────────
 
 /**
@@ -167,9 +186,8 @@ export async function handlePhaseGateReady(interaction, ctx) {
     return;
   }
 
-  // Both ready — finalize
-  // Edit both messages to final state (no buttons)
-  await updateGateMessages(game, ctx);
+  // Both ready — finalize: delete gate messages from hand channels (no need to leave stale text)
+  await deleteGateMessages(game, ctx);
 
   const phase = game.phaseGate.phase;
   clearPhaseGate(game);
@@ -302,6 +320,9 @@ async function advanceFromDeployment(game, ctx) {
     client, logGameAction, saveGames,
     getInitiativePlayerZoneLabel, clearPreGameSetup,
     runPostDeployPhase, getCcShuffleDrawButton,
+    // Companion DC embed deps (threaded to runPostDeployPhase)
+    buildDcEmbedAndFiles, dcMessageMeta, dcExhaustedState, dcHealthState,
+    getDcPlayAreaComponents, getNicknamesForDcMessage,
   } = ctx;
   const gameId = game.gameId;
 
@@ -346,7 +367,11 @@ async function advanceFromDeployment(game, ctx) {
 
   let postDeployActive = false;
   if (runPostDeployPhase) {
-    postDeployActive = await runPostDeployPhase(game, gameId, client, { logGameAction, saveGames }, _sendCcPrompts);
+    postDeployActive = await runPostDeployPhase(game, gameId, client, {
+      logGameAction, saveGames,
+      buildDcEmbedAndFiles, dcMessageMeta, dcExhaustedState, dcHealthState,
+      getDcPlayAreaComponents, getNicknamesForDcMessage,
+    }, _sendCcPrompts);
   }
   if (!postDeployActive) {
     await _sendCcPrompts();
