@@ -721,7 +721,7 @@ export async function handleMovePick(interaction, ctx) {
     // Post-deploy movement: advance the post-deploy queue
     if (wasPostDeploy && game.postDeployQueue) {
       const { onPostDeployMovementComplete } = await import('./post-deploy.js');
-      await onPostDeployMovementComplete(game, meta.gameId, client, ctx);
+      await onPostDeployMovementComplete(game, meta.gameId, client, ctx, figureKey);
     }
   } else {
     const nextBoard = getBoardStateForMovement(game, figureKey);
