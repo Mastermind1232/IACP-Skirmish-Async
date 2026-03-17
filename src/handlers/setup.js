@@ -2269,7 +2269,7 @@ export async function handleAttachDoneRedo(interaction, ctx) {
   for (const { card, dcMsgId } of applied) {
     const arr = game[attachKey]?.[dcMsgId];
     if (Array.isArray(arr)) {
-      const idx = arr.indexOf(card);
+      const idx = arr.findIndex(c => cardNameEquals(c, card));
       if (idx >= 0) arr.splice(idx, 1);
     }
     // Reverse Focused on the Kill HP bonus
