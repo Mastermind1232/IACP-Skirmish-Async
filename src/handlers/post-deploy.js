@@ -547,21 +547,29 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
 }
 
 /**
- * Advance after a figure finishes movement (or is skipped).
- * For smooth_landing: uses _resolvedFigures tracking and shows picker.
- * For other abilities: uses currentFigureIdx.
+ * Single entry point: advance after a figure finishes movement (or is skipped).
+ * Handles all ability types — smooth_landing (resolved-figure tracking + picker),
+ * strike_team (index-based + token distribution transition), and others (index-based).
+ * @param {string} figureKey — REQUIRED: the figure that just finished.
  */
 async function _advanceAfterFigure(game, gameId, client, ctx, figureKey) {
   const { logGameAction, saveGames } = ctx;
   const q = game.postDeployQueue;
   if (!q) return;
   const active = q.activeAbility;
-  if (!active || !active.moveFigures) return;
+
+  // No active ability or no moveFigures → ability is done
+  if (!active || !active.moveFigures) {
+    if (active) q.activeAbility = null;
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
+    if (saveGames) saveGames();
+    return;
+  }
 
   if (active.abilityId === 'smooth_landing') {
-    // Track resolved figures
+    // Resolved-figure tracking: mark this figure done, show picker for remaining
     active._resolvedFigures = active._resolvedFigures || [];
-    if (!active._resolvedFigures.includes(figureKey)) {
+    if (figureKey && !active._resolvedFigures.includes(figureKey)) {
       active._resolvedFigures.push(figureKey);
     }
     const remaining = active.moveFigures.filter(f => !active._resolvedFigures.includes(f.figureKey));
@@ -571,12 +579,23 @@ async function _advanceAfterFigure(game, gameId, client, ctx, figureKey) {
       if (saveGames) saveGames();
       return;
     }
-    // Show picker for remaining figures
     await _startNextMovement(game, gameId, client, ctx);
   } else {
-    // Legacy path: auto-advance via currentFigureIdx
+    // Index-based advance (Forward Emplacement, Strike Team, Scavenged Walker, etc.)
     active.currentFigureIdx = (active.currentFigureIdx || 0) + 1;
-    await _startNextMovement(game, gameId, client, ctx);
+    if (active.currentFigureIdx >= active.moveFigures.length) {
+      // All figures moved — check if Strike Team needs token distribution next
+      if (active.abilityId === 'strike_team' && active.tokenRemaining > 0) {
+        active.step = 'tokens';
+        active.moveFigures = null;
+        await _postStrikeTeamTokenPicker(game, gameId, active.playerNum, client, logGameAction);
+      } else {
+        q.activeAbility = null;
+        await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
+      }
+    } else {
+      await _startNextMovement(game, gameId, client, ctx);
+    }
   }
 }
 
@@ -1334,32 +1353,7 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
   const q = game.postDeployQueue;
   if (!q) { saveGames(); return; }
 
-  const active = q.activeAbility;
-  if (active && active.moveFigures) {
-
-    if (active.abilityId === 'smooth_landing') {
-      // Use resolved-figure tracking + picker
-      await _advanceAfterFigure(game, gameId, client, ctx, skippedFigureKey);
-    } else {
-      active.currentFigureIdx = (active.currentFigureIdx || 0) + 1;
-      if (active.currentFigureIdx >= active.moveFigures.length) {
-        // Movement phase done — check if Strike Team needs tokens next
-        if (active.abilityId === 'strike_team' && active.tokenRemaining > 0) {
-          active.step = 'tokens';
-          active.moveFigures = null;
-          await _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction);
-        } else {
-          q.activeAbility = null;
-          await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-        }
-      } else {
-        await _startNextMovement(game, gameId, client, ctx);
-      }
-    }
-  } else {
-    q.activeAbility = null;
-    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-  }
+  await _advanceAfterFigure(game, gameId, client, ctx, skippedFigureKey);
   saveGames();
 }
 
@@ -1472,53 +1466,12 @@ export async function handlePostDeployMoveStay(interaction, ctx) {
 
 /**
  * Called from movement.js handleMovePick when a postDeployReturn move finishes.
- * Advances the multi-figure movement flow or the overall queue.
+ * Delegates to _advanceAfterFigure which handles all ability types.
+ * @param {string} completedFigureKey — REQUIRED: the figure that just finished moving.
  */
 export async function onPostDeployMovementComplete(game, gameId, client, ctx, completedFigureKey) {
-  const { logGameAction, saveGames } = ctx;
-  const q = game.postDeployQueue;
-  if (!q) return;
-
-  const active = q.activeAbility;
-  if (!active) {
-    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-    if (saveGames) saveGames();
-    return;
-  }
-
-  if (active.moveFigures) {
-    // Determine the completed figure key: passed explicitly, or infer from currentFigureIdx
-    let resolvedKey = completedFigureKey;
-    if (!resolvedKey && active.moveFigures) {
-      const idx = active.currentFigureIdx || 0;
-      resolvedKey = active.moveFigures[idx]?.figureKey;
-    }
-
-    if (active.abilityId === 'smooth_landing') {
-      // Use resolved-figure tracking + picker
-      await _advanceAfterFigure(game, gameId, client, ctx, resolvedKey);
-    } else {
-      // Legacy path: auto-advance via currentFigureIdx
-      active.currentFigureIdx = (active.currentFigureIdx || 0) + 1;
-      if (active.currentFigureIdx >= active.moveFigures.length) {
-        // All figures moved — check if Strike Team needs tokens next
-        if (active.abilityId === 'strike_team' && active.tokenRemaining > 0) {
-          active.step = 'tokens';
-          active.moveFigures = null;
-          await _postStrikeTeamTokenPicker(game, gameId, active.playerNum, client, logGameAction);
-        } else {
-          q.activeAbility = null;
-          await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-        }
-      } else {
-        await _startNextMovement(game, gameId, client, ctx);
-      }
-    }
-  } else {
-    q.activeAbility = null;
-    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-  }
-
+  const { saveGames } = ctx;
+  await _advanceAfterFigure(game, gameId, client, ctx, completedFigureKey);
   if (saveGames) saveGames();
 }
 
