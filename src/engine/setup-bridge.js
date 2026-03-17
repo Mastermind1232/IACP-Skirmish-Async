@@ -410,7 +410,7 @@ export async function populatePlayAreas(game, client, deps) {
       const dcName = deps.resolveDcName(entry);
       counts[dcName] = (counts[dcName] || 0) + 1;
       const dgIndex = counts[dcName];
-      const displayName = totals[dcName] > 1 ? `${dcName} [DG ${dgIndex}]` : dcName;
+      const displayName = totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
       const stats = deps.getDcStats(dcName);
       const figureless = deps.isFigurelessDc(dcName);
       const health = figureless ? null : (stats.health ?? '?');

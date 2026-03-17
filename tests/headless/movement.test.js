@@ -31,7 +31,7 @@ describe('headless movement flow', () => {
   };
 
   const dcMeta = new Map([
-    [dcMsgId, { gameId: '99003', playerNum: 1, dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [DG 1]' }],
+    [dcMsgId, { gameId: '99003', playerNum: 1, dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [Group 1]' }],
   ]);
 
   it('dc_move handler runs without error', async () => {

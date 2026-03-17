@@ -9,8 +9,8 @@ describe('getAvailableActions — setup phases', () => {
     player1Id: 'p1',
     player2Id: 'p2',
     initiativePlayerId: 'p1',
-    player1Squad: { dcList: [{ dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [DG 1]' }] },
-    player2Squad: { dcList: [{ dcName: 'Rebel Trooper', displayName: 'Rebel Trooper [DG 1]' }] },
+    player1Squad: { dcList: [{ dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [Group 1]' }] },
+    player2Squad: { dcList: [{ dcName: 'Rebel Trooper', displayName: 'Rebel Trooper [Group 1]' }] },
   };
 
   it('returns empty for ended games', () => {

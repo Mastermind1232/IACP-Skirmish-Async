@@ -21,8 +21,8 @@ describe('getAvailableActions — activation phase', () => {
 
   it('returns activation actions for current turn player', () => {
     const dcMessageMeta = new Map([
-      ['msg1', { gameId: '00002', playerNum: 1, dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [DG 1]' }],
-      ['msg2', { gameId: '00002', playerNum: 2, dcName: 'Rebel Trooper', displayName: 'Rebel Trooper [DG 1]' }],
+      ['msg1', { gameId: '00002', playerNum: 1, dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [Group 1]' }],
+      ['msg2', { gameId: '00002', playerNum: 2, dcName: 'Rebel Trooper', displayName: 'Rebel Trooper [Group 1]' }],
     ]);
     const dcExhaustedState = new Map();
 
@@ -48,7 +48,7 @@ describe('getAvailableActions — activation phase', () => {
       },
     };
     const dcMessageMeta = new Map([
-      ['msg1', { gameId: '00002', playerNum: 1, dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [DG 1]' }],
+      ['msg1', { gameId: '00002', playerNum: 1, dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [Group 1]' }],
     ]);
     const dcExhaustedState = new Map([['msg1', true]]);
     const deps = { dcMessageMeta, dcExhaustedState };
@@ -72,7 +72,7 @@ describe('getAvailableActions — activation phase', () => {
 
   it('skips exhausted DCs in activation list', () => {
     const dcMessageMeta = new Map([
-      ['msg1', { gameId: '00002', playerNum: 1, dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [DG 1]' }],
+      ['msg1', { gameId: '00002', playerNum: 1, dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [Group 1]' }],
     ]);
     const dcExhaustedState = new Map([['msg1', true]]);
     const deps = { dcMessageMeta, dcExhaustedState };

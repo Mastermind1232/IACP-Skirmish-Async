@@ -1118,7 +1118,7 @@ async function buildAndSendAttackTargets(
     const dg = m ? parseInt(m[1], 10) : 1;
     const fi = m ? parseInt(m[2], 10) : 0;
     const figCount = getDcStats(dcName).figures ?? 1;
-    const label = figCount > 1 ? `${dg}${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [DG ${dg}]` : dcName);
+    const label = figCount > 1 ? `${dg}${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [Group ${dg}]` : dcName);
     targets.push({ figureKey: k, coord, label, hasLOS: los, dist, droidArmLOS });
   }
   // Missile Salvo: filter out already-targeted figures

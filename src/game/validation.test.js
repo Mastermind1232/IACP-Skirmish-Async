@@ -15,7 +15,7 @@ test('resolveDcName', () => {
   assert.strictEqual(resolveDcName('Darth Vader'), 'Darth Vader');
   assert.strictEqual(resolveDcName({ dcName: 'Nexu' }), 'Nexu');
   assert.strictEqual(resolveDcName({ displayName: 'Stormtrooper (Elite)' }), 'Stormtrooper (Elite)');
-  assert.strictEqual(resolveDcName({ dcName: 'Luke', displayName: 'Luke [DG 1]' }), 'Luke');
+  assert.strictEqual(resolveDcName({ dcName: 'Luke', displayName: 'Luke [Group 1]' }), 'Luke');
 });
 
 test('constants', () => {

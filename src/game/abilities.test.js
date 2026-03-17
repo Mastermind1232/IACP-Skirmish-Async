@@ -75,7 +75,7 @@ test('resolveAbility Planning with non-LEADER discards 1 of drawn', () => {
     gameId: 'g-plan',
     dcActionsData: { [msgId]: {} },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-plan', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-plan', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [Group 1]' }]]);
   const result = resolveAbility('Planning', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.player1CcHand.length, 1);
@@ -130,7 +130,7 @@ test('resolveAbility Fleet Footed with active activation applies +1 MP', () => {
     dcActionsData: { [msgId]: { remaining: 1 } },
     movementBank: { [msgId]: { total: 4, remaining: 2 } },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g1', playerNum: 1, dcName: 'Test', displayName: 'Test [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g1', playerNum: 1, dcName: 'Test', displayName: 'Test [Group 1]' }]]);
   const result = resolveAbility('cc:fleet_footed', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Gained 1 movement point.');
@@ -145,7 +145,7 @@ test('resolveAbility Force Rush with active activation applies +2 MP', () => {
     dcActionsData: { [msgId]: { remaining: 1 } },
     movementBank: { [msgId]: { total: 4, remaining: 2 } },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g2', playerNum: 2, dcName: 'Vader', displayName: 'Vader [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g2', playerNum: 2, dcName: 'Vader', displayName: 'Vader [Group 1]' }]]);
   const result = resolveAbility('Force Rush', { game, playerNum: 2, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Gained 2 movement points.');
@@ -161,7 +161,7 @@ test('resolveAbility Urgency (Speed+2) with active activation applies MP', () =>
     movementBank: { [msgId]: { total: 4, remaining: 2 } },
   };
   // Luke Skywalker has speed 5 in dc-stats → 5+2=7 MP
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g3', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g3', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Urgency', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Gained 7 movement points.');
@@ -198,7 +198,7 @@ test("resolveAbility Fool Me Once clears opponent discard and draws 1 if SPY", (
     gameId: 'g4',
     dcActionsData: { [msgId]: {} },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g4', playerNum: 1, dcName: 'Agent Blaise', displayName: 'Agent Blaise [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g4', playerNum: 1, dcName: 'Agent Blaise', displayName: 'Agent Blaise [Group 1]' }]]);
   const result = resolveAbility('Fool Me Once', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.player2CcDiscard.length, 0);
@@ -221,7 +221,7 @@ test("resolveAbility Fool Me Once applies 2 Strain to activating figure", () => 
     p1DcMessageIds: [msgId],
     p1DcList: [{ dcName: 'Agent Blaise', healthState: [[8, 8]] }],
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g4b', playerNum: 1, dcName: 'Agent Blaise', displayName: 'Agent Blaise [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g4b', playerNum: 1, dcName: 'Agent Blaise', displayName: 'Agent Blaise [Group 1]' }]]);
   const dcHealthState = new Map([[msgId, [[8, 8]]]]);
   const result = resolveAbility('Fool Me Once', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
@@ -243,7 +243,7 @@ test('resolveAbility Battle Scars with active activation gains 1 Power Token', (
     p1DcMessageIds: [msgId],
     p1DcList: [{ dcName: 'Wookiee Warrior (Elite)', healthState: [[7, 8]] }],
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g5', playerNum: 1, dcName: 'Wookiee Warrior (Elite)', displayName: 'Wookiee [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g5', playerNum: 1, dcName: 'Wookiee Warrior (Elite)', displayName: 'Wookiee [Group 1]' }]]);
   const result = resolveAbility('Battle Scars', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Gained 1 Power Token — choose type.');
@@ -261,7 +261,7 @@ test('resolveAbility Battle Scars with 3+ damage gains 2 Power Tokens', () => {
     p1DcMessageIds: [msgId],
     p1DcList: [{ dcName: 'Wookiee Warrior (Regular)', healthState: [[4, 8]] }],
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g6', playerNum: 1, dcName: 'Wookiee Warrior (Regular)', displayName: 'Wookiee [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g6', playerNum: 1, dcName: 'Wookiee Warrior (Regular)', displayName: 'Wookiee [Group 1]' }]]);
   const result = resolveAbility('Battle Scars', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Gained 2 Power Tokens — choose type.');
@@ -334,7 +334,7 @@ test('resolveAbility Advance Warning (cc:advance_warning) with active activation
     dcActionsData: { [msgId]: {} },
     movementBank: {},
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-aw', playerNum: 1, dcName: 'C-3PO', displayName: 'C-3PO [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-aw', playerNum: 1, dcName: 'C-3PO', displayName: 'C-3PO [Group 1]' }]]);
   const result = resolveAbility('cc:advance_warning', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Gained 2 movement points.');
@@ -351,7 +351,7 @@ test('resolveAbility Rally discards HARMFUL conditions from activating figures',
       'Stormtroopers-1-1': ['Weaken'],
     },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-rally', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-rally', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 1]' }]]);
   const result = resolveAbility('Rally', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(game.figureConditions['Stormtroopers-1-0'], ['Focus']);
@@ -367,7 +367,7 @@ test('resolveAbility Primary Target applies Focus and attackBonusHits', () => {
     figurePositions: { 1: { 'Boba Fett-1-0': 'a1' } },
     figureConditions: {},
   };
-  const dcMessageMeta = new Map([['msg-pt', { gameId: 'g-pt', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [DG 1]' }]]);
+  const dcMessageMeta = new Map([['msg-pt', { gameId: 'g-pt', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [Group 1]' }]]);
   const result = resolveAbility('Primary Target', { game, playerNum: 1, combat, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('Hit'));
@@ -384,7 +384,7 @@ test('resolveAbility Master Operative applies Focus and attackSurgeBonus', () =>
     figurePositions: { 1: { 'Verena Talos-1-0': 'a1' } },
     figureConditions: {},
   };
-  const dcMessageMeta = new Map([['msg-mo', { gameId: 'g-mo', playerNum: 1, dcName: 'Verena Talos', displayName: 'Verena [DG 1]' }]]);
+  const dcMessageMeta = new Map([['msg-mo', { gameId: 'g-mo', playerNum: 1, dcName: 'Verena Talos', displayName: 'Verena [Group 1]' }]]);
   const result = resolveAbility('Master Operative', { game, playerNum: 1, combat, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('Surge'));
@@ -400,7 +400,7 @@ test('resolveAbility Meditation applies Focus (same as Focus)', () => {
     figurePositions: { 1: { 'Luke Skywalker-1-0': 'a1' } },
     figureConditions: {},
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-med', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-med', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Meditation', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage.startsWith('Became Focused.'));
@@ -417,7 +417,7 @@ test('resolveAbility Recovery recovers 2 damage when dcHealthState and msgId pro
     p1DcMessageIds: [msgId],
     p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[3, 6]] }],
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-rec', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-rec', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Recovery', { game, playerNum: 1, dcMessageMeta, dcHealthState, msgId });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Recovered 2 Damage.');
@@ -437,7 +437,7 @@ test('resolveAbility Heart of Freedom applies discard 1 HARMFUL, recover 2, gain
     p1DcMessageIds: [msgId],
     p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[4, 6]] }],
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-hof', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-hof', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Heart of Freedom', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('HARMFUL'));
@@ -456,7 +456,7 @@ test('resolveAbility Price of Glory applies discard 1 HARMFUL and gain 2 MP', ()
     figurePositions: { 1: { 'Stormtroopers-1-0': 'a1' } },
     figureConditions: { 'Stormtroopers-1-0': ['Weaken'] },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-pog', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-pog', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 1]' }]]);
   const result = resolveAbility('Price of Glory', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: 'skip' });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('HARMFUL'));
@@ -473,7 +473,7 @@ test('resolveAbility Worth Every Credit applies discard 1 HARMFUL and gain 2 MP'
     figurePositions: { 1: { 'Bossk-1-0': 'a1' } },
     figureConditions: { 'Bossk-1-0': ['Bleed'] },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-wec', playerNum: 1, dcName: 'Bossk', displayName: 'Bossk [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-wec', playerNum: 1, dcName: 'Bossk', displayName: 'Bossk [Group 1]' }]]);
   const result = resolveAbility('Worth Every Credit', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('HARMFUL'));
@@ -490,7 +490,7 @@ test('resolveAbility Apex Predator applies Focus, Hide, 2 Power Tokens, 2 MP', (
     figurePositions: { 1: { 'Nexu-1-0': 'a1' } },
     figureConditions: {},
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-apex', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-apex', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [Group 1]' }]]);
   const result = resolveAbility('Apex Predator', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('Focused'));
@@ -514,8 +514,8 @@ test('resolveAbility Honoring the Fallen adds +1 Hit per defeated friendly figur
     gameId: 'g-htf',
     pendingCombat: combat,
     p1DcList: [
-      { dcName: 'Nexu', displayName: 'Nexu [DG 1]' },
-      { dcName: 'Echo Base Trooper (Elite)', displayName: 'Echo Base Trooper (Elite) [DG 2]' },
+      { dcName: 'Nexu', displayName: 'Nexu [Group 1]' },
+      { dcName: 'Echo Base Trooper (Elite)', displayName: 'Echo Base Trooper (Elite) [Group 2]' },
     ],
     figurePositions: {
       1: { 'Nexu-1-0': 'a1' },
@@ -534,10 +534,10 @@ test('resolveAbility Honoring the Fallen caps at 3 Hits', () => {
     gameId: 'g-htf2',
     pendingCombat: combat,
     p1DcList: [
-      { dcName: 'A', displayName: 'A [DG 1]' },
-      { dcName: 'B', displayName: 'B [DG 2]' },
-      { dcName: 'C', displayName: 'C [DG 3]' },
-      { dcName: 'D', displayName: 'D [DG 4]' },
+      { dcName: 'A', displayName: 'A [Group 1]' },
+      { dcName: 'B', displayName: 'B [Group 2]' },
+      { dcName: 'C', displayName: 'C [Group 3]' },
+      { dcName: 'D', displayName: 'D [Group 4]' },
     ],
     figurePositions: { 1: {} },
   };
@@ -587,7 +587,7 @@ test('resolveAbility Brace Yourself applies +2 Block when not attacker activatio
     attackerPlayerNum: 1,
     defenderPlayerNum: 2,
     attackerMsgId: 'msg-attacker',
-    target: { figureKey: 'Wookiee-2-0', label: 'Wookiee [DG 1]' },
+    target: { figureKey: 'Wookiee-2-0', label: 'Wookiee [Group 1]' },
   };
   const game = { gameId: 'g-by', pendingCombat: combat };
   const result = resolveAbility('Brace Yourself', { game, playerNum: 2, combat });
@@ -688,7 +688,7 @@ test('resolveAbility Camouflage applies Hide to defender when attack declared on
   const combat = {
     attackerPlayerNum: 1,
     defenderPlayerNum: 2,
-    target: { figureKey: 'Stormtroopers-2-0', label: 'Stormtroopers [DG 1]' },
+    target: { figureKey: 'Stormtroopers-2-0', label: 'Stormtroopers [Group 1]' },
   };
   const game = {
     gameId: 'g-cam',
@@ -709,7 +709,7 @@ test('resolveAbility Rally with no harmful conditions returns applied', () => {
     figurePositions: { 1: { 'Darth Vader-1-0': 'a1' } },
     figureConditions: { 'Darth Vader-1-0': ['Focus'] },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-rally2', playerNum: 1, dcName: 'Darth Vader', displayName: 'Vader [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-rally2', playerNum: 1, dcName: 'Darth Vader', displayName: 'Vader [Group 1]' }]]);
   const result = resolveAbility('Rally', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(game.figureConditions['Darth Vader-1-0'], ['Focus']);
@@ -723,7 +723,7 @@ test('resolveAbility Size Advantage sets nextAttacksBonusHits and nextAttacksBon
     nextAttacksBonusHits: {},
     nextAttacksBonusConditions: {},
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-sa', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-sa', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [Group 1]' }]]);
   const result = resolveAbility('Size Advantage', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(game.nextAttacksBonusHits[1], { count: 1, bonus: 2 });
@@ -737,7 +737,7 @@ test('resolveAbility Maximum Firepower sets nextAttacksBonusHits', () => {
     dcActionsData: { [msgId]: {} },
     nextAttacksBonusHits: {},
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g11', playerNum: 2, dcName: 'Heavy Troopers', displayName: 'Heavy [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g11', playerNum: 2, dcName: 'Heavy Troopers', displayName: 'Heavy [Group 1]' }]]);
   const result = resolveAbility('Maximum Firepower', { game, playerNum: 2, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(game.nextAttacksBonusHits[2], { count: 1, bonus: 4 });
@@ -795,7 +795,7 @@ test('resolveAbility Regroup discards HARMFUL from adjacent figures', () => {
     figureConditions: { 'Trooper-1-0': ['Stun'] },
     dcActionsData: { [msgId]: {} },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-r', playerNum: 1, dcName: 'Leader', displayName: 'Leader [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-r', playerNum: 1, dcName: 'Leader', displayName: 'Leader [Group 1]' }]]);
   const result = resolveAbility('Regroup', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(game.figureConditions['Trooper-1-0'], []);
@@ -804,7 +804,7 @@ test('resolveAbility Regroup discards HARMFUL from adjacent figures', () => {
 test('resolveAbility Take Position sets roundDefenseBonusBlock', () => {
   const msgId = 'msg-tp';
   const game = { gameId: 'g-tp', dcActionsData: { [msgId]: {} } };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-tp', playerNum: 1, dcName: 'Guardian', displayName: 'Guard [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-tp', playerNum: 1, dcName: 'Guardian', displayName: 'Guard [Group 1]' }]]);
   const result = resolveAbility('Take Position', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.roundDefenseBonusBlock?.[1], 1);
@@ -813,7 +813,7 @@ test('resolveAbility Take Position sets roundDefenseBonusBlock', () => {
 test('resolveAbility Survival Instincts sets roundDefenseBonusBlock and Evade', () => {
   const msgId = 'msg-si';
   const game = { gameId: 'g-si', dcActionsData: { [msgId]: {} } };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-si', playerNum: 2, dcName: 'Nexu', displayName: 'Nexu [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-si', playerNum: 2, dcName: 'Nexu', displayName: 'Nexu [Group 1]' }]]);
   const result = resolveAbility('Survival Instincts', { game, playerNum: 2, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.roundDefenseBonusBlock?.[2], 1);
@@ -831,7 +831,7 @@ test('resolveAbility Hour of Need recovers round number damage', () => {
     p1DcMessageIds: [msgId],
     p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[4, 6]] }],
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-hon', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-hon', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Hour of Need', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(healthState[0], [6, 6]);
@@ -841,7 +841,7 @@ test('resolveAbility Hour of Need recovers round number damage', () => {
 test('resolveAbility Take Cover sets roundDefenseBonusBlock and Evade', () => {
   const msgId = 'msg-tc';
   const game = { gameId: 'g-tc', dcActionsData: { [msgId]: {} } };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-tc', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-tc', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 1]' }]]);
   const result = resolveAbility('Take Cover', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.roundDefenseBonusBlock?.[1], 1);
@@ -868,8 +868,8 @@ test('resolveAbility Emergency Aid recovers to adjacent figure', () => {
     ],
   };
   const dcMessageMeta = new Map([
-    [msgId, { gameId: 'g-ea', playerNum: 1, dcName: 'Leader', displayName: 'Leader [DG 1]' }],
-    [targetMsgId, { gameId: 'g-ea', playerNum: 1, dcName: 'Trooper', displayName: 'Trooper [DG 1]' }],
+    [msgId, { gameId: 'g-ea', playerNum: 1, dcName: 'Leader', displayName: 'Leader [Group 1]' }],
+    [targetMsgId, { gameId: 'g-ea', playerNum: 1, dcName: 'Trooper', displayName: 'Trooper [Group 1]' }],
   ]);
   const result = resolveAbility('Emergency Aid', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
@@ -889,8 +889,8 @@ test('resolveAbility Dirty Trick with adjacent hostile presents orStunInstead ch
     figureConditions: {},
   };
   const dcMessageMeta = new Map([
-    [msgId, { gameId: 'g-dt', playerNum: 1, dcName: 'Akbar', displayName: 'Akbar [DG 1]' }],
-    [hostileMsgId, { gameId: 'g-dt', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+    [msgId, { gameId: 'g-dt', playerNum: 1, dcName: 'Akbar', displayName: 'Akbar [Group 1]' }],
+    [hostileMsgId, { gameId: 'g-dt', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 2]' }],
   ]);
   const result = resolveAbility('Dirty Trick', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, false);
@@ -913,7 +913,7 @@ test('resolveAbility Dirty Trick with stun: choice applies Stun condition', () =
     figureConditions: {},
   };
   const dcMessageMeta = new Map([
-    [hostileMsgId, { gameId: 'g-dt2', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+    [hostileMsgId, { gameId: 'g-dt2', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 2]' }],
   ]);
   const result = resolveAbility('Dirty Trick', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: `stun:${hostileFk}` });
   assert.strictEqual(result.applied, true);
@@ -933,7 +933,7 @@ test('resolveAbility Dirty Trick with strain: choice applies 3 Strain damage', (
     p2DcList: [{ dcName: 'Stormtroopers', healthState: [[4, 5]] }],
   };
   const dcMessageMeta = new Map([
-    [hostileMsgId, { gameId: 'g-dt3', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+    [hostileMsgId, { gameId: 'g-dt3', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 2]' }],
   ]);
   const result = resolveAbility('Dirty Trick', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: `strain:${hostileFk}` });
   assert.strictEqual(result.applied, true);
@@ -943,7 +943,7 @@ test('resolveAbility Dirty Trick with strain: choice applies 3 Strain damage', (
 test('resolveAbility Close and Personal uses entry logMessage and grants 2 MP', () => {
   const msgId = 'msg-cap';
   const game = { gameId: 'g-cap', dcActionsData: { [msgId]: {} } };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-cap', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-cap', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Close and Personal', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('2 MP'));
@@ -964,7 +964,7 @@ test('resolveAbility Wild Fury applies Focus and uses entry logMessage', () => {
     figurePositions: { 1: { 'Darth Vader-1-0': 'n8' }, 2: {} },
     selectedMap: { id: 'mos-eisley-outskirts' },
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-wf2', playerNum: 1, dcName: 'Darth Vader', displayName: 'Darth Vader [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-wf2', playerNum: 1, dcName: 'Darth Vader', displayName: 'Darth Vader [Group 1]' }]]);
   const result = resolveAbility('Wild Fury', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.startsWith('Became Focused.'));
@@ -975,7 +975,7 @@ test('resolveAbility Wild Fury applies Focus and uses entry logMessage', () => {
 test('resolveAbility Dying Lunge grants 2 MP and uses entry logMessage', () => {
   const msgId = 'msg-dl';
   const game = { gameId: 'g-dl', dcActionsData: { [msgId]: {} } };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-dl', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-dl', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Dying Lunge', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
@@ -998,8 +998,8 @@ test('resolveAbility Out of Time applies strain = round number via scaleStrainTo
     p2DcList: [{ dcName: 'Stormtroopers', healthState: [[8, 10]] }],
   };
   const dcMessageMeta = new Map([
-    [msgId, { gameId: 'g-oot', playerNum: 1, dcName: 'Obi-Wan', displayName: 'Obi-Wan [DG 1]' }],
-    [hostileMsgId, { gameId: 'g-oot', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+    [msgId, { gameId: 'g-oot', playerNum: 1, dcName: 'Obi-Wan', displayName: 'Obi-Wan [Group 1]' }],
+    [hostileMsgId, { gameId: 'g-oot', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 2]' }],
   ]);
   const result = resolveAbility('Out of Time', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
@@ -1027,8 +1027,8 @@ test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if FO
     figureConditions: {},
   };
   const dcMessageMeta = new Map([
-    [msgId, { gameId: 'g-fd', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }],
-    [hostileMsgId, { gameId: 'g-fd', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+    [msgId, { gameId: 'g-fd', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }],
+    [hostileMsgId, { gameId: 'g-fd', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 2]' }],
   ]);
   const result = resolveAbility('Force Drain', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
@@ -1056,8 +1056,8 @@ test('resolveAbility Force Lightning applies 2 Damage and Stun to adjacent hosti
     figureConditions: {},
   };
   const dcMessageMeta = new Map([
-    [msgId, { gameId: 'g-fl', playerNum: 1, dcName: 'Emperor Palpatine', displayName: 'Emperor Palpatine [DG 1]' }],
-    [hostileMsgId, { gameId: 'g-fl', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+    [msgId, { gameId: 'g-fl', playerNum: 1, dcName: 'Emperor Palpatine', displayName: 'Emperor Palpatine [Group 1]' }],
+    [hostileMsgId, { gameId: 'g-fl', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 2]' }],
   ]);
   const result = resolveAbility('Force Lightning', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
@@ -1125,25 +1125,25 @@ test('resolveAbility Still Faster Than You sets stillFasterPlayerNum', () => {
 test('resolveAbility Disable with no choice presents hostile list', () => {
   const game = {
     gameId: 'g-dis',
-    p2DcList: [{ dcName: 'Nexu', displayName: 'Nexu [DG 1]' }],
+    p2DcList: [{ dcName: 'Nexu', displayName: 'Nexu [Group 1]' }],
   };
   const result = resolveAbility('Disable', { game, playerNum: 1 });
   assert.strictEqual(result.requiresChoice, true);
-  assert.ok(result.choiceOptions?.includes('Nexu [DG 1]'));
+  assert.ok(result.choiceOptions?.includes('Nexu [Group 1]'));
 });
 
 test('resolveAbility Disable with chosenOption adds to disabledFigures', () => {
   const game = { gameId: 'g-dis2', p2DcList: [], disabledFigures: [] };
-  const result = resolveAbility('Disable', { game, playerNum: 1, chosenOption: 'Nexu [DG 1]' });
+  const result = resolveAbility('Disable', { game, playerNum: 1, chosenOption: 'Nexu [Group 1]' });
   assert.strictEqual(result.applied, true);
-  assert.ok(game.disabledFigures.includes('Nexu [DG 1]'));
+  assert.ok(game.disabledFigures.includes('Nexu [Group 1]'));
   assert.ok(result.logMessage?.includes('Nexu'));
 });
 
 test('resolveAbility Beatdown sets nextAttacksBonusHits for 2 attacks +1 Hit', () => {
   const msgId = 'msg-bd';
   const game = { gameId: 'g-bd', dcActionsData: { [msgId]: {} } };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bd', playerNum: 1, dcName: 'Wookiee Warrior', displayName: 'Wookiee [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bd', playerNum: 1, dcName: 'Wookiee Warrior', displayName: 'Wookiee [Group 1]' }]]);
   const result = resolveAbility('Beatdown', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(game.nextAttacksBonusHits[1], { count: 2, bonus: 1 });
@@ -1153,19 +1153,19 @@ test('resolveAbility Beatdown sets nextAttacksBonusHits for 2 attacks +1 Hit', (
 test('resolveAbility New Orders first call returns choice list of friendly DCs', () => {
   const game = {
     gameId: 'g-no',
-    p1DcList: [{ dcName: 'Boba Fett', displayName: 'Boba Fett [DG 1]' }],
+    p1DcList: [{ dcName: 'Boba Fett', displayName: 'Boba Fett [Group 1]' }],
   };
   const result = resolveAbility('New Orders', { game, playerNum: 1 });
   assert.strictEqual(result.requiresChoice, true);
-  assert.ok(result.choiceOptions?.includes('Boba Fett [DG 1]'));
+  assert.ok(result.choiceOptions?.includes('Boba Fett [Group 1]'));
 });
 
 test('resolveAbility New Orders second call readies matching DC', () => {
   const game = {
     gameId: 'g-no2',
-    p1DcList: [{ dcName: 'Boba Fett', displayName: 'Boba Fett [DG 1]', exhausted: true }],
+    p1DcList: [{ dcName: 'Boba Fett', displayName: 'Boba Fett [Group 1]', exhausted: true }],
   };
-  const result = resolveAbility('New Orders', { game, playerNum: 1, chosenOption: 'Boba Fett [DG 1]' });
+  const result = resolveAbility('New Orders', { game, playerNum: 1, chosenOption: 'Boba Fett [Group 1]' });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.p1DcList[0].exhausted, false);
   assert.ok(result.logMessage?.includes('Boba Fett'));
@@ -1176,7 +1176,7 @@ test('resolveAbility Roar fails damage check when insufficient damage suffered',
   // healthState [7, 10]: suffered 3 damage (10-7=3), exactly meets threshold
   const dcHealthState = new Map([[msgId, [[7, 10]]]]);
   const game = { gameId: 'g-roar', dcActionsData: { [msgId]: {} }, p2DcList: [] };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-roar', playerNum: 1, dcName: 'Bantha', displayName: 'Bantha [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-roar', playerNum: 1, dcName: 'Bantha', displayName: 'Bantha [Group 1]' }]]);
   // 10-7 = 3 damage, threshold is 3 — should pass
   const result = resolveAbility('Roar', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   // Should NOT return the damage-check failure (no hostile DCs → different error)
@@ -1188,7 +1188,7 @@ test('resolveAbility Roar returns manual when damage < threshold', () => {
   // healthState [9, 10]: only 1 damage suffered, threshold is 3
   const dcHealthState = new Map([[msgId, [[9, 10]]]]);
   const game = { gameId: 'g-roar2', dcActionsData: { [msgId]: {} } };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-roar2', playerNum: 1, dcName: 'Bantha', displayName: 'Bantha [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-roar2', playerNum: 1, dcName: 'Bantha', displayName: 'Bantha [Group 1]' }]]);
   const result = resolveAbility('Roar', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, false);
   assert.ok(result.manualMessage?.includes('Damage'));
@@ -1205,13 +1205,13 @@ test('resolveAbility Roar with chosenFigureKey applies Stun to hostile figures',
     gameId: 'g-roar3',
     dcActionsData: { [msgId]: {} },
     p2DcMessageIds: [hostileMsgId],
-    p2DcList: [{ dcName: 'Nexu', displayName: 'Nexu [DG 2]', healthState: [[3, 6]] }],
+    p2DcList: [{ dcName: 'Nexu', displayName: 'Nexu [Group 2]', healthState: [[3, 6]] }],
     figurePositions: { 1: {}, 2: { 'Nexu-2-0': 'p8' } },
     figureConditions: {},
   };
   const dcMessageMeta = new Map([
-    [msgId, { gameId: 'g-roar3', playerNum: 1, dcName: 'Rancor', displayName: 'Rancor [DG 1]' }],
-    [hostileMsgId, { gameId: 'g-roar3', playerNum: 2, dcName: 'Nexu', displayName: 'Nexu [DG 2]' }],
+    [msgId, { gameId: 'g-roar3', playerNum: 1, dcName: 'Rancor', displayName: 'Rancor [Group 1]' }],
+    [hostileMsgId, { gameId: 'g-roar3', playerNum: 2, dcName: 'Nexu', displayName: 'Nexu [Group 2]' }],
   ]);
   const result = resolveAbility('Roar', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: hostileMsgId });
   assert.strictEqual(result.applied, true);
@@ -1221,10 +1221,10 @@ test('resolveAbility Roar with chosenFigureKey applies Stun to hostile figures',
 test('resolveAbility Blaze of Glory first call returns DC choice list', () => {
   const msgId = 'msg-bog';
   const game = { gameId: 'g-bog' };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.requiresChoice, true);
-  assert.ok(result.choiceOptions?.includes('Luke [DG 1]'));
+  assert.ok(result.choiceOptions?.includes('Luke [Group 1]'));
 });
 
 test('resolveAbility Blaze of Glory second call readies DC and sets EOR damage', () => {
@@ -1232,10 +1232,10 @@ test('resolveAbility Blaze of Glory second call readies DC and sets EOR damage',
   const game = {
     gameId: 'g-bog2',
     p1DcMessageIds: [msgId],
-    p1DcList: [{ dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]', exhausted: true }],
+    p1DcList: [{ dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]', exhausted: true }],
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog2', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
-  const result = resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta, chosenOption: 'Luke [DG 1]' });
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog2', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
+  const result = resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta, chosenOption: 'Luke [Group 1]' });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.p1DcList[0].exhausted, false);
   assert.strictEqual(game.endOfRoundSelfDamage[1].damage, 3);

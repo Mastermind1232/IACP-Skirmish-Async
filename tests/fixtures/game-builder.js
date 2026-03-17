@@ -101,7 +101,7 @@ class GameBuilder {
       const count = entry.count || 1;
       for (let dg = 0; dg < count; dg++) {
         const stats = getDcStats(dcName);
-        const displayName = count > 1 ? `${dcName} [DG ${dg + 1}]` : dcName;
+        const displayName = count > 1 ? `${dcName} [Group ${dg + 1}]` : dcName;
         const figureCount = stats?.figures ?? 1;
         const maxHp = stats?.health ?? 1;
         const healthState = [];

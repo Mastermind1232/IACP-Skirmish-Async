@@ -200,7 +200,7 @@ export function getMapSelectionTooltipEmbed() {
     .setColor(COLORS.DARK_EMBED);
 }
 
-/** Display names for deploy list: duplicate DCs get [DG 1], [DG 2], etc. */
+/** Display names for deploy list: duplicate DCs get [Group 1], [Group 2], etc. */
 export function getDeployDisplayNames(dcList) {
   if (!dcList?.length) return [];
   const totals = {};
@@ -209,7 +209,7 @@ export function getDeployDisplayNames(dcList) {
   return dcList.map((dcName) => {
     counts[dcName] = (counts[dcName] || 0) + 1;
     const dgIndex = counts[dcName];
-    return totals[dcName] > 1 ? `${dcName} [DG ${dgIndex}]` : dcName;
+    return totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
   });
 }
 
