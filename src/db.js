@@ -232,10 +232,13 @@ export async function saveGamesToDb(gamesMap) {
   return savePromise;
 }
 
-/** Remove a game from the database (when game is killed). */
+/** Remove a game and all related data from the database (when game is killed). */
 export async function deleteGameFromDb(gameId) {
   if (!pool) return;
   try {
+    await pool.query('DELETE FROM domain_events WHERE game_id = $1', [gameId]);
+    await pool.query('DELETE FROM game_events WHERE game_id = $1', [gameId]);
+    await pool.query('DELETE FROM game_snapshots WHERE game_id = $1', [gameId]);
     await pool.query('DELETE FROM games WHERE game_id = $1', [gameId]);
   } catch (err) {
     console.error('[DB] Delete failed:', err.message);
@@ -670,16 +673,27 @@ export async function getGameEvents(gameId, { afterSeq = 0, limit = 100 } = {}) 
 
 // ── Domain Events (Phase 4) ──
 
-export async function insertDomainEvent(gameId, event) {
+export async function insertDomainEvent(gameId, event, { bumpEventSeq } = {}) {
   if (!pool) return;
-  try {
-    await pool.query(
-      `INSERT INTO domain_events (game_id, seq, type, correlation_id, player_id, aggregate_version, timestamp, payload)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [gameId, event.seq, event.type, event.correlationId || null, event.playerId || null, event.aggregateVersion, event.timestamp, JSON.stringify(event.payload)]
-    );
-  } catch (err) {
-    console.error('[DB] insertDomainEvent failed:', err.message);
+  const MAX_RETRIES = 3;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await pool.query(
+        `INSERT INTO domain_events (game_id, seq, type, correlation_id, player_id, aggregate_version, timestamp, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [gameId, event.seq, event.type, event.correlationId || null, event.playerId || null, event.aggregateVersion, event.timestamp, JSON.stringify(event.payload)]
+      );
+      return; // success
+    } catch (err) {
+      // 23505 = unique_violation (duplicate seq for this game)
+      if (err.code === '23505' && bumpEventSeq && attempt < MAX_RETRIES) {
+        console.warn(`[DB] insertDomainEvent duplicate seq ${event.seq} for ${gameId}, bumping (attempt ${attempt}/${MAX_RETRIES})`);
+        bumpEventSeq(event);
+        continue;
+      }
+      console.error('[DB] insertDomainEvent failed:', err.message);
+      return;
+    }
   }
 }
 
