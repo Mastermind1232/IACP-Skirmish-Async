@@ -36,6 +36,9 @@ import {
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+import { chunkButtonsToRows } from '../discord/components.js';
+import { splitCustomId } from '../discord/custom-id.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * Determine the companion (if any) for a given DC, considering both
@@ -230,7 +233,7 @@ export async function handleStatusPhase(interaction, ctx) {
       content: `${clickerIsP1 ? 'P1' : 'P2'} has ended activation. Waiting for **${waiting}** to click **End R${round} Activation Phase**.`,
       ephemeral: true,
     }).catch(discordCatch);
-    const generalChannel = await client.channels.fetch(game.generalId);
+    const generalChannel = await fetchGameChannel(client, game.generalId);
     const roundEmbed = new EmbedBuilder()
       .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round} - Activation Phase`)
       .setColor(PHASE_COLOR);
@@ -307,7 +310,7 @@ export async function handlePassActivationTurn(interaction, ctx) {
   });
   if (game.roundActivationMessageId && game.generalId) {
     try {
-      const ch = await client.channels.fetch(game.generalId);
+      const ch = await fetchGameChannel(client, game.generalId);
       const msg = await ch.messages.fetch(game.roundActivationMessageId);
       const initNum = otherPlayerNum;
       const newCurrentRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
@@ -402,7 +405,7 @@ async function checkLieInAmbushTrigger(game, activatingPlayerNum, ctx) {
   const handId = getHandChannelId(game, liaOwnerNum);
 
   try {
-    const handChannel = await client.channels.fetch(handId);
+    const handChannel = await fetchGameChannel(client, handId);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`lia_deploy_zone_${gameId}_${liaOwnerNum}_red`)
@@ -584,7 +587,7 @@ export async function handleEndTurn(interaction, ctx) {
   delete game.pendingEndTurn[dcMsgId];
   if (pending.messageId) {
     try {
-      const ch = await client.channels.fetch(game.generalId);
+      const ch = await fetchGameChannel(client, game.generalId);
       const endTurnMsg = await ch.messages.fetch(pending.messageId);
       await endTurnMsg.edit({ components: [] }).catch(discordCatch);
     } catch {}
@@ -678,7 +681,7 @@ export async function handleEndTurn(interaction, ctx) {
   const actionsData = game.dcActionsData?.[dcMsgId];
   if (actionsData?.threadId) {
     try {
-      const thread = await client.channels.fetch(actionsData.threadId);
+      const thread = await fetchGameChannel(client, actionsData.threadId);
       await thread.delete();
     } catch (err) {
       console.error('Failed to delete DC activation thread:', err);
@@ -692,7 +695,7 @@ export async function handleEndTurn(interaction, ctx) {
   }
   try {
     const playAreaId = getPlayAreaId(game, meta.playerNum);
-    const playChannel = await client.channels.fetch(playAreaId);
+    const playChannel = await fetchGameChannel(client, playAreaId);
     const dcMsg = await playChannel.messages.fetch(dcMsgId);
     const healthState = dcHealthState.get(dcMsgId) ?? [[null, null]];
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[dcMsgId] || game?.p2DcAttachments?.[dcMsgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
@@ -752,7 +755,7 @@ export async function handleEndTurn(interaction, ctx) {
   });
   if (game.roundActivationMessageId && game.generalId && !game.roundActivationButtonShown) {
     try {
-      const ch = await client.channels.fetch(game.generalId);
+      const ch = await fetchGameChannel(client, game.generalId);
       const msg = await ch.messages.fetch(game.roundActivationMessageId);
       const round = game.currentRound || 1;
       const newCurrentRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
@@ -827,7 +830,7 @@ export async function handleDcEndActivation(interaction, ctx) {
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData?.threadId) {
     try {
-      const thread = await client.channels.fetch(actionsData.threadId);
+      const thread = await fetchGameChannel(client, actionsData.threadId);
       await thread.delete();
     } catch (err) {
       console.error('Failed to delete DC activation thread on End Activation:', err);
@@ -859,7 +862,7 @@ export async function handleDcEndActivation(interaction, ctx) {
   // Update DC card (stays exhausted)
   try {
     const playAreaId = getPlayAreaId(game, meta.playerNum);
-    const playChannel = await client.channels.fetch(playAreaId);
+    const playChannel = await fetchGameChannel(client, playAreaId);
     const dcMsg = await playChannel.messages.fetch(msgId);
     const healthState = dcHealthState.get(msgId) ?? [[null, null]];
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
@@ -899,7 +902,7 @@ export async function handleDcEndActivation(interaction, ctx) {
   // Update round activation message
   if (game.roundActivationMessageId && game.generalId && !game.roundActivationButtonShown) {
     try {
-      const ch = await client.channels.fetch(game.generalId);
+      const ch = await fetchGameChannel(client, game.generalId);
       const msg = await ch.messages.fetch(game.roundActivationMessageId);
       const round = game.currentRound || 1;
       const newCurrentRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
@@ -1108,7 +1111,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   const displayName = meta.displayName || meta.dcName;
   const playAreaId = getPlayAreaId(game, meta.playerNum);
-  const playChannel = await client.channels.fetch(playAreaId);
+  const playChannel = await fetchGameChannel(client, playAreaId);
   const dcMsg = await playChannel.messages.fetch(msgId);
   const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, dcHealthState.get(msgId) ?? [[null, null]], getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
   await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) });
@@ -1592,11 +1595,11 @@ export async function handleConfirmActivate(interaction, ctx) {
       .filter(([fk, fp]) => fp && _llpGetRange(_llpSelfPos, fp) <= 3) : [];
     if (_llpFriendlies.length > 0 && roundNum > 0) {
       game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: roundNum, ability: 'longlaid', tokenTypes: ['Hit', 'Block', 'Surge', 'Evade'] };
-      const btns = _llpFriendlies.slice(0, 4).map(([fk]) =>
+      const btns = _llpFriendlies.map(([fk]) =>
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🧠 **Long-Laid Plans** — Distribute **${roundNum} power token${roundNum > 1 ? 's' : ''}** among friendly figures within 3 spaces. Pick a figure (${roundNum} remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+      await thread.send({ content: `🧠 **Long-Laid Plans** — Distribute **${roundNum} power token${roundNum > 1 ? 's' : ''}** among friendly figures within 3 spaces. Pick a figure (${roundNum} remaining):`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
     } else {
       await thread.send({ content: `🧠 **Long-Laid Plans** — No friendly figures within 3 spaces (or round 0).` }).catch(discordCatch);
     }
@@ -1679,7 +1682,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       }
       if (_fvBtns.length > 0) _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns));
       try {
-        const _fvGeneralCh = await client.channels.fetch(game.generalId);
+        const _fvGeneralCh = await fetchGameChannel(client, game.generalId);
         await _fvGeneralCh.send({
           content: `👁️ **Force Vision** — <@${_fvOppOwnerId}>, **Kanan Jarrus** is activating! Choose one of your ready groups — you **must** activate it next, if possible:`,
           components: _fvRows.slice(0, 5),
@@ -2338,7 +2341,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
   }
 
-  const logCh = await client.channels.fetch(game.generalId);
+  const logCh = await fetchGameChannel(client, game.generalId);
   const icon = ACTION_ICONS.activate || '⚡';
   const pLabel = `P${meta.playerNum}`;
   const logMsg = await logCh.send({
@@ -2379,7 +2382,7 @@ export async function handleActPassive(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, dcMessageMeta, dcHealthState, saveGames, logGameAction, client, buildDcEmbedAndFiles, getDcPlayAreaComponents } = ctx;
   // Parse: act_passive_{gameId}_{msgId}_{ability}_{choice}
-  const parts = interaction.customId.replace(/^act_passive_/, '').split('_');
+  const parts = splitCustomId(interaction.customId, 'act_passive_');
   if (parts.length < 3) return;
   const gameId = parts[0];
   const msgId = parts[1];
@@ -2625,8 +2628,7 @@ export async function handleActPassive(interaction, ctx) {
             .setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`sc_fig_pick_${game.gameId}_${msgId}_cancel`).setLabel('Cancel').setStyle(ButtonStyle.Secondary));
-        const rows = [];
-        for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+        const rows = chunkButtonsToRows(btns);
         await interaction.message.edit({
           content: '**[Spectre Cell]** — Choose another friendly figure to gain 2 MP and may interrupt to attack:',
           components: rows.slice(0, 5),
@@ -3301,7 +3303,7 @@ export async function handleActPassive(interaction, ctx) {
  */
 export async function handleFieldTacticsPick(interaction, ctx) {
   const { getGame, dcMessageMeta, logGameAction, saveGames, client } = ctx;
-  const parts = interaction.customId.replace('field_tactics_pick_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'field_tactics_pick_');
   // Format: gameId_triggerMsgId_figureKey (figureKey may contain underscores — but figure keys use hyphens)
   // Actually: gameId and triggerMsgId are snowflake-like, figureKey is the rest
   const gameId = parts[0];
@@ -3379,7 +3381,7 @@ export async function handleForceVisionPick(interaction, ctx) {
  */
 export async function handleHeroicEffortReturn(interaction, ctx) {
   const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('heroic_effort_return_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'heroic_effort_return_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const cardIdx = parseInt(parts[2], 10);
@@ -3417,7 +3419,7 @@ export async function handleHeroicEffortReturn(interaction, ctx) {
 export async function handleScavWeaponTransfer(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('scav_weapon_transfer_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'scav_weapon_transfer_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const targetIdx = parseInt(parts[2], 10);

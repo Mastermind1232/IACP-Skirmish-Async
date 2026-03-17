@@ -20,7 +20,10 @@ import {
 } from '../game/player-helpers.js';
 import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
+import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+import { chunkButtonsToRows } from '../discord/components.js';
+import { splitCustomId } from '../discord/custom-id.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -231,10 +234,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
       );
     }
     // Discord limits 5 buttons per row; split into rows of 5
-    const rows = [];
-    for (let r = 0; r < btns.length; r += 5) {
-      rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-    }
+    const rows = chunkButtonsToRows(btns);
     await withDiscordRetry(() => thread.send({
       content: `**Strain** — <@${ownerId}>, **${dcName}** (${cur}/${max} HP) suffers ${amount} Strain from **${abilityLabel}** (${sourceLabel}).`
         + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
@@ -425,7 +425,7 @@ export async function handleStrainChoice(interaction, ctx) {
   // Edit the choice message to remove buttons
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
-  const thread = await client.channels.fetch(pending.threadId).catch(() => null);
+  const thread = await fetchCombatThread(client, pending.threadId);
   if (!thread) {
     delete game.pendingStrainChoice;
     saveGames();
@@ -475,10 +475,7 @@ async function sendStrainCcPickButtons(game, pending, thread) {
       .setLabel(cardName.length > 75 ? cardName.slice(0, 72) + '...' : cardName)
       .setStyle(ButtonStyle.Primary),
   );
-  const rows = [];
-  for (let r = 0; r < btns.length; r += 5) {
-    rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-  }
+  const rows = chunkButtonsToRows(btns);
   await withDiscordRetry(() => thread.send({
     content: `**Strain** — <@${ownerId}>, pick a CC to discard (${remaining} strain point${remaining > 1 ? 's' : ''} remaining, ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} each). Hand: ${hand.length} card${hand.length > 1 ? 's' : ''}.`,
     components: rows,
@@ -510,7 +507,7 @@ export async function handleStrainCcPick(interaction, ctx) {
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
-  const thread = await client.channels.fetch(pending.threadId).catch(() => null);
+  const thread = await fetchCombatThread(client, pending.threadId);
   if (!thread) {
     delete game.pendingStrainChoice;
     saveGames();
@@ -608,7 +605,7 @@ export async function handleUnderDuress(interaction, ctx) {
   // Remove the UD prompt buttons
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
-  const thread = await client.channels.fetch(pending.threadId).catch(() => null);
+  const thread = await fetchCombatThread(client, pending.threadId);
   if (!thread) {
     delete game.pendingStrainChoice;
     saveGames();
@@ -663,10 +660,7 @@ export async function handleUnderDuress(interaction, ctx) {
           .setStyle(ButtonStyle.Primary),
       );
     }
-    const rows = [];
-    for (let r = 0; r < btns.length; r += 5) {
-      rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-    }
+    const rows = chunkButtonsToRows(btns);
     await withDiscordRetry(() => thread.send({
       content: `**[Under Duress]** — <@${controllerId}>, choose how **${pending.dcName}** allocates ${pending.amount} Strain:`
         + ` take HP damage or discard from opponent's hand (${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''}, costs ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} per strain).`,
@@ -710,10 +704,7 @@ export async function handleUnderDuress(interaction, ctx) {
           .setStyle(ButtonStyle.Primary),
       );
     }
-    const rows = [];
-    for (let r = 0; r < btns.length; r += 5) {
-      rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-    }
+    const rows = chunkButtonsToRows(btns);
     await withDiscordRetry(() => thread.send({
       content: `**Strain** — <@${ownerId}>, **${pending.dcName}** suffers ${pending.amount} Strain from **${pending.abilityLabel}** (${pending.sourceLabel}).`
         + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
@@ -1039,7 +1030,7 @@ export async function handleAttackTarget(interaction, ctx) {
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const combatDeclare = `**P${attackerPlayerNum}:** "${attackerDisplayName}" is attacking **P${defenderPlayerNum}:** "${target.label}"!`;
 
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   const declareMsg = await generalChannel.send({
     content: `${ACTION_ICONS.attack || '⚔️'} <t:${Math.floor(Date.now() / 1000)}:t> — ${combatDeclare}`,
     allowedMentions: { users: [game.player1Id, game.player2Id] },
@@ -2356,7 +2347,7 @@ export async function handleCombatReady(interaction, ctx) {
       .setLabel('Roll Combat Dice')
       .setStyle(ButtonStyle.Danger)
   );
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   const rollMsgSent = await thread.send({
     embeds: [combatEmbed],
     components: [rollRow],
@@ -2397,7 +2388,7 @@ export async function handleCombatRoll(interaction, ctx) {
   if (!canActAsPlayer(game, interaction.user.id, 1) && !await requirePlayer(interaction, game, interaction.user.id, 2, canActAsPlayer, 'Only players in this game can roll.')) return;
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   const effectiveAttackerPlayerNum = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
 
   // C4: On the Lam — recheck LOS before rolling; if defender moved out of LOS, attack auto-misses
@@ -2811,7 +2802,7 @@ export async function handleCombatRoll(interaction, ctx) {
         // Send prompt to attacker's hand channel
         const _pcHandId = attackerPlayerNum === 1 ? game.p1HandId : game.p2HandId;
         if (_pcHandId) {
-          const _pcHand = await interaction.client.channels.fetch(_pcHandId).catch(() => null);
+          const _pcHand = await fetchGameChannel(interaction.client, _pcHandId);
           if (_pcHand) {
             const _pcRow = new ActionRowBuilder().addComponents(
               new ButtonBuilder().setCustomId(`power_converter_approve_${gameId}`).setLabel('Use Power Converter').setStyle(ButtonStyle.Primary),
@@ -3114,7 +3105,7 @@ export async function handleCombatReroll(interaction, ctx) {
     expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
   }
   if (!expectedPlayer || !await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only P${expectedPlayer} can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`)) return;
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
 
   // Helper: get the dominant icon type of a die result for Double or Nothing
   const _getDomIcon = (d) => {
@@ -3358,7 +3349,7 @@ export async function handlePreReroll(interaction, ctx) {
   const pr = (combat.pendingPreRerolls || [])[0];
   if (!pr) { await interaction.followUp({ content: 'No pending pre-reroll.', ephemeral: true }).catch(discordCatch); return; }
   if (!await requirePlayer(interaction, game, interaction.user.id, pr.playerNum, canActAsPlayer, `Only P${pr.playerNum} can make this choice.`)) return;
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
 
   // Process choice
   if (choice === 'skip') {
@@ -3745,7 +3736,7 @@ export async function handleCombatPassive(interaction, ctx) {
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) return;
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
 
   // Parse ability and choice
   const parts = rest.split('_');
@@ -4498,7 +4489,7 @@ export async function handleCombatSurge(interaction, ctx) {
   const attackerPlayerNum = combat.attackerPlayerNum;
   const effectiveAttackerForSurge = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
   if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerForSurge, canActAsPlayer, 'Only the attacker may spend surge.')) return;
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   // Overload (Rebel Saboteur): may trigger the same surge ability up to twice per attack
   const getDcEffS = ctx.getDcEffects || (() => ({}));
   const atkEffS = getDcEffS()[combat.attackerDcName] || getDcEffS()[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
@@ -4527,8 +4518,7 @@ export async function handleCombatSurge(interaction, ctx) {
           .setLabel('Cancel')
           .setStyle(ButtonStyle.Secondary)
       );
-      const rows = [];
-      for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+      const rows = chunkButtonsToRows(btns);
       await thread.send({
         content: '**Rogue One** — Choose a power token to discard from a friendly figure for **+1 Surge**:',
         components: rows,
@@ -4671,7 +4661,7 @@ export async function handleCombatSurge(interaction, ctx) {
             await thread.send(`**Krayt Dragon Fury** — Recover ${_kdfX} (${_kdfX} Surge rolled).`).catch(discordCatch);
           }
         } else {
-          const cThread = await interaction.client.channels.fetch(combat.combatThreadId);
+          const cThread = await fetchCombatThread(interaction.client, combat.combatThreadId);
           await cThread.send(`⚠️ **${getSurgeLabel(key)}** — complex surge applied (see ability text for details).`).catch(discordCatch);
         }
       }
@@ -4808,7 +4798,7 @@ export async function handleCombatToken(interaction, ctx) {
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) return;
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
 
   // Wild type resolution: combat_token_{gameId}_wild_{hit|surge|block|evade}
   if (role === 'wild') {
@@ -5069,7 +5059,7 @@ export async function handleCleaveTarget(interaction, ctx) {
   const { checkPostCombatSurges } = ctx;
   if (checkPostCombatSurges) {
     const defPN = opponentPlayerNum(pending.attackerPlayerNum);
-    const cThread = await client.channels.fetch(pending.combat.combatThreadId).catch(() => null);
+    const cThread = await fetchCombatThread(client, pending.combat.combatThreadId);
     if (cThread) {
       const triggered = await checkPostCombatSurges(game, pending.combat, pending.resultText, embedRefreshMsgIds, cThread, pending.ownerId, defPN);
       if (triggered) { saveGames(); return; }
@@ -5103,7 +5093,7 @@ export async function handlePowerTokenChoice(interaction, ctx) {
   }
   game.pendingPowerTokenGrant = null;
   if (channelId) {
-    const ch = await interaction.client.channels.fetch(channelId).catch(() => null);
+    const ch = await fetchGameChannel(interaction.client, channelId);
     if (ch) {
       await ch.send(`**Power Token(s) granted:** ${lines.join(', ')}`).catch(discordCatch);
       // Check for overflow and prompt discard if needed
@@ -5116,7 +5106,7 @@ export async function handlePowerTokenChoice(interaction, ctx) {
   // If we're mid-surge and there are still surges remaining, continue the surge flow
   const combat = game.pendingCombat;
   if (combat?.surgeRemaining > 0 && channelId) {
-    const thread = await interaction.client.channels.fetch(channelId).catch(() => null);
+    const thread = await fetchCombatThread(interaction.client, channelId);
     if (thread) {
       const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
       const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
@@ -5169,7 +5159,7 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
   if (!combat || combat.gameId !== gameId) return;
   game.pendingSpreadThePainCondPick = null;
 
-  const thread = await interaction.client.channels.fetch(combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(interaction.client, combatThreadId);
   if (!thread) { saveGames(); return; }
 
   if (condRaw !== 'skip') {
@@ -5232,7 +5222,7 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
     delete game.pendingRogueOneTokenPick;
     const combat = game.pendingCombat;
     if (!combat) return;
-    const thread = await interaction.client.channels.fetch(combat.combatThreadId).catch(() => null);
+    const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
     if (!thread) { saveGames(); return; }
     await interaction.message.edit({ components: [] }).catch(discordCatch);
     await thread.send('**Rogue One** — Cancelled, no token discarded.').catch(discordCatch);
@@ -5268,7 +5258,7 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
 
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) { saveGames(); return; }
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   if (!thread) { saveGames(); return; }
 
   // Validate the token still exists
@@ -5349,7 +5339,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
     return;
   }
   const { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex, fhFigKey, fhMsgId, fhFigIndex, fhLabel } = pending;
-  const thread = await client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
 
   if (isUse) {
     const fhDamage = Math.max(0, damage - 1);
@@ -5491,7 +5481,7 @@ export async function handleLasatDiePick(interaction, ctx) {
     return;
   }
   await interaction.deferUpdate().catch(discordCatch);
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   combat.lasatChosenDieIndex = dieIdx;
   await sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx);
   saveGames();
@@ -5532,7 +5522,7 @@ export async function handleLasatFacePick(interaction, ctx) {
   combat.attackDiceResults[dieIdx] = { ...die, acc: newFace.acc || 0, dmg: newFace.dmg || 0, surge: newFace.surge || 0 };
   combat.lasatHonorGuardPhase = false;
   await interaction.deferUpdate().catch(discordCatch);
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   await thread.send(`**Lasat Honor Guard** — Turned die to ${newFace.acc || 0}a/${newFace.dmg || 0}d/${newFace.surge || 0}s. New total: ${combat.attackRoll.acc}a/${combat.attackRoll.dmg}d/${combat.attackRoll.surge}s.`);
   await proceedAfterRerolls(thread, game, combat, ctx);
   saveGames();
@@ -5576,7 +5566,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
   const defenderPlayerNum = opponentPlayerNum(controlledPlayerNum);
   const combatDeclare = `**False Orders** — P${controllerPlayerNum} controls "${controlledName}" attacking "${target.label}"!`;
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   const declareMsg = await generalChannel.send({
     content: `${ACTION_ICONS?.attack || '⚔️'} <t:${Math.floor(Date.now() / 1000)}:t> — ${combatDeclare}`,
     allowedMentions: { users: [game.player1Id, game.player2Id] },
@@ -5659,7 +5649,7 @@ export async function handleCoverFireBlock(interaction, ctx) {
   if (logGameAction) await logGameAction(game, client, `🛡️ **Cover Fire** — **${dcName}** gained 1 Block Token.`, { phase: 'ROUND', icon: 'card' });
   // G73: Check for power token overflow
   if (game.pendingPowerTokenOverflow?.length > 0) {
-    const ch = await interaction.client.channels.fetch(interaction.channelId).catch(() => null);
+    const ch = await fetchGameChannel(interaction.client, interaction.channelId);
     if (ch) await sendPowerTokenOverflowUI(game, gameId, ch, playerNum, saveGames);
     return;
   }
@@ -5717,7 +5707,7 @@ export async function handleCoverFireDiscard(interaction, ctx) {
 /** Guidance Systems (Mortar Trooper): apply -1 Hit, +2 Accuracy. May be used multiple times. */
 export async function handleGuidanceSystems(interaction, ctx) {
   const { getGame, saveGames } = ctx;
-  const parts = interaction.customId.replace('guidance_systems_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'guidance_systems_');
   const gameId = parts[0];
   const action = parts[1]; // 'use' or 'done'
   const game = await requireGame(interaction, getGame, gameId);
@@ -5727,7 +5717,7 @@ export async function handleGuidanceSystems(interaction, ctx) {
     await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   if (action === 'use') {
     combat.attackRoll.dmg = Math.max(0, (combat.attackRoll.dmg || 0) - 1);
     combat.attackRoll.acc = (combat.attackRoll.acc || 0) + 2;
@@ -5770,7 +5760,7 @@ export async function handleZilloDiscard(interaction, ctx) {
     await interaction.message.edit({ components: [] }).catch(discordCatch);
     return;
   }
-  const thread = combat.combatThreadId ? await client.channels.fetch(combat.combatThreadId) : null;
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
   if (isSkip) {
     delete game.pendingZilloDiscard;
     await interaction.message.edit({ content: '**Zillo Technique** — Skipped (+1 Block).', components: [] }).catch(discordCatch);
@@ -5928,7 +5918,7 @@ export async function handlePowerTokenOverflowDiscard(interaction, ctx) {
     // Check if there are more figures with overflow
     if (game.pendingPowerTokenOverflow?.length > 0) {
       const nextEntry = game.pendingPowerTokenOverflow[0];
-      const ch = await interaction.client.channels.fetch(nextEntry.channelId || interaction.channelId).catch(() => null);
+      const ch = await fetchGameChannel(interaction.client, nextEntry.channelId || interaction.channelId);
       if (ch) {
         await sendPowerTokenOverflowUI(game, gameId, ch, nextEntry.playerNum || playerNum, saveGames);
         return; // saveGames already called

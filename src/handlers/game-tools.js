@@ -9,6 +9,7 @@ import { logGameAction } from '../discord/messages.js';
 import { requireGame } from '../utils/guards.js';
 import { getInitiativePlayerNum, getPlayerId } from '../game/player-helpers.js';
 import { PHASES } from '../game/phase.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /** Build a short description of the current game state after an undo, so players know what to do next. */
 function describeGameState(game) {
@@ -96,7 +97,8 @@ export async function handleRefreshMap(interaction, ctx) {
     return;
   }
   try {
-    const boardChannel = await client.channels.fetch(game.boardId);
+    const boardChannel = await fetchGameChannel(client, game.boardId);
+    if (!boardChannel) throw new Error('Board channel not found');
     const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
     await boardChannel.send(payload);
   } catch (err) {
@@ -175,7 +177,8 @@ export async function handleUndo(interaction, ctx) {
   /** F14 time-travel: remove the original action message from Game Log so it looks exactly as before. */
   if (last.gameLogMessageId && game.generalId) {
     try {
-      const ch = await client.channels.fetch(game.generalId);
+      const ch = await fetchGameChannel(client, game.generalId);
+      if (!ch) throw new Error('Channel not found');
       const msg = await ch.messages.fetch(last.gameLogMessageId).catch(() => null);
       if (msg) await msg.delete().catch(discordCatch);
     } catch {
@@ -221,7 +224,7 @@ export async function handleUndo(interaction, ctx) {
   if (last.type === 'pass_turn') {
     if (last.roundMessageId && last.roundContentBefore != null && game.generalId) {
       try {
-        const ch = await client.channels.fetch(game.generalId);
+        const ch = await fetchGameChannel(client, game.generalId);
         const msg = await ch.messages.fetch(last.roundMessageId).catch(() => null);
         if (msg) {
           const passRow = new ActionRowBuilder().addComponents(
@@ -250,9 +253,11 @@ export async function handleUndo(interaction, ctx) {
     }
     if (game.boardId && game.selectedMap) {
       try {
-        const boardChannel = await client.channels.fetch(game.boardId);
-        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-        await boardChannel.send(payload);
+        const boardChannel = await fetchGameChannel(client, game.boardId);
+        if (boardChannel) {
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        }
       } catch (err) {
         console.error('Failed to update map after undo move:', err);
       }
@@ -265,9 +270,11 @@ export async function handleUndo(interaction, ctx) {
     await updateDeployPromptMessages(game, last.playerNum, client);
     if (game.boardId && game.selectedMap) {
       try {
-        const boardChannel = await client.channels.fetch(game.boardId);
-        const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
-        await boardChannel.send(payload);
+        const boardChannel = await fetchGameChannel(client, game.boardId);
+        if (boardChannel) {
+          const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        }
       } catch (err) {
         console.error('Failed to update map after undo:', err);
       }
@@ -280,7 +287,7 @@ export async function handleUndo(interaction, ctx) {
     // Delete the deploy prompt messages that were sent to initiative player's hand
     if (last.deployMessageIds?.length && last.deployHandChannelId) {
       try {
-        const handCh = await client.channels.fetch(last.deployHandChannelId);
+        const handCh = await fetchGameChannel(client, last.deployHandChannelId);
         for (const msgId of last.deployMessageIds) {
           const msg = await handCh.messages.fetch(msgId).catch(() => null);
           if (msg) await msg.delete().catch(discordCatch);
@@ -290,7 +297,7 @@ export async function handleUndo(interaction, ctx) {
     // Delete old zone picker message and send a new one at the bottom of chat
     if (game.generalId && getDeploymentZoneButtons) {
       try {
-        const generalChannel = await client.channels.fetch(game.generalId);
+        const generalChannel = await fetchGameChannel(client, game.generalId);
         if (game.deploymentZoneMessageId) {
           const oldMsg = await generalChannel.messages.fetch(game.deploymentZoneMessageId).catch(() => null);
           if (oldMsg) await oldMsg.delete().catch(discordCatch);
@@ -338,7 +345,7 @@ export async function handleUndo(interaction, ctx) {
     // Step 15: Attack undo — clean up the combat thread
     if (last.type === 'attack' && last.snapshot?.pendingCombat?.combatThreadId) {
       try {
-        const combatThread = await client.channels.fetch(last.snapshot.pendingCombat.combatThreadId);
+        const combatThread = await fetchGameChannel(client, last.snapshot.pendingCombat.combatThreadId);
         if (combatThread) {
           await combatThread.send('Combat cancelled (undo).').catch(discordCatch);
           await combatThread.setArchived(true).catch(discordCatch);
@@ -348,9 +355,11 @@ export async function handleUndo(interaction, ctx) {
     // Step 16: Always refresh board for attack, dc_special, and end_activation undos
     if (game.boardId && game.selectedMap && buildBoardMapPayload) {
       try {
-        const boardChannel = await client.channels.fetch(game.boardId);
-        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-        await boardChannel.send(payload);
+        const boardChannel = await fetchGameChannel(client, game.boardId);
+        if (boardChannel) {
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        }
       } catch { /* ignore */ }
     }
     const label = last.label || last.type.replace('_', ' ');

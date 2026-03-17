@@ -4,12 +4,15 @@
  * concussive bolt, spread the pain, missile salvo.
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
+import { splitCustomId } from '../discord/custom-id.js';
 import { reduceHp, awardKillVp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, checkNefariousGains, applyCondition } from '../game/index.js';
 import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, ccHandKey, ccDiscardKey, removeFigurePosition } from '../game/player-helpers.js';
 import { getDcKeywords } from '../data-loader.js';
 import { checkDeckDiscardPassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
+import { chunkButtonsToRows } from '../discord/components.js';
+import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
 
 // ── Internal helpers ─────────────────────────────
 
@@ -71,7 +74,7 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
     try {
       const tMeta = dcMessageMeta.get(mid);
       if (tMeta) {
-        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(mid);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, mid), null, null, getNicknamesForDcMessage?.(game, tMeta));
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
@@ -89,7 +92,7 @@ async function advanceSpreadThePain(game, pending, ctx) {
   const {
     client, saveGames, finishCombatResolution, getMapSpaces, getFigureLabel,
   } = ctx;
-  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, pending.combatThreadId);
   if (!thread) { await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client); saveGames(); return; }
   if (pending.conditionIdx >= pending.conditions.length) {
     delete game.pendingSpreadThePain;
@@ -214,7 +217,7 @@ export async function handleBleedResolve(interaction, ctx) {
           const meta = dcMessageMeta.get(msgId);
           if (meta) {
             const channelId = getPlayAreaId(game, playerNum);
-            const ch = await interaction.client.channels.fetch(channelId);
+            const ch = await fetchGameChannel(interaction.client, channelId);
             const dcMsg = await ch.messages.fetch(msgId);
             const exhausted = dcExhaustedState.get(msgId) ?? false;
             const health = dcHealthState.get(msgId) || [];
@@ -291,7 +294,7 @@ export async function handleSidewinderApply(interaction, ctx) {
   await logGameAction(game, client, `**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.`, { phase: 'ROUND', icon: 'card' });
   await ensureMovementBankMessage(game, attackerMsgId, client);
   try {
-    const ch = await client.channels.fetch(getPlayAreaId(game, meta.playerNum));
+    const ch = await fetchGameChannel(client, getPlayAreaId(game, meta.playerNum));
     const msg = await ch.messages.fetch(attackerMsgId);
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, dcExhaustedState.get(attackerMsgId) ?? false, meta.displayName, dcHealthState.get(attackerMsgId) || [], getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, attackerMsgId), null, null, getNicknamesForDcMessage?.(game, meta));
     await msg.edit({ embeds: [embed], files }).catch(discordCatch);
@@ -330,14 +333,14 @@ export async function handleBoltslingerTarget(interaction, ctx) {
     try {
       const tMeta = dcMessageMeta.get(targetMsgId);
       if (tMeta) {
-        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch (e) { console.error('Failed to refresh Boltslinger target embed:', e); }
   }
-  const blThread = await client.channels.fetch(combatThreadId).catch(() => null);
+  const blThread = await fetchCombatThread(client, combatThreadId);
   if (blThread) await blThread.send(`**Boltslinger** — **${target.label}** suffers 1 Damage.`);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Boltslinger** — **${target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
@@ -371,7 +374,7 @@ export async function handleIndiscriminateFireDie(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   delete game.pendingIndiscriminateFire;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  const thread = await client.channels.fetch(combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, combatThreadId);
   if (thread) await applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThreadId, die, targets, thread, ctx);
   saveGames();
 }
@@ -412,7 +415,7 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   // Roll 1 red die
   const die = rollSingleAttackDie('red');
   const hits = die.dmg || 0;
-  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, pending.combatThreadId);
   if (!thread) { saveGames(); return; }
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (hits > 0 && target.msgId) {
@@ -581,7 +584,7 @@ export async function handleMissileSalvoDie(interaction, ctx) {
   game.freeAttackBonusPending[msgId] = true;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const threadId = game.pendingMissileSalvo[msgId].threadId || game.dcActionsData?.[msgId]?.threadId;
-  const salvoThread = threadId ? await client.channels.fetch(threadId).catch(() => null) : null;
+  const salvoThread = await fetchCombatThread(client, threadId);
   const ownerId = getPlayerId(game, playerNum);
   const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
   const msg = `<@${ownerId}> **Missile Salvo** — **${colorLabel} die** selected (+3 Accuracy). Click **Attack** to target a different hostile figure. This attack costs no action.`;
@@ -629,7 +632,7 @@ export async function handleMissileSalvoDone(interaction, ctx) {
 /** Internal helper: advance to next Heavy Fire target pick, or finish. */
 async function advanceHeavyFirePick(game, pending, ctx) {
   const { client, saveGames, logGameAction } = ctx;
-  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, pending.combatThreadId);
   if (!thread) { saveGames(); return; }
 
   const remaining = pending.diceCount - pending.chosenTargets.length;
@@ -670,7 +673,7 @@ async function startHeavyFireConditions(game, pending, ctx) {
     getNicknamesForDcMessage, getDcUpgradeAttachments, getDcEffects, logGameAction, calculateKillVp,
     decrementActivationIfGroupDefeated, checkWinConditions,
   } = ctx;
-  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, pending.combatThreadId);
   if (!thread) { saveGames(); return; }
 
   if (pending.chosenTargets.length === 0) {
@@ -710,7 +713,7 @@ async function startHeavyFireConditions(game, pending, ctx) {
     try {
       const tMeta = dcMessageMeta.get(mid);
       if (tMeta) {
-        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(mid);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, mid), null, null, getNicknamesForDcMessage?.(game, tMeta));
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
@@ -741,7 +744,7 @@ async function startHeavyFireConditions(game, pending, ctx) {
 /** Internal helper: prompt opponent to pick 1 harmful condition for the attacker. */
 async function advanceHeavyFireConditionPick(game, pending, ctx) {
   const { client, saveGames } = ctx;
-  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, pending.combatThreadId);
   if (!thread) { saveGames(); return; }
 
   if (pending.conditionsApplied >= pending.conditionsOwed) {
@@ -790,7 +793,7 @@ export async function handleHeavyFireUse(interaction, ctx) {
     try {
       const hfMeta = dcMessageMeta.get(pending.hfMsgId);
       if (hfMeta) {
-        const ch = await client.channels.fetch(getPlayAreaId(game, hfMeta.playerNum));
+        const ch = await fetchGameChannel(client, getPlayAreaId(game, hfMeta.playerNum));
         const msg = await ch.messages.fetch(pending.hfMsgId);
         const { embed, files } = await buildDcEmbedAndFiles(hfMeta.dcName, true, hfMeta.displayName, [], getConditionsForDcMessage(game, hfMeta), getDcUpgradeAttachments(game, pending.hfMsgId), null, null, getNicknamesForDcMessage?.(game, hfMeta));
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
@@ -818,7 +821,7 @@ export async function handleHeavyFireSkip(interaction, ctx) {
 /** Heavy Fire target pick: heavy_fire_tgt_{gameId}_{figureKey} */
 export async function handleHeavyFireTarget(interaction, ctx) {
   const { getGame, saveGames, canActAsPlayer } = ctx;
-  const parts = interaction.customId.replace('heavy_fire_tgt_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'heavy_fire_tgt_');
   const gameId = parts[0];
   const figureKey = parts.slice(1).join('_');
   if (!gameId || !figureKey) return;
@@ -875,12 +878,12 @@ export async function handleHeavyFireCondition(interaction, ctx) {
   // Apply the chosen harmful condition to the attacker figure
   const attackerFk = pending.attackerFigureKey;
   if (isConditionImmune(game, attackerFk)) {
-    const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+    const thread = await fetchCombatThread(client, pending.combatThreadId);
     if (thread) await thread.send(`**Heavy Fire** — **${pending.attackerDcName}** is immune to conditions; **${condition}** not applied.`).catch(discordCatch);
     await logGameAction(game, client, `**Heavy Fire** — **${pending.attackerDcName}** is immune to conditions; **${condition}** not applied.`, { phase: 'ROUND', icon: 'card' });
   } else {
     applyCondition(game, attackerFk, condition);
-    const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+    const thread = await fetchCombatThread(client, pending.combatThreadId);
     if (thread) await thread.send(`**Heavy Fire** — **${pending.attackerDcName}** gains **${condition}** (opponent's choice).`).catch(discordCatch);
     await logGameAction(game, client, `**Heavy Fire** — **${pending.attackerDcName}** gains **${condition}** (opponent's choice).`, { phase: 'ROUND', icon: 'card' });
   }
@@ -909,7 +912,7 @@ export async function handleHavocShotUse(interaction, ctx) {
     try {
       const atkMeta = dcMessageMeta.get(atkMsgId);
       if (atkMeta) {
-        const ch = await client.channels.fetch(getPlayAreaId(game, atkMeta.playerNum));
+        const ch = await fetchGameChannel(client, getPlayAreaId(game, atkMeta.playerNum));
         const msg = await ch.messages.fetch(atkMsgId);
         const { embed, files } = await buildDcEmbedAndFiles(atkMeta.dcName, dcExhaustedState.get(atkMsgId) ?? false, atkMeta.displayName, dcHealthState.get(atkMsgId) || [], getConditionsForDcMessage(game, atkMeta), getDcUpgradeAttachments(game, atkMsgId), null, null, getNicknamesForDcMessage?.(game, atkMeta));
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
@@ -921,8 +924,7 @@ export async function handleHavocShotUse(interaction, ctx) {
     new ButtonBuilder().setCustomId(`havoc_shot_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
   );
   btns.push(new ButtonBuilder().setCustomId(`havoc_shot_done_${game.gameId}`).setLabel('Done (skip remaining)').setStyle(ButtonStyle.Secondary));
-  const rows = [];
-  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  const rows = chunkButtonsToRows(btns);
   await interaction.message.edit({
     content: `**Havoc Shot** — Suffered 1 Strain. Choose up to ${hs.maxPicks} figure(s) to deal 1 Damage:`,
     components: rows,
@@ -964,7 +966,7 @@ export async function handleHavocShotPick(interaction, ctx) {
     try {
       const tMeta = dcMessageMeta.get(targetMsgId);
       if (tMeta) {
-        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
@@ -972,7 +974,7 @@ export async function handleHavocShotPick(interaction, ctx) {
     } catch {}
   }
   hs.chosen.push(target.figureKey);
-  const thread = await client.channels.fetch(hs.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, hs.combatThreadId);
   if (thread) await thread.send(`**Havoc Shot** — **${target.label}** suffers 1 Damage.`).catch(discordCatch);
   await logGameAction(game, client, `**Havoc Shot** — **${target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
   // If more picks available and more targets
@@ -985,8 +987,7 @@ export async function handleHavocShotPick(interaction, ctx) {
       return new ButtonBuilder().setCustomId(`havoc_shot_pick_${gameId}_${origIdx}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger);
     });
     btns2.push(new ButtonBuilder().setCustomId(`havoc_shot_done_${gameId}`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-    const rows2 = [];
-    for (let r = 0; r < btns2.length; r += 5) rows2.push(new ActionRowBuilder().addComponents(btns2.slice(r, r + 5)));
+    const rows2 = chunkButtonsToRows(btns2);
     await interaction.message.edit({ content: `**Havoc Shot** — ${remaining} pick(s) remaining:`, components: rows2 }).catch(discordCatch);
   } else {
     delete game.pendingHavocShot;
@@ -1028,14 +1029,14 @@ export async function handleDeflectPick(interaction, ctx) {
     try {
       const tMeta = dcMessageMeta.get(targetMsgId);
       if (tMeta) {
-        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch {}
   }
-  const dfThread = await client.channels.fetch(df.combatThreadId).catch(() => null);
+  const dfThread = await fetchCombatThread(client, df.combatThreadId);
   if (dfThread) await dfThread.send(`**Deflect** — **${df.deflectorDcName}**: **${target.label}** suffers 1 Damage.`).catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Deflect** — **${df.deflectorDcName}** redirects 1 Damage to **${target.label}**.`, { phase: 'ROUND', icon: 'attack' });
@@ -1078,8 +1079,7 @@ export async function handleWantonUse(interaction, ctx) {
   const ccBtns = [...new Set(hand)].slice(0, 25).map((card, i) =>
     new ButtonBuilder().setCustomId(`wanton_cc_${game.gameId}_${i}_${card.replace(/\s+/g, '_').slice(0, 40)}`).setLabel(card.slice(0, 80)).setStyle(ButtonStyle.Secondary)
   );
-  const ccRows = [];
-  for (let r = 0; r < ccBtns.length; r += 5) ccRows.push(new ActionRowBuilder().addComponents(ccBtns.slice(r, r + 5)));
+  const ccRows = chunkButtonsToRows(ccBtns);
   await interaction.message.edit({
     content: `**Wanton Destruction** — Choose a Command card to discard:`,
     components: ccRows,
@@ -1119,8 +1119,7 @@ export async function handleWantonCcPick(interaction, ctx) {
     new ButtonBuilder().setCustomId(`wanton_pick_${gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
   );
   btns.push(new ButtonBuilder().setCustomId(`wanton_done_${gameId}`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-  const rows = [];
-  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  const rows = chunkButtonsToRows(btns);
   await interaction.message.edit({
     content: `**Wanton Destruction** — CC discarded. Choose up to ${wd.maxPicks} figures to deal 1 Damage:`,
     components: rows,
@@ -1149,7 +1148,7 @@ export async function handleWantonPick(interaction, ctx) {
     try {
       const tMeta = dcMessageMeta.get(targetMsgId);
       if (tMeta) {
-        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
@@ -1157,7 +1156,7 @@ export async function handleWantonPick(interaction, ctx) {
     } catch {}
   }
   wd.chosen.push(target.figureKey);
-  const thread = await client.channels.fetch(wd.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, wd.combatThreadId);
   if (thread) await thread.send(`**Wanton Destruction** — **${target.label}** suffers 1 Damage.`).catch(discordCatch);
   await logGameAction(game, client, `**Wanton Destruction** — **${target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
   const remaining = wd.maxPicks - wd.chosen.length;
@@ -1169,8 +1168,7 @@ export async function handleWantonPick(interaction, ctx) {
       return new ButtonBuilder().setCustomId(`wanton_pick_${gameId}_${origIdx}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger);
     });
     btns2.push(new ButtonBuilder().setCustomId(`wanton_done_${gameId}`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-    const rows2 = [];
-    for (let r = 0; r < btns2.length; r += 5) rows2.push(new ActionRowBuilder().addComponents(btns2.slice(r, r + 5)));
+    const rows2 = chunkButtonsToRows(btns2);
     await interaction.message.edit({ content: `**Wanton Destruction** — ${remaining} pick(s) remaining:`, components: rows2 }).catch(discordCatch);
   } else {
     delete game.pendingWantonDestruction;

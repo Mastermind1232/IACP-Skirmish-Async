@@ -15,6 +15,9 @@ import { getRange } from '../game/spatial.js';
 import { discordCatch } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { requireGame } from '../utils/guards.js';
+import { chunkButtonsToRows } from '../discord/components.js';
+import { splitCustomId } from '../discord/custom-id.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 // Module-level storage for companion DC embed deps (keyed by gameId).
 // Set by runPostDeployPhase when ctx includes embed deps, consumed by resolveAutoAbility,
@@ -317,7 +320,7 @@ async function _createCompanionDcEmbed(game, companionName, playerNum, hostMsgId
     getNicknamesForDcMessage(game, dcInfo),
   );
 
-  const playArea = await client.channels.fetch(playAreaId);
+  const playArea = await fetchGameChannel(client, playAreaId);
   const msg = await playArea.send({ embeds: [embed], files });
 
   dcMessageMeta.set(msg.id, { gameId: game.gameId, playerNum, dcName: companionName, displayName });
@@ -376,7 +379,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
       );
       const rows = [];
       for (let i = 0; i < btns.length; i += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
-      const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+      const generalChannel = await fetchGameChannel(client, game.generalId);
       if (generalChannel) {
         await generalChannel.send({
           content: `🛬 **Smooth Landing** — <@${ownerId}>, choose which figure moves next (${remaining.length} remaining):`,
@@ -458,7 +461,7 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
 
   // Fix 1: When no valid movement spaces, show a Stay button instead of auto-skipping
   if (cache.cells.size === 0) {
-    const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+    const generalChannel = await fetchGameChannel(client, game.generalId);
     if (!generalChannel) {
       await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
       return;
@@ -518,7 +521,7 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
   firstRows.push(new ActionRowBuilder().addComponents(skipBtn));
 
   // Find the game-log channel to post the movement UI
-  const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   if (!generalChannel) {
     await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
     return;
@@ -745,15 +748,14 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
           .setLabel(buildFigureButtonLabel(fk, game))
           .setStyle(ButtonStyle.Primary)
         );
-        const rows = [];
-        for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+        const rows = chunkButtonsToRows(btns);
         await logGameAction(game, client, `🛡️ **Extra Armor** — <@${ownerId}>, distribute **4 Block Tokens** among your figures (4 remaining). Check your hand channel.`, {
           allowedMentions: { users: [ownerId] },
         });
         // Send buttons to player's hand channel so only they can interact
         const handChId = getHandChannelId(game, ability.playerNum);
         try {
-          const handCh = await client.channels.fetch(handChId);
+          const handCh = await fetchGameChannel(client, handChId);
           const sent = await handCh.send({
             content: '🛡️ **Extra Armor** — Choose a figure to give **1 Block Token** (4 remaining):',
             components: rows,
@@ -798,8 +800,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         .setLabel(buildFigureButtonLabel(fk, game))
         .setStyle(ButtonStyle.Primary)
       );
-      const rows = [];
-      for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+      const rows = chunkButtonsToRows(btns);
       await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — <@${ownerId}>, choose **1 friendly figure** within 3 spaces of **${ability.dcName}** to gain **1 Power Token**:`, {
         components: rows.slice(0, 5),
         allowedMentions: { users: [ownerId] },
@@ -966,7 +967,7 @@ async function postAbilityPicker(game, gameId, client, logGameAction, saveGames)
     for (const ab of abilities) {
       await resolveAutoAbility(game, ab, client, logGameAction);
       if (game.pendingPowerTokenOverflow?.length > 0) {
-        const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+        const _ovCh = await fetchGameChannel(client, game.generalId);
         if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ab.playerNum, saveGames);
       }
     }
@@ -981,7 +982,7 @@ async function postAbilityPicker(game, gameId, client, logGameAction, saveGames)
     q.awaitingOrder = false;
     await resolveAutoAbility(game, ability, client, logGameAction);
     if (game.pendingPowerTokenOverflow?.length > 0) {
-      const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+      const _ovCh = await fetchGameChannel(client, game.generalId);
       if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ability.playerNum, saveGames);
     }
     await advanceToNextPlayer(game, gameId, client, logGameAction);
@@ -1087,7 +1088,7 @@ export async function runPostDeployPhase(game, gameId, client, ctx, onComplete) 
     _companionEmbedDeps.delete(gameId);
     // Check for overflow after batch auto-resolve
     if (game.pendingPowerTokenOverflow?.length > 0) {
-      const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+      const _ovCh = await fetchGameChannel(client, game.generalId);
       if (_ovCh) {
         const _ovEntry = game.pendingPowerTokenOverflow[0];
         const _ovPn = _ovEntry?.playerNum || initPn;
@@ -1135,7 +1136,7 @@ export async function advancePostDeployQueue(game, gameId, client, ctx) {
  */
 export async function handlePostDeployPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_pick_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_pick_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const abilityIdx = parseInt(parts[2], 10);
@@ -1168,7 +1169,7 @@ export async function handlePostDeployPick(interaction, ctx) {
   if (!ability.interactive) {
     await resolveAutoAbility(game, ability, client, logGameAction);
     if (game.pendingPowerTokenOverflow?.length > 0) {
-      const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+      const _ovCh = await fetchGameChannel(client, game.generalId);
       if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ability.playerNum, saveGames);
     }
     await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
@@ -1183,7 +1184,7 @@ export async function handlePostDeployPick(interaction, ctx) {
  */
 export async function handleSecurityDetailPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_security_pick_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_security_pick_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const game = await requireGame(interaction, getGame, gameId);
@@ -1215,7 +1216,7 @@ export async function handleSecurityDetailPick(interaction, ctx) {
  */
 export async function handleStrikeTeamAdjPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_strike_adj_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_strike_adj_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const friendFk = parts.slice(2).join('_');
@@ -1251,7 +1252,7 @@ export async function handleStrikeTeamAdjPick(interaction, ctx) {
  */
 export async function handleStrikeTeamTokenPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_strike_token_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_strike_token_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const figureKey = parts.slice(2).join('_');
@@ -1291,7 +1292,7 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
  */
 export async function handleStrikeTeamTokenDone(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_strike_token_done_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_strike_token_done_');
   const gameId = parts[0];
 
   const game = await requireGame(interaction, getGame, gameId);
@@ -1317,7 +1318,7 @@ export async function handleStrikeTeamTokenDone(interaction, ctx) {
  */
 export async function handlePostDeployMoveSkip(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_move_skip_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_move_skip_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const moveKey = parts.slice(2).join('_');
@@ -1342,7 +1343,7 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
   if (game.moveGridMessageIds?.[moveKey]) {
     for (const mid of game.moveGridMessageIds[moveKey]) {
       try {
-        const ch = interaction.channel || await client.channels.fetch(game.generalId);
+        const ch = interaction.channel || await fetchGameChannel(client, game.generalId);
         const msg = await ch.messages.fetch(mid).catch(() => null);
         if (msg) await msg.edit({ components: [] }).catch(discordCatch);
       } catch {}
@@ -1362,7 +1363,7 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
  */
 export async function handleWalkerMove(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_walker_move_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_walker_move_');
   const gameId = parts[0];
 
   const game = await requireGame(interaction, getGame, gameId);
@@ -1388,7 +1389,7 @@ export async function handleWalkerMove(interaction, ctx) {
  */
 export async function handleWalkerSkip(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_walker_skip_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_walker_skip_');
   const gameId = parts[0];
 
   const game = await requireGame(interaction, getGame, gameId);
@@ -1414,7 +1415,7 @@ export async function handleWalkerSkip(interaction, ctx) {
  */
 export async function handleSmoothLandingPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_sl_pick_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_sl_pick_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const figureKey = parts.slice(2).join('_');
@@ -1442,7 +1443,7 @@ export async function handleSmoothLandingPick(interaction, ctx) {
  */
 export async function handlePostDeployMoveStay(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_move_stay_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_move_stay_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const figureKey = parts.slice(2).join('_');
@@ -1494,7 +1495,7 @@ export async function onExtraArmorComplete(game, gameId, client, ctx) {
  */
 export async function handleArmsDistFigPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_arms_dist_fig_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_arms_dist_fig_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const figureKey = parts.slice(2).join('_');
@@ -1532,7 +1533,7 @@ export async function handleArmsDistFigPick(interaction, ctx) {
  */
 export async function handleArmsDistTokenPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('pd_arms_dist_token_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_arms_dist_token_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const tokenType = parts[2]; // 'Hit', 'Surge', 'Block', or 'Evade'
@@ -1569,7 +1570,7 @@ export async function handleArmsDistTokenPick(interaction, ctx) {
 export async function handleCompanionDeployPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
   // customId: pd_comp_space_${gameId}_${playerNum}_${space}
-  const parts = interaction.customId.replace('pd_comp_space_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'pd_comp_space_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const space = parts.slice(2).join('_');

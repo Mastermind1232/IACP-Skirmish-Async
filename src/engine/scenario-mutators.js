@@ -9,6 +9,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 // ── Error class ──────────────────────────────────────────────────────────────
 
@@ -99,7 +100,7 @@ async function mutateToEndOfRound(game, client, deps, userId) {
   );
 
   // Send EOR button to Game Log
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   const eorRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`end_end_of_round_${game.gameId}`)
@@ -244,7 +245,7 @@ async function mutateToCombat(game, client, deps, userId) {
   );
 
   // Send combat prompt to Game Log
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   const readyRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`combat_ready_${game.gameId}`)

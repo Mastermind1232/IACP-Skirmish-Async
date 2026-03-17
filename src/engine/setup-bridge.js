@@ -2,6 +2,7 @@
  * Setup bridge functions extracted from index.js.
  * Handles post-attachment setup, play area reordering, draft-random flow, and play area population.
  */
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * Reorder play area messages so attachments appear right after their parent DCs.
@@ -23,7 +24,7 @@ export async function reorderPlayAreaAfterAttachments(game, playerNum, client, d
   const hasAttachments = attachMsgIds.some((id) => id != null);
   if (!hasAttachments) return;
 
-  const channel = await client.channels.fetch(channelId);
+  const channel = await fetchGameChannel(client, channelId);
   const oldDcMsgIds = [...dcMsgIds];
   const oldAttachMsgIds = [...attachMsgIds];
 
@@ -138,7 +139,7 @@ export async function finishSetupAttachments(game, client, deps) {
  */
 export async function runDraftRandom(game, client, deps, options = {}) {
   const { scenarioId } = options;
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
 
   // Map selection
   if (!game.mapSelected) {
@@ -295,7 +296,7 @@ export async function runDraftRandom(game, client, deps, options = {}) {
   deps.setPhase(game, deps.PHASES.ROUND_ACTIVE, deps.ROUND_PHASES.START_OF_ROUND);
 
   if (game.boardId && game.selectedMap) {
-    const boardChannel = await client.channels.fetch(game.boardId);
+    const boardChannel = await fetchGameChannel(client, game.boardId);
     const payload = await deps.buildBoardMapPayload(game.gameId, game.selectedMap, game);
     await boardChannel.send(payload);
   }
@@ -326,7 +327,7 @@ export async function runDraftRandom(game, client, deps, options = {}) {
     const playerId = deps.getPlayerId(game, playerNum);
     await deps.logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
     const handChannelId = deps.getHandChannelId(game, playerNum);
-    const handChannel = await client.channels.fetch(handChannelId);
+    const handChannel = await fetchGameChannel(client, handChannelId);
     const existingMsgs = await handChannel.messages.fetch({ limit: 5 });
     if (existingMsgs.size === 0) {
       const playerId = deps.getPlayerId(game, playerNum);
@@ -386,8 +387,8 @@ export async function runDraftRandom(game, client, deps, options = {}) {
  * @param {object} deps
  */
 export async function populatePlayAreas(game, client, deps) {
-  const p1PlayArea = await client.channels.fetch(game.p1PlayAreaId);
-  const p2PlayArea = await client.channels.fetch(game.p2PlayAreaId);
+  const p1PlayArea = await fetchGameChannel(client, game.p1PlayAreaId);
+  const p2PlayArea = await fetchGameChannel(client, game.p2PlayAreaId);
   const gameId = game.gameId;
 
   const p1FigureDcs = (game.player1Squad?.dcList || []).filter((d) => !deps.isFigurelessDc(deps.resolveDcName(d)));

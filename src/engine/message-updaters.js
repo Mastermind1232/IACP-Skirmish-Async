@@ -2,6 +2,7 @@
  * Message updater functions extracted from index.js.
  * Each function takes an explicit `deps` parameter for closed-over dependencies.
  */
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * Update the Play Area "Attachments" message for a DC (CC + DC Skirmish Upgrade attachments).
@@ -24,7 +25,7 @@ export async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, cli
   const hasContent = ccList.length > 0 || dcList.length > 0;
   const dcDisplayName = deps.dcMessageMeta.get(dcMsgId)?.displayName || null;
   try {
-    const channel = await client.channels.fetch(channelId);
+    const channel = await fetchGameChannel(client, channelId);
     if (!attachMsgId) {
       if (!hasContent) return;
       const { embeds, files } = await deps.buildAttachmentEmbedsAndFiles(ccList, dcList, dcDisplayName);
@@ -80,14 +81,14 @@ export async function updateMovementBankMessage(game, msgId, client, deps) {
   if (!threadId) return;
   try {
     if (remaining <= 0 && messageId) {
-      const thread = await client.channels.fetch(threadId);
+      const thread = await fetchGameChannel(client, threadId);
       const msg = await thread.messages.fetch(messageId).catch(() => null);
       if (msg) await msg.delete().catch(deps.discordCatch);
       bank.messageId = null;
       return;
     }
     if (!messageId) return;
-    const thread = await client.channels.fetch(threadId);
+    const thread = await fetchGameChannel(client, threadId);
     const msg = await thread.messages.fetch(messageId);
     await msg.edit({ content: deps.getMovementBankText(displayName, remaining, total) });
   } catch {}
@@ -100,7 +101,7 @@ export async function ensureMovementBankMessage(game, msgId, client, deps) {
   if (bank.messageId) return bank;
   if (!bank.threadId) return bank;
   try {
-    const thread = await client.channels.fetch(bank.threadId);
+    const thread = await fetchGameChannel(client, bank.threadId);
     const msg = await thread.send({ content: deps.getMovementBankText(bank.displayName, bank.remaining, bank.total) });
     bank.messageId = msg.id;
   } catch (err) {
@@ -118,7 +119,7 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
 
   if (data?.messageId) {
     try {
-      const thread = await client.channels.fetch(data.threadId);
+      const thread = await fetchGameChannel(client, data.threadId);
       const msg = await thread.messages.fetch(data.messageId);
       const components = meta && game ? deps.getDcActionButtons(msgId, meta.dcName, displayName, data, game) : [];
       const editPayload = {
@@ -139,7 +140,7 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
   if (meta && game) {
     try {
       const _chId = deps.getPlayAreaId(game, meta.playerNum);
-      const _ch = await client.channels.fetch(_chId);
+      const _ch = await fetchGameChannel(client, _chId);
       const _dcMsg = await _ch.messages.fetch(msgId);
       const _hs = deps.dcHealthState.get(msgId) || [];
       const { embed: _emb, files: _files } = await deps.buildDcEmbedAndFiles(
@@ -164,7 +165,7 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
       const ownerId = deps.getPlayerId(game, meta.playerNum);
       const initPlayerNum = meta.playerNum;
       try {
-        const ch = await client.channels.fetch(game.generalId);
+        const ch = await fetchGameChannel(client, game.generalId);
         const icon = deps.ACTION_ICONS.activate || '\u26A1';
         const timestamp = `<t:${Math.floor(Date.now() / 1000)}:t>`;
         const endTurnBtn = new deps.ActionRowBuilder().addComponents(
@@ -195,7 +196,7 @@ export async function maybeShowEndActivationPhaseButton(game, client, deps) {
     const roundMsgId = game.roundActivationMessageId;
   if (!roundMsgId || !game.generalId) return;
   try {
-    const ch = await client.channels.fetch(game.generalId);
+    const ch = await fetchGameChannel(client, game.generalId);
     const msg = await ch.messages.fetch(roundMsgId);
     const round = game.currentRound || 1;
     const roundEmbed = new deps.EmbedBuilder()
@@ -230,7 +231,7 @@ export async function updateHandChannelMessages(game, client, deps) {
     const handId = deps.getHandChannelId(game, pn);
     if (!handId) continue;
     try {
-      const handCh = await client.channels.fetch(handId);
+      const handCh = await fetchGameChannel(client, handId);
       // Try stored message ID first (reliable path)
       const storedMsgId = pn === 1 ? game.p1HandMessageId : game.p2HandMessageId;
       let handMsg = null;
@@ -264,7 +265,7 @@ export async function updateHandVisualMessage(game, playerNum, client, deps) {
   if (msgId == null) return;
   try {
     const channelId = deps.getPlayAreaId(game, playerNum);
-    const channel = await client.channels.fetch(channelId);
+    const channel = await fetchGameChannel(client, channelId);
     const msg = await channel.messages.fetch(msgId);
     await msg.edit({ embeds: [deps.getHandVisualEmbed(hand.length)] });
   } catch (err) {
@@ -281,7 +282,7 @@ export async function updateDiscardPileMessage(game, playerNum, client, deps) {
   const hasOpenThread = !!threadId;
   try {
     const channelId = deps.getPlayAreaId(game, playerNum);
-    const channel = await client.channels.fetch(channelId);
+    const channel = await fetchGameChannel(client, channelId);
     const msg = await channel.messages.fetch(msgId);
     await msg.edit({
       embeds: [deps.getDiscardPileEmbed(discard.length)],
@@ -300,7 +301,7 @@ export async function updatePlayAreaDcButtons(game, client, deps) {
     const channelId = deps.getPlayAreaId(game, playerNum);
     if (!channelId || msgIds.length === 0) continue;
     try {
-      const channel = await client.channels.fetch(channelId);
+      const channel = await fetchGameChannel(client, channelId);
       for (const msgId of msgIds) {
         const meta = deps.dcMessageMeta.get(msgId);
         if (!meta || meta.gameId !== game.gameId) continue;
@@ -323,7 +324,7 @@ export async function refreshAllGameComponents(game, client, deps) {
 
   if (game.boardId && game.selectedMap) {
     try {
-      const boardChannel = await client.channels.fetch(game.boardId);
+      const boardChannel = await fetchGameChannel(client, game.boardId);
       const payload = await deps.buildBoardMapPayload(gameId, game.selectedMap, game);
       await boardChannel.send(payload);
     } catch (err) {
@@ -353,7 +354,7 @@ export async function refreshAllGameComponents(game, client, deps) {
     }
     try {
       const channelId = deps.getPlayAreaId(game, meta.playerNum);
-      const channel = await client.channels.fetch(channelId);
+      const channel = await fetchGameChannel(client, channelId);
       const msg = await channel.messages.fetch(msgId);
       const { embed, files } = await deps.buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState, deps.getConditionsForDcMessage(game, meta), deps.getDcUpgradeAttachments(game, msgId), null, null, deps.getNicknamesForDcMessage(game, meta));
       const components = deps.getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
@@ -375,7 +376,7 @@ export async function refreshAllGameComponents(game, client, deps) {
     const dcName = p1DcList[i]?.dcName;
     if (!dcName) continue;
     try {
-      const ch = await client.channels.fetch(p1PlayAreaId);
+      const ch = await fetchGameChannel(client, p1PlayAreaId);
       const companionMsg = await ch.messages.fetch(p1CompanionIds[i]);
       const desc = deps.getCompanionDescriptionForDc(dcName);
       await companionMsg.edit({ embeds: [new deps.EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(deps.COLORS.DARK_EMBED)] });
@@ -388,7 +389,7 @@ export async function refreshAllGameComponents(game, client, deps) {
     const dcName = p2DcList[i]?.dcName;
     if (!dcName) continue;
     try {
-      const ch = await client.channels.fetch(p2PlayAreaId);
+      const ch = await fetchGameChannel(client, p2PlayAreaId);
       const companionMsg = await ch.messages.fetch(p2CompanionIds[i]);
       const desc = deps.getCompanionDescriptionForDc(dcName);
       await companionMsg.edit({ embeds: [new deps.EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(deps.COLORS.DARK_EMBED)] });

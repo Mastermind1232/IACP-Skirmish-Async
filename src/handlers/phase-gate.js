@@ -12,6 +12,7 @@ import {
 } from '../game/player-helpers.js';
 import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 // ── Message builders ────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ export async function sendPhaseGateMessages(game, phase, ctx) {
     const handId = getHandChannelId(game, pn);
     if (!handId) continue;
     try {
-      const handCh = await client.channels.fetch(handId);
+      const handCh = await fetchGameChannel(client, handId);
       const payload = buildGatePayload(gameId, pn, gate, game);
       const msg = await handCh.send(payload);
       if (pn === 1) gate.p1MsgId = msg.id;
@@ -118,7 +119,7 @@ async function updateGateMessages(game, ctx) {
     const msgId = pn === 1 ? gate.p1MsgId : gate.p2MsgId;
     if (!handId || !msgId) continue;
     try {
-      const handCh = await client.channels.fetch(handId);
+      const handCh = await fetchGameChannel(client, handId);
       const msg = await handCh.messages.fetch(msgId);
       const payload = buildGatePayload(gameId, pn, gate, game);
       await msg.edit(payload).catch(discordCatch);
@@ -138,7 +139,7 @@ async function deleteGateMessages(game, ctx) {
     const msgId = pn === 1 ? gate.p1MsgId : gate.p2MsgId;
     if (!handId || !msgId) continue;
     try {
-      const handCh = await client.channels.fetch(handId);
+      const handCh = await fetchGameChannel(client, handId);
       const msg = await handCh.messages.fetch(msgId);
       await msg.delete().catch(discordCatch);
     } catch {
@@ -335,7 +336,7 @@ async function advanceFromDeployment(game, ctx) {
   if (clearPreGameSetup) await clearPreGameSetup(game, client);
 
   const _sendCcPrompts = async () => {
-    const generalChannel = await client.channels.fetch(game.generalId);
+    const generalChannel = await fetchGameChannel(client, game.generalId);
     const initPlayerNum = getInitiativePlayerNum(game);
     const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
     await generalChannel.send({
@@ -348,8 +349,8 @@ async function advanceFromDeployment(game, ctx) {
     const p1DeckList = p1CcList.filter((c) => !p1Placed.includes(c));
     const p2DeckList = p2CcList.filter((c) => !p2Placed.includes(c));
     try {
-      const p1HandChannel = await client.channels.fetch(game.p1HandId);
-      const p2HandChannel = await client.channels.fetch(game.p2HandId);
+      const p1HandChannel = await fetchGameChannel(client, game.p1HandId);
+      const p2HandChannel = await fetchGameChannel(client, game.p2HandId);
       const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
       await p1HandChannel.send({
         content: `**Your Command Card deck** (${p1DeckList.length} cards):\n${ccDeckText(p1DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,

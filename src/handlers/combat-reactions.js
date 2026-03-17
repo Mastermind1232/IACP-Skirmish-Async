@@ -3,6 +3,9 @@ import { opponentPlayerNum, getPlayerId, getDcList, getDcMessageIds, getCcHand, 
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, checkNefariousGains } from '../game/index.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
+import { chunkButtonsToRows } from '../discord/components.js';
+import { splitCustomId } from '../discord/custom-id.js';
+import { fetchCombatThread } from '../discord/channel-helpers.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -44,7 +47,7 @@ export async function handleToughLuck(interaction, ctx) {
   }
   game.pendingToughLuck = null;
   // Continue reroll flow
-  const thread = await client.channels.fetch(combat?.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, combat?.combatThreadId);
   if (thread && combat) {
     const side = tlData.side;
     const atkRem = combat.attackerRerollsRemaining || 0;
@@ -83,7 +86,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
   if (!game.pendingThereIsNoTry && type !== 'skip') {
     await interaction.followUp({ content: 'No pending There Is No Try.', ephemeral: true }).catch(discordCatch); return;
   }
-  const thread = await client.channels.fetch(combat?.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, combat?.combatThreadId);
   if (type === 'die') {
     const dieIdx = parseInt(parts[6], 10);
     const defDice = combat?.defenseDiceResults || [];
@@ -167,7 +170,7 @@ export async function handleVetInstincts(interaction, ctx) {
   const isDefPhase = choice === 'block' || choice === 'evade' || (choice === 'skip' && combat.vetInstinctsAttackApplied);
   const expectedPlayer = isDefPhase ? defPN : atkPN;
   if (!await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only P${expectedPlayer} may respond to Veteran Instincts.`)) return;
-  const thread = await client.channels.fetch(combat.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
   if (choice === 'hit') {
     combat.attackRoll = { ...combat.attackRoll, dmg: (combat.attackRoll?.dmg || 0) + 1 };
     combat.vetInstinctsAttackApplied = true;
@@ -242,7 +245,7 @@ export async function handleHunterProtocol(interaction, ctx) {
   if (!_hpCombat || !_hpGame.pendingHunterProtocol) { await interaction.followUp({ content: 'No pending Hunter Protocol.', ephemeral: true }).catch(discordCatch); return; }
   const _hpAtk = _hpCombat.attackerPlayerNum;
   if (!await requirePlayer(interaction, _hpGame, interaction.user.id, _hpAtk, canActAsPlayer, 'Only the attacker may respond to Hunter Protocol.')) return;
-  const _hpThread = await client.channels.fetch(_hpCombat.combatThreadId).catch(() => null);
+  const _hpThread = await fetchCombatThread(client, _hpCombat.combatThreadId);
   const { key: _hpKey, cost: _hpCost } = _hpGame.pendingHunterProtocol;
   _hpGame.pendingHunterProtocol = null;
   if (buttonKey === 'hunter_protocol_trigger_' && _hpKey) {
@@ -321,7 +324,7 @@ export async function handleStrikeMeDown(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, 'Only the defender (Obi-Wan\'s owner) may respond.')) return;
   await interaction.deferUpdate().catch(discordCatch);
 
-  const thread = await client.channels.fetch(smd.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, smd.combatThreadId);
 
   // Clear the buttons from the picker message
   await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
@@ -408,7 +411,7 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, 'Only the defender may respond.')) return;
   await interaction.deferUpdate().catch(discordCatch);
 
-  const thread = await client.channels.fetch(sotd.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, sotd.combatThreadId);
 
   // Clear the buttons from the picker message
   await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
@@ -477,7 +480,7 @@ export async function handleSlowOnTheDrawResume(interaction, ctx) {
   const combatThreadId = game.pendingCombat?.combatThreadId;
   game.slowOnTheDrawInterrupt = null;
 
-  const thread = combatThreadId ? await client.channels.fetch(combatThreadId).catch(() => null) : null;
+  const thread = await fetchCombatThread(client, combatThreadId);
   if (thread) await thread.send('**Slow on the Draw** — Interrupt complete. Greedo\'s attack resumes.').catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, '**Slow on the Draw** — Interrupt resolved. Original attack resumed.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
@@ -518,7 +521,7 @@ export async function handlePowerConverter(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
-  const thread = await client.channels.fetch(combat.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
 
   // Helper: resume normal reroll flow from stored pending counts
   const _resumeRerollFlow = async () => {
@@ -684,7 +687,7 @@ export async function handleIllicitArms(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, ia.playerNum, canActAsPlayer, 'Only the attacker\'s owner may respond.')) return;
   await interaction.deferUpdate().catch(discordCatch);
 
-  const thread = await client.channels.fetch(ia.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, ia.combatThreadId);
 
   // Clear buttons from the picker message
   await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
@@ -705,22 +708,15 @@ export async function handleIllicitArms(interaction, ctx) {
       saveGames();
       return;
     }
-    // Build buttons for each CC in hand (max 25 buttons = 5 rows of 5)
-    const rows = [];
-    let currentBtns = [];
-    for (let i = 0; i < hand.length && rows.length < 5; i++) {
-      const label = String(hand[i]).slice(0, 80);
-      currentBtns.push(
-        new ButtonBuilder()
-          .setCustomId(`illicit_arms_pick_${gameId}_${i}`)
-          .setLabel(label)
-          .setStyle(ButtonStyle.Primary)
-      );
-      if (currentBtns.length === 5 || i === hand.length - 1) {
-        rows.push(new ActionRowBuilder().addComponents(...currentBtns));
-        currentBtns = [];
-      }
-    }
+    // Build buttons for each CC in hand — encode card name (not index) for staleness safety
+    const btns = hand.slice(0, 25).map((card) => {
+      const label = String(card).slice(0, 80);
+      return new ButtonBuilder()
+        .setCustomId(`illicit_arms_pick_${gameId}_${card}`)
+        .setLabel(label)
+        .setStyle(ButtonStyle.Primary);
+    });
+    const rows = chunkButtonsToRows(btns);
     const ownerId = getPlayerId(game, ia.playerNum);
     if (thread) {
       await thread.send({
@@ -734,12 +730,13 @@ export async function handleIllicitArms(interaction, ctx) {
   }
 
   if (isPick) {
-    const match = customId.match(/^illicit_arms_pick_([^_]+)_(\d+)$/);
-    const ccIndex = parseInt(match[2], 10);
+    const match = customId.match(/^illicit_arms_pick_([^_]+)_(.+)$/);
+    const cardName = match?.[2];
     const handKey = ccHandKey(ia.playerNum);
     const hand = game[handKey] || [];
-    if (ccIndex < 0 || ccIndex >= hand.length) {
-      if (thread) await thread.send('**Illicit Arms** — Invalid card selection.').catch(discordCatch);
+    const ccIndex = hand.findIndex(c => String(c) === cardName);
+    if (!cardName || ccIndex < 0) {
+      if (thread) await thread.send('**Illicit Arms** — Card no longer in hand.').catch(discordCatch);
       game.pendingIllicitArms = null;
       saveGames();
       return;
@@ -788,7 +785,7 @@ export async function handleForceExhaustion(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, 'Only The Child\'s owner may respond.')) return;
   await interaction.deferUpdate().catch(discordCatch);
 
-  const thread = await client.channels.fetch(fe.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, fe.combatThreadId);
 
   // Clear buttons
   await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
@@ -851,7 +848,7 @@ export async function handleDoubtReroll(interaction, ctx) {
   const defPN = combat.defenderPlayerNum || opponentPlayerNum(combat.attackerPlayerNum);
   if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, `Only P${defPN} may respond to Doubt.`)) return;
 
-  const thread = await client.channels.fetch(combat.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
 
   try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
 

@@ -10,6 +10,7 @@ import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../g
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -781,7 +782,8 @@ export async function handleMovePick(interaction, ctx) {
   }
   if (game.boardId && game.selectedMap) {
     try {
-      const boardChannel = await client.channels.fetch(game.boardId);
+      const boardChannel = await fetchGameChannel(client, game.boardId);
+      if (!boardChannel) throw new Error('Board channel not found');
       const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
       await boardChannel.send(payload);
     } catch (err) {

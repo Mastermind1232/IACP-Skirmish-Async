@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-03-16T23:49:32.927Z",
+  "timestamp": "2026-03-17T05:50:33.380Z",
   "totalRun": 288,
   "summary": {
     "effect": 0,
-    "no-op": 193,
-    "not-reached": 95,
+    "no-op": 190,
+    "not-reached": 98,
     "setup-error": 0,
     "crash": 0,
     "play-error": 0
@@ -145,8 +145,8 @@
     {
       "ccName": "Brace for Impact",
       "scenarioType": "activation",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Brace Yourself",
@@ -181,8 +181,8 @@
     {
       "ccName": "Camouflage",
       "scenarioType": "combat",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Capitalize",
@@ -217,8 +217,8 @@
     {
       "ccName": "Chaotic Force",
       "scenarioType": "sor",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Cheat to Win",
@@ -247,8 +247,8 @@
     {
       "ccName": "Close the Gap",
       "scenarioType": "sor",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Collateral Damage",
@@ -259,8 +259,8 @@
     {
       "ccName": "Collect Intel",
       "scenarioType": "sor",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Combat Resupply",
@@ -403,14 +403,14 @@
     {
       "ccName": "Deploy the Garrison",
       "scenarioType": "sor",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Desperate Escape",
       "scenarioType": "eor",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Devotion",
@@ -499,8 +499,8 @@
     {
       "ccName": "Elusive",
       "scenarioType": "activation",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Emergency Aid",
@@ -553,8 +553,8 @@
     {
       "ccName": "Eyes on the Prize",
       "scenarioType": "sor",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Face Me!",
@@ -721,8 +721,8 @@
     {
       "ccName": "Gauntlet Blade",
       "scenarioType": "activation",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Get Behind Me!",
@@ -763,8 +763,8 @@
     {
       "ccName": "Hard to Hit",
       "scenarioType": "activation",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "Harsh Environment",
@@ -901,8 +901,8 @@
     {
       "ccName": "Let's Make a Deal",
       "scenarioType": "activation",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Lightbow",
@@ -1057,8 +1057,8 @@
     {
       "ccName": "Mandalorian Steel",
       "scenarioType": "sor",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Marked Territory",
@@ -1123,8 +1123,8 @@
     {
       "ccName": "On the Lam",
       "scenarioType": "combat",
-      "status": "not-reached",
-      "error": "CC never became playable in this scenario"
+      "status": "no-op",
+      "stateChanged": false
     },
     {
       "ccName": "One in a Million",
@@ -1153,8 +1153,8 @@
     {
       "ccName": "Overdrive",
       "scenarioType": "sor",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Overheated",
@@ -1189,8 +1189,8 @@
     {
       "ccName": "Parry",
       "scenarioType": "activation",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Parting Blow",
@@ -1381,8 +1381,8 @@
     {
       "ccName": "Run for Cover",
       "scenarioType": "combat",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Sarlacc Sweep",
@@ -1393,8 +1393,8 @@
     {
       "ccName": "Savage Vigor",
       "scenarioType": "combat",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Second Chance",
@@ -1459,8 +1459,8 @@
     {
       "ccName": "Sit Tight",
       "scenarioType": "sor",
-      "status": "no-op",
-      "stateChanged": false
+      "status": "not-reached",
+      "error": "CC never became playable in this scenario"
     },
     {
       "ccName": "Slippery Target",

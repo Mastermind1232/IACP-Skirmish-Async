@@ -2,6 +2,8 @@
  * DC Play Area handlers: dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { splitCustomId } from '../discord/custom-id.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { truncateLabel, getAttachmentSpecials } from '../discord/components.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { bottomLeftCoord, edgeKey } from '../game/coords.js';
@@ -58,7 +60,7 @@ export async function handleDcActivate(interaction, ctx) {
     getDcEffects,
     logGameAction,
   } = ctx;
-  const parts = interaction.customId.replace('dc_activate_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'dc_activate_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const dcIndex = parseInt(parts[2], 10);
@@ -174,7 +176,7 @@ export async function handleDcActivate(interaction, ctx) {
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const isMyTurn = ownerId === turnPlayerId;
   if (!isMyTurn) {
-    const playAreaCh = await client.channels.fetch(getPlayAreaId(game, playerNum));
+    const playAreaCh = await fetchGameChannel(client, getPlayAreaId(game, playerNum));
     const promptRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`confirm_activate_${gameId}_${msgId}_${interaction.message.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`cancel_activate_${gameId}_${ownerId}`).setLabel('No').setStyle(ButtonStyle.Danger)
@@ -187,7 +189,7 @@ export async function handleDcActivate(interaction, ctx) {
     return;
   }
   try {
-    const channel = await client.channels.fetch(getPlayAreaId(game, playerNum));
+    const channel = await fetchGameChannel(client, getPlayAreaId(game, playerNum));
     const msg = await channel.messages.fetch(msgId);
     dcExhaustedState.set(msgId, true);
     const { embed, files } = await buildDcEmbedAndFiles(dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, { dcName, displayName }), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, { dcName, displayName }));
@@ -297,7 +299,7 @@ export async function handleDcActivate(interaction, ctx) {
           }
           if (_fvBtns.length > 0) _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns));
           try {
-            const _fvGeneralCh = await client.channels.fetch(game.generalId);
+            const _fvGeneralCh = await fetchGameChannel(client, game.generalId);
             await _fvGeneralCh.send({
               content: `👁️ **Force Vision** — <@${_fvOppOwnerId}>, **Kanan Jarrus** is activating! Choose one of your ready groups — you **must** activate it next, if possible:`,
               components: _fvRows.slice(0, 5),
@@ -312,7 +314,7 @@ export async function handleDcActivate(interaction, ctx) {
       }
     }
     saveGames();
-    const logCh = await client.channels.fetch(game.generalId);
+    const logCh = await fetchGameChannel(client, game.generalId);
     const icon = ACTION_ICONS.activate || '⚡';
     const pLabel = `P${playerNum}`;
     const logMsg = await logCh.send({
@@ -411,8 +413,8 @@ export async function handleDcUnactivate(interaction, ctx) {
   const threadId = game.dcActionsData?.[msgId]?.threadId;
   if (threadId) {
     try {
-      const thread = await client.channels.fetch(threadId);
-      await thread.delete();
+      const thread = await fetchGameChannel(client, threadId);
+      if (thread) await thread.delete();
     } catch (err) {
       console.error('Failed to delete activation thread on un-activate:', err);
     }
@@ -442,9 +444,11 @@ export async function handleDcUnactivate(interaction, ctx) {
   }
   if (game.dcActivationLogMessageIds?.[msgId]) {
     try {
-      const logCh = await client.channels.fetch(game.generalId);
-      const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
-      await logMsg.delete().catch(discordCatch);
+      const logCh = await fetchGameChannel(client, game.generalId);
+      if (logCh) {
+        const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
+        await logMsg.delete().catch(discordCatch);
+      }
     } catch {}
     delete game.dcActivationLogMessageIds[msgId];
   }
@@ -502,7 +506,7 @@ export async function handleDcToggle(interaction, ctx) {
     const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
     const isMyTurn = playerId === turnPlayerId;
     if (!isMyTurn) {
-      const playAreaCh = await client.channels.fetch(getPlayAreaId(game, meta.playerNum));
+      const playAreaCh = await fetchGameChannel(client, getPlayAreaId(game, meta.playerNum));
       const promptRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`confirm_activate_${game.gameId}_${msgId}_0`).setLabel('Yes').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`cancel_activate_${game.gameId}_${playerId}`).setLabel('No').setStyle(ButtonStyle.Danger)
@@ -543,7 +547,7 @@ export async function handleDcToggle(interaction, ctx) {
       if (actMinimap) actionsPayload.files = [actMinimap];
       const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
       game.dcActionsData[msgId].messageId = actionsMsg.id;
-      const logCh = await client.channels.fetch(game.generalId);
+      const logCh = await fetchGameChannel(client, game.generalId);
       const icon = ACTION_ICONS.activate || '⚡';
       const pLabel = `P${meta.playerNum}`;
       const logMsg = await logCh.send({
@@ -569,8 +573,8 @@ export async function handleDcToggle(interaction, ctx) {
     const threadId = game.dcActionsData?.[msgId]?.threadId;
     if (threadId) {
       try {
-        const thread = await client.channels.fetch(threadId);
-        await thread.delete();
+        const thread = await fetchGameChannel(client, threadId);
+        if (thread) await thread.delete();
       } catch (err) {
         console.error('Failed to delete activation thread on ready:', err);
       }
@@ -584,9 +588,11 @@ export async function handleDcToggle(interaction, ctx) {
     if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
     if (game.dcActivationLogMessageIds?.[msgId]) {
       try {
-        const logCh = await client.channels.fetch(game.generalId);
-        const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
-        await logMsg.delete().catch(discordCatch);
+        const logCh = await fetchGameChannel(client, game.generalId);
+        if (logCh) {
+          const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
+          await logMsg.delete().catch(discordCatch);
+        }
       } catch {}
       delete game.dcActivationLogMessageIds[msgId];
     }
@@ -775,7 +781,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     game[discardKey].push(card);
   }
   const handChannelId = getHandChannelId(game, meta.playerNum);
-  const handChannel = await interaction.client.channels.fetch(handChannelId);
+  const handChannel = await fetchGameChannel(interaction.client, handChannelId);
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
   const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
   const deck = getCcDeck(game, meta.playerNum) || [];
@@ -812,7 +818,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
           const _ext = _imgPath.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
           const _fn = `cc-log-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${_ext}`;
           const _embed = new _EB().setTitle(card).setColor(COLORS.DARK_EMBED).setImage(`attachment://${_fn}`);
-          const _logCh = await interaction.client.channels.fetch(game.generalId).catch(() => null);
+          const _logCh = await fetchGameChannel(interaction.client, game.generalId);
           if (_logCh) await _logCh.send({ embeds: [_embed], files: [new _AB(_imgPath, { name: _fn })] }).catch(discordCatch);
         }
       } catch (err) {
@@ -824,7 +830,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     game.pendingNegation = { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card), handChannelId };
     const oppNum = opponentPlayerNum(meta.playerNum);
     const oppHandId = getHandChannelId(game, oppNum);
-    const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
+    const oppHandChannel = await fetchGameChannel(interaction.client, oppHandId);
     if (oppHandChannel) {
       const oppId = getPlayerId(game, oppNum);
       await oppHandChannel.send({
@@ -870,15 +876,15 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
           new _BB().setCustomId(`cc_choice_${game.gameId}_${i}`).setLabel(label).setStyle(_BS.Secondary)
         );
       }
-      const handCh = await interaction.client.channels.fetch(handChannelId);
-      await handCh.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(discordCatch);
+      const handCh = await fetchGameChannel(interaction.client, handChannelId);
+      if (handCh) await handCh.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(discordCatch);
     } else {
       await applyAbilityResult(result, { game, playerNum: meta.playerNum, msgId, client: interaction.client, ctx });
       if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
         const threadId = game.dcActionsData?.[msgId]?.threadId;
         if (threadId) {
           game.pendingPowerTokenGrant.channelId = threadId;
-          const ptThread = await interaction.client.channels.fetch(threadId).catch(() => null);
+          const ptThread = await fetchGameChannel(interaction.client, threadId);
           if (ptThread) {
             const { grants } = game.pendingPowerTokenGrant;
             const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
@@ -1305,7 +1311,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     figureIndex = m ? parseInt(m[2], 10) : 0;
     action = 'Interact';
   } else {
-    const parts = interaction.customId.replace('dc_special_', '').split('_');
+    const parts = splitCustomId(interaction.customId, 'dc_special_');
     specialIdx = parseInt(parts[0], 10);
     msgId = parts.slice(1).join('_');
     const metaForAction = dcMessageMeta.get(msgId);
@@ -1354,7 +1360,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     return;
   }
   if (buttonKey === 'dc_special_') {
-    const parts = interaction.customId.replace('dc_special_', '').split('_');
+    const parts = splitCustomId(interaction.customId, 'dc_special_');
     const specialIdx = parseInt(parts[0], 10);
     const specialsUsed = actionsData?.specialsUsed ?? [];
     if (specialsUsed.includes(specialIdx)) {
@@ -2135,7 +2141,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       );
       btns.push(new BB().setCustomId(`missile_salvo_done_${game.gameId}_${msgId}`).setLabel('End Salvo').setStyle(BS.Success));
       const threadId = ms.threadId || game.dcActionsData?.[msgId]?.threadId;
-      const salvoThread = threadId ? await client.channels.fetch(threadId).catch(() => null) : null;
+      const salvoThread = threadId ? await fetchGameChannel(client, threadId) : null;
       const salvoMsg = `<@${ownerId}> **Missile Salvo** — Choose a die for your next ranged attack (+3 Accuracy, different targets). ${ms.diceAvailable.length} shot${ms.diceAvailable.length !== 1 ? 's' : ''} remaining.`;
       if (salvoThread) {
         await salvoThread.send({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] } }).catch(discordCatch);
@@ -2157,7 +2163,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const threadId = game.dcActionsData?.[msgId]?.threadId;
     if (threadId) {
       game.pendingPowerTokenGrant.channelId = threadId;
-      const ptThread = await client.channels.fetch(threadId).catch(() => null);
+      const ptThread = await fetchGameChannel(client, threadId);
       if (ptThread) {
         const { grants } = game.pendingPowerTokenGrant;
         const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
@@ -2474,9 +2480,11 @@ export async function handlePounceSpacePick(interaction, ctx) {
     // Refresh board if figure moved during the space choice phase
     if (result.refreshBoard && game.boardId && game.selectedMap && buildBoardMapPayload) {
       try {
-        const boardChannel = await client.channels.fetch(game.boardId);
-        const bPayload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-        await boardChannel.send(bPayload);
+        const boardChannel = await fetchGameChannel(client, game.boardId);
+        if (boardChannel) {
+          const bPayload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(bPayload);
+        }
       } catch (err) { console.error('Board refresh after space choice failed:', err); }
     }
     const choiceButtons = result.choiceOptions.map((label, i) =>
@@ -2501,9 +2509,11 @@ export async function handlePounceSpacePick(interaction, ctx) {
     }
     if (result.refreshBoard && game.boardId && game.selectedMap && buildBoardMapPayload) {
       try {
-        const boardChannel = await client.channels.fetch(game.boardId);
-        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-        await boardChannel.send(payload);
+        const boardChannel = await fetchGameChannel(client, game.boardId);
+        if (boardChannel) {
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        }
       } catch (err) {
         console.error('Pounce board refresh failed:', err);
       }
@@ -3053,9 +3063,11 @@ export async function handleRushPushSpace(interaction, ctx) {
   // Refresh board
   if (game.boardId && game.selectedMap && buildBoardMapPayload) {
     try {
-      const boardChannel = await client.channels.fetch(game.boardId);
-      const boardPayload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-      await boardChannel.send(boardPayload);
+      const boardChannel = await fetchGameChannel(client, game.boardId);
+      if (boardChannel) {
+        const boardPayload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await boardChannel.send(boardPayload);
+      }
     } catch { /* ignore */ }
   }
   await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
@@ -3210,9 +3222,11 @@ export async function handleShoulderRushSpace(interaction, ctx) {
   // Refresh board
   if (game.boardId && game.selectedMap && buildBoardMapPayload) {
     try {
-      const boardChannel = await client.channels.fetch(game.boardId);
-      const boardPayload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-      await boardChannel.send(boardPayload);
+      const boardChannel = await fetchGameChannel(client, game.boardId);
+      if (boardChannel) {
+        const boardPayload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await boardChannel.send(boardPayload);
+      }
     } catch { /* ignore */ }
   }
   await updateDcActionsMessage(game, msgId, client).catch(discordCatch);

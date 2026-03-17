@@ -5,6 +5,8 @@
 
 import { processFigureDefeat } from './defeat-handler.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { chunkButtonsToRows } from '../discord/components.js';
+import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -221,7 +223,7 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
     const fhResult = findFigureheadFigure(game, defenderPlayerNum, combat.target.figureKey);
     if (fhResult) {
       const fhOwnerId = getPlayerId(game, defenderPlayerNum);
-      const fhThread = await client.channels.fetch(combat.combatThreadId);
+      const fhThread = await fetchCombatThread(client, combat.combatThreadId);
       game.pendingFigurehead = {
         damage, hit, resultText, totalBlast,
         defenderPlayerNum, attackerPlayerNum, ownerId,
@@ -276,7 +278,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     normalizeCoord,
   } = deps;
 
-  const thread = await client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
   const targetDcName = dcNameFromFigureKey(combat.target.figureKey);
   // Store applied damage on combat object for post-combat checks (Return Fire, etc.)
   combat._appliedDamage = damage;
@@ -1724,7 +1726,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // (skipped if player spent a surge to prevent Bleed during the surge window)
   // I30 Fireproof: attacker with Flame Trooper cannot be Bleeding
   if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed && !combat.attackerFireproof) {
-    const bleedThread = await client.channels.fetch(combat.combatThreadId);
+    const bleedThread = await fetchCombatThread(client, combat.combatThreadId);
     await deps.sendBleedingPrompt(game, bleedThread, combat.attackerFigureKey, combat.attackerPlayerNum, combat.attackerDisplayName);
   }
   // Deflection: if defender took 0 damage (attack hit but was fully blocked), attacker suffers N damage
@@ -2165,7 +2167,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     syncHealthStateToList,
   } = deps;
 
-  const thread = await client.channels.fetch(combat.combatThreadId);
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
   await thread.send(resultText);
   // Lure of the Dark Side: after attack resolves, hostile figure suffers strain (damage to HP)
   if (combat.isLure && combat.lurePostAttackStrain > 0 && combat.attackerFigureKey) {
@@ -2443,8 +2445,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           new ButtonBuilder().setCustomId(`deflect_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
         );
         _dflBtns.push(new ButtonBuilder().setCustomId(`deflect_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        const _dflRows = [];
-        for (let r = 0; r < _dflBtns.length; r += 5) _dflRows.push(new ActionRowBuilder().addComponents(_dflBtns.slice(r, r + 5)));
+        const _dflRows = chunkButtonsToRows(_dflBtns);
         await thread.send({
           content: `<@${_dflOwnerId}> **Deflect** — **${_dflCand.dcName}** may redirect 1 Damage to a hostile in LOS:`,
           allowedMentions: { users: [_dflOwnerId] },
@@ -2748,7 +2749,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       const meta = dcMessageMeta.get(msgId);
       if (meta) {
         const channelId = getPlayAreaId(game, meta.playerNum);
-        const channel = await client.channels.fetch(channelId);
+        const channel = await fetchGameChannel(client, channelId);
         const dcMsg = await channel.messages.fetch(msgId);
         const exhausted = dcExhaustedState.get(msgId) ?? false;
         const healthState = dcHealthState.get(msgId) || [];
@@ -2761,7 +2762,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   }
   if (game.boardId && game.selectedMap) {
     try {
-      const boardChannel = await client.channels.fetch(game.boardId);
+      const boardChannel = await fetchGameChannel(client, game.boardId);
       const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
       await boardChannel.send(payload);
     } catch (err) {

@@ -1,3 +1,6 @@
+import { chunkButtonsToRows } from '../discord/components.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
+
 /**
  * Universal figure defeat handler.
  *
@@ -173,9 +176,8 @@ export async function processFigureDefeat(game, opts, deps) {
                   .setLabel(String(card).length > 80 ? String(card).slice(0, 77) + '...' : String(card))
                   .setStyle(ButtonStyle.Primary)
               );
-              const rows = [];
-              for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-              const handCh = await client.channels.fetch(handChId);
+              const rows = chunkButtonsToRows(btns);
+              const handCh = await fetchGameChannel(client, handChId);
               await handCh.send({
                 content: '**Heroic Effort** — Choose 1 Command card from your hand to place on the bottom of your deck:',
                 components: rows.slice(0, 5),
@@ -241,9 +243,8 @@ export async function processFigureDefeat(game, opts, deps) {
                     .setLabel(e.displayName.length > 80 ? e.displayName.slice(0, 77) + '...' : e.displayName)
                     .setStyle(ButtonStyle.Primary)
                 );
-                const rows = [];
-                for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-                const handCh = await client.channels.fetch(handChId);
+                const rows = chunkButtonsToRows(btns);
+                const handCh = await fetchGameChannel(client, handChId);
                 await handCh.send({
                   content: `**Scavenged Weaponry** — **${dcName}** was defeated. Choose a friendly Droid/Vehicle to transfer it to:`,
                   components: rows.slice(0, 5),

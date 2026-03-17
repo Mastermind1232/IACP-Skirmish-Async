@@ -21,6 +21,7 @@ import { renderBoardState, renderTurnPrompt } from './pvp-renderer.js';
 import { getAvailableActions } from '../engine/available-actions.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
+import { fetchGameChannel } from './channel-helpers.js';
 
 // ── Thread Creation ─────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ export async function createGameThread(opts) {
 export async function updateGameView(game, client, deps = {}, opts = {}) {
   if (!game.pvpThreadId) return; // Not a PvP thread game
 
-  const thread = await client.channels.fetch(game.pvpThreadId).catch(() => null);
+  const thread = await fetchGameChannel(client, game.pvpThreadId);
   if (!thread) {
     console.error(`[pvp-thread] Thread ${game.pvpThreadId} not found for game ${game.gameId}`);
     return;
@@ -137,7 +138,8 @@ export async function postGameLog(game, client, content, options = {}) {
   if (!game.pvpThreadId) return;
 
   try {
-    const thread = await client.channels.fetch(game.pvpThreadId);
+    const thread = await fetchGameChannel(client, game.pvpThreadId);
+    if (!thread) return;
     const payload = { content };
     if (options.files?.length) payload.files = options.files;
     if (options.embeds?.length) payload.embeds = options.embeds;
@@ -184,7 +186,8 @@ export async function archiveGameThread(game, client, summary = {}) {
   if (!game.pvpThreadId) return;
 
   try {
-    const thread = await client.channels.fetch(game.pvpThreadId);
+    const thread = await fetchGameChannel(client, game.pvpThreadId);
+    if (!thread) return;
 
     // Post final summary
     const vp1 = game.player1VP?.total || 0;

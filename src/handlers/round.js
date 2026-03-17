@@ -23,9 +23,11 @@ import {
   removeFigurePosition,
 } from '../game/player-helpers.js';
 import { checkStartOfRoundPassiveRedraws } from '../game/cc-passive-redraw.js';
-import { FIGURE_LETTERS } from '../discord/components.js';
+import { FIGURE_LETTERS, chunkButtonsToRows } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+import { splitCustomId } from '../discord/custom-id.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /** Sync a healthState array back to the player's dcList entry. */
 function syncHealthStateToList(game, playerNum, msgId, healthState) {
@@ -604,8 +606,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
           .setStyle(ButtonStyle.Danger);
       });
       _dbtBtns.push(new ButtonBuilder().setCustomId(`doubt_fig_${gameId}_${pn}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-      const _dbtRows = [];
-      for (let r = 0; r < _dbtBtns.length; r += 5) _dbtRows.push(new ActionRowBuilder().addComponents(_dbtBtns.slice(r, r + 5)));
+      const _dbtRows = chunkButtonsToRows(_dbtBtns);
       await logGameAction(game, client, `<@${_dbtOwnerId}> **[Doubt]** — Choose a hostile figure to discard 1 condition or Power Token:`, {
         components: _dbtRows.slice(0, 5),
         allowedMentions: { users: [_dbtOwnerId] },
@@ -621,7 +622,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     if (game.exhaustedSkirmishUpgrades?.[msgId]) delete game.exhaustedSkirmishUpgrades[msgId];
     try {
       const chId = getPlayAreaId(game, meta.playerNum);
-      const ch = await client.channels.fetch(chId);
+      const ch = await fetchGameChannel(client, chId);
       const msg = await ch.messages.fetch(msgId);
       const healthState = dcHealthState.get(msgId) || [];
       const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
@@ -634,7 +635,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   // Regenerate the board map so condition icons and updated health are reflected
   if (buildBoardMapPayload && game.boardId && game.selectedMap) {
     try {
-      const boardChannel = await client.channels.fetch(game.boardId);
+      const boardChannel = await fetchGameChannel(client, game.boardId);
       const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
       await withDiscordRetry(() => boardChannel.send(payload));
     } catch (err) {
@@ -753,15 +754,14 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     const handChId = getHandChannelId(game, _ctfPn);
     if (handChId) {
       try {
-        const handCh = await client.channels.fetch(handChId);
+        const handCh = await fetchGameChannel(client, handChId);
         const btns = _ctfUnique.slice(0, 20).map((c, i) =>
           new ButtonBuilder()
             .setCustomId(`ctf_pick_${gameId}_${_ctfPn}_${i}`)
             .setLabel(String(c.name).length > 80 ? String(c.name).slice(0, 77) + '...' : String(c.name))
             .setStyle(ButtonStyle.Primary)
         );
-        const rows = [];
-        for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+        const rows = chunkButtonsToRows(btns);
         game[`pendingChannelTheForce_p${_ctfPn}`] = { cards: _ctfUnique };
         await handCh.send({
           content: `**Channel the Force** — Choose a FORCE USER Command card from your deck to add to your hand:`,
@@ -786,7 +786,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
     // Check for power token overflow from mission rules (fluctuation/crate tokens)
     if (game.pendingPowerTokenOverflow?.length > 0) {
-      const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
+      const _ovCh = await fetchGameChannel(client, game.generalId);
       if (_ovCh) {
         const _ovEntry = game.pendingPowerTokenOverflow[0];
         // Determine owning player from figure positions
@@ -844,7 +844,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     const handId = getHandChannelId(game, pn);
     if (!handId) continue;
     try {
-      const handCh = await client.channels.fetch(handId);
+      const handCh = await fetchGameChannel(client, handId);
       const msgs = await handCh.messages.fetch({ limit: 20 });
       const handMsg = msgs.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
       if (handMsg) {
@@ -855,7 +855,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       console.error('Failed to update hand message:', err);
     }
   }
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   const p1DrawDetail = `${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}${p1HasRHC ? ' + Rebel High Command' : ''}`;
   const p2DrawDetail = `${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}${p2HasRHC ? ' + Rebel High Command' : ''}`;
   const drawDesc = hadCutLines
@@ -973,8 +973,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
             .setLabel(t)
             .setStyle(ButtonStyle.Primary)
           );
-          const rows = [];
-          for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+          const rows = chunkButtonsToRows(btns);
           await logGameAction(game, client, `🔧 **Programming Override** — <@${ownerId}>, choose a TRAIT for **${dc.displayName || dc.dcName}** to gain this round:`, {
             phase: 'ROUND', icon: 'round',
             components: rows,
@@ -996,8 +995,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
               .setLabel(name === _curForm ? `${name} (current)` : name)
               .setStyle(name === _curForm ? ButtonStyle.Secondary : ButtonStyle.Primary)
             );
-            const rows = [];
-            for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+            const rows = chunkButtonsToRows(btns);
             await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card (current: **${_curForm || 'none'}**):`, {
               phase: 'ROUND', icon: 'round',
               components: rows,
@@ -1055,14 +1053,13 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
             game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
             const handChannelId = getHandChannelId(game, playerNum);
             try {
-              const handCh = await client.channels.fetch(handChannelId);
+              const handCh = await fetchGameChannel(client, handChannelId);
               const discardBtns = hand.slice(0, 25).map((card, idx) => new ButtonBuilder()
                 .setCustomId(`rbf_discard_${gameId}_${playerNum}_${idx}`)
                 .setLabel(card.length > 80 ? card.slice(0, 77) + '...' : card)
                 .setStyle(ButtonStyle.Danger)
               );
-              const discardRows = [];
-              for (let r = 0; r < discardBtns.length; r += 5) discardRows.push(new ActionRowBuilder().addComponents(discardBtns.slice(r, r + 5)));
+              const discardRows = chunkButtonsToRows(discardBtns);
               await withDiscordRetry(() => handCh.send({ content: '**Rule by Fear** — Choose 1 card from your hand to discard:', components: discardRows }));
             } catch (err) {
               console.error('Rule by Fear discard picker failed:', err);
@@ -1094,14 +1091,13 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
             game[`pendingRogueOne_p${playerNum}`] = { remaining: 2 };
             const handChannelId = getHandChannelId(game, playerNum);
             try {
-              const handCh = await client.channels.fetch(handChannelId);
+              const handCh = await fetchGameChannel(client, handChannelId);
               const pickBtns = hand.slice(0, 25).map((card, idx) => new ButtonBuilder()
                 .setCustomId(`rogue_one_return_${gameId}_${playerNum}_${idx}`)
                 .setLabel(card.length > 80 ? card.slice(0, 77) + '...' : card)
                 .setStyle(ButtonStyle.Primary)
               );
-              const pickRows = [];
-              for (let r = 0; r < pickBtns.length; r += 5) pickRows.push(new ActionRowBuilder().addComponents(pickBtns.slice(r, r + 5)));
+              const pickRows = chunkButtonsToRows(pickBtns);
               await withDiscordRetry(() => handCh.send({ content: '**Rogue One** — Choose a card to place on top of your deck (1 of 2):', components: pickRows }));
             } catch (err) {
               console.error('Rogue One return picker failed:', err);
@@ -1247,8 +1243,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
               .setLabel(name === _curForm ? `${name} (current)` : name)
               .setStyle(name === _curForm ? ButtonStyle.Secondary : ButtonStyle.Primary)
             );
-            const rows = [];
-            for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+            const rows = chunkButtonsToRows(btns);
             await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card (current: **${_curForm || 'none'}**):`, {
               phase: 'ROUND', icon: 'round',
               components: rows,
@@ -1270,7 +1265,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
   }
 
   // Fallback: no gate function, start activation directly
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   const roundEmbed = new EmbedBuilder()
     .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound} - Start of Round`)
     .setColor(PHASE_COLOR);
@@ -1346,8 +1341,7 @@ async function _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, 
   const btns = hostiles.map(({ fk, dcName }) =>
     new ButtonBuilder().setCustomId(`force_slow_pick_${gameId}_${playerNum}_${fk}`).setLabel(dcName).setStyle(ButtonStyle.Primary)
   );
-  const rows = [];
-  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  const rows = chunkButtonsToRows(btns);
   await logGameAction(game, client, `🐌 **Force Slow** — <@${ownerId}>, choose a hostile figure within 3 spaces of **${dc.displayName || dc.dcName}** to skip its next activation:`, {
     phase: 'ROUND', icon: 'round',
     components: rows,
@@ -1389,8 +1383,7 @@ async function _postExcavationPicker(game, gameId, playerNum, dc, logGameAction,
   const btns = eligible.map(({ name, index }) =>
     new ButtonBuilder().setCustomId(`excavation_pick_${gameId}_${playerNum}_${index}`).setLabel(name.slice(0, 80)).setStyle(ButtonStyle.Primary)
   );
-  const rows = [];
-  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  const rows = chunkButtonsToRows(btns);
   await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card (cost ≤1) from your discard pile to add to hand:`, {
     phase: 'ROUND', icon: 'round',
     components: rows,
@@ -1433,8 +1426,7 @@ function _buildExtraArmorUI(gameId, playerNum, allFks, game, allocation, total) 
     .setLabel(_extraArmorLabel(fk, game, allocation))
     .setStyle(_extraArmorStyle(fk, allocation))
   );
-  const rows = [];
-  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  const rows = chunkButtonsToRows(btns);
   // Show confirm button only when all tokens are placed
   if (remaining <= 0) {
     rows.push(new ActionRowBuilder().addComponents(
@@ -1457,7 +1449,7 @@ function _buildExtraArmorUI(gameId, playerNum, allFks, game, allocation, total) 
 export async function handleExtraArmorPick(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames } = ctx;
-  const parts = interaction.customId.replace('extra_armor_pick_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'extra_armor_pick_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const figureKey = parts.slice(2).join('_');
@@ -1510,7 +1502,7 @@ export async function handleExtraArmorPick(interaction, ctx) {
 export async function handleExtraArmorConfirm(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('extra_armor_confirm_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'extra_armor_confirm_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
@@ -1569,7 +1561,7 @@ export async function handleExtraArmorCancel(interaction, ctx) {
  */
 export async function handleRbfDiscard(interaction, ctx) {
   const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('rbf_discard_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'rbf_discard_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const cardIdx = parseInt(parts[2], 10);
@@ -1602,7 +1594,7 @@ export async function handleRbfDiscard(interaction, ctx) {
  */
 export async function handleRogueOneReturn(interaction, ctx) {
   const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('rogue_one_return_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'rogue_one_return_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const cardIdx = parseInt(parts[2], 10);
@@ -1641,8 +1633,7 @@ export async function handleRogueOneReturn(interaction, ctx) {
       .setLabel(c.length > 80 ? c.slice(0, 77) + '...' : c)
       .setStyle(ButtonStyle.Primary)
     );
-    const pickRows = [];
-    for (let r = 0; r < pickBtns.length; r += 5) pickRows.push(new ActionRowBuilder().addComponents(pickBtns.slice(r, r + 5)));
+    const pickRows = chunkButtonsToRows(pickBtns);
     await interaction.message.edit({ components: pickRows }).catch(discordCatch);
     await interaction.followUp({ content: `Placed **${card}** on deck. Pick 1 more card to return.`, ephemeral: true }).catch(discordCatch);
   }
@@ -1655,7 +1646,7 @@ export async function handleRogueOneReturn(interaction, ctx) {
  */
 export async function handleCtfPick(interaction, ctx) {
   const { getGame, saveGames, updateHandVisualMessage, logGameAction, client, dcHealthState, dcMessageMeta } = ctx;
-  const parts = interaction.customId.replace('ctf_pick_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'ctf_pick_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const pickIdx = parseInt(parts[2], 10);
@@ -1740,15 +1731,14 @@ export async function handleCtfPick(interaction, ctx) {
       const handChId = getHandChannelId(game, playerNum);
       if (handChId) {
         try {
-          const handCh = await client.channels.fetch(handChId);
+          const handCh = await fetchGameChannel(client, handChId);
           const btns = fuFigures.slice(0, 10).map((f, i) =>
             new ButtonBuilder()
               .setCustomId(`ctf_strain_${gameId}_${playerNum}_${i}`)
               .setLabel(f.dcName)
               .setStyle(ButtonStyle.Danger)
           );
-          const rows = [];
-          for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+          const rows = chunkButtonsToRows(btns);
           await handCh.send({
             content: `**Channel the Force** — Choose a FORCE USER figure to suffer **${cost} Strain**:`,
             components: rows.slice(0, 5),
@@ -1768,7 +1758,7 @@ export async function handleCtfPick(interaction, ctx) {
  */
 export async function handleCtfStrain(interaction, ctx) {
   const { getGame, saveGames, logGameAction, client, dcHealthState } = ctx;
-  const parts = interaction.customId.replace('ctf_strain_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'ctf_strain_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const figIdx = parseInt(parts[2], 10);
@@ -1812,7 +1802,7 @@ export async function handleCtfStrain(interaction, ctx) {
  */
 export async function handleImpCitadel(interaction, ctx) {
   const { getGame, saveGames, logGameAction, client } = ctx;
-  const parts = interaction.customId.replace('imp_citadel_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'imp_citadel_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const tokenType = parts[2]; // 'damage' or 'block'
@@ -1909,8 +1899,7 @@ export async function handleDoubtFigPick(interaction, ctx) {
         .setLabel(label.length > 80 ? label.slice(0, 77) + '...' : label)
         .setStyle(ButtonStyle.Danger);
     });
-    const rows = [];
-    for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+    const rows = chunkButtonsToRows(btns);
     await interaction.message.edit({
       content: `**[Doubt]** — Choose a condition or Power Token to discard from **${targetDcName}**:`,
       components: rows.slice(0, 5),

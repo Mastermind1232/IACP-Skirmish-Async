@@ -252,6 +252,7 @@ export function parsePayloadFromCustomId(customId, prefix) {
       return { gameId: parts[0], targetFigureKey: parts.slice(1).join('_') };
 
     default:
+      console.warn(`[command-router] parsePayloadFromCustomId: unhandled prefix "${prefix}" — customId="${customId}"`);
       return { raw: remainder };
   }
 }
@@ -286,5 +287,6 @@ export function customIdToCommand(customId, handlerKey, playerId, gameId) {
       };
     }
   }
+  console.warn(`[command-router] customIdToCommand: no command match for handlerKey="${handlerKey}" customId="${customId}"`);
   return null;
 }

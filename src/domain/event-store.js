@@ -1,7 +1,7 @@
 import { insertDomainEvent, getDomainEvents, getLatestDomainSeq, isDbConfigured } from '../db.js';
 import { shouldSnapshot, saveSnapshot } from './snapshot-store.js';
 import { gameReducer } from './reducer/index.js';
-import { resetSeqCounter, getSeqCounter } from './events.js';
+import { resetSeqCounter, getSeqCounter, bumpEventSeq } from './events.js';
 
 /**
  * Initialize seq counters for all active games from DB.
@@ -30,7 +30,7 @@ export async function appendEvents(gameId, events, expectedVersion = null) {
     }
   }
   for (const event of events) {
-    await insertDomainEvent(gameId, event);
+    await insertDomainEvent(gameId, event, { bumpEventSeq });
   }
 
   // Auto-snapshot: check if latest seq crosses a snapshot boundary

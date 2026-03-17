@@ -13,6 +13,7 @@ import { getHandlerKey } from '../router.js';
 import { getHandler, getHandlerGroup } from '../handlers/index.js';
 import { buildContext } from '../context-factory.js';
 import { createFakeInteraction } from '../headless/fake-interaction.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /** Sentinel user ID prefix for AI players. */
 export const AI_USER_PREFIX = 'ai_player_';
@@ -84,7 +85,7 @@ function createLiveAiInteraction(customId, userId, game, client) {
       // Send to the game's general channel for visibility
       try {
         if (game.generalId) {
-          const ch = await client.channels.fetch(game.generalId);
+          const ch = await fetchGameChannel(client, game.generalId);
           const content = typeof payload === 'string' ? payload : payload?.content;
           if (content && !payload?.ephemeral) {
             await ch.send({ content, embeds: payload?.embeds, components: payload?.components });
@@ -205,7 +206,7 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
       // Set up channel reference
       if (currentGame.generalId) {
         try {
-          interaction.channel = await client.channels.fetch(currentGame.generalId);
+          interaction.channel = await fetchGameChannel(client, currentGame.generalId);
           interaction.message.channel = interaction.channel;
         } catch {}
       }

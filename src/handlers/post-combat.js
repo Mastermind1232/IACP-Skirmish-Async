@@ -13,6 +13,7 @@ import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+import { fetchCombatThread } from '../discord/channel-helpers.js';
 
 /**
  * reaction_skip_
@@ -36,7 +37,7 @@ export async function handleReactionSkip(interaction, ctx) {
   game[handKey] = game[handKey] || [];
   game[handKey].push(cardName);
   // Continue checking for more reactions or finish
-  const cThread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  const cThread = await fetchCombatThread(client, pending.combatThreadId);
   if (cThread) {
     const triggered = await checkPostCombatSurges(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds), cThread, ownerId, pending.defenderPlayerNum);
     if (triggered) { saveGames(); return; }
@@ -69,7 +70,7 @@ export async function handleReactionUse(interaction, ctx) {
   game[discardKey].push(cardName);
   const combat = pending.combat;
   const attackerPlayerNum = combat.attackerPlayerNum;
-  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, pending.combatThreadId);
 
   if (cardName === 'Payback') {
     // Payback: Dengar counter-attacks the attacker with +2 Surge bonus
@@ -164,7 +165,7 @@ export async function handleRightBack(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const rbPending = game.pendingRightBackAtYa;
   delete game.pendingRightBackAtYa;
-  const thread = await client.channels.fetch(rbPending.combatThreadId).catch(() => null);
+  const thread = await fetchCombatThread(client, rbPending.combatThreadId);
   let dmg = 1;
   if (isBlockVariant) {
     // Spend Block token
@@ -210,7 +211,7 @@ export async function handleMasteryPick(interaction, ctx) {
   if (!isMasterySkip) {
     // Rest in Peace: block discard-pile retrieval
     if (mastGame.restInPeaceActive) {
-      const mastThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
+      const mastThread = await fetchCombatThread(client, mastCombat.combatThreadId);
       if (mastThread) await mastThread.send('**Mastery** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).').catch(discordCatch);
     } else {
     const mastCardIdx = parseInt(interaction.customId.split('_').pop(), 10);
@@ -223,13 +224,13 @@ export async function handleMasteryPick(interaction, ctx) {
       const mastHandKey = ccHandKey(mastAPN);
       mastGame[mastHandKey] = mastGame[mastHandKey] || [];
       mastGame[mastHandKey].push(mastCard);
-      const mastThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
+      const mastThread = await fetchCombatThread(client, mastCombat.combatThreadId);
       if (mastThread) await mastThread.send(`**Mastery** — **${mastCard}** returned from discard to hand.`).catch(discordCatch);
       await updateHandChannelMessages(mastGame, client).catch(discordCatch);
     }
     }
   }
-  const mastCThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
+  const mastCThread = await fetchCombatThread(client, mastCombat.combatThreadId);
   if (mastCThread) {
     const triggered = await checkPostCombatSurges(mastGame, mastCombat, mastRT, new Set(mastEmbed), mastCThread, mastOwnerId, mastDPN);
     if (triggered) { saveGames(); return; }
@@ -259,7 +260,7 @@ export async function handleInterrogatePick(interaction, ctx) {
   if (interaction.user.id !== intOwnerId) { await interaction.followUp({ content: 'Only the attacker can resolve Interrogate.', ephemeral: true }).catch(discordCatch); return; }
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  const intThread = await client.channels.fetch(intCombat.combatThreadId).catch(() => null);
+  const intThread = await fetchCombatThread(client, intCombat.combatThreadId);
 
   if (buttonKey === 'interrogate_pick_') {
     // Step 1: attacker chose a card from opponent's hand. Show own hand to optionally discard.

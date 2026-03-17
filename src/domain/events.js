@@ -21,3 +21,12 @@ export function createDomainEvent(type, gameId, playerId, payload, meta = {}) {
 export function resetSeqCounter(gameId, startSeq) { seqCounters.set(gameId, startSeq); }
 export function getSeqCounter(gameId) { return seqCounters.get(gameId) || 0; }
 export function clearSeqCounter(gameId) { seqCounters.delete(gameId); }
+
+/** Bump seq counter and update the event object in-place (used by retry logic). */
+export function bumpEventSeq(event) {
+  const next = (seqCounters.get(event.gameId) || event.seq) + 1;
+  seqCounters.set(event.gameId, next);
+  event.seq = next;
+  event.aggregateVersion = next;
+  return event;
+}

@@ -2,6 +2,7 @@
  * Deployment UI helper functions extracted from index.js.
  * Deploy prompts, map attachments for space choices, movement bank text.
  */
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /** Movement bank display text (green progress bar). */
 export function getMovementBankText(displayName, remaining, total) {
@@ -39,7 +40,7 @@ export async function updateDeployPromptMessages(game, playerNum, client, deps) 
   const squad = deps.getSquad(game, playerNum);
   const dcList = squad?.dcList || [];
   try {
-    const handChannel = await client.channels.fetch(handId);
+    const handChannel = await fetchGameChannel(client, handId);
     for (const msgId of msgIds) {
       try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
     }

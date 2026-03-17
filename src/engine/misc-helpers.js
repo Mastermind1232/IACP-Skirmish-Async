@@ -10,6 +10,7 @@ import {
   ButtonStyle,
   AttachmentBuilder,
 } from 'discord.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * Build embeds and files for the "Attachments" message under a DC.
@@ -351,7 +352,7 @@ export async function sendDeckIllegalAlert(game, isP1, squad, validation, client
   const key = `${gameId}_${playerNum}`;
   deps.pendingIllegalSquad.set(key, { squad, timestamp: Date.now() });
   const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
-  const handChannel = await client.channels.fetch(handChannelId);
+  const handChannel = await fetchGameChannel(client, handChannelId);
   const errorList = validation.errors.map((e) => `\u2022 ${e}`).join('\n');
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -386,7 +387,7 @@ export async function sendSquadConfirmation(game, isP1, squad, validation, clien
   const key = `${gameId}_${playerNum}`;
   deps.pendingSquadConfirm.set(key, { squad, validation, timestamp: Date.now() });
   const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
-  const handChannel = await client.channels.fetch(handChannelId);
+  const handChannel = await fetchGameChannel(client, handChannelId);
   const text = deps.buildSquadConfirmText(squad, validation);
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -413,7 +414,7 @@ export async function sendSquadConfirmation(game, isP1, squad, validation, clien
  */
 export async function sendRoundActivationPhaseMessage(game, client, deps) {
   const gameId = game.gameId;
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   const round = game.currentRound || 1;
   const roundEmbed = new EmbedBuilder()
     .setTitle(`${deps.GAME_PHASES.ROUND.emoji}  ROUND ${round} - Start of Round`)

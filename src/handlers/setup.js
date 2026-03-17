@@ -23,6 +23,7 @@ import { dcNameFromFigureKey, isFigurelessDc } from '../game/index.js';
 import { stripBrackets, cardNameEquals } from '../game/card-names.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
@@ -541,7 +542,7 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
   const mapName = map?.name ?? 'Map';
   if (game.generalSetupMessageId) {
     try {
-      const generalChannel = await client.channels.fetch(game.generalId);
+      const generalChannel = await fetchGameChannel(client, game.generalId);
       const setupMsg = await generalChannel.messages.fetch(game.generalSetupMessageId);
       const _setupRow = getGeneralSetupButtons(game);
       await setupMsg.edit({ components: _setupRow ? [_setupRow] : [] });
@@ -551,7 +552,7 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
   }
   try {
     if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
-      const generalCh = await client.channels.fetch(game.generalId);
+      const generalCh = await fetchGameChannel(client, game.generalId);
       const guild = generalCh.guild;
       const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalCh.parentId);
       const prefix = `IA${game.gameId}`;
@@ -563,7 +564,7 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     }
     // Map Updates channel created AFTER play areas so it appears last in the category
     if (!game.boardId) {
-      const generalCh = await client.channels.fetch(game.generalId);
+      const generalCh = await fetchGameChannel(client, game.generalId);
       const guild = generalCh.guild;
       const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalCh.parentId);
       const prefix = `IA${game.gameId}`;
@@ -581,7 +582,7 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     } else if (map) {
       // Board channel already exists (re-entry); post the map to it
       try {
-        const boardChannel = await client.channels.fetch(game.boardId);
+        const boardChannel = await fetchGameChannel(client, game.boardId);
         const payload = await buildBoardMapPayload(game.gameId, map, game);
         await boardChannel.send(payload);
       } catch (err) {
@@ -591,8 +592,8 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     if (!game.p1HandId || !game.p2HandId) {
       await createHandThreads(client, game);
     }
-    const p1Hand = await client.channels.fetch(game.p1HandId);
-    const p2Hand = await client.channels.fetch(game.p2HandId);
+    const p1Hand = await fetchGameChannel(client, game.p1HandId);
+    const p2Hand = await fetchGameChannel(client, game.p2HandId);
     const p1Id = game.player1Id;
     const p2Id = game.player2Id;
     {
@@ -799,7 +800,7 @@ export async function handleDraftRandom(interaction, ctx) {
     game.draftRandomUsed = true;
     if (game.generalSetupMessageId) {
       try {
-        const generalChannel = await client.channels.fetch(game.generalId);
+        const generalChannel = await fetchGameChannel(client, game.generalId);
         const setupMsg = await generalChannel.messages.fetch(game.generalSetupMessageId);
         const _setupRow = getGeneralSetupButtons(game);
       await setupMsg.edit({ components: _setupRow ? [_setupRow] : [] });
@@ -837,7 +838,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
   if (!game.player2Squad) missing.push(`<@${game.player2Id}> (Player 2)`);
   if (missing.length > 0) {
     await interaction.followUp({ content: 'Both players must select their squads before initiative can be determined.', ephemeral: true }).catch(discordCatch);
-    const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+    const generalChannel = await fetchGameChannel(client, game.generalId);
     if (generalChannel) {
       await generalChannel.send({
         content: `⚠️ **Initiative blocked** — Squad selection required first.\n\nStill needed: ${missing.join(', ')}`,
@@ -891,7 +892,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
     if (p1HasDS && p2HasDS) {
       await logGameAction(game, client, `Both players have **[Devious Scheme]** — cards cancel each other. Normal initiative rules apply.`, { phase: 'INITIATIVE', icon: 'initiative' });
     }
-    const generalChannel = await client.channels.fetch(game.generalId);
+    const generalChannel = await fetchGameChannel(client, game.generalId);
     const zoneMsg = await generalChannel.send({
       content: `<@${zoneChooser}> (**Player ${dsPlayerNum}**) — Pick your deployment zone (Devious Scheme):`,
       allowedMentions: { users: [zoneChooser] },
@@ -900,7 +901,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
     game.deploymentZoneMessageId = zoneMsg.id;
   } else {
     await logGameAction(game, client, `<@${winner}> (**Player ${playerNum}**) won initiative (random roll)! Choose your deployment zone.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
-    const generalChannel = await client.channels.fetch(game.generalId);
+    const generalChannel = await fetchGameChannel(client, game.generalId);
     const zoneMsg = await generalChannel.send({
       content: `<@${winner}> (**Player ${playerNum}**) — Pick your deployment zone:`,
       allowedMentions: { users: [winner] },
@@ -945,7 +946,7 @@ export async function handleDeploymentZone(interaction, ctx) {
   await logGameAction(game, client, `<@${zoneChooserId}> (${zoneLabel}**Player ${zoneChooserPlayerNum}**) chose the **${zone}** deployment zone`, { allowedMentions: { users: [zoneChooserId] }, phase: 'INITIATIVE', icon: 'zone' });
   if (game.deploymentZoneMessageId) {
     try {
-      const generalChannel = await client.channels.fetch(game.generalId);
+      const generalChannel = await fetchGameChannel(client, game.generalId);
       const zoneMsg = await generalChannel.messages.fetch(game.deploymentZoneMessageId);
       await zoneMsg.edit({ content: `~~Pick your deployment zone~~ — **${zone}** chosen.`, components: [] });
     } catch (err) {
@@ -972,7 +973,7 @@ export async function handleDeploymentZone(interaction, ctx) {
       2: [...game.setupAttachmentPending[2]],
     };
     game.setupAttachmentApplied = { 1: [], 2: [] };
-    const generalChannel = await client.channels.fetch(game.generalId);
+    const generalChannel = await fetchGameChannel(client, game.generalId);
     await generalChannel.send({
       content: '**Deployment zones chosen.** Place your Skirmish Upgrade card(s) on your Deployment cards (see the **Your Hand** thread in your Play Area). Deployment will begin after upgrades are placed.',
     });
@@ -1039,7 +1040,7 @@ async function _sendInitiativeDeployButtons(game, gameId, ctx) {
   game[deployMetadataKey] = initiativeMetadata;
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   try {
-    const initiativeHandChannel = await client.channels.fetch(initiativeHandId);
+    const initiativeHandChannel = await fetchGameChannel(client, initiativeHandId);
     const { deployRows, doneRow } = getDeployButtonRows(gameId, initiativePlayerNum, initiativeDcList, zone, game.figurePositions, game);
     const DEPLOY_ROWS_PER_MSG = 4;
     game.initiativeDeployMessageIds = game.initiativeDeployMessageIds || [];
@@ -1203,7 +1204,7 @@ export async function handleDeploymentFig(interaction, ctx) {
     if (firstDeployMsgId) {
       try {
         const handId = getHandChannelId(game, playerNum);
-        const handChannel = await client.channels.fetch(handId);
+        const handChannel = await fetchGameChannel(client, handId);
         const deployMsg = await handChannel.messages.fetch(firstDeployMsgId);
         await deployMsg.edit({ attachments: [] });
       } catch {}
@@ -1318,7 +1319,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
     if (firstDeployMsgId) {
       try {
         const handId = getHandChannelId(game, playerNum);
-        const handChannel = await client.channels.fetch(handId);
+        const handChannel = await fetchGameChannel(client, handId);
         const deployMsg = await handChannel.messages.fetch(firstDeployMsgId);
         await deployMsg.edit({ attachments: [] });
       } catch {}
@@ -1558,7 +1559,7 @@ export async function handleDeployPick(interaction, ctx) {
   if (gridMsgIds.length > 0) {
     try {
       const handId = getHandChannelId(game, playerNum);
-      const handChannel = await client.channels.fetch(handId);
+      const handChannel = await fetchGameChannel(client, handId);
       for (const msgId of gridMsgIds) {
         if (msgId === clickedMsgId) continue;
         try {
@@ -1592,7 +1593,7 @@ export async function handleDeployPick(interaction, ctx) {
   await updateDeployPromptMessages(game, playerNum, client);
   if (game.boardId && game.selectedMap) {
     try {
-      const boardChannel = await client.channels.fetch(game.boardId);
+      const boardChannel = await fetchGameChannel(client, game.boardId);
       const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
       await boardChannel.send(payload);
     } catch (err) {
@@ -1617,7 +1618,7 @@ export async function handleDeployPick(interaction, ctx) {
       const files = _getLoadoutImageAttachment(loadoutCards[defaultName]);
       try {
         const handId = getHandChannelId(game, playerNum);
-        const handChannel = await client.channels.fetch(handId);
+        const handChannel = await fetchGameChannel(client, handId);
         await handChannel.send({
           content: `⚔️ **Imperial Loadout** — Choose a Loadout card for **${figMeta.dcName}**:`,
           components: [selectionRow, confirmRow],
@@ -1646,7 +1647,7 @@ export async function handleDeployPick(interaction, ctx) {
       );
       try {
         const handId = getHandChannelId(game, playerNum);
-        const handChannel = await client.channels.fetch(handId);
+        const handChannel = await fetchGameChannel(client, handId);
         await handChannel.send({
           content: `🔄 **Shape** — Choose a Form card for **${figMeta.dcName}**:`,
           components: [row],
@@ -1874,7 +1875,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     await logGameAction(game, client, `<@${interaction.user.id}> finished deploying`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deployed' });
     const initiativeHandId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
     try {
-      const handChannel = await client.channels.fetch(initiativeHandId);
+      const handChannel = await fetchGameChannel(client, initiativeHandId);
       const toDelete = [...(game.initiativeDeployMessageIds || []), ...(game.initiativeDeployedConfirmIds || [])];
       for (const msgId of toDelete) {
         try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
@@ -1887,7 +1888,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     }
     if (game.boardId && game.selectedMap) {
       try {
-        const boardChannel = await client.channels.fetch(game.boardId);
+        const boardChannel = await fetchGameChannel(client, game.boardId);
         const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
         await boardChannel.send(payload);
       } catch (err) {
@@ -1906,7 +1907,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
     try {
       const nonInitiativePlayerId = getPlayerId(game, nonInitiativePlayerNum);
-      const nonInitiativeHandChannel = await client.channels.fetch(nonInitiativeHandId);
+      const nonInitiativeHandChannel = await fetchGameChannel(client, nonInitiativeHandId);
       const { deployRows, doneRow } = getDeployButtonRows(gameId, nonInitiativePlayerNum, nonInitiativeDcList, otherZone, game.figurePositions, game);
       const DEPLOY_ROWS_PER_MSG = 4;
       game.nonInitiativeDeployMessageIds = game.nonInitiativeDeployMessageIds || [];
@@ -1956,7 +1957,7 @@ export async function handleDeploymentDone(interaction, ctx) {
   game.nonInitiativePlayerDeployed = true;
   const nonInitiativeHandId = game.initiativePlayerId === game.player1Id ? game.p2HandId : game.p1HandId;
   try {
-    const handChannel = await client.channels.fetch(nonInitiativeHandId);
+    const handChannel = await fetchGameChannel(client, nonInitiativeHandId);
     const toDelete = [...(game.nonInitiativeDeployMessageIds || []), ...(game.nonInitiativeDeployedConfirmIds || [])];
     for (const msgId of toDelete) {
       try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
@@ -2064,7 +2065,7 @@ export async function handleAutoDeploy(interaction, ctx) {
   const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
   const handId = getHandChannelId(game, playerNum);
   try {
-    const handChannel = await client.channels.fetch(handId);
+    const handChannel = await fetchGameChannel(client, handId);
     // Delete old deploy messages
     const toDelete = game[idsKey] || [];
     for (const msgId of toDelete) {
@@ -2092,7 +2093,7 @@ export async function handleAutoDeploy(interaction, ctx) {
   // Post board update
   if (game.boardId && game.selectedMap) {
     try {
-      const boardChannel = await client.channels.fetch(game.boardId);
+      const boardChannel = await fetchGameChannel(client, game.boardId);
       const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
       await boardChannel.send(payload);
     } catch (err) {
@@ -2151,7 +2152,7 @@ export async function handleSetupAttachTo(interaction, ctx) {
       .setStyle(ButtonStyle.Secondary),
   );
   const handId = getHandChannelId(game, playerNum);
-  const handChannel = await client.channels.fetch(handId);
+  const handChannel = await fetchGameChannel(client, handId);
   await handChannel.send({
     content: `Attach **${card}** to **${dcDisplayName}**?`,
     components: [confirmRow],
@@ -2279,7 +2280,7 @@ export async function handleAttachDoneConfirm(interaction, ctx) {
   if (oppPending === 0 && oppConfirmed) {
     // Both done and confirmed — clean up redo notices
     if (game.attachRedoNoticeIds?.length) {
-      const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+      const generalChannel = await fetchGameChannel(client, game.generalId);
       if (generalChannel) {
         for (const nId of game.attachRedoNoticeIds) {
           await generalChannel.messages.delete(nId).catch(discordCatch);
@@ -2298,7 +2299,7 @@ export async function handleAttachDoneConfirm(interaction, ctx) {
     await sendPhaseGateMessages(game, 'attach_done', ctx);
   } else {
     const handId = getHandChannelId(game, playerNum);
-    const handChannel = await client.channels.fetch(handId);
+    const handChannel = await fetchGameChannel(client, handId);
     await handChannel.send({ content: 'Attachments confirmed. Waiting for your opponent to finish placing theirs.' });
   }
   saveGames();
@@ -2379,7 +2380,7 @@ export async function handleAttachDoneRedo(interaction, ctx) {
   // Notify both players in general channel
   const p1Id = getPlayerId(game, 1);
   const p2Id = getPlayerId(game, 2);
-  const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   if (generalChannel) {
     const redoNoticeMsg = await generalChannel.send({
       content: `<@${p1Id}> <@${p2Id}> — Attachment placements are being redone. Your play areas will reassemble with the correct attachments once complete.`,
@@ -2432,7 +2433,7 @@ export async function recoverSetupAttachments(game, gameId, playerNum, client) {
 /** Helper: send the attachment dropdown for a card. Exported for phase-gate.js. */
 export async function _sendAttachmentDropdown(game, gameId, playerNum, card, client) {
   const handId = getHandChannelId(game, playerNum);
-  const handChannel = await client.channels.fetch(handId);
+  const handChannel = await fetchGameChannel(client, handId);
   const dcList = getDcList(game, playerNum) || [];
   const dcMsgIds = getDcMessageIds(game, playerNum) || [];
   const restriction = getAttachmentRestriction(card);
@@ -2479,7 +2480,7 @@ export async function _sendAttachmentDropdown(game, gameId, playerNum, card, cli
 /** Helper: send the "all done" prompt with confirm/redo. Exported for phase-gate.js. */
 export async function _sendAttachDonePrompt(game, gameId, playerNum, client) {
   const handId = getHandChannelId(game, playerNum);
-  const handChannel = await client.channels.fetch(handId);
+  const handChannel = await fetchGameChannel(client, handId);
   const oppNum = opponentPlayerNum(playerNum);
   const oppPending = (game.setupAttachmentPending?.[oppNum] || []).length;
   const oppConfirmed = game.setupAttachmentConfirmed?.[oppNum];

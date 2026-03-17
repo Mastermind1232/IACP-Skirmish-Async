@@ -5,6 +5,7 @@ import { EmbedBuilder, ChannelType, ThreadAutoArchiveDuration } from 'discord.js
 import { getActivationsMessageId, getActivationsRemaining, getActivationsTotal, getPlayAreaId } from '../game/player-helpers.js';
 import { enforceContentLimit, DISCORD_CONTENT_LIMIT } from './limits.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
+import { fetchGameChannel } from './channel-helpers.js';
 
 /** Orange sidebar color for phase embeds */
 export const PHASE_COLOR = 0xf39c12;
@@ -61,7 +62,7 @@ export async function logPhaseHeader(game, client, phase, roundNum = null) {
   if (game[phaseKey] === fullKey) return;
   game[phaseKey] = fullKey;
   try {
-    const ch = await client.channels.fetch(game.generalId);
+    const ch = await fetchGameChannel(client, game.generalId);
     const embed = new EmbedBuilder()
       .setTitle(`${phase.emoji}  ${phaseName}`)
       .setColor(phase.color);
@@ -84,7 +85,7 @@ export async function logGameAction(game, client, content, options = {}) {
       _clearPreviousPing(game, client);
     }
 
-    const ch = await client.channels.fetch(game.generalId);
+    const ch = await fetchGameChannel(client, game.generalId);
     const icon = options.icon ? `${ACTION_ICONS[options.icon] || ''} ` : '';
     const phase = options.phase;
     if (phase) {
@@ -124,8 +125,8 @@ function _clearPreviousPing(game, client) {
   const msgId = game._lastPingLogMsgId;
   delete game._lastPingLogMsgId;
   if (!msgId || !game.generalId) return;
-  client.channels.fetch(game.generalId).then(ch =>
-    ch.messages.fetch(msgId).then(msg => {
+  fetchGameChannel(client, game.generalId).then(ch =>
+    ch?.messages.fetch(msgId).then(msg => {
       let text = msg.content;
       if (game.player1Id) text = text.replaceAll(`<@${game.player1Id}>`, '**P1**');
       if (game.player2Id) text = text.replaceAll(`<@${game.player2Id}>`, '**P2**');
@@ -157,7 +158,7 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
     await guild.roles.fetch().catch(discordCatch);
     // Try fetching by known channel ID first, fall back to name search
     let ch = null;
-    try { ch = await client.channels.fetch(BOT_LOGS_CHANNEL_ID).catch(() => null); } catch {}
+    try { ch = await fetchGameChannel(client, BOT_LOGS_CHANNEL_ID); } catch {}
     if (!ch) {
       await guild.channels.fetch().catch(discordCatch);
       ch = guild.channels.cache.find((c) => {
@@ -202,7 +203,7 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
           threadId = null;
         }
       }
-      let target = threadId ? await client.channels.fetch(threadId).catch(() => null) : null;
+      let target = threadId ? await fetchGameChannel(client, threadId) : null;
       if (!target) {
         // Thread gone/archived or no gameId thread yet — clear stale cache and fall back to channel
         if (threadId) gameErrorThreads.delete(key);
@@ -290,7 +291,8 @@ export async function updateActivationsMessage(game, playerNum, client) {
   if (msgId == null || total === 0) return;
   try {
     const channelId = getPlayAreaId(game, playerNum);
-    const channel = await client.channels.fetch(channelId);
+    const channel = await fetchGameChannel(client, channelId);
+    if (!channel) return;
     const msg = await channel.messages.fetch(msgId);
     await msg.edit(getActivationsLine(remaining, total));
   } catch (err) {

@@ -12,7 +12,9 @@ import {
   getActivatedDcIndices, opponentPlayerNum, ccHandKey,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { fetchGameChannel, fetchCombatThread } from '../discord/channel-helpers.js';
 import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 import { getRecoveryPrompts, needsRecovery } from '../engine/recovery.js';
 
 /**
@@ -123,7 +125,7 @@ async function recoverBothSquadsReady(game, gameId, ctx) {
 
   // Check if the initiative button already exists in the game log
   if (!game.generalId) return null;
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   if (!generalChannel) return null;
 
   const recentMsgs = await generalChannel.messages.fetch({ limit: 30 });
@@ -168,7 +170,7 @@ async function recoverPendingCombat(game, gameId, ctx) {
 
   let thread;
   try {
-    thread = await client.channels.fetch(combat.combatThreadId);
+    thread = await fetchCombatThread(client, combat.combatThreadId);
   } catch {
     return null; // thread gone — cannot recover
   }
@@ -237,7 +239,7 @@ async function recoverPendingNegation(game, gameId, ctx) {
   const handId = getHandChannelId(game, oppNum);
   if (!handId) return null;
 
-  const handCh = await client.channels.fetch(handId);
+  const handCh = await fetchGameChannel(client, handId);
   const buttons = getNegationResponseButtons(gameId);
   await handCh.send({
     content: `**[Recover]** Your opponent played a Command Card. Respond with Negation or let it resolve:`,
@@ -259,7 +261,7 @@ async function recoverSetupAttachmentPhase(game, gameId, ctx) {
 
     const handId = getHandChannelId(game, pn);
     if (!handId) continue;
-    const handCh = await client.channels.fetch(handId);
+    const handCh = await fetchGameChannel(client, handId);
 
     // Pending confirm — re-send confirm/reselect buttons
     if (game.pendingAttachConfirm?.[pn]) {
@@ -330,7 +332,7 @@ async function recoverPendingEndTurn(game, gameId, ctx) {
   if (!game.pendingEndTurn || Object.keys(game.pendingEndTurn).length === 0) return [];
 
   const results = [];
-  const generalCh = game.generalId ? await client.channels.fetch(game.generalId) : null;
+  const generalCh = game.generalId ? await fetchGameChannel(client, game.generalId) : null;
   if (!generalCh) return [];
 
   for (const [msgId, entry] of Object.entries(game.pendingEndTurn)) {
@@ -375,7 +377,7 @@ async function recoverEndOfRoundWhoseTurn(game, gameId, ctx) {
 
   // Send reminder in general
   if (game.generalId) {
-    const generalCh = await client.channels.fetch(game.generalId);
+    const generalCh = await fetchGameChannel(client, game.generalId);
     await generalCh.send({
       content: `**[Recover]** <@${game.endOfRoundWhoseTurn}> — it's your turn in the End of Round window. Click **End 'End of Round' window** in your Hand channel when done.`,
       allowedMentions: { users: [game.endOfRoundWhoseTurn] },
@@ -423,7 +425,7 @@ async function recoverForceVisionPending(game, gameId, ctx) {
   if (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(...btns));
 
   const ownerId = getPlayerId(game, fvPn);
-  const generalCh = await client.channels.fetch(game.generalId);
+  const generalCh = await fetchGameChannel(client, game.generalId);
   await generalCh.send({
     content: `**[Recover]** Force Vision — <@${ownerId}>, choose one of your ready groups to activate next:`,
     components: rows.slice(0, 5),
@@ -447,14 +449,13 @@ async function recoverPendingStartOfRound(game, gameId, ctx) {
       const hand = game[ccHandKey(pn)] || [];
       if (hand.length > 0) {
         const handId = getHandChannelId(game, pn);
-        const handCh = await client.channels.fetch(handId);
+        const handCh = await fetchGameChannel(client, handId);
         const pickBtns = hand.slice(0, 25).map((card, idx) => new ButtonBuilder()
           .setCustomId(`rogue_one_return_${gameId}_${pn}_${idx}`)
           .setLabel(card.length > 80 ? card.slice(0, 77) + '...' : card)
           .setStyle(ButtonStyle.Primary)
         );
-        const pickRows = [];
-        for (let r = 0; r < pickBtns.length; r += 5) pickRows.push(new ActionRowBuilder().addComponents(pickBtns.slice(r, r + 5)));
+        const pickRows = chunkButtonsToRows(pickBtns);
         await handCh.send({
           content: `**[Recover]** Rogue One — Choose a card to place on top of your deck (${roPending.remaining} remaining):`,
           components: pickRows,
@@ -465,7 +466,7 @@ async function recoverPendingStartOfRound(game, gameId, ctx) {
 
   // Always send a fallback end_start_of_round_ button in general
   if (game.generalId) {
-    const generalCh = await client.channels.fetch(game.generalId);
+    const generalCh = await fetchGameChannel(client, game.generalId);
     const fallbackRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`end_start_of_round_${gameId}`)
@@ -507,7 +508,7 @@ async function recoverMoveInProgress(game, gameId, ctx) {
     const mpRows = getMoveMpButtonRows(msgId, figureIndex, moveState.mpRemaining);
     if (mpRows.length === 0) continue;
 
-    const ch = await client.channels.fetch(channelId);
+    const ch = await fetchGameChannel(client, channelId);
     await ch.send({
       content: `**[Recover]** Movement in progress — ${moveState.mpRemaining} MP remaining. Choose how many to spend:`,
       components: mpRows,
@@ -528,7 +529,7 @@ async function recoverRoundActivationMessage(game, gameId, ctx) {
   // Check if message still exists
   let generalCh;
   try {
-    generalCh = await client.channels.fetch(game.generalId);
+    generalCh = await fetchGameChannel(client, game.generalId);
     await generalCh.messages.fetch(game.roundActivationMessageId);
     return null; // message exists, no recovery needed
   } catch {
@@ -536,7 +537,7 @@ async function recoverRoundActivationMessage(game, gameId, ctx) {
     const activePlayerId = game.currentActivationTurnPlayerId || game.initiativePlayerId;
     const activePlayerNum = activePlayerId === game.player1Id ? 1 : 2;
     const round = game.currentRound;
-    if (!generalCh) generalCh = await client.channels.fetch(game.generalId);
+    if (!generalCh) generalCh = await fetchGameChannel(client, game.generalId);
     const sent = await generalCh.send({
       content: `**[Recover]** <@${activePlayerId}> (**Player ${activePlayerNum}**) **Round ${round}** — Your turn!`,
       allowedMentions: { users: [activePlayerId] },
@@ -566,7 +567,7 @@ async function recoverCcDrawPhase(game, gameId, ctx) {
     const handId = getHandChannelId(game, pn);
     if (!handId) continue;
 
-    const handCh = await client.channels.fetch(handId);
+    const handCh = await fetchGameChannel(client, handId);
     await handCh.send({
       content: `**[Recover]** Shuffle your deck and draw your starting hand:`,
       components: [getCcShuffleDrawButton(gameId)],
@@ -591,14 +592,14 @@ async function recoverPhaseGate(game, gameId, ctx) {
     let msgExists = false;
     if (msgId) {
       try {
-        const handCh = await client.channels.fetch(handId);
+        const handCh = await fetchGameChannel(client, handId);
         await handCh.messages.fetch(msgId);
         msgExists = true;
       } catch {}
     }
     if (!msgExists) {
       // Re-send gate message with current ready state
-      const handCh = await client.channels.fetch(handId);
+      const handCh = await fetchGameChannel(client, handId);
       const label = (PHASE_GATE_LABELS[gate.phase] || 'Phase gate active')
         .replace('{round}', String(game.currentRound || 1));
       const isReady = pn === 1 ? gate.p1Ready : gate.p2Ready;

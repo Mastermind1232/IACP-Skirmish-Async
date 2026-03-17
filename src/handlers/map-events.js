@@ -6,6 +6,7 @@ import { getPlayerId } from '../game/player-helpers.js';
 import { edgeKey } from '../game/coords.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -37,7 +38,7 @@ export async function handleDevaronDoorOpen(interaction, ctx) {
     if (pending.doorsRemaining <= 0) game.pendingDoorSelections.shift();
     await interaction.message.edit({ components: [] }).catch(discordCatch);
     const allDoors = getMapTokensData()['devaron-garrison']?.doors || [];
-    const generalCh = await client.channels.fetch(game.generalId);
+    const generalCh = await fetchGameChannel(client, game.generalId);
     if (game.pendingDoorSelections.length > 0) {
       await postDevaronDoorButtons(game, allDoors, generalCh, gameId);
     } else {

@@ -125,7 +125,7 @@ const CONTEXT_GROUPS = {
     'getDcActionButtons', 'getActivationMinimapAttachment', 'getActivateDcButtons',
     'DC_ACTIONS_PER_ACTIVATION', 'ThreadAutoArchiveDuration', 'ACTION_ICONS',
     'getDcStats', 'getRange', 'hasLineOfSight', 'getMapSpaces',
-    'findDcMessageIdForFigure',
+    'findDcMessageIdForFigure', 'updateHandVisualMessage',
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
   ],
 

@@ -4,6 +4,7 @@
  */
 import { PermissionFlagsBits } from 'discord.js';
 import { discordCatch } from '../error-handling.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -17,7 +18,7 @@ export async function handleRequestResolve(interaction, ctx) {
     return;
   }
   try {
-    const thread = await interaction.client.channels.fetch(threadId);
+    const thread = await fetchGameChannel(interaction.client, threadId);
     if (!thread?.isThread?.()) {
       await interaction.followUp({ content: 'Thread not found.', ephemeral: true }).catch(discordCatch);
       return;
@@ -45,7 +46,7 @@ export async function handleRequestReject(interaction, ctx) {
     return;
   }
   try {
-    const thread = await interaction.client.channels.fetch(threadId);
+    const thread = await fetchGameChannel(interaction.client, threadId);
     if (!thread?.isThread?.()) {
       await interaction.followUp({ content: 'Thread not found.', ephemeral: true }).catch(discordCatch);
       return;

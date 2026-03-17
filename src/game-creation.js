@@ -16,6 +16,7 @@ import {
 } from 'discord.js';
 import { PHASES } from './game/phase.js';
 import { discordCatch } from './error-handling.js';
+import { fetchGameChannel } from './discord/channel-helpers.js';
 
 /**
  * Sanitize a display name for use in Discord channel names.
@@ -74,8 +75,8 @@ export async function createPlayAreaChannels(guild, gameCategory, prefix, player
  */
 export async function createHandThreads(client, game, deps) {
   const { discordCatch } = deps;
-  const p1PlayArea = await client.channels.fetch(game.p1PlayAreaId);
-  const p2PlayArea = await client.channels.fetch(game.p2PlayAreaId);
+  const p1PlayArea = await fetchGameChannel(client, game.p1PlayAreaId);
+  const p2PlayArea = await fetchGameChannel(client, game.p2PlayAreaId);
   const p1Thread = await p1PlayArea.threads.create({
     name: 'Your Hand',
     autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
@@ -340,7 +341,7 @@ export async function applySquadSubmission(game, isP1, squad, client, deps) {
   const playerNum = isP1 ? 1 : 2;
   await logGameAction(game, client, `<@${playerId}> submitted squad **${squad.name || 'Unnamed'}** (${squad.dcCount ?? 0} DCs, ${squad.ccCount ?? 0} CCs)`, { allowedMentions: { users: [playerId] }, phase: 'SETUP', icon: 'squad' });
   const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
-  const handChannel = await client.channels.fetch(handChannelId);
+  const handChannel = await fetchGameChannel(client, handChannelId);
   const handMessages = await handChannel.messages.fetch({ limit: 10 });
   const botMsg = handMessages.find((m) => m.author.bot && m.components.length > 0);
   if (botMsg) {
@@ -382,7 +383,7 @@ export async function postBothSquadsReady(game, client, deps, opts = {}) {
   const { createPlayAreaChannels, createBoardChannel,
     buildBoardMapPayload, populatePlayAreas, getDetermineInitiativeButtons } = deps;
 
-  const generalChannel = await client.channels.fetch(game.generalId);
+  const generalChannel = await fetchGameChannel(client, game.generalId);
 
   // ── Temporary "setting up" message while Play Areas are created ──
   let settingUpMsg = null;

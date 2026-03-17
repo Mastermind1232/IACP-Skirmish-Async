@@ -15,6 +15,7 @@ import {
   EmbedBuilder,
   ThreadAutoArchiveDuration,
 } from 'discord.js';
+import { splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
@@ -31,7 +32,9 @@ import {
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 
 /**
  * C14: After a CC is played, check if opponent has Comm Disruption in hand
@@ -68,7 +71,7 @@ async function promptCommDisruption(game, gameId, playerNum, card, client, logGa
   const oppHandId = getHandChannelId(game, oppNum);
   if (!oppHandId) return;
   try {
-    const oppHandChannel = await client.channels.fetch(oppHandId);
+    const oppHandChannel = await fetchGameChannel(client, oppHandId);
     const oppId = getPlayerId(game, oppNum);
     game.pendingCommDisruptionPrompt = { targetPlayerNum: oppNum, playedCard: card, playedBy: playerNum, gameId };
     const row = new ActionRowBuilder().addComponents(
@@ -215,7 +218,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   game[attachKey][dcMsgId].push(card);
   delete game.pendingCcAttachment;
   await updateAttachmentMessageForDc(game, playerNum, dcMsgId, interaction.client);
-  const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+  const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
   const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
   const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
@@ -279,7 +282,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.delete().catch(discordCatch);
   const handId = getHandChannelId(game, playerNum);
-  const handChannel = await interaction.client.channels.fetch(handId);
+  const handChannel = await fetchGameChannel(interaction.client, handId);
   await withDiscordRetry(() => handChannel.send({ embeds: [embed], files, components: [row] }));
 }
 
@@ -347,7 +350,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   if (!restriction.legal) {
     game.pendingIllegalCcPlay = { playerNum, card, reason: restriction.reason };
     const handId = getHandChannelId(game, playerNum);
-    const handChannel = await client.channels.fetch(handId);
+    const handChannel = await fetchGameChannel(client, handId);
     const msg = await withDiscordRetry(() => handChannel.send({
       content: `⚠️ The bot thinks playing **${card}** is illegal: ${restriction.reason}\n\nChoose **Ignore and play** to play it anyway, or **Unplay card** to cancel.`,
       components: [getIllegalCcPlayButtons(gameId)],
@@ -362,7 +365,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   if (_cbt?.ccLockedOut) {
     game.pendingIllegalCcPlay = { playerNum, card, reason: 'A card with "no other Command cards this attack" (e.g. Assassinate) was already played.' };
     const handId = getHandChannelId(game, playerNum);
-    const handChannel = await client.channels.fetch(handId);
+    const handChannel = await fetchGameChannel(client, handId);
     const msg = await withDiscordRetry(() => handChannel.send({
       content: `⚠️ **${card}** cannot be played: a mutual-exclude CC (Assassinate) is active this attack.\n\nChoose **Ignore and play** to override, or **Unplay card** to cancel.`,
       components: [getIllegalCcPlayButtons(gameId)],
@@ -501,7 +504,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       // C57: De Wanna Wanga passive reshuffle
       { const _dww = checkHandDiscardPassiveReshuffle(game, playerNum, card);
         if (_dww.reshuffled && logGameAction) await logGameAction(game, interaction.client, `**De Wanna Wanga** (passive) — Shuffled back into command deck.`, { phase: 'ROUND', icon: 'card' }); }
-      const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+      const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
       const handMessages = await handChannel.messages.fetch({ limit: 20 });
       const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
       const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
@@ -518,15 +521,11 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
       game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum, card, ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}) };
-      const rows = [];
-      const maxPerRow = 5;
-      for (let i = 0; i < result.choiceOptions.length; i++) {
-        if (i % maxPerRow === 0) rows.push(new ActionRowBuilder());
-        const label = String(result.choiceOptions[i]).slice(0, 80);
-        rows[rows.length - 1].addComponents(
-          new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${i}`).setLabel(label).setStyle(ButtonStyle.Secondary)
-        );
-      }
+      const btns = result.choiceOptions.map((opt) => {
+        const label = String(opt).slice(0, 80);
+        return new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${opt}`).setLabel(label).setStyle(ButtonStyle.Secondary);
+      });
+      const rows = chunkButtonsToRows(btns);
       await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(discordCatch);
       // C14: Comm Disruption — prompt opponent if they have it in hand
       await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
@@ -547,7 +546,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       // C57: De Wanna Wanga passive reshuffle
       { const _dww = checkHandDiscardPassiveReshuffle(game, playerNum, card);
         if (_dww.reshuffled && logGameAction) await logGameAction(game, interaction.client, `**De Wanna Wanga** (passive) — Shuffled back into command deck.`, { phase: 'ROUND', icon: 'card' }); }
-      const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+      const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
       const handMessages = await handChannel.messages.fetch({ limit: 20 });
       const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
       const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
@@ -586,7 +585,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       if (idxNow >= 0) handNow.splice(idxNow, 1);
       game[handKey] = handNow;
       game[discardKey] = (game[discardKey] || []).concat(card);
-      const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+      const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
       const handMessages = await handChannel.messages.fetch({ limit: 20 });
       const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
       const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
@@ -606,7 +605,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         const handChannelId2 = getHandChannelId(game, playerNum);
         if (handChannelId2) {
           game.pendingPowerTokenGrant.channelId = handChannelId2;
-          const ptCh = await interaction.client.channels.fetch(handChannelId2).catch(() => null);
+          const ptCh = await fetchGameChannel(interaction.client, handChannelId2);
           if (ptCh) {
             const { grants } = game.pendingPowerTokenGrant;
             const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
@@ -637,7 +636,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
             .setStyle(ButtonStyle.Primary)
         );
         const _belHandId = getHandChannelId(game, playerNum);
-        const _belHandCh = await interaction.client.channels.fetch(_belHandId);
+        const _belHandCh = await fetchGameChannel(interaction.client, _belHandId);
         await _belHandCh.send({
           content: `**Behind Enemy Lines** — Choose which card goes **on top** of the opponent's deck:`,
           components: [new ActionRowBuilder().addComponents(..._belBtns.slice(0, 5))],
@@ -660,7 +659,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       // Timing/context mismatch: don't move the card; ping in hand with Play anyway / Unplay (same as illegal-CC flow).
       game.pendingIllegalCcPlay = { playerNum, card, reason: result.manualMessage, fromContext: true };
       const handId = getHandChannelId(game, playerNum);
-      const handChannel = await client.channels.fetch(handId);
+      const handChannel = await fetchGameChannel(client, handId);
       const msg = await withDiscordRetry(() => handChannel.send({
         content: `We don't think you can do this right now: ${result.manualMessage}\n\nChoose **Ignore and play** to play it anyway (resolve manually), or **Unplay** to cancel.`,
         components: [getIllegalCcPlayButtons(gameId)],
@@ -682,7 +681,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   if (_dwwResult.reshuffled && logGameAction) {
     await logGameAction(game, interaction.client, `**De Wanna Wanga** (passive) — Shuffled back into command deck instead of staying in discard.`, { phase: 'ROUND', icon: 'card' });
   }
-  const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+  const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
   const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
   const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
@@ -706,7 +705,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     game.pendingNegation = { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel.id };
     const oppNum = opponentPlayerNum(playerNum);
     const oppHandId = getHandChannelId(game, oppNum);
-    const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
+    const oppHandChannel = await fetchGameChannel(interaction.client, oppHandId);
     if (oppHandChannel) {
       const oppId = getPlayerId(game, oppNum);
       await oppHandChannel.send({
@@ -836,7 +835,7 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push(card);
   const handId = getHandChannelId(game, playerNum);
-  const handChannel = await client.channels.fetch(handId);
+  const handChannel = await fetchGameChannel(client, handId);
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
   const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
   const deck = getCcDeck(game, playerNum) || [];
@@ -907,14 +906,14 @@ export async function handleCcSpacePick(interaction, ctx) {
 
 /** @param {import('discord.js').ButtonInteraction} interaction — choice button for choose-one CC (e.g. Retaliation). */
 export async function handleCcChoice(interaction, ctx) {
-  const match = interaction.customId.match(/^cc_choice_(.+)_(\d+)$/);
-  if (!match) {
+  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, getBoardStateForMovement, getSpaceChoiceRows, getMapAttachmentForSpaces, client, saveGames } = ctx;
+  const parts = interaction.customId.replace(/^cc_choice_/, '').split('_');
+  const gameId = parts[0];
+  const chosenLabel = parts.slice(1).join('_');
+  if (!gameId) {
     await interaction.followUp({ content: 'Invalid choice.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const [, gameId, choiceIndexStr] = match;
-  const choiceIndex = parseInt(choiceIndexStr, 10);
-  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, getBoardStateForMovement, getSpaceChoiceRows, getMapAttachmentForSpaces, client, saveGames } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingCcChoice;
@@ -924,7 +923,12 @@ export async function handleCcChoice(interaction, ctx) {
   }
   const playerNum = pending.playerNum;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the player who played the card can choose.')) return;
-  if (choiceIndex < 0 || choiceIndex >= (pending.choiceOptions?.length ?? 0)) {
+  // Match by label (new-style) or fall back to numeric index (old buttons still in flight)
+  let choiceIndex = pending.choiceOptions?.findIndex(opt => String(opt) === chosenLabel);
+  if (choiceIndex < 0 && /^\d+$/.test(chosenLabel)) {
+    choiceIndex = parseInt(chosenLabel, 10);
+  }
+  if (choiceIndex == null || choiceIndex < 0 || choiceIndex >= (pending.choiceOptions?.length ?? 0)) {
     await interaction.followUp({ content: 'Invalid option.', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -957,7 +961,7 @@ export async function handleCcChoice(interaction, ctx) {
       chosenFigureKey: result.chosenFigureKey ?? pending.choiceValues?.[choiceIndex] ?? null,
     };
     const handChannelId = getHandChannelId(game, playerNum);
-    const handCh = await client.channels.fetch(handChannelId).catch(() => null);
+    const handCh = await fetchGameChannel(client, handChannelId);
     if (handCh) {
       const boardState2 = getBoardStateForMovement(game, null);
       const mapSpaces2 = boardState2?.mapSpaces || { spaces: result.validSpaces };
@@ -1036,7 +1040,7 @@ export async function handleNegationPlay(interaction, ctx) {
   await logGameAction(game, client, `<@${negPlayerId}> played **Negation** — cancelled **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [negPlayerId] } });
   // Notify the player whose card was cancelled
   if (waitingMsgId && handChannelId) {
-    const playingHandChannel = await client.channels.fetch(handChannelId).catch(() => null);
+    const playingHandChannel = await fetchGameChannel(client, handChannelId);
     if (playingHandChannel) {
       const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
       const playedById = getPlayerId(game, playedBy);
@@ -1082,7 +1086,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
   }
   // Notify the player whose card resolved
   if (waitingMsgId && handChannelId) {
-    const playingHandChannel = await client.channels.fetch(handChannelId).catch(() => null);
+    const playingHandChannel = await fetchGameChannel(client, handChannelId);
     if (playingHandChannel) {
       const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
       const playedById = getPlayerId(game, playedBy);
@@ -1190,7 +1194,7 @@ export async function handleCcDiscardSelect(interaction, ctx) {
   game[handKey] = hand;
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push(card);
-  const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+  const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
   const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')));
   const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
@@ -1214,7 +1218,7 @@ export async function handleCcDiscardSelect(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleSquadConfirm(interaction, ctx) {
   const { getGame, pendingSquadConfirm, PENDING_ILLEGAL_TTL_MS, applySquadSubmission } = ctx;
-  const parts = interaction.customId.replace('squad_confirm_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'squad_confirm_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const game = await requireGame(interaction, getGame, gameId);
@@ -1237,7 +1241,7 @@ export async function handleSquadConfirm(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleSquadCancel(interaction, ctx) {
   const { getGame, pendingSquadConfirm } = ctx;
-  const parts = interaction.customId.replace('squad_cancel_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'squad_cancel_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const game = await requireGame(interaction, getGame, gameId);
@@ -1252,7 +1256,7 @@ export async function handleSquadCancel(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleDeckIllegalPlay(interaction, ctx) {
   const { getGame, pendingIllegalSquad, PENDING_ILLEGAL_TTL_MS, applySquadSubmission } = ctx;
-  const parts = interaction.customId.replace('deck_illegal_play_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'deck_illegal_play_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const game = await requireGame(interaction, getGame, gameId);
@@ -1274,7 +1278,7 @@ export async function handleDeckIllegalPlay(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleDeckIllegalRedo(interaction, ctx) {
   const { getGame, pendingIllegalSquad, getHandTooltipEmbed, saveGames } = ctx;
-  const parts = interaction.customId.replace('deck_illegal_redo_', '').split('_');
+  const parts = splitCustomId(interaction.customId, 'deck_illegal_redo_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const game = await requireGame(interaction, getGame, gameId);
@@ -1287,7 +1291,7 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
   else game.player2Squad = null;
   if (game.bothReadyPosted) game.bothReadyPosted = false;
   const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
-  const handChannel = await interaction.client.channels.fetch(handChannelId);
+  const handChannel = await fetchGameChannel(interaction.client, handChannelId);
   const handMessages = await handChannel.messages.fetch({ limit: 15 });
   const botMsg = handMessages.find((m) => m.author.bot && m.embeds?.some((e) => e.title?.includes('Your Hand')));
   if (botMsg) {
@@ -1444,7 +1448,7 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
   const handChannelId = getHandChannelId(game, playerNum);
   if (handChannelId) {
     try {
-      const handChannel = await client.channels.fetch(handChannelId);
+      const handChannel = await fetchGameChannel(client, handChannelId);
       const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
       await withDiscordRetry(() => handChannel.send(handPayload));
     } catch {}
@@ -1555,7 +1559,7 @@ export async function handleCcSearchDiscard(interaction, ctx) {
   const existingThreadId = getDiscardThreadId(game, playerNum);
   if (existingThreadId) {
     try {
-      const existing = await client.channels.fetch(existingThreadId);
+      const existing = await fetchGameChannel(client, existingThreadId);
       if (existing) {
         await interaction.followUp({ content: 'Discard pile thread is already open. Close it first.', ephemeral: true }).catch(discordCatch);
         return;
@@ -1615,7 +1619,7 @@ export async function handleCcCloseDiscard(interaction, ctx) {
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can close the discard pile thread.')) return;
   try {
-    const thread = await client.channels.fetch(threadId);
+    const thread = await fetchGameChannel(client, threadId);
     await thread.delete();
   } catch (err) {
     console.error('Failed to delete discard pile thread:', err);

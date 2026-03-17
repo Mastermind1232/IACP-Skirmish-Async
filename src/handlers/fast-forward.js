@@ -16,6 +16,7 @@ import { dcNameFromFigureKey } from '../game/index.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * Infer the timing category for fast-forward based on the primary CC's ability entry.
@@ -232,7 +233,8 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
 
   const healthState = (dcHealthState && dcHealthState.get(msgId)) || dc.healthState || [[null, null]];
 
-  const channel = await client.channels.fetch(playAreaId);
+  const channel = await fetchGameChannel(client, playAreaId);
+  if (!channel) throw new Error(`Play area channel ${playAreaId} not found`);
   const msg = await channel.messages.fetch(msgId);
 
   dcExhaustedState.set(msgId, true);
@@ -286,7 +288,8 @@ export async function startDefenderThreadForFastForward(game, defenderPlayerNum,
   const msgId = dcMessageIds[defenderDcIndex];
   if (!msgId) return null;
 
-  const channel = await client.channels.fetch(playAreaId);
+  const channel = await fetchGameChannel(client, playAreaId);
+  if (!channel) return null;
   const msg = await channel.messages.fetch(msgId);
 
   const threadName = (`🛡️ DEFENDER — ${displayName}`).slice(0, 100);

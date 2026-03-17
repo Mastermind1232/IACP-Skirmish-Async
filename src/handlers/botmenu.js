@@ -14,6 +14,7 @@ import { clearBuffer, clearSeqCounter as clearEventLogSeqCounter } from '../even
 import { clearSeqCounter as clearDomainSeqCounter } from '../domain/events.js';
 import { clearGameErrorThread } from '../discord/messages.js';
 import { cleanupCompanionEmbedDeps } from './post-deploy.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 const BOTMENU_ALLOWED_KILL_ROLES = ['Admin', 'Bothelpers'];
 
@@ -48,12 +49,12 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
   } = ctx;
   let categoryId = game.gameCategoryId;
   if (!categoryId) {
-    const generalCh = await client.channels.fetch(game.generalId).catch(() => null);
+    const generalCh = await fetchGameChannel(client, game.generalId);
     categoryId = generalCh?.parentId;
   }
   if (categoryId) {
     try {
-      const guild = (await client.channels.fetch(categoryId).catch(() => null))?.guild;
+      const guild = (await fetchGameChannel(client, categoryId))?.guild;
       if (guild) {
         const children = guild.channels.cache.filter((c) => c.parentId === categoryId);
         for (const ch of children.values()) await ch.delete().catch(discordCatch);

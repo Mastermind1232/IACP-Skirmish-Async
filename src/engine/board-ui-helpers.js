@@ -4,6 +4,7 @@
 
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /** Maps that are play-ready: have deployment zones, map-spaces, and are marked ready. */
 export function getPlayReadyMaps(deps) {
@@ -42,7 +43,7 @@ export async function postPinnedMissionCardFromGameState(game, client, deps) {
   const mapLabel = map.name || map.id;
   const fullName = `${mapLabel}: ${variantLabel}`;
   try {
-    const ch = await client.channels.fetch(game.generalId);
+    const ch = await fetchGameChannel(client, game.generalId);
     let sentMsg;
     const cardImagePath = missionData?.customImagePath || missionData?.imagePath;
     if (cardImagePath) {
@@ -80,7 +81,7 @@ export async function clearPreGameSetup(game, client) {
   ];
   if (ids.length === 0) return;
   try {
-    const ch = await client.channels.fetch(game.generalId);
+    const ch = await fetchGameChannel(client, game.generalId);
     for (const id of ids) {
       try {
         const msg = await ch.messages.fetch(id);

@@ -1,6 +1,7 @@
 import { getPlayAreaId, opponentPlayerNum } from '../game/player-helpers.js';
 import { enforceContentLimit } from './limits.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
+import { fetchGameChannel } from './channel-helpers.js';
 
 /**
  * Unified handler for resolveAbility() result fields.
@@ -56,7 +57,8 @@ export async function applyAbilityResult(result, opts) {
       if (meta && buildDcEmbedAndFiles && getDcPlayAreaComponents) {
         try {
           const chId = getPlayAreaId(game, meta.playerNum);
-          const ch = await client.channels.fetch(chId);
+          const ch = await fetchGameChannel(client, chId);
+          if (!ch) continue;
           const msg = await ch.messages.fetch(id);
           const healthState = dcHealthState?.get(id) || [];
           const { embed, files } = await buildDcEmbedAndFiles(
@@ -131,7 +133,8 @@ export async function applyAbilityResult(result, opts) {
       if (!meta || !buildDcEmbedAndFiles || !getDcPlayAreaComponents) continue;
       try {
         const chId = getPlayAreaId(game, meta.playerNum);
-        const ch = await client.channels.fetch(chId);
+        const ch = await fetchGameChannel(client, chId);
+        if (!ch) continue;
         const msg = await ch.messages.fetch(id);
         const healthState = dcHealthState?.get(id) || [];
         const exhausted = dcExhaustedState?.get(id) || false;
@@ -159,7 +162,8 @@ export async function applyAbilityResult(result, opts) {
   // --- Refresh board map (e.g. after token placement) ---
   if (result.applied && result.refreshBoard && game.boardId && game.selectedMap && buildBoardMapPayload) {
     try {
-      const boardChannel = await client.channels.fetch(game.boardId);
+      const boardChannel = await fetchGameChannel(client, game.boardId);
+      if (!boardChannel) throw new Error('Board channel not found');
       const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
       await boardChannel.send(payload);
     } catch (err) {
@@ -174,7 +178,8 @@ export async function applyAbilityResult(result, opts) {
       const data = game.dcActionsData?.[id];
       if (!data?.threadId) continue;
       try {
-        const thread = await client.channels.fetch(data.threadId);
+        const thread = await fetchGameChannel(client, data.threadId);
+        if (!thread) continue;
         await withDiscordRetry(() => thread.send({ content: enforceContentLimit(`💡 ${result.logMessage}`) })).catch(discordCatch);
       } catch (err) {
         console.error('Failed to send CC effect to DC thread:', err);

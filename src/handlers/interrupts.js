@@ -4,11 +4,13 @@
  * ab_blade_pick, sf_mp_pick, force_slow_pick, excavation_pick
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
+import { splitCustomId } from '../discord/custom-id.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, applyCondition, filterCondition, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
 export async function handleStillFaster(interaction, ctx) {
@@ -166,7 +168,7 @@ export async function handleOverdrive(interaction, ctx) {
   const _odDisplayName = _odMeta.displayName || _odMeta.dcName;
   const { embed: _odEmbed, files: _odFiles } = await buildDcEmbedAndFiles(_odMeta.dcName, true, _odDisplayName, _odHS, getConditionsForDcMessage?.(_odGame, _odMeta), (_odGame?.p1DcAttachments?.[_odMsgId] || _odGame?.p2DcAttachments?.[_odMsgId] || []), null, null, getNicknamesForDcMessage?.(_odGame, _odMeta));
   try {
-    const _odCh = await client.channels.fetch(_odMeta.playerNum === 1 ? _odGame.p1PlayAreaId : _odGame.p2PlayAreaId);
+    const _odCh = await fetchGameChannel(client, _odMeta.playerNum === 1 ? _odGame.p1PlayAreaId : _odGame.p2PlayAreaId);
     const _odMsg = await _odCh.messages.fetch(_odMsgId);
     await _odMsg.edit({ embeds: [_odEmbed], files: _odFiles, components: getDcPlayAreaComponents(_odMsgId, true, _odGame, _odMeta.dcName) });
   } catch (err) { console.error('Overdrive embed refresh failed:', err); }
@@ -501,7 +503,7 @@ export async function handleBelReorder(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
   const buttonKey = interaction.customId.startsWith('bel_reorder_1_') ? 'bel_reorder_1_' : 'bel_reorder_2_';
 
-  const _belParts = interaction.customId.replace(buttonKey, '').split('_');
+  const _belParts = splitCustomId(interaction.customId, buttonKey);
   const _belGameId = _belParts[0]; const _belCardIdx = parseInt(_belParts[1], 10);
   const _belGame = await requireGame(interaction, getGame, _belGameId, { silent: true });
   if (!_belGame) return;
@@ -516,7 +518,7 @@ export async function handleBelReorder(interaction, ctx) {
       return new ButtonBuilder().setCustomId(`bel_reorder_2_${_belGameId}_${_origIdx}`).setLabel(`2nd: ${c}`.slice(0, 80)).setStyle(ButtonStyle.Primary);
     });
     const _belHandId = _belData.playerNum === 1 ? _belGame.p1HandId : _belGame.p2HandId;
-    const _belHandCh2 = await client.channels.fetch(_belHandId).catch(() => null);
+    const _belHandCh2 = await fetchGameChannel(client, _belHandId);
     if (_belHandCh2) await _belHandCh2.send({ content: `**Behind Enemy Lines** — **${_belData.cards[_belCardIdx]}** goes 1st. Choose 2nd card:`, components: [new ActionRowBuilder().addComponents(..._belBtns2.slice(0, 5))] }).catch(discordCatch);
     saveGames(); return;
   }
