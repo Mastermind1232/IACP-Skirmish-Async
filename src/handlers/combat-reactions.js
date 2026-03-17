@@ -597,9 +597,8 @@ export async function handlePowerConverter(interaction, ctx) {
         .setLabel('Cancel')
         .setStyle(ButtonStyle.Danger)
     );
-    const rows = [];
-    for (let i = 0; i < buttons.length; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-    await thread.send({ content: `⚡ **Power Converter** — <@${game[`player${atkPN}Id`] ?? ''}> Pick an attack die to reroll (you may swap its color first):`, components: rows.slice(0, 5) }).catch(discordCatch);
+    const rows = chunkButtonsToRows(buttons);
+    await thread.send({ content: `⚡ **Power Converter** — <@${game[`player${atkPN}Id`] ?? ''}> Pick an attack die to reroll (you may swap its color first):`, components: rows }).catch(discordCatch);
     saveGames();
     return;
   }

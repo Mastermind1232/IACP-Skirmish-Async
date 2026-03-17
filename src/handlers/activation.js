@@ -165,10 +165,7 @@ async function maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, clien
       .setLabel('Skip')
       .setStyle(ButtonStyle.Secondary)
   );
-  const rows = [];
-  for (let i = 0; i < btns.length; i += 5) {
-    rows.push(new ActionRowBuilder().addComponents(...btns.slice(i, i + 5)));
-  }
+  const rows = chunkButtonsToRows(btns);
   await logGameAction(game, client, `<@${ownerId}> **Field Tactics** — Choose a friendly TROOPER/LEADER (cost ≤6) within 2 spaces to perform a free interrupt attack:`, {
     components: rows,
     allowedMentions: { users: [ownerId] },
@@ -1632,15 +1629,11 @@ export async function handleConfirmActivate(interaction, ctx) {
       const hand = game[handKey] || [];
       const uniqueCards = [...new Set(hand)];
       if (uniqueCards.length > 0) {
-        const rows = [];
-        for (let i = 0; i < uniqueCards.length; i += 5) {
-          const chunk = uniqueCards.slice(i, i + 5);
-          const btns = chunk.map((c, ci) =>
-            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_wisdom_${i + ci}`).setLabel(c.length > 70 ? c.slice(0, 67) + '...' : c).setStyle(ButtonStyle.Secondary)
-          );
-          rows.push(new ActionRowBuilder().addComponents(btns));
-        }
-        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC. Choose a card from your hand to return to the bottom of your deck:`, components: rows.slice(0, 5) }).catch(discordCatch);
+        const btns = uniqueCards.map((c, ci) =>
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_wisdom_${ci}`).setLabel(c.length > 70 ? c.slice(0, 67) + '...' : c).setStyle(ButtonStyle.Secondary)
+        );
+        const rows = chunkButtonsToRows(btns);
+        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC. Choose a card from your hand to return to the bottom of your deck:`, components: rows }).catch(discordCatch);
       } else {
         await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC but hand is empty (cannot return).` }).catch(discordCatch);
       }

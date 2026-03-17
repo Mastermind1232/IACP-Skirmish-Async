@@ -14,6 +14,7 @@ import { getHandler, getHandlerGroup } from '../handlers/index.js';
 import { buildContext } from '../context-factory.js';
 import { createFakeInteraction } from '../headless/fake-interaction.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { withAtomicGameLock } from '../game/action-queue.js';
 
 /** Sentinel user ID prefix for AI players. */
 export const AI_USER_PREFIX = 'ai_player_';
@@ -138,12 +139,14 @@ function createLiveAiInteraction(customId, userId, game, client) {
  * @param {number} [options.maxSteps=50] - Safety limit per AI turn
  * @param {number} [options.delayMs=1500] - Delay between actions in ms
  * @param {object} [options.deps] - Extra deps for available-actions (dcMessageMeta, etc.)
+ * @param {object} [options.atomicOpts] - Options for withAtomicGameLock (getGame, setGame, commitFn, onRollback)
  * @returns {Promise<{ steps: number, actions: string[] }>}
  */
 export async function runAiTurnLive(game, client, buildAllDeps, getGame, options = {}) {
   const maxSteps = options.maxSteps || 50;
   const delayMs = options.delayMs ?? 1500;
   const extraDeps = options.deps || {};
+  const atomicOpts = options.atomicOpts || null;
   const { hasAi, aiPlayerNum, aiUserId } = getAiPlayer(game);
   if (!hasAi || !aiPlayerNum) return { steps: 0, actions: [] };
 
@@ -211,11 +214,20 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
         } catch {}
       }
 
-      if (group) {
-        const ctx = buildContext(group, allDeps);
-        await handler(interaction, ctx);
+      const runHandler = async () => {
+        if (group) {
+          const ctx = buildContext(group, allDeps);
+          await handler(interaction, ctx);
+        } else {
+          await handler(interaction);
+        }
+      };
+
+      // Acquire per-game mutex so AI handler doesn't race with human interactions
+      if (atomicOpts) {
+        await withAtomicGameLock(currentGame.gameId, atomicOpts, runHandler);
       } else {
-        await handler(interaction);
+        await runHandler();
       }
 
       actionLog.push(chosen.customId);

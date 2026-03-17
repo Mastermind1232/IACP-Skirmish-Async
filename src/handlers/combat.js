@@ -8,7 +8,7 @@ import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, get
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
@@ -2529,9 +2529,8 @@ export async function handleCombatRoll(interaction, ctx) {
             .setStyle(ButtonStyle.Primary)
         );
         _tintBtns.push(new ButtonBuilder().setCustomId(`there_is_no_try_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        const _tintRows = [];
-        for (let i = 0; i < _tintBtns.length; i += 5) _tintRows.push(new ActionRowBuilder().addComponents(_tintBtns.slice(i, i + 5)));
-        await thread.send({ content: `**There Is No Try** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> choose a defense die to set to any face:`, components: _tintRows.slice(0, 5) }).catch(discordCatch);
+        const _tintRows = chunkButtonsToRows(_tintBtns);
+        await thread.send({ content: `**There Is No Try** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> choose a defense die to set to any face:`, components: _tintRows }).catch(discordCatch);
         saveGames();
         return; // Wait for TINT response before entering reroll window
       }
@@ -2884,11 +2883,7 @@ export async function handleCombatRoll(interaction, ctx) {
 
 /** Chunk buttons into ActionRows of up to 5 (Discord limit). Max 5 rows = 25 buttons. */
 function buildActionRows(buttons) {
-  const rows = [];
-  for (let i = 0; i < buttons.length; i += 5) {
-    rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-  }
-  return rows.slice(0, 5);
+  return chunkButtonsToRows(buttons);
 }
 
 /** Format individual dice for display in reroll UI */
@@ -3606,11 +3601,7 @@ async function sendTokenWindow(thread, gameId, role, tokens, displayName, combat
       .setLabel('Skip (no token)')
       .setStyle(ButtonStyle.Primary)
   );
-  // Split into rows of 5 if needed (Discord max 5 buttons per ActionRow)
-  const rows = [];
-  for (let i = 0; i < btns.length; i += 5) {
-    rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
-  }
+  const rows = chunkButtonsToRows(btns);
   let content = `**Power Token — ${role === 'attacker' ? 'Attacker' : 'Defender'}** (${displayName}): spend a token or skip.`;
   if (scTokens.length > 0) content += '\n*Squad Cohesion (Ko-Tun Feralo): tokens from nearby friendly Rebel figures are also available.*';
   await thread.send({
@@ -4131,13 +4122,12 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         .setStyle(ButtonStyle.Primary)
     );
     btns.push(new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_elusive_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-    const rows = [];
-    for (let ri = 0; ri < btns.length; ri += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(ri, ri + 5)));
+    const rows = chunkButtonsToRows(btns);
     const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
     const defenderId = game[`player${defenderPlayerNum}Id`] ?? '';
     await thread.send({
       content: `**Elusive** — <@${defenderId}> choose an attack die to nullify (its results will be removed). One defense die will also be nullified.`,
-      components: rows.slice(0, 5),
+      components: rows,
     });
     saveGames?.();
     return;
@@ -4283,11 +4273,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
       btns.push(
         new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_survival_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary)
       );
-      // Split into rows of 5 if needed
-      const rows = [];
-      for (let i = 0; i < btns.length; i += 5) {
-        rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
-      }
+      const rows = chunkButtonsToRows(btns);
       await thread.send({
         content: `**Survival is Strength** (${_sisArmorerDcName}): Defender spent a Block token — choose an attack die to force reroll, or skip.`,
         components: rows,
@@ -5685,8 +5671,7 @@ export async function handleCoverFireDiscard(interaction, ctx) {
     const idx = parseInt(indexStr, 10);
     if (idx < conds.length) {
       const removed = conds[idx];
-      conds.splice(idx, 1);
-      game.figureConditions[figureKey] = conds;
+      filterCondition(game, figureKey, removed);
       await interaction.message.edit({ content: `🛡️ **Cover Fire** — Discarded **${removed}** from **${dcName}**.`, components: [] }).catch(discordCatch);
       if (logGameAction) await logGameAction(game, client, `🛡️ **Cover Fire** — Discarded **${removed}** from **${dcName}**.`, { phase: 'ROUND', icon: 'card' });
     }
@@ -5811,7 +5796,6 @@ export async function sendPowerTokenOverflowUI(game, gameId, channel, playerNum,
   const figName = dcNameFromFigureKey(figureKey);
 
   // Build one button per token the figure currently holds
-  const rows = [];
   const btns = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -5823,10 +5807,7 @@ export async function sendPowerTokenOverflowUI(game, gameId, channel, playerNum,
         .setStyle(ButtonStyle.Secondary)
     );
   }
-  // Split into rows of 5 (Discord limit)
-  for (let i = 0; i < btns.length; i += 5) {
-    rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
-  }
+  const rows = chunkButtonsToRows(btns);
 
   // Store the playerNum so the handler can enforce access
   entry.playerNum = playerNum;
@@ -5838,7 +5819,7 @@ export async function sendPowerTokenOverflowUI(game, gameId, channel, playerNum,
       `Discard **${discardCount}** token${discardCount > 1 ? 's' : ''}.\n` +
       `Current tokens: ${tokenList}\n` +
       `Choose which token to discard:`,
-    components: rows.slice(0, 5), // max 5 rows
+    components: rows,
   }).catch(discordCatch);
 
   if (saveGames) saveGames();
@@ -5893,10 +5874,7 @@ export async function handlePowerTokenOverflowDiscard(interaction, ctx) {
           .setStyle(ButtonStyle.Secondary)
       );
     }
-    const rows = [];
-    for (let i = 0; i < btns.length; i += 5) {
-      rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
-    }
+    const rows = chunkButtonsToRows(btns);
     const max = getMaxPowerTokens(figureKey);
     const tokenList = tokens.map(t => `${TOKEN_EMOJI[t] || ''} ${t}`).join(', ');
     await interaction.message.edit({
@@ -5904,7 +5882,7 @@ export async function handlePowerTokenOverflowDiscard(interaction, ctx) {
         `Discard **${remaining}** more.\n` +
         `Current tokens: ${tokenList}\n` +
         `Choose which token to discard:`,
-      components: rows.slice(0, 5),
+      components: rows,
     }).catch(discordCatch);
   } else {
     // Overflow resolved

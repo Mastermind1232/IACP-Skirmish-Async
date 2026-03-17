@@ -1879,9 +1879,7 @@ export async function handleDoubtFigPick(interaction, ctx) {
     // Only one option — auto-remove
     const item = removables[0];
     if (item.type === 'condition') {
-      const arr = game.figureConditions[targetFk] || [];
-      arr.splice(item.index, 1);
-      if (arr.length === 0) delete game.figureConditions[targetFk];
+      filterCondition(game, targetFk, item.value);
     } else {
       const arr = game.figurePowerTokens[targetFk] || [];
       arr.splice(item.index, 1);
@@ -1933,9 +1931,7 @@ export async function handleDoubtRemove(interaction, ctx) {
     const conds = game.figureConditions?.[targetFk] || [];
     if (idx < conds.length) {
       const removed = conds[idx];
-      conds.splice(idx, 1);
-      if (conds.length === 0) delete game.figureConditions[targetFk];
-      else game.figureConditions[targetFk] = conds;
+      filterCondition(game, targetFk, removed);
       await interaction.message.edit({ content: `**[Doubt]** — Discarded **${removed}** from **${targetDcName}**.`, components: [] }).catch(discordCatch);
       await logGameAction(game, client, `**[Doubt]** — Discarded ${removed} from ${targetDcName}.`, { phase: 'ROUND', icon: 'card' });
     }

@@ -1784,10 +1784,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             .setLabel(_cfLabel.slice(0, 80))
             .setStyle(ButtonStyle.Primary);
         });
-        const _cfRows = [];
-        for (let i = 0; i < _cfBtns.length; i += 5) {
-          _cfRows.push(new ActionRowBuilder().addComponents(_cfBtns.slice(i, i + 5)));
-        }
+        const _cfRows = chunkButtonsToRows(_cfBtns);
         game.pendingCoverFire = { gameId: game.gameId, attackerPlayerNum, attackerMsgId: combat.attackerMsgId, hit: !!(hit && damage > 0), targetFigureKey: combat.target?.figureKey, targetMsgId, targetFigIndex, defenderPlayerNum, combat: { combatThreadId: combat.combatThreadId, resultText }, embedRefreshMsgIds: [...embedRefreshMsgIds] };
         await thread.send({ content: `\u{1F6E1}\uFE0F **Cover Fire** — <@${ownerId}> Choose a friendly figure within 3 spaces to receive 1 Block Token:`, allowedMentions: { users: [ownerId] }, components: _cfRows });
         // Don't return — the Block token choice is async but we continue combat resolution
@@ -1807,10 +1804,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             .setStyle(ButtonStyle.Danger);
         });
         _cfRemBtns.push(new ButtonBuilder().setCustomId(`cover_fire_discard_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        const _cfRemRows = [];
-        for (let i = 0; i < _cfRemBtns.length; i += 5) {
-          _cfRemRows.push(new ActionRowBuilder().addComponents(_cfRemBtns.slice(i, i + 5)));
-        }
+        const _cfRemRows = chunkButtonsToRows(_cfRemBtns);
         await thread.send({ content: `\u{1F6E1}\uFE0F **Cover Fire** — <@${ownerId}> You may discard 1 condition or Power Token from **${combat.target.label}**:`, allowedMentions: { users: [ownerId] }, components: _cfRemRows });
       }
     }

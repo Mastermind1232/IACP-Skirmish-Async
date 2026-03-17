@@ -24,6 +24,7 @@ import { stripBrackets, cardNameEquals } from '../game/card-names.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 
 /**
  * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
@@ -1410,10 +1411,7 @@ export async function handleDeployRow(interaction, ctx) {
       .setLabel(space.toUpperCase())
       .setStyle(zoneStyle)
   );
-  const spaceRows = [];
-  for (let i = 0; i < btns.length; i += 5) {
-    spaceRows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
-  }
+  const spaceRows = chunkButtonsToRows(btns);
   // Add a "back to rows" button
   const backRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()

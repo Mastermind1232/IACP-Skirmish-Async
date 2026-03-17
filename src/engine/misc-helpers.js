@@ -11,6 +11,7 @@ import {
   AttachmentBuilder,
 } from 'discord.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 
 /**
  * Build embeds and files for the "Attachments" message under a DC.
@@ -292,10 +293,7 @@ export async function postKryknaPushButtons(game, channel, gameId, deps) {
       .setLabel(`Push ${k.id} @ ${String(k.coord).toUpperCase()}`)
       .setStyle(ButtonStyle.Danger)
   );
-  const rows = [];
-  for (let i = 0; i < buttons.length; i += 5) {
-    rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-  }
+  const rows = chunkButtonsToRows(buttons);
   await channel.send({
     content: `\uD83D\uDD77\uFE0F **Krykna Push Phase** (${remaining} push${remaining !== 1 ? 'es' : ''} remaining) — <@${pid}>, choose a Krykna to push up to 3 spaces (end adjacent to most figures if possible):`,
     components: rows,

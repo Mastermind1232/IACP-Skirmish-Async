@@ -5,6 +5,7 @@
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { splitCustomId } from '../discord/custom-id.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, applyCondition, filterCondition, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
@@ -79,10 +80,9 @@ export async function handleStillFaster(interaction, ctx) {
       saveGames();
       return;
     }
-    const sftRows = [];
-    for (let i = 0; i < sftButtons.length; i += 5) sftRows.push(new ActionRowBuilder().addComponents(sftButtons.slice(i, i + 5)));
+    const sftRows = chunkButtonsToRows(sftButtons);
     await interaction.deferUpdate().catch(discordCatch);
-    await interaction.followUp({ content: '**Still Faster Than You** — Choose which figure interrupts (move 2 + attack):', components: sftRows.slice(0, 5), ephemeral: false }).catch(discordCatch);
+    await interaction.followUp({ content: '**Still Faster Than You** — Choose which figure interrupts (move 2 + attack):', components: sftRows, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -327,12 +327,8 @@ export async function handleYHSIW(interaction, ctx) {
       }
     } else {
       // Condition token: remove from target, apply to Gideon
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[targetFk] = (game.figureConditions[targetFk] || []).filter(c => c !== token);
-      game.figureConditions[gideonFk] = game.figureConditions[gideonFk] || [];
-      if (!game.figureConditions[gideonFk].includes(token)) {
-        game.figureConditions[gideonFk].push(token);
-      }
+      filterCondition(game, targetFk, token);
+      applyCondition(game, gideonFk, token);
     }
     const targetName = dcNameFromFigureKey(targetFk);
     await logGameAction(game, client, `**You Have Something I Want** — **${targetName}** transfers **${token}** to **Moff Gideon**.`, { phase: 'ROUND', icon: 'card' });

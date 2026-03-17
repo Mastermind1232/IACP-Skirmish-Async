@@ -4,7 +4,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
-import { truncateLabel, getAttachmentSpecials } from '../discord/components.js';
+import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows } from '../discord/components.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { bottomLeftCoord, edgeKey } from '../game/coords.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
@@ -1231,30 +1231,22 @@ async function buildAndSendAttackTargets(
   const displayName = meta.displayName || meta.dcName;
   const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
   const _arcActive = game.arcingShotActive?.[msgId] || game.arcingShotActiveScalar;
-  const targetRows = [];
-  for (let i = 0; i < targets.length; i += 5) {
-    const chunk = targets.slice(i, i + 5);
-    targetRows.push(
-      new ActionRowBuilder().addComponents(
-        chunk.map((t, idx) => {
-          const targetIndex = i + idx;
-          const noLOS = t.hasLOS === false;
-          const daTag = t.droidArmLOS ? ' [Droid Arm]' : '';
-          const arcTag = (_arcActive && t.arcingShotValid === false) ? ' [No Arc]' : '';
-          return new ButtonBuilder()
-            .setCustomId(`attack_target_${msgId}_${figureIndex}_${targetIndex}`)
-            .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : daTag}${arcTag}`.slice(0, 80))
-            .setStyle(noLOS ? ButtonStyle.Secondary : (arcTag ? ButtonStyle.Secondary : ButtonStyle.Danger))
-            .setDisabled(noLOS);
-        })
-      )
-    );
-  }
+  const targetBtns = targets.map((t, targetIndex) => {
+    const noLOS = t.hasLOS === false;
+    const daTag = t.droidArmLOS ? ' [Droid Arm]' : '';
+    const arcTag = (_arcActive && t.arcingShotValid === false) ? ' [No Arc]' : '';
+    return new ButtonBuilder()
+      .setCustomId(`attack_target_${msgId}_${figureIndex}_${targetIndex}`)
+      .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : daTag}${arcTag}`.slice(0, 80))
+      .setStyle(noLOS ? ButtonStyle.Secondary : (arcTag ? ButtonStyle.Secondary : ButtonStyle.Danger))
+      .setDisabled(noLOS);
+  });
+  const targetRows = chunkButtonsToRows(targetBtns);
   game.attackTargets = game.attackTargets || {};
   game.attackTargets[`${msgId}_${figureIndex}`] = targets;
   await interaction.followUp({
     content: `**Attack** — Choose target for **${figLabel}**:`,
-    components: targetRows.slice(0, 5),
+    components: targetRows,
     ephemeral: false,
   }).catch(discordCatch);
 }
@@ -1702,20 +1694,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const missionOpts = options.filter((o) => o.missionSpecific);
     const standardOpts = options.filter((o) => !o.missionSpecific);
     const sorted = [...missionOpts, ...standardOpts];
-    const rows = [];
-    for (let i = 0; i < sorted.length; i += 5) {
-      const chunk = sorted.slice(i, i + 5);
-      rows.push(
-        new ActionRowBuilder().addComponents(
-          chunk.map((opt) =>
-            new ButtonBuilder()
-              .setCustomId(`interact_choice_${game.gameId}_${msgId}_${figureIndex}_${opt.id}`)
-              .setLabel(truncateLabel(opt.label))
-              .setStyle(opt.missionSpecific ? ButtonStyle.Primary : ButtonStyle.Secondary)
-          )
-        )
-      );
-    }
+    const interactBtns = sorted.map((opt) =>
+      new ButtonBuilder()
+        .setCustomId(`interact_choice_${game.gameId}_${msgId}_${figureIndex}_${opt.id}`)
+        .setLabel(truncateLabel(opt.label))
+        .setStyle(opt.missionSpecific ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    );
+    const rows = chunkButtonsToRows(interactBtns);
     const cancelRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`interact_cancel_${game.gameId}_${msgId}_${figureIndex}`)
@@ -2087,10 +2072,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         .setLabel(String(label).slice(0, 80))
         .setStyle(ButtonStyle.Primary)
     );
-    const rows = [];
-    for (let i = 0; i < choiceButtons.length; i += 5) {
-      rows.push(new ActionRowBuilder().addComponents(choiceButtons.slice(i, i + 5)));
-    }
+    const rows = chunkButtonsToRows(choiceButtons);
     game.pendingDcAbilityChoice = game.pendingDcAbilityChoice || {};
     game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`] = {
       gameId: game.gameId, playerNum: meta.playerNum, abilityId, msgId, figureIndex, specialIdx,
@@ -2106,7 +2088,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     if (resolveResult.refreshDcEmbed && ctx.updateAttachmentMessageForDc) {
       await ctx.updateAttachmentMessageForDc(game, meta?.playerNum, msgId, client).catch(discordCatch);
     }
-    await interaction.followUp({ content: `**${action}** — Choose one:`, components: rows.slice(0, 5), ephemeral: false }).catch(discordCatch);
+    await interaction.followUp({ content: `**${action}** — Choose one:`, components: rows, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2401,12 +2383,9 @@ export async function handleDcAbilityChoice(interaction, ctx) {
         .setLabel(String(label).slice(0, 80))
         .setStyle(ButtonStyle.Primary)
     );
-    const rows = [];
-    for (let i = 0; i < choiceButtons.length; i += 5) {
-      rows.push(new ActionRowBuilder().addComponents(choiceButtons.slice(i, i + 5)));
-    }
+    const rows = chunkButtonsToRows(choiceButtons);
     const prompt = resolveResult.choicePrompt || `**${abilityId}** — Choose:`;
-    await interaction.followUp({ content: prompt, components: rows.slice(0, 5), ephemeral: false }).catch(discordCatch);
+    await interaction.followUp({ content: prompt, components: rows, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2493,12 +2472,9 @@ export async function handlePounceSpacePick(interaction, ctx) {
         .setLabel(String(label).slice(0, 80))
         .setStyle(ButtonStyle.Primary)
     );
-    const rows = [];
-    for (let i = 0; i < choiceButtons.length; i += 5) {
-      rows.push(new ActionRowBuilder().addComponents(choiceButtons.slice(i, i + 5)));
-    }
+    const rows = chunkButtonsToRows(choiceButtons);
     const prompt = result.choicePrompt || `Choose a target:`;
-    await interaction.followUp({ content: prompt, components: rows.slice(0, 5), ephemeral: false }).catch(discordCatch);
+    await interaction.followUp({ content: prompt, components: rows, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2862,24 +2838,18 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   }
   game.falseOrdersAttackTargets = game.falseOrdersAttackTargets || {};
   game.falseOrdersAttackTargets[msgId] = foTargets;
-  const targetRows = [];
-  for (let i = 0; i < foTargets.length; i += 5) {
-    const chunk = foTargets.slice(i, i + 5);
-    targetRows.push(new ActionRowBuilder().addComponents(
-      chunk.map((t, idx) => {
-        const targetIndex = i + idx;
-        const noLOS = t.hasLOS === false;
-        return new ButtonBuilder()
-          .setCustomId(`false_orders_atk_${gameId}_${msgId}_${targetIndex}`)
-          .setLabel(`${t.label} (${String(t.coord).toUpperCase()})${noLOS ? ' [No LOS]' : ''}`.slice(0, 80))
-          .setStyle(noLOS ? ButtonStyle.Secondary : ButtonStyle.Danger)
-          .setDisabled(noLOS);
-      })
-    ));
-  }
+  const targetBtns = foTargets.map((t, targetIndex) => {
+    const noLOS = t.hasLOS === false;
+    return new ButtonBuilder()
+      .setCustomId(`false_orders_atk_${gameId}_${msgId}_${targetIndex}`)
+      .setLabel(`${t.label} (${String(t.coord).toUpperCase()})${noLOS ? ' [No LOS]' : ''}`.slice(0, 80))
+      .setStyle(noLOS ? ButtonStyle.Secondary : ButtonStyle.Danger)
+      .setDisabled(noLOS);
+  });
+  const targetRows = chunkButtonsToRows(targetBtns);
   await interaction.followUp({
     content: `**False Orders** — Choose attack target for **${controlledName}**:`,
-    components: targetRows.slice(0, 5),
+    components: targetRows,
     ephemeral: false,
   }).catch(discordCatch);
   saveGames();

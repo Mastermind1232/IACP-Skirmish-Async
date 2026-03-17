@@ -377,13 +377,12 @@ async function _startNextMovement(game, gameId, client, ctx) {
         .setLabel(buildFigureButtonLabel(f.figureKey, game))
         .setStyle(ButtonStyle.Primary)
       );
-      const rows = [];
-      for (let i = 0; i < btns.length; i += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+      const rows = chunkButtonsToRows(btns);
       const generalChannel = await fetchGameChannel(client, game.generalId);
       if (generalChannel) {
         await generalChannel.send({
           content: `🛬 **Smooth Landing** — <@${ownerId}>, choose which figure moves next (${remaining.length} remaining):`,
-          components: rows.slice(0, 5),
+          components: rows,
           allowedMentions: { users: [ownerId] },
         }).catch(() => null);
       }
@@ -616,8 +615,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         .setLabel(l.dcName)
         .setStyle(ButtonStyle.Primary)
       );
-      const rows = [];
-      for (let i = 0; i < btns.length; i += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+      const rows = chunkButtonsToRows(btns);
       await logGameAction(game, client, `🛡️ **Security Detail** (${ability.dcName}) — <@${ownerId}>, choose which **LEADER** gains 1 Block Token:`, {
         components: rows,
         allowedMentions: { users: [ownerId] },
@@ -712,8 +710,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
           .setLabel(f.dcName)
           .setStyle(ButtonStyle.Primary)
         );
-        const rows = [];
-        for (let i = 0; i < btns.length; i += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+        const rows = chunkButtonsToRows(btns);
         await logGameAction(game, client, `⚡ **Strike Team** — **${ability.dcName}** gains **2 MP**. <@${ownerId}>, choose an adjacent friendly figure to also gain **2 MP**:`, {
           components: rows,
           allowedMentions: { users: [ownerId] },
@@ -853,8 +850,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
           .setStyle(ButtonStyle.Secondary)
         );
       }
-      const rows = [];
-      for (let i = 0; i < btns.length; i += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+      const rows = chunkButtonsToRows(btns);
 
       game.postDeployQueue.activeAbility = {
         abilityId: 'companion_deploy',
@@ -866,7 +862,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       };
 
       await logGameAction(game, client, `👶 **Deploy ${companionName}** — <@${ownerId}>, choose a space to deploy **${companionName}** (${ability.dcName}'s space or an adjacent space):`, {
-        components: rows.slice(0, 5),
+        components: rows,
         allowedMentions: { users: [ownerId] },
       });
       break;
@@ -938,10 +934,9 @@ async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGa
     .setLabel(`Done (${active.tokenRemaining} remaining)`)
     .setStyle(ButtonStyle.Secondary)
   );
-  const rows = [];
-  for (let i = 0; i < btns.length; i += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+  const rows = chunkButtonsToRows(btns);
   await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose up to **${active.tokenRemaining}** friendly figure(s) outside your deployment zone to gain **1 Hit Token** each:`, {
-    components: rows.slice(0, 5),
+    components: rows,
     allowedMentions: { users: [ownerId] },
   });
 }
@@ -997,10 +992,9 @@ async function postAbilityPicker(game, gameId, client, logGameAction, saveGames)
       .setLabel(`${ab.label} — ${ab.dcName}${autoLabel}`)
       .setStyle(ab.interactive ? ButtonStyle.Primary : ButtonStyle.Secondary);
   });
-  const rows = [];
-  for (let i = 0; i < btns.length; i += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+  const rows = chunkButtonsToRows(btns);
   await logGameAction(game, client, `📋 **After Deployment** — <@${ownerId}> (${playerLabel}), choose which ability to resolve next (${abilities.length} remaining):`, {
-    components: rows.slice(0, 5),
+    components: rows,
     allowedMentions: { users: [ownerId] },
   });
 }

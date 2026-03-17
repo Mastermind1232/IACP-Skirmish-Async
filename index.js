@@ -2807,6 +2807,7 @@ client.on('interactionCreate', async (interaction) => {
                 maxSteps: 50,
                 delayMs: 2000,
                 deps: { dcMessageMeta, dcExhaustedState },
+                atomicOpts,
               });
             } catch (err) {
               console.error('[play-ai] AI turn error:', err.message);
@@ -2857,6 +2858,7 @@ client.on('interactionCreate', async (interaction) => {
             maxSteps: 50,
             delayMs: 2000,
             deps: { dcMessageMeta, dcExhaustedState },
+            atomicOpts,
           });
         } catch (err) {
           console.error('[add-ai] AI turn error:', err.message);
@@ -3246,6 +3248,7 @@ client.on('interactionCreate', async (interaction) => {
                     maxSteps: 50,
                     delayMs: 1500,
                     deps: { dcMessageMeta, dcExhaustedState },
+                    atomicOpts,
                   });
                 } catch (err) {
                   console.error('[AI hook modal] Error:', err.message);
@@ -3298,6 +3301,7 @@ client.on('interactionCreate', async (interaction) => {
                   maxSteps: 50,
                   delayMs: 1500,
                   deps: { dcMessageMeta, dcExhaustedState },
+                  atomicOpts,
                 });
               } catch (err) {
                 console.error('[AI hook select] Error:', err.message);
@@ -3590,6 +3594,7 @@ client.on('interactionCreate', async (interaction) => {
                   maxSteps: 50,
                   delayMs: 1500,
                   deps: { dcMessageMeta, dcExhaustedState },
+                  atomicOpts,
                 });
               } catch (err) {
                 console.error('[AI hook] Error:', err.message);

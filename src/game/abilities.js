@@ -2884,17 +2884,14 @@ export function resolveAbility(abilityId, context) {
     game.figureConditions = game.figureConditions || {};
     for (const fk of figureKeys) {
       if (discarded >= limit) break;
-      const existing = game.figureConditions[fk] || [];
+      const existing = [...(game.figureConditions[fk] || [])];
       const harmful = existing.filter((c) => HARMFUL.includes(c));
-      if (harmful.length > 0) {
-        const toRemove = Math.min(harmful.length, limit - discarded);
-        const kept = [...existing];
-        for (let i = 0; i < toRemove; i++) {
-          const idx = kept.findIndex((c) => HARMFUL.includes(c));
-          if (idx >= 0) kept.splice(idx, 1);
-        }
-        game.figureConditions[fk] = kept.length ? kept : [];
-        discarded += toRemove;
+      for (const h of harmful) {
+        if (discarded >= limit) break;
+        const before = (game.figureConditions[fk] || []).length;
+        filterCondition(game, fk, h);
+        const after = (game.figureConditions[fk] || []).length;
+        if (after < before) discarded++;
       }
     }
     let recovered = 0;
@@ -3632,13 +3629,13 @@ export function resolveAbility(abilityId, context) {
     game.figureConditions = game.figureConditions || {};
     let discarded = 0;
     for (const fk of adjacent) {
-      const existing = game.figureConditions[fk] || [];
-      // Disarm permanent Weakened: preserve Weaken if locked by Disarm
-      const lockedWeaken = game.disarmPermanentWeakened?.[fk];
-      const kept = existing.filter((c) => !HARMFUL.includes(c) || (c === 'Weaken' && lockedWeaken));
-      if (kept.length < existing.length) {
-        game.figureConditions[fk] = kept.length ? kept : [];
-        discarded += existing.length - kept.length;
+      const existing = [...(game.figureConditions[fk] || [])];
+      for (const c of existing) {
+        if (!HARMFUL.includes(c)) continue;
+        const before = (game.figureConditions[fk] || []).length;
+        filterCondition(game, fk, c);
+        const after = (game.figureConditions[fk] || []).length;
+        if (after < before) discarded++;
       }
     }
     return {
@@ -3662,13 +3659,13 @@ export function resolveAbility(abilityId, context) {
     game.figureConditions = game.figureConditions || {};
     let discarded = 0;
     for (const fk of figureKeys) {
-      const existing = game.figureConditions[fk] || [];
-      // Disarm permanent Weakened: preserve Weaken if locked by Disarm
-      const lockedWeaken = game.disarmPermanentWeakened?.[fk];
-      const kept = existing.filter((c) => !HARMFUL.includes(c) || (c === 'Weaken' && lockedWeaken));
-      if (kept.length < existing.length) {
-        game.figureConditions[fk] = kept.length ? kept : [];
-        discarded += existing.length - kept.length;
+      const existing = [...(game.figureConditions[fk] || [])];
+      for (const c of existing) {
+        if (!HARMFUL.includes(c)) continue;
+        const before = (game.figureConditions[fk] || []).length;
+        filterCondition(game, fk, c);
+        const after = (game.figureConditions[fk] || []).length;
+        if (after < before) discarded++;
       }
     }
     return {
@@ -6939,13 +6936,15 @@ export function resolveAbility(abilityId, context) {
     let figuresProcessed = 0;
     for (const pn of [1, 2]) {
       for (const fk of Object.keys(game.figurePositions?.[pn] || {})) {
-        const conds = game.figureConditions?.[fk] || [];
+        const conds = [...(game.figureConditions?.[fk] || [])];
         if (!conds.length || figuresProcessed >= 2) continue;
-        const count = conds.length;
-        game.figureConditions[fk] = [];
-        grantPowerTokens(game, fk, 'Hit', count);
+        // Remove each condition through filterCondition (respects disarm lock)
+        for (const c of conds) filterCondition(game, fk, c);
+        const remaining = (game.figureConditions?.[fk] || []).length;
+        const count = conds.length - remaining;
+        if (count > 0) grantPowerTokens(game, fk, 'Hit', count);
         const dcName = dcNameFromFigureKey(fk);
-        results.push(`**${dcName}** lost [${conds.join(', ')}] → +${count} Hit Token${count !== 1 ? 's' : ''}`);
+        results.push(`**${dcName}** lost [${conds.filter(c => !(game.figureConditions?.[fk] || []).includes(c)).join(', ')}] → +${count} Hit Token${count !== 1 ? 's' : ''}`);
         figuresProcessed++;
       }
     }
