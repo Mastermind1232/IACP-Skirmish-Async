@@ -647,15 +647,13 @@ async function advanceHeavyFirePick(game, pending, ctx) {
   }
 
   const ownerId = getPlayerId(game, pending.attackerPlayerNum);
-  const btns = available.slice(0, 4).map((t, i) =>
+  const btns = available.slice(0, 4).map((t) =>
     new ButtonBuilder()
-      .setCustomId(`heavy_fire_tgt_${game.gameId}_${i}`)
+      .setCustomId(`heavy_fire_tgt_${game.gameId}_${t.figureKey}`)
       .setLabel(t.label)
       .setStyle(ButtonStyle.Danger)
   );
   btns.push(new ButtonBuilder().setCustomId(`heavy_fire_tgt_done_${game.gameId}`).setLabel('Done Picking').setStyle(ButtonStyle.Secondary));
-  // Stash available snapshot for index lookup
-  pending.availableSnapshot = available;
   await thread.send({
     content: `<@${ownerId}> **Heavy Fire** — Pick hostile target ${pending.chosenTargets.length + 1}/${pending.diceCount} (within 2 of target space). ${remaining} pick${remaining !== 1 ? 's' : ''} left:`,
     allowedMentions: { users: [ownerId] },
@@ -817,18 +815,18 @@ export async function handleHeavyFireSkip(interaction, ctx) {
   saveGames();
 }
 
-/** Heavy Fire target pick: heavy_fire_tgt_{gameId}_{index} */
+/** Heavy Fire target pick: heavy_fire_tgt_{gameId}_{figureKey} */
 export async function handleHeavyFireTarget(interaction, ctx) {
   const { getGame, saveGames, canActAsPlayer } = ctx;
-  const m = interaction.customId.match(/^heavy_fire_tgt_([^_]+)_(\d+)$/);
-  if (!m) return;
-  const [, gameId, idxStr] = m;
+  const parts = interaction.customId.replace('heavy_fire_tgt_', '').split('_');
+  const gameId = parts[0];
+  const figureKey = parts.slice(1).join('_');
+  if (!gameId || !figureKey) return;
   const game = getGame(gameId);
   if (!game?.pendingHeavyFire) return;
   const pending = game.pendingHeavyFire;
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can pick Heavy Fire targets.')) return;
-  const available = pending.availableSnapshot || [];
-  const target = available[parseInt(idxStr, 10)];
+  const target = pending.hostiles.find(t => t.figureKey === figureKey);
   if (!target) return;
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
