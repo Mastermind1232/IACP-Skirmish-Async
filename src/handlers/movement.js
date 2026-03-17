@@ -109,12 +109,21 @@ export async function handleMoveMp(interaction, ctx) {
   const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces, profile.size);
   const gridIds = [];
   const firstSpaceRows = rows.slice(0, SPACE_ROWS_ON_FIRST);
-  const adjustRow = new ActionRowBuilder().addComponents(
+  const adjustRowButtons = [
     new ButtonBuilder()
       .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
       .setLabel('Adjust movement points spent')
-      .setStyle(ButtonStyle.Secondary)
-  );
+      .setStyle(ButtonStyle.Secondary),
+  ];
+  if (mpRemaining > 0 && !game.urgencyMustSpendAll?.[msgId]) {
+    adjustRowButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`move_pick_${msgId}_${figureIndex}_done`)
+        .setLabel('End Movement')
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
+  const adjustRow = new ActionRowBuilder().addComponents(...adjustRowButtons);
   const firstRows = [...firstSpaceRows, adjustRow];
   const minimapCells = isMultiTile
     ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
@@ -245,7 +254,7 @@ export async function handleMoveLetter(interaction, ctx) {
   const letterCells = allCells.filter((c) => (c.match(/^([a-z]+)/)?.[1] ?? c[0]) === letter);
   const { rows: cellRows } = getMoveSpaceGridRows(msgId, figureIndex, letterCells, boardState.mapSpaces, profile.size);
   const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
-  const actionRow = new ActionRowBuilder().addComponents(
+  const actionRowButtons = [
     new ButtonBuilder()
       .setCustomId(`move_back_letters_${msgId}_${figureIndex}`)
       .setLabel('⬅️ Choose Column')
@@ -253,8 +262,17 @@ export async function handleMoveLetter(interaction, ctx) {
     new ButtonBuilder()
       .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
       .setLabel('🗺️ Pick Path Manually')
-      .setStyle(ButtonStyle.Secondary)
-  );
+      .setStyle(ButtonStyle.Secondary),
+  ];
+  if (moveState.mpRemaining > 0 && !game.urgencyMustSpendAll?.[msgId]) {
+    actionRowButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`move_pick_${msgId}_${figureIndex}_done`)
+        .setLabel('End Movement')
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
+  const actionRow = new ActionRowBuilder().addComponents(...actionRowButtons);
   const firstRows = [...cellRows.slice(0, 4), actionRow];
   try {
     await interaction.message.edit({
@@ -319,12 +337,21 @@ export async function handleMoveLetterBack(interaction, ctx) {
   // cache.cells only stores topLeft cells — no filtering needed.
   const allCells = [...cache.cells.keys()];
   const letterRows = buildLetterRows(allCells, msgId, figureIndex);
-  const manualPickRow = new ActionRowBuilder().addComponents(
+  const manualPickButtons = [
     new ButtonBuilder()
       .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
       .setLabel('🗺️ Pick Path Manually')
-      .setStyle(ButtonStyle.Secondary)
-  );
+      .setStyle(ButtonStyle.Secondary),
+  ];
+  if (mpRemaining > 0 && !game.urgencyMustSpendAll?.[msgId]) {
+    manualPickButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`move_pick_${msgId}_${figureIndex}_done`)
+        .setLabel('End Movement')
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
+  const manualPickRow = new ActionRowBuilder().addComponents(...manualPickButtons);
   const firstRows = [...letterRows.slice(0, 4), manualPickRow];
   try {
     await interaction.message.edit({
@@ -622,7 +649,9 @@ export async function handleMovePick(interaction, ctx) {
   const footprintSet = new Set(getNormalizedFootprint(newTopLeft, newSize));
   const updatedProfile = getMovementProfile(meta.dcName, figureKey, game);
   await resolveMassivePush(game, updatedProfile, figureKey, playerNum, footprintSet, client, logGameAction);
-  const newMp = mpRemaining - cost;
+  // Massive figure that pushed someone: movement ends immediately (cannot continue moving)
+  const massivePushHappened = game.massiveMovementLocked?.[figureKey];
+  const newMp = massivePushHappened ? 0 : (mpRemaining - cost);
   moveState.mpRemaining = newMp;
   moveState.startCoord = targetInfo.topLeft;
   moveState.boardState = null;

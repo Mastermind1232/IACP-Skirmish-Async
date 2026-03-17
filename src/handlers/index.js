@@ -22,6 +22,7 @@ import {
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
+  handleCompanionDeployPick,
 } from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleStrainChoice, handleStrainCcPick, handleUnderDuress, handleRogueOneTokenPick } from './combat.js';
@@ -199,6 +200,7 @@ register('pd_walker_move_', handleWalkerMove, 'postDeploy');
 register('pd_walker_skip_', handleWalkerSkip, 'postDeploy');
 register('pd_arms_dist_fig_', handleArmsDistFigPick, 'postDeploy');
 register('pd_arms_dist_token_', handleArmsDistTokenPick, 'postDeploy');
+register('pd_comp_space_', handleCompanionDeployPick, 'postDeploy');
 
 // --- Movement ---
 register('move_mp_', handleMoveMp, 'move');
@@ -529,6 +531,7 @@ export {
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
+  handleCompanionDeployPick,
 } from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip } from './movement.js';
 export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls, handleStrainChoice, handleStrainCcPick, handleRogueOneTokenPick } from './combat.js';

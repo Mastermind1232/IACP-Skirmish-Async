@@ -774,22 +774,31 @@ export function pushFigureToNearestValid(game, playerNum, figureKey, forbiddenSe
 
 /**
  * Handle collision resolution for massive figures that can end on occupied spaces.
+ * Pushes each displaced figure to the nearest valid space. When multiple figures
+ * overlap, they are pushed one at a time — the order matters because each push
+ * changes the board state (freed spaces) for subsequent pushes.
  * @param {Function} logGameAction - Discord logging function passed from caller
  */
 export async function resolveMassivePush(game, profile, figureKey, playerNum, newFootprint, client, logGameAction) {
   if (!profile.canEndOnOccupied) return;
   const footprintSet = new Set(newFootprint);
   const overlaps = collectOverlappingFigures(game, playerNum, figureKey, footprintSet);
+  if (overlaps.length === 0) return;
+  // Push each figure one at a time; earlier pushes free spaces for later ones
   for (const entry of overlaps) {
+    const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
     const success = pushFigureToNearestValid(game, entry.playerNum, entry.figureKey, footprintSet);
+    const newPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
     if (!success) {
       console.warn(`Failed to push ${entry.figureKey} away from massive figure ${figureKey}`);
+    } else if (logGameAction) {
+      const from = prevPos ? String(prevPos).toUpperCase() : '?';
+      const to = newPos ? String(newPos).toUpperCase() : '?';
+      await logGameAction(game, client, `**${entry.dcName}** displaced **${from}** → **${to}** by massive figure.`, { icon: 'move', phase: 'ROUND' });
     }
   }
-  if (overlaps.length > 0) {
-    // G66-G68: After Massive ends on occupied space and pushes, lock voluntary movement for rest of phase
-    game.massiveMovementLocked = game.massiveMovementLocked || {};
-    game.massiveMovementLocked[figureKey] = true;
-    await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside. Cannot voluntarily move again this phase.`, { icon: 'move', phase: 'ROUND' });
-  }
+  // G66-G68: After Massive ends on occupied space and pushes, lock voluntary movement for rest of phase
+  game.massiveMovementLocked = game.massiveMovementLocked || {};
+  game.massiveMovementLocked[figureKey] = true;
+  await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside. Movement locked for this phase.`, { icon: 'move', phase: 'ROUND' });
 }

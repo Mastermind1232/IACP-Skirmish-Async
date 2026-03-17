@@ -1481,12 +1481,21 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         : buttonSpaces;
       const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells);
       const letterRows = buildLetterRows(buttonSpaces, msgId, figureIndex);
-      const manualPickRow = new ActionRowBuilder().addComponents(
+      const manualPickButtons = [
         new ButtonBuilder()
           .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
           .setLabel('🗺️ Pick Path Manually')
-          .setStyle(ButtonStyle.Secondary)
-      );
+          .setStyle(ButtonStyle.Secondary),
+      ];
+      if (mpRemaining > 0 && !game.urgencyMustSpendAll?.[msgId]) {
+        manualPickButtons.push(
+          new ButtonBuilder()
+            .setCustomId(`move_pick_${msgId}_${figureIndex}_done`)
+            .setLabel('End Movement')
+            .setStyle(ButtonStyle.Danger)
+        );
+      }
+      const manualPickRow = new ActionRowBuilder().addComponents(...manualPickButtons);
       const firstRows = [...letterRows.slice(0, 4), manualPickRow];
       const firstPayload = {
         content: `**Move** — Pick a column (**${mpRemaining}** MP remaining):${multiTileNote}`,

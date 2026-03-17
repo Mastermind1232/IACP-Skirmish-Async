@@ -184,10 +184,14 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
         if (!dc || dc.defeated) continue;
         const hostFk = Object.keys(figPositions).find(k => k.startsWith(dc.dcName + '-'));
         if (hostFk) {
+          // Check if the ability text allows adjacent placement (e.g. "your space or an adjacent space")
+          const allowsAdjacent = (attData.abilityText || '').toLowerCase().includes('adjacent space');
           abilities.push({
             abilityId: 'companion_deploy', label: `Deploy ${attData.companion}`,
             dcName: dc.dcName, figureKey: hostFk, msgId: mid, playerNum,
-            companionName: attData.companion, interactive: false, type: 'companion',
+            companionName: attData.companion,
+            interactive: allowsAdjacent, type: 'companion',
+            companionAllowsAdjacent: allowsAdjacent,
           });
         }
       }
@@ -354,7 +358,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
     if (remaining.length === 0) {
       // All figures done
       q.activeAbility = null;
-      await postAbilityPicker(game, gameId, client, logGameAction);
+      await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
       if (saveGames) saveGames();
       return;
     }
@@ -394,7 +398,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
     const idx = active.currentFigureIdx || 0;
     if (idx >= active.moveFigures.length) {
       q.activeAbility = null;
-      await postAbilityPicker(game, gameId, client, logGameAction);
+      await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
       if (saveGames) saveGames();
       return;
     }
@@ -403,7 +407,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
 
   if (!fig) {
     q.activeAbility = null;
-    await postAbilityPicker(game, gameId, client, logGameAction);
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
     if (saveGames) saveGames();
     return;
   }
@@ -563,7 +567,7 @@ async function _advanceAfterFigure(game, gameId, client, ctx, figureKey) {
     const remaining = active.moveFigures.filter(f => !active._resolvedFigures.includes(f.figureKey));
     if (remaining.length === 0) {
       q.activeAbility = null;
-      await postAbilityPicker(game, gameId, client, logGameAction);
+      await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
       if (saveGames) saveGames();
       return;
     }
@@ -783,6 +787,70 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       });
       break;
     }
+    case 'companion_deploy': {
+      // Interactive companion deploy — player chooses host space or adjacent space
+      const companionName = ability.companionName;
+      const hostPos = game.figurePositions?.[ability.playerNum]?.[ability.figureKey];
+      if (!hostPos || !companionName) break;
+      const hostNorm = normalizeCoord(hostPos);
+
+      // Get all cells adjacent to the host figure (multi-cell aware)
+      const ms = getMapSpaces(game.selectedMap?.id);
+      const adjacency = ms?.adjacency || {};
+      const hostSize = game.figureOrientations?.[ability.figureKey] || getFigureSize(ability.dcName) || '1x1';
+      const hostCells = getFootprintCells(hostPos, hostSize).map(c => normalizeCoord(c));
+      const adjSet = new Set();
+      for (const hc of hostCells) {
+        for (const n of (adjacency[hc] || [])) {
+          const nn = normalizeCoord(n);
+          // Exclude cells the host itself occupies
+          if (!hostCells.includes(nn)) adjSet.add(nn);
+        }
+      }
+      // Filter out spaces occupied by any figure
+      const allPositions = new Set();
+      for (const pn of [1, 2]) {
+        for (const [fk, fpos] of Object.entries(game.figurePositions?.[pn] || {})) {
+          if (!fpos) continue;
+          const fSize = game.figureOrientations?.[fk] || getFigureSize(dcNameFromFigureKey(fk)) || '1x1';
+          for (const c of getFootprintCells(fpos, fSize)) allPositions.add(normalizeCoord(c));
+        }
+      }
+      const adjSpaces = [...adjSet].filter(s => !allPositions.has(s));
+
+      // Build buttons: host space first, then adjacent
+      // Only gameId, playerNum, and space are needed — companion info lives in activeAbility
+      const btns = [];
+      btns.push(new ButtonBuilder()
+        .setCustomId(`pd_comp_space_${gameId}_${ability.playerNum}_${hostNorm}`)
+        .setLabel(`Host space (${hostNorm.toUpperCase()})`)
+        .setStyle(ButtonStyle.Primary)
+      );
+      for (const adjSpace of adjSpaces.slice(0, 19)) {
+        btns.push(new ButtonBuilder()
+          .setCustomId(`pd_comp_space_${gameId}_${ability.playerNum}_${adjSpace}`)
+          .setLabel(adjSpace.toUpperCase())
+          .setStyle(ButtonStyle.Secondary)
+        );
+      }
+      const rows = [];
+      for (let i = 0; i < btns.length; i += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+
+      game.postDeployQueue.activeAbility = {
+        abilityId: 'companion_deploy',
+        playerNum: ability.playerNum,
+        figureKey: ability.figureKey,
+        dcName: ability.dcName,
+        companionName,
+        msgId: ability.msgId,
+      };
+
+      await logGameAction(game, client, `👶 **Deploy ${companionName}** — <@${ownerId}>, choose a space to deploy **${companionName}** (${ability.dcName}'s space or an adjacent space):`, {
+        components: rows.slice(0, 5),
+        allowedMentions: { users: [ownerId] },
+      });
+      break;
+    }
     case 'scavenged_walker_move': {
       game[`scavengedWalkerDeployMoveFired_${ability.msgId}`] = true;
       // Use the unified movement flow
@@ -860,7 +928,7 @@ async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGa
 
 // ── Ability picker ──────────────────────────────────────────────────────────
 
-async function postAbilityPicker(game, gameId, client, logGameAction) {
+async function postAbilityPicker(game, gameId, client, logGameAction, saveGames) {
   const q = game.postDeployQueue;
   if (!q) return;
 
@@ -880,7 +948,7 @@ async function postAbilityPicker(game, gameId, client, logGameAction) {
       await resolveAutoAbility(game, ab, client, logGameAction);
       if (game.pendingPowerTokenOverflow?.length > 0) {
         const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
-        if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ab.playerNum, ctx.saveGames);
+        if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ab.playerNum, saveGames);
       }
     }
     q.abilities = [];
@@ -895,7 +963,7 @@ async function postAbilityPicker(game, gameId, client, logGameAction) {
     await resolveAutoAbility(game, ability, client, logGameAction);
     if (game.pendingPowerTokenOverflow?.length > 0) {
       const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
-      if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ability.playerNum, ctx.saveGames);
+      if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ability.playerNum, saveGames);
     }
     await advanceToNextPlayer(game, gameId, client, logGameAction);
     return;
@@ -1023,7 +1091,7 @@ export async function runPostDeployPhase(game, gameId, client, ctx, onComplete) 
   // Store callback for when everything completes
   if (onComplete) game._postDeployCallback = onComplete;
 
-  await postAbilityPicker(game, gameId, client, logGameAction);
+  await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   if (saveGames) saveGames();
   return true;
 }
@@ -1037,7 +1105,7 @@ export async function advancePostDeployQueue(game, gameId, client, ctx) {
   if (!q) return;
 
   q.activeAbility = null;
-  await postAbilityPicker(game, gameId, client, logGameAction);
+  await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   if (saveGames) saveGames();
 }
 
@@ -1084,7 +1152,7 @@ export async function handlePostDeployPick(interaction, ctx) {
       const _ovCh = await client.channels.fetch(game.generalId).catch(() => null);
       if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ability.playerNum, saveGames);
     }
-    await postAbilityPicker(game, gameId, client, logGameAction);
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   } else {
     await postInteractiveAbility(game, gameId, ability, client, ctx);
   }
@@ -1118,7 +1186,7 @@ export async function handleSecurityDetailPick(interaction, ctx) {
   const q = game.postDeployQueue;
   if (q) {
     q.activeAbility = null;
-    await postAbilityPicker(game, gameId, client, logGameAction);
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   }
   saveGames();
 }
@@ -1192,7 +1260,7 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
 
   if (active.tokenRemaining <= 0) {
     game.postDeployQueue.activeAbility = null;
-    await postAbilityPicker(game, gameId, client, logGameAction);
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   } else {
     await _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction);
   }
@@ -1220,7 +1288,7 @@ export async function handleStrikeTeamTokenDone(interaction, ctx) {
   const q = game.postDeployQueue;
   if (q) {
     q.activeAbility = null;
-    await postAbilityPicker(game, gameId, client, logGameAction);
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   }
   saveGames();
 }
@@ -1282,7 +1350,7 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
           await _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction);
         } else {
           q.activeAbility = null;
-          await postAbilityPicker(game, gameId, client, logGameAction);
+          await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
         }
       } else {
         await _startNextMovement(game, gameId, client, ctx);
@@ -1290,7 +1358,7 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
     }
   } else {
     q.activeAbility = null;
-    await postAbilityPicker(game, gameId, client, logGameAction);
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   }
   saveGames();
 }
@@ -1342,7 +1410,7 @@ export async function handleWalkerSkip(interaction, ctx) {
   const q = game.postDeployQueue;
   if (q) {
     q.activeAbility = null;
-    await postAbilityPicker(game, gameId, client, logGameAction);
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   }
   saveGames();
 }
@@ -1413,7 +1481,7 @@ export async function onPostDeployMovementComplete(game, gameId, client, ctx, co
 
   const active = q.activeAbility;
   if (!active) {
-    await postAbilityPicker(game, gameId, client, logGameAction);
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
     if (saveGames) saveGames();
     return;
   }
@@ -1440,7 +1508,7 @@ export async function onPostDeployMovementComplete(game, gameId, client, ctx, co
           await _postStrikeTeamTokenPicker(game, gameId, active.playerNum, client, logGameAction);
         } else {
           q.activeAbility = null;
-          await postAbilityPicker(game, gameId, client, logGameAction);
+          await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
         }
       } else {
         await _startNextMovement(game, gameId, client, ctx);
@@ -1448,7 +1516,7 @@ export async function onPostDeployMovementComplete(game, gameId, client, ctx, co
     }
   } else {
     q.activeAbility = null;
-    await postAbilityPicker(game, gameId, client, logGameAction);
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   }
 
   if (saveGames) saveGames();
@@ -1464,7 +1532,7 @@ export async function onExtraArmorComplete(game, gameId, client, ctx) {
   if (!q) return;
 
   q.activeAbility = null;
-  await postAbilityPicker(game, gameId, client, logGameAction);
+  await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   if (saveGames) saveGames();
 }
 
@@ -1538,6 +1606,59 @@ export async function handleArmsDistTokenPick(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   game.postDeployQueue.activeAbility = null;
-  await postAbilityPicker(game, gameId, client, logGameAction);
+  await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
+  saveGames();
+}
+
+/**
+ * Companion deploy: player picks a space to deploy the companion.
+ */
+export async function handleCompanionDeployPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
+  // customId: pd_comp_space_${gameId}_${playerNum}_${space}
+  const parts = interaction.customId.replace('pd_comp_space_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const space = parts.slice(2).join('_');
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can deploy companions.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const active = game.postDeployQueue?.activeAbility;
+  if (!active || active.abilityId !== 'companion_deploy') {
+    await interaction.followUp({ content: 'No companion deploy in progress.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const normSpace = normalizeCoord(space);
+  const companionKey = `${active.companionName}-0-0`;
+  if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
+  game.figurePositions[playerNum][companionKey] = normSpace;
+  game[`companionDeployed_${active.msgId}`] = true;
+
+  // Track companion → host relationship for activation
+  game.companionHostMap = game.companionHostMap || {};
+  game.companionHostMap[companionKey] = { hostFigureKey: active.figureKey, playerNum };
+
+  await logGameAction(game, client, `👶 **${active.companionName}** deployed at **${normSpace.toUpperCase()}** (${active.dcName}'s companion).`, { phase: 'ROUND', icon: 'deployed' });
+
+  // Create DC embed for companion in Play Area
+  const embedDeps = _companionEmbedDeps.get(gameId);
+  if (embedDeps) {
+    try {
+      await _createCompanionDcEmbed(game, active.companionName, playerNum, active.msgId, client, embedDeps);
+    } catch (err) {
+      console.error(`[post-deploy] Failed to create companion DC embed for ${active.companionName}:`, err.message);
+    }
+  }
+
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  game.postDeployQueue.activeAbility = null;
+  await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   saveGames();
 }

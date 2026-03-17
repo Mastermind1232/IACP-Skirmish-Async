@@ -277,7 +277,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   }
   if (newCur <= 0) {
     const attackerPlayerNum = opponentPlayerNum(playerNum);
-    if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
+    removeFigurePosition(game, playerNum, figureKey);
     const stats = getDcStats?.(dcName);
     const effects = getDcEffects?.()?.[dcName];
     const figures = stats?.figures ?? 1;
@@ -352,7 +352,7 @@ async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
   }
   if (newCur <= 0) {
     const attackerPlayerNum = opponentPlayerNum(playerNum);
-    if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
+    removeFigurePosition(game, playerNum, figureKey);
     const stats = getDcStats?.(dcName);
     const effects = getDcEffects?.()?.[dcName];
     const figures = stats?.figures ?? 1;
@@ -2137,18 +2137,8 @@ export async function handleAttackTarget(interaction, ctx) {
             if (_tfDcList[i]?.dcName === _tfDcN) { _tfMsgId = _tfMsgIds[i]; break; }
           }
           if (_tfMsgId) {
-            const _tfHs = _tfDcHs.get(_tfMsgId);
             const _tfFi = parseInt(_tfFiStr, 10);
-            if (_tfHs?.[_tfFi]) {
-              const [_tfCur, _tfMax] = _tfHs[_tfFi];
-              if (_tfCur > 0) {
-                const _tfNew = Math.max(0, _tfCur - 1);
-                _tfHs[_tfFi] = [_tfNew, _tfMax];
-                _tfDcHs.set(_tfMsgId, _tfHs);
-                const _tfIdx = _tfMsgIds.indexOf(_tfMsgId);
-                if (_tfIdx >= 0 && _tfDcList[_tfIdx]) _tfDcList[_tfIdx].healthState = [..._tfHs];
-              }
-            }
+            reduceHp(_tfDcHs, game, _tfMsgId, _tfFi, 1, attackerPlayerNum);
           }
         }
       }
@@ -3430,11 +3420,8 @@ export async function handlePreReroll(interaction, ctx) {
     const dcHS = ctx.dcHealthState;
     const atkMsgId = combat.attackerMsgId;
     if (atkMsgId && dcHS) {
-      const hpArr = dcHS.get(atkMsgId);
       const figIdx = combat.attackerFigureIndex ?? 0;
-      if (hpArr?.[figIdx]) {
-        hpArr[figIdx][0] = Math.max(0, (hpArr[figIdx][0] ?? 0) - 1);
-      }
+      reduceHp(dcHS, game, atkMsgId, figIdx, 1, combat.attackerPlayerNum);
     }
     combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
     combat.pendingPreRerolls.shift();
@@ -3964,8 +3951,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       const defSIds = (getDcEff[defDcN] || getDcEff[(defDcN || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
       const landoPN = atkSIds.includes('shrewd_scoundrel_lando') ? combat.attackerPlayerNum : (defSIds.includes('shrewd_scoundrel_lando') ? opponentPlayerNum(combat.attackerPlayerNum) : null);
       if (landoPN) {
-        if (landoPN === 1) game.p1VictoryPoints = (game.p1VictoryPoints || 0) + 2;
-        else game.p2VictoryPoints = (game.p2VictoryPoints || 0) + 2;
+        awardObjectiveVp(game, landoPN, 2);
         await thread.send(`**Shrewd Scoundrel** — Guessed ${guess} Hits, rolled ${hitCount} Hits. **Correct! +2 VP!**`);
       }
     } else {
@@ -5374,8 +5360,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
         fhResultText = `**Figurehead** — ${fhLabel || 'Murne Rin'} suffers **${fhDamage} damage** (${fhPrev} — ${fhNew} HP); ${combat.target.label} suffers 0.`;
         if (fhNew <= 0) {
           // Murne Rin defeated
-          if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][fhFigKey];
-          if (game.figureConditions?.[fhFigKey]) delete game.figureConditions[fhFigKey];
+          removeFigurePosition(game, defenderPlayerNum, fhFigKey);
           const fhDcName = dcNameFromFigureKey(fhFigKey);
           const fhStats = getDcStats?.(fhDcName);
           const fhEff = getDcEffects?.()?.[fhDcName];
@@ -5866,7 +5851,7 @@ export async function sendPowerTokenOverflowUI(game, gameId, channel, playerNum,
     components: rows.slice(0, 5), // max 5 rows
   }).catch(discordCatch);
 
-  saveGames();
+  if (saveGames) saveGames();
   return true;
 }
 

@@ -696,9 +696,16 @@ async function ensureMovementBankMessage(game, msgId, client) {
 /** Fisher-Yates shuffle. Mutates array in place. */
 function shuffleArray(arr) { return _shuffleArrayPure(arr); }
 
-/** Filter zone spaces to only those valid as top-left for a unit of given size (all footprint cells in zone, unoccupied, and not blocking). */
-function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, blockingSpaces, ignoreBlocking) {
-  return _filterValidTopLeftSpacesPure(zoneSpaces, occupiedSpaces, size, getFootprintCells, blockingSpaces, ignoreBlocking);
+/** Filter zone spaces to only those valid as top-left for a unit of given size (all footprint cells in zone, unoccupied, and not blocking).
+ *  Accepts both 5-arg (without getFootprintCells) and 6-arg (with getFootprintCells) call conventions. */
+function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, arg4, arg5, arg6) {
+  // Callers in setup.js pass 6 args: (zones, occupied, size, getFootprintCells, blocking, ignoreBlocking)
+  // The wrapper injects getFootprintCells, so detect and skip the caller's copy when present.
+  if (typeof arg4 === 'function') {
+    return _filterValidTopLeftSpacesPure(zoneSpaces, occupiedSpaces, size, getFootprintCells, arg5, arg6);
+  }
+  // 5-arg form: (zones, occupied, size, blocking, ignoreBlocking)
+  return _filterValidTopLeftSpacesPure(zoneSpaces, occupiedSpaces, size, getFootprintCells, arg4, arg5);
 }
 
 /** Maps that are play-ready: have deployment zones, map-spaces (spaces/adjacency), and Play ready? checked so the bot can draw from the pool. */

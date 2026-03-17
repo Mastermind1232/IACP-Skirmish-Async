@@ -1536,6 +1536,17 @@ export async function handleDeployPick(interaction, ctx) {
     return;
   }
   const figureKey = `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}`;
+  // Server-side validation: reject blocking terrain for non-MOBILE/MASSIVE figures
+  const { blocking: _dpBlocking, ignoreBlocking: _dpIgnore } = getDeployBlockingInfo(game, figMeta.dcName);
+  if (!_dpIgnore && _dpBlocking.length > 0) {
+    const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || getFigureSize(figMeta.dcName) || '1x1';
+    const cells = getFootprintCells(space.toLowerCase(), figureSize);
+    const blockSet = new Set(_dpBlocking.map(s => String(s).toLowerCase()));
+    if (cells.some(c => blockSet.has(c))) {
+      await interaction.followUp({ content: 'That space is blocking terrain. Only MOBILE or MASSIVE figures can deploy there.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+  }
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
   game.figurePositions[playerNum][figureKey] = space.toLowerCase();

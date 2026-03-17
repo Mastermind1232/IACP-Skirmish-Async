@@ -1058,7 +1058,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
           new ButtonBuilder()
             .setCustomId(`overdrive_use_${msgId}`)
             .setLabel('Overdrive: −1 HP for +1 Action')
-            .setStyle(ButtonStyle.Warning)
+            .setStyle(ButtonStyle.Danger)
         ));
       }
     }

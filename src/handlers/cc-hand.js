@@ -19,7 +19,8 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { normalizeSquadInput } from '../game/validation.js';
-import { getDcEffects, getDcKeywords } from '../data-loader.js';
+import { getDcEffects, getDcKeywords, getMapSpaces, getFigureSize } from '../data-loader.js';
+import { getFootprintCells } from '../game/coords.js';
 import { checkHandDiscardPassiveReshuffle } from '../game/cc-passive-redraw.js';
 import { awardObjectiveVp } from '../game/index.js';
 import {
@@ -150,6 +151,23 @@ export async function handleDeployModal(interaction, ctx) {
     }
   }
   const figureKey = `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}`;
+  // Block non-MOBILE/non-MASSIVE figures from deploying on blocking terrain
+  const ms = getMapSpaces(game.selectedMap?.id);
+  const blockingArr = ms?.blocking || [];
+  if (blockingArr.length > 0) {
+    const dcKws = getDcKeywords(game)?.[figMeta.dcName] || [];
+    const kwUpper = dcKws.map(k => String(k).toUpperCase());
+    const canIgnoreBlocking = kwUpper.includes('MOBILE') || kwUpper.includes('MASSIVE');
+    if (!canIgnoreBlocking) {
+      const figSize = getFigureSize(figMeta.dcName) || '1x1';
+      const cells = getFootprintCells(space, figSize);
+      const blockSet = new Set(blockingArr.map(s => String(s).toLowerCase()));
+      if (cells.some(c => blockSet.has(String(c).toLowerCase()))) {
+        await interaction.reply({ content: `**${space.toUpperCase()}** is blocking terrain. Only MOBILE or MASSIVE figures can deploy there.`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+    }
+  }
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
   game.figurePositions[playerNum][figureKey] = space;

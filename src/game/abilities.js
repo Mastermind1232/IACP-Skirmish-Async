@@ -3251,7 +3251,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: stillEligible.map((efk) => edcNameFromFigureKey(fk)),
+        choiceOptions: stillEligible.map((efk) => dcNameFromFigureKey(efk)),
         targetFigureKeys: stillEligible,
         logMessage: `**${tName}** gained 1 Hit Token. ${pending.remaining} more to assign.`,
       };
@@ -3340,7 +3340,7 @@ export function resolveAbility(abilityId, context) {
       const _adjAll = getFiguresAdjacentToTarget(game, fk, game.selectedMap.id);
       const _hasLeader = _adjAll.some(({ figureKey: _afk, playerNum: _apn }) => {
         if (_apn !== playerNum) return false;
-        const _adcName = _adcNameFromFigureKey(fk);
+        const _adcName = dcNameFromFigureKey(_afk);
         const _aEff = getDcEffects()?.[_adcName] || getDcEffects()?.[_adcName?.replace(/\s*\[.*\]\s*$/, '')];
         return (_aEff?.keywords || []).map(k => String(k).toUpperCase()).includes('LEADER');
       });
@@ -4268,7 +4268,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, manualMessage: `**Scomp Link** — R2-D2 is not adjacent to a terminal${terminals.length === 0 ? ' (no terminals found for this map)' : ''}.` };
     }
     const n = entry.drawCCIfAdjacentTerminal;
-    const drew = drawCards(game, meta.playerNum, n);
+    const drew = drawCcCards(game, meta.playerNum, n);
     if (!drew.length) return { applied: false, manualMessage: 'No Command cards left in deck to draw.' };
     return {
       applied: true,
@@ -4362,7 +4362,7 @@ export function resolveAbility(abilityId, context) {
       dcHealthState.set(cftMsgId, cftHS);
       const cftP = dcMessageMeta.get(cftMsgId)?.playerNum;
       syncHealthStateToList(game, cftP, cftMsgId, cftHS);
-      const cftName = chosenTargedcNameFromFigureKey(tFk);
+      const cftName = dcNameFromFigureKey(chosenTargetFk);
       return { applied: true, logMessage: `**Collateral Damage** — **${cftName}** suffers **${flatDmg} Damage** (HP: ${cC ?? cM} → ${cNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [cftMsgId] };
     }
     // Phase 1: find all figures (hostile to attacker) within N spaces of last attack target
@@ -5245,7 +5245,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     const cah = entry.chooseAdjacentHostileThen;
     const { damage = 0, selfStrain = 0, scaleStrainToRound = false } = cah;
-    const strain = scaleStrainToRound ? (game?.round || 1) : (cah.strain || 0);
+    const strain = scaleStrainToRound ? (game.currentRound || 1) : (cah.strain || 0);
     const totalDamage = damage + strain;
     const targetConditions = [
       ...(cah.weaken ? ['Weaken'] : []),
@@ -7580,7 +7580,7 @@ export function resolveAbility(abilityId, context) {
     for (const hfk of adjHostileFks) {
       const hMsgId = findMsgIdForFigureKey(game, oppNum, hfk, dcMessageMeta);
       const hMeta = hMsgId ? dcMessageMeta.get(hMsgId) : null;
-      const hName = hMeta?.displayName || hMeta?.dcName || hdcNameFromFigureKey(fk);
+      const hName = hMeta?.displayName || hMeta?.dcName || dcNameFromFigureKey(hfk);
       opts.push(`Push: ${hName}`);
       vals.push(hfk);
     }
@@ -8511,7 +8511,7 @@ export function resolveAbility(abilityId, context) {
     const vals = [];
     for (const hfk of hostileFks) {
       for (const ffk of friendlyFks) {
-        opts.push(`${hdcNameFromFigureKey(fk)} ↔ ${fdcNameFromFigureKey(fk)}`);
+        opts.push(`${dcNameFromFigureKey(hfk)} ↔ ${dcNameFromFigureKey(ffk)}`);
         vals.push(`${hfk}|${ffk}`);
       }
     }
@@ -9295,7 +9295,7 @@ export function resolveAbility(abilityId, context) {
       const _pdfStats = getStatsForDc(_pdfDcName);
       const _pdfFigCount = _pdfStats?.figures ?? 1;
       if (_pdfFigCount >= 1) {
-        const _pdfDgIdx = chosenFigureKey.split('-').slice(-2, -1)[0];
+        const { dgIndex: _pdfDgIdx } = parseFigureKey(chosenFigureKey);
         const _pdfAllOnBoard = Array.from({ length: _pdfFigCount }, (_, fi) =>
           `${_pdfDcName}-${_pdfDgIdx}-${fi}`
         ).every(fk => game.figurePositions?.[playerNum]?.[fk]);

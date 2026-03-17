@@ -270,6 +270,18 @@ async function drivePostDeployQueue(game, gameId, p1Id, p2Id, submit, harness, g
         }
       }
 
+      // Companion deploy — pick host space
+      if (active.abilityId === 'companion_deploy') {
+        const hostPos = g.figurePositions?.[pn]?.[active.figureKey];
+        if (hostPos) {
+          const { normalizeCoord } = await import('../../src/game/coords.js');
+          const space = normalizeCoord(hostPos);
+          await submit(`pd_comp_space_${gameId}_${pn}_${space}`, userId);
+          abilitiesResolved++;
+          continue;
+        }
+      }
+
       // If we're stuck with an active ability we don't know how to handle, skip
       if (verbose) console.log(`  [post-deploy] Stuck on active ability: ${active.abilityId} step=${active.step}`);
       errors.push({ step: steps.length, customId: 'pd_stuck', userId, error: `Stuck on post-deploy active ability: ${active.abilityId}` });

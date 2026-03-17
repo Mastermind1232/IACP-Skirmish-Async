@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { getDcEffects, getMapSpaces, getFormCards, getCcEffectsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
-import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, deductVp, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
+import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { getRange } from '../game/spatial.js';
@@ -26,6 +26,14 @@ import { checkStartOfRoundPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { FIGURE_LETTERS } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+
+/** Sync a healthState array back to the player's dcList entry. */
+function syncHealthStateToList(game, playerNum, msgId, healthState) {
+  const dcIds = getDcMessageIds(game, playerNum);
+  const dcList = getDcList(game, playerNum);
+  const idx = dcIds ? dcIds.indexOf(msgId) : -1;
+  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+}
 
 /**
  * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
@@ -281,10 +289,9 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
           if (_wymInOppZone) {
             // Steal 2 VP: deduct from opponent, add to owner
             const _wymOppVpKey = oppNum === 1 ? 'player1VP' : 'player2VP';
-            const _wymOwnVpKey = pn === 1 ? 'player1VP' : 'player2VP';
-            const _wymSteal = Math.min(2, game[_wymOppVpKey] || 0);
-            game[_wymOppVpKey] = (game[_wymOppVpKey] || 0) - _wymSteal;
-            game[_wymOwnVpKey] = (game[_wymOwnVpKey] || 0) + _wymSteal;
+            const _wymSteal = Math.min(2, game[_wymOppVpKey]?.total || 0);
+            deductVp(game, oppNum, _wymSteal);
+            awardObjectiveVp(game, pn, _wymSteal);
             await logGameAction(game, client, `💰 **What's Yours is Mine** — **${dc.displayName || dc.dcName}** is in the opponent's deployment zone! Stole **${_wymSteal} VP** from Player ${oppNum}.`, { phase: 'ROUND', icon: 'round' });
             await checkWinConditions(game, client);
           } else {
@@ -1018,8 +1025,8 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
         // [First Strike]: After setup, both players receive 4 VPs (round 1 only)
         if (dcName.includes('First Strike') && game.currentRound === 1 && !game.firstStrikeFired) {
           game.firstStrikeFired = true;
-          game.player1Vp = (game.player1Vp || 0) + 4;
-          game.player2Vp = (game.player2Vp || 0) + 4;
+          awardObjectiveVp(game, 1, 4);
+          awardObjectiveVp(game, 2, 4);
           await logGameAction(game, client, `⚔️ **First Strike** — Both players receive **4 VPs**.`);
         }
 

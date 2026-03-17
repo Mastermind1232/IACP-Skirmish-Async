@@ -498,7 +498,12 @@ export async function handleLiaDeployZone(interaction, ctx) {
       }
     }
 
-    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, currentOccupied, figureSize, getFootprintCells, blocking, false);
+    // Check if figure is MOBILE or MASSIVE — those can deploy on blocking terrain
+    const fkDcName = dcNameFromFigureKey(fk);
+    const fkKeywords = getDcKeywords(game)?.[fkDcName] || [];
+    const fkKwUpper = fkKeywords.map(k => String(k).toUpperCase());
+    const ignoreBlocking = fkKwUpper.includes('MOBILE') || fkKwUpper.includes('MASSIVE');
+    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, currentOccupied, figureSize, getFootprintCells, blocking, ignoreBlocking);
     if (!validSpaces.length) continue;
 
     // Sort by proximity to opponent zone entrance

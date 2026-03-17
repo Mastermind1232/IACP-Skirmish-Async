@@ -535,8 +535,10 @@ export function buildHeadlessDeps(options = {}) {
 
     // Extracted engine modules (real)
     shuffleArray,
-    filterValidTopLeftSpaces: (zoneSpaces, occupiedSpaces, size, blockingSpaces, ignoreBlocking) =>
-      _filterValidTopLeftSpacesPure(zoneSpaces, occupiedSpaces, size, getFootprintCells, blockingSpaces, ignoreBlocking),
+    filterValidTopLeftSpaces: (zoneSpaces, occupiedSpaces, size, arg4, arg5, arg6) =>
+      typeof arg4 === 'function'
+        ? _filterValidTopLeftSpacesPure(zoneSpaces, occupiedSpaces, size, getFootprintCells, arg5, arg6)
+        : _filterValidTopLeftSpacesPure(zoneSpaces, occupiedSpaces, size, getFootprintCells, arg4, arg5),
     getMissionTokenLabel, calculateKillVp,
     // Game readers — wrapped to close over in-memory Maps (matching index.js wrapper signatures)
     hasActionsRemainingInGame: (game, gameId) => _hasActionsRemainingInGameRaw(game, gameId, dcMessageMeta),
