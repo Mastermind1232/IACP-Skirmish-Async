@@ -14,6 +14,13 @@ import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
 
+/** Clean up all movement-related state flags for a completed/cancelled move. */
+function _cleanupMoveState(game, moveKey, msgId) {
+  delete game.moveInProgress[moveKey];
+  if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
+  if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
+}
+
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, dcMessageMeta, getBoardStateForMovement, getMovementProfile, ensureMovementCache, getSpacesAtCost, clearMoveGridMessages, getMoveSpaceGridRows, getMovementMinimapAttachment, client
@@ -65,7 +72,7 @@ export async function handleMoveMp(interaction, ctx) {
   }
   const boardState = moveState.boardState || getBoardStateForMovement(game, figureKey);
   if (!boardState) {
-    delete game.moveInProgress[moveKey];
+    _cleanupMoveState(game, moveKey, msgId);
     await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -81,7 +88,7 @@ export async function handleMoveMp(interaction, ctx) {
   moveState.movementProfile = profile;
   const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
   if (!startCoord) {
-    delete game.moveInProgress[moveKey];
+    _cleanupMoveState(game, moveKey, msgId);
     await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -420,9 +427,7 @@ export async function handleMovePick(interaction, ctx) {
   if (space === 'done') {
     await clearMoveGridMessages(game, moveKey, interaction.channel);
     try { await interaction.message.delete(); } catch { /* already gone */ }
-    if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
-    if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
-    delete game.moveInProgress[moveKey];
+    _cleanupMoveState(game, moveKey, msgId);
     await interaction.followUp({ content: `**${displayName}** finished moving (${mpRemaining} MP forfeited).`, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
@@ -434,7 +439,7 @@ export async function handleMovePick(interaction, ctx) {
   try { await interaction.message.delete(); } catch { /* already gone or no perms */ }
   const boardState = getBoardStateForMovement(game, figureKey);
   if (!boardState) {
-    delete game.moveInProgress[moveKey];
+    _cleanupMoveState(game, moveKey, msgId);
     await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -448,7 +453,7 @@ export async function handleMovePick(interaction, ctx) {
   }
   const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
   if (!startCoord) {
-    delete game.moveInProgress[moveKey];
+    _cleanupMoveState(game, moveKey, msgId);
     await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -713,11 +718,7 @@ export async function handleMovePick(interaction, ctx) {
       } catch { /* ignore fetch errors */ }
     }
     const wasPostDeploy = moveState.postDeployReturn;
-    delete game.moveInProgress[moveKey];
-    // Force Jump: clear mobileMovementActive when all MP is spent
-    if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
-    // Urgency: clear must-spend-all flag when movement completes
-    if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
+    _cleanupMoveState(game, moveKey, msgId);
     // Post-deploy movement: advance the post-deploy queue
     if (wasPostDeploy && game.postDeployQueue) {
       const { onPostDeployMovementComplete } = await import('./post-deploy.js');

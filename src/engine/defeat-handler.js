@@ -46,8 +46,8 @@ export async function processFigureDefeat(game, opts, deps) {
     figureKey,
     attackerPlayerNum,
     attackerFigureKey = null,
-    msgId = null,
-    dcIdx = -1,
+    msgId: msgIdOpt = null,
+    dcIdx: dcIdxOpt = -1,
     dcName: dcNameOpt = null,
     displayName: displayNameOpt = null,
     source = '',
@@ -70,10 +70,24 @@ export async function processFigureDefeat(game, opts, deps) {
     checkNefariousGains,
     checkHuntDissent,
     checkWinConditions,
+    // Optional: for auto-resolving msgId/dcIdx when not provided
+    findDcMessageIdForFigure: findMsgId,
+    dcMessageMeta,
   } = deps;
 
   const dcName = dcNameOpt || dcNameFromFigureKey(figureKey);
   const displayName = displayNameOpt || dcName;
+
+  // Auto-resolve msgId and dcIdx when not provided by caller
+  let msgId = msgIdOpt;
+  let dcIdx = dcIdxOpt;
+  if ((!msgId || dcIdx < 0) && findMsgId && dcMessageMeta) {
+    if (!msgId) msgId = findMsgId(game.gameId, defeatedPlayerNum, figureKey, dcMessageMeta);
+    if (msgId && dcIdx < 0) {
+      const dcIds = getDcMessageIds(game, defeatedPlayerNum);
+      dcIdx = (dcIds || []).indexOf(msgId);
+    }
+  }
 
   // 1. Remove position + conditions + device tokens
   removeFigurePosition(game, defeatedPlayerNum, figureKey);

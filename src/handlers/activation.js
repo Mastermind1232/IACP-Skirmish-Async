@@ -9,7 +9,7 @@ import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, awardKillVp } from '../game/index.js';
-import { getRange } from '../game/spatial.js';
+import { getRange, getAllFigureCoords } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
@@ -660,9 +660,7 @@ export async function handleEndTurn(interaction, ctx) {
     let _htlBlockCount = 0;
     if (_htlPos && _htlHasLos && _htlMapSpaces) {
       const _htlEnemyNum = opponentPlayerNum(meta.playerNum);
-      const _htlAllFigCoords = [];
-      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _htlAllFigCoords.push(String(fp).toLowerCase());
-      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _htlAllFigCoords.push(String(fp).toLowerCase());
+      const _htlAllFigCoords = getAllFigureCoords(game);
       for (const [, ePos] of Object.entries(game.figurePositions?.[_htlEnemyNum] || {})) {
         if (!ePos) continue;
         if (_htlHasLos(String(_htlPos).toLowerCase(), String(ePos).toLowerCase(), _htlMapSpaces, _htlAllFigCoords)) _htlBlockCount++;
@@ -1391,9 +1389,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     let surgeCount = 0;
     if (selfPos && _hasLos && _mapSpaces) {
       const enemyNum = opponentPlayerNum(meta.playerNum);
-      const allFigCoords = [];
-      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) allFigCoords.push(String(fp).toLowerCase());
-      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) allFigCoords.push(String(fp).toLowerCase());
+      const allFigCoords = getAllFigureCoords(game);
       for (const [, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
         if (!ePos) continue;
         if (_hasLos(String(selfPos).toLowerCase(), String(ePos).toLowerCase(), _mapSpaces, allFigCoords)) surgeCount++;
@@ -1479,9 +1475,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     const _udSelfFk = `${meta.dcName}-${_udDgIndex}-0`;
     const _udSelfPos = game.figurePositions?.[meta.playerNum]?.[_udSelfFk];
     // Collect all figure coords for LOS blocking check
-    const _udAllFigCoords = [];
-    for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _udAllFigCoords.push(String(fp).toLowerCase());
-    for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _udAllFigCoords.push(String(fp).toLowerCase());
+    const _udAllFigCoords = getAllFigureCoords(game);
     // Find friendlies in LOS
     const _udFriendlies = [];
     if (_udSelfPos && _udHasLos && _udMapSpaces) {
@@ -1919,9 +1913,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       const _motSelfFk = `${meta.dcName}-${_motDgIndex}-0`;
       const _motSelfPos = game.figurePositions?.[meta.playerNum]?.[_motSelfFk];
       const _motSelfCost = ctx.getDcStats?.(meta.dcName)?.cost ?? 99;
-      const _motAllFigCoords = [];
-      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _motAllFigCoords.push(String(fp).toLowerCase());
-      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _motAllFigCoords.push(String(fp).toLowerCase());
+      const _motAllFigCoords = getAllFigureCoords(game);
       const _motFriendlies = _motSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
         .filter(([fk, fp]) => {
           if (fk === _motSelfFk || !fp) return false;
