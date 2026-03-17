@@ -3414,7 +3414,8 @@ client.on('interactionCreate', async (interaction) => {
       'squad_confirm_',
       'squad_cancel_',
       'form_pick_',
-      'loadout_pick_',
+      'loadout_select_',
+      'loadout_confirm_',
       // DC play area
       'dc_attack_',
       'dc_move_',

@@ -84,7 +84,8 @@ export const PREFIX_TO_COMMAND = {
   'squad_confirm_': COMMAND_TYPES.SubmitSquad,
   'squad_cancel_': COMMAND_TYPES.SubmitSquad,
   'form_pick_': COMMAND_TYPES.DeployFigure,
-  'loadout_pick_': COMMAND_TYPES.DeployFigure,
+  'loadout_select_': COMMAND_TYPES.DeployFigure,
+  'loadout_confirm_': COMMAND_TYPES.DeployFigure,
   // DC play area
   'dc_attack_': COMMAND_TYPES.PerformAction,
   'dc_move_': COMMAND_TYPES.PerformAction,
@@ -219,7 +220,8 @@ export function parsePayloadFromCustomId(customId, prefix) {
     case 'deployment_orient_':
     case 'auto_deploy_':
     case 'form_pick_':
-    case 'loadout_pick_':
+    case 'loadout_select_':
+    case 'loadout_confirm_':
       return { gameId: parts[0], figureKey: parts.slice(1).join('_') };
 
     case 'deployment_done_':

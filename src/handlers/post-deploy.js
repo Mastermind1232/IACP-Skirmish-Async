@@ -738,7 +738,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       const allFks = Object.keys(game.figurePositions?.[ability.playerNum] || {});
       if (allFks.length > 0) {
         game.figurePowerTokens = game.figurePowerTokens || {};
-        game[`pendingExtraArmor_p${ability.playerNum}`] = { remaining: 4 };
+        game[`pendingExtraArmor_p${ability.playerNum}`] = { remaining: 4, total: 4, allocation: {} };
         game.postDeployQueue.activeAbility = { abilityId: 'extra_armor', playerNum: ability.playerNum, remaining: 4 };
         const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
           .setCustomId(`extra_armor_pick_${gameId}_${ability.playerNum}_${fk}`)

@@ -287,10 +287,10 @@ describe('Manual Deployment: customId parsing — misc formats', () => {
     assert.equal(parts[5], 'mos-eisley');
   });
 
-  it('loadout_pick_{gameId}_{figureKey}_{loadoutName}', () => {
-    const parts = parseCustomId('loadout_pick_G42_Purge Trooper (Elite)-0-0_Electrostaff');
+  it('loadout_select_{gameId}_{figureKey}_{loadoutName}', () => {
+    const parts = parseCustomId('loadout_select_G42_Purge Trooper (Elite)-0-0_Electrostaff');
     assert.equal(parts[0], 'loadout');
-    assert.equal(parts[1], 'pick');
+    assert.equal(parts[1], 'select');
     assert.equal(parts[2], 'G42');
   });
 
@@ -354,8 +354,9 @@ describe('Manual Deployment: handler registration', () => {
     assert.equal(typeof setup.handleDeploymentOrient, 'function');
   });
 
-  it('setup.js exports handleLoadoutPick', () => {
-    assert.equal(typeof setup.handleLoadoutPick, 'function');
+  it('setup.js exports handleLoadoutSelect and handleLoadoutConfirm', () => {
+    assert.equal(typeof setup.handleLoadoutSelect, 'function');
+    assert.equal(typeof setup.handleLoadoutConfirm, 'function');
   });
 
   it('setup.js exports handleFormPick', () => {

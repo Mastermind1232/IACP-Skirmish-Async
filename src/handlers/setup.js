@@ -6,7 +6,7 @@ import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ModalB
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getLoadoutCards, getFormCards, getDcEffects, getDcStats, getMapSpaces, getDcKeywords } from '../data-loader.js';
+import { getLoadoutCards, getFormCards, getDcEffects, getDcStats, getMapSpaces, getDcKeywords, getRootDir } from '../data-loader.js';
 import { getDcImagePath } from '../asset-paths.js';
 import { setPhase, PHASES } from '../game/phase.js';
 
@@ -1611,20 +1611,17 @@ export async function handleDeployPick(interaction, ctx) {
     const loadoutCards = getLoadoutCards();
     const names = Object.keys(loadoutCards);
     if (names.length > 0) {
-      const row = new ActionRowBuilder().addComponents(
-        ...names.map((name) =>
-          new ButtonBuilder()
-            .setCustomId(`loadout_pick_${game.gameId}_${figureKey}_${name}`)
-            .setLabel(name)
-            .setStyle(ButtonStyle.Primary)
-        )
-      );
+      const defaultName = names[0];
+      const selectionRow = _getLoadoutSelectionRow(game.gameId, figureKey, names, defaultName);
+      const confirmRow = _getLoadoutConfirmRow(game.gameId, figureKey);
+      const files = _getLoadoutImageAttachment(loadoutCards[defaultName]);
       try {
         const handId = getHandChannelId(game, playerNum);
         const handChannel = await client.channels.fetch(handId);
         await handChannel.send({
           content: `⚔️ **Imperial Loadout** — Choose a Loadout card for **${figMeta.dcName}**:`,
-          components: [row],
+          components: [selectionRow, confirmRow],
+          files,
         });
       } catch (err) {
         console.error('Failed to send loadout picker:', err);
@@ -1661,28 +1658,100 @@ export async function handleDeployPick(interaction, ctx) {
   }
 }
 
-/**
- * Handle loadout card selection: loadout_pick_{gameId}_{figureKey}_{loadoutName}
- * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, logGameAction, client, saveGames
- */
-export async function handleLoadoutPick(interaction, ctx) {
-  await interaction.deferUpdate().catch(discordCatch);
-  const { getGame, logGameAction, client, saveGames } = ctx;
-  // Parse: loadout_pick_{gameId}_{dcName}-{dgIdx}-{figIdx}_{loadoutName}
-  const prefix = 'loadout_pick_';
-  const rest = interaction.customId.slice(prefix.length);
+/* ── Loadout picker helpers ── */
+
+function _getLoadoutSelectionRow(gameId, figureKey, names, selectedName) {
+  return new ActionRowBuilder().addComponents(
+    ...names.map((name) =>
+      new ButtonBuilder()
+        .setCustomId(`loadout_select_${gameId}_${figureKey}_${name}`)
+        .setLabel(name)
+        .setStyle(name === selectedName ? ButtonStyle.Success : ButtonStyle.Primary)
+    )
+  );
+}
+
+function _getLoadoutConfirmRow(gameId, figureKey) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`loadout_confirm_${gameId}_${figureKey}`)
+      .setLabel('Confirm Selection')
+      .setStyle(ButtonStyle.Success)
+  );
+}
+
+function _getLoadoutImageAttachment(card) {
+  if (!card?.imagePath) return [];
+  try {
+    return [new AttachmentBuilder(join(getRootDir(), card.imagePath))];
+  } catch { return []; }
+}
+
+/** Parse loadout custom ID after prefix: {gameId}_{figureKey}_{extra} */
+function _parseLoadoutId(customId, prefix) {
+  const rest = customId.slice(prefix.length);
   const gameIdEnd = rest.indexOf('_');
-  if (gameIdEnd < 0) return;
+  if (gameIdEnd < 0) return null;
   const gameId = rest.slice(0, gameIdEnd);
   const afterGameId = rest.slice(gameIdEnd + 1);
-  // figureKey is dcName-dgIdx-figIdx, loadoutName follows after last _ that's part of loadout
-  // Since DC names can contain spaces/hyphens, figure key ends at -\d+-\d+_
-  const fkMatch = afterGameId.match(/^(.+-\d+-\d+)_(.+)$/);
-  if (!fkMatch) return;
-  const [, figureKey, loadoutName] = fkMatch;
+  const fkMatch = afterGameId.match(/^(.+-\d+-\d+)(?:_(.+))?$/);
+  if (!fkMatch) return null;
+  return { gameId, figureKey: fkMatch[1], extra: fkMatch[2] ?? null };
+}
+
+/**
+ * Handle loadout selection toggle: loadout_select_{gameId}_{figureKey}_{loadoutName}
+ * Updates buttons (green = selected) and swaps the card image.
+ */
+export async function handleLoadoutSelect(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame } = ctx;
+  const parsed = _parseLoadoutId(interaction.customId, 'loadout_select_');
+  if (!parsed || !parsed.extra) return;
+  const { gameId, figureKey, extra: loadoutName } = parsed;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
+
+  const loadoutCards = getLoadoutCards();
+  const card = loadoutCards[loadoutName];
+  if (!card) return;
+
+  const names = Object.keys(loadoutCards);
+  const selectionRow = _getLoadoutSelectionRow(gameId, figureKey, names, loadoutName);
+  const confirmRow = _getLoadoutConfirmRow(gameId, figureKey);
+  const files = _getLoadoutImageAttachment(card);
+
+  await interaction.message.edit({
+    content: `⚔️ **Imperial Loadout** — Choose a Loadout card for **${dcNameFromFigureKey(figureKey)}**:`,
+    components: [selectionRow, confirmRow],
+    files,
+    attachments: [],
+  }).catch(discordCatch);
+}
+
+/**
+ * Handle loadout confirm: loadout_confirm_{gameId}_{figureKey}
+ * Reads the currently-green button to determine which loadout was selected.
+ */
+export async function handleLoadoutConfirm(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, logGameAction, client, saveGames } = ctx;
+  const parsed = _parseLoadoutId(interaction.customId, 'loadout_confirm_');
+  if (!parsed) return;
+  const { gameId, figureKey } = parsed;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+
+  // Determine selected loadout from the green (Success) button in the first row
+  const selectionRow = interaction.message.components[0];
+  let loadoutName = null;
+  for (const btn of selectionRow.components) {
+    if (btn.style === ButtonStyle.Success) {
+      loadoutName = btn.label;
+      break;
+    }
+  }
+  if (!loadoutName) return;
 
   const loadoutCards = getLoadoutCards();
   const card = loadoutCards[loadoutName];
@@ -1691,19 +1760,12 @@ export async function handleLoadoutPick(interaction, ctx) {
   setConfig(game, figureKey, 'loadout', loadoutName);
   saveGames();
 
-  // Show chosen card image and update the message
-  const { join } = await import('path');
-  const { getRootDir } = await import('../data-loader.js');
-  const files = [];
-  if (card.imagePath) {
-    try {
-      files.push(new AttachmentBuilder(join(getRootDir(), card.imagePath)));
-    } catch {}
-  }
+  const files = _getLoadoutImageAttachment(card);
   await interaction.message.edit({
     content: `✓ **Imperial Loadout** — **${dcNameFromFigureKey(figureKey)}** equipped **${loadoutName}**.\n${card.abilityText}`,
     components: [],
     files,
+    attachments: [],
   }).catch(discordCatch);
   await logGameAction?.(game, client, `**Imperial Loadout** — **${dcNameFromFigureKey(figureKey)}** chose **${loadoutName}**.`, { phase: 'DEPLOYMENT', icon: 'deploy' });
 }

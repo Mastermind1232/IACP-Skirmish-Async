@@ -40,7 +40,8 @@ import {
   handleDeployPick,
   handleDeployRow,
   handleDeployRowBack,
-  handleLoadoutPick,
+  handleLoadoutSelect,
+  handleLoadoutConfirm,
   handleFormPick,
   handleDeploymentDone,
   handleAutoDeploy,
@@ -281,7 +282,8 @@ register('deployment_orient_', handleDeploymentOrient, 'setup');
 register('deploy_pick_', handleDeployPick, 'setup');
 register('deploy_row_back_', handleDeployRowBack, 'setup');
 register('deploy_row_', handleDeployRow, 'setup');
-register('loadout_pick_', handleLoadoutPick, 'setup');
+register('loadout_select_', handleLoadoutSelect, 'setup');
+register('loadout_confirm_', handleLoadoutConfirm, 'setup');
 register('form_pick_', handleFormPick, 'setup');
 register('deployment_done_', handleDeploymentDone, 'setup');
 register('auto_deploy_', handleAutoDeploy, 'setup');
@@ -549,7 +551,8 @@ export {
   handleDeployPick,
   handleDeployRow,
   handleDeployRowBack,
-  handleLoadoutPick,
+  handleLoadoutSelect,
+  handleLoadoutConfirm,
   handleFormPick,
   handleDeploymentDone,
   handleAutoDeploy,

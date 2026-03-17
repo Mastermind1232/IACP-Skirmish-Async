@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { getDcEffects, getMapSpaces, getFormCards, getCcEffectsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
-import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
+import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, buildFigureButtonLabel, getMaxPowerTokens } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { getRange } from '../game/spatial.js';
@@ -1400,51 +1400,120 @@ async function _postExcavationPicker(game, gameId, playerNum, dc, logGameAction,
 
 // ---- Skirmish Upgrade SOR button handlers ----
 
+/* ── Extra Armor helpers ── */
+
+/** Build the button label for a figure in the Extra Armor picker, showing pending allocation. */
+function _extraArmorLabel(fk, game, allocation) {
+  const dcName = dcNameFromFigureKey(fk);
+  const { dgIndex, figureIndex } = parseFigureKey(fk);
+  const letters = 'abcdefghij';
+  const letter = letters[figureIndex] || 'a';
+  const pending = allocation[fk] || 0;
+  const max = getMaxPowerTokens(fk);
+  const existing = (game.figurePowerTokens?.[fk] || []).length;
+  let label = `${dcName} (${dgIndex}${letter})`;
+  if (pending > 0) label += ` [${pending}/${max - existing}]`;
+  return label;
+}
+
+/** Get the button style for a figure based on its pending token count. */
+function _extraArmorStyle(fk, allocation) {
+  const pending = allocation[fk] || 0;
+  if (pending === 0) return ButtonStyle.Primary;    // blue  — 0 tokens
+  if (pending === 1) return ButtonStyle.Success;     // green — 1 token
+  return ButtonStyle.Danger;                          // red   — 2 tokens
+}
+
+/** Build the full Extra Armor UI rows (figure buttons + optional confirm). */
+function _buildExtraArmorUI(gameId, playerNum, allFks, game, allocation, total) {
+  const placed = Object.values(allocation).reduce((s, n) => s + n, 0);
+  const remaining = total - placed;
+  const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
+    .setCustomId(`extra_armor_pick_${gameId}_${playerNum}_${fk}`)
+    .setLabel(_extraArmorLabel(fk, game, allocation))
+    .setStyle(_extraArmorStyle(fk, allocation))
+  );
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  // Show confirm button only when all tokens are placed
+  if (remaining <= 0) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`extra_armor_confirm_${gameId}_${playerNum}`)
+        .setLabel('Confirm Allocation')
+        .setStyle(ButtonStyle.Success)
+    ));
+  }
+  const content = remaining > 0
+    ? `🛡️ **Extra Armor** — Distribute Block Tokens among your figures (${remaining} of ${total} remaining):`
+    : `🛡️ **Extra Armor** — All ${total} Block Tokens allocated. Press **Confirm** to apply.`;
+  return { content, components: rows };
+}
+
 /**
- * Extra Armor: player picks a figure to give 1 Block Token (repeats until 4 distributed).
- * Confirm step: first click shows confirm/cancel, second click applies the token.
+ * Extra Armor: cycle a figure's pending token count (0 → 1 → 2 → 0).
+ * No game-state changes until confirm.
  */
 export async function handleExtraArmorPick(interaction, ctx) {
-  const { getGame, saveGames, logGameAction, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames } = ctx;
   const parts = interaction.customId.replace('extra_armor_pick_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const figureKey = parts.slice(2).join('_');
-  const game = await requireGame(interaction, getGame, gameId);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
-  // Player verification
   const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owning player can distribute Extra Armor tokens.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const pending = game[`pendingExtraArmor_p${playerNum}`];
-  if (!pending || pending.remaining <= 0) {
-    await interaction.followUp({ content: 'Extra Armor tokens already distributed.', ephemeral: true }).catch(discordCatch);
-    return;
+  if (!pending) return;
+  const total = pending.total || 4;
+  const allocation = pending.allocation || {};
+
+  // Calculate max tokens this figure can receive (cap minus existing)
+  const existing = (game.figurePowerTokens?.[figureKey] || []).length;
+  const maxForFigure = getMaxPowerTokens(figureKey) - existing;
+  const current = allocation[figureKey] || 0;
+  const placed = Object.values(allocation).reduce((s, n) => s + n, 0);
+
+  // Cycle: 0 → 1 → 2 → 0 (capped by per-figure max and total remaining)
+  let next;
+  if (current >= maxForFigure || current >= 2) {
+    // At max for this figure — cycle back to 0
+    next = 0;
+  } else if (placed - current + (current + 1) > total) {
+    // Adding one more would exceed total — cycle back to 0
+    next = 0;
+  } else {
+    next = current + 1;
   }
-  const dcName = dcNameFromFigureKey(figureKey);
-  // Show confirm/cancel buttons
-  const confirmRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`extra_armor_confirm_${gameId}_${playerNum}_${figureKey}`).setLabel(`Confirm: ${dcName}`).setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`extra_armor_cancel_${gameId}_${playerNum}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary),
-  );
-  await interaction.message.edit({
-    content: `🛡️ **Extra Armor** — Place **1 Block Token** on **${dcName}**? (${pending.remaining} remaining)`,
-    components: [confirmRow],
-  }).catch(discordCatch);
+
+  if (next === 0) {
+    delete allocation[figureKey];
+  } else {
+    allocation[figureKey] = next;
+  }
+  pending.allocation = allocation;
+  saveGames();
+
+  const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
+  const ui = _buildExtraArmorUI(gameId, playerNum, allFks, game, allocation, total);
+  await interaction.message.edit(ui).catch(discordCatch);
 }
 
 /**
- * Extra Armor confirm: apply the Block Token.
+ * Extra Armor confirm: apply all allocated Block Tokens at once and log.
  */
 export async function handleExtraArmorConfirm(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames, logGameAction, client } = ctx;
   const parts = interaction.customId.replace('extra_armor_confirm_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
-  const figureKey = parts.slice(2).join('_');
-  const game = await requireGame(interaction, getGame, gameId);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
@@ -1452,72 +1521,47 @@ export async function handleExtraArmorConfirm(interaction, ctx) {
     return;
   }
   const pending = game[`pendingExtraArmor_p${playerNum}`];
-  if (!pending || pending.remaining <= 0) {
-    await interaction.followUp({ content: 'Extra Armor tokens already distributed.', ephemeral: true }).catch(discordCatch);
+  if (!pending) return;
+  const allocation = pending.allocation || {};
+  const total = pending.total || 4;
+  const placed = Object.values(allocation).reduce((s, n) => s + n, 0);
+  if (placed < total) {
+    await interaction.followUp({ content: `Still ${total - placed} token(s) left to allocate.`, ephemeral: true }).catch(discordCatch);
     return;
   }
-  grantPowerTokens(game, figureKey, 'Block', 1);
-  pending.remaining -= 1;
-  const dcName = dcNameFromFigureKey(figureKey);
-  await logGameAction(game, client, `🛡️ **Extra Armor** — **${dcName}** gains **1 Block Token** (${pending.remaining} remaining).`);
+
+  // Apply all tokens
+  const logParts = [];
+  for (const [fk, count] of Object.entries(allocation)) {
+    if (count <= 0) continue;
+    grantPowerTokens(game, fk, 'Block', count);
+    logParts.push(`**${dcNameFromFigureKey(fk)}** +${count}`);
+  }
+  delete game[`pendingExtraArmor_p${playerNum}`];
+  saveGames();
+
+  // Single log entry for the whole allocation
+  await logGameAction(game, client, `🛡️ **Extra Armor** — Block Tokens distributed: ${logParts.join(', ')}.`);
+
+  // Check for power token overflow
   if (game.pendingPowerTokenOverflow?.length > 0) {
     await sendPowerTokenOverflowUI(game, gameId, interaction.channel, playerNum, saveGames);
   }
-  if (pending.remaining <= 0) {
-    delete game[`pendingExtraArmor_p${playerNum}`];
-    await interaction.message.edit({ content: '🛡️ **Extra Armor** — All 4 Block Tokens distributed.', components: [] }).catch(discordCatch);
-    // If post-deploy queue is active, advance it
-    if (game.postDeployQueue) {
-      const { onExtraArmorComplete } = await import('./post-deploy.js');
-      await onExtraArmorComplete(game, gameId, client, { logGameAction, saveGames });
-    }
-  } else {
-    // Rebuild figure picker with remaining count
-    const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
-    const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
-      .setCustomId(`extra_armor_pick_${gameId}_${playerNum}_${fk}`)
-      .setLabel(buildFigureButtonLabel(fk, game))
-      .setStyle(ButtonStyle.Primary)
-    );
-    const rows = [];
-    for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-    await interaction.message.edit({
-      content: `🛡️ **Extra Armor** — Choose a figure to give **1 Block Token** (${pending.remaining} remaining):`,
-      components: rows,
-    }).catch(discordCatch);
+
+  await interaction.message.edit({ content: `🛡️ **Extra Armor** — All ${total} Block Tokens distributed.`, components: [] }).catch(discordCatch);
+
+  // Advance post-deploy queue if active
+  if (game.postDeployQueue) {
+    const { onExtraArmorComplete } = await import('./post-deploy.js');
+    await onExtraArmorComplete(game, gameId, client, { logGameAction, saveGames });
   }
-  saveGames();
 }
 
 /**
- * Extra Armor cancel: go back to figure picker.
+ * Extra Armor cancel: kept for backwards compat but no longer used in the new UI.
  */
 export async function handleExtraArmorCancel(interaction, ctx) {
-  const { getGame } = ctx;
-  const parts = interaction.customId.replace('extra_armor_cancel_', '').split('_');
-  const gameId = parts[0];
-  const playerNum = parseInt(parts[1], 10);
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  const ownerId = getPlayerId(game, playerNum);
-  if (interaction.user.id !== ownerId) {
-    await interaction.followUp({ content: 'Only the owning player can distribute Extra Armor tokens.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const pending = game[`pendingExtraArmor_p${playerNum}`];
-  if (!pending || pending.remaining <= 0) return;
-  const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
-  const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
-    .setCustomId(`extra_armor_pick_${gameId}_${playerNum}_${fk}`)
-    .setLabel(buildFigureButtonLabel(fk, game))
-    .setStyle(ButtonStyle.Primary)
-  );
-  const rows = [];
-  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-  await interaction.message.edit({
-    content: `🛡️ **Extra Armor** — Choose a figure to give **1 Block Token** (${pending.remaining} remaining):`,
-    components: rows,
-  }).catch(discordCatch);
+  await interaction.deferUpdate().catch(discordCatch);
 }
 
 /**

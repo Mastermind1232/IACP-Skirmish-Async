@@ -228,15 +228,28 @@ async function drivePostDeployQueue(game, gameId, p1Id, p2Id, submit, harness, g
         continue;
       }
 
-      // Extra Armor — pick first figure then confirm, repeat until 4 tokens distributed
+      // Extra Armor — cycle figures to allocate all tokens, then confirm
       if (active.abilityId === 'extra_armor') {
         const pendingEa = g[`pendingExtraArmor_p${pn}`];
-        if (pendingEa && pendingEa.remaining > 0) {
+        if (pendingEa) {
           const allFks = Object.keys(g.figurePositions?.[pn] || {});
           if (allFks.length > 0) {
-            const targetFk = allFks[0];
-            await submit(`extra_armor_pick_${gameId}_${pn}_${targetFk}`, userId);
-            await submit(`extra_armor_confirm_${gameId}_${pn}_${targetFk}`, userId);
+            const total = pendingEa.total || 4;
+            let placed = 0;
+            let fkIdx = 0;
+            // Spread tokens across figures (each click adds 1, max 2 per figure)
+            while (placed < total && fkIdx < allFks.length) {
+              const fk = allFks[fkIdx];
+              await submit(`extra_armor_pick_${gameId}_${pn}_${fk}`, userId);
+              placed++;
+              if (placed < total) {
+                // Click same figure again for second token
+                await submit(`extra_armor_pick_${gameId}_${pn}_${fk}`, userId);
+                placed++;
+              }
+              fkIdx++;
+            }
+            await submit(`extra_armor_confirm_${gameId}_${pn}`, userId);
             continue;
           }
         }
