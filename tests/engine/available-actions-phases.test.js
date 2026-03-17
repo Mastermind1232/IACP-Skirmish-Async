@@ -78,16 +78,23 @@ describe('getAvailableActions — phase gate and round phases', () => {
       assert.strictEqual(p2.length, 0);
     });
 
-    it('returns action for both when no endOfRoundWhoseTurn set', () => {
-      const game = {
+    it('returns action only for the player whose turn it is', () => {
+      const game1 = {
         ...baseGame,
         phase: 'round_active',
         roundPhase: 'end_of_round',
+        endOfRoundWhoseTurn: 'p1',
       };
-      const p1 = getAvailableActions(game, 1);
+      const p1 = getAvailableActions(game1, 1);
       assert.ok(p1.some(a => a.type === ACTION_TYPES.END_END_OF_ROUND));
 
-      const p2 = getAvailableActions(game, 2);
+      const game2 = {
+        ...baseGame,
+        phase: 'round_active',
+        roundPhase: 'end_of_round',
+        endOfRoundWhoseTurn: 'p2',
+      };
+      const p2 = getAvailableActions(game2, 2);
       assert.ok(p2.some(a => a.type === ACTION_TYPES.END_END_OF_ROUND));
     });
   });

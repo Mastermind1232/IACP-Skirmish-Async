@@ -47,7 +47,7 @@ describe('getAvailableActions — combat flow', () => {
     assert.ok(p1Actions.some(a => a.type === ACTION_TYPES.COMBAT_ROLL));
   });
 
-  it('returns resolve/skip rerolls during reroll phase', () => {
+  it('returns reroll actions during reroll phase', () => {
     const game = {
       ...baseGame,
       pendingCombat: {
@@ -57,11 +57,18 @@ describe('getAvailableActions — combat flow', () => {
         attackRoll: [1, 2, 3],
         defenseRoll: [1, 2],
         rerollPhase: 'attacker',
+        attackerRerollsRemaining: 1,
+        attackDiceResults: [
+          { color: 'blue', accuracy: 2, damage: 1, surge: 0 },
+          { color: 'green', accuracy: 0, damage: 2, surge: 1 },
+          { color: 'red', accuracy: 0, damage: 3, surge: 0 },
+        ],
+        attackerRerolledIndices: [],
       },
     };
 
     const p1Actions = getAvailableActions(game, 1); // attacker
-    assert.ok(p1Actions.some(a => a.type === ACTION_TYPES.COMBAT_RESOLVE));
+    assert.ok(p1Actions.some(a => a.type === ACTION_TYPES.COMBAT_REROLL));
 
     const p2Actions = getAvailableActions(game, 2); // defender, not their turn
     assert.strictEqual(p2Actions.length, 0);

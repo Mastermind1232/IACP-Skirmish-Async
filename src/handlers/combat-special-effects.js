@@ -5,7 +5,7 @@
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { reduceHp, awardKillVp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, checkNefariousGains, applyCondition } from '../game/index.js';
-import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, ccDiscardKey, removeFigurePosition } from '../game/player-helpers.js';
+import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, ccHandKey, ccDiscardKey, removeFigurePosition } from '../game/player-helpers.js';
 import { getDcKeywords } from '../data-loader.js';
 import { checkDeckDiscardPassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
@@ -1067,9 +1067,8 @@ export async function handleWantonUse(interaction, ctx) {
   const wd = game.pendingWantonDestruction;
   if (!await requirePlayer(interaction, game, interaction.user.id, wd.ownerPlayerNum, canActAsPlayer, 'Only the attacker\'s team can use Wanton Destruction.')) return;
   // Discard the first CC card from hand (auto-pick cheapest)
-  const handKey = wd.ownerPlayerNum === 1 ? 'p1CcHand' : 'p2CcHand';
-  const discKey = wd.ownerPlayerNum === 1 ? 'p1CcDiscard' : 'p2CcDiscard';
-  const hand = game[handKey] || [];
+  const hKey = ccHandKey(wd.ownerPlayerNum);
+  const hand = game[hKey] || [];
   if (hand.length === 0) {
     await interaction.followUp({ content: 'No Command cards in hand to discard.', ephemeral: true }).catch(discordCatch);
     delete game.pendingWantonDestruction;
@@ -1077,7 +1076,8 @@ export async function handleWantonUse(interaction, ctx) {
     saveGames(); return;
   }
   // Show CC cards as buttons for the player to pick which to discard
-  const ccBtns = [...new Set(hand)].slice(0, 4).map((card, i) =>
+  // Discord allows max 25 buttons (5 rows x 5)
+  const ccBtns = [...new Set(hand)].slice(0, 25).map((card, i) =>
     new ButtonBuilder().setCustomId(`wanton_cc_${game.gameId}_${i}_${card.replace(/\s+/g, '_').slice(0, 40)}`).setLabel(card.slice(0, 80)).setStyle(ButtonStyle.Secondary)
   );
   const ccRows = [];
@@ -1103,9 +1103,9 @@ export async function handleWantonCcPick(interaction, ctx) {
   const wd = game.pendingWantonDestruction;
   if (!await requirePlayer(interaction, game, interaction.user.id, wd.ownerPlayerNum, canActAsPlayer, 'Not your choice.')) return;
   // Find and discard the CC card
-  const handKey = wd.ownerPlayerNum === 1 ? 'p1CcHand' : 'p2CcHand';
-  const discKey = wd.ownerPlayerNum === 1 ? 'p1CcDiscard' : 'p2CcDiscard';
-  const hand = game[handKey] || [];
+  const hKey = ccHandKey(wd.ownerPlayerNum);
+  const dKey = ccDiscardKey(wd.ownerPlayerNum);
+  const hand = game[hKey] || [];
   const uniqueCards = [...new Set(hand)];
   const cardIdx = parseInt(idxStr, 10);
   const cardName = uniqueCards[cardIdx];
@@ -1113,11 +1113,11 @@ export async function handleWantonCcPick(interaction, ctx) {
   // Remove from hand, add to discard
   const hIdx = hand.indexOf(cardName);
   if (hIdx >= 0) hand.splice(hIdx, 1);
-  game[handKey] = hand;
-  game[discKey] = [...(game[discKey] || []), cardName];
+  game[hKey] = hand;
+  game[dKey] = [...(game[dKey] || []), cardName];
   await logGameAction(game, client, `**Wanton Destruction** — Discarded **${cardName}**.`, { phase: 'ROUND', icon: 'card' });
-  // Show figure picker
-  const btns = wd.targets.slice(0, 4).map((t, i) =>
+  // Show figure picker — Discord allows max 25 buttons (5 rows x 5); reserve 1 for Done
+  const btns = wd.targets.slice(0, 24).map((t, i) =>
     new ButtonBuilder().setCustomId(`wanton_pick_${gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
   );
   btns.push(new ButtonBuilder().setCustomId(`wanton_done_${gameId}`).setLabel('Done').setStyle(ButtonStyle.Secondary));
@@ -1165,7 +1165,8 @@ export async function handleWantonPick(interaction, ctx) {
   const remaining = wd.maxPicks - wd.chosen.length;
   const remTargets = wd.targets.filter(t => !wd.chosen.includes(t.figureKey));
   if (remaining > 0 && remTargets.length > 0) {
-    const btns2 = remTargets.slice(0, 4).map(t => {
+    // Discord allows max 25 buttons (5 rows x 5); reserve 1 for Done
+    const btns2 = remTargets.slice(0, 24).map(t => {
       const origIdx = wd.targets.indexOf(t);
       return new ButtonBuilder().setCustomId(`wanton_pick_${gameId}_${origIdx}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger);
     });

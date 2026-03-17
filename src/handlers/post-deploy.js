@@ -946,6 +946,14 @@ async function finishPostDeploy(game, gameId, client, logGameAction) {
   }
 }
 
+/**
+ * Clean up module-level _companionEmbedDeps for a game (e.g. when game is killed).
+ * @param {string} gameId
+ */
+export function cleanupCompanionEmbedDeps(gameId) {
+  _companionEmbedDeps.delete(gameId);
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
@@ -1068,7 +1076,7 @@ export async function handlePostDeployPick(interaction, ctx) {
   q.awaitingOrder = false;
 
   // Disable buttons on the picker message
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   if (!ability.interactive) {
     await resolveAutoAbility(game, ability, client, logGameAction);
@@ -1105,7 +1113,7 @@ export async function handleSecurityDetailPick(interaction, ctx) {
     await sendPowerTokenOverflowUI(game, gameId, interaction.channel, playerNum, saveGames);
   }
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const q = game.postDeployQueue;
   if (q) {
@@ -1138,7 +1146,7 @@ export async function handleStrikeTeamAdjPick(interaction, ctx) {
   const cassianName = cassianFk ? dcNameFromFigureKey(cassianFk) : 'Cassian Andor';
   await logGameAction(game, client, `⚡ **Strike Team** — **${cassianName}** and **${friendDcName}** each gain **2 MP**.`, { phase: 'ROUND', icon: 'deployed' });
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   // Set up movement for both Cassian and chosen friend
   if (active) {
@@ -1180,7 +1188,7 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
     await sendPowerTokenOverflowUI(game, gameId, interaction.channel, playerNum, saveGames);
   }
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   if (active.tokenRemaining <= 0) {
     game.postDeployQueue.activeAbility = null;
@@ -1207,7 +1215,7 @@ export async function handleStrikeTeamTokenDone(interaction, ctx) {
     return;
   }
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const q = game.postDeployQueue;
   if (q) {
@@ -1234,7 +1242,7 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
     return;
   }
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   // Read figureKey BEFORE cleaning up moveInProgress (needed for smooth_landing tracking)
   const skippedFigureKey = game.moveInProgress?.[moveKey]?.figureKey || null;
@@ -1303,7 +1311,7 @@ export async function handleWalkerMove(interaction, ctx) {
     return;
   }
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const active = game.postDeployQueue?.activeAbility;
   if (!active || active.abilityId !== 'scavenged_walker_move') return;
@@ -1329,7 +1337,7 @@ export async function handleWalkerSkip(interaction, ctx) {
     return;
   }
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const q = game.postDeployQueue;
   if (q) {
@@ -1356,7 +1364,7 @@ export async function handleSmoothLandingPick(interaction, ctx) {
     return;
   }
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const active = game.postDeployQueue?.activeAbility;
   if (!active || active.abilityId !== 'smooth_landing') return;
@@ -1384,7 +1392,7 @@ export async function handlePostDeployMoveStay(interaction, ctx) {
     return;
   }
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const dcName = dcNameFromFigureKey(figureKey);
   const active = game.postDeployQueue?.activeAbility;
@@ -1485,7 +1493,7 @@ export async function handleArmsDistFigPick(interaction, ctx) {
   active.step = 'pick_token';
   const dcName = dcNameFromFigureKey(figureKey);
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const tokenBtns = ['Hit', 'Surge', 'Block', 'Evade'].map(t => new ButtonBuilder()
     .setCustomId(`pd_arms_dist_token_${gameId}_${playerNum}_${t}`)
@@ -1527,7 +1535,7 @@ export async function handleArmsDistTokenPick(interaction, ctx) {
     await sendPowerTokenOverflowUI(game, gameId, interaction.channel, playerNum, saveGames);
   }
 
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   game.postDeployQueue.activeAbility = null;
   await postAbilityPicker(game, gameId, client, logGameAction);

@@ -1536,7 +1536,7 @@ export async function handleRbfDiscard(interaction, ctx) {
   game[discKey].push(card);
   game[handKey] = hand;
   await logGameAction(game, client, `📜 **Rule by Fear** — discarded **${card}**.`);
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
   saveGames();
   await interaction.followUp({ content: `Discarded **${card}**.`, ephemeral: true }).catch(discordCatch);
@@ -1577,7 +1577,7 @@ export async function handleRogueOneReturn(interaction, ctx) {
   await logGameAction(game, client, `🎯 **Rogue One** — placed **${card}** on top of deck (${pending.remaining} remaining).`);
   if (pending.remaining <= 0) {
     delete game[`pendingRogueOne_p${playerNum}`];
-    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
     await interaction.followUp({ content: 'Both cards returned to deck.', ephemeral: true }).catch(discordCatch);
     // Resolve start-of-round blocking effect
     if (game.pendingStartOfRoundResolve > 0) {
@@ -1592,7 +1592,7 @@ export async function handleRogueOneReturn(interaction, ctx) {
     );
     const pickRows = [];
     for (let r = 0; r < pickBtns.length; r += 5) pickRows.push(new ActionRowBuilder().addComponents(pickBtns.slice(r, r + 5)));
-    try { await interaction.message.edit({ components: pickRows }).catch(discordCatch); } catch {}
+    await interaction.message.edit({ components: pickRows }).catch(discordCatch);
     await interaction.followUp({ content: `Placed **${card}** on deck. Pick 1 more card to return.`, ephemeral: true }).catch(discordCatch);
   }
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
@@ -1777,7 +1777,7 @@ export async function handleImpCitadel(interaction, ctx) {
   game.imperialCitadelTokens[tokenType] = (game.imperialCitadelTokens[tokenType] || 0) + 1;
   const total = game.imperialCitadelTokens;
   await logGameAction(game, client, `🏰 **Imperial Citadel** — placed **1 ${label}** token (now: ${total.damage} Damage, ${total.block} Block).`);
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
   await interaction.followUp({ content: `Placed ${label} token on Imperial Citadel.`, ephemeral: true }).catch(discordCatch);
 }
@@ -1799,7 +1799,7 @@ export async function handleProgrammingOverride(interaction, ctx) {
   game.roundProgrammingOverrideTrait = game.roundProgrammingOverrideTrait || {};
   game.roundProgrammingOverrideTrait[playerNum] = trait;
   await logGameAction(game, client, `🔧 **Programming Override** — **4-LOM** gains **${trait}** until end of round.`, { phase: 'ROUND', icon: 'round' });
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
 

@@ -8,7 +8,7 @@ import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, get
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
@@ -3926,10 +3926,8 @@ export async function handleCombatPassive(interaction, ctx) {
     const _negDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
     if (choice === 'pay') {
       // Defender pays 2 VP to attacker (Hondo)
-      const defVpKey = `p${_negDefPN}Vp`;
-      const atkVpKey = `p${combat.attackerPlayerNum}Vp`;
-      game[defVpKey] = Math.max(0, (game[defVpKey] || 0) - 2);
-      game[atkVpKey] = (game[atkVpKey] || 0) + 2;
+      deductVp(game, _negDefPN, 2);
+      awardObjectiveVp(game, combat.attackerPlayerNum, 2);
       await thread.send(`**Negotiate** — Defender paid 2 VP to Hondo. No bonus damage applied.`);
     } else {
       // Accept +2 Damage
@@ -4342,19 +4340,28 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     const _negAtkEff = _negDcEff[_negAtkDcName] || _negDcEff[(_negAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
     if ((_negAtkEff?.specialAbilityIds || []).includes('negotiate_hondo')) {
       const _negDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-      const _negDefId = getPlayerId(game, _negDefPN);
-      combat.pendingCombatPassive = 'negotiate';
-      const _negRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_pay`).setLabel('Pay 2 VP (avoid +2 Damage)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_accept`).setLabel('Accept +2 Damage').setStyle(ButtonStyle.Danger),
-      );
-      await thread.send({
-        content: `<@${_negDefId}> **Negotiate** — Hondo demands tribute! Pay **2 VP** to avoid +2 Damage, or accept the +2 Damage:`,
-        allowedMentions: { users: [_negDefId] },
-        components: [_negRow],
-      }).catch(discordCatch);
-      saveGames?.();
-      return;
+      const _negDefVpKey = _negDefPN === 1 ? 'player1VP' : 'player2VP';
+      const _negDefVpTotal = game[_negDefVpKey]?.total ?? 0;
+      if (_negDefVpTotal < 2) {
+        // Defender cannot afford to pay — auto-apply +2 Damage
+        combat.bonusHits = (combat.bonusHits || 0) + 2;
+        combat.negotiateResolved = true;
+        await thread.send('**Negotiate** — Defender has fewer than 2 VP; +2 Damage auto-applied.');
+      } else {
+        const _negDefId = getPlayerId(game, _negDefPN);
+        combat.pendingCombatPassive = 'negotiate';
+        const _negRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_pay`).setLabel('Pay 2 VP (avoid +2 Damage)').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_accept`).setLabel('Accept +2 Damage').setStyle(ButtonStyle.Danger),
+        );
+        await thread.send({
+          content: `<@${_negDefId}> **Negotiate** — Hondo demands tribute! Pay **2 VP** to avoid +2 Damage, or accept the +2 Damage:`,
+          allowedMentions: { users: [_negDefId] },
+          components: [_negRow],
+        }).catch(discordCatch);
+        saveGames?.();
+        return;
+      }
     }
   }
 

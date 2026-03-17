@@ -301,6 +301,19 @@ const ROUND_NULL_FLAGS = [
   'pendingAssassinsBlade',
   'pendingPunishingStrike',
   'pendingConspire',
+  'pendingItWillBeAlright',
+  'pendingGeneralsOrders',
+  'pendingMotivation',
+  'pendingTrustedAlly',
+  'pendingTokenDistribution',
+  'pendingLieInAmbush',
+  'pendingPowerTokenGrant',
+  'pendingChannelTheForceStrain',
+  'pendingIllegalCcPlay',
+  'pendingCcAttachment',
+  'pendingCcChoice',
+  'pendingCcSpaceChoice',
+  'pendingIKnowEverything',
 ];
 
 const ROUND_ARRAY_FLAGS = [
@@ -330,6 +343,8 @@ const ROUND_DELETE_FLAGS = [
   'pendingKryknaPushQueue',
   'kryknaPushedIds',
   'roundDioxisActive',
+  'pendingStartOfRoundResolve',
+  'pendingDeployOrientation',
 ];
 
 /**

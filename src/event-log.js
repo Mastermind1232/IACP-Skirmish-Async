@@ -124,3 +124,11 @@ export function getRecentEvents(gameId, count = 10) {
 export function clearBuffer(gameId) {
   eventBuffers.delete(gameId);
 }
+
+/**
+ * Clear the sequence counter for a game (e.g. when game is deleted/ended).
+ * @param {string} gameId
+ */
+export function clearSeqCounter(gameId) {
+  seqCounters.delete(gameId);
+}

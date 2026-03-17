@@ -15,6 +15,7 @@ import {
   EmbedBuilder,
 } from 'discord.js';
 import { PHASES } from './game/phase.js';
+import { discordCatch } from './error-handling.js';
 
 /**
  * Sanitize a display name for use in Discord channel names.
@@ -248,7 +249,7 @@ export async function createTestGame(client, guild, userId, scenarioId, feedback
           await mutator(game, client, mutatorDeps, userId);
         } catch (err) {
           // Fail-fast: clean up all channels and game state, then propagate
-          await deleteGameChannelsAndGame?.(game, gameId, cleanupCtx).catch(() => {});
+          await deleteGameChannelsAndGame?.(game, gameId, cleanupCtx).catch(discordCatch);
           const errMsg = err.scenario ? err.message : `Scenario mutation error: ${err.message}`;
           throw new Error(errMsg);
         }
@@ -411,7 +412,7 @@ export async function postBothSquadsReady(game, client, deps, opts = {}) {
       game.boardId = boardChannel.id;
       if (game.selectedMap) {
         const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-        await boardChannel.send(payload).catch(() => {});
+        await boardChannel.send(payload).catch(discordCatch);
       }
     }
     await populatePlayAreas(game, client);
@@ -420,7 +421,7 @@ export async function postBothSquadsReady(game, client, deps, opts = {}) {
   }
 
   // Clean up the temporary message
-  if (settingUpMsg) settingUpMsg.delete().catch(() => {});
+  if (settingUpMsg) settingUpMsg.delete().catch(discordCatch);
 
   // ── Post initiative button ───────────────────────────────────────
   const tag = opts.tag ? `**${opts.tag}** ` : '';

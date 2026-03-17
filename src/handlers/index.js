@@ -16,6 +16,7 @@ import { handleInteractCancel, handleInteractChoice } from './interact.js';
 import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove } from './round.js';
 import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
+  cleanupCompanionEmbedDeps,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
@@ -522,6 +523,7 @@ export { handleInteractCancel, handleInteractChoice } from './interact.js';
 export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove } from './round.js';
 export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
+  cleanupCompanionEmbedDeps,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,

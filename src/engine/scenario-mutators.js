@@ -8,6 +8,7 @@
  * Dev-only: guarded by PHASE_JUMP_ALLOWED_USERS env (fail-closed).
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 
 // ── Error class ──────────────────────────────────────────────────────────────
 
@@ -206,8 +207,8 @@ async function mutateToCombat(game, client, deps, userId) {
   game.testScenarioPattern = 'phase_jump';
 
   // Extract DC names from figure keys (format: "DcName-groupIdx-figIdx")
-  const attackerDcName = attackerFigureKey.split('-').slice(0, -2).join('-') || attackerFigureKey;
-  const defenderDcName = defenderFigureKey.split('-').slice(0, -2).join('-') || defenderFigureKey;
+  const attackerDcName = dcNameFromFigureKey(attackerFigureKey);
+  const defenderDcName = dcNameFromFigureKey(defenderFigureKey);
 
   // Set pendingCombat (minimal structure — combat handlers fill rest)
   game.pendingCombat = {

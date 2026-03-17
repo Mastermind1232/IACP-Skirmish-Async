@@ -99,7 +99,7 @@ import { runRecovery } from './src/handlers/recover.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
-import { captureSnapshot, computeDiff, createEvent, appendToBuffer, getRecentEvents } from './src/event-log.js';
+import { captureSnapshot, computeDiff, createEvent, appendToBuffer, getRecentEvents, clearBuffer, clearSeqCounter as clearEventLogSeqCounter } from './src/event-log.js';
 import { translateDiffToEvents } from './src/domain/diff-translator.js';
 import { appendEvents as appendDomainEvents } from './src/domain/event-store.js';
 import { customIdToCommand } from './src/domain/commands/command-router.js';
@@ -112,7 +112,7 @@ import { handleResolveCombat as cmdResolveCombat, handleCancelCombat as cmdCance
 import { handlePlayCommandCard as cmdPlayCard, handleDiscardCommandCard as cmdDiscardCard, handleDrawCommandCards as cmdDrawCards, handleNegationAttempt as cmdNegationAttempt, handleNegationResolve as cmdNegationResolve } from './src/domain/commands/hand-commands.js';
 import { handleSelectMap as cmdSelectMap, handleConfirmMap as cmdConfirmMap, handleDetermineInitiative as cmdDetermineInitiative, handleChooseDeploymentZone as cmdChooseZone, handleDeployFigure as cmdDeployFigure, handleFinishDeployment as cmdFinishDeployment, handleSubmitSquad as cmdSubmitSquad } from './src/domain/commands/setup-commands.js';
 import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDcEndActivation } from './src/domain/commands/dc-play-area-commands.js';
-import { createDomainEvent } from './src/domain/events.js';
+import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
@@ -256,6 +256,7 @@ import {
   proceedAfterRerolls,
   sendReadyToResolveRolls,
   sendPowerTokenOverflowUI,
+  cleanupCompanionEmbedDeps,
   startDeploymentAfterAttachments as _startDeploymentAfterAttachments,
 } from './src/handlers/index.js';
 import {
@@ -369,6 +370,7 @@ import {
   logPhaseHeader,
   logGameAction,
   logGameErrorToBotLogs,
+  clearGameErrorThread,
   formatHealthSection,
   CARD_BACK_CHAR,
   getPlayAreaTooltipEmbed,
@@ -1107,6 +1109,8 @@ async function postGameOver(game, client, winnerId, reason) {
     buildScorecardEmbed, getMissionVpBonus, isDbConfigured, insertCompletedGame,
     achievementsChannelId, getStatsSummaryForPlayer, checkAndPostAchievements,
     checkAndGrantAchievements, postAchievementNotification, saveGames,
+    clearBuffer, clearEventLogSeqCounter, clearDomainSeqCounter,
+    clearGameErrorThread, cleanupCompanionEmbedDeps,
   });
 }
 

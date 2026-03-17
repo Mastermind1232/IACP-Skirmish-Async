@@ -20,3 +20,4 @@ export function createDomainEvent(type, gameId, playerId, payload, meta = {}) {
 
 export function resetSeqCounter(gameId, startSeq) { seqCounters.set(gameId, startSeq); }
 export function getSeqCounter(gameId) { return seqCounters.get(gameId) || 0; }
+export function clearSeqCounter(gameId) { seqCounters.delete(gameId); }

@@ -3419,6 +3419,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: '**Dioxis Fumes** — Each non-DROID figure suffers 1 Strain. Non-DROID figures cannot recover Strain this round. Resolve manually.' };
     const parts = [];
     const refreshMsgIds = [];
+    let anyDefeated = false;
     for (const pn of [1, 2]) {
       const poses = game.figurePositions?.[pn] || {};
       for (const fk of Object.keys(poses)) {
@@ -3429,8 +3430,7 @@ export function resolveAbility(abilityId, context) {
         const tMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
         if (!tMsgId) continue;
         const hs = dcHealthState.get(tMsgId) || [];
-        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
-        const fIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const { figureIndex: fIdx } = parseFigureKey(fk);
         const hpE = hs[fIdx];
         if (!Array.isArray(hpE) || hpE.length < 1) continue;
         const [cur, max] = hpE;
@@ -3438,14 +3438,21 @@ export function resolveAbility(abilityId, context) {
         hs[fIdx] = [newCur, max ?? cur];
         dcHealthState.set(tMsgId, hs);
         syncHealthStateToList(game, pn, tMsgId, hs);
-        parts.push(`**${dcName}** (${cur ?? max}→${newCur})`);
+        if (newCur <= 0) {
+          // Figure defeated — remove from board
+          delete game.figurePositions[pn][fk];
+          parts.push(`**${dcName}** (${cur ?? max}→0, DEFEATED)`);
+          anyDefeated = true;
+        } else {
+          parts.push(`**${dcName}** (${cur ?? max}→${newCur})`);
+        }
         if (!refreshMsgIds.includes(tMsgId)) refreshMsgIds.push(tMsgId);
       }
     }
     // Set round flag: non-DROID figures cannot recover Strain this round
     game.roundDioxisActive = true;
     const affected = parts.length > 0 ? parts.join(', ') : 'no non-DROID figures on the board';
-    return { applied: true, logMessage: `**Dioxis Fumes** — 1 Strain to each non-DROID: ${affected}.\n⚠️ Non-DROID figures cannot recover Strain for the rest of this round.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshMsgIds };
+    return { applied: true, logMessage: `**Dioxis Fumes** — 1 Strain to each non-DROID: ${affected}.\n⚠️ Non-DROID figures cannot recover Strain for the rest of this round.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshMsgIds, refreshBoard: anyDefeated };
   }
 
   // ccEffect: vpGainSelf + vpGainOpponent (e.g. Dangerous Bargains — start of round, if self VP ≤ N, both gain VP)

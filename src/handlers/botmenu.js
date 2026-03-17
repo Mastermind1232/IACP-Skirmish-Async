@@ -10,6 +10,10 @@ import {
 } from '../discord/components.js';
 import { cleanupGameLock } from '../game/action-queue.js';
 import { discordCatch } from '../error-handling.js';
+import { clearBuffer, clearSeqCounter as clearEventLogSeqCounter } from '../event-log.js';
+import { clearSeqCounter as clearDomainSeqCounter } from '../domain/events.js';
+import { clearGameErrorThread } from '../discord/messages.js';
+import { cleanupCompanionEmbedDeps } from './post-deploy.js';
 
 const BOTMENU_ALLOWED_KILL_ROLES = ['Admin', 'Bothelpers'];
 
@@ -61,6 +65,11 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
   }
   deleteGame(gameId);
   cleanupGameLock(gameId);
+  clearBuffer(gameId);
+  clearEventLogSeqCounter(gameId);
+  clearDomainSeqCounter(gameId);
+  clearGameErrorThread(gameId);
+  cleanupCompanionEmbedDeps(gameId);
   saveGames();
   if (deleteGameFromDb) await deleteGameFromDb(gameId).catch(discordCatch);
   for (const [msgId, meta] of dcMessageMeta) {
@@ -74,12 +83,11 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
 
 /** Kill Game clicked: check permission, show confirmation. */
 export async function handleBotmenuKill(interaction, ctx) {
-  console.log('[botmenu] handleBotmenuKill called, customId:', interaction.customId);
   const { getGame } = ctx;
   const gameId = interaction.customId.replace('botmenu_kill_', '');
   const game = getGame(gameId);
   if (!game) {
-    console.log('[botmenu] Game not found for gameId:', gameId);
+    console.warn('[botmenu] Game not found for gameId:', gameId);
     await interaction.editReply({
       content: 'Game not found.',
       components: [],
@@ -93,7 +101,6 @@ export async function handleBotmenuKill(interaction, ctx) {
     }).catch(discordCatch);
     return;
   }
-  console.log('[botmenu] Showing kill confirmation for game:', gameId);
   await interaction.editReply({
     content: '**Are you sure you want to kill this game?** This will remove the game and its channels.',
     components: [getBotmenuKillConfirmButtons(gameId)],
@@ -102,7 +109,6 @@ export async function handleBotmenuKill(interaction, ctx) {
 
 /** Kill Game Yes: delete channels and game. */
 export async function handleBotmenuKillYes(interaction, ctx) {
-  console.log('[botmenu] handleBotmenuKillYes called, customId:', interaction.customId);
   const { getGame, logGameErrorToBotLogs } = ctx;
   const gameId = interaction.customId.replace('botmenu_kill_yes_', '');
   const game = getGame(gameId);
@@ -121,7 +127,6 @@ export async function handleBotmenuKillYes(interaction, ctx) {
   }).catch(discordCatch);
   try {
     await deleteGameChannelsAndGame(game, gameId, ctx);
-    console.log('[botmenu] Game', gameId, 'deleted successfully');
   } catch (err) {
     console.error('[botmenu] Kill game error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'botmenu_kill');

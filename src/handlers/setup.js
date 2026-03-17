@@ -59,12 +59,6 @@ function getDeployBlockingInfo(game, dcName) {
   return { blocking, ignoreBlocking };
 }
 
-/**
- * @deprecated No longer used — Massive/Mobile figures must still deploy within
- * the deployment zone.  `filterValidTopLeftSpaces` already handles the
- * ignoreBlocking flag so blocking cells *inside* the zone are allowed.
- */
-// function extendZoneForMassive() — removed
 
 /** Keyword tokens recognized as trait/type restrictions (not DC names). */
 const RESTRICTION_KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE', 'TROOPER', 'VEHICLE',
@@ -2076,7 +2070,7 @@ export async function handleSetupAttachTo(interaction, ctx) {
   game.pendingAttachConfirm[playerNum] = { card, dcMsgId };
 
   // Remove the dropdown from the original message
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const dcDisplayName = ctx.dcMessageMeta?.get(dcMsgId)?.displayName || dcMsgId;
   const confirmRow = new ActionRowBuilder().addComponents(
@@ -2134,7 +2128,7 @@ export async function handleAttachConfirm(interaction, ctx) {
   game.setupAttachmentApplied[playerNum].push({ card, dcMsgId });
 
   // Remove confirm buttons
-  try { await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   const dcDisplayName = ctx.dcMessageMeta?.get(dcMsgId)?.displayName || 'DC';
   await logGameAction(game, client, `<@${interaction.user.id}> placed **${card}** on **${dcDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
@@ -2178,7 +2172,7 @@ export async function handleAttachReselect(interaction, ctx) {
   if (game.pendingAttachConfirm?.[playerNum]) delete game.pendingAttachConfirm[playerNum];
 
   // Remove buttons from confirm message
-  try { await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   const pending = game.setupAttachmentPending[playerNum];
   if (!pending || pending.length === 0) return;
@@ -2205,7 +2199,7 @@ export async function handleAttachDoneConfirm(interaction, ctx) {
   }
 
   // Remove buttons
-  try { await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   // Mark this player as confirmed
   game.setupAttachmentConfirmed = game.setupAttachmentConfirmed || {};
@@ -2261,7 +2255,7 @@ export async function handleAttachDoneRedo(interaction, ctx) {
   }
 
   // Remove buttons
-  try { await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   // Reverse all applied attachments
   const applied = game.setupAttachmentApplied?.[playerNum] || [];

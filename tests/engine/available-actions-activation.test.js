@@ -39,7 +39,7 @@ describe('getAvailableActions — activation phase', () => {
     assert.strictEqual(p2Actions.length, 0);
   });
 
-  it('returns move/attack/end-turn for activated DC with actions', () => {
+  it('returns move/attack/end-activation for activated DC with actions', () => {
     const game = {
       ...baseGame,
       p1ActivationsRemaining: 0,
@@ -56,7 +56,7 @@ describe('getAvailableActions — activation phase', () => {
     const actions = getAvailableActions(game, 1, deps);
     assert.ok(actions.some(a => a.type === ACTION_TYPES.MOVE_FIGURE));
     assert.ok(actions.some(a => a.type === ACTION_TYPES.ATTACK_TARGET));
-    assert.ok(actions.some(a => a.type === ACTION_TYPES.END_TURN));
+    assert.ok(actions.some(a => a.type === ACTION_TYPES.DC_END_ACTIVATION));
   });
 
   it('returns end activation phase when both players have 0 activations', () => {

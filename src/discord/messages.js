@@ -37,6 +37,19 @@ export const ACTION_ICONS = {
 };
 
 const gameErrorThreads = new Map();
+
+/**
+ * Clear the cached error thread for a game (e.g. when game is deleted/ended).
+ * Accepts gameId — iterates keys matching `*_gameId` pattern.
+ * @param {string} gameId
+ */
+export function clearGameErrorThread(gameId) {
+  for (const key of gameErrorThreads.keys()) {
+    if (key.endsWith(`_${gameId}`)) {
+      gameErrorThreads.delete(key);
+    }
+  }
+}
 const BOT_LOGS_CHANNEL_NAMES = ['bot-logs', 'bot-log', 'bot logs', 'botlogs'];
 const BOT_LOGS_CHANNEL_ID = '1467647184542634005';
 
@@ -120,7 +133,7 @@ function _clearPreviousPing(game, client) {
         msg.edit({ content: text, allowedMentions: { parse: [] } }).catch(discordCatch);
       }
     })
-  ).catch(() => {});
+  ).catch(discordCatch);
 }
 
 const BOTHELPERS_ROLE_NAME = 'bothelpers';

@@ -61,7 +61,7 @@ describe('combat flow via engine API', () => {
     assert.ok(p1.some(a => a.type === ACTION_TYPES.COMBAT_ROLL));
   });
 
-  it('shows resolve during reroll phase for correct player', () => {
+  it('shows reroll actions during reroll phase for correct player', () => {
     const game = {
       ...baseGame,
       pendingCombat: {
@@ -71,13 +71,20 @@ describe('combat flow via engine API', () => {
         attackRoll: [2, 3, 4],
         defenseRoll: [1, 2],
         rerollPhase: 'attacker',
+        attackerRerollsRemaining: 1,
+        attackDiceResults: [
+          { color: 'blue', accuracy: 2, damage: 3, surge: 0 },
+          { color: 'green', accuracy: 0, damage: 3, surge: 1 },
+          { color: 'red', accuracy: 0, damage: 4, surge: 0 },
+        ],
+        attackerRerolledIndices: [],
       },
     };
     const engine = createGameEngine(game);
 
     const p1 = engine.getAvailableActions(1); // attacker
-    assert.ok(p1.some(a => a.type === ACTION_TYPES.COMBAT_RESOLVE),
-      'Attacker should have resolve action');
+    assert.ok(p1.some(a => a.type === ACTION_TYPES.COMBAT_REROLL),
+      'Attacker should have reroll action');
 
     const p2 = engine.getAvailableActions(2); // defender
     assert.strictEqual(p2.length, 0, 'Defender should have no actions during attacker reroll');

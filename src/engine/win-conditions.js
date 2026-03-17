@@ -122,6 +122,11 @@ export async function postGameOver(game, client, winnerId, reason, deps) {
   game.winnerId = winnerId ?? game.winnerId ?? null;
   deps.cleanupGameLock(game.gameId);
   deps.cleanupGameMaps(game.gameId);
+  if (deps.clearBuffer) deps.clearBuffer(game.gameId);
+  if (deps.clearEventLogSeqCounter) deps.clearEventLogSeqCounter(game.gameId);
+  if (deps.clearDomainSeqCounter) deps.clearDomainSeqCounter(game.gameId);
+  if (deps.clearGameErrorThread) deps.clearGameErrorThread(game.gameId);
+  if (deps.cleanupCompanionEmbedDeps) deps.cleanupCompanionEmbedDeps(game.gameId);
   deps.pendingIllegalSquad.delete(`${game.gameId}_1`);
   deps.pendingIllegalSquad.delete(`${game.gameId}_2`);
   deps.pendingSquadConfirm.delete(`${game.gameId}_1`);

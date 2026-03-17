@@ -72,7 +72,7 @@ describe('full activation cycle via engine API', () => {
     assert.ok(!p1.some(a => a.type === ACTION_TYPES.ACTIVATE_DC));
   });
 
-  it('shows move/attack/end-turn for DC with remaining actions', () => {
+  it('shows move/attack/end-activation for DC with remaining actions', () => {
     const game = {
       ...baseGame,
       p1ActivationsRemaining: 0,
@@ -89,7 +89,7 @@ describe('full activation cycle via engine API', () => {
       'Should have MOVE_FIGURE');
     assert.ok(actions.some(a => a.type === ACTION_TYPES.ATTACK_TARGET),
       'Should have ATTACK_TARGET');
-    assert.ok(actions.some(a => a.type === ACTION_TYPES.END_TURN),
-      'Should have END_TURN');
+    assert.ok(actions.some(a => a.type === ACTION_TYPES.DC_END_ACTIVATION),
+      'Should have DC_END_ACTIVATION');
   });
 });
