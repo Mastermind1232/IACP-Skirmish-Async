@@ -52,6 +52,8 @@ export async function initDb() {
         round_count INT
       )
     `);
+    // Add game_id column to completed_games if missing (migration)
+    await pool.query(`ALTER TABLE completed_games ADD COLUMN IF NOT EXISTS game_id TEXT`).catch(() => {});
     // DB3: optional indexes for active games / recent updates
     await pool.query('CREATE INDEX IF NOT EXISTS idx_games_updated_at ON games (updated_at)').catch((err) => { console.error('[discord]', err?.message ?? err); });
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_games_ended ON games ((game_data->>'ended'))`).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -75,21 +77,6 @@ export async function initDb() {
         UNIQUE(user_id, achievement_id)
       )
     `);
-    // Event log table for audit trail
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS game_events (
-        id SERIAL PRIMARY KEY,
-        game_id TEXT NOT NULL,
-        seq INT NOT NULL,
-        handler_key TEXT NOT NULL,
-        custom_id TEXT,
-        player_id TEXT,
-        timestamp TIMESTAMPTZ DEFAULT NOW(),
-        state_diff JSONB,
-        metadata JSONB
-      )
-    `);
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_game_events_game_seq ON game_events (game_id, seq)').catch((err) => { console.error('[discord]', err?.message ?? err); });
     await pool.query(`
       CREATE TABLE IF NOT EXISTS domain_events (
         id SERIAL PRIMARY KEY,
@@ -166,10 +153,11 @@ export async function insertCompletedGame(game) {
     const missionId = game.selectedMission ? `${game.selectedMap?.id || ''}:${game.selectedMission.variant || 'a'}` : null;
     const deploymentZoneWinner = game.deploymentZoneChosen ? getPlayerId(game, getInitiativePlayerNum(game)) : null;
     const roundCount = game.currentRound ?? null;
+    const gameId = game.gameId ?? null;
     await pool.query(
-      `INSERT INTO completed_games (winner_id, player1_id, player2_id, player1_affiliation, player2_affiliation, player1_army_json, player2_army_json, map_id, mission_id, deployment_zone_winner, round_count)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [winnerId, player1Id, player2Id, p1Squad.affiliation ?? null, p2Squad.affiliation ?? null, JSON.stringify(p1Squad), JSON.stringify(p2Squad), mapId, missionId, deploymentZoneWinner, roundCount]
+      `INSERT INTO completed_games (game_id, winner_id, player1_id, player2_id, player1_affiliation, player2_affiliation, player1_army_json, player2_army_json, map_id, mission_id, deployment_zone_winner, round_count)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [gameId, winnerId, player1Id, player2Id, p1Squad.affiliation ?? null, p2Squad.affiliation ?? null, JSON.stringify(p1Squad), JSON.stringify(p2Squad), mapId, missionId, deploymentZoneWinner, roundCount]
     );
   } catch (err) {
     console.error('[DB] insertCompletedGame failed:', err.message);
@@ -194,36 +182,32 @@ export async function loadGamesFromDb() {
   }
 }
 
-/** Save all games to the database. Serializes the games Map. DB5: only delete rows for games no longer in the in-memory map; upsert the rest. */
+/** Set of game IDs that have been modified since last save. */
+const dirtyGameIds = new Set();
+
+/** Mark a game as needing to be saved. */
+export function markGameDirty(gameId) {
+  dirtyGameIds.add(gameId);
+}
+
+/** Save only dirty games to the database. */
 export let savePromise = Promise.resolve();
 
 export async function saveGamesToDb(gamesMap) {
   if (!pool) return;
-  const data = Object.fromEntries(gamesMap);
-  const currentIds = Object.keys(data);
+  const toSave = [...dirtyGameIds].filter(id => gamesMap.has(id));
+  dirtyGameIds.clear();
+  if (toSave.length === 0) return;
   savePromise = savePromise.then(async () => {
     try {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        if (currentIds.length === 0) {
-          await client.query('DELETE FROM games');
-        } else {
-          await client.query('DELETE FROM games WHERE NOT (game_id = ANY($1::text[]))', [currentIds]);
-        }
-        for (const [gameId, game] of Object.entries(data)) {
-          await client.query(
-            `INSERT INTO games (game_id, game_data) VALUES ($1, $2)
-             ON CONFLICT (game_id) DO UPDATE SET game_data = $2, updated_at = NOW()`,
-            [gameId, JSON.stringify(game)]
-          );
-        }
-        await client.query('COMMIT');
-      } catch (e) {
-        await client.query('ROLLBACK');
-        throw e;
-      } finally {
-        client.release();
+      for (const gameId of toSave) {
+        const game = gamesMap.get(gameId);
+        if (!game) continue;
+        await pool.query(
+          `INSERT INTO games (game_id, game_data) VALUES ($1, $2)
+           ON CONFLICT (game_id) DO UPDATE SET game_data = $2, updated_at = NOW()`,
+          [gameId, JSON.stringify(game)]
+        );
       }
     } catch (err) {
       console.error('[DB] Save failed:', err.message);
@@ -237,7 +221,6 @@ export async function deleteGameFromDb(gameId) {
   if (!pool) return;
   try {
     await pool.query('DELETE FROM domain_events WHERE game_id = $1', [gameId]);
-    await pool.query('DELETE FROM game_events WHERE game_id = $1', [gameId]);
     await pool.query('DELETE FROM game_snapshots WHERE game_id = $1', [gameId]);
     await pool.query('DELETE FROM games WHERE game_id = $1', [gameId]);
   } catch (err) {
@@ -632,44 +615,6 @@ export async function checkAndGrantAchievements(userId, trigger, statCount) {
 }
 
 // ── Event Log ─────────────────────────────────────────────────────────────
-
-/** Insert a game event into the database. */
-export async function insertGameEvent(gameId, event) {
-  if (!pool) return;
-  try {
-    await pool.query(
-      `INSERT INTO game_events (game_id, seq, handler_key, custom_id, player_id, timestamp, state_diff, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        gameId,
-        event.seq,
-        event.handlerKey,
-        event.customId ?? null,
-        event.playerId ?? null,
-        event.timestamp,
-        event.diff ? JSON.stringify(event.diff) : null,
-        event.metadata ? JSON.stringify(event.metadata) : null,
-      ]
-    );
-  } catch (err) {
-    console.error('[DB] insertGameEvent failed:', err.message);
-  }
-}
-
-/** Query game events from the database. */
-export async function getGameEvents(gameId, { afterSeq = 0, limit = 100 } = {}) {
-  if (!pool) return [];
-  try {
-    const res = await pool.query(
-      `SELECT * FROM game_events WHERE game_id = $1 AND seq > $2 ORDER BY seq ASC LIMIT $3`,
-      [gameId, afterSeq, limit]
-    );
-    return res.rows;
-  } catch (err) {
-    console.error('[DB] getGameEvents failed:', err.message);
-    return [];
-  }
-}
 
 // ── Domain Events (Phase 4) ──
 

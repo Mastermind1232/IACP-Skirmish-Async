@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb, savePromise, getActiveGameIdsFromEvents } from './db.js';
+import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb, savePromise, getActiveGameIdsFromEvents, markGameDirty } from './db.js';
 import { initSeqCounters, replayToState } from './domain/event-store.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices } from './game/player-helpers.js';
 
@@ -227,7 +227,7 @@ export function deleteGame(gameId) {
 /** Set game and persist in one call. Convenience wrapper to DRY up setGame+saveGames. */
 export function persistGame(gameId, game) {
   games.set(gameId, game);
-  saveGames();
+  saveGames(gameId);
 }
 
 /** Sync live dcHealthState Map back into game objects so persisted health is always current. */
@@ -246,8 +246,8 @@ function syncHealthStateToGames() {
   }
 }
 
-/** Persist all games to DB or file. Returns a Promise so callers can optionally await. */
-export async function saveGames() {
+/** Persist games to DB or file. Pass gameId to save only that game; omit to save all. */
+export async function saveGames(gameId) {
   if (!gamesLoadedOk) {
     console.warn('[Games] saveGames() called before load completed — skipping to protect DB.');
     return;
@@ -258,6 +258,12 @@ export async function saveGames() {
   }
   syncHealthStateToGames();
   if (isDbConfigured()) {
+    if (gameId) {
+      markGameDirty(gameId);
+    } else {
+      // No specific game — mark all as dirty (backward compat)
+      for (const id of games.keys()) markGameDirty(id);
+    }
     try {
       await saveGamesToDb(games);
     } catch (err) {

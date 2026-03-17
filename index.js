@@ -40,7 +40,6 @@ import {
   getLeaderboard,
   getEarnedAchievements,
   checkAndGrantAchievements,
-  insertGameEvent,
   upsertCoverageLiveStatus,
   getCoverageLiveStatuses,
   getCoverageRegions,
@@ -3225,7 +3224,6 @@ client.on('interactionCreate', async (interaction) => {
           if (_evtDiff) {
             const _evt = createEvent(_evtGameId, fakeButtonKey, interaction.customId, interaction.user.id, _evtDiff);
             appendToBuffer(_evt);
-            insertGameEvent(_evtGameId, _evt).catch(e => console.error('[event-log]', e));
             // Domain events (dual-write)
             const _domainEvents = translateDiffToEvents(fakeButtonKey, _evtDiff, {
               gameId: _evtGameId, playerId: interaction.user.id, before: _evtBefore, after: _evtAfter,
@@ -3278,7 +3276,6 @@ client.on('interactionCreate', async (interaction) => {
         if (_evtDiff) {
           const _evt = createEvent(_evtGameId, selectKey, interaction.customId, interaction.user.id, _evtDiff);
           appendToBuffer(_evt);
-          insertGameEvent(_evtGameId, _evt).catch(e => console.error('[event-log]', e));
           // Domain events (dual-write)
           const _domainEvents = translateDiffToEvents(selectKey, _evtDiff, {
             gameId: _evtGameId, playerId: interaction.user.id, before: _evtBefore, after: _evtAfter,
@@ -3570,7 +3567,6 @@ client.on('interactionCreate', async (interaction) => {
         if (_evtDiff) {
           const _evt = createEvent(_evtGameId, buttonKey, interaction.customId, interaction.user.id, _evtDiff);
           appendToBuffer(_evt);
-          insertGameEvent(_evtGameId, _evt).catch(e => console.error('[event-log]', e));
           // Domain events (dual-write)
           const _domainEvents = translateDiffToEvents(buttonKey, _evtDiff, {
             gameId: _evtGameId, playerId: interaction.user.id, before: _evtBefore, after: _evtAfter,
