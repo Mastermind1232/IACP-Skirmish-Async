@@ -1765,17 +1765,21 @@ client.once('ready', async () => {
           { name: 'queue-status', value: 'queue-status' },
         ))
       .addStringOption((o) => o.setName('scenario').setDescription('Scenario ID for start (optional)').setRequired(false));
-    await rest.put(Routes.applicationCommands(client.user.id), {
-      body: [
-        botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
-        events.toJSON(), playai.toJSON(), addai.toJSON(),
-        affiliationwinrateglobal.toJSON(), affiliationwinratepersonal.toJSON(),
-        affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
-        dcwinrateglobaltopten.toJSON(), dcwinratepersonaltopten.toJSON(),
-        leaderboard.toJSON(), achievements.toJSON(), favorites.toJSON(), selfplay.toJSON(),
-      ],
-    });
-    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /events, /play-ai, /add-ai, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard, /achievements, /favorites, /selfplay');
+    const commandBody = [
+      botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
+      events.toJSON(), playai.toJSON(), addai.toJSON(),
+      affiliationwinrateglobal.toJSON(), affiliationwinratepersonal.toJSON(),
+      affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
+      dcwinrateglobaltopten.toJSON(), dcwinratepersonaltopten.toJSON(),
+      leaderboard.toJSON(), achievements.toJSON(), favorites.toJSON(), selfplay.toJSON(),
+    ];
+    // Register as guild commands (instant propagation) for each guild
+    for (const g of client.guilds.cache.values()) {
+      await rest.put(Routes.applicationGuildCommands(client.user.id, g.id), { body: commandBody });
+      console.log(`Slash commands registered for guild ${g.name} (${g.id})`);
+    }
+    // Clear stale global commands
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [] }).catch(() => {});
   } catch (err) {
     console.error('Failed to register slash commands:', err.message);
   }
