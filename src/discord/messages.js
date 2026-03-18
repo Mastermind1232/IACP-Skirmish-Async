@@ -1,7 +1,7 @@
 /**
  * Game phases, action icons, and game-log / error-log helpers.
  */
-import { EmbedBuilder, ChannelType, ThreadAutoArchiveDuration } from 'discord.js';
+import { EmbedBuilder, ChannelType, ThreadAutoArchiveDuration, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getActivationsMessageId, getActivationsRemaining, getActivationsTotal, getPlayAreaId } from '../game/player-helpers.js';
 import { enforceContentLimit, DISCORD_CONTENT_LIMIT } from './limits.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
@@ -186,7 +186,13 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
     content += `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${channelRef}${ctx}\n${errMsg}${stack}`;
     if (link) content += `\n\n**Jump to message:** ${link}`;
 
-    const sendPayload = { content };
+    const resolveRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('botlog_resolve_')
+        .setLabel('Resolve')
+        .setStyle(ButtonStyle.Secondary),
+    );
+    const sendPayload = { content, components: [resolveRow] };
     if (bothelpersRole) sendPayload.allowedMentions = { roles: [bothelpersRole.id] };
 
     if (gameId) {

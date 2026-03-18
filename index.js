@@ -3766,6 +3766,17 @@ client.on('interactionCreate', async (interaction) => {
           console.error('Bothelper game log notification error:', err);
         }
       },
+      'botlog_resolve_': async (i) => {
+        // Collapse the error message to a resolved one-liner
+        const original = i.message.content;
+        const firstLine = original.split('\n')[0] || '';
+        const resolved = firstLine.replace('⚠️ **Game Error**', '✅ ~~Game Error~~ **Resolved**');
+        await i.message.edit({
+          content: `${resolved}\n-# Resolved by <@${i.user.id}> at <t:${Math.floor(Date.now() / 1000)}:t>`,
+          components: [],
+          allowedMentions: { users: [] },
+        }).catch(discordCatch);
+      },
       'bothelper_resolve_': async (i) => {
         const remainder = i.customId.replace('bothelper_resolve_', '');
         const sepIdx = remainder.indexOf('_');
