@@ -20,6 +20,12 @@ import { fetchGameChannel } from './discord/channel-helpers.js';
 import { computeDeckHash } from './game/deck-hash.js';
 import { getFavoriteDeckByHash } from './db.js';
 
+/** Check if a string is a valid Discord snowflake (for filtering synthetic AI user IDs). */
+const isDiscordSnowflake = (id) => /^\d{17,20}$/.test(id);
+
+/** Filter an array of user IDs to only valid snowflakes (safe for allowedMentions). */
+const snowflakeUsers = (ids) => ids.filter(isDiscordSnowflake);
+
 /**
  * Sanitize a display name for use in Discord channel names.
  */
@@ -122,7 +128,7 @@ export async function createGameChannels(guild, player1Id, player2Id, deps) {
   const everyoneRole = guild.roles.everyone;
   const botId = guild.client.user.id;
 
-  const isSnowflake = (id) => /^\d{17,20}$/.test(id);
+  const isSnowflake = isDiscordSnowflake;
   const playerPerms = [
     { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
     ...(isSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel }] : []),
@@ -239,7 +245,7 @@ export async function createTestGame(client, guild, userId, scenarioId, feedback
 
     const scenarioImplemented = scenarioId && IMPLEMENTED_SCENARIOS.includes(scenarioId);
     const p2Label = p2IsBot ? 'the bot' : `<@${p2Id}>`;
-    const mentionUsers = p2IsBot ? [userId] : [userId, p2Id];
+    const mentionUsers = snowflakeUsers(p2IsBot ? [userId] : [userId, p2Id]);
     const killRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`kill_game_${gameId}`).setLabel('Kill Test Game').setStyle(ButtonStyle.Danger),
     );
@@ -274,7 +280,7 @@ export async function createTestGame(client, guild, userId, scenarioId, feedback
       const testPrompt = scenarioPrimaryCard
         ? `🧪 <@${userId}> — **Testing: ${scenarioPrimaryCard}** (scenario: \`${scenarioId}\`)\n${cardDetails ? `*${cardDetails}*\n` : ''}> *${effectText}*\n\n**How to test:** ${howToTest}${opponentNote}\nThe card is in P1's **Your Hand** thread (inside Play Area).`
         : `🧪 <@${userId}> — **Testing scenario: \`${scenarioId}\`**`;
-      await generalChannel.send({ content: testPrompt, allowedMentions: { users: [userId] } }).catch(discordCatch);
+      await generalChannel.send({ content: testPrompt, allowedMentions: { users: snowflakeUsers([userId]) } }).catch(discordCatch);
       await generalChannel.send({ content: `Done testing? Kill the game here:`, components: [killRow] }).catch(discordCatch);
       const phaseLabel = mutator ? ' (phase-jump)' : '';
       const scenarioDoneText = scenarioPrimaryCard
@@ -349,7 +355,7 @@ export async function applySquadSubmission(game, isP1, squad, client, deps) {
     const fav = await getFavoriteDeckByHash(playerId, hash);
     if (fav?.saved_name) displayName = fav.saved_name;
   } catch {}
-  await logGameAction(game, client, `<@${playerId}> submitted squad **${displayName}** (${squad.dcCount ?? 0} DCs, ${squad.ccCount ?? 0} CCs)`, { allowedMentions: { users: [playerId] }, phase: 'SETUP', icon: 'squad' });
+  await logGameAction(game, client, `<@${playerId}> submitted squad **${displayName}** (${squad.dcCount ?? 0} DCs, ${squad.ccCount ?? 0} CCs)`, { allowedMentions: { users: snowflakeUsers([playerId]) }, phase: 'SETUP', icon: 'squad' });
   const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
   const handChannel = await fetchGameChannel(client, handChannelId);
   const handMessages = await handChannel.messages.fetch({ limit: 10 });
@@ -438,7 +444,7 @@ export async function postBothSquadsReady(game, client, deps, opts = {}) {
   const tag = opts.tag ? `**${opts.tag}** ` : '';
   const bothReadyMsg = await generalChannel.send({
     content: `<@${game.player1Id}> <@${game.player2Id}> — ${tag}Both squads are ready! Determine initiative below.`,
-    allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
+    allowedMentions: { users: snowflakeUsers([...new Set([game.player1Id, game.player2Id])]) },
     embeds: [
       new EmbedBuilder()
         .setTitle('Both Squads Ready')

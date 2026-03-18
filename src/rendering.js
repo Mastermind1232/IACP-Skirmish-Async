@@ -392,7 +392,8 @@ export async function buildBoardMapPayload(gameId, map, game, client, { getMissi
   const imagePath = resolvedMapPath ? join(rootDir, resolvedMapPath) : null;
   const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
 
-  const allowedMentions = game ? { users: [...new Set([game.player1Id, game.player2Id])] } : undefined;
+  const rawUsers = game ? [...new Set([game.player1Id, game.player2Id])].filter(id => /^\d{17,20}$/.test(id)) : [];
+  const allowedMentions = rawUsers.length > 0 ? { users: rawUsers } : undefined;
   // Player labels: Discord names over each player's deployment zone
   const playerLabels = [];
   if (game?.deploymentZoneChosen && game?.player1Id && game?.player2Id) {
