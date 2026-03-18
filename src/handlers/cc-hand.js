@@ -93,7 +93,9 @@ async function promptCommDisruption(game, gameId, playerNum, card, client, logGa
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
   const { getGame, validateDeckLegal, sendSquadConfirmation } = ctx;
-  const [, , gameId, playerNum] = interaction.customId.split('_');
+  const parts = splitCustomId(interaction.customId, 'squad_modal_');
+  const gameId = parts[0];
+  const playerNum = parts[1];
   const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   if (!game.mapSelected) {
@@ -118,14 +120,14 @@ export async function handleSquadModal(interaction, ctx) {
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleDeployModal(interaction, ctx) {
   const { getGame, getDeploymentZones, updateDeployPromptMessages, logGameAction, saveGames } = ctx;
-  const parts = interaction.customId.split('_');
-  if (parts.length < 5) {
+  const parts = splitCustomId(interaction.customId, 'deploy_modal_');
+  if (parts.length < 3) {
     await interaction.reply({ content: 'Invalid modal.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const gameId = parts[2];
-  const playerNum = parseInt(parts[3], 10);
-  const flatIndex = parseInt(parts[4], 10);
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const flatIndex = parseInt(parts[2], 10);
   const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this deck can deploy.', { useReply: true })) return;
@@ -1663,7 +1665,9 @@ export async function handleCcDiscard(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleSquadSelect(interaction, ctx) {
   const { getGame } = ctx;
-  const [, , gameId, playerNum] = interaction.customId.split('_');
+  const parts = splitCustomId(interaction.customId, 'squad_select_');
+  const gameId = parts[0];
+  const playerNum = parts[1];
   const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   if (!game.mapSelected) {

@@ -14,6 +14,7 @@ import { dcNameFromFigureKey } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
+import { splitCustomId } from '../discord/custom-id.js';
 
 /**
  * reaction_skip_
@@ -214,7 +215,7 @@ export async function handleMasteryPick(interaction, ctx) {
       const mastThread = await fetchCombatThread(client, mastCombat.combatThreadId);
       if (mastThread) await mastThread.send('**Mastery** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).').catch(discordCatch);
     } else {
-    const mastCardIdx = parseInt(interaction.customId.split('_').pop(), 10);
+    const mastCardIdx = parseInt(splitCustomId(interaction.customId, 'mastery_pick_')[1], 10);
     const mastCard = mastEl[mastCardIdx];
     if (mastCard) {
       const mastDiscard = mastGame[mastDK] || [];
@@ -264,7 +265,7 @@ export async function handleInterrogatePick(interaction, ctx) {
 
   if (buttonKey === 'interrogate_pick_') {
     // Step 1: attacker chose a card from opponent's hand. Show own hand to optionally discard.
-    const intPickIdx = parseInt(interaction.customId.split('_').pop(), 10);
+    const intPickIdx = parseInt(splitCustomId(interaction.customId, 'interrogate_pick_')[1], 10);
     const intChosenCard = intOHS[intPickIdx];
     if (!intChosenCard) { delete intGame.pendingInterrogate; saveGames(); return; }
     intGame.pendingInterrogate.chosenCardName = intChosenCard;
@@ -299,7 +300,7 @@ export async function handleInterrogatePick(interaction, ctx) {
   // Step 2: interrogate_discard_ or interrogate_skip_
   if (!intChosen) { delete intGame.pendingInterrogate; saveGames(); return; }
   if (buttonKey === 'interrogate_discard_') {
-    const intDisIdx = parseInt(interaction.customId.split('_').pop(), 10);
+    const intDisIdx = parseInt(splitCustomId(interaction.customId, 'interrogate_discard_')[1], 10);
     const intOwnCard = (intOES || [])[intDisIdx];
     if (intOwnCard) {
       // Discard attacker's card from hand

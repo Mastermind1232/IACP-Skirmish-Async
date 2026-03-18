@@ -10,6 +10,7 @@ import { requireGame } from '../utils/guards.js';
 import { getInitiativePlayerNum, getPlayerId } from '../game/player-helpers.js';
 import { PHASES } from '../game/phase.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { splitCustomId } from '../discord/custom-id.js';
 
 /** Build a short description of the current game state after an undo, so players know what to do next. */
 function describeGameState(game) {
@@ -413,14 +414,14 @@ export async function handleDefaultDeck(interaction, ctx) {
     DEFAULT_DECK_IMPERIAL,
     client,
   } = ctx;
-  const parts = interaction.customId.split('_');
-  if (parts.length < 5) {
+  const parts = splitCustomId(interaction.customId, 'default_deck_');
+  if (parts.length < 3) {
     await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const gameId = parts[2];
-  const playerNum = parts[3];
-  const faction = parts[4];
+  const gameId = parts[0];
+  const playerNum = parts[1];
+  const faction = parts[2];
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!game.mapSelected) {

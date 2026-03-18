@@ -18,8 +18,8 @@ export async function handleToughLuck(interaction, ctx) {
   const buttonKey = interaction.customId.startsWith('tough_luck_remove_') ? 'tough_luck_remove_' : 'tough_luck_skip_';
 
   // Tough Luck: remove a rerolled die or skip, then continue reroll flow
-  const parts = interaction.customId.split('_');
-  const gameId = parts[3];
+  const parts = splitCustomId(interaction.customId, buttonKey);
+  const gameId = parts[0];
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (!game.pendingToughLuck) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(discordCatch); return; }
@@ -28,7 +28,7 @@ export async function handleToughLuck(interaction, ctx) {
   const responder = game.toughLuckPlayerNum;
   if (!await requirePlayer(interaction, game, interaction.user.id, responder, canActAsPlayer, 'Only the Tough Luck player may respond.')) return;
   if (buttonKey === 'tough_luck_remove_') {
-    const dieIdx = parseInt(parts[4], 10);
+    const dieIdx = parseInt(parts[1], 10);
     if (tlData.side === 'atk' && combat?.attackDiceResults?.[dieIdx]) {
       const die = combat.attackDiceResults[dieIdx];
       combat.attackDiceResults.splice(dieIdx, 1);
@@ -74,10 +74,10 @@ export async function handleThereIsNoTry(interaction, ctx) {
   } = ctx;
 
   // There Is No Try: die picker → face picker → apply, then enter reroll window
-  const parts = interaction.customId.split('_');
-  // Prefix pattern: there_is_no_try_{die|face|skip}_ → parts[0..4] are the prefix words
-  const type = parts[4]; // 'die', 'face', or 'skip'
-  const gameId = parts[5];
+  const type = interaction.customId.startsWith('there_is_no_try_die_') ? 'die'
+    : interaction.customId.startsWith('there_is_no_try_face_') ? 'face' : 'skip';
+  const parts = splitCustomId(interaction.customId, `there_is_no_try_${type}_`);
+  const gameId = parts[0];
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const combat = game.pendingCombat;
@@ -88,7 +88,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
   }
   const thread = await fetchCombatThread(client, combat?.combatThreadId);
   if (type === 'die') {
-    const dieIdx = parseInt(parts[6], 10);
+    const dieIdx = parseInt(parts[1], 10);
     const defDice = combat?.defenseDiceResults || [];
     const die = defDice[dieIdx];
     if (!die) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch(discordCatch); return; }
@@ -109,10 +109,10 @@ export async function handleThereIsNoTry(interaction, ctx) {
     saveGames(); return;
   }
   if (type === 'face') {
-    const dieIdx = parseInt(parts[6], 10);
-    const block = parseInt(parts[7], 10) || 0;
-    const evade = parseInt(parts[8], 10) || 0;
-    const dodgeFlag = parseInt(parts[9], 10) === 1;
+    const dieIdx = parseInt(parts[1], 10);
+    const block = parseInt(parts[2], 10) || 0;
+    const evade = parseInt(parts[3], 10) || 0;
+    const dodgeFlag = parseInt(parts[4], 10) === 1;
     const defDice = combat?.defenseDiceResults || [];
     if (defDice[dieIdx]) {
       const old = defDice[dieIdx];
@@ -157,9 +157,9 @@ export async function handleVetInstincts(interaction, ctx) {
   } = ctx;
 
   // Veteran Instincts: attacker adds +1 Hit/Surge, defender adds +1 Block/Evade
-  const parts = interaction.customId.split('_');
-  const gameId = parts[3];
-  const choice = parts[4]; // hit/surge/block/evade/skip
+  const parts = splitCustomId(interaction.customId, 'vet_instincts_pick_');
+  const gameId = parts[0];
+  const choice = parts[1]; // hit/surge/block/evade/skip
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const combat = game.pendingCombat;
@@ -836,10 +836,10 @@ export async function handleDoubtReroll(interaction, ctx) {
     getGame, canActAsPlayer, saveGames, client,
     sendRerollUI, proceedAfterRerolls,
   } = ctx;
-  const parts = interaction.customId.split('_');
   // doubt_reroll_use_{gameId} or doubt_reroll_skip_{gameId}
-  const action = parts[2]; // 'use' or 'skip'
-  const gameId = parts[3];
+  const action = interaction.customId.startsWith('doubt_reroll_use_') ? 'use' : 'skip';
+  const parts = splitCustomId(interaction.customId, `doubt_reroll_${action}_`);
+  const gameId = parts[0];
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const combat = game.pendingCombat;

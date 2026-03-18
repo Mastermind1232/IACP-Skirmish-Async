@@ -434,10 +434,10 @@ async function checkLieInAmbushTrigger(game, activatingPlayerNum, ctx) {
 export async function handleLiaDeployZone(interaction, ctx) {
   const { getGame, logGameAction, client, saveGames } = ctx;
   // customId: lia_deploy_zone_<gameId>_<playerNum>_<zone>
-  const parts = interaction.customId.split('_');
+  const parts = splitCustomId(interaction.customId, 'lia_deploy_zone_');
   const zone = parts[parts.length - 1]; // red or blue
   const playerNum = parseInt(parts[parts.length - 2], 10);
-  const gameId = parts.slice(3, -2).join('_');
+  const gameId = parts.slice(0, -2).join('_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
 

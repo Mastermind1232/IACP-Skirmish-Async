@@ -25,6 +25,7 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
+import { splitCustomId } from '../discord/custom-id.js';
 
 /**
  * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
@@ -1105,14 +1106,14 @@ export async function handleDeploymentFig(interaction, ctx) {
     getDeploymentMapAttachment,
     client,
   } = ctx;
-  const parts = interaction.customId.split('_');
-  if (parts.length < 5) {
+  const parts = splitCustomId(interaction.customId, 'deployment_fig_');
+  if (parts.length < 3) {
     await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const gameId = parts[2];
-  const playerNum = parseInt(parts[3], 10);
-  const flatIndex = parseInt(parts[4], 10);
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const flatIndex = parseInt(parts[2], 10);
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const ownerId = getPlayerId(game, playerNum);
@@ -1259,15 +1260,15 @@ export async function handleDeploymentOrient(interaction, ctx) {
     getDeploymentMapAttachment,
     client,
   } = ctx;
-  const parts = interaction.customId.split('_');
-  if (parts.length < 6) {
+  const parts = splitCustomId(interaction.customId, 'deployment_orient_');
+  if (parts.length < 4) {
     await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const gameId = parts[2];
-  const playerNum = parseInt(parts[3], 10);
-  const flatIndex = parseInt(parts[4], 10);
-  const orientation = parts[5];
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const flatIndex = parseInt(parts[2], 10);
+  const orientation = parts[3];
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const ownerId = getPlayerId(game, playerNum);
@@ -1996,9 +1997,13 @@ export async function handleAutoDeploy(interaction, ctx) {
     client,
     saveGames,
   } = ctx;
-  const parts = interaction.customId.split('_');
-  const gameId = parts[2];
-  const playerNum = parseInt(parts[3], 10);
+  const parts = splitCustomId(interaction.customId, 'auto_deploy_');
+  if (parts.length < 2) {
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const ownerId = getPlayerId(game, playerNum);

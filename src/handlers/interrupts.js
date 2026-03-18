@@ -20,7 +20,6 @@ export async function handleStillFaster(interaction, ctx) {
     : interaction.customId.startsWith('still_faster_skip_') ? 'still_faster_skip_'
     : 'still_faster_use_';
 
-  const sftParts = interaction.customId.split('_');
   // still_faster_use_{gameId}_{activatingMsgId}
   // still_faster_skip_{gameId}_{activatingMsgId}
   // still_faster_dc_pick_{gameId}_{sftDcMsgId}_{activatingMsgId}
@@ -121,9 +120,9 @@ export async function handleSquadSwarm(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
   const buttonKey = interaction.customId.startsWith('squad_swarm_yes_') ? 'squad_swarm_yes_' : 'squad_swarm_no_';
 
-  const _swParts = interaction.customId.split('_');
+  const _swParts = splitCustomId(interaction.customId, buttonKey);
   // squad_swarm_yes_{gameId}_{msgId}_{targetMsgId} OR squad_swarm_no_{gameId}_{msgId}
-  const _swGameId = _swParts[3]; const _swMsgId = _swParts[4]; const _swTargetMsgId = _swParts[5];
+  const _swGameId = _swParts[0]; const _swMsgId = _swParts[1]; const _swTargetMsgId = _swParts[2];
   const _swGame = await requireGame(interaction, getGame, _swGameId);
   if (!_swGame) return;
   const _swMeta = dcMessageMeta.get(_swMsgId);
