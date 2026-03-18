@@ -147,7 +147,10 @@ export async function handleFavNameModal(interaction, ctx) {
     return;
   }
   const { getGame, pendingSquadConfirm, PENDING_ILLEGAL_TTL_MS } = ctx;
-  const [, , gameId, playerNumStr] = interaction.customId.split('_');
+  // fav_name_modal_{gameId}_{playerNum}
+  const parts = interaction.customId.split('_');
+  const gameId = parts[3];
+  const playerNumStr = parts[4];
   const playerNum = parseInt(playerNumStr, 10);
   const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
