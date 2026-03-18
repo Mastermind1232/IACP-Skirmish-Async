@@ -5,7 +5,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
-import { fetchCombatThread } from '../discord/channel-helpers.js';
+import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -429,7 +429,7 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
     game.pendingCombat = null;
 
     const defOwnerId = getPlayerId(game, defPN);
-    if (thread) await thread.send({ content: `**Slow on the Draw** — <@${defOwnerId}>, you may now perform an attack targeting **Greedo**. Use your DC's Attack action. After the interrupt attack resolves, click **Resume Original Attack** below to continue.`, allowedMentions: { users: [defOwnerId] } }).catch(discordCatch);
+    if (thread) await thread.send(sanitizeMentions({ content: `**Slow on the Draw** — <@${defOwnerId}>, you may now perform an attack targeting **Greedo**. Use your DC's Attack action. After the interrupt attack resolves, click **Resume Original Attack** below to continue.`, allowedMentions: { users: [defOwnerId] } })).catch(discordCatch);
 
     // Post a resume button in the thread for after the interrupt attack
     const resumeRow = new ActionRowBuilder().addComponents(

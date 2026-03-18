@@ -3,7 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
-import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows } from '../discord/components.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { bottomLeftCoord, edgeKey } from '../game/coords.js';
@@ -2126,9 +2126,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const salvoThread = threadId ? await fetchGameChannel(client, threadId) : null;
       const salvoMsg = `<@${ownerId}> **Missile Salvo** — Choose a die for your next ranged attack (+3 Accuracy, different targets). ${ms.diceAvailable.length} shot${ms.diceAvailable.length !== 1 ? 's' : ''} remaining.`;
       if (salvoThread) {
-        await salvoThread.send({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+        await salvoThread.send(sanitizeMentions({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] } })).catch(discordCatch);
       } else {
-        await interaction.followUp({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] }, ephemeral: false }).catch(discordCatch);
+        await interaction.followUp(sanitizeMentions({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] }, ephemeral: false })).catch(discordCatch);
       }
       saveGames();
       return;

@@ -12,7 +12,7 @@ import { checkDeckDiscardPassiveRedraws, checkFriendlyDefeatedPassiveRedraws } f
 import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 
 // ── Internal helpers ─────────────────────────────
 
@@ -588,7 +588,7 @@ export async function handleMissileSalvoDie(interaction, ctx) {
   const ownerId = getPlayerId(game, playerNum);
   const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
   const msg = `<@${ownerId}> **Missile Salvo** — **${colorLabel} die** selected (+3 Accuracy). Click **Attack** to target a different hostile figure. This attack costs no action.`;
-  if (salvoThread) await salvoThread.send({ content: msg, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+  if (salvoThread) await salvoThread.send(sanitizeMentions({ content: msg, allowedMentions: { users: [ownerId] } })).catch(discordCatch);
   saveGames();
 }
 

@@ -20,7 +20,7 @@ import {
 } from '../game/player-helpers.js';
 import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
-import { fetchCombatThread, fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
+import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
@@ -204,12 +204,12 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
           .setLabel('Skip')
           .setStyle(ButtonStyle.Secondary),
       ];
-      await withDiscordRetry(() => thread.send({
+      await withDiscordRetry(() => thread.send(sanitizeMentions({
         content: `**[Under Duress]** — <@${udOwnerId}>, **${dcName}** (opponent) suffers ${amount} Strain from **${abilityLabel}**.`
           + ` You may **deplete** Under Duress to resolve strain choices for your opponent (each CC discard costs 2 CCs).`,
         components: [new ActionRowBuilder().addComponents(udBtns)],
         allowedMentions: { users: [udOwnerId] },
-      }));
+      })));
       // Don't show strain choice yet — wait for UD owner's decision
       return;
     }
@@ -235,13 +235,13 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     }
     // Discord limits 5 buttons per row; split into rows of 5
     const rows = chunkButtonsToRows(btns);
-    await withDiscordRetry(() => thread.send({
+    await withDiscordRetry(() => thread.send(sanitizeMentions({
       content: `**Strain** — <@${ownerId}>, **${dcName}** (${cur}/${max} HP) suffers ${amount} Strain from **${abilityLabel}** (${sourceLabel}).`
         + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
         + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.${udNote}`,
       components: rows,
       allowedMentions: { users: [ownerId] },
-    }));
+    })));
     // Don't apply strain HP damage yet — wait for player's choice
     return;
   }
@@ -267,11 +267,11 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
           new ButtonBuilder().setCustomId(`submit_fight_use_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Use Submit or Fight').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`submit_fight_skip_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
         ];
-        await withDiscordRetry(() => thread.send({
+        await withDiscordRetry(() => thread.send(sanitizeMentions({
           content: `🛡️ **Submit or Fight** — <@${_sofOwnerId}>, **${dcName}** may return a CC from discard to game box to heal 1 Strain damage (${_sofDiscard.length} CC${_sofDiscard.length > 1 ? 's' : ''} in discard).`,
           components: [new ActionRowBuilder().addComponents(_sofBtns)],
           allowedMentions: { users: [_sofOwnerId] },
-        }));
+        })));
       }
     }
   }
@@ -342,11 +342,11 @@ async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
           new ButtonBuilder().setCustomId(`submit_fight_use_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Use Submit or Fight').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`submit_fight_skip_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
         ];
-        await withDiscordRetry(() => thread.send({
+        await withDiscordRetry(() => thread.send(sanitizeMentions({
           content: `🛡️ **Submit or Fight** — <@${_sofOwnerId}>, **${dcName}** may return a CC from discard to game box to heal 1 Strain damage (${_sofDiscard.length} CC${_sofDiscard.length > 1 ? 's' : ''} in discard).`,
           components: [new ActionRowBuilder().addComponents(_sofBtns)],
           allowedMentions: { users: [_sofOwnerId] },
-        }));
+        })));
       }
     }
   }
@@ -476,11 +476,11 @@ async function sendStrainCcPickButtons(game, pending, thread) {
       .setStyle(ButtonStyle.Primary),
   );
   const rows = chunkButtonsToRows(btns);
-  await withDiscordRetry(() => thread.send({
+  await withDiscordRetry(() => thread.send(sanitizeMentions({
     content: `**Strain** — <@${ownerId}>, pick a CC to discard (${remaining} strain point${remaining > 1 ? 's' : ''} remaining, ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} each). Hand: ${hand.length} card${hand.length > 1 ? 's' : ''}.`,
     components: rows,
     allowedMentions: { users: [ownerId] },
-  }));
+  })));
 }
 
 /**
@@ -661,12 +661,12 @@ export async function handleUnderDuress(interaction, ctx) {
       );
     }
     const rows = chunkButtonsToRows(btns);
-    await withDiscordRetry(() => thread.send({
+    await withDiscordRetry(() => thread.send(sanitizeMentions({
       content: `**[Under Duress]** — <@${controllerId}>, choose how **${pending.dcName}** allocates ${pending.amount} Strain:`
         + ` take HP damage or discard from opponent's hand (${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''}, costs ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} per strain).`,
       components: rows,
       allowedMentions: { users: [controllerId] },
-    }));
+    })));
   } else {
     // Skip — show normal strain choice to figure owner
     delete pending.underDuressDepleteMsgId;
@@ -705,13 +705,13 @@ export async function handleUnderDuress(interaction, ctx) {
       );
     }
     const rows = chunkButtonsToRows(btns);
-    await withDiscordRetry(() => thread.send({
+    await withDiscordRetry(() => thread.send(sanitizeMentions({
       content: `**Strain** — <@${ownerId}>, **${pending.dcName}** suffers ${pending.amount} Strain from **${pending.abilityLabel}** (${pending.sourceLabel}).`
         + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
         + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.${udNote}`,
       components: rows,
       allowedMentions: { users: [ownerId] },
-    }));
+    })));
   }
   saveGames();
 }
@@ -1347,11 +1347,11 @@ export async function handleAttackTarget(interaction, ctx) {
           for (let _ztR = 0; _ztR < _ztBtns.length; _ztR += 5) {
             _ztRows.push(new ActionRowBuilder().addComponents(_ztBtns.slice(_ztR, _ztR + 5)));
           }
-          await thread.send({
+          await thread.send(sanitizeMentions({
             content: `<@${_ztDefOwnerId}> **Zillo Technique** — Discard 1 Command card for **+1 Block**? (once per attack)`,
             allowedMentions: { users: [_ztDefOwnerId] },
             components: _ztRows.slice(0, 5),
-          }).catch(discordCatch);
+          })).catch(discordCatch);
         }
       }
     }
@@ -2165,7 +2165,7 @@ export async function handleAttackTarget(interaction, ctx) {
       new ButtonBuilder().setCustomId(`strike_me_down_yes_${game.gameId}`).setLabel('Use Strike Me Down').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`strike_me_down_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
     );
-    await thread.send({ content: `<@${defOwnerId}> **Strike Me Down** — Obi-Wan may choose to reduce his figure cost by 3 and be defeated, ending this attack. Use this ability?`, components: [smdRow], allowedMentions: { users: [defOwnerId] } });
+    await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> **Strike Me Down** — Obi-Wan may choose to reduce his figure cost by 3 and be defeated, ending this attack. Use this ability?`, components: [smdRow], allowedMentions: { users: [defOwnerId] } }));
   }
 
   // Slow on the Draw (Greedo): when Greedo declares an attack, defender may interrupt to attack Greedo first
@@ -2184,7 +2184,7 @@ export async function handleAttackTarget(interaction, ctx) {
       new ButtonBuilder().setCustomId(`slow_on_draw_yes_${game.gameId}`).setLabel('Interrupt: Attack Greedo first').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`slow_on_draw_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
     );
-    await thread.send({ content: `<@${defOwnerId}> **Slow on the Draw** — You may interrupt to perform an attack targeting **Greedo** before this attack resolves. Use this ability?`, components: [sotdRow], allowedMentions: { users: [defOwnerId] } });
+    await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> **Slow on the Draw** — You may interrupt to perform an attack targeting **Greedo** before this attack resolves. Use this ability?`, components: [sotdRow], allowedMentions: { users: [defOwnerId] } }));
   }
 
   // Illicit Arms (Bib Fortuna): while a friendly figure is attacking, if army affiliation is SCUM,
@@ -2219,7 +2219,7 @@ export async function handleAttackTarget(interaction, ctx) {
         new ButtonBuilder().setCustomId(`illicit_arms_use_${game.gameId}`).setLabel('Use Illicit Arms (+1 Hit)').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`illicit_arms_skip_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
       );
-      await thread.send({ content: `<@${atkOwnerId}> **Illicit Arms** (${fkDcName}) — You may discard 1 Command card from your hand to apply **+1 Hit** to this attack. Use this ability?`, components: [iaRow], allowedMentions: { users: [atkOwnerId] } });
+      await thread.send(sanitizeMentions({ content: `<@${atkOwnerId}> **Illicit Arms** (${fkDcName}) — You may discard 1 Command card from your hand to apply **+1 Hit** to this attack. Use this ability?`, components: [iaRow], allowedMentions: { users: [atkOwnerId] } }));
       bibFound = true;
     }
   }
@@ -2253,7 +2253,7 @@ export async function handleAttackTarget(interaction, ctx) {
           new ButtonBuilder().setCustomId(`force_exhaustion_yes_${game.gameId}`).setLabel('Use Force Exhaustion (Incapacitate The Child)').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId(`force_exhaustion_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
         );
-        await thread.send({ content: `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated** to remove 1 attack die and apply **Weakened** to the attacker. Use this ability?`, components: [feRow], allowedMentions: { users: [defOwnerId] } });
+        await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated** to remove 1 attack die and apply **Weakened** to the attacker. Use this ability?`, components: [feRow], allowedMentions: { users: [defOwnerId] } }));
       }
     }
   }
@@ -2282,7 +2282,7 @@ export async function handleAttackTarget(interaction, ctx) {
     ]);
     const defOwnerId = getPlayerId(game, defenderPlayerNum);
     if (defReactions.length) {
-      await thread.send({ content: `<@${defOwnerId}> — You have ${defReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defOwnerId] } }).catch(discordCatch);
+      await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> — You have ${defReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defOwnerId] } })).catch(discordCatch);
     }
     // Auto-prompt attacker for whenYouDeclareAttack cards
     const atkReactions = getPlayableReactionCards(game, attackerPlayerNum, [
@@ -2294,7 +2294,7 @@ export async function handleAttackTarget(interaction, ctx) {
     ]);
     const atkOwnerId = getPlayerId(game, attackerPlayerNum);
     if (atkReactions.length) {
-      await thread.send({ content: `<@${atkOwnerId}> — You have ${atkReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [atkOwnerId] } }).catch(discordCatch);
+      await thread.send(sanitizeMentions({ content: `<@${atkOwnerId}> — You have ${atkReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [atkOwnerId] } })).catch(discordCatch);
     }
   } catch (err) {
     console.error('Reaction prompt error:', err?.message ?? err);
@@ -4317,11 +4317,11 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
           new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_pay`).setLabel('Pay 2 VP (avoid +2 Damage)').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_accept`).setLabel('Accept +2 Damage').setStyle(ButtonStyle.Danger),
         );
-        await thread.send({
+        await thread.send(sanitizeMentions({
           content: `<@${_negDefId}> **Negotiate** — Hondo demands tribute! Pay **2 VP** to avoid +2 Damage, or accept the +2 Damage:`,
           allowedMentions: { users: [_negDefId] },
           components: [_negRow],
-        }).catch(discordCatch);
+        })).catch(discordCatch);
         saveGames?.();
         return;
       }
@@ -5373,11 +5373,11 @@ export async function handleFigureheadDecision(interaction, ctx) {
           const fhAtkerOwnerId = getPlayerId(game, attackerPlayerNum);
           if (!game.pendingCelebration && isDcUnique?.(fhDcName)) {
             game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
-            await thread.send({
+            await thread.send(sanitizeMentions({
               content: `<@${fhAtkerOwnerId}> — You defeated a unique figure (Figurehead). Play **Celebration** to gain 4 VP?`,
               components: [getCelebrationButtons(game.gameId)],
               allowedMentions: { users: [fhAtkerOwnerId] },
-            }).catch(discordCatch);
+            })).catch(discordCatch);
           }
         }
       }

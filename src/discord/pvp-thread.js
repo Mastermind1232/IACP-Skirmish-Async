@@ -21,7 +21,7 @@ import { renderBoardState, renderTurnPrompt } from './pvp-renderer.js';
 import { getAvailableActions } from '../engine/available-actions.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
-import { fetchGameChannel, snowflakeUsers } from './channel-helpers.js';
+import { fetchGameChannel, snowflakeUsers, isDiscordSnowflake } from './channel-helpers.js';
 
 // ── Thread Creation ─────────────────────────────────────────────────────────
 
@@ -51,9 +51,9 @@ export async function createGameThread(opts) {
     reason: `PvP game ${gameId}`,
   });
 
-  // Add both players
-  await thread.members.add(game.player1Id).catch(discordCatch);
-  await thread.members.add(game.player2Id).catch(discordCatch);
+  // Add both players (skip synthetic AI IDs)
+  if (isDiscordSnowflake(game.player1Id)) await thread.members.add(game.player1Id).catch(discordCatch);
+  if (isDiscordSnowflake(game.player2Id)) await thread.members.add(game.player2Id).catch(discordCatch);
 
   // Send and pin the Board State message (Message 1 — top)
   const boardPayload = await renderBoardState(game, { client, ...renderOpts });

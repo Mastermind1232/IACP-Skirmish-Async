@@ -38,7 +38,7 @@ import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
-import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 
 /**
  * Determine the companion (if any) for a given DC, considering both
@@ -1561,7 +1561,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (_mountedIds.includes('consider_it_my_payment_asajj')) {
     const oppNum = opponentPlayerNum(meta.playerNum);
     const oppOwnerId = game[`player${oppNum}Id`];
-    await thread.send({ content: `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand.`, allowedMentions: { users: [oppOwnerId] } }).catch(discordCatch);
+    await thread.send(sanitizeMentions({ content: `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand.`, allowedMentions: { users: [oppOwnerId] } })).catch(discordCatch);
   }
   // General's Orders (General Weiss): choose up to 2 friendlies; each gains 2 MP
   if (_mountedIds.includes('generals_orders_weiss')) {

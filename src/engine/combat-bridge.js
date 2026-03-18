@@ -6,7 +6,7 @@
 import { processFigureDefeat } from './defeat-handler.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -231,14 +231,14 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
         fhFigKey: fhResult.figureKey, fhMsgId: fhResult.msgId, fhFigIndex: fhResult.figIndex,
         fhLabel: fhResult.label,
       };
-      await fhThread.send({
+      await fhThread.send(sanitizeMentions({
         content: `<@${fhOwnerId}> — **Figurehead**: **${combat.target.label}** is about to suffer **${damage} damage**. Murne Rin suffers **${Math.max(0, damage - 1)} damage** instead (prevents 1)?`,
         components: [new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(`figurehead_use_${game.gameId}`).setLabel('Use Figurehead').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId(`figurehead_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary),
         )],
         allowedMentions: { users: [fhOwnerId] },
-      });
+      }));
       return;
     }
   }
@@ -1141,11 +1141,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const defeatedDcName = idx >= 0 ? dcList[idx]?.dcName : null;
         if (isDcUnique(defeatedDcName)) {
           game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
-          await thread.send({
+          await thread.send(sanitizeMentions({
             content: `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`,
             components: [getCelebrationButtons(game.gameId)],
             allowedMentions: { users: [ownerId] },
-          }).catch(discordCatch);
+          })).catch(discordCatch);
         }
         // Auto-prompt for defeat-triggered reaction cards
         try {
@@ -1162,14 +1162,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           const atkHand = getCcHand(game, attackerPlayerNum) || [];
           const atkDefeatCards = [...new Set(atkHand)].filter(c => ccCards[c]?.timing && _defeatTimings.has(ccCards[c].timing));
           if (atkDefeatCards.length) {
-            await thread.send({ content: `<@${ownerId}> — Hostile defeated! You have ${atkDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+            await thread.send(sanitizeMentions({ content: `<@${ownerId}> — Hostile defeated! You have ${atkDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [ownerId] } })).catch(discordCatch);
           }
           // Notify defender about own-figure-defeat reactions in hand
           const defId = getPlayerId(game, defenderPlayerNum);
           const defHand = getCcHand(game, defenderPlayerNum) || [];
           const defDefeatCards = [...new Set(defHand)].filter(c => ccCards[c]?.timing && _ownDefeatTimings.has(ccCards[c].timing));
           if (defDefeatCards.length) {
-            await thread.send({ content: `<@${defId}> — Your figure was defeated! You have ${defDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defId] } }).catch(discordCatch);
+            await thread.send(sanitizeMentions({ content: `<@${defId}> — Your figure was defeated! You have ${defDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defId] } })).catch(discordCatch);
           }
         } catch (_defeatPromptErr) {
           console.error('Defeat reaction prompt error:', _defeatPromptErr?.message ?? _defeatPromptErr);
@@ -1245,11 +1245,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           // Celebration: prompt if unique figure defeated via Blast
           if (!game.pendingCelebration && isDcUnique(blastDcName)) {
             game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
-            await thread.send({
+            await thread.send(sanitizeMentions({
               content: `<@${ownerId}> — You defeated a unique figure (Blast). Play **Celebration** to gain 4 VP?`,
               components: [getCelebrationButtons(game.gameId)],
               allowedMentions: { users: [ownerId] },
-            }).catch(discordCatch);
+            })).catch(discordCatch);
           }
         }
       }
@@ -1786,7 +1786,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         });
         const _cfRows = chunkButtonsToRows(_cfBtns);
         game.pendingCoverFire = { gameId: game.gameId, attackerPlayerNum, attackerMsgId: combat.attackerMsgId, hit: !!(hit && damage > 0), targetFigureKey: combat.target?.figureKey, targetMsgId, targetFigIndex, defenderPlayerNum, combat: { combatThreadId: combat.combatThreadId, resultText }, embedRefreshMsgIds: [...embedRefreshMsgIds] };
-        await thread.send({ content: `\u{1F6E1}\uFE0F **Cover Fire** — <@${ownerId}> Choose a friendly figure within 3 spaces to receive 1 Block Token:`, allowedMentions: { users: [ownerId] }, components: _cfRows });
+        await thread.send(sanitizeMentions({ content: `\u{1F6E1}\uFE0F **Cover Fire** — <@${ownerId}> Choose a friendly figure within 3 spaces to receive 1 Block Token:`, allowedMentions: { users: [ownerId] }, components: _cfRows }));
         // Don't return — the Block token choice is async but we continue combat resolution
       }
     }
@@ -1805,7 +1805,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         });
         _cfRemBtns.push(new ButtonBuilder().setCustomId(`cover_fire_discard_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         const _cfRemRows = chunkButtonsToRows(_cfRemBtns);
-        await thread.send({ content: `\u{1F6E1}\uFE0F **Cover Fire** — <@${ownerId}> You may discard 1 condition or Power Token from **${combat.target.label}**:`, allowedMentions: { users: [ownerId] }, components: _cfRemRows });
+        await thread.send(sanitizeMentions({ content: `\u{1F6E1}\uFE0F **Cover Fire** — <@${ownerId}> You may discard 1 condition or Power Token from **${combat.target.label}**:`, allowedMentions: { users: [ownerId] }, components: _cfRemRows }));
       }
     }
   }
@@ -1836,11 +1836,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
         };
         const cleaveRows = getCleaveTargetButtons(game.gameId, targetsWithLabels);
-        await thread.send({
+        await thread.send(sanitizeMentions({
           content: `**Cleave (${effectiveCleave} damage):** <@${ownerId}> — Choose one figure adjacent to the target to apply cleave damage:`,
           allowedMentions: { users: [ownerId] },
           components: cleaveRows,
-        });
+        }));
         return;
       }
     }
@@ -1889,11 +1889,11 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
       };
       const rows = getFightingKnifeTargetButtons(game.gameId, targetsWithLabels);
-      await thread.send({
+      await thread.send(sanitizeMentions({
         content: `<@${ownerId}> **Fighting Knife** — Choose an adjacent hostile figure to roll 1 red die:`,
         allowedMentions: { users: [ownerId] },
         components: rows,
-      }).catch(discordCatch);
+      })).catch(discordCatch);
       return true;
     }
   }
@@ -1925,11 +1925,11 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
           new ButtonBuilder().setCustomId(`concussive_bolt_push_${game.gameId}_${sp}`).setLabel(sp.toUpperCase()).setStyle(ButtonStyle.Danger)
         );
         btns.push(new ButtonBuilder().setCustomId(`concussive_bolt_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({
+        await thread.send(sanitizeMentions({
           content: `<@${ownerId}> **Concussive Bolt** — Push **${targetLabel}** 1 space. Choose a destination:`,
           allowedMentions: { users: [ownerId] },
           components: [new ActionRowBuilder().addComponents(btns)],
-        }).catch(discordCatch);
+        })).catch(discordCatch);
         return true;
       }
     }
@@ -1972,11 +1972,11 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
             .setStyle(f.playerNum === defenderPlayerNum ? ButtonStyle.Danger : ButtonStyle.Secondary)
         );
         btns.push(new ButtonBuilder().setCustomId(`spread_pain_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({
+        await thread.send(sanitizeMentions({
           content: `<@${ownerId}> **Spread the Pain** — Apply **${firstCond}** to a figure at or adjacent to target (${String(targetPos).toUpperCase()}):`,
           allowedMentions: { users: [ownerId] },
           components: [new ActionRowBuilder().addComponents(btns)],
-        }).catch(discordCatch);
+        })).catch(discordCatch);
         return true;
       }
     }
@@ -2024,11 +2024,11 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       .setCustomId(`reaction_skip_${game.gameId}`)
       .setLabel('Skip')
       .setStyle(ButtonStyle.Secondary);
-    await thread.send({
+    await thread.send(sanitizeMentions({
       content: `<@${defOwnerId}> — You have **${name}** in hand! React to this attack?`,
       allowedMentions: { users: [defOwnerId] },
       components: [new ActionRowBuilder().addComponents(btnUse, btnSkip)],
-    }).catch(discordCatch);
+    })).catch(discordCatch);
     return true;
   }
   // Agitate (Cam Droid): on hit, defender's group must activate next, if able
@@ -2082,11 +2082,11 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
             new ButtonBuilder().setCustomId(`mastery_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)
           );
           mastBtns.push(new ButtonBuilder().setCustomId(`mastery_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-          await thread.send({
+          await thread.send(sanitizeMentions({
             content: `<@${mastOwnerId}> **Mastery** — Choose a FORCE USER CC (cost \u2264 1) from your discard pile to return to hand:`,
             allowedMentions: { users: [mastOwnerId] },
             components: [new ActionRowBuilder().addComponents(mastBtns)],
-          }).catch(discordCatch);
+          })).catch(discordCatch);
           return true;
         }
       }
@@ -2106,11 +2106,11 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       const intBtns = intOpponentHand.slice(0, 4).map((cardName, i) =>
         new ButtonBuilder().setCustomId(`interrogate_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Danger)
       );
-      await thread.send({
+      await thread.send(sanitizeMentions({
         content: `<@${intOwnerId}> **Interrogate** — \u26A0\uFE0F *Opponent: look away!* Pick the card you want to target:`,
         allowedMentions: { users: [intOwnerId] },
         components: [new ActionRowBuilder().addComponents(intBtns)],
-      }).catch(discordCatch);
+      })).catch(discordCatch);
       return true;
     }
   }
@@ -2197,14 +2197,14 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   if (pcAttIds.includes('sidewinder') && combat.attackerMsgId != null) {
     const swKey = combat.attackerFigureKey + '_sidewinder';
     if (!game.roundFigureAbilityUsed?.[swKey]) {
-      await thread.send({
+      await thread.send(sanitizeMentions({
         content: `<@${pcOwnerId}> **Sidewinder** — Suffer 1 Strain to move up to 2 spaces? (once per round)`,
         allowedMentions: { users: [pcOwnerId] },
         components: [new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(`sidewinder_apply_${game.gameId}_${combat.attackerMsgId}_${combat.attackerFigureIndex ?? 0}`).setLabel('Suffer 1 Strain \u2192 +2 MP').setStyle(ButtonStyle.Secondary),
           new ButtonBuilder().setCustomId(`sidewinder_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary),
         )],
-      }).catch(discordCatch);
+      })).catch(discordCatch);
     }
   }
   // Boltslinger (Vinto Hreeda): deal 1 Dmg to another hostile within 3 after attack
@@ -2225,11 +2225,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         new ButtonBuilder().setCustomId(`boltslinger_target_${game.gameId}_${i}`).setLabel(t.label).setStyle(ButtonStyle.Danger)
       );
       btns.push(new ButtonBuilder().setCustomId(`boltslinger_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
-      await thread.send({
+      await thread.send(sanitizeMentions({
         content: `<@${pcOwnerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
         allowedMentions: { users: [pcOwnerId] },
         components: [new ActionRowBuilder().addComponents(btns)],
-      }).catch(discordCatch);
+      })).catch(discordCatch);
     }
   }
   // Indiscriminate Fire (Bossk): after attack, if not a miss, choose 1 non-red attack die;
@@ -2262,11 +2262,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           new ButtonBuilder().setCustomId(`indiscriminate_die_${game.gameId}_${i}`).setLabel(`${String(d.color).slice(0, 1).toUpperCase()}${String(d.color).slice(1)} (${d.dmg}dmg/${d.surge}\u21AF)`).setStyle(ButtonStyle.Secondary)
         );
         ifBtns.push(new ButtonBuilder().setCustomId(`indiscriminate_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
-        await thread.send({
+        await thread.send(sanitizeMentions({
           content: `<@${pcOwnerId}> **Indiscriminate Fire** — Choose 1 non-red attack die for splash:`,
           allowedMentions: { users: [pcOwnerId] },
           components: [new ActionRowBuilder().addComponents(ifBtns)],
-        }).catch(discordCatch);
+        })).catch(discordCatch);
       }
     }
   }
@@ -2321,11 +2321,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
                   chosenTargets: [],
                   conditionsOwed: 0,
                 };
-                await thread.send({
+                await thread.send(sanitizeMentions({
                   content: `<@${_hfOwnerId}> **Heavy Fire** — Your **${combat.attackerDcName}** resolved an attack (printed pool: ${_hfDiceCount} dice). Exhaust Heavy Fire to deal 1 Damage to up to ${_hfDiceCount} hostile figure${_hfDiceCount !== 1 ? 's' : ''} within 2 spaces of the target?`,
                   allowedMentions: { users: [_hfOwnerId] },
                   components: [new ActionRowBuilder().addComponents(_hfBtns)],
-                }).catch(discordCatch);
+                })).catch(discordCatch);
               }
             }
           }
@@ -2369,11 +2369,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           new ButtonBuilder().setCustomId(`havoc_shot_use_${game.gameId}`).setLabel('Use Havoc Shot (1 Strain)').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId(`havoc_shot_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
         ];
-        await thread.send({
+        await thread.send(sanitizeMentions({
           content: `<@${pcOwnerId}> **Havoc Shot** — Suffer 1 Strain to deal 1 Damage to up to 2 figures within 2 spaces of the target in your LOS?`,
           allowedMentions: { users: [pcOwnerId] },
           components: [new ActionRowBuilder().addComponents(_hsBtns)],
-        }).catch(discordCatch);
+        })).catch(discordCatch);
       }
     }
   }
@@ -2440,11 +2440,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         );
         _dflBtns.push(new ButtonBuilder().setCustomId(`deflect_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         const _dflRows = chunkButtonsToRows(_dflBtns);
-        await thread.send({
+        await thread.send(sanitizeMentions({
           content: `<@${_dflOwnerId}> **Deflect** — **${_dflCand.dcName}** may redirect 1 Damage to a hostile in LOS:`,
           allowedMentions: { users: [_dflOwnerId] },
           components: _dflRows,
-        }).catch(discordCatch);
+        })).catch(discordCatch);
       }
       break; // Only one Deflect trigger per attack
     }
@@ -2461,11 +2461,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         new ButtonBuilder().setCustomId(`missile_salvo_die_${c}_${game.gameId}_${combat.attackerMsgId}`).setLabel(`${c.charAt(0).toUpperCase() + c.slice(1)} Die`).setStyle(colorStyle[c] || ButtonStyle.Secondary)
       );
       salvoBtns.push(new ButtonBuilder().setCustomId(`missile_salvo_done_${game.gameId}_${combat.attackerMsgId}`).setLabel('End Salvo').setStyle(ButtonStyle.Success));
-      await thread.send({
+      await thread.send(sanitizeMentions({
         content: `<@${salvoOwnerId}> **Missile Salvo** — ${ms.diceAvailable.length} shot${ms.diceAvailable.length !== 1 ? 's' : ''} remaining. Choose a die for your next attack (different target):`,
         components: [new ActionRowBuilder().addComponents(salvoBtns)],
         allowedMentions: { users: [salvoOwnerId] },
-      }).catch(discordCatch);
+      })).catch(discordCatch);
     } else {
       delete game.pendingMissileSalvo[combat.attackerMsgId];
       await thread.send('**Missile Salvo** — All shots fired. Salvo complete.').catch(discordCatch);
@@ -2487,7 +2487,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _defPostHand = getCcHand(game, _defPostPn) || [];
     const _defPostCards = [...new Set(_defPostHand)].filter(c => _ccCardsAll[c]?.timing && _postAtkTimings.has(_ccCardsAll[c].timing));
     if (_defPostCards.length) {
-      await thread.send({ content: `<@${_defPostId}> — Attack resolved! You have ${_defPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_defPostId] } }).catch(discordCatch);
+      await thread.send(sanitizeMentions({ content: `<@${_defPostId}> — Attack resolved! You have ${_defPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_defPostId] } })).catch(discordCatch);
     }
     // Attacker: cards triggered by resolving an attack (includes Opportunistic — hostile suffered damage)
     const _atkPostTimings = new Set(['afterAttack', 'afterYouResolveAttackTargetingFigure', 'afterYouResolveAttackThatDidNotMissDueToAccuracy', 'afterHostileFigureSuffersDamage']);
@@ -2495,7 +2495,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _atkPostHand = getCcHand(game, combat.attackerPlayerNum) || [];
     const _atkPostCards = [...new Set(_atkPostHand)].filter(c => _ccCardsAll[c]?.timing && _atkPostTimings.has(_ccCardsAll[c].timing));
     if (_atkPostCards.length) {
-      await thread.send({ content: `<@${_atkPostId}> — Attack resolved! You have ${_atkPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_atkPostId] } }).catch(discordCatch);
+      await thread.send(sanitizeMentions({ content: `<@${_atkPostId}> — Attack resolved! You have ${_atkPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_atkPostId] } })).catch(discordCatch);
     }
   } catch (_postAtkErr) {
     console.error('Post-attack reaction prompt error:', _postAtkErr?.message ?? _postAtkErr);
@@ -2533,10 +2533,10 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
             game.forcedAttackTarget[_rfDefMsgId] = combat.attackerFigureKey;
             const _rfOwnerId = getPlayerId(game, _rfDefPN);
             const _rfLabel = _rfDefIds.includes('return_fire_migs') ? 'Return Fire (Migs)' : 'Return Fire';
-            await thread.send({
+            await thread.send(sanitizeMentions({
               content: `<@${_rfOwnerId}> **${_rfLabel}** — Interrupt: perform a free attack targeting **${combat.attackerDcName}**! Use the **Attack** button on your DC card.`,
               allowedMentions: { users: [_rfOwnerId] },
-            }).catch(discordCatch);
+            })).catch(discordCatch);
             await logGameAction(game, client, `**${_rfLabel}** — **${_rfDefDcName}** may interrupt to attack **${combat.attackerDcName}**.`, { phase: 'ROUND', icon: 'attack' });
           }
         }
@@ -2613,11 +2613,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         new ButtonBuilder().setCustomId(`wanton_use_${game.gameId}`).setLabel('Use (discard 1 CC)').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`wanton_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       ];
-      await thread.send({
+      await thread.send(sanitizeMentions({
         content: `<@${_wdOwnerId}> **Wanton Destruction** — **${_wdDc.dcName}**: Discard 1 CC to deal 1 Damage to up to 2 figures within 2 spaces of the target?`,
         allowedMentions: { users: [_wdOwnerId] },
         components: [new ActionRowBuilder().addComponents(_wdBtns)],
-      }).catch(discordCatch);
+      })).catch(discordCatch);
       break;
     }
   }
