@@ -10,7 +10,7 @@ import { getRegisteredButtonPrefixes } from './handlers/index.js';
  * inline handlers that live directly in index.js (not in the handler registry).
  * Computed once on first use.
  */
-const LOCAL_BUTTON_PREFIXES = ['ping_active_', 'create_game', 'join_game', 'bothelper_jump_', 'bothelper_resolve_'];
+const LOCAL_BUTTON_PREFIXES = ['ping_active_', 'create_game', 'join_game', 'bothelper_jump_', 'bothelper_resolve_', 'botlog_resolve_'];
 let _buttonPrefixes = null;
 function getButtonPrefixes() {
   if (!_buttonPrefixes) {

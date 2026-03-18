@@ -3872,7 +3872,13 @@ client.on('interactionCreate', async (interaction) => {
         }
       },
       'botlog_resolve_': async (i) => {
-        // Collapse the error message to a resolved one-liner
+        // If the message is in an error thread, delete the thread entirely
+        const ch = i.message.channel;
+        if (ch?.isThread()) {
+          await ch.delete().catch(discordCatch);
+          return;
+        }
+        // Otherwise collapse the error message to a resolved one-liner
         const original = i.message.content;
         const firstLine = original.split('\n')[0] || '';
         const resolved = firstLine.replace('⚠️ **Game Error**', '✅ ~~Game Error~~ **Resolved**');
