@@ -2987,7 +2987,11 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: `Self-play already running: game **${getActiveSelfPlayGameId()}**. Use \`/selfplay stop\` first.`, ephemeral: true }).catch(discordCatch);
         return;
       }
-      const scenarioId = interaction.options.getString('scenario') || null;
+      // Self-play requires a scenario that auto-deploys to round 1 (runDraftRandom).
+      // Phase-jump mutators (eor_cc_window, sor_cc_window, mid_combat) need PHASE_JUMP_ALLOWED_USERS — skip them.
+      const SELFPLAY_SCENARIOS = IMPLEMENTED_SCENARIOS.filter(s => !['eor_cc_window', 'sor_cc_window', 'mid_combat'].includes(s));
+      const userScenario = interaction.options.getString('scenario') || null;
+      const scenarioId = userScenario || SELFPLAY_SCENARIOS[Math.floor(Math.random() * SELFPLAY_SCENARIOS.length)];
       await interaction.deferReply({ ephemeral: false }).catch(discordCatch);
       try {
         const aiP1 = `${AI_USER_PREFIX}1`;
