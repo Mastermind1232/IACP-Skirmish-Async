@@ -59,15 +59,20 @@ export async function handleBotmenuRecover(interaction, ctx) {
  */
 export async function runRecovery(game, gameId, ctx) {
   const results = [];
+  let specificCount = 0;
+  let genericCount = 0;
 
   // Helper: run a recovery function, collect results, log errors.
   // Each recovery fn returns null (nothing to recover), a string, or string[].
-  async function tryRecover(name, fn) {
+  // `source` is 'specific' or 'generic' for observability.
+  async function tryRecover(name, fn, source = 'specific') {
     try {
       const r = await fn();
       if (r == null) return;
-      if (Array.isArray(r)) results.push(...r);
-      else results.push(r);
+      const items = Array.isArray(r) ? r : [r];
+      results.push(...items);
+      if (source === 'generic') genericCount += items.length;
+      else specificCount += items.length;
     } catch (err) {
       console.error(`[recover] ${name}:`, err.message);
       results.push(`[ERROR] ${name}: ${err.message}`);
@@ -106,8 +111,19 @@ export async function runRecovery(game, gameId, ctx) {
   await tryRecover('moveInProgress',      () => recoverMoveInProgress(game, gameId, ctx));
   await tryRecover('roundActivation',     () => recoverRoundActivationMessage(game, gameId, ctx));
   await tryRecover('ccDrawPhase',         () => recoverCcDrawPhase(game, gameId, ctx));
+  await tryRecover('pendingCcConfirmation', () => recoverPendingCcConfirmation(game, gameId, ctx));
+  await tryRecover('pendingCelebration',    () => recoverPendingCelebration(game, gameId, ctx));
+  await tryRecover('pendingPowerToken',     () => recoverPendingPowerTokenGrant(game, gameId, ctx));
+
+  // ── Generic fallback: use available-actions to recover unhandled states ──
+  if (results.length === 0 && actionsDiag.length > 0) {
+    await tryRecover('genericActions', () => recoverFromAvailableActions(game, gameId, ctx, actionsDiag), 'generic');
+  }
 
   logRecoveryCrossCheck(actionsDiag, results, gameId);
+  if (results.length > 0) {
+    console.log(`[recover] Game ${gameId}: recovered=${results.length} (specific=${specificCount}, generic=${genericCount})`);
+  }
   return results;
 }
 
@@ -618,4 +634,194 @@ async function recoverPhaseGate(game, gameId, ctx) {
     }
   }
   return 'Re-sent phase gate messages';
+}
+
+// ─── Step 14: Recover pendingCcConfirmation ───────────────────────────────────
+
+async function recoverPendingCcConfirmation(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return null;
+  const { client } = ctx;
+  const pending = game.pendingCcConfirmation;
+  if (!pending) return null;
+
+  const { playerNum, card, ts } = pending;
+
+  // Check 10-minute TTL — if expired, clear state instead of re-sending stale buttons
+  const CONFIRM_TTL_MS = 10 * 60 * 1000;
+  if (ts && Date.now() - ts > CONFIRM_TTL_MS) {
+    delete game.pendingCcConfirmation;
+    console.log(`[recover] Cleared expired pendingCcConfirmation (card=${card}, age=${Math.round((Date.now() - ts) / 60000)}m)`);
+    return 'Cleared expired CC confirmation (TTL exceeded)';
+  }
+
+  const handId = getHandChannelId(game, playerNum);
+  if (!handId) return null;
+
+  const handCh = await fetchGameChannel(client, handId);
+  if (!handCh) return null;
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`cc_confirm_play_${gameId}`).setLabel('PLAY CARD').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`cc_cancel_play_${gameId}`).setLabel('DO SOMETHING ELSE').setStyle(ButtonStyle.Danger),
+  );
+  await handCh.send({
+    content: `**[Recover]** Play **${card}**?`,
+    components: [row],
+  }).catch(discordCatch);
+  return `Re-sent CC confirmation for P${playerNum}: ${card} [hand]`;
+}
+
+// ─── Step 15: Recover pendingCelebration ──────────────────────────────────────
+
+async function recoverPendingCelebration(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return null;
+  const { client } = ctx;
+  const pending = game.pendingCelebration;
+  if (!pending) return null;
+
+  const { attackerPlayerNum, combatThreadId } = pending;
+  const ownerId = getPlayerId(game, attackerPlayerNum);
+
+  // Try combat thread first (where it was originally sent)
+  let targetCh = null;
+  if (combatThreadId) {
+    try {
+      targetCh = await fetchCombatThread(client, combatThreadId);
+    } catch { /* thread gone */ }
+  }
+  // Fall back to general channel
+  if (!targetCh && game.generalId) {
+    targetCh = await fetchGameChannel(client, game.generalId);
+  }
+  if (!targetCh) return null;
+
+  // Import getCelebrationButtons from components
+  const { getCelebrationButtons } = await import('../discord/components.js');
+  await targetCh.send({
+    content: `**[Recover]** <@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`,
+    components: [getCelebrationButtons(gameId)],
+    allowedMentions: { users: [ownerId] },
+  }).catch(discordCatch);
+  return `Re-sent Celebration prompt for P${attackerPlayerNum}`;
+}
+
+// ─── Step 16: Recover pendingPowerTokenGrant ──────────────────────────────────
+
+async function recoverPendingPowerTokenGrant(game, gameId, ctx) {
+  if (game.phase !== 'round_active') return null;
+  const { client } = ctx;
+  const pending = game.pendingPowerTokenGrant;
+  if (!pending || !pending.grants || pending.grants.length === 0) return null;
+
+  const { grants, channelId, playerNum } = pending;
+  const ownerId = getPlayerId(game, playerNum);
+
+  // Use stored channelId if available, otherwise fall back to general
+  let targetCh = null;
+  if (channelId) {
+    try {
+      targetCh = await fetchGameChannel(client, channelId);
+    } catch { /* channel gone */ }
+  }
+  if (!targetCh && game.generalId) {
+    targetCh = await fetchGameChannel(client, game.generalId);
+  }
+  if (!targetCh) return null;
+
+  const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
+  const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
+  const countLabel = totalCount > 1 ? `${totalCount} tokens` : '1 token';
+  const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+    new ButtonBuilder()
+      .setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`)
+      .setLabel(t)
+      .setStyle(ButtonStyle.Secondary)
+  );
+  await targetCh.send({
+    content: `**[Recover]** <@${ownerId}> — **Choose power token type** for **${figNames}** (${countLabel}):`,
+    components: [new ActionRowBuilder().addComponents(btns)],
+    allowedMentions: { users: [ownerId] },
+  }).catch(discordCatch);
+  return `Re-sent power token choice for P${playerNum}: ${figNames}`;
+}
+
+// ─── Generic fallback: build buttons from available-actions ───────────────────
+
+/**
+ * When no specific recovery handler found anything, but available-actions says
+ * players have legal actions, build generic button prompts from those actions.
+ * This covers ~30 pending sub-states (pendingCoverFire, pendingCcConfirmation,
+ * pendingStrainChoice, etc.) without needing a specific handler for each.
+ *
+ * @param {object} game
+ * @param {string} gameId
+ * @param {object} ctx
+ * @param {Array<{ playerNum: number, playerId: string, actions: object[], description: string }>} actionsDiag
+ * @returns {string[]|null}
+ */
+/**
+ * Determine whether this player's recovery prompt should go to their hand
+ * channel (true) or the general channel (false).
+ */
+function shouldRouteToHand(game, playerNum) {
+  // Check CC pending states that are owned by this player
+  if (game.pendingCcConfirmation && game.pendingCcConfirmation.playerNum === playerNum) return true;
+  if (game.pendingCcChoice && game.pendingCcChoice.playerNum === playerNum) return true;
+  if (game.pendingCcSpaceChoice && game.pendingCcSpaceChoice.playerNum === playerNum) return true;
+  return false;
+}
+
+async function recoverFromAvailableActions(game, gameId, ctx, actionsDiag) {
+  const { client } = ctx;
+  if (!actionsDiag || actionsDiag.length === 0) return null;
+  if (!game.generalId) return null;
+
+  const generalCh = await fetchGameChannel(client, game.generalId);
+  if (!generalCh) return null;
+
+  const results = [];
+  for (const diag of actionsDiag) {
+    const { playerNum, playerId, actions, description } = diag;
+    if (!actions || actions.length === 0) continue;
+
+    // Build buttons from actions (cap at 25 = 5 rows × 5)
+    const btns = [];
+    for (const action of actions.slice(0, 25)) {
+      if (!action.customId) continue;
+      // Use description as label, truncate to Discord's 80 char limit
+      const label = (action.description || action.type || 'Action').slice(0, 80);
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(action.customId)
+          .setLabel(label)
+          .setStyle(ButtonStyle.Primary)
+      );
+    }
+    if (btns.length === 0) continue;
+
+    const rows = chunkButtonsToRows(btns);
+
+    // Route CC-related states to hand channel; everything else to general
+    const useHand = shouldRouteToHand(game, playerNum);
+    let targetCh = generalCh;
+    let channelNote = '';
+    if (useHand) {
+      const handId = getHandChannelId(game, playerNum);
+      if (handId) {
+        const handCh = await fetchGameChannel(client, handId);
+        if (handCh) {
+          targetCh = handCh;
+          channelNote = ' [hand]';
+        }
+      }
+    }
+
+    await targetCh.send({
+      content: `**[Recover]** <@${playerId}> (**Player ${playerNum}**) — ${description}:`,
+      components: rows,
+      allowedMentions: { users: [playerId] },
+    }).catch(discordCatch);
+    results.push(`Generic recovery for P${playerNum}: ${description}${channelNote}`);
+  }
+  return results.length > 0 ? results : null;
 }

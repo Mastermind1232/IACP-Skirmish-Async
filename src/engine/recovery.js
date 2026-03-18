@@ -62,6 +62,37 @@ export function getRecoveryPrompts(game, deps = {}) {
 }
 
 /**
+ * Return a short human-readable reason why a game needs recovery,
+ * or null if it doesn't. Used for observability logging.
+ * @param {object} game
+ * @returns {string|null}
+ */
+export function getRecoveryReason(game) {
+  if (!game || game.ended) return null;
+  if (game.phaseGate) return `phaseGate(${game.phaseGate.phase || '?'})`;
+  if (game.pendingCombat) return `pendingCombat(reroll=${!!game.pendingCombat.rerollPhase})`;
+  if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) return 'moveInProgress';
+  if (game.currentActivationTurnPlayerId) return 'currentActivationTurn';
+  if (game.pendingNegation) return 'pendingNegation';
+  if (game.pendingCoverFire) return 'pendingCoverFire';
+  if (game.pendingStrainChoice && Object.keys(game.pendingStrainChoice).length > 0) return 'pendingStrainChoice';
+  if (game.pendingCcConfirmation) return `pendingCcConfirmation(${game.pendingCcConfirmation.card || '?'})`;
+  if (game.pendingCcChoice && game.pendingCcChoice.gameId) return 'pendingCcChoice';
+  if (game.pendingCcSpaceChoice && game.pendingCcSpaceChoice.gameId) return 'pendingCcSpaceChoice';
+  if (game.pendingStillFaster) return 'pendingStillFaster';
+  if (game.pendingPowerTokenGrant) return 'pendingPowerTokenGrant';
+  if (game.pendingCelebration) return 'pendingCelebration';
+  if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) return 'pendingDcAbilityChoice';
+  if (game.pendingRushPush) return 'pendingRushPush';
+  // pendingBleeding: headless-only state, never set in production — skip
+  if (game.pendingLastResort) return 'pendingLastResort';
+  if (game.pendingFalseOrders) return 'pendingFalseOrders';
+  if (game.forceVisionPending) return 'forceVisionPending';
+  if (game.phase === 'cc_draw' && (!game.player1CcDrawn || !game.player2CcDrawn)) return 'ccDrawPending';
+  return null;
+}
+
+/**
  * Determine if a game needs recovery (has pending actions but no recent interaction).
  * @param {object} game
  * @returns {boolean}
@@ -80,6 +111,26 @@ export function needsRecovery(game) {
 
   // Active games with a current turn player
   if (game.currentActivationTurnPlayerId) return true;
+
+  // Blocking pending sub-states that prevent normal play
+  if (game.pendingNegation) return true;
+  if (game.pendingCoverFire) return true;
+  if (game.pendingStrainChoice && Object.keys(game.pendingStrainChoice).length > 0) return true;
+  if (game.pendingCcConfirmation) return true;
+  if (game.pendingCcChoice && game.pendingCcChoice.gameId) return true;
+  if (game.pendingCcSpaceChoice && game.pendingCcSpaceChoice.gameId) return true;
+  if (game.pendingStillFaster) return true;
+  if (game.pendingPowerTokenGrant) return true;
+  if (game.pendingCelebration) return true;
+  if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) return true;
+  if (game.pendingRushPush) return true;
+  // pendingBleeding: headless-only state, never set in production — skip
+  if (game.pendingLastResort) return true;
+  if (game.pendingFalseOrders) return true;
+  if (game.forceVisionPending) return true;
+
+  // CC draw phase with undrawn hands
+  if (game.phase === 'cc_draw' && (!game.player1CcDrawn || !game.player2CcDrawn)) return true;
 
   return false;
 }
