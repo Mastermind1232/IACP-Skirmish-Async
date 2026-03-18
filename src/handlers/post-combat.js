@@ -14,7 +14,7 @@ import { dcNameFromFigureKey } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
 /**
  * reaction_skip_
@@ -23,7 +23,7 @@ import { splitCustomId } from '../discord/custom-id.js';
  */
 export async function handleReactionSkip(interaction, ctx) {
   const { getGame, client, saveGames, checkPostCombatSurges, finishCombatResolution } = ctx;
-  const gameId = interaction.customId.replace('reaction_skip_', '');
+  const gameId = parseCustomId(interaction.customId, 'reaction_skip_');
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (!game.pendingReaction) { await interaction.followUp({ content: 'No pending reaction.', ephemeral: true }).catch(discordCatch); return; }
@@ -55,7 +55,7 @@ export async function handleReactionSkip(interaction, ctx) {
  */
 export async function handleReactionUse(interaction, ctx) {
   const { getGame, client, saveGames, checkPostCombatSurges, finishCombatResolution, findDcMessageIdForFigure, applyDirectDamageToFigure } = ctx;
-  const gameId = interaction.customId.replace('reaction_use_', '');
+  const gameId = parseCustomId(interaction.customId, 'reaction_use_');
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (!game.pendingReaction) { await interaction.followUp({ content: 'No pending reaction.', ephemeral: true }).catch(discordCatch); return; }
@@ -156,7 +156,7 @@ export async function handleRightBack(interaction, ctx) {
   const { getGame, client, saveGames, checkPostCombatSurges, finishCombatResolution, findDcMessageIdForFigure, applyDirectDamageToFigure } = ctx;
   const buttonKey = interaction.customId.startsWith('right_back_block_') ? 'right_back_block_' : 'right_back_nodmg_';
   const isBlockVariant = buttonKey === 'right_back_block_';
-  const gameId = interaction.customId.replace(buttonKey, '');
+  const gameId = parseCustomId(interaction.customId, buttonKey);
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (!game.pendingRightBackAtYa) { await interaction.followUp({ content: 'No pending Right Back At Ya! choice.', ephemeral: true }).catch(discordCatch); return; }
@@ -198,7 +198,7 @@ export async function handleMasteryPick(interaction, ctx) {
   const { getGame, client, saveGames, checkPostCombatSurges, finishCombatResolution, updateHandChannelMessages } = ctx;
   const buttonKey = interaction.customId.startsWith('mastery_skip_') ? 'mastery_skip_' : 'mastery_pick_';
   const isMasterySkip = buttonKey === 'mastery_skip_';
-  const mastGameId = isMasterySkip ? interaction.customId.replace('mastery_skip_', '') : interaction.customId.match(/^mastery_pick_([^_]+)_\d+$/)?.[1];
+  const mastGameId = isMasterySkip ? parseCustomId(interaction.customId, 'mastery_skip_') : interaction.customId.match(/^mastery_pick_([^_]+)_\d+$/)?.[1];
   if (!mastGameId) { await interaction.followUp({ content: 'Invalid mastery interaction.', ephemeral: true }).catch(discordCatch); return; }
   const mastGame = await requireGame(interaction, getGame, mastGameId, { silent: true });
   if (!mastGame) return;

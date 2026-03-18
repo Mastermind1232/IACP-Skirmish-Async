@@ -10,7 +10,7 @@ import { requireGame } from '../utils/guards.js';
 import { getInitiativePlayerNum, getPlayerId } from '../game/player-helpers.js';
 import { PHASES } from '../game/phase.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
 /** Build a short description of the current game state after an undo, so players know what to do next. */
 function describeGameState(game) {
@@ -86,7 +86,7 @@ function describeGameState(game) {
  */
 export async function handleRefreshMap(interaction, ctx) {
   const { getGame, buildBoardMapPayload, logGameErrorToBotLogs, client } = ctx;
-  const gameId = interaction.customId.replace('refresh_map_', '');
+  const gameId = parseCustomId(interaction.customId, 'refresh_map_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
@@ -115,7 +115,7 @@ export async function handleRefreshMap(interaction, ctx) {
  */
 export async function handleRefreshAll(interaction, ctx) {
   const { getGame, refreshAllGameComponents, logGameErrorToBotLogs, client } = ctx;
-  const gameId = interaction.customId.replace('refresh_all_', '');
+  const gameId = parseCustomId(interaction.customId, 'refresh_all_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
@@ -150,7 +150,7 @@ export async function handleUndo(interaction, ctx) {
     getDeploymentZoneButtons,
     client,
   } = ctx;
-  const gameId = interaction.customId.replace('undo_', '');
+  const gameId = parseCustomId(interaction.customId, 'undo_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (game.ended) {
@@ -383,7 +383,7 @@ export async function handleUndo(interaction, ctx) {
  */
 export async function handleKillGame(interaction, ctx) {
   const { getGame, logGameErrorToBotLogs } = ctx;
-  const gameId = interaction.customId.replace('kill_game_', '');
+  const gameId = parseCustomId(interaction.customId, 'kill_game_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {

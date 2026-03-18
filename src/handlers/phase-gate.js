@@ -13,6 +13,7 @@ import {
 import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { parseCustomId } from '../discord/custom-id.js';
 
 // ── Message builders ────────────────────────────────────────────────────────
 
@@ -157,7 +158,7 @@ async function deleteGateMessages(game, ctx) {
  */
 export async function handlePhaseGateReady(interaction, ctx) {
   const { getGame, saveGames, client } = ctx;
-  const gameId = interaction.customId.replace('phase_gate_ready_', '');
+  const gameId = parseCustomId(interaction.customId, 'phase_gate_ready_');
   const game = getGame(gameId);
   if (!game || game.ended) {
     await interaction.followUp({ content: 'Game not found or ended.', ephemeral: true }).catch(discordCatch);
@@ -205,7 +206,7 @@ export async function handlePhaseGateReady(interaction, ctx) {
  */
 export async function handlePhaseGateUnready(interaction, ctx) {
   const { getGame, saveGames } = ctx;
-  const gameId = interaction.customId.replace('phase_gate_unready_', '');
+  const gameId = parseCustomId(interaction.customId, 'phase_gate_unready_');
   const game = getGame(gameId);
   if (!game || game.ended) {
     await interaction.followUp({ content: 'Game not found or ended.', ephemeral: true }).catch(discordCatch);

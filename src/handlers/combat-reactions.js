@@ -4,7 +4,7 @@ import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, checkNefari
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
 
 export async function handleToughLuck(interaction, ctx) {
@@ -238,7 +238,7 @@ export async function handleHunterProtocol(interaction, ctx) {
   const buttonKey = interaction.customId.startsWith('hunter_protocol_trigger_') ? 'hunter_protocol_trigger_' : 'hunter_protocol_skip_';
 
   // Hunter Protocol: re-trigger the same surge ability once
-  const _hpGameId = interaction.customId.replace(/^hunter_protocol_(?:trigger|skip)_/, '');
+  const _hpGameId = parseCustomId(interaction.customId, buttonKey);
   const _hpGame = await requireGame(interaction, getGame, _hpGameId);
   if (!_hpGame) return;
   const _hpCombat = _hpGame.pendingCombat;
@@ -312,7 +312,7 @@ export async function handleStrikeMeDown(interaction, ctx) {
   } = ctx;
 
   const isYes = interaction.customId.startsWith('strike_me_down_yes_');
-  const gameId = interaction.customId.replace(/^strike_me_down_(?:yes|no)_/, '');
+  const gameId = parseCustomId(interaction.customId, isYes ? 'strike_me_down_yes_' : 'strike_me_down_no_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!game.pendingStrikeMeDown) {
@@ -399,7 +399,7 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
   } = ctx;
 
   const isYes = interaction.customId.startsWith('slow_on_draw_yes_');
-  const gameId = interaction.customId.replace(/^slow_on_draw_(?:yes|no)_/, '');
+  const gameId = parseCustomId(interaction.customId, isYes ? 'slow_on_draw_yes_' : 'slow_on_draw_no_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!game.pendingSlowOnTheDraw) {
@@ -458,7 +458,7 @@ export async function handleSlowOnTheDrawResume(interaction, ctx) {
     logGameAction,
   } = ctx;
 
-  const gameId = interaction.customId.replace('slow_on_draw_resume_', '');
+  const gameId = parseCustomId(interaction.customId, 'slow_on_draw_resume_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!game.slowOnTheDrawInterrupt) {
@@ -507,8 +507,8 @@ export async function handlePowerConverter(interaction, ctx) {
   const isColor = customId.startsWith('power_converter_color_');
 
   let gameId;
-  if (isApprove) gameId = customId.replace('power_converter_approve_', '');
-  else if (isSkip) gameId = customId.replace('power_converter_skip_', '');
+  if (isApprove) gameId = parseCustomId(customId, 'power_converter_approve_');
+  else if (isSkip) gameId = parseCustomId(customId, 'power_converter_skip_');
   else if (isDie) gameId = customId.split('_')[3]; // power_converter_die_{gameId}_{index}
   else if (isColor) gameId = customId.split('_')[3]; // power_converter_color_{gameId}_{color}
 
@@ -772,7 +772,7 @@ export async function handleForceExhaustion(interaction, ctx) {
   } = ctx;
 
   const isYes = interaction.customId.startsWith('force_exhaustion_yes_');
-  const gameId = interaction.customId.replace(/^force_exhaustion_(?:yes|no)_/, '');
+  const gameId = parseCustomId(interaction.customId, isYes ? 'force_exhaustion_yes_' : 'force_exhaustion_no_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!game.pendingForceExhaustion) {

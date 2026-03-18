@@ -2,7 +2,7 @@
  * DC Play Area handlers: dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows } from '../discord/components.js';
 import { cardNameIncludes } from '../game/card-names.js';
@@ -383,7 +383,7 @@ export async function handleDcUnactivate(interaction, ctx) {
     saveGames,
     client,
   } = ctx;
-  const msgId = interaction.customId.replace('dc_unactivate_', '');
+  const msgId = parseCustomId(interaction.customId, 'dc_unactivate_');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
@@ -486,7 +486,7 @@ export async function handleDcToggle(interaction, ctx) {
     saveGames,
     client,
   } = ctx;
-  const msgId = interaction.customId.replace('dc_toggle_', '');
+  const msgId = parseCustomId(interaction.customId, 'dc_toggle_');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
@@ -627,7 +627,7 @@ export async function handleDcDeplete(interaction, ctx) {
     saveGames,
     client,
   } = ctx;
-  const msgId = interaction.customId.replace('dc_deplete_', '');
+  const msgId = parseCustomId(interaction.customId, 'dc_deplete_');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
@@ -665,7 +665,7 @@ export async function handleDcDeplete(interaction, ctx) {
  */
 export async function handleDcRename(interaction, ctx) {
   const { dcMessageMeta, getDcStats, FIGURE_LETTERS } = ctx;
-  const msgId = interaction.customId.replace('dc_rename_', '');
+  const msgId = parseCustomId(interaction.customId, 'dc_rename_');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
     await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
@@ -737,7 +737,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     saveGames,
     client,
   } = ctx;
-  const rest = interaction.customId.replace(idPrefix, '');
+  const rest = parseCustomId(interaction.customId, idPrefix);
   const lastUnderscore = rest.lastIndexOf('_');
   const msgId = rest.slice(0, lastUnderscore);
   const idx = parseInt(rest.slice(lastUnderscore + 1), 10);
@@ -1289,17 +1289,17 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   let msgId, action, figureIndex = 0, specialIdx = -1;
   if (buttonKey === 'dc_move_') {
     const m = interaction.customId.match(/^dc_move_(.+)_f(\d+)$/);
-    msgId = m ? m[1] : interaction.customId.replace('dc_move_', '');
+    msgId = m ? m[1] : parseCustomId(interaction.customId, 'dc_move_');
     figureIndex = m ? parseInt(m[2], 10) : 0;
     action = 'Move';
   } else if (buttonKey === 'dc_attack_') {
     const m = interaction.customId.match(/^dc_attack_(.+)_f(\d+)$/);
-    msgId = m ? m[1] : interaction.customId.replace('dc_attack_', '');
+    msgId = m ? m[1] : parseCustomId(interaction.customId, 'dc_attack_');
     figureIndex = m ? parseInt(m[2], 10) : 0;
     action = 'Attack';
   } else if (buttonKey === 'dc_interact_') {
     const m = interaction.customId.match(/^dc_interact_(.+)_f(\d+)$/);
-    msgId = m ? m[1] : interaction.customId.replace('dc_interact_', '');
+    msgId = m ? m[1] : parseCustomId(interaction.customId, 'dc_interact_');
     figureIndex = m ? parseInt(m[2], 10) : 0;
     action = 'Interact';
   } else {
@@ -2524,7 +2524,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
  */
 export async function handleArsenalPick(interaction, ctx) {
   // customId: arsenal_pick_{gameId}_{msgId}_{figureIndex}
-  const withoutPrefix = interaction.customId.replace('arsenal_pick_', '');
+  const withoutPrefix = parseCustomId(interaction.customId, 'arsenal_pick_');
   const parts = withoutPrefix.split('_');
   const gameId = parts[0];
   const figureIndex = parseInt(parts[parts.length - 1], 10);
@@ -2578,7 +2578,7 @@ export async function handleArsenalPick(interaction, ctx) {
  */
 export async function handleEe3DiePick(interaction, ctx) {
   const { getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames } = ctx;
-  const withoutPrefix = interaction.customId.replace('ee3_pick_die_', '');
+  const withoutPrefix = parseCustomId(interaction.customId, 'ee3_pick_die_');
   const parts = withoutPrefix.split('_');
   const color = parts[0]; // 'blue', 'green', 'yellow', or 'skip'
   const gameId = parts[1];
@@ -2642,7 +2642,7 @@ export async function handleEe3DiePick(interaction, ctx) {
  */
 export async function handleBoRiflePick(interaction, ctx) {
   const { getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames } = ctx;
-  const withoutPrefix = interaction.customId.replace('bo_rifle_pick_', '');
+  const withoutPrefix = parseCustomId(interaction.customId, 'bo_rifle_pick_');
   const parts = withoutPrefix.split('_');
   const choice = parts[0]; // 'use' or 'skip'
   const gameId = parts[1];

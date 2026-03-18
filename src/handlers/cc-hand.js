@@ -15,7 +15,7 @@ import {
   EmbedBuilder,
   ThreadAutoArchiveDuration,
 } from 'discord.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
@@ -185,7 +185,7 @@ export async function handleDeployModal(interaction, ctx) {
 /** @param {import('discord.js').StringSelectMenuInteraction} interaction */
 export async function handleCcAttachTo(interaction, ctx) {
   const { getGame, getCcEffect, buildHandDisplayPayload, updateAttachmentMessageForDc, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
-  const gameId = interaction.customId.replace('cc_attach_to_', '');
+  const gameId = parseCustomId(interaction.customId, 'cc_attach_to_');
   const game = getGame(gameId);
   const pending = game?.pendingCcAttachment;
   if (!game || !pending) {
@@ -246,7 +246,7 @@ export async function handleCcAttachTo(interaction, ctx) {
 /** After dropdown selection: show card preview + PLAY CARD / DO SOMETHING ELSE confirmation. */
 export async function handleCcPlaySelect(interaction, ctx) {
   const { getGame, getCommandCardImagePath, saveGames } = ctx;
-  const gameId = interaction.customId.replace('cc_play_select_', '');
+  const gameId = parseCustomId(interaction.customId, 'cc_play_select_');
   const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   const channelId = interaction.channel?.id;
@@ -291,7 +291,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
 /** PLAY CARD confirmed — execute the actual play. */
 export async function handleCcConfirmPlay(interaction, ctx) {
   const { getGame, getCcEffect, isCcAttachment, isCcPlayableNow, isCcPlayLegalByRestriction, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, getIllegalCcPlayButtons, getCommandCardImagePath, client } = ctx;
-  const gameId = interaction.customId.replace('cc_confirm_play_', '');
+  const gameId = parseCustomId(interaction.customId, 'cc_confirm_play_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!game.pendingCcConfirmation) {
@@ -753,7 +753,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
 /** DO SOMETHING ELSE — cancel the pending play. */
 export async function handleCcCancelPlay(interaction, ctx) {
   const { getGame, saveGames } = ctx;
-  const gameId = interaction.customId.replace('cc_cancel_play_', '');
+  const gameId = parseCustomId(interaction.customId, 'cc_cancel_play_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   // 5H: Verify the interacting user owns this pending confirmation
@@ -771,7 +771,7 @@ export async function handleCcCancelPlay(interaction, ctx) {
  */
 export async function handleCommDisruptionPlay(interaction, ctx) {
   const { getGame, getCcEffect, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, client } = ctx;
-  const gameId = interaction.customId.replace('comm_disruption_play_', '');
+  const gameId = parseCustomId(interaction.customId, 'comm_disruption_play_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingCommDisruptionPrompt;
@@ -811,7 +811,7 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
  */
 export async function handleCommDisruptionSkip(interaction, ctx) {
   const { getGame, saveGames } = ctx;
-  const gameId = interaction.customId.replace('comm_disruption_skip_', '');
+  const gameId = parseCustomId(interaction.customId, 'comm_disruption_skip_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   delete game.pendingCommDisruptionPrompt;
@@ -909,7 +909,7 @@ export async function handleCcSpacePick(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction — choice button for choose-one CC (e.g. Retaliation). */
 export async function handleCcChoice(interaction, ctx) {
   const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, getBoardStateForMovement, getSpaceChoiceRows, getMapAttachmentForSpaces, client, saveGames } = ctx;
-  const parts = interaction.customId.replace(/^cc_choice_/, '').split('_');
+  const parts = splitCustomId(interaction.customId, 'cc_choice_');
   const gameId = parts[0];
   const chosenLabel = parts.slice(1).join('_');
   if (!gameId) {
@@ -991,7 +991,7 @@ export async function handleCcChoice(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction — "Ignore and play" for pending illegal CC. */
 export async function handleIllegalCcIgnore(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames } = ctx;
-  const gameId = interaction.customId.replace('illegal_cc_ignore_', '');
+  const gameId = parseCustomId(interaction.customId, 'illegal_cc_ignore_');
   const game = getGame(gameId);
   if (!game || !game.pendingIllegalCcPlay) {
     await interaction.followUp({ content: 'No pending play to resolve.', ephemeral: true }).catch(discordCatch);
@@ -1013,7 +1013,7 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction — "Play Negation" to cancel opponent's cost-0 CC. */
 export async function handleNegationPlay(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames } = ctx;
-  const gameId = interaction.customId.replace('negation_play_', '');
+  const gameId = parseCustomId(interaction.customId, 'negation_play_');
   const game = getGame(gameId);
   if (!game || !game.pendingNegation) {
     await interaction.followUp({ content: 'No pending play to negate.', ephemeral: true }).catch(discordCatch);
@@ -1055,7 +1055,7 @@ export async function handleNegationPlay(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction — "Let it resolve" for pending cost-0 CC. */
 export async function handleNegationLetResolve(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames, resolveAbility, dcMessageMeta, dcHealthState, updateDcActionsMessage, updateAttachmentMessageForDc, isCcAttachment, ensureMovementBankMessage, updateMovementBankMessage } = ctx;
-  const gameId = interaction.customId.replace('negation_let_resolve_', '');
+  const gameId = parseCustomId(interaction.customId, 'negation_let_resolve_');
   const game = getGame(gameId);
   if (!game || !game.pendingNegation) {
     await interaction.followUp({ content: 'No pending play to resolve.', ephemeral: true }).catch(discordCatch);
@@ -1101,7 +1101,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction — "Play Celebration" to gain 4 VP. */
 export async function handleCelebrationPlay(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, client, saveGames } = ctx;
-  const gameId = interaction.customId.replace('celebration_play_', '');
+  const gameId = parseCustomId(interaction.customId, 'celebration_play_');
   const game = getGame(gameId);
   if (!game || !game.pendingCelebration) {
     await interaction.followUp({ content: 'No Celebration window open.', ephemeral: true }).catch(discordCatch);
@@ -1134,7 +1134,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction — "Pass" on Celebration. */
 export async function handleCelebrationPass(interaction, ctx) {
   const { getGame, logGameAction, client, saveGames } = ctx;
-  const gameId = interaction.customId.replace('celebration_pass_', '');
+  const gameId = parseCustomId(interaction.customId, 'celebration_pass_');
   const game = getGame(gameId);
   if (!game || !game.pendingCelebration) {
     await interaction.followUp({ content: 'No Celebration window open.', ephemeral: true }).catch(discordCatch);
@@ -1150,7 +1150,7 @@ export async function handleCelebrationPass(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction — "Unplay card" for pending illegal CC. */
 export async function handleIllegalCcUnplay(interaction, ctx) {
   const { getGame, client, saveGames } = ctx;
-  const gameId = interaction.customId.replace('illegal_cc_unplay_', '');
+  const gameId = parseCustomId(interaction.customId, 'illegal_cc_unplay_');
   const game = getGame(gameId);
   if (!game || !game.pendingIllegalCcPlay) {
     await interaction.followUp({ content: 'No pending play to cancel.', ephemeral: true }).catch(discordCatch);
@@ -1171,7 +1171,7 @@ export async function handleIllegalCcUnplay(interaction, ctx) {
 /** @param {import('discord.js').StringSelectMenuInteraction} interaction */
 export async function handleCcDiscardSelect(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
-  const gameId = interaction.customId.replace('cc_discard_select_', '');
+  const gameId = parseCustomId(interaction.customId, 'cc_discard_select_');
   const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   const channelId = interaction.channel?.id;
@@ -1310,7 +1310,7 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleCcShuffleDraw(interaction, ctx) {
   const { getGame, shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, logGameAction, saveGames, client } = ctx;
-  const gameId = interaction.customId.replace('cc_shuffle_draw_', '');
+  const gameId = parseCustomId(interaction.customId, 'cc_shuffle_draw_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const channelId = interaction.channel?.id;
@@ -1467,7 +1467,7 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleCcPlay(interaction, ctx) {
   const { getGame, getPlayableCcFromHand } = ctx;
-  const gameId = interaction.customId.replace('cc_play_', '');
+  const gameId = parseCustomId(interaction.customId, 'cc_play_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const channelId = interaction.channel?.id;
@@ -1505,7 +1505,7 @@ export async function handleCcPlay(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleCcDraw(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, logGameAction, saveGames, client } = ctx;
-  const gameId = interaction.customId.replace('cc_draw_', '');
+  const gameId = parseCustomId(interaction.customId, 'cc_draw_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const channelId = interaction.channel?.id;
@@ -1635,7 +1635,7 @@ export async function handleCcCloseDiscard(interaction, ctx) {
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleCcDiscard(interaction, ctx) {
   const { getGame } = ctx;
-  const gameId = interaction.customId.replace('cc_discard_', '');
+  const gameId = parseCustomId(interaction.customId, 'cc_discard_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const channelId = interaction.channel?.id;

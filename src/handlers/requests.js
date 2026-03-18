@@ -5,6 +5,7 @@
 import { PermissionFlagsBits } from 'discord.js';
 import { discordCatch } from '../error-handling.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { parseCustomId } from '../discord/custom-id.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -12,7 +13,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
  */
 export async function handleRequestResolve(interaction, ctx) {
   const { logGameErrorToBotLogs } = ctx;
-  const threadId = interaction.customId.replace('request_resolve_', '');
+  const threadId = parseCustomId(interaction.customId, 'request_resolve_');
   if (!interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
     await interaction.followUp({ content: 'Only admins can resolve requests.', ephemeral: true }).catch(discordCatch);
     return;
@@ -40,7 +41,7 @@ export async function handleRequestResolve(interaction, ctx) {
  */
 export async function handleRequestReject(interaction, ctx) {
   const { logGameErrorToBotLogs } = ctx;
-  const threadId = interaction.customId.replace('request_reject_', '');
+  const threadId = parseCustomId(interaction.customId, 'request_reject_');
   if (!interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
     await interaction.followUp({ content: 'Only admins can reject requests.', ephemeral: true }).catch(discordCatch);
     return;

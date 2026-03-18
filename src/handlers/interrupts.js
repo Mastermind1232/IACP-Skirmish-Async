@@ -4,7 +4,7 @@
  * ab_blade_pick, sf_mp_pick, force_slow_pick, excavation_pick
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, applyCondition, filterCondition, HARMFUL_CONDITIONS } from '../game/index.js';
@@ -144,7 +144,7 @@ export async function handleSquadSwarm(interaction, ctx) {
 export async function handleOverdrive(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, dcHealthState, DC_ACTIONS_PER_ACTIVATION, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getNicknamesForDcMessage, getDcPlayAreaComponents } = ctx;
 
-  const _odMsgId = interaction.customId.replace('overdrive_use_', '');
+  const _odMsgId = parseCustomId(interaction.customId, 'overdrive_use_');
   const _odMeta = dcMessageMeta.get(_odMsgId);
   if (!_odMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
   const _odGame = await requireGame(interaction, getGame, _odMeta.gameId);
@@ -179,7 +179,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapSpaces } = ctx;
   const buttonKey = interaction.customId.startsWith('self_destruct_probe_use_') ? 'self_destruct_probe_use_' : 'self_destruct_probe_skip_';
 
-  const _sdpSuffix = interaction.customId.replace(buttonKey, '');
+  const _sdpSuffix = parseCustomId(interaction.customId, buttonKey);
   const _sdpParts = _sdpSuffix.split('_');
   const _sdpGameId = _sdpParts[0]; const _sdpMsgId = _sdpParts.slice(1).join('_');
   const _sdpGame = await requireGame(interaction, getGame, _sdpGameId);
@@ -235,7 +235,7 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
   const buttonKey = interaction.customId.startsWith('self_destruct_protocol_use_') ? 'self_destruct_protocol_use_' : 'self_destruct_protocol_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
-  const _sdcpSuffix = interaction.customId.replace(buttonKey, '');
+  const _sdcpSuffix = parseCustomId(interaction.customId, buttonKey);
   const _sdcpParts = _sdcpSuffix.split('_');
   const _sdcpGameId = _sdcpParts[0]; const _sdcpTargetMsgId = _sdcpParts[1];
   const _sdcpGame = await requireGame(interaction, getGame, _sdcpGameId, { silent: true });
@@ -299,7 +299,7 @@ export async function handleYHSIW(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
   const isTransfer = interaction.customId.startsWith('yhsiw_transfer_');
   await interaction.deferUpdate().catch(discordCatch);
-  const gameId = interaction.customId.replace(isTransfer ? 'yhsiw_transfer_' : 'yhsiw_damage_', '');
+  const gameId = parseCustomId(interaction.customId, isTransfer ? 'yhsiw_transfer_' : 'yhsiw_damage_');
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (!game.pendingYHSIW) {
@@ -359,7 +359,7 @@ export async function handleLastResort(interaction, ctx) {
   const buttonKey = interaction.customId.startsWith('last_resort_use_') ? 'last_resort_use_' : 'last_resort_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
-  const _lrSuffix = interaction.customId.replace(buttonKey, '');
+  const _lrSuffix = parseCustomId(interaction.customId, buttonKey);
   const _lrParts = _lrSuffix.split('_');
   const _lrGameId = _lrParts[0]; const _lrTargetMsgId = _lrParts[1];
   const _lrGame = await requireGame(interaction, getGame, _lrGameId, { silent: true });
@@ -431,7 +431,7 @@ export async function handleScavengedWalker(interaction, ctx) {
   const buttonKey = interaction.customId.startsWith('scavenged_walker_attack_') ? 'scavenged_walker_attack_' : 'scavenged_walker_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
-  const _swSuffix = interaction.customId.replace(buttonKey, '');
+  const _swSuffix = parseCustomId(interaction.customId, buttonKey);
   const _swParts = _swSuffix.split('_');
   const _swGameId = _swParts[0]; const _swMsgId = _swParts[1];
   const _swGame = await requireGame(interaction, getGame, _swGameId);
@@ -455,7 +455,7 @@ export async function handleOnDiplomatic(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, checkWinConditions } = ctx;
 
   await interaction.deferUpdate().catch(discordCatch);
-  const _odmSuffix = interaction.customId.replace('on_diplomatic_', '');
+  const _odmSuffix = parseCustomId(interaction.customId, 'on_diplomatic_');
   const _odmParts = _odmSuffix.split('_');
   const _odmGameId = _odmParts[0]; const _odmMsgId = _odmParts[1]; const _odmChoice = _odmParts[2];
   const _odmGame = await requireGame(interaction, getGame, _odmGameId);
@@ -535,7 +535,7 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // ab_blade_pick_{gameId}_{figureKey}
-  const suffix = interaction.customId.replace('ab_blade_pick_', '');
+  const suffix = parseCustomId(interaction.customId, 'ab_blade_pick_');
   const parts = suffix.split('_');
   const gameId = parts[0];
   const figureKey = parts.slice(1).join('_');
@@ -568,7 +568,7 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // sf_mp_pick_{gameId}_{figureKey}
-  const suffix = interaction.customId.replace('sf_mp_pick_', '');
+  const suffix = parseCustomId(interaction.customId, 'sf_mp_pick_');
   const parts = suffix.split('_');
   const gameId = parts[0];
   const figureKey = parts.slice(1).join('_');
@@ -606,7 +606,7 @@ export async function handleForceSlowPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // force_slow_pick_{gameId}_{playerNum}_{figureKey}
-  const suffix = interaction.customId.replace('force_slow_pick_', '');
+  const suffix = parseCustomId(interaction.customId, 'force_slow_pick_');
   const parts = suffix.split('_');
   const gameId = parts[0];
   const ownerPlayerNum = parseInt(parts[1], 10);
@@ -628,7 +628,7 @@ export async function handleExcavationPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, logGameAction, updateHandChannelMessages } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // excavation_pick_{gameId}_{playerNum}_{cardIndex}
-  const suffix = interaction.customId.replace('excavation_pick_', '');
+  const suffix = parseCustomId(interaction.customId, 'excavation_pick_');
   const parts = suffix.split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -669,7 +669,7 @@ export async function handleDrivenByHatred(interaction, ctx) {
   else if (interaction.customId.startsWith('dbh_attack_')) buttonKey = 'dbh_attack_';
   else buttonKey = 'dbh_skip_';
 
-  const _dbhSuffix = interaction.customId.replace(buttonKey, '');
+  const _dbhSuffix = parseCustomId(interaction.customId, buttonKey);
   const _dbhParts = _dbhSuffix.split('_');
   const _dbhGameId = _dbhParts[0]; const _dbhMsgId = _dbhParts[1];
   const _dbhGame = await requireGame(interaction, getGame, _dbhGameId);
@@ -715,7 +715,7 @@ export async function handleSubmitOrFight(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
   const isUse = interaction.customId.startsWith('submit_fight_use_');
   const prefix = isUse ? 'submit_fight_use_' : 'submit_fight_skip_';
-  const suffix = interaction.customId.replace(prefix, '');
+  const suffix = parseCustomId(interaction.customId, prefix);
   const parts = suffix.split('_');
   const gameId = parts[0];
   const figureIndex = parseInt(parts[parts.length - 1], 10);
@@ -771,7 +771,7 @@ export async function handleBlackMarket(interaction, ctx) {
   const _bmPrefix = _bmPrefixes.find(p => interaction.customId.startsWith(p));
   if (!_bmPrefix) return;
   const _bmChoice = _bmPrefix.replace('bm_', '').replace(/_$/, ''); // draw | discard | return | skip
-  const _bmSuffix = interaction.customId.replace(_bmPrefix, '');
+  const _bmSuffix = parseCustomId(interaction.customId, _bmPrefix);
   const _bmParts = _bmSuffix.split('_');
   const _bmGameId = _bmParts[0];
   const _bmMsgId = _bmParts[1];
@@ -901,7 +901,7 @@ export async function handleExecutor(interaction, ctx) {
   const buttonKey = interaction.customId.startsWith('executor_use_') ? 'executor_use_' : 'executor_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
-  const _exSuffix = interaction.customId.replace(buttonKey, '');
+  const _exSuffix = parseCustomId(interaction.customId, buttonKey);
   const _exParts = _exSuffix.split('_');
   const _exGameId = _exParts[0];
   const _exRgcMsgId = _exParts[1];
@@ -959,7 +959,7 @@ export async function handleExtraProtection(interaction, ctx) {
   const buttonKey = isPlay ? 'extra_protection_play_' : 'extra_protection_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
-  const _epGameId = interaction.customId.replace(buttonKey, '');
+  const _epGameId = parseCustomId(interaction.customId, buttonKey);
   const _epGame = await requireGame(interaction, getGame, _epGameId, { silent: true });
   if (!_epGame) return;
   if (!_epGame.pendingExtraProtection) {

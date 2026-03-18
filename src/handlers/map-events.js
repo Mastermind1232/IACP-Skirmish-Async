@@ -7,6 +7,7 @@ import { edgeKey } from '../game/coords.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { parseCustomId } from '../discord/custom-id.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -15,7 +16,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 export async function handleDevaronDoorOpen(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, logGameAction, getMapTokensData, postDevaronDoorButtons, postDevaronCratePushPrompts } = ctx;
     // customId: devaron_door_open_{gameId}_{a}|{b}
-    const rest = interaction.customId.replace('devaron_door_open_', '');
+    const rest = parseCustomId(interaction.customId, 'devaron_door_open_');
     const pipeIdx = rest.indexOf('|');
     if (pipeIdx < 0) return;
     const beforePipe = rest.substring(0, pipeIdx);
@@ -55,7 +56,7 @@ export async function handleDevaronDoorOpen(interaction, ctx) {
 export async function handleDevaronCratePush(interaction, ctx) {
   const { getGame, canActAsPlayer, client, getSpaceController } = ctx;
     // customId: devaron_crate_push_{gameId}_{origCoord}
-    const rest = interaction.customId.replace('devaron_crate_push_', '');
+    const rest = parseCustomId(interaction.customId, 'devaron_crate_push_');
     const lastUnderscore = rest.lastIndexOf('_');
     const gameId = rest.substring(0, lastUnderscore);
     const origCoord = rest.substring(lastUnderscore + 1);
@@ -89,7 +90,7 @@ export async function handleDevaronCratePush(interaction, ctx) {
 export async function handleKryknaPush(interaction, ctx) {
   const { getGame, canActAsPlayer, client } = ctx;
     // customId: krykna_push_{gameId}_krykna-{N}
-    const rest = interaction.customId.replace('krykna_push_', '');
+    const rest = parseCustomId(interaction.customId, 'krykna_push_');
     const kryknaIdx = rest.indexOf('krykna-');
     if (kryknaIdx < 0) return;
     const gameId = rest.substring(0, kryknaIdx - 1);

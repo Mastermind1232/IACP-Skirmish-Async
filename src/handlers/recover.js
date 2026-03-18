@@ -13,6 +13,7 @@ import {
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { fetchGameChannel, fetchCombatThread } from '../discord/channel-helpers.js';
+import { parseCustomId } from '../discord/custom-id.js';
 import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { getRecoveryPrompts, needsRecovery } from '../engine/recovery.js';
@@ -24,7 +25,7 @@ import { getRecoveryPrompts, needsRecovery } from '../engine/recovery.js';
  */
 export async function handleBotmenuRecover(interaction, ctx) {
   const { getGame, saveGames, client } = ctx;
-  const gameId = interaction.customId.replace('botmenu_recover_', '');
+  const gameId = parseCustomId(interaction.customId, 'botmenu_recover_');
   const game = getGame(gameId);
   if (!game) {
     await interaction.editReply({ content: 'Game not found.', components: [] }).catch(discordCatch);

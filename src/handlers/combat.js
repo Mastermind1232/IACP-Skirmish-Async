@@ -23,7 +23,7 @@ import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -489,7 +489,7 @@ async function sendStrainCcPickButtons(game, pending, thread) {
 export async function handleStrainCcPick(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames, client } = ctx;
-  const suffix = interaction.customId.replace('strain_cc_pick_', '');
+  const suffix = parseCustomId(interaction.customId, 'strain_cc_pick_');
   const firstUnderscore = suffix.indexOf('_');
   const gameId = suffix.slice(0, firstUnderscore);
   const cardName = decodeURIComponent(suffix.slice(firstUnderscore + 1));
@@ -2309,7 +2309,7 @@ export async function handleAttackTarget(interaction, ctx) {
  */
 export async function handleCombatReady(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames } = ctx;
-  const gameId = interaction.customId.replace('combat_ready_', '');
+  const gameId = parseCustomId(interaction.customId, 'combat_ready_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -2376,7 +2376,7 @@ export async function handleCombatRoll(interaction, ctx) {
     saveGames,
   } = ctx;
   const getInnateRerolls = ctx.getInnateRerolls || (() => ({ attackReroll: 0, defenseReroll: 0 }));
-  const gameId = interaction.customId.replace('combat_roll_', '');
+  const gameId = parseCustomId(interaction.customId, 'combat_roll_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -4427,7 +4427,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
  */
 export async function handleCombatResolveReady(interaction, ctx) {
   const { getGame, replyIfGameEnded, resolveCombatAfterRolls, saveGames, client } = ctx;
-  const gameId = interaction.customId.replace('combat_resolve_ready_', '');
+  const gameId = parseCustomId(interaction.customId, 'combat_resolve_ready_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -5309,7 +5309,7 @@ async function _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx) {
 export async function handleFigureheadDecision(interaction, ctx) {
   const { getGame, client, saveGames, applyDamageAndFinishCombat, isDcUnique, getCelebrationButtons, dcHealthState, findDcMessageIdForFigure, logGameAction, isGroupDefeated, checkWinConditions, updateActivationsMessage, updateAttachmentMessageForDc, getDcStats, getDcEffects } = ctx;
   const isUse = interaction.customId.startsWith('figurehead_use_');
-  const gameId = interaction.customId.replace(/^figurehead_(?:use|skip)_/, '');
+  const gameId = parseCustomId(interaction.customId, isUse ? 'figurehead_use_' : 'figurehead_skip_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   await interaction.deferUpdate().catch(discordCatch);
@@ -5652,7 +5652,7 @@ export async function handleCoverFireDiscard(interaction, ctx) {
   const { getGame, saveGames, logGameAction, client } = ctx;
   // Skip button
   if (interaction.customId.startsWith('cover_fire_discard_skip_')) {
-    const skipGameId = interaction.customId.replace('cover_fire_discard_skip_', '');
+    const skipGameId = parseCustomId(interaction.customId, 'cover_fire_discard_skip_');
     const skipGame = await requireGame(interaction, getGame, skipGameId, { silent: true });
     if (skipGame) skipGame.pendingCoverFire = null;
     await interaction.message.edit({ content: '🛡️ **Cover Fire** — Skipped condition/token removal.', components: [] }).catch(discordCatch);
@@ -5735,7 +5735,7 @@ export async function handleZilloDiscard(interaction, ctx) {
   const { getGame, saveGames, client } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const isSkip = interaction.customId.startsWith('zillo_discard_skip_');
-  const parts = interaction.customId.replace(/^zillo_discard_(?:skip_)?/, '').split('_');
+  const parts = splitCustomId(interaction.customId, isSkip ? 'zillo_discard_skip_' : 'zillo_discard_');
   const gameId = parts[0];
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;

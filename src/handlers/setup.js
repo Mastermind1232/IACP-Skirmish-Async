@@ -25,7 +25,7 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
 /**
  * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
@@ -372,7 +372,7 @@ export function buildPlayableMissionOptions(getPlayReadyMaps, getMissionCardsDat
  */
 export async function handleMapSelection(interaction, ctx) {
   const { getGame, getMapTypeButtons } = ctx;
-  const gameId = interaction.customId.replace('map_selection_', '');
+  const gameId = parseCustomId(interaction.customId, 'map_selection_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
@@ -422,7 +422,7 @@ export async function handleMapTypeChoice(interaction, ctx) {
   } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // Parse type and gameId from customId: map_type_{type}_{gameId}
-  const afterPrefix = interaction.customId.replace('map_type_', '');
+  const afterPrefix = parseCustomId(interaction.customId, 'map_type_');
   const types = ['competitive', 'random', 'select_draw', 'selection'];
   let type = null;
   let gameId = null;
@@ -652,7 +652,7 @@ export async function handleMapSelectionDraw(interaction, ctx) {
     client,
   } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
-  const gameId = interaction.customId.replace('map_selection_draw_', '');
+  const gameId = parseCustomId(interaction.customId, 'map_selection_draw_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (game.mapSelected) {
@@ -688,7 +688,7 @@ export async function handleMapSelectionPick(interaction, ctx) {
     client,
   } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
-  const gameId = interaction.customId.replace('map_selection_pick_', '');
+  const gameId = parseCustomId(interaction.customId, 'map_selection_pick_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (game.mapSelected) {
@@ -722,7 +722,7 @@ export async function handleMapConfirm(interaction, ctx) {
     client,
   } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
-  const gameId = interaction.customId.replace('map_confirm_', '');
+  const gameId = parseCustomId(interaction.customId, 'map_confirm_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (game.mapSelected) {
@@ -755,7 +755,7 @@ export async function handleMapConfirm(interaction, ctx) {
 export async function handleMapGoBack(interaction, ctx) {
   const { getGame, getMapTypeButtons, getMapSelectionTooltipEmbed } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
-  const gameId = interaction.customId.replace('map_goback_', '');
+  const gameId = parseCustomId(interaction.customId, 'map_goback_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (game.mapSelected) {
@@ -789,7 +789,7 @@ export async function handleDraftRandom(interaction, ctx) {
     client,
     saveGames,
   } = ctx;
-  const gameId = interaction.customId.replace('draft_random_', '');
+  const gameId = parseCustomId(interaction.customId, 'draft_random_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
@@ -827,7 +827,7 @@ export async function handleDraftRandom(interaction, ctx) {
  */
 export async function handleDetermineInitiative(interaction, ctx) {
   const { getGame, clearPreGameSetup, logGameAction, getDeploymentZoneButtons, client, saveGames } = ctx;
-  const gameId = interaction.customId.replace('determine_initiative_', '');
+  const gameId = parseCustomId(interaction.customId, 'determine_initiative_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
@@ -924,7 +924,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
 export async function handleDeploymentZone(interaction, ctx) {
   const { getGame, logGameAction, getDeployFigureLabels, getDeployButtonRows, getDeploymentMapAttachment, pushUndo, getDeploymentZoneButtons, client, saveGames } = ctx;
   const isRed = interaction.customId.startsWith('deployment_zone_red_');
-  const gameId = interaction.customId.replace(isRed ? 'deployment_zone_red_' : 'deployment_zone_blue_', '');
+  const gameId = parseCustomId(interaction.customId, isRed ? 'deployment_zone_red_' : 'deployment_zone_blue_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   // Devious Scheme: zone chooser may differ from initiative player
@@ -1850,7 +1850,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     isFigurelessDc,
     finishSetupAttachments,
   } = ctx;
-  const gameId = interaction.customId.replace('deployment_done_', '');
+  const gameId = parseCustomId(interaction.customId, 'deployment_done_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {

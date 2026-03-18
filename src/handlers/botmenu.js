@@ -13,6 +13,7 @@ import { discordCatch } from '../error-handling.js';
 import { clearBuffer, clearSeqCounter as clearEventLogSeqCounter } from '../event-log.js';
 import { clearSeqCounter as clearDomainSeqCounter } from '../domain/events.js';
 import { clearGameErrorThread } from '../discord/messages.js';
+import { parseCustomId } from '../discord/custom-id.js';
 import { cleanupCompanionEmbedDeps } from './post-deploy.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
@@ -85,7 +86,7 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
 /** Kill Game clicked: check permission, show confirmation. */
 export async function handleBotmenuKill(interaction, ctx) {
   const { getGame } = ctx;
-  const gameId = interaction.customId.replace('botmenu_kill_', '');
+  const gameId = parseCustomId(interaction.customId, 'botmenu_kill_');
   const game = getGame(gameId);
   if (!game) {
     console.warn('[botmenu] Game not found for gameId:', gameId);
@@ -111,7 +112,7 @@ export async function handleBotmenuKill(interaction, ctx) {
 /** Kill Game Yes: delete channels and game. */
 export async function handleBotmenuKillYes(interaction, ctx) {
   const { getGame, logGameErrorToBotLogs } = ctx;
-  const gameId = interaction.customId.replace('botmenu_kill_yes_', '');
+  const gameId = parseCustomId(interaction.customId, 'botmenu_kill_yes_');
   const game = getGame(gameId);
   if (!game) {
     await interaction.editReply({ content: 'Game not found.', components: [] }).catch(discordCatch);
@@ -144,7 +145,7 @@ export async function handleBotmenuKillNo(interaction, ctx) {
 /** Forfeit clicked: check participant, show confirmation. */
 export async function handleForfeit(interaction, ctx) {
   const { getGame } = ctx;
-  const gameId = interaction.customId.replace('forfeit_', '');
+  const gameId = parseCustomId(interaction.customId, 'forfeit_');
   const game = getGame(gameId);
   if (!game) {
     await interaction.editReply({ content: 'Game not found.', components: [] }).catch(discordCatch);
@@ -167,7 +168,7 @@ export async function handleForfeit(interaction, ctx) {
 /** Forfeit Yes: end game cleanly via postGameOver. */
 export async function handleForfeitYes(interaction, ctx) {
   const { getGame, postGameOver, logGameErrorToBotLogs } = ctx;
-  const gameId = interaction.customId.replace('forfeit_yes_', '');
+  const gameId = parseCustomId(interaction.customId, 'forfeit_yes_');
   const game = getGame(gameId);
   if (!game) {
     await interaction.editReply({ content: 'Game not found.', components: [] }).catch(discordCatch);

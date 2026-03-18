@@ -37,7 +37,7 @@ import {
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
@@ -189,7 +189,7 @@ export async function handleStatusPhase(interaction, ctx) {
     saveGames,
     client,
   } = ctx;
-  const gameId = interaction.customId.replace('status_phase_', '');
+  const gameId = parseCustomId(interaction.customId, 'status_phase_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -266,7 +266,7 @@ export async function handleStatusPhase(interaction, ctx) {
  */
 export async function handlePassActivationTurn(interaction, ctx) {
   const { getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames } = ctx;
-  const gameId = interaction.customId.replace('pass_activation_turn_', '');
+  const gameId = parseCustomId(interaction.customId, 'pass_activation_turn_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -804,7 +804,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     client,
     saveGames,
   } = ctx;
-  const msgId = interaction.customId.replace('dc_end_activation_', '');
+  const msgId = parseCustomId(interaction.customId, 'dc_end_activation_');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
@@ -3447,7 +3447,7 @@ export async function handleScFigPick(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, dcMessageMeta, saveGames, logGameAction, client } = ctx;
   // Parse: sc_fig_pick_{gameId}_{activatingMsgId}_{rest}
-  const full = interaction.customId.replace(/^sc_fig_pick_/, '');
+  const full = parseCustomId(interaction.customId, 'sc_fig_pick_');
   const firstUs = full.indexOf('_');
   const gameId = full.slice(0, firstUs);
   const rest = full.slice(firstUs + 1);
@@ -3515,7 +3515,7 @@ export async function handleHairTriggerUse(interaction, ctx) {
   const { getGame, saveGames, client, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // hair_trigger_use_{gameId}_{htMsgId}_{figureKey}
-  const suffix = interaction.customId.replace('hair_trigger_use_', '');
+  const suffix = parseCustomId(interaction.customId, 'hair_trigger_use_');
   const parts = suffix.split('_');
   const gameId = parts[0];
   const htMsgId = parts[1];
@@ -3547,7 +3547,7 @@ export async function handleHairTriggerSkip(interaction, ctx) {
   const { getGame, saveGames } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // hair_trigger_skip_{gameId}_{figureKey}
-  const suffix = interaction.customId.replace('hair_trigger_skip_', '');
+  const suffix = parseCustomId(interaction.customId, 'hair_trigger_skip_');
   const parts = suffix.split('_');
   const gameId = parts[0];
   const game = getGame(gameId);

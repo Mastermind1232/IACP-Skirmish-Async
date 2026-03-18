@@ -26,7 +26,7 @@ import { checkStartOfRoundPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { FIGURE_LETTERS, chunkButtonsToRows } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
-import { splitCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /** Sync a healthState array back to the player's dcList entry. */
@@ -98,7 +98,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     postKryknaPushButtons,
     client,
   } = ctx;
-  const gameId = interaction.customId.replace('end_end_of_round_', '');
+  const gameId = parseCustomId(interaction.customId, 'end_end_of_round_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -1164,7 +1164,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
     PHASE_COLOR,
     client,
   } = ctx;
-  const gameId = interaction.customId.replace('end_start_of_round_', '');
+  const gameId = parseCustomId(interaction.customId, 'end_start_of_round_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -1830,7 +1830,7 @@ export async function handleImpCitadel(interaction, ctx) {
 export async function handleProgrammingOverride(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, logGameAction, client, saveGames } = ctx;
-  const withoutPrefix = interaction.customId.replace('prog_override_', '');
+  const withoutPrefix = parseCustomId(interaction.customId, 'prog_override_');
   const parts = withoutPrefix.split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -1851,7 +1851,7 @@ export async function handleProgrammingOverride(interaction, ctx) {
 export async function handleDoubtFigPick(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames, logGameAction, client } = ctx;
-  const full = interaction.customId.replace(/^doubt_fig_/, '');
+  const full = parseCustomId(interaction.customId, 'doubt_fig_');
   const parts = full.split('_');
   const gameId = parts[0];
   const pn = parseInt(parts[1], 10);
@@ -1913,7 +1913,7 @@ export async function handleDoubtFigPick(interaction, ctx) {
 export async function handleDoubtRemove(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames, logGameAction, client } = ctx;
-  const full = interaction.customId.replace(/^doubt_remove_/, '');
+  const full = parseCustomId(interaction.customId, 'doubt_remove_');
   // Last two parts are type and index; everything before (after gameId and pn) is the figureKey
   const parts = full.split('_');
   const gameId = parts[0];

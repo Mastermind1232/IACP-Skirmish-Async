@@ -13,6 +13,7 @@ import {
   ccHandKey, ccDiscardKey,
 } from '../game/player-helpers.js';
 import { dcNameFromFigureKey } from '../game/index.js';
+import { parseCustomId } from '../discord/custom-id.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
@@ -335,7 +336,7 @@ export async function startDefenderThreadForFastForward(game, defenderPlayerNum,
  * @param {object} ctx
  */
 export async function handleFastForward(interaction, ctx) {
-  const gameId = interaction.customId.replace('fast_forward_', '');
+  const gameId = parseCustomId(interaction.customId, 'fast_forward_');
   const { getGame, saveGames, logGameAction, client } = ctx;
 
   const game = await requireGame(interaction, getGame, gameId);
@@ -400,7 +401,7 @@ export async function handleFastForward(interaction, ctx) {
 export async function handleDefenderCcPlay(interaction, ctx) {
   // customId: dc_cc_defender_{gameId}_{msgId}_{idx}
   // gameId and msgId are digit-only strings; idx is a small integer
-  const idWithoutPrefix = interaction.customId.replace('dc_cc_defender_', '');
+  const idWithoutPrefix = parseCustomId(interaction.customId, 'dc_cc_defender_');
   const parts = idWithoutPrefix.split('_');
   if (parts.length < 3) {
     await interaction.followUp({ content: 'Invalid defender CC button.', ephemeral: true }).catch(discordCatch);

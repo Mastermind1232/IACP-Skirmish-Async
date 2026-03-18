@@ -5,6 +5,7 @@
 import { COLORS } from '../discord/colors.js';
 import { CURRENT_GAME_VERSION } from '../game-state.js';
 import { PHASES } from '../game/phase.js';
+import { parseCustomId } from '../discord/custom-id.js';
 
 /**
  * Handle Join Game button in a lobby post.
@@ -20,7 +21,7 @@ export async function handleLobbyJoin(interaction, ctx) {
     getLobbyStartButton,
     updateThreadName,
   } = ctx;
-  const threadId = interaction.customId.replace('lobby_join_', '');
+  const threadId = parseCustomId(interaction.customId, 'lobby_join_');
   const lobby = lobbies.get(threadId);
   if (!lobby) {
     await interaction.followUp({ content: 'This lobby could not be found. If the bot was recently restarted, try again in a moment — lobbies are restored automatically. Otherwise, please create a new game in **#new-games**.', ephemeral: true });
@@ -76,7 +77,7 @@ export async function handleLobbyStart(interaction, ctx) {
     updateThreadName,
     EmbedBuilder,
   } = ctx;
-  const threadId = interaction.customId.replace('lobby_start_', '');
+  const threadId = parseCustomId(interaction.customId, 'lobby_start_');
   const lobby = lobbies.get(threadId);
   if (!lobby || !lobby.joinedId) {
     await interaction.followUp({ content: 'Both players must join before starting. Player 2 has not joined yet.', ephemeral: true });
