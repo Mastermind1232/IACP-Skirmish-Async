@@ -147,11 +147,9 @@ export async function handleFavNameModal(interaction, ctx) {
     return;
   }
   const { getGame, pendingSquadConfirm, PENDING_ILLEGAL_TTL_MS } = ctx;
-  // fav_name_modal_{gameId}_{playerNum}
-  const parts = interaction.customId.split('_');
-  const gameId = parts[3];
-  const playerNumStr = parts[4];
-  const playerNum = parseInt(playerNumStr, 10);
+  const parts = splitCustomId(interaction.customId, 'fav_name_modal_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
   const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this hand can save favorites.', { useReply: true })) return;
@@ -305,10 +303,9 @@ export async function handleFavRenameModal(interaction, ctx) {
     return;
   }
   const { getGame, pendingSquadConfirm, PENDING_ILLEGAL_TTL_MS } = ctx;
-  const parts = interaction.customId.split('_');
-  // fav_rename_modal_{gameId}_{playerNum}
-  const gameId = parts[3];
-  const playerNum = parseInt(parts[4], 10);
+  const parts = splitCustomId(interaction.customId, 'fav_rename_modal_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
   const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this hand can rename favorites.', { useReply: true })) return;
@@ -596,8 +593,7 @@ export async function handleFavListRenameModal(interaction, ctx) {
     await interaction.reply({ content: UNAVAILABLE_MSG, ephemeral: true }).catch(discordCatch);
     return;
   }
-  // fav_list_rename_modal_{favoriteId}
-  const favoriteId = parseInt(interaction.customId.replace('fav_list_rename_modal_', ''), 10);
+  const favoriteId = parseInt(splitCustomId(interaction.customId, 'fav_list_rename_modal_')[0], 10);
   const userId = interaction.user.id;
   const fav = await getFavoriteDeckById(userId, favoriteId);
   if (!fav) {
