@@ -145,7 +145,7 @@ function getInitiativeActions(game, playerNum) {
   return [{
     type: ACTION_TYPES.DETERMINE_INITIATIVE,
     customId: buildCustomId(ACTION_TYPES.DETERMINE_INITIATIVE, { gameId: game.gameId }),
-    description: 'Roll for initiative',
+    description: 'Determine initiative',
   }];
 }
 
