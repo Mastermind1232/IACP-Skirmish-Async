@@ -114,8 +114,8 @@ import { handleSelectMap as cmdSelectMap, handleConfirmMap as cmdConfirmMap, han
 import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDcEndActivation } from './src/domain/commands/dc-play-area-commands.js';
 import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
-import { runSelfPlayLoop, stopSelfPlay, getActiveSelfPlayGameId } from './src/ai/self-play.js';
-import { startQueue, stopQueue, pauseQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
+import { getActiveSelfPlayGameId } from './src/ai/self-play.js';
+import { startQueue, stopQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
 import { snowflakeUsers, sanitizeMentions } from './src/discord/channel-helpers.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
@@ -1756,15 +1756,9 @@ client.once('ready', async () => {
       .setDescription('View, rename, or remove your saved favorite decks.');
     const selfplay = new SlashCommandBuilder()
       .setName('selfplay')
-      .setDescription('Dev-only AI-vs-AI self-play test (admin only).')
-      .addStringOption((o) => o.setName('action').setDescription('start, stop, status, queue-start/stop/pause/resume/status').setRequired(true)
-        .addChoices(
-          { name: 'start', value: 'start' }, { name: 'stop', value: 'stop' }, { name: 'status', value: 'status' },
-          { name: 'queue-start', value: 'queue-start' }, { name: 'queue-stop', value: 'queue-stop' },
-          { name: 'queue-pause', value: 'queue-pause' }, { name: 'queue-resume', value: 'queue-resume' },
-          { name: 'queue-status', value: 'queue-status' },
-        ))
-      .addStringOption((o) => o.setName('scenario').setDescription('Scenario ID for start (optional)').setRequired(false));
+      .setDescription('Dev-only AI-vs-AI self-play (admin only). Cycles through all scenarios.')
+      .addStringOption((o) => o.setName('action').setDescription('start, stop, or status').setRequired(true)
+        .addChoices({ name: 'start', value: 'start' }, { name: 'stop', value: 'stop' }, { name: 'status', value: 'status' }));
     const commandBody = [
       botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
       events.toJSON(), playai.toJSON(), addai.toJSON(),
@@ -2978,174 +2972,83 @@ client.on('interactionCreate', async (interaction) => {
       const action = interaction.options.getString('action');
 
       if (action === 'status') {
-        const activeId = getActiveSelfPlayGameId();
-        await interaction.reply({
-          content: activeId ? `Self-play active: game **${activeId}**` : 'No self-play running.',
-          ephemeral: true,
-        }).catch(discordCatch);
-        return;
-      }
-
-      if (action === 'stop') {
-        const stoppedId = stopSelfPlay(getGame);
-        await interaction.reply({
-          content: stoppedId ? `Stopping self-play for game **${stoppedId}**.` : 'No self-play running.',
-          ephemeral: true,
-        }).catch(discordCatch);
-        return;
-      }
-
-      // ── Queue commands ───────────────────────────────────────────────────────
-      if (action === 'queue-start') {
-        const SELFPLAY_SCENARIOS_Q = IMPLEMENTED_SCENARIOS.filter(s => !['eor_cc_window', 'sor_cc_window', 'mid_combat'].includes(s));
-        try {
-          startQueue({
-            client,
-            guild: interaction.guild,
-            guildId: interaction.guild.id,
-            buildAllDeps,
-            getGame,
-            atomicOpts,
-            actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState },
-            createTestGame,
-            deleteGameChannelsAndGame,
-            cleanupCtx: {
-              client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
-              deleteGameFromDb,
-            },
-            scenarios: SELFPLAY_SCENARIOS_Q,
-            interGameDelayMs: 5000,
-            actionCap: 500,
-            delayMs: 200,
-            feedbackChannel: interaction.channel,
-            logChannel: interaction.channel,
-            saveGames,
-            AI_USER_PREFIX,
-            botLogsPost: async (artifact) => {
-              try {
-                await logGameErrorToBotLogs(client, interaction.guild, artifact.game_id,
-                  new Error(`Self-play queue ${artifact.stop_reason}: ${artifact.error_message || 'no details'}`),
-                  'selfplay-queue');
-              } catch {}
-            },
-          });
-          await interaction.reply({
-            content: `**Queue started** — ${SELFPLAY_SCENARIOS_Q.length} scenarios, round-robin. Use \`/selfplay queue-status\` to check progress.`,
-            ephemeral: false,
-          }).catch(discordCatch);
-        } catch (err) {
-          await interaction.reply({ content: `Queue start failed: ${err.message}`, ephemeral: true }).catch(discordCatch);
-        }
-        return;
-      }
-
-      if (action === 'queue-stop') {
-        try {
-          stopQueue();
-          await interaction.reply({ content: 'Queue draining (will stop after current run).', ephemeral: false }).catch(discordCatch);
-        } catch (err) {
-          await interaction.reply({ content: err.message, ephemeral: true }).catch(discordCatch);
-        }
-        return;
-      }
-
-      if (action === 'queue-pause') {
-        try {
-          pauseQueue('manual');
-          await interaction.reply({ content: 'Queue paused. Use `/selfplay queue-resume` to continue.', ephemeral: false }).catch(discordCatch);
-        } catch (err) {
-          await interaction.reply({ content: err.message, ephemeral: true }).catch(discordCatch);
-        }
-        return;
-      }
-
-      if (action === 'queue-resume') {
-        try {
-          resumeQueue();
-          await interaction.reply({ content: 'Queue resumed.', ephemeral: false }).catch(discordCatch);
-        } catch (err) {
-          await interaction.reply({ content: err.message, ephemeral: true }).catch(discordCatch);
-        }
-        return;
-      }
-
-      if (action === 'queue-status') {
         const qs = getQueueStatus();
+        const activeId = getActiveSelfPlayGameId();
+        if (qs.state === 'idle' && !activeId) {
+          await interaction.reply({ content: 'Self-play idle.', ephemeral: true }).catch(discordCatch);
+          return;
+        }
         const lines = [
-          `**Queue state:** ${qs.state}`,
+          `**State:** ${qs.state}`,
           `**Runs:** ${qs.runCount} (${qs.failCount} failed)`,
           `**Current scenario:** ${qs.currentRunScenario || 'none'}`,
           `**Rotation:** ${qs.rotationIndex} / ${qs.totalScenarios} scenarios`,
         ];
+        if (activeId) lines.push(`**Active game:** ${activeId}`);
         if (qs.pauseReason) lines.push(`**Pause reason:** ${qs.pauseReason}`);
         await interaction.reply({ content: lines.join('\n'), ephemeral: true }).catch(discordCatch);
         return;
       }
 
-      // action === 'start'
-      if (getActiveSelfPlayGameId()) {
-        await interaction.reply({ content: `Self-play already running: game **${getActiveSelfPlayGameId()}**. Use \`/selfplay stop\` first.`, ephemeral: true }).catch(discordCatch);
+      if (action === 'stop') {
+        try {
+          stopQueue();
+          await interaction.reply({ content: 'Self-play stopping after current game.', ephemeral: false }).catch(discordCatch);
+        } catch (err) {
+          await interaction.reply({ content: err.message, ephemeral: true }).catch(discordCatch);
+        }
         return;
       }
-      // Self-play requires a scenario that auto-deploys to round 1 (runDraftRandom).
-      // Phase-jump mutators (eor_cc_window, sor_cc_window, mid_combat) need PHASE_JUMP_ALLOWED_USERS — skip them.
+
+      // action === 'start' — begin self-play, or resume if paused
+      const qs = getQueueStatus();
+      if (qs.state === 'paused') {
+        try {
+          resumeQueue();
+          await interaction.reply({ content: `**Self-play resumed** — was paused (${qs.pauseReason || 'unknown'}). Run ${qs.runCount + 1} next.`, ephemeral: false }).catch(discordCatch);
+        } catch (err) {
+          await interaction.reply({ content: err.message, ephemeral: true }).catch(discordCatch);
+        }
+        return;
+      }
       const SELFPLAY_SCENARIOS = IMPLEMENTED_SCENARIOS.filter(s => !['eor_cc_window', 'sor_cc_window', 'mid_combat'].includes(s));
-      const userScenario = interaction.options.getString('scenario') || null;
-      const scenarioId = userScenario || SELFPLAY_SCENARIOS[Math.floor(Math.random() * SELFPLAY_SCENARIOS.length)];
-      await interaction.deferReply({ ephemeral: false }).catch(discordCatch);
       try {
-        const aiP1 = `${AI_USER_PREFIX}1`;
-        const aiP2 = `${AI_USER_PREFIX}2`;
-        const { gameId } = await createTestGame(client, interaction.guild, aiP1, scenarioId, interaction.channel, { player2Id: aiP2 });
-        const game = getGame(gameId);
-        if (!game) throw new Error('Game creation returned no game state');
-        game.selfPlay = true;
-        game.guildId = interaction.guild.id;
-        saveGames();
-
-        await interaction.editReply({
-          content: `**Self-play started** — game **${gameId}**${scenarioId ? ` (scenario: ${scenarioId})` : ''}. Use \`/selfplay stop\` to halt.`,
+        startQueue({
+          client,
+          guild: interaction.guild,
+          guildId: interaction.guild.id,
+          buildAllDeps,
+          getGame,
+          atomicOpts,
+          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState },
+          createTestGame,
+          deleteGameChannelsAndGame,
+          cleanupCtx: {
+            client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+            deleteGameFromDb,
+          },
+          scenarios: SELFPLAY_SCENARIOS,
+          interGameDelayMs: 5000,
+          actionCap: 500,
+          delayMs: 200,
+          feedbackChannel: interaction.channel,
+          logChannel: interaction.channel,
+          saveGames,
+          AI_USER_PREFIX,
+          botLogsPost: async (artifact) => {
+            try {
+              await logGameErrorToBotLogs(client, interaction.guild, artifact.game_id,
+                new Error(`Self-play ${artifact.stop_reason}: ${artifact.error_message || 'no details'}`),
+                'selfplay');
+            } catch {}
+          },
+        });
+        await interaction.reply({
+          content: `**Self-play started** — ${SELFPLAY_SCENARIOS.length} scenarios, round-robin. Use \`/selfplay status\` to check.`,
+          ephemeral: false,
         }).catch(discordCatch);
-
-        // Run the self-play loop asynchronously
-        (async () => {
-          try {
-            const { result, artifact } = await runSelfPlayLoop(game, client, {
-              buildAllDeps,
-              getGame,
-              atomicOpts,
-              actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState },
-              scenario: scenarioId,
-              guildId: interaction.guild.id,
-              actionCap: 500,
-              delayMs: 200,
-            });
-            // Post summary to channel
-            const summary = [
-              `**Self-play finished** — game **${artifact.game_id}**`,
-              `Scenario: ${artifact.scenario || 'none'} | Result: **${result}** | Stop: ${artifact.stop_reason}`,
-              `Steps: ${artifact.total_steps} | Last action: \`${artifact.last_action || 'none'}\``,
-            ].join('\n');
-            try {
-              await interaction.channel.send(summary);
-            } catch {}
-            if (result === 'failed') {
-              try {
-                await logGameErrorToBotLogs(client, interaction.guild, artifact.game_id,
-                  new Error(`Self-play ${artifact.stop_reason}: ${artifact.error_message || 'no details'}`),
-                  'selfplay');
-              } catch {}
-            }
-          } catch (err) {
-            console.error('[selfplay] Loop error:', err.message);
-            try {
-              await interaction.channel.send(`**Self-play error** — ${err.message}`);
-            } catch {}
-          }
-        })();
       } catch (err) {
-        console.error('/selfplay start error:', err);
-        await interaction.editReply({ content: `Failed to start self-play: ${err.message}` }).catch(discordCatch);
+        await interaction.reply({ content: `Start failed: ${err.message}`, ephemeral: true }).catch(discordCatch);
       }
       return;
     }

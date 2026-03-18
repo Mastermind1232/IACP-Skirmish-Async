@@ -47,7 +47,10 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
     dcExhaustedState,
     dcHealthState,
     deleteGameFromDb,
+    channelDeleteGuard,
   } = ctx;
+  // Mark this game so the channelDelete listener ignores bot-initiated deletions
+  if (channelDeleteGuard) channelDeleteGuard.add(gameId);
   let categoryId = game.gameCategoryId;
   if (!categoryId) {
     const generalCh = await fetchGameChannel(client, game.generalId);
@@ -65,6 +68,7 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
       console.error('deleteGameChannelsAndGame:', err);
     }
   }
+  if (channelDeleteGuard) channelDeleteGuard.delete(gameId);
   deleteGame(gameId);
   cleanupGameLock(gameId);
   clearBuffer(gameId);

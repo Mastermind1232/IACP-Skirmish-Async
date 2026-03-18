@@ -25,7 +25,7 @@ let queueOpts = null;
  */
 export function startQueue(opts) {
   if (queueState !== 'idle') {
-    throw new Error(`Queue is ${queueState}, cannot start. Use queue-stop first.`);
+    throw new Error(`Self-play is ${queueState}, cannot start. Use /selfplay stop first.`);
   }
   if (getActiveSelfPlayGameId()) {
     throw new Error(`Self-play already active for game ${getActiveSelfPlayGameId()}. Stop it first.`);
@@ -49,20 +49,20 @@ export function startQueue(opts) {
 
 /** Drain the queue (finish current run, then stop). */
 export function stopQueue() {
-  if (queueState === 'idle') throw new Error('Queue is not running.');
+  if (queueState === 'idle') throw new Error('Self-play is not running.');
   queueState = 'draining';
 }
 
 /** Pause the queue after the current run completes. */
 export function pauseQueue(reason = 'manual') {
-  if (queueState !== 'running') throw new Error(`Queue is ${queueState}, cannot pause.`);
+  if (queueState !== 'running') throw new Error(`Self-play is ${queueState}, cannot pause.`);
   queueState = 'paused';
   pauseReason = reason;
 }
 
 /** Resume a paused queue. */
 export function resumeQueue() {
-  if (queueState !== 'paused') throw new Error(`Queue is ${queueState}, cannot resume.`);
+  if (queueState !== 'paused') throw new Error(`Self-play is ${queueState}, cannot resume.`);
   queueState = 'running';
   pauseReason = null;
 }
@@ -176,7 +176,7 @@ async function _runQueueLoop() {
 
       // 4. Post summary to logChannel
       const summary = [
-        `**Queue run #${runNum}** — ${scenarioId} (${scenarioIdx + 1}/${scenarios.length})`,
+        `**Run #${runNum}** — ${scenarioId} (${scenarioIdx + 1}/${scenarios.length})`,
         `Result: **${result}** | Stop: ${artifact?.stop_reason || 'unknown'}`,
         `Steps: ${artifact?.total_steps ?? 0} | Handlers: ${artifact?.exercised_handlers?.length ?? '?'} | Actions: ${artifact?.seen_action_types?.length ?? '?'}`,
       ].join('\n');

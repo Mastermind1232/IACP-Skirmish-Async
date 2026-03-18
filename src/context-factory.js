@@ -203,6 +203,7 @@ const CONTEXT_GROUPS = {
   botmenu: [
     'getGame', 'deleteGame', 'saveGames', 'dcMessageMeta', 'dcExhaustedState',
     'dcHealthState', 'logGameErrorToBotLogs', 'client', 'deleteGameFromDb',
+    'channelDeleteGuard',
   ],
 
   forfeit: [
@@ -227,6 +228,7 @@ const CONTEXT_GROUPS = {
   killGame: [
     'getGame', 'deleteGame', 'saveGames', 'dcMessageMeta', 'dcExhaustedState',
     'dcHealthState', 'logGameErrorToBotLogs', 'client', 'deleteGameFromDb',
+    'channelDeleteGuard',
   ],
 
   defaultDeck: [
