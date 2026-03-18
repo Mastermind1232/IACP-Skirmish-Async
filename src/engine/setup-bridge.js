@@ -207,7 +207,7 @@ export async function runDraftRandom(game, client, deps, options = {}) {
       game,
       client,
       `<@${winner}> (**Player ${playerNum}**) won initiative! Chooses deployment zone and activates first each round.`,
-      { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' }
+      { allowedMentions: { users: snowflakeUsers([winner]) }, phase: 'INITIATIVE', icon: 'initiative' }
     );
   }
   if (!game.deploymentZoneChosen) {
@@ -224,7 +224,7 @@ export async function runDraftRandom(game, client, deps, options = {}) {
       game,
       client,
       `<@${game.initiativePlayerId}> (${zoneLabel}**Player ${initiativePlayerNum}**) chose the **${zone}** deployment zone`,
-      { allowedMentions: { users: [game.initiativePlayerId] }, phase: 'INITIATIVE', icon: 'zone' }
+      { allowedMentions: { users: snowflakeUsers([game.initiativePlayerId]) }, phase: 'INITIATIVE', icon: 'zone' }
     );
   }
 
@@ -325,7 +325,7 @@ export async function runDraftRandom(game, client, deps, options = {}) {
     game[handKey] = hand;
     game[drawnKey] = true;
     const playerId = deps.getPlayerId(game, playerNum);
-    await deps.logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
+    await deps.logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: snowflakeUsers([playerId]) } });
     const handChannelId = deps.getHandChannelId(game, playerNum);
     const handChannel = await fetchGameChannel(client, handChannelId);
     const existingMsgs = await handChannel.messages.fetch({ limit: 5 });

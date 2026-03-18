@@ -52,8 +52,8 @@ export async function createPlayAreaChannels(guild, gameCategory, prefix, player
   const p2Name = await getPlayerChannelName(guild, player2Id);
   const playAreaPerms = [
     { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages },
+    ...(isDiscordSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages }] : []),
+    ...(isDiscordSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages }] : []),
     { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.CreatePrivateThreads | PermissionFlagsBits.ManageThreads | PermissionFlagsBits.SendMessagesInThreads },
   ];
   const p1 = await guild.channels.create({
@@ -85,14 +85,14 @@ export async function createHandThreads(client, game, deps) {
     type: ChannelType.PrivateThread,
     invitable: false,
   });
-  await p1Thread.members.add(game.player1Id).catch(discordCatch);
+  if (isDiscordSnowflake(game.player1Id)) await p1Thread.members.add(game.player1Id).catch(discordCatch);
   const p2Thread = await p2PlayArea.threads.create({
     name: 'Your Hand',
     autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
     type: ChannelType.PrivateThread,
     invitable: false,
   });
-  await p2Thread.members.add(game.player2Id).catch(discordCatch);
+  if (isDiscordSnowflake(game.player2Id)) await p2Thread.members.add(game.player2Id).catch(discordCatch);
   game.p1HandId = p1Thread.id;
   game.p2HandId = p2Thread.id;
   return { p1HandThread: p1Thread, p2HandThread: p2Thread };
@@ -169,8 +169,8 @@ export async function createBoardChannel(guild, gameCategory, prefix, player1Id,
   const botId = guild.client.user.id;
   const boardPerms = [
     { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
+    ...(isDiscordSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages }] : []),
+    ...(isDiscordSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages }] : []),
     { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
   ];
   return await guild.channels.create({
