@@ -21,7 +21,7 @@ import { renderBoardState, renderTurnPrompt } from './pvp-renderer.js';
 import { getAvailableActions } from '../engine/available-actions.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
-import { fetchGameChannel } from './channel-helpers.js';
+import { fetchGameChannel, snowflakeUsers } from './channel-helpers.js';
 
 // ── Thread Creation ─────────────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ export async function archiveGameThread(game, client, summary = {}) {
 
     await thread.send({
       content: `**Game Over** — ${winnerText}${reason ? ` (${reason})` : ''}\nFinal score: P1 ${vp1} — P2 ${vp2}`,
-      allowedMentions: { users: [game.player1Id, game.player2Id] },
+      allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
     }).catch(discordCatch);
 
     // Lock and archive

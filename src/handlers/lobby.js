@@ -6,6 +6,7 @@ import { COLORS } from '../discord/colors.js';
 import { CURRENT_GAME_VERSION } from '../game-state.js';
 import { PHASES } from '../game/phase.js';
 import { parseCustomId } from '../discord/custom-id.js';
+import { snowflakeUsers } from '../discord/channel-helpers.js';
 
 /**
  * Handle Join Game button in a lobby post.
@@ -141,7 +142,7 @@ export async function handleLobbyStart(interaction, ctx) {
 
     const setupMsg = await generalChannel.send({
       content: `<@${game.player1Id}> <@${game.player2Id}>`,
-      allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
+      allowedMentions: { users: snowflakeUsers([...new Set([game.player1Id, game.player2Id])]) },
       embeds: [
         new EmbedBuilder()
           .setTitle('Game Setup')

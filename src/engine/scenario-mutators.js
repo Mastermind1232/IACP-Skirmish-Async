@@ -9,7 +9,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
-import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
 
 // ── Error class ──────────────────────────────────────────────────────────────
 
@@ -255,7 +255,7 @@ async function mutateToCombat(game, client, deps, userId) {
   await generalChannel.send({
     content: `**Pre-combat window** — <@${game.player1Id}> (attacker: **${attackerDcName}**) vs <@${game.player2Id}> (defender: **${defenderDcName}**)\nBoth players: resolve any Command Cards, etc. When ready, click **Ready to roll combat dice**.`,
     components: [readyRow],
-    allowedMentions: { users: [game.player1Id, game.player2Id] },
+    allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
 
   await updatePlayAreaDcButtons(game, client);

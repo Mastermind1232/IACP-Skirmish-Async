@@ -16,15 +16,9 @@ import {
 } from 'discord.js';
 import { PHASES } from './game/phase.js';
 import { discordCatch } from './error-handling.js';
-import { fetchGameChannel } from './discord/channel-helpers.js';
+import { fetchGameChannel, isDiscordSnowflake, snowflakeUsers } from './discord/channel-helpers.js';
 import { computeDeckHash } from './game/deck-hash.js';
 import { getFavoriteDeckByHash } from './db.js';
-
-/** Check if a string is a valid Discord snowflake (for filtering synthetic AI user IDs). */
-const isDiscordSnowflake = (id) => /^\d{17,20}$/.test(id);
-
-/** Filter an array of user IDs to only valid snowflakes (safe for allowedMentions). */
-const snowflakeUsers = (ids) => ids.filter(isDiscordSnowflake);
 
 /**
  * Sanitize a display name for use in Discord channel names.

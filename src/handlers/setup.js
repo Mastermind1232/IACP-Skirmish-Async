@@ -23,7 +23,7 @@ import { dcNameFromFigureKey, isFigurelessDc } from '../game/index.js';
 import { stripBrackets, cardNameEquals } from '../game/card-names.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
-import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
@@ -847,7 +847,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
     if (generalChannel) {
       await generalChannel.send({
         content: `⚠️ **Initiative blocked** — Squad selection required first.\n\nStill needed: ${missing.join(', ')}`,
-        allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
+        allowedMentions: { users: snowflakeUsers([...new Set([game.player1Id, game.player2Id])]) },
       }).catch(discordCatch);
     }
     return;

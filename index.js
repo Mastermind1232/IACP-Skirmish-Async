@@ -115,6 +115,7 @@ import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDc
 import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
 import { runSelfPlayLoop, stopSelfPlay, getActiveSelfPlayGameId } from './src/ai/self-play.js';
+import { snowflakeUsers } from './src/discord/channel-helpers.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
   getMissionTokenLabel as _getMissionTokenLabelPure,
@@ -3198,17 +3199,17 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
       if (!p1HasSquad && !p2HasSquad) {
-        await logGameAction(game, client, `🔔 **Nudge** — <@${game.player1Id}> <@${game.player2Id}> it's time to submit your squads!`, { allowedMentions: { users: [game.player1Id, game.player2Id] } }).catch(discordCatch);
+        await logGameAction(game, client, `🔔 **Nudge** — <@${game.player1Id}> <@${game.player2Id}> it's time to submit your squads!`, { allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) } }).catch(discordCatch);
         await interaction.followUp({ content: 'Pinged both players to submit squads.', ephemeral: true }).catch(discordCatch);
         return;
       }
       if (!p1HasSquad) {
-        await logGameAction(game, client, `🔔 **Nudge** — <@${game.player1Id}> Squad submission is pending.`, { allowedMentions: { users: [game.player1Id] } }).catch(discordCatch);
+        await logGameAction(game, client, `🔔 **Nudge** — <@${game.player1Id}> Squad submission is pending.`, { allowedMentions: { users: snowflakeUsers([game.player1Id]) } }).catch(discordCatch);
         await interaction.followUp({ content: `Pinged <@${game.player1Id}>.`, ephemeral: true }).catch(discordCatch);
         return;
       }
       if (!p2HasSquad) {
-        await logGameAction(game, client, `🔔 **Nudge** — <@${game.player2Id}> Squad submission is pending.`, { allowedMentions: { users: [game.player2Id] } }).catch(discordCatch);
+        await logGameAction(game, client, `🔔 **Nudge** — <@${game.player2Id}> Squad submission is pending.`, { allowedMentions: { users: snowflakeUsers([game.player2Id]) } }).catch(discordCatch);
         await interaction.followUp({ content: `Pinged <@${game.player2Id}>.`, ephemeral: true }).catch(discordCatch);
         return;
       }

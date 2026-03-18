@@ -8,6 +8,7 @@ import { dcNameFromFigureKey } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { getDeploymentZones } from '../data-loader.js';
 import { getPlayerOccupiedCellsForControl } from './board-helpers.js';
+import { snowflakeUsers } from '../discord/channel-helpers.js';
 
 function normalizeCoord(c) {
   if (c == null || typeof c !== 'string') return '';
@@ -149,14 +150,14 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
       if (p1Vp > 0) {
         awardObjectiveVp(game, 1, p1Vp);
         const msg = vpMessage ? vpMessage.replace('{vp}', String(p1Vp)) : `mission objective`;
-        await logGameAction(game, client, `<@${game.player1Id}> gained **${p1Vp} VP** — ${msg}.`, { allowedMentions: { users: [game.player1Id] }, phase: 'ROUND', icon: 'round' });
+        await logGameAction(game, client, `<@${game.player1Id}> gained **${p1Vp} VP** — ${msg}.`, { allowedMentions: { users: snowflakeUsers([game.player1Id]) }, phase: 'ROUND', icon: 'round' });
         await checkWinConditions(game, client);
         if (game.ended) return { gameEnded: true };
       }
       if (p2Vp > 0) {
         awardObjectiveVp(game, 2, p2Vp);
         const msg = vpMessage ? vpMessage.replace('{vp}', String(p2Vp)) : `mission objective`;
-        await logGameAction(game, client, `<@${game.player2Id}> gained **${p2Vp} VP** — ${msg}.`, { allowedMentions: { users: [game.player2Id] }, phase: 'ROUND', icon: 'round' });
+        await logGameAction(game, client, `<@${game.player2Id}> gained **${p2Vp} VP** — ${msg}.`, { allowedMentions: { users: snowflakeUsers([game.player2Id]) }, phase: 'ROUND', icon: 'round' });
         await checkWinConditions(game, client);
         if (game.ended) return { gameEnded: true };
       }

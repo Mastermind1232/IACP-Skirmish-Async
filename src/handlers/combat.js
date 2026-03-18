@@ -20,7 +20,7 @@ import {
 } from '../game/player-helpers.js';
 import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
-import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchCombatThread, fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
@@ -1033,7 +1033,7 @@ export async function handleAttackTarget(interaction, ctx) {
   const generalChannel = await fetchGameChannel(client, game.generalId);
   const declareMsg = await generalChannel.send({
     content: `${ACTION_ICONS.attack || '⚔️'} <t:${Math.floor(Date.now() / 1000)}:t> — ${combatDeclare}`,
-    allowedMentions: { users: [game.player1Id, game.player2Id] },
+    allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
   const thread = await declareMsg.startThread({
     name: `Combat: P${attackerPlayerNum} vs P${defenderPlayerNum}`,
@@ -5555,7 +5555,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const generalChannel = await fetchGameChannel(client, game.generalId);
   const declareMsg = await generalChannel.send({
     content: `${ACTION_ICONS?.attack || '⚔️'} <t:${Math.floor(Date.now() / 1000)}:t> — ${combatDeclare}`,
-    allowedMentions: { users: [game.player1Id, game.player2Id] },
+    allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
   const thread = await declareMsg.startThread({
     name: `Combat (False Orders): P${controllerPlayerNum} vs P${defenderPlayerNum}`,

@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { COLORS } from './discord/colors.js';
+import { snowflakeUsers } from './discord/channel-helpers.js';
 import { renderMap } from './map-renderer.js';
 import { getCommandCardImagePath, getDcImagePath, getFigureImagePath, resolveAssetPath, UPGRADE_IMAGE_OVERRIDES } from './asset-paths.js';
 import {
@@ -392,7 +393,7 @@ export async function buildBoardMapPayload(gameId, map, game, client, { getMissi
   const imagePath = resolvedMapPath ? join(rootDir, resolvedMapPath) : null;
   const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
 
-  const rawUsers = game ? [...new Set([game.player1Id, game.player2Id])].filter(id => /^\d{17,20}$/.test(id)) : [];
+  const rawUsers = game ? snowflakeUsers([...new Set([game.player1Id, game.player2Id])]) : [];
   const allowedMentions = rawUsers.length > 0 ? { users: rawUsers } : undefined;
   // Player labels: Discord names over each player's deployment zone
   const playerLabels = [];
