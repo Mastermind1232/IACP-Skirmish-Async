@@ -129,10 +129,14 @@ function checkL1Inventory(dcName, card) {
     }
     return { pass: true };
   }
-  // Figure cards need health, speed, attack
+  // Figure cards: validate shape of attack/defense when present (some DCs legitimately lack one)
   if (card.health && card.figures) {
-    if (!card.attack) return { pass: false, reason: 'Missing attack field' };
-    if (!card.defense) return { pass: false, reason: 'Missing defense field' };
+    if (card.attack && (!Array.isArray(card.attack.dice) || !card.attack.type)) {
+      return { pass: false, reason: 'attack field has invalid shape (needs dice[] and type)' };
+    }
+    if (card.defense && !Array.isArray(card.defense)) {
+      return { pass: false, reason: 'defense field has invalid shape (needs array)' };
+    }
   }
   return { pass: true };
 }

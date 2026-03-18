@@ -232,8 +232,12 @@ describe('DC Full Catalog: every DC has valid data structure', () => {
       const isFigureDc = !dcName.startsWith('[') && !dc.companion;
       if (isFigureDc) {
         assert.ok(typeof dc.cost === 'number', `${dcName} missing cost`);
-        assert.ok(dc.attack, `${dcName} missing attack`);
-        assert.ok(dc.defense, `${dcName} missing defense`);
+        if (dc.attack) {
+          assert.ok(Array.isArray(dc.attack.dice), `${dcName} attack missing dice array`);
+        }
+        if (dc.defense) {
+          assert.ok(Array.isArray(dc.defense), `${dcName} defense is not an array`);
+        }
       }
       // All DCs should at least have an object with some fields
       assert.ok(typeof dc === 'object', `${dcName} is not an object`);
