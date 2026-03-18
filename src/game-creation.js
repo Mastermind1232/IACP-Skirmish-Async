@@ -122,10 +122,11 @@ export async function createGameChannels(guild, player1Id, player2Id, deps) {
   const everyoneRole = guild.roles.everyone;
   const botId = guild.client.user.id;
 
+  const isSnowflake = (id) => /^\d{17,20}$/.test(id);
   const playerPerms = [
     { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel },
+    ...(isSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel }] : []),
+    ...(isSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel }] : []),
     { id: botId, allow: PermissionFlagsBits.ViewChannel },
   ];
 
