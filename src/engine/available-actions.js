@@ -140,7 +140,8 @@ function getMapSelectionActions(game, playerNum, deps) {
 // ── Initiative ───────────────────────────────────────────────────────────────
 
 function getInitiativeActions(game, playerNum) {
-  // Both players can roll for initiative
+  // Both squads must be submitted before initiative can be determined
+  if (!game.player1Squad || !game.player2Squad) return [];
   return [{
     type: ACTION_TYPES.DETERMINE_INITIATIVE,
     customId: buildCustomId(ACTION_TYPES.DETERMINE_INITIATIVE, { gameId: game.gameId }),
