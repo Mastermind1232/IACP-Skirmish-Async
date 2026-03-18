@@ -70,9 +70,12 @@ export function getRecoveryPrompts(game, deps = {}) {
 export function getRecoveryReason(game) {
   if (!game || game.ended) return null;
   if (game.phaseGate) return `phaseGate(${game.phaseGate.phase || '?'})`;
+  if (game.setupAttachmentPhase) return 'setupAttachmentPhase';
   if (game.pendingCombat) return `pendingCombat(reroll=${!!game.pendingCombat.rerollPhase})`;
   if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) return 'moveInProgress';
   if (game.currentActivationTurnPlayerId) return 'currentActivationTurn';
+  if (game.endOfRoundWhoseTurn) return 'endOfRoundWhoseTurn';
+  if (game.pendingEndTurn && Object.keys(game.pendingEndTurn).length > 0) return 'pendingEndTurn';
   if (game.pendingNegation) return 'pendingNegation';
   if (game.pendingCoverFire) return 'pendingCoverFire';
   if (game.pendingStrainChoice && Object.keys(game.pendingStrainChoice).length > 0) return 'pendingStrainChoice';
@@ -103,6 +106,9 @@ export function needsRecovery(game) {
   // Games with a phase gate always need their prompts
   if (game.phaseGate) return true;
 
+  // Games in setup attachment placement
+  if (game.setupAttachmentPhase) return true;
+
   // Games mid-combat need the combat UI re-sent
   if (game.pendingCombat) return true;
 
@@ -111,6 +117,12 @@ export function needsRecovery(game) {
 
   // Active games with a current turn player
   if (game.currentActivationTurnPlayerId) return true;
+
+  // End-of-round window active
+  if (game.endOfRoundWhoseTurn) return true;
+
+  // End-turn buttons pending (belt-and-suspenders with currentActivationTurnPlayerId)
+  if (game.pendingEndTurn && Object.keys(game.pendingEndTurn).length > 0) return true;
 
   // Blocking pending sub-states that prevent normal play
   if (game.pendingNegation) return true;

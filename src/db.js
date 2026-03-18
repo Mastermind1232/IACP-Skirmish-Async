@@ -218,18 +218,19 @@ export async function saveGamesToDb(gamesMap) {
   dirtyGameIds.clear();
   if (toSave.length === 0) return;
   savePromise = savePromise.then(async () => {
-    try {
-      for (const gameId of toSave) {
-        const game = gamesMap.get(gameId);
-        if (!game) continue;
+    for (const gameId of toSave) {
+      const game = gamesMap.get(gameId);
+      if (!game) continue;
+      try {
         await pool.query(
           `INSERT INTO games (game_id, game_data) VALUES ($1, $2)
            ON CONFLICT (game_id) DO UPDATE SET game_data = $2, updated_at = NOW()`,
           [gameId, JSON.stringify(game)]
         );
+      } catch (err) {
+        dirtyGameIds.add(gameId);
+        console.error(`[DB] Save failed for ${gameId}:`, err.message);
       }
-    } catch (err) {
-      console.error('[DB] Save failed:', err.message);
     }
   });
   return savePromise;
