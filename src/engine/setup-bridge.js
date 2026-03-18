@@ -2,7 +2,7 @@
  * Setup bridge functions extracted from index.js.
  * Handles post-attachment setup, play area reordering, draft-random flow, and play area population.
  */
-import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
 
 /**
  * Reorder play area messages so attachments appear right after their parent DCs.
@@ -334,7 +334,7 @@ export async function runDraftRandom(game, client, deps, options = {}) {
       await handChannel.send({
         content: `<@${playerId}>, this is your hand.`,
         embeds: [deps.getHandTooltipEmbed(game, playerNum)],
-        allowedMentions: { users: [playerId] },
+        allowedMentions: { users: snowflakeUsers([playerId]) },
       });
     }
     const handPayload = deps.buildHandDisplayPayload(hand, deck, game.gameId, game, playerNum);
