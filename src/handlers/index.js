@@ -134,6 +134,7 @@ import {
   handleFavChoose, handleFavChooseSelect,
   handleFavListSelect, handleFavListRename, handleFavListRemove, handleFavListBack,
   handleFavNameModal, handleFavRenameModal, handleFavListRenameModal,
+  buildFavoritesListPayload,
 } from './favorites.js';
 import {
   handleBleedResolve,
@@ -656,6 +657,7 @@ export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterPr
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
+export { buildFavoritesListPayload } from './favorites.js';
 export {
   handleBleedResolve,
   handleSidewinderApply, handleSidewinderSkip,
