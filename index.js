@@ -115,6 +115,7 @@ import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDc
 import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
 import { runSelfPlayLoop, stopSelfPlay, getActiveSelfPlayGameId } from './src/ai/self-play.js';
+import { startQueue, stopQueue, pauseQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
 import { snowflakeUsers } from './src/discord/channel-helpers.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
@@ -1756,8 +1757,13 @@ client.once('ready', async () => {
     const selfplay = new SlashCommandBuilder()
       .setName('selfplay')
       .setDescription('Dev-only AI-vs-AI self-play test (admin only).')
-      .addStringOption((o) => o.setName('action').setDescription('start, stop, or status').setRequired(true)
-        .addChoices({ name: 'start', value: 'start' }, { name: 'stop', value: 'stop' }, { name: 'status', value: 'status' }))
+      .addStringOption((o) => o.setName('action').setDescription('start, stop, status, queue-start/stop/pause/resume/status').setRequired(true)
+        .addChoices(
+          { name: 'start', value: 'start' }, { name: 'stop', value: 'stop' }, { name: 'status', value: 'status' },
+          { name: 'queue-start', value: 'queue-start' }, { name: 'queue-stop', value: 'queue-stop' },
+          { name: 'queue-pause', value: 'queue-pause' }, { name: 'queue-resume', value: 'queue-resume' },
+          { name: 'queue-status', value: 'queue-status' },
+        ))
       .addStringOption((o) => o.setName('scenario').setDescription('Scenario ID for start (optional)').setRequired(false));
     await rest.put(Routes.applicationCommands(client.user.id), {
       body: [
@@ -2543,12 +2549,15 @@ async function refreshGameVisuals(game) {
  * Build the shared dependencies bag for handler dispatch.
  * Defined once; called wherever a handler needs its context built via buildContext().
  */
+/** Guard set: game IDs currently being cleaned up, prevents channelDelete re-entrancy. */
+const channelDeleteGuard = new Set();
+
 function buildAllDeps() {
   return {
     // Core state
     getGame, setGame, saveGames, deleteGame, deleteGameFromDb,
     dcMessageMeta, dcExhaustedState, dcHealthState, pendingIllegalSquad, pendingSquadConfirm,
-    client,
+    client, channelDeleteGuard,
 
     // Auth & utility
     canActAsPlayer, extractGameIdFromInteraction, logGameErrorToBotLogs,
@@ -2979,6 +2988,93 @@ client.on('interactionCreate', async (interaction) => {
           content: stoppedId ? `Stopping self-play for game **${stoppedId}**.` : 'No self-play running.',
           ephemeral: true,
         }).catch(discordCatch);
+        return;
+      }
+
+      // ── Queue commands ───────────────────────────────────────────────────────
+      if (action === 'queue-start') {
+        const SELFPLAY_SCENARIOS_Q = IMPLEMENTED_SCENARIOS.filter(s => !['eor_cc_window', 'sor_cc_window', 'mid_combat'].includes(s));
+        try {
+          startQueue({
+            client,
+            guild: interaction.guild,
+            guildId: interaction.guild.id,
+            buildAllDeps,
+            getGame,
+            atomicOpts,
+            actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState },
+            createTestGame,
+            deleteGameChannelsAndGame,
+            cleanupCtx: {
+              client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+              deleteGameFromDb,
+            },
+            scenarios: SELFPLAY_SCENARIOS_Q,
+            interGameDelayMs: 5000,
+            actionCap: 500,
+            delayMs: 200,
+            feedbackChannel: interaction.channel,
+            logChannel: interaction.channel,
+            saveGames,
+            AI_USER_PREFIX,
+            botLogsPost: async (artifact) => {
+              try {
+                await logGameErrorToBotLogs(client, interaction.guild, artifact.game_id,
+                  new Error(`Self-play queue ${artifact.stop_reason}: ${artifact.error_message || 'no details'}`),
+                  'selfplay-queue');
+              } catch {}
+            },
+          });
+          await interaction.reply({
+            content: `**Queue started** — ${SELFPLAY_SCENARIOS_Q.length} scenarios, round-robin. Use \`/selfplay queue-status\` to check progress.`,
+            ephemeral: false,
+          }).catch(discordCatch);
+        } catch (err) {
+          await interaction.reply({ content: `Queue start failed: ${err.message}`, ephemeral: true }).catch(discordCatch);
+        }
+        return;
+      }
+
+      if (action === 'queue-stop') {
+        try {
+          stopQueue();
+          await interaction.reply({ content: 'Queue draining (will stop after current run).', ephemeral: false }).catch(discordCatch);
+        } catch (err) {
+          await interaction.reply({ content: err.message, ephemeral: true }).catch(discordCatch);
+        }
+        return;
+      }
+
+      if (action === 'queue-pause') {
+        try {
+          pauseQueue('manual');
+          await interaction.reply({ content: 'Queue paused. Use `/selfplay queue-resume` to continue.', ephemeral: false }).catch(discordCatch);
+        } catch (err) {
+          await interaction.reply({ content: err.message, ephemeral: true }).catch(discordCatch);
+        }
+        return;
+      }
+
+      if (action === 'queue-resume') {
+        try {
+          resumeQueue();
+          await interaction.reply({ content: 'Queue resumed.', ephemeral: false }).catch(discordCatch);
+        } catch (err) {
+          await interaction.reply({ content: err.message, ephemeral: true }).catch(discordCatch);
+        }
+        return;
+      }
+
+      if (action === 'queue-status') {
+        const qs = getQueueStatus();
+        const lines = [
+          `**Queue state:** ${qs.state}`,
+          `**Runs:** ${qs.runCount} (${qs.failCount} failed)`,
+          `**Current scenario:** ${qs.currentRunScenario || 'none'}`,
+          `**Rotation:** ${qs.rotationIndex} / ${qs.totalScenarios} scenarios`,
+        ];
+        if (qs.pauseReason) lines.push(`**Pause reason:** ${qs.pauseReason}`);
+        await interaction.reply({ content: lines.join('\n'), ephemeral: true }).catch(discordCatch);
         return;
       }
 
@@ -3936,6 +4032,58 @@ client.on('interactionCreate', async (interaction) => {
         if (_refreshGame) refreshGameVisuals(_refreshGame).catch(err => console.error('[refresh]', err?.message ?? err));
       }
     } catch (_) {}
+  }
+});
+
+/* ── channelDelete: clean up orphaned game records when channels are deleted outside the bot ── */
+
+client.on('channelDelete', async (channel) => {
+  if (!botReady) return;
+  try {
+    const channelId = channel.id;
+    const gamesMap = getGamesMap();
+
+    // Match on game channels (generalId, chatId, boardId, play-areas, hands)
+    let gameId;
+    let game;
+    const match = findGameByChannel(gamesMap, channelId);
+    if (match) {
+      gameId = match.gameId;
+      game = match.game;
+    } else {
+      // Also check gameCategoryId (not covered by findGameByChannel)
+      for (const [gid, g] of gamesMap) {
+        if (g.gameCategoryId === channelId) {
+          gameId = gid;
+          game = g;
+          break;
+        }
+      }
+    }
+    if (!gameId) return;
+
+    // Guard against re-entrancy (bot-initiated deletions via Kill Game / deleteGameChannelsAndGame)
+    if (channelDeleteGuard.has(gameId)) return;
+    channelDeleteGuard.add(gameId);
+
+    console.log(`[channelDelete] External channel deletion detected for game #${gameId} (channel ${channelId}). Cleaning up.`);
+    try {
+      await deleteGameChannelsAndGame(game, gameId, {
+        client,
+        deleteGame,
+        saveGames,
+        dcMessageMeta,
+        dcExhaustedState,
+        dcHealthState,
+        deleteGameFromDb,
+        channelDeleteGuard,
+      });
+      console.log(`[channelDelete] Game #${gameId} cleanup complete.`);
+    } finally {
+      channelDeleteGuard.delete(gameId);
+    }
+  } catch (err) {
+    console.error('[channelDelete] Error:', err);
   }
 });
 

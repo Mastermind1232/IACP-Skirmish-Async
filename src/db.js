@@ -191,6 +191,20 @@ export async function initDb() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_selfplay_runs_reason ON selfplay_runs (stop_reason)').catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_selfplay_runs_created ON selfplay_runs (failed_at DESC)').catch(() => {});
 
+    // Phase 1 trace columns (queue runner)
+    for (const col of [
+      { name: 'exploration_mode', type: 'TEXT' },
+      { name: 'exercised_handlers', type: "JSONB DEFAULT '[]'" },
+      { name: 'seen_action_types', type: "JSONB DEFAULT '[]'" },
+      { name: 'triggered_pending_states', type: "JSONB DEFAULT '[]'" },
+    ]) {
+      try {
+        await pool.query(`ALTER TABLE selfplay_runs ADD COLUMN ${col.name} ${col.type}`);
+      } catch (err) {
+        if (err.code !== '42701') console.error(`[DB] ALTER selfplay_runs add ${col.name}:`, err.message);
+      }
+    }
+
     await seedAchievements();
     await seedCoverageRegions();
     console.log('[DB] PostgreSQL connected, all tables ready.');
@@ -235,9 +249,10 @@ export async function insertSelfPlayRun(artifact) {
         total_steps, last_action, recent_actions, pending_states,
         recovery_reason, error_message, error_stack, handler_key,
         intended_surface, actual_channel, discord_op, discord_error,
-        started_at, failed_at, duration_ms, recovery_fired, recovery_count
+        started_at, failed_at, duration_ms, recovery_fired, recovery_count,
+        exploration_mode, exercised_handlers, seen_action_types, triggered_pending_states
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34
       )`,
       [
         artifact.game_id, artifact.guild_id ?? null, artifact.scenario ?? null,
@@ -253,6 +268,10 @@ export async function insertSelfPlayRun(artifact) {
         artifact.discord_op ?? null, artifact.discord_error ?? null,
         artifact.started_at, artifact.failed_at ?? new Date(),
         artifact.duration_ms ?? null, artifact.recovery_fired ?? false, artifact.recovery_count ?? 0,
+        artifact.exploration_mode ?? null,
+        JSON.stringify(artifact.exercised_handlers ?? []),
+        JSON.stringify(artifact.seen_action_types ?? []),
+        JSON.stringify(artifact.triggered_pending_states ?? []),
       ]
     );
   } catch (err) {
