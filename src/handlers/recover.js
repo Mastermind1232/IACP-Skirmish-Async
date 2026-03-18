@@ -150,7 +150,7 @@ async function recoverBothSquadsReady(game, gameId, ctx) {
       row.components?.some(c => c.customId?.startsWith('determine_initiative_'))
     )
   );
-  if (hasInitiativeButton) return null;
+  if (hasInitiativeButton) return 'Initiative button already present';
 
   // Reuse the canonical "both squads ready" flow
   const { postBothSquadsReady } = await import('../game-creation.js');
