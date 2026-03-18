@@ -17,6 +17,8 @@ import {
 import { PHASES } from './game/phase.js';
 import { discordCatch } from './error-handling.js';
 import { fetchGameChannel } from './discord/channel-helpers.js';
+import { computeDeckHash } from './game/deck-hash.js';
+import { getFavoriteDeckByHash } from './db.js';
 
 /**
  * Sanitize a display name for use in Discord channel names.
@@ -339,7 +341,14 @@ export async function applySquadSubmission(game, isP1, squad, client, deps) {
   else game.player2Squad = squad;
   const playerId = isP1 ? game.player1Id : game.player2Id;
   const playerNum = isP1 ? 1 : 2;
-  await logGameAction(game, client, `<@${playerId}> submitted squad **${squad.name || 'Unnamed'}** (${squad.dcCount ?? 0} DCs, ${squad.ccCount ?? 0} CCs)`, { allowedMentions: { users: [playerId] }, phase: 'SETUP', icon: 'squad' });
+  // Use saved favorite name if this deck matches one
+  let displayName = squad.name || 'Unnamed';
+  try {
+    const hash = computeDeckHash(squad);
+    const fav = await getFavoriteDeckByHash(playerId, hash);
+    if (fav?.saved_name) displayName = fav.saved_name;
+  } catch {}
+  await logGameAction(game, client, `<@${playerId}> submitted squad **${displayName}** (${squad.dcCount ?? 0} DCs, ${squad.ccCount ?? 0} CCs)`, { allowedMentions: { users: [playerId] }, phase: 'SETUP', icon: 'squad' });
   const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
   const handChannel = await fetchGameChannel(client, handChannelId);
   const handMessages = await handChannel.messages.fetch({ limit: 10 });
