@@ -10,7 +10,7 @@ import {
   ButtonStyle,
   AttachmentBuilder,
 } from 'discord.js';
-import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { computeDeckHash } from '../game/deck-hash.js';
 import { getFavoriteDeckByHash, isFavoritesAvailable } from '../db.js';
@@ -214,7 +214,7 @@ export async function postDevaronDoorButtons(game, allDoors, channel, gameId, de
   });
   if (available.length === 0) {
     game.pendingDoorSelections.shift();
-    await channel.send({ content: `<@${pid}> — All doors are already open (no more selections needed).`, allowedMentions: { users: [pid] } }).catch(deps.discordCatch);
+    await channel.send(sanitizeMentions({ content: `<@${pid}> — All doors are already open (no more selections needed).`, allowedMentions: { users: [pid] } })).catch(deps.discordCatch);
     return;
   }
   const rows = [];
@@ -228,11 +228,11 @@ export async function postDevaronDoorButtons(game, allDoors, channel, gameId, de
       )
     ));
   }
-  await channel.send({
+  await channel.send(sanitizeMentions({
     content: `<@${pid}> — **Crate Rush (EoR)**: You control ${doorsRemaining} terminal${doorsRemaining !== 1 ? 's' : ''}. Choose a door to open (${doorsRemaining} remaining):`,
     components: rows,
     allowedMentions: { users: [pid] },
-  }).catch(deps.discordCatch);
+  })).catch(deps.discordCatch);
 }
 
 /**
@@ -266,11 +266,11 @@ export async function postDevaronCratePushPrompts(game, channel, gameId, deps) {
         })
       ));
     }
-    await channel.send({
+    await channel.send(sanitizeMentions({
       content: `<@${pid}> — **Crate Rush (EoR)**: Push each controlled crate up to 3 spaces. Select a crate:`,
       components: rows,
       allowedMentions: { users: [pid] },
-    }).catch(deps.discordCatch);
+    })).catch(deps.discordCatch);
   }
 }
 
@@ -297,11 +297,11 @@ export async function postKryknaPushButtons(game, channel, gameId, deps) {
       .setStyle(ButtonStyle.Danger)
   );
   const rows = chunkButtonsToRows(buttons);
-  await channel.send({
+  await channel.send(sanitizeMentions({
     content: `\uD83D\uDD77\uFE0F **Krykna Push Phase** (${remaining} push${remaining !== 1 ? 'es' : ''} remaining) — <@${pid}>, choose a Krykna to push up to 3 spaces (end adjacent to most figures if possible):`,
     components: rows,
     allowedMentions: { users: [pid] },
-  }).catch(deps.discordCatch);
+  })).catch(deps.discordCatch);
 }
 
 /**
@@ -365,11 +365,11 @@ export async function sendDeckIllegalAlert(game, isP1, squad, validation, client
       .setLabel('REDO')
       .setStyle(ButtonStyle.Danger)
   );
-  await handChannel.send({
+  await handChannel.send(sanitizeMentions({
     content: `<@${playerId}> — Your deck is **not legal**.\n\n${errorList}\n\nChoose an option below:`,
     components: [row],
     allowedMentions: { users: [playerId] },
-  });
+  }));
 }
 
 /**
@@ -401,11 +401,11 @@ export async function sendSquadConfirmation(game, isP1, squad, validation, clien
   const row = buildFavoriteConfirmButtons(gameId, playerNum, existingFavorite);
   const content = buildFavoriteConfirmContent(text, existingFavorite);
 
-  await handChannel.send({
+  await handChannel.send(sanitizeMentions({
     content,
     components: [row],
     allowedMentions: { users: [playerId] },
-  });
+  }));
 }
 
 /**
@@ -447,12 +447,12 @@ export async function sendRoundActivationPhaseMessage(game, client, deps) {
   const content = showBtn
     ? `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Your turn! All deployment groups readied. Both players: click **End R${round} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
     : `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Your turn! All deployment groups readied. Use all activations and actions. The **End R${round} Activation Phase** button will appear when both players have done so.${passHint}`;
-  const sent = await generalChannel.send({
+  const sent = await generalChannel.send(sanitizeMentions({
     content,
     embeds: [roundEmbed],
     components,
     allowedMentions: { users: [game.initiativePlayerId] },
-  });
+  }));
   game.roundActivationMessageId = sent.id;
   game.roundActivationButtonShown = showBtn;
   game.currentActivationTurnPlayerId = game.initiativePlayerId;

@@ -2,7 +2,7 @@
  * Message updater functions extracted from index.js.
  * Each function takes an explicit `deps` parameter for closed-over dependencies.
  */
-import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 
 /**
  * Update the Play Area "Attachments" message for a DC (CC + DC Skirmish Upgrade attachments).
@@ -174,11 +174,11 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
             .setLabel('End Turn')
             .setStyle(deps.ButtonStyle.Primary)
         );
-        const endTurnMsg = await ch.send({
+        const endTurnMsg = await ch.send(sanitizeMentions({
           content: `${icon} ${timestamp} — <@${ownerId}> (**Player ${initPlayerNum}**) **${displayName}** finished all actions. Press **End Turn** when ready to pass the turn.`,
           components: [endTurnBtn],
           allowedMentions: { users: [ownerId] },
-        });
+        }));
         game.pendingEndTurn[msgId] = { playerNum: meta.playerNum, displayName, messageId: endTurnMsg.id };
       } catch (err) {
         console.error('Failed to send End Turn prompt:', err);
@@ -210,12 +210,12 @@ export async function maybeShowEndActivationPhaseButton(game, client, deps) {
     );
     const initPlayerNum = deps.getInitiativePlayerNum(game);
     const initZone = deps.getInitiativePlayerZoneLabel(game);
-    await msg.edit({
+    await msg.edit(sanitizeMentions({
       content: `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Both players have used all activations and actions. Both players: click **End R${round} Activation Phase** when done with any end-of-activation effects.`,
       embeds: [roundEmbed],
       components: [endBtn],
       allowedMentions: { users: [game.initiativePlayerId] },
-    }).catch(deps.discordCatch);
+    })).catch(deps.discordCatch);
     game.roundActivationButtonShown = true;
     deps.saveGames();
   } catch (err) {

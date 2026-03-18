@@ -116,7 +116,7 @@ import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './s
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
 import { runSelfPlayLoop, stopSelfPlay, getActiveSelfPlayGameId } from './src/ai/self-play.js';
 import { startQueue, stopQueue, pauseQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
-import { snowflakeUsers } from './src/discord/channel-helpers.js';
+import { snowflakeUsers, sanitizeMentions } from './src/discord/channel-helpers.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
   getMissionTokenLabel as _getMissionTokenLabelPure,
@@ -1112,7 +1112,7 @@ async function postAchievementNotification(client, channelId, userId, def) {
       .setColor(COLORS.GOLD)
       .setTitle(`${def.icon || '🏆'} Achievement Unlocked!`)
       .setDescription(`<@${userId}> unlocked **${def.name}**\n${def.description}`);
-    await ch.send({ content: `<@${userId}>`, embeds: [embed], allowedMentions: { users: [userId] } });
+    await ch.send(sanitizeMentions({ content: `<@${userId}>`, embeds: [embed], allowedMentions: { users: [userId] } }));
   } catch (err) {
     console.error('[Achievements] Failed to post notification:', err.message);
   }
@@ -1191,10 +1191,10 @@ async function _sendCcShuffleDrawPrompts(game, client) {
   const generalChannel = await client.channels.fetch(game.generalId);
   const initPlayerNum = getInitiativePlayerNum(game);
   const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
-  await generalChannel.send({
+  await generalChannel.send(sanitizeMentions({
     content: deployContent,
     allowedMentions: { users: [game.initiativePlayerId] },
-  });
+  }));
   const p1CcList = game.player1Squad?.ccList || [];
   const p2CcList = game.player2Squad?.ccList || [];
   const p1Placed = (game.p1CcAttachments && Object.values(game.p1CcAttachments).flat()) || [];
@@ -3962,7 +3962,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
           const generalCh = await client.channels.fetch(game.generalId);
           if (generalCh) {
-            await generalCh.send({ content: `🛟 <@${helperId}> has joined as a **Bothelper** to assist with this game.`, allowedMentions: { users: [helperId] } }).catch(discordCatch);
+            await generalCh.send(sanitizeMentions({ content: `🛟 <@${helperId}> has joined as a **Bothelper** to assist with this game.`, allowedMentions: { users: [helperId] } })).catch(discordCatch);
           }
         } catch (err) {
           console.error('Bothelper game log notification error:', err);

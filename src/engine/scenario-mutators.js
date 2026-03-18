@@ -9,7 +9,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
-import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
+import { fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
 
 // ── Error class ──────────────────────────────────────────────────────────────
 
@@ -107,11 +107,11 @@ async function mutateToEndOfRound(game, client, deps, userId) {
       .setLabel("End 'End of Round' window")
       .setStyle(ButtonStyle.Primary),
   );
-  await generalChannel.send({
+  await generalChannel.send(sanitizeMentions({
     content: `<@${game.initiativePlayerId}> — **End of Round** window is open. Play end-of-round CCs from your Hand, then click the button below when done.`,
     components: [eorRow],
     allowedMentions: { users: [game.initiativePlayerId] },
-  });
+  }));
 
   // Update DC embeds to show exhausted state
   await updatePlayAreaDcButtons(game, client);
