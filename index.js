@@ -114,6 +114,7 @@ import { handleSelectMap as cmdSelectMap, handleConfirmMap as cmdConfirmMap, han
 import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDcEndActivation } from './src/domain/commands/dc-play-area-commands.js';
 import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
+import { runSelfPlayLoop, stopSelfPlay, getActiveSelfPlayGameId } from './src/ai/self-play.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
   getMissionTokenLabel as _getMissionTokenLabelPure,
@@ -1751,6 +1752,12 @@ client.once('ready', async () => {
     const favorites = new SlashCommandBuilder()
       .setName('favorites')
       .setDescription('View, rename, or remove your saved favorite decks.');
+    const selfplay = new SlashCommandBuilder()
+      .setName('selfplay')
+      .setDescription('Dev-only AI-vs-AI self-play test (admin only).')
+      .addStringOption((o) => o.setName('action').setDescription('start, stop, or status').setRequired(true)
+        .addChoices({ name: 'start', value: 'start' }, { name: 'stop', value: 'stop' }, { name: 'status', value: 'status' }))
+      .addStringOption((o) => o.setName('scenario').setDescription('Scenario ID for start (optional)').setRequired(false));
     await rest.put(Routes.applicationCommands(client.user.id), {
       body: [
         botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
@@ -1758,10 +1765,10 @@ client.once('ready', async () => {
         affiliationwinrateglobal.toJSON(), affiliationwinratepersonal.toJSON(),
         affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
         dcwinrateglobaltopten.toJSON(), dcwinratepersonaltopten.toJSON(),
-        leaderboard.toJSON(), achievements.toJSON(), favorites.toJSON(),
+        leaderboard.toJSON(), achievements.toJSON(), favorites.toJSON(), selfplay.toJSON(),
       ],
     });
-    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /events, /play-ai, /add-ai, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard, /achievements, /favorites');
+    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /events, /play-ai, /add-ai, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard, /achievements, /favorites, /selfplay');
   } catch (err) {
     console.error('Failed to register slash commands:', err.message);
   }
@@ -2948,6 +2955,96 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    // /selfplay — dev-only AI-vs-AI self-play (admin only)
+    if (cmd === 'selfplay') {
+      if (!interaction.member?.permissions?.has(PermissionFlagsBits.ManageGuild)) {
+        await interaction.reply({ content: 'Admin only (Manage Server required).', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const action = interaction.options.getString('action');
+
+      if (action === 'status') {
+        const activeId = getActiveSelfPlayGameId();
+        await interaction.reply({
+          content: activeId ? `Self-play active: game **${activeId}**` : 'No self-play running.',
+          ephemeral: true,
+        }).catch(discordCatch);
+        return;
+      }
+
+      if (action === 'stop') {
+        const stoppedId = stopSelfPlay(getGame);
+        await interaction.reply({
+          content: stoppedId ? `Stopping self-play for game **${stoppedId}**.` : 'No self-play running.',
+          ephemeral: true,
+        }).catch(discordCatch);
+        return;
+      }
+
+      // action === 'start'
+      if (getActiveSelfPlayGameId()) {
+        await interaction.reply({ content: `Self-play already running: game **${getActiveSelfPlayGameId()}**. Use \`/selfplay stop\` first.`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const scenarioId = interaction.options.getString('scenario') || null;
+      await interaction.deferReply({ ephemeral: false }).catch(discordCatch);
+      try {
+        const aiP1 = `${AI_USER_PREFIX}1`;
+        const aiP2 = `${AI_USER_PREFIX}2`;
+        const { gameId } = await createTestGame(client, interaction.guild, aiP1, scenarioId, interaction.channel, { player2Id: aiP2 });
+        const game = getGame(gameId);
+        if (!game) throw new Error('Game creation returned no game state');
+        game.selfPlay = true;
+        game.guildId = interaction.guild.id;
+        saveGames();
+
+        await interaction.editReply({
+          content: `**Self-play started** — game **${gameId}**${scenarioId ? ` (scenario: ${scenarioId})` : ''}. Use \`/selfplay stop\` to halt.`,
+        }).catch(discordCatch);
+
+        // Run the self-play loop asynchronously
+        (async () => {
+          try {
+            const { result, artifact } = await runSelfPlayLoop(game, client, {
+              buildAllDeps,
+              getGame,
+              atomicOpts,
+              actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState },
+              scenario: scenarioId,
+              guildId: interaction.guild.id,
+              actionCap: 500,
+              delayMs: 200,
+            });
+            // Post summary to channel
+            const summary = [
+              `**Self-play finished** — game **${artifact.game_id}**`,
+              `Scenario: ${artifact.scenario || 'none'} | Result: **${result}** | Stop: ${artifact.stop_reason}`,
+              `Steps: ${artifact.total_steps} | Last action: \`${artifact.last_action || 'none'}\``,
+            ].join('\n');
+            try {
+              await interaction.channel.send(summary);
+            } catch {}
+            if (result === 'failed') {
+              try {
+                await logGameErrorToBotLogs(client, interaction.guild, artifact.game_id,
+                  new Error(`Self-play ${artifact.stop_reason}: ${artifact.error_message || 'no details'}`),
+                  'selfplay');
+              } catch {}
+            }
+          } catch (err) {
+            console.error('[selfplay] Loop error:', err.message);
+            try {
+              await interaction.channel.send(`**Self-play error** — ${err.message}`);
+            } catch {}
+          }
+        })();
+      } catch (err) {
+        console.error('/selfplay start error:', err);
+        await interaction.editReply({ content: `Failed to start self-play: ${err.message}` }).catch(discordCatch);
+      }
+      return;
+    }
+
     // Stats commands: only in #statistics channel; require DB
     const statsChannelName = (interaction.channel?.name || '').toLowerCase();
     const statsCmds = ['statcheck', 'affiliationwinrateglobal', 'affiliationwinratepersonal', 'affiliationpickrateglobal', 'affiliationpickratepersonal', 'dcwinrateglobaltopten', 'dcwinratepersonaltopten', 'leaderboard'];
@@ -3328,7 +3425,7 @@ client.on('interactionCreate', async (interaction) => {
         // AI hook (modal): after a human action, check if the AI should respond
         if (_evtGameId) {
           const _aiGame = getGame(_evtGameId);
-          if (_aiGame && !_aiGame.ended && _aiGame.aiPlayerNum) {
+          if (_aiGame && !_aiGame.ended && _aiGame.aiPlayerNum && !_aiGame.selfPlay) {
             const _aiUserId = interaction.user.id;
             if (!_aiUserId.startsWith(AI_USER_PREFIX)) {
               setTimeout(async () => {
@@ -3381,7 +3478,7 @@ client.on('interactionCreate', async (interaction) => {
       // AI hook (select menu): after a human action, check if the AI should respond
       if (_evtGameId) {
         const _aiGame = getGame(_evtGameId);
-        if (_aiGame && !_aiGame.ended && _aiGame.aiPlayerNum) {
+        if (_aiGame && !_aiGame.ended && _aiGame.aiPlayerNum && !_aiGame.selfPlay) {
           const _aiUserId = interaction.user.id;
           if (!_aiUserId.startsWith(AI_USER_PREFIX)) {
             setTimeout(async () => {
@@ -3674,7 +3771,7 @@ client.on('interactionCreate', async (interaction) => {
       // AI hook: after a human action, check if the AI should respond
       if (_evtGameId) {
         const _aiGame = getGame(_evtGameId);
-        if (_aiGame && !_aiGame.ended && _aiGame.aiPlayerNum) {
+        if (_aiGame && !_aiGame.ended && _aiGame.aiPlayerNum && !_aiGame.selfPlay) {
           // Don't block the handler — run AI asynchronously
           const _aiUserId = interaction.user.id;
           if (!_aiUserId.startsWith(AI_USER_PREFIX)) {

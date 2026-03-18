@@ -53,7 +53,7 @@ export function getAiPlayer(game) {
  * @param {object} client - Real Discord client
  * @returns {object} An interaction-like object
  */
-function createLiveAiInteraction(customId, userId, game, client) {
+export function createLiveAiInteraction(customId, userId, game, client) {
   const sentMessages = [];
 
   const interaction = {

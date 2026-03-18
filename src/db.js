@@ -150,6 +150,47 @@ export async function initDb() {
       )
     `);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_favorite_decks_user ON favorite_decks (user_id, last_used_at DESC NULLS LAST)').catch(() => {});
+
+    // ── Self-play run artifacts ────────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS selfplay_runs (
+        id              BIGSERIAL PRIMARY KEY,
+        game_id         TEXT NOT NULL,
+        guild_id        TEXT,
+        scenario        TEXT,
+        result          TEXT NOT NULL,
+        stop_reason     TEXT NOT NULL,
+        commit_sha      TEXT,
+        map             TEXT,
+        p1_squad        JSONB,
+        p2_squad        JSONB,
+        phase           TEXT,
+        round_phase     TEXT,
+        current_round   INT,
+        active_player   TEXT,
+        total_steps     INT NOT NULL,
+        last_action     TEXT,
+        recent_actions  JSONB NOT NULL DEFAULT '[]',
+        pending_states  JSONB NOT NULL DEFAULT '{}',
+        recovery_reason TEXT,
+        error_message   TEXT,
+        error_stack     TEXT,
+        handler_key     TEXT,
+        intended_surface TEXT,
+        actual_channel   TEXT,
+        discord_op       TEXT,
+        discord_error    TEXT,
+        started_at      TIMESTAMPTZ NOT NULL,
+        failed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        duration_ms     INT,
+        recovery_fired  BOOLEAN DEFAULT FALSE,
+        recovery_count  INT DEFAULT 0
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_selfplay_runs_game ON selfplay_runs (game_id)').catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_selfplay_runs_reason ON selfplay_runs (stop_reason)').catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_selfplay_runs_created ON selfplay_runs (failed_at DESC)').catch(() => {});
+
     await seedAchievements();
     await seedCoverageRegions();
     console.log('[DB] PostgreSQL connected, all tables ready.');
@@ -180,6 +221,42 @@ export async function insertCompletedGame(game) {
     );
   } catch (err) {
     console.error('[DB] insertCompletedGame failed:', err.message);
+  }
+}
+
+/** Insert a self-play run artifact (failed/stopped runs only by default). */
+export async function insertSelfPlayRun(artifact) {
+  if (!pool || !artifact) return;
+  try {
+    await pool.query(
+      `INSERT INTO selfplay_runs (
+        game_id, guild_id, scenario, result, stop_reason, commit_sha,
+        map, p1_squad, p2_squad, phase, round_phase, current_round, active_player,
+        total_steps, last_action, recent_actions, pending_states,
+        recovery_reason, error_message, error_stack, handler_key,
+        intended_surface, actual_channel, discord_op, discord_error,
+        started_at, failed_at, duration_ms, recovery_fired, recovery_count
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30
+      )`,
+      [
+        artifact.game_id, artifact.guild_id ?? null, artifact.scenario ?? null,
+        artifact.result, artifact.stop_reason, artifact.commit_sha ?? null,
+        artifact.map ?? null,
+        JSON.stringify(artifact.p1_squad ?? null), JSON.stringify(artifact.p2_squad ?? null),
+        artifact.phase ?? null, artifact.round_phase ?? null,
+        artifact.current_round ?? null, artifact.active_player ?? null,
+        artifact.total_steps, artifact.last_action ?? null,
+        JSON.stringify(artifact.recent_actions ?? []), JSON.stringify(artifact.pending_states ?? {}),
+        artifact.recovery_reason ?? null, artifact.error_message ?? null, artifact.error_stack ?? null,
+        artifact.handler_key ?? null, artifact.intended_surface ?? null, artifact.actual_channel ?? null,
+        artifact.discord_op ?? null, artifact.discord_error ?? null,
+        artifact.started_at, artifact.failed_at ?? new Date(),
+        artifact.duration_ms ?? null, artifact.recovery_fired ?? false, artifact.recovery_count ?? 0,
+      ]
+    );
+  } catch (err) {
+    console.error('[DB] insertSelfPlayRun failed:', err.message);
   }
 }
 
