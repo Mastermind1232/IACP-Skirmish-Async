@@ -2621,7 +2621,7 @@ function buildAllDeps() {
     updateDeployPromptMessages, finishSetupAttachments,
     createPlayAreaChannels, createBoardChannel, createHandThreads,
     refreshAllGameComponents, applyDirectDamageToFigure,
-    getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert, sendSquadConfirmation,
+    getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert, sendSquadConfirmation, buildSquadConfirmText,
     runDraftRandom, getRange, hasLineOfSight,
     getDeploymentZones,
     // Combat special effects deps
