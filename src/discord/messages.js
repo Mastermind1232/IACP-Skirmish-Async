@@ -182,7 +182,8 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
       : null;
     let content = '';
     if (bothelpersRole) content += `<@&${bothelpersRole.id}> `;
-    content += `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${ctx}\n${errMsg}${stack}`;
+    const channelRef = options.messageLink?.channelId ? ` | <#${options.messageLink.channelId}>` : '';
+    content += `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${channelRef}${ctx}\n${errMsg}${stack}`;
     if (link) content += `\n\n**Jump to message:** ${link}`;
 
     const sendPayload = { content };

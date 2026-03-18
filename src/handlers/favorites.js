@@ -375,7 +375,7 @@ export async function handleFavChoose(interaction, ctx) {
     return;
   }
   if (favorites.length === 0) {
-    await interaction.reply({ content: 'You don\'t have any saved favorites yet. Use **Enter List** to submit a deck, then save it.', ephemeral: true }).catch(discordCatch);
+    await interaction.reply({ content: 'You don\'t have any saved favorites yet. Submit a squad list first, then use **Save to Favorites** to save it.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
