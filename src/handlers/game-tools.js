@@ -2,7 +2,7 @@
  * Game tools handlers: refresh_map_, refresh_all_, undo_, kill_game_, default_deck_.
  * Participants-only; require getGame and various helpers via context.
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } from 'discord.js';
 import { deleteGameChannelsAndGame } from './botmenu.js';
 import { discordCatch } from '../error-handling.js';
 import { logGameAction } from '../discord/messages.js';
@@ -386,8 +386,10 @@ export async function handleKillGame(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'kill_game_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can kill it.', ephemeral: true });
+  const isPlayer = interaction.user.id === game.player1Id || interaction.user.id === game.player2Id;
+  const isAdmin = interaction.member?.permissions?.has(PermissionFlagsBits.ManageGuild);
+  if (!isPlayer && !isAdmin) {
+    await interaction.followUp({ content: 'Only players in this game (or server admins) can kill it.', ephemeral: true });
     return;
   }
   try {
