@@ -70,11 +70,12 @@ function determineActingPlayer(game) {
   // CC draw: both may need to draw
   if (game.phase === 'cc_draw') return 'both';
 
-  // End-of-round window
-  if (game.endOfRoundWhoseTurn) {
+  // End-of-round window — only relevant during end_of_round phase
+  if (game.endOfRoundWhoseTurn && game.roundPhase === 'end_of_round') {
     return game.endOfRoundWhoseTurn === game.player1Id ? 1 : 2;
   }
-  if (game.startOfRoundWhoseTurn) {
+  // Start-of-round window — only relevant during start_of_round phase
+  if (game.startOfRoundWhoseTurn && game.roundPhase === 'start_of_round') {
     return game.startOfRoundWhoseTurn === game.player1Id ? 1 : 2;
   }
 
