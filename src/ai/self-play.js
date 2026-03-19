@@ -351,6 +351,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       // Build interaction
       const actingUserId = chosen._playerNum === 1 ? g.player1Id : g.player2Id;
       const interaction = createLiveAiInteraction(chosen.customId, actingUserId, g, client);
+      interaction.client = client;
 
       // Set up guild/channel references
       if (g.guildId) {

@@ -38,6 +38,7 @@ export const ACTION_ICONS = {
   deplete: '🔄',
 };
 
+/** Map<"guildId_gameId", { threadId, headerMsgId }> */
 const gameErrorThreads = new Map();
 
 /**
@@ -49,16 +50,35 @@ const gameErrorThreads = new Map();
  */
 export async function clearGameErrorThread(gameId, client) {
   let found = false;
-  for (const [key, threadId] of gameErrorThreads.entries()) {
+  for (const [key, entry] of gameErrorThreads.entries()) {
     if (key.endsWith(`_${gameId}`)) {
       found = true;
-      if (client && threadId) {
-        try {
-          const thread = await fetchGameChannel(client, threadId);
-          if (thread) await thread.delete();
-        } catch (err) {
-          if (err.code !== 10003 && err.code !== 10008) {
-            console.error(`[clearGameErrorThread] Failed to delete thread for ${gameId}:`, err.message);
+      if (client) {
+        const threadId = typeof entry === 'string' ? entry : entry?.threadId;
+        const headerMsgId = typeof entry === 'string' ? null : entry?.headerMsgId;
+        // Delete thread first, then header message
+        if (threadId) {
+          try {
+            const thread = await fetchGameChannel(client, threadId);
+            if (thread) await thread.delete();
+          } catch (err) {
+            if (err.code !== 10003 && err.code !== 10008) {
+              console.error(`[clearGameErrorThread] Failed to delete thread for ${gameId}:`, err.message);
+            }
+          }
+        }
+        // Delete the header message in bot-logs (prevents orphaned "started a thread" text)
+        if (headerMsgId) {
+          try {
+            const ch = await fetchGameChannel(client, BOT_LOGS_CHANNEL_ID);
+            if (ch) {
+              const msg = await ch.messages.fetch(headerMsgId).catch(() => null);
+              if (msg) await msg.delete();
+            }
+          } catch (err) {
+            if (err.code !== 10003 && err.code !== 10008) {
+              console.error(`[clearGameErrorThread] Failed to delete header message for ${gameId}:`, err.message);
+            }
           }
         }
       }
@@ -74,7 +94,16 @@ export async function clearGameErrorThread(gameId, client) {
         const threads = await ch.threads.fetchActive();
         const threadName = `IA${gameId} errors`;
         const match = threads.threads.find(t => t.name === threadName);
-        if (match) await match.delete();
+        if (match) {
+          // Find and delete the header message (the thread's parent/starter message)
+          const starterMsgId = match.id; // Thread from message: thread ID === starter message ID
+          await match.delete();
+          // Also try to delete the header message
+          try {
+            const headerMsg = await ch.messages.fetch(starterMsgId).catch(() => null);
+            if (headerMsg) await headerMsg.delete();
+          } catch {}
+        }
       }
     } catch (err) {
       if (err.code !== 10003 && err.code !== 10008) {
@@ -254,17 +283,28 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
     try {
       if (gameId) {
         const key = `${guild.id}_${gameId}`;
-        let threadId = gameErrorThreads.get(key);
+        let entry = gameErrorThreads.get(key);
+        let threadId = typeof entry === 'string' ? entry : entry?.threadId;
+        let headerMsgId = typeof entry === 'string' ? null : entry?.headerMsgId;
         if (!threadId) {
           try {
-            const thread = await ch.threads.create({
+            // Send a header message to bot-logs, then create thread from it.
+            // This avoids the orphaned Discord system message that standalone
+            // threads.create() leaves behind when the thread is later deleted.
+            const headerMsg = await ch.send(sanitizeMentions({
+              content: `🧵 **IA${gameId}** — Error thread`,
+              allowedMentions: { users: [] },
+            }));
+            const thread = await headerMsg.startThread({
               name: `IA${gameId} errors`,
               autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
             });
             threadId = thread.id;
-            gameErrorThreads.set(key, threadId);
+            headerMsgId = headerMsg.id;
+            gameErrorThreads.set(key, { threadId, headerMsgId });
           } catch {
             threadId = null;
+            headerMsgId = null;
           }
         }
         let target = threadId ? await fetchGameChannel(client, threadId) : null;
@@ -272,6 +312,7 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
           if (threadId) gameErrorThreads.delete(key);
           target = ch;
           threadId = null;
+          headerMsgId = null;
         }
         usedThreadId = threadId;
         if (sendPayload.content.length > 2000) sendPayload.content = sendPayload.content.slice(0, 1997) + '...';

@@ -106,6 +106,13 @@ export function createLiveAiInteraction(customId, userId, game, client) {
       sentMessages.push({ type: 'reply', ...(typeof payload === 'string' ? { content: payload } : payload) });
       return { id: 'ai-reply-msg' };
     },
+    update: async (payload) => {
+      sentMessages.push({ type: 'update', ...(typeof payload === 'string' ? { content: payload } : payload) });
+      return interaction.message;
+    },
+    showModal: async () => {
+      // Modals can't be shown to AI — silently ignore
+    },
 
     isButton: () => true,
     isStringSelectMenu: () => false,
@@ -198,6 +205,7 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
 
       const group = getHandlerGroup(handlerKey);
       const interaction = createLiveAiInteraction(chosen.customId, aiUserId, currentGame, client);
+      interaction.client = client;
 
       // Set up guild reference for handlers that need it
       if (currentGame.guildId) {

@@ -4046,10 +4046,20 @@ client.on('interactionCreate', async (interaction) => {
         if (incidentId) {
           resolveIncident(incidentId, i.user.id).catch(discordCatch);
         }
-        // If the message is in an error thread, delete the thread entirely
+        // If the message is in an error thread, delete the thread and its header message
         const ch = i.message.channel;
         if (ch?.isThread()) {
+          const parentChannel = ch.parent;
+          // For message-based threads, the starter message ID equals the thread ID
+          const starterMsgId = ch.id;
           await ch.delete().catch(discordCatch);
+          // Delete the header message in bot-logs that the thread was created from
+          if (parentChannel) {
+            try {
+              const headerMsg = await parentChannel.messages.fetch(starterMsgId).catch(() => null);
+              if (headerMsg) await headerMsg.delete();
+            } catch {}
+          }
           return;
         }
         // Otherwise collapse the error message to a resolved one-liner

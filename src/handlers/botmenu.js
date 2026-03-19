@@ -61,13 +61,25 @@ async function cleanupIncidentMirrors(gameId, client) {
     }
     // Delete error threads (each thread delete removes all messages in it)
     for (const threadId of threadIds) {
+      let parentChannel = null;
       try {
         const thread = await fetchGameChannel(client, threadId);
-        if (thread) await thread.delete().catch(discordCatch);
+        if (thread) {
+          parentChannel = thread.parent;
+          await thread.delete().catch(discordCatch);
+        }
       } catch (err) {
         if (err.code !== 10003 && err.code !== 10008) {
           console.error(`[cleanupIncidentMirrors] Thread delete failed:`, err.message);
         }
+      }
+      // For message-based threads, thread ID === header message ID.
+      // Delete the header message so bot-logs stays clean.
+      if (parentChannel) {
+        try {
+          const headerMsg = await parentChannel.messages.fetch(threadId).catch(() => null);
+          if (headerMsg) await headerMsg.delete();
+        } catch {}
       }
     }
     await markIncidentMirrorsCleaned(cleanedIds);
