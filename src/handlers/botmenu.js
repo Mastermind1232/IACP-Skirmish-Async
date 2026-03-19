@@ -16,6 +16,7 @@ import { clearGameErrorThread } from '../discord/messages.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { cleanupCompanionEmbedDeps } from './post-deploy.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { getIncidentMirrorsForGame, markIncidentMirrorsCleaned } from '../db.js';
 
 const BOTMENU_ALLOWED_KILL_ROLES = ['Admin', 'Bothelpers'];
 
@@ -31,6 +32,51 @@ function canKillGame(interaction, game) {
 function isParticipant(interaction, game) {
   return game.player1Id === interaction.user.id || game.player2Id === interaction.user.id;
 }
+
+/**
+ * Clean up Discord mirrors for all incidents associated with a game.
+ * Queries the incidents table for posted mirrors, deletes threads/messages, marks cleaned.
+ */
+async function cleanupIncidentMirrors(gameId, client) {
+  try {
+    const mirrors = await getIncidentMirrorsForGame(gameId);
+    if (!mirrors.length) return;
+    const threadIds = new Set();
+    const cleanedIds = [];
+    for (const m of mirrors) {
+      cleanedIds.push(m.id);
+      // Collect unique thread IDs for deletion (threads contain all messages)
+      if (m.discord_thread_id) {
+        threadIds.add(m.discord_thread_id);
+      } else if (m.discord_message_id) {
+        // Standalone message in bot-logs channel (no thread) — delete individually
+        try {
+          const ch = await fetchGameChannel(client, BOT_LOGS_CHANNEL_ID);
+          if (ch) {
+            const msg = await ch.messages.fetch(m.discord_message_id).catch(() => null);
+            if (msg) await msg.delete().catch(discordCatch);
+          }
+        } catch {}
+      }
+    }
+    // Delete error threads (each thread delete removes all messages in it)
+    for (const threadId of threadIds) {
+      try {
+        const thread = await fetchGameChannel(client, threadId);
+        if (thread) await thread.delete().catch(discordCatch);
+      } catch (err) {
+        if (err.code !== 10003 && err.code !== 10008) {
+          console.error(`[cleanupIncidentMirrors] Thread delete failed:`, err.message);
+        }
+      }
+    }
+    await markIncidentMirrorsCleaned(cleanedIds);
+  } catch (err) {
+    console.error(`[cleanupIncidentMirrors] Failed for game ${gameId}:`, err.message);
+  }
+}
+
+const BOT_LOGS_CHANNEL_ID = '1467647184542634005';
 
 /**
  * Delete game's Discord category and channels, remove from state and DB. Shared by Kill Game and Archive confirm.
@@ -75,6 +121,7 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
   clearEventLogSeqCounter(gameId);
   clearDomainSeqCounter(gameId);
   await clearGameErrorThread(gameId, client);
+  await cleanupIncidentMirrors(gameId, client);
   cleanupCompanionEmbedDeps(gameId);
   saveGames();
   if (deleteGameFromDb) await deleteGameFromDb(gameId).catch(discordCatch);

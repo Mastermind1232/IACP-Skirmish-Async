@@ -19,7 +19,7 @@ const COMBAT_DEPS = [
   'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons',
   'calculateKillVp', 'checkHuntDissent', 'decrementActivationIfGroupDefeated',
   'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
-  'checkNefariousGains', 'updateHandVisualMessage',
+  'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage',
 ];
 
 const CONTEXT_GROUPS = {
@@ -334,7 +334,7 @@ const CONTEXT_GROUPS = {
     'finishCombatResolution', 'ensureMovementBankMessage',
     'rollSingleAttackDie', 'getDcEffects', 'getMapSpaces', 'getFigureLabel',
     'filterCondition', 'isConditionImmune', 'applyCondition', 'HARMFUL_CONDITIONS',
-    'updateDcActionsMessage',
+    'updateDcActionsMessage', 'updateHandVisualMessage', 'updateDiscardPileMessage',
   ],
 };
 

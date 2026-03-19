@@ -241,6 +241,33 @@ export async function initDb() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_exploration_transitions_status ON exploration_transitions (status)').catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_exploration_episodes_created ON exploration_episodes (created_at DESC)').catch(() => {});
 
+    // ── Incidents table (Postgres-first error tracking) ──────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS incidents (
+        id                  BIGSERIAL PRIMARY KEY,
+        game_id             TEXT,
+        guild_id            TEXT,
+        source              TEXT NOT NULL DEFAULT 'pvp',
+        context             TEXT,
+        error_message       TEXT NOT NULL,
+        error_stack         TEXT,
+        status              TEXT NOT NULL DEFAULT 'open',
+        mirror_status       TEXT NOT NULL DEFAULT 'pending',
+        selfplay_run_id     BIGINT,
+        channel_id          TEXT,
+        message_link        TEXT,
+        discord_thread_id   TEXT,
+        discord_message_id  TEXT,
+        metadata            JSONB DEFAULT '{}',
+        resolved_by         TEXT,
+        resolved_at         TIMESTAMPTZ,
+        created_at          TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents (status)').catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_incidents_game ON incidents (game_id)').catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents (created_at DESC)').catch(() => {});
+
     await seedAchievements();
     await seedCoverageRegions();
     console.log('[DB] PostgreSQL connected, all tables ready.');
@@ -1283,6 +1310,124 @@ export async function upsertDiscordTransition(transitionKey, roundPhase, pending
     );
   } catch (err) {
     console.error('[DB] upsertDiscordTransition failed:', err.message);
+  }
+}
+
+// ── Incidents (Postgres-first error tracking) ─────────────────────────────
+
+/**
+ * Insert an incident record. Returns the incident id (or null if DB unavailable).
+ * @param {{ game_id?, guild_id?, source?, context?, error_message, error_stack?, selfplay_run_id?, channel_id?, message_link?, metadata? }} inc
+ * @returns {Promise<string|null>}
+ */
+export async function insertIncident(inc) {
+  if (!pool || !inc) return null;
+  try {
+    const res = await pool.query(
+      `INSERT INTO incidents (
+        game_id, guild_id, source, context, error_message, error_stack,
+        selfplay_run_id, channel_id, message_link, metadata
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      RETURNING id`,
+      [
+        inc.game_id ?? null, inc.guild_id ?? null, inc.source ?? 'pvp',
+        inc.context ?? null, inc.error_message,
+        inc.error_stack ? inc.error_stack.slice(0, 4000) : null,
+        inc.selfplay_run_id ?? null, inc.channel_id ?? null,
+        inc.message_link ?? null, JSON.stringify(inc.metadata ?? {}),
+      ]
+    );
+    return res.rows[0]?.id?.toString() ?? null;
+  } catch (err) {
+    console.error('[DB] insertIncident failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Update an incident with the Discord mirror IDs (thread + message).
+ * Sets mirror_status to 'posted'. Called after the bot-logs message is sent.
+ */
+export async function updateIncidentMirrorPosted(incidentId, threadId, messageId) {
+  if (!pool || !incidentId) return;
+  try {
+    await pool.query(
+      `UPDATE incidents SET discord_thread_id = $2, discord_message_id = $3, mirror_status = 'posted' WHERE id = $1`,
+      [incidentId, threadId ?? null, messageId ?? null]
+    );
+  } catch (err) {
+    console.error('[DB] updateIncidentMirrorPosted failed:', err.message);
+  }
+}
+
+/**
+ * Mark an incident's mirror as failed. Called when Discord posting throws.
+ */
+export async function setIncidentMirrorFailed(incidentId) {
+  if (!pool || !incidentId) return;
+  try {
+    await pool.query(
+      `UPDATE incidents SET mirror_status = 'failed' WHERE id = $1`,
+      [incidentId]
+    );
+  } catch (err) {
+    console.error('[DB] setIncidentMirrorFailed failed:', err.message);
+  }
+}
+
+/**
+ * Resolve an incident by id. Sets status, resolved_by, resolved_at.
+ * @returns {Promise<boolean>} true if a row was updated
+ */
+export async function resolveIncident(incidentId, resolvedByUserId) {
+  if (!pool || !incidentId) return false;
+  try {
+    const res = await pool.query(
+      `UPDATE incidents SET status = 'resolved', resolved_by = $2, resolved_at = NOW() WHERE id = $1 AND status = 'open'`,
+      [incidentId, resolvedByUserId ?? null]
+    );
+    return (res.rowCount ?? 0) > 0;
+  } catch (err) {
+    console.error('[DB] resolveIncident failed:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Get all incidents for a game that have mirrored Discord resources.
+ * Used by killgame cleanup to delete bot-logs threads/messages.
+ * @returns {Promise<Array<{ id: string, discord_thread_id: string|null, discord_message_id: string|null }>>}
+ */
+export async function getIncidentMirrorsForGame(gameId) {
+  if (!pool || !gameId) return [];
+  try {
+    const res = await pool.query(
+      `SELECT id, discord_thread_id, discord_message_id FROM incidents
+       WHERE game_id = $1 AND mirror_status = 'posted'
+         AND (discord_thread_id IS NOT NULL OR discord_message_id IS NOT NULL)`,
+      [gameId]
+    );
+    return res.rows;
+  } catch (err) {
+    console.error('[DB] getIncidentMirrorsForGame failed:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Mark incident mirrors as cleaned up (set mirror_status = 'cleaned_up').
+ * Called after killgame deletes the Discord resources.
+ */
+export async function markIncidentMirrorsCleaned(incidentIds) {
+  if (!pool || !incidentIds?.length) return;
+  try {
+    await pool.query(
+      `UPDATE incidents SET mirror_status = 'cleaned_up', discord_thread_id = NULL, discord_message_id = NULL
+       WHERE id = ANY($1::bigint[])`,
+      [incidentIds]
+    );
+  } catch (err) {
+    console.error('[DB] markIncidentMirrorsCleaned failed:', err.message);
   }
 }
 

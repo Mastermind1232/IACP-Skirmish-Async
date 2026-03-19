@@ -6,6 +6,7 @@ import { getActivationsMessageId, getActivationsRemaining, getActivationsTotal, 
 import { enforceContentLimit, DISCORD_CONTENT_LIMIT } from './limits.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
 import { fetchGameChannel, sanitizeMentions } from './channel-helpers.js';
+import { insertIncident, updateIncidentMirrorPosted, setIncidentMirrorFailed } from '../db.js';
 
 /** Orange sidebar color for phase embeds */
 export const PHASE_COLOR = 0xf39c12;
@@ -182,76 +183,112 @@ const BOTHELPERS_ROLE_NAME = 'bothelpers';
  */
 export async function logGameErrorToBotLogs(client, guild, gameId, error, context = '', options = {}) {
   try {
+    const errMsg = error?.message || String(error);
+    const link = options.messageLink?.guildId && options.messageLink?.channelId && options.messageLink?.messageId
+      ? `https://discord.com/channels/${options.messageLink.guildId}/${options.messageLink.channelId}/${options.messageLink.messageId}`
+      : null;
+
+    // ── Step 1: Persist to Postgres (source of truth) ──────────────────────
+    const source = context === 'selfplay' ? 'selfplay'
+      : (!gameId ? 'system' : 'pvp');
+    const incidentId = await insertIncident({
+      game_id: gameId ?? null,
+      guild_id: guild?.id ?? null,
+      source,
+      context: context || null,
+      error_message: errMsg,
+      error_stack: error?.stack ?? null,
+      selfplay_run_id: options.selfplayRunId ?? null,
+      channel_id: options.messageLink?.channelId ?? null,
+      message_link: link,
+      metadata: options.metadata ?? {},
+    });
+
+    // ── Step 2: Mirror to Discord bot-logs ─────────────────────────────────
     if (!guild) {
       console.error('logGameErrorToBotLogs: no guild (interaction may be in DMs)');
+      if (incidentId) setIncidentMirrorFailed(incidentId).catch(discordCatch);
       return;
     }
-    await guild.roles.fetch().catch(discordCatch);
-    // Try fetching by known channel ID first, fall back to name search
     let ch = null;
-    try { ch = await fetchGameChannel(client, BOT_LOGS_CHANNEL_ID); } catch {}
-    if (!ch) {
-      await guild.channels.fetch().catch(discordCatch);
-      ch = guild.channels.cache.find((c) => {
-        if (c.type !== ChannelType.GuildText) return false;
-        const name = (c.name || '').toLowerCase().trim();
-        return BOT_LOGS_CHANNEL_NAMES.includes(name) || name.replace(/\s+/g, '-') === 'bot-logs';
-      });
-    }
+    try {
+      await guild.roles.fetch().catch(discordCatch);
+      try { ch = await fetchGameChannel(client, BOT_LOGS_CHANNEL_ID); } catch {}
+      if (!ch) {
+        await guild.channels.fetch().catch(discordCatch);
+        ch = guild.channels.cache.find((c) => {
+          if (c.type !== ChannelType.GuildText) return false;
+          const name = (c.name || '').toLowerCase().trim();
+          return BOT_LOGS_CHANNEL_NAMES.includes(name) || name.replace(/\s+/g, '-') === 'bot-logs';
+        });
+      }
+    } catch {}
     if (!ch) {
       console.error(
         `Bot logs channel not found in guild "${guild.name}" (${guild.id}). Ensure your existing bot logs text channel is named one of: ${BOT_LOGS_CHANNEL_NAMES.join(', ')}, or has ID ${BOT_LOGS_CHANNEL_ID}.`
       );
+      if (incidentId) setIncidentMirrorFailed(incidentId).catch(discordCatch);
       return;
     }
-    const errMsg = error?.message || String(error);
     const stack = error?.stack ? `\n\`\`\`\n${error.stack.slice(0, 800)}\n\`\`\`` : '';
     const ctx = context ? ` (${context})` : '';
     const bothelpersRole = guild.roles.cache.find((r) => (r.name || '').toLowerCase() === BOTHELPERS_ROLE_NAME.toLowerCase());
-    const link = options.messageLink?.guildId && options.messageLink?.channelId && options.messageLink?.messageId
-      ? `https://discord.com/channels/${options.messageLink.guildId}/${options.messageLink.channelId}/${options.messageLink.messageId}`
-      : null;
     let content = '';
     if (bothelpersRole) content += `<@&${bothelpersRole.id}> `;
     const channelRef = options.messageLink?.channelId ? ` | <#${options.messageLink.channelId}>` : '';
-    content += `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${channelRef}${ctx}\n${errMsg}${stack}`;
+    const incidentRef = incidentId ? ` [#${incidentId}]` : '';
+    content += `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${incidentRef}${channelRef}${ctx}\n${errMsg}${stack}`;
     if (link) content += `\n\n**Jump to message:** ${link}`;
 
     const resolveRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId('botlog_resolve_')
+        .setCustomId(`botlog_resolve_${incidentId || ''}`)
         .setLabel('Resolve')
         .setStyle(ButtonStyle.Secondary),
     );
     const sendPayload = { content, components: [resolveRow] };
     if (bothelpersRole) sendPayload.allowedMentions = { roles: [bothelpersRole.id] };
 
-    if (gameId) {
-      const key = `${guild.id}_${gameId}`;
-      let threadId = gameErrorThreads.get(key);
-      if (!threadId) {
-        try {
-          const thread = await ch.threads.create({
-            name: `IA${gameId} errors`,
-            autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
-          });
-          threadId = thread.id;
-          gameErrorThreads.set(key, threadId);
-        } catch {
+    let sentMsg = null;
+    let usedThreadId = null;
+    try {
+      if (gameId) {
+        const key = `${guild.id}_${gameId}`;
+        let threadId = gameErrorThreads.get(key);
+        if (!threadId) {
+          try {
+            const thread = await ch.threads.create({
+              name: `IA${gameId} errors`,
+              autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+            });
+            threadId = thread.id;
+            gameErrorThreads.set(key, threadId);
+          } catch {
+            threadId = null;
+          }
+        }
+        let target = threadId ? await fetchGameChannel(client, threadId) : null;
+        if (!target) {
+          if (threadId) gameErrorThreads.delete(key);
+          target = ch;
           threadId = null;
         }
+        usedThreadId = threadId;
+        if (sendPayload.content.length > 2000) sendPayload.content = sendPayload.content.slice(0, 1997) + '...';
+        sentMsg = await withDiscordRetry(() => target.send(sendPayload));
+      } else {
+        if (sendPayload.content.length > 2000) sendPayload.content = sendPayload.content.slice(0, 1997) + '...';
+        sentMsg = await withDiscordRetry(() => ch.send(sendPayload));
       }
-      let target = threadId ? await fetchGameChannel(client, threadId) : null;
-      if (!target) {
-        // Thread gone/archived or no gameId thread yet — clear stale cache and fall back to channel
-        if (threadId) gameErrorThreads.delete(key);
-        target = ch;
-      }
-      if (sendPayload.content.length > 2000) sendPayload.content = sendPayload.content.slice(0, 1997) + '...';
-      await withDiscordRetry(() => target.send(sendPayload));
-    } else {
-      if (sendPayload.content.length > 2000) sendPayload.content = sendPayload.content.slice(0, 1997) + '...';
-      await withDiscordRetry(() => ch.send(sendPayload));
+    } catch (mirrorErr) {
+      console.error('Failed to mirror incident to bot-logs:', mirrorErr?.message ?? mirrorErr);
+      if (incidentId) setIncidentMirrorFailed(incidentId).catch(discordCatch);
+      return;
+    }
+
+    // ── Step 3: Store Discord mirror IDs back to incident ──────────────────
+    if (incidentId && sentMsg) {
+      updateIncidentMirrorPosted(incidentId, usedThreadId, sentMsg.id).catch(discordCatch);
     }
   } catch (e) {
     console.error('Failed to log game error to bot-logs:', e?.message ?? e);

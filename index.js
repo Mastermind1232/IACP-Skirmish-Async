@@ -49,6 +49,7 @@ import {
   getCoverageIncidents,
   upsertDiscordTransition,
   insertExplorationEpisode,
+  resolveIncident,
 } from './src/db.js';
 import {
   getGame,
@@ -4040,6 +4041,11 @@ client.on('interactionCreate', async (interaction) => {
         }
       },
       'botlog_resolve_': async (i) => {
+        // Resolve incident in Postgres (source of truth)
+        const incidentId = i.customId.replace('botlog_resolve_', '');
+        if (incidentId) {
+          resolveIncident(incidentId, i.user.id).catch(discordCatch);
+        }
         // If the message is in an error thread, delete the thread entirely
         const ch = i.message.channel;
         if (ch?.isThread()) {

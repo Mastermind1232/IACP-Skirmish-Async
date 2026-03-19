@@ -1561,7 +1561,7 @@ export async function handleExtraArmorCancel(interaction, ctx) {
  * Rule by Fear: player picks 1 card from hand to discard.
  */
 export async function handleRbfDiscard(interaction, ctx) {
-  const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
+  const { getGame, saveGames, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, client } = ctx;
   const parts = splitCustomId(interaction.customId, 'rbf_discard_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -1582,6 +1582,7 @@ export async function handleRbfDiscard(interaction, ctx) {
   await logGameAction(game, client, `📜 **Rule by Fear** — discarded **${card}**.`);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
+  if (updateDiscardPileMessage) await updateDiscardPileMessage(game, playerNum, client).catch(discordCatch);
   saveGames();
   await interaction.followUp({ content: `Discarded **${card}**.`, ephemeral: true }).catch(discordCatch);
   // Resolve start-of-round blocking effect

@@ -315,7 +315,9 @@ export async function runSelfPlayLoop(game, client, opts) {
         const a = lastCustomIds.slice(0, 3).join(',');
         const b = lastCustomIds.slice(3, 6).join(',');
         if (a === b) {
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', surfaceCtx, traceData, explorationMode });
+          const loopPattern = lastCustomIds.slice(0, 3).join(' → ');
+          const loopErr = new Error(`Repeating 3-action loop detected: ${loopPattern}`);
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }

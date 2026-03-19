@@ -147,6 +147,7 @@ export async function handleBleedResolve(interaction, ctx) {
     getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction, calculateKillVp,
     decrementActivationIfGroupDefeated, checkWinConditions, canActAsPlayer,
     filterCondition,
+    updateHandVisualMessage, updateDiscardPileMessage,
   } = ctx;
   const match = interaction.customId.match(/^bleed_(accept|prevent)_(\d+)_(1|2)_(.+)$/);
   if (!match) return;
@@ -185,6 +186,10 @@ export async function handleBleedResolve(interaction, ctx) {
             const _bleedPrResult = checkFriendlyDefeatedPassiveRedraws(game, playerNum, dcName);
             for (const _bleedPrCard of _bleedPrResult.redrawn) {
               await logGameAction(game, interaction.client, `**Passive Redraw** — **${_bleedPrCard}** re-drawn from discard (friendly **${dcName}** defeated by Bleeding).`, { phase: 'ROUND', icon: 'card' });
+            }
+            if (_bleedPrResult.redrawn.length > 0) {
+              if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, interaction.client).catch(discordCatch);
+              if (updateDiscardPileMessage) await updateDiscardPileMessage(game, playerNum, interaction.client).catch(discordCatch);
             }
           }
           // Nefarious Gains (Jabba): Bleeding defeat
@@ -246,6 +251,11 @@ export async function handleBleedResolve(interaction, ctx) {
     const _bprResult = checkDeckDiscardPassiveRedraws(game, playerNum, discardedCard);
     for (const _bprCard of _bprResult.redrawn) {
       await logGameAction(game, interaction.client, `**Passive Redraw** — **${_bprCard}** re-drawn from discard (discarded from deck).`, { phase: 'ROUND', icon: 'card' });
+    }
+    // Discard pile changed (card added from deck + possibly redrawn to hand)
+    if (updateDiscardPileMessage) await updateDiscardPileMessage(game, playerNum, interaction.client).catch(discordCatch);
+    if (_bprResult.redrawn.length > 0) {
+      if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, interaction.client).catch(discordCatch);
     }
   }
   filterCondition(game, figureKey, 'Bleed');

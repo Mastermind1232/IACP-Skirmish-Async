@@ -295,6 +295,10 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
       for (const _strPrCard of _strPrResult.redrawn) {
         if (logGameAction) await logGameAction(game, client, `**Passive Redraw** — **${_strPrCard}** re-drawn from discard (friendly **${dcName}** defeated).`, { phase: 'ROUND', icon: 'card' });
       }
+      if (_strPrResult.redrawn.length > 0) {
+        if (ctx.updateHandVisualMessage) await ctx.updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
+        if (ctx.updateDiscardPileMessage) await ctx.updateDiscardPileMessage(game, playerNum, client).catch(discordCatch);
+      }
     }
     const dcIds = getDcMessageIds(game, playerNum);
     const idx = (dcIds || []).indexOf(msgId);
@@ -367,6 +371,10 @@ async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
       const _strPrResult = checkFriendlyDefeatedPassiveRedraws(game, playerNum, dcName);
       for (const _strPrCard of _strPrResult.redrawn) {
         if (logGameAction) await logGameAction(game, client, `**Passive Redraw** — **${_strPrCard}** re-drawn from discard (friendly **${dcName}** defeated).`, { phase: 'ROUND', icon: 'card' });
+      }
+      if (_strPrResult.redrawn.length > 0) {
+        if (ctx.updateHandVisualMessage) await ctx.updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
+        if (ctx.updateDiscardPileMessage) await ctx.updateDiscardPileMessage(game, playerNum, client).catch(discordCatch);
       }
     }
     const dcIds = getDcMessageIds(game, playerNum);
@@ -4668,6 +4676,9 @@ export async function handleCombatSurge(interaction, ctx) {
           if (ctx.updateHandVisualMessage) {
             await ctx.updateHandVisualMessage(game, attackerPlayerNum, ctx.client || interaction.client).catch(discordCatch);
           }
+          if (ctx.updateDiscardPileMessage) {
+            await ctx.updateDiscardPileMessage(game, attackerPlayerNum, ctx.client || interaction.client).catch(discordCatch);
+          }
         }
       }
       // Hunter Protocol: offer to trigger the same surge ability once more
@@ -5350,6 +5361,10 @@ export async function handleFigureheadDecision(interaction, ctx) {
             const _fhPrResult = checkFriendlyDefeatedPassiveRedraws(game, defenderPlayerNum, fhDcName);
             for (const _fhPrCard of _fhPrResult.redrawn) {
               if (logGameAction) await logGameAction(game, client, `**Passive Redraw** — **${_fhPrCard}** re-drawn from discard (friendly **${fhDcName}** defeated by Figurehead).`, { phase: 'ROUND', icon: 'card' });
+            }
+            if (_fhPrResult.redrawn.length > 0) {
+              if (ctx.updateHandVisualMessage) await ctx.updateHandVisualMessage(game, defenderPlayerNum, client).catch(discordCatch);
+              if (ctx.updateDiscardPileMessage) await ctx.updateDiscardPileMessage(game, defenderPlayerNum, client).catch(discordCatch);
             }
           }
           // Nefarious Gains (Jabba): Figurehead defeat
