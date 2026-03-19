@@ -16,7 +16,7 @@ const ALPHA = 0.002;         // Learning rate (smaller for neural stability)
 const HIDDEN_SIZE = 32;      // Hidden layer width
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
-const WEIGHT_DECAY = 0.0001;        // L2 regularization — gently pulls weights toward zero
+const WEIGHT_DECAY = 0.000002;      // L2 regularization — reduced 50x from 0.0001 (was crushing strategic weights)
 const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger with decay active
 
 const REPLAY_BUFFER_SIZE = 10000;   // Max transitions in ring buffer
