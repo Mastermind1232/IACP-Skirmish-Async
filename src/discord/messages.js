@@ -40,13 +40,24 @@ export const ACTION_ICONS = {
 const gameErrorThreads = new Map();
 
 /**
- * Clear the cached error thread for a game (e.g. when game is deleted/ended).
- * Accepts gameId — iterates keys matching `*_gameId` pattern.
+ * Delete the bot-logs error thread for a game, then clear the cached mapping.
  * @param {string} gameId
+ * @param {object} [client] - Discord client. If provided, deletes the thread from Discord.
  */
-export function clearGameErrorThread(gameId) {
-  for (const key of gameErrorThreads.keys()) {
+export async function clearGameErrorThread(gameId, client) {
+  for (const [key, threadId] of gameErrorThreads.entries()) {
     if (key.endsWith(`_${gameId}`)) {
+      if (client && threadId) {
+        try {
+          const thread = await fetchGameChannel(client, threadId);
+          if (thread) await thread.delete();
+        } catch (err) {
+          // Thread already gone or inaccessible — that's fine
+          if (err.code !== 10003 && err.code !== 10008) {
+            console.error(`[clearGameErrorThread] Failed to delete thread for ${gameId}:`, err.message);
+          }
+        }
+      }
       gameErrorThreads.delete(key);
     }
   }

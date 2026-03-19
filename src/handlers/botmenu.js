@@ -74,7 +74,7 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
   clearBuffer(gameId);
   clearEventLogSeqCounter(gameId);
   clearDomainSeqCounter(gameId);
-  clearGameErrorThread(gameId);
+  await clearGameErrorThread(gameId, client);
   cleanupCompanionEmbedDeps(gameId);
   saveGames();
   if (deleteGameFromDb) await deleteGameFromDb(gameId).catch(discordCatch);
