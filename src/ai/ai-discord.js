@@ -177,7 +177,7 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
       getState: () => currentGame,
       getAvailableActions: (pn) => getAvailableActions(currentGame, pn, extraDeps),
     };
-    const result = pickBestAction(engineLike, actions, aiPlayerNum);
+    const result = pickBestAction(engineLike, actions, aiPlayerNum, extraDeps);
     const chosen = result?.action || actions[0];
     if (!chosen?.customId) {
       return { steps: step, actions: actionLog };

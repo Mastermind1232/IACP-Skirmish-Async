@@ -322,7 +322,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         getState: () => g,
         getAvailableActions: (pn) => getAvailableActions(g, pn, actionDeps),
       };
-      const pick = pickBestAction(engineLike, allActions, allActions[0]._playerNum);
+      const pick = pickBestAction(engineLike, allActions, allActions[0]._playerNum, actionDeps);
       if (!pick) {
         // All available actions are unsupported (e.g., only CC plays) — skip this step
         consecutiveEmpty++;
