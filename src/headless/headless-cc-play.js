@@ -84,7 +84,7 @@ function handleAttachment(game, playerNum, cardName, idx, hand, handKey, ability
   const dcList = getDcList(game, playerNum) || [];
   if (dcMsgIds.length === 0) throw new Error(`No DCs to attach "${cardName}" to`);
 
-  // Filter by playableBy restriction (mirrors cc-hand.js lines 380-438)
+  // Filter by playableBy restriction using shared helper
   const ccEffect = getCcEffect(cardName);
   const playableBy = (ccEffect?.playableBy || '').trim();
   const hasRestriction = playableBy && playableBy.toLowerCase() !== 'any figure';
@@ -92,43 +92,9 @@ function handleAttachment(game, playerNum, cardName, idx, hand, handKey, ability
   let eligible = dcMsgIds.map((msgId, i) => ({ msgId, dc: dcList[i], index: i }));
 
   if (hasRestriction) {
-    const allDcEffects = (getDcEffectsFn ? getDcEffectsFn() : null) || {};
-    const allKeywords = (getDcKeywordsFn ? getDcKeywordsFn(game) : null) || {};
-    const AFFILIATIONS = new Set(['imperial', 'rebel', 'scum', 'mercenary']);
-    const alternatives = playableBy.split(/\s+or\s+/i).map(a => a.trim().replace(/^"|"$/g, '').toLowerCase());
-
     eligible = eligible.filter(({ dc }) => {
       const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
-      const dcBase = String(dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-      const dcData = allDcEffects[dcName] || allDcEffects[dcBase];
-      const affiliationLower = (dcData?.affiliation || '').toLowerCase();
-      const kw = allKeywords[dcName] || allKeywords[dcBase] || [];
-      const kwLower = kw.map(k => String(k).toLowerCase());
-
-      for (const alt of alternatives) {
-        if (alt === 'unique' || alt === 'any unique figure') {
-          if (dcData?.unique) return true;
-          continue;
-        }
-        if (alt === 'any small figure') {
-          if (kwLower.includes('small')) return true;
-          continue;
-        }
-        const dcLow = dcBase.toLowerCase();
-        if (dcLow.includes(alt) || alt.includes(dcLow)) return true;
-        const words = alt.split(/\s+/);
-        let reqAff = null;
-        const reqKwWords = [];
-        for (const w of words) {
-          if (AFFILIATIONS.has(w) && !reqAff) reqAff = w;
-          else reqKwWords.push(w);
-        }
-        const reqKw = reqKwWords.join(' ');
-        if (reqAff && affiliationLower !== reqAff && affiliationLower !== 'any') continue;
-        if (reqKw && !kwLower.includes(reqKw)) continue;
-        if (reqAff || reqKw) return true;
-      }
-      return false;
+      return dcMatchesPlayableBy(dcName, playableBy, getDcEffectsFn, getDcKeywordsFn, game);
     });
   }
 
@@ -302,8 +268,7 @@ const COMBAT_ANY_TIMINGS = new Set([
 ]);
 const EVENT_DRIVEN_TIMINGS = new Set([
   'whenhostilefigureexitsadjacentspace',
-  'whenhostileentersonadjacentspace',
-  'whenanadjacentfriendlyfigureisdefeated',
+  'whenhostilefigureentersadjacentspace',
 ]);
 
 /**
