@@ -18,7 +18,7 @@ import {
   setActivationsRemaining, setActivatedDcIndices,
   getActivationsTotal,
   ccHandKey, ccDiscardKey, ccDeckKey,
-  opponentPlayerNum,
+  opponentPlayerNum, syncHealthStateToList,
   getInitiativePlayerNum,
   removeFigurePosition,
 } from '../game/player-helpers.js';
@@ -30,12 +30,6 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /** Sync a healthState array back to the player's dcList entry. */
-function syncHealthStateToList(game, playerNum, msgId, healthState) {
-  const dcIds = getDcMessageIds(game, playerNum);
-  const dcList = getDcList(game, playerNum);
-  const idx = dcIds ? dcIds.indexOf(msgId) : -1;
-  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-}
 
 /**
  * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters

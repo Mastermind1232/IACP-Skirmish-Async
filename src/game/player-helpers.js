@@ -29,6 +29,16 @@ export function getCcDeck(game, pn)                { return pn === 1 ? game.play
 export function getCcAttachments(game, pn)         { return pn === 1 ? game.p1CcAttachments : game.p2CcAttachments; }
 export function getDcAttachments(game, pn)         { return pn === 1 ? game.p1DcAttachments : game.p2DcAttachments; }
 
+// ── Health state sync ────────────────────────────────────────────────────────
+
+/** Sync a figure's health state array back to the DC list for persistence. */
+export function syncHealthStateToList(game, playerNum, msgId, healthState) {
+  const dcIds = getDcMessageIds(game, playerNum);
+  const dcList = getDcList(game, playerNum);
+  const idx = dcIds ? dcIds.indexOf(msgId) : -1;
+  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+}
+
 // ── Setters (for properties that are reassigned, not just mutated) ──────────
 
 export function setActivationsRemaining(game, pn, v) { if (pn === 1) game.p1ActivationsRemaining = v; else game.p2ActivationsRemaining = v; }

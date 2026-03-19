@@ -8,13 +8,6 @@ import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens } from './dc-hel
 import { grantPowerTokens } from './game-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 
-/** Sync a healthState array back to the player's dcList entry. */
-function syncHealthStateToList(game, playerNum, msgId, healthState) {
-  const dcIds = getDcMessageIds(game, playerNum);
-  const dcList = getDcList(game, playerNum);
-  const idx = dcIds ? dcIds.indexOf(msgId) : -1;
-  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-}
 
 /**
  * Decrement a figure's HP in a healthState array.
@@ -53,7 +46,7 @@ function getStatsForDc(dcName) {
 import { applyCondition, resetCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces } from './movement.js';
-import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum } from './player-helpers.js';
+import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList } from './player-helpers.js';
 import { hasLineOfSight, isWithinRange } from './spatial.js';
 import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
 

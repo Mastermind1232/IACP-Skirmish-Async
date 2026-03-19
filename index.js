@@ -486,7 +486,7 @@ import {
   setActivationsRemaining, setActivationsTotal, setActivatedDcIndices,
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, dcAttachmentsKey,
   dcAttachmentMessageIdsKey, vpKey, deployMetadataKey, deployLabelsKey, armyCostModifierKey,
-  removeFigurePosition,
+  removeFigurePosition, syncHealthStateToList,
 } from './src/game/player-helpers.js';
 import { discordCatch } from './src/error-handling.js';
 
@@ -1453,14 +1453,6 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     updateMovementBankMessage,
     client,
   });
-}
-
-/** Sync a figure's health state array back to the DC list for persistence. */
-function syncHealthStateToList(game, playerNum, msgId, healthState) {
-  const dcIds = getDcMessageIds(game, playerNum);
-  const dcList = getDcList(game, playerNum);
-  const idx = dcIds ? dcIds.indexOf(msgId) : -1;
-  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
 }
 
 /** Send result to thread, clear combat/roll UI, refresh DC embeds and board. */

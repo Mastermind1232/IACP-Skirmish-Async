@@ -44,7 +44,7 @@ import {
 } from '../game/index.js';
 
 import {
-  removeFigurePosition,
+  removeFigurePosition, syncHealthStateToList,
   getPlayerId, getDcList, getDcMessageIds,
   getCcHand, getCcDiscard, getCcDeck,
   getActivatedDcIndices, getActivationsRemaining, setActivationsRemaining,
@@ -337,12 +337,7 @@ export function buildHeadlessDeps(options = {}) {
     buildDcEmbedAndFiles, getConditionsForDcMessage, getDcUpgradeAttachments, getNicknamesForDcMessage,
     buildBoardMapPayload,
     getPlayAreaId: () => null,
-    syncHealthStateToList: (game, pn, msgId, hs) => {
-      const dcIds = getDcMessageIds(game, pn);
-      const dcList = getDcList(game, pn);
-      const idx = dcIds ? dcIds.indexOf(msgId) : -1;
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
-    },
+    syncHealthStateToList,
     client,
     // headless flag for skipping Discord-only prompts
     headless: true,
