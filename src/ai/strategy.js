@@ -1,14 +1,19 @@
 /**
  * AI strategy: selects the best action from available options.
- * Uses greedy one-ply evaluation by default.
+ * Uses greedy one-ply evaluation with spatial awareness for movement.
  */
 
-import { evaluateState } from './evaluator.js';
+import { getRange } from '../game/spatial.js';
+
+/**
+ * Actions the AI can't complete (multi-step flows requiring dropdowns/modals).
+ * Filtered out before scoring to prevent infinite loops.
+ */
+const AI_UNSUPPORTED_TYPES = new Set(['play_cc']);
 
 /**
  * Pick the best action from a list of available actions using greedy evaluation.
- * For simple actions (phase gate, end turn), just scores the current state.
- * For complex actions (attacks, moves), would ideally simulate the outcome.
+ * Filters out actions the AI can't handle, then scores the rest.
  *
  * @param {object} engine - Game engine instance
  * @param {Array} actions - Available actions from getAvailableActions
@@ -17,13 +22,20 @@ import { evaluateState } from './evaluator.js';
  */
 export function pickBestAction(engine, actions, playerNum) {
   if (!actions || actions.length === 0) return null;
-  if (actions.length === 1) return { action: actions[0], score: 0 };
 
-  // Score each action using heuristics
-  let best = { action: actions[0], score: -Infinity };
+  // Filter out multi-step flows the AI can't complete
+  const viable = actions.filter(a => !AI_UNSUPPORTED_TYPES.has(a.type));
+  if (viable.length === 0) {
+    // All actions are unsupported — fall back to original list to avoid stuck_no_actions
+    return { action: actions[0], score: 0 };
+  }
+  if (viable.length === 1) return { action: viable[0], score: 0 };
 
-  for (const action of actions) {
-    const score = scoreAction(action, engine.getState(), playerNum);
+  const game = engine.getState();
+  let best = { action: viable[0], score: -Infinity };
+
+  for (const action of viable) {
+    const score = scoreAction(action, game, playerNum);
     if (score > best.score) {
       best = { action, score };
     }
@@ -33,9 +45,25 @@ export function pickBestAction(engine, actions, playerNum) {
 }
 
 /**
- * Score an action using heuristics (without simulation).
- * This is a fast approximation — full simulation would clone the game
- * and execute the action to see the resulting state.
+ * Find the distance from a coord to the nearest enemy figure.
+ * Returns 999 if no enemies found.
+ */
+function distToNearestEnemy(coord, game, playerNum) {
+  const opponentNum = playerNum === 1 ? 2 : 1;
+  const enemyPositions = game.figurePositions?.[opponentNum];
+  if (!enemyPositions || !coord) return 999;
+  let minDist = 999;
+  for (const enemyCoord of Object.values(enemyPositions)) {
+    if (!enemyCoord) continue;
+    const d = getRange(coord, enemyCoord);
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
+
+/**
+ * Score an action using heuristics with spatial awareness.
+ * Movement actions are scored by how much closer they move toward enemies.
  *
  * @param {object} action - Action descriptor
  * @param {object} game - Current game state
@@ -55,7 +83,28 @@ export function scoreAction(action, game, playerNum) {
   if (type === 'combat_ready') return 85;
   if (type === 'combat_resolve') return 70;
 
-  // Movement: moderate priority
+  // Movement: score by proximity to nearest enemy
+  if (type === 'move_pick_space') {
+    const { moveKey, coord } = action.params || {};
+    if (!coord || !moveKey) return 20;
+
+    // "Finish movement" — only pick this if no better moves exist
+    if (action.params?.done || coord === 'done' || action.customId?.endsWith('_done')) return 5;
+
+    const moveState = game.moveInProgress?.[moveKey];
+    const currentPos = moveState?.currentPosition || moveState?.startCoord;
+    const currentDistToEnemy = distToNearestEnemy(currentPos, game, playerNum);
+    const newDistToEnemy = distToNearestEnemy(coord, game, playerNum);
+
+    // Score: base 50 + bonus for closing distance (up to +40 per space closer)
+    // Moving 3 spaces closer = 50 + 120 = 170
+    // Staying same distance = 50
+    // Moving away = 50 - penalty
+    const improvement = currentDistToEnemy - newDistToEnemy;
+    return 50 + (improvement * 40);
+  }
+
+  // Start movement: prefer moving when far from enemies
   if (type === 'move_figure' || type === 'dc_move') return 50;
 
   // Activation: prefer activating DCs over passing
