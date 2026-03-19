@@ -7,6 +7,7 @@ import { createCanvas, loadImage, registerFont } from 'canvas';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { parseCoord } from './game/coords.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
@@ -99,17 +100,6 @@ function colToLetter(col) {
  * @param {number} [options.maxWidth] - Scale down if wider (for Discord 8MB limit)
  * @returns {Promise<Buffer>} PNG buffer
  */
-/** Parse coord "g10" -> { col, row } (0-based) */
-function parseCoord(coord) {
-  const s = String(coord || '').toLowerCase();
-  const letter = s.match(/[a-z]+/)?.[0] || '';
-  const num = parseInt(s.match(/\d+/)?.[0] || '0', 10);
-  const col = letter
-    ? [...letter].reduce((acc, c) => acc * 26 + (c.charCodeAt(0) - 96), 0) - 1
-    : -1;
-  const row = num - 1;
-  return { col, row };
-}
 
 export async function renderMap(mapId, options = {}) {
   const { figures = [], tokens = {}, showGrid = true, maxWidth = 1200, cropToZone = null, gridStyle = 'default', showGridOnlyOnCoords = null } = options;

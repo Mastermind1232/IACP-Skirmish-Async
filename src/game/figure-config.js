@@ -56,3 +56,23 @@ export function getAttachments(game, figureKey) {
 export function hasAttachment(game, figureKey, attachmentName) {
   return getAttachments(game, figureKey).includes(attachmentName);
 }
+
+/**
+ * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
+ * on the same team.  Used to prevent two Clawdites from sharing a form.
+ * @param {object} game
+ * @param {number} playerNum  1 or 2
+ * @param {string} excludeFigureKey  figureKey of the Clawdite currently picking
+ * @returns {Set<string>}
+ */
+export function getFormsChosenByTeamClawdites(game, playerNum, excludeFigureKey) {
+  const taken = new Set();
+  const positions = game.figurePositions?.[playerNum] || {};
+  for (const fk of Object.keys(positions)) {
+    if (fk === excludeFigureKey) continue;
+    if (!fk.startsWith('Clawdite Shapeshifter')) continue;
+    const form = getConfig(game, fk)?.form;
+    if (form) taken.add(form);
+  }
+  return taken;
+}

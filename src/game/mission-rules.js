@@ -9,11 +9,7 @@ import { grantPowerTokens } from './game-helpers.js';
 import { getDeploymentZones } from '../data-loader.js';
 import { getPlayerOccupiedCellsForControl } from './board-helpers.js';
 import { snowflakeUsers } from '../discord/channel-helpers.js';
-
-function normalizeCoord(c) {
-  if (c == null || typeof c !== 'string') return '';
-  return String(c).toLowerCase().trim();
-}
+import { normalizeCoord } from './coords.js';
 
 /** Extract flat coordinate array from a missionA/missionB token data block (generic). */
 function extractTokenCoords(missionTokenData) {

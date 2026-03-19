@@ -7,6 +7,7 @@ import { parseCoord, normalizeCoord, getFootprintCells } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
+import { getRange as _spatialGetRange } from './spatial.js';
 
 
 /**
@@ -3210,7 +3211,7 @@ export function resolveAbility(abilityId, context) {
     const fk = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     const activatorPos = fk ? game.figurePositions?.[playerNum]?.[fk] : null;
     const roundNum = game.currentRound || 1;
-    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+    const getRng = context.getRange ?? _spatialGetRange;
 
     // Find friendly figures within 3 spaces (including self)
     const eligible = [];
@@ -5035,7 +5036,7 @@ export function resolveAbility(abilityId, context) {
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
     if (!activatorPos) return { applied: false, manualMessage: 'Resolve manually: position unknown.' };
-    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+    const getRng = context.getRange ?? _spatialGetRange;
     const losCheck = context.hasLineOfSight ?? null;
     const mapId = game.selectedMap?.id;
     const mapSpaces = mapId ? getMapSpaces(mapId) : null;
@@ -5173,7 +5174,7 @@ export function resolveAbility(abilityId, context) {
     const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
-    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+    const getRng = context.getRange ?? _spatialGetRange;
     const refreshIds = [];
     const parts = [];
     let count = 0;
@@ -5407,7 +5408,7 @@ export function resolveAbility(abilityId, context) {
     const cahLos = cah.requiresLos ?? false;
     const cahAll = cah.targetAll ?? false;
     // Range helper: use context if available, else Manhattan distance via parseCoord
-    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+    const getRng = context.getRange ?? _spatialGetRange;
     const losCheck = context.hasLineOfSight ?? null;
     const mapSpacesForLos = cahLos ? getMapSpaces(mapId) : null;
     // Activator position for range/LOS checks
@@ -6271,7 +6272,7 @@ export function resolveAbility(abilityId, context) {
     const activatingPositions = activatingKeys.map((k) => game.figurePositions?.[playerNum]?.[k]).filter(Boolean);
     if (activatingPositions.length > 0) {
       const hostilePositions = Object.values(game.figurePositions?.[oppNum] || {}).filter(Boolean);
-      const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+      const getRng = context.getRange ?? _spatialGetRange;
       const hasAdjacentHostile = activatingPositions.some((aPos) =>
         hostilePositions.some((hPos) => getRng(String(aPos).toLowerCase(), String(hPos).toLowerCase()) <= 1)
       );
@@ -7471,7 +7472,7 @@ export function resolveAbility(abilityId, context) {
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
-    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+    const getRng = context.getRange ?? _spatialGetRange;
     const validTargets = [];
     for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
       if (!coord) continue;

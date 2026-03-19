@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getDcEffects, getMapSpaces, getFormCards, getCcEffectsData } from '../data-loader.js';
-import { getConfig } from '../game/figure-config.js';
+import { getConfig, getFormsChosenByTeamClawdites } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, buildFigureButtonLabel, getMaxPowerTokens } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
@@ -28,24 +28,6 @@ import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
-
-/** Sync a healthState array back to the player's dcList entry. */
-
-/**
- * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
- * on the same team.  Used to prevent two Clawdites from sharing a form.
- */
-function getFormsChosenByTeamClawdites(game, playerNum, excludeFigureKey) {
-  const taken = new Set();
-  const positions = game.figurePositions?.[playerNum] || {};
-  for (const fk of Object.keys(positions)) {
-    if (fk === excludeFigureKey) continue;
-    if (!fk.startsWith('Clawdite Shapeshifter')) continue;
-    const form = getConfig(game, fk)?.form;
-    if (form) taken.add(form);
-  }
-  return taken;
-}
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction

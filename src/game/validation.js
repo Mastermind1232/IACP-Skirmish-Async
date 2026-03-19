@@ -280,7 +280,7 @@ const ATTACHMENT_RESTRICTION_KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE'
   'SCUM', 'FIGURE WITH', 'FIGURE COST', 'GROUP WITH', 'MASSIVE'];
 
 /** Check if a DC's keywords + affiliation satisfy a keyword phrase like "IMPERIAL TROOPER" or "HUNTER". */
-function _matchesKeywordPhrase(phrase, dcKw, affiliation) {
+export function _matchesKeywordPhrase(phrase, dcKw, affiliation) {
   const words = phrase.split(/\s+/).filter(Boolean);
   return words.every(w => dcKw.includes(w) || affiliation === w);
 }

@@ -4,7 +4,8 @@
  */
 
 export function normalizeCoord(coord) {
-  return String(coord || '').toLowerCase();
+  if (coord == null || typeof coord !== 'string') return '';
+  return coord.toLowerCase().trim();
 }
 
 export function parseCoord(coord) {

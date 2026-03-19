@@ -12,7 +12,7 @@ import { setPhase, PHASES } from '../game/phase.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..', '..');
-import { getConfig, setConfig } from '../game/figure-config.js';
+import { getConfig, setConfig, getFormsChosenByTeamClawdites } from '../game/figure-config.js';
 import {
   getPlayerId, getSquad, getDcList, getDcMessageIds, getHandChannelId,
   dcAttachmentsKey, ccDeckKey, ccHandKey,
@@ -26,27 +26,7 @@ import { requireGame } from '../utils/guards.js';
 import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
-
-/**
- * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
- * on the same team.  Used to prevent two Clawdites from sharing a form.
- * @param {object} game
- * @param {number} playerNum  1 or 2
- * @param {string} excludeFigureKey  figureKey of the Clawdite currently picking
- * @returns {Set<string>}
- */
-function getFormsChosenByTeamClawdites(game, playerNum, excludeFigureKey) {
-  const taken = new Set();
-  const positions = game.figurePositions?.[playerNum] || {};
-  for (const fk of Object.keys(positions)) {
-    if (fk === excludeFigureKey) continue;
-    // figureKey format: dcName-dgIdx-figIdx  — dcName may contain spaces/hyphens
-    if (!fk.startsWith('Clawdite Shapeshifter')) continue;
-    const form = getConfig(game, fk)?.form;
-    if (form) taken.add(form);
-  }
-  return taken;
-}
+import { _matchesKeywordPhrase } from '../game/validation.js';
 
 /** Get blocking terrain info for deployment filtering.
  * When ignoreBlocking is true (Massive/Mobile), blocking cells are merged into
@@ -172,12 +152,6 @@ function getAttachmentRestriction(cardName) {
       });
     },
   };
-}
-
-/** Check if a DC's keywords + affiliation satisfy a keyword phrase like "IMPERIAL TROOPER" or "HUNTER". */
-function _matchesKeywordPhrase(phrase, dcKw, affiliation) {
-  const words = phrase.split(/\s+/).filter(Boolean);
-  return words.every(w => dcKw.includes(w) || affiliation === w);
 }
 
 /**
