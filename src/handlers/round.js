@@ -823,6 +823,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
   game.currentRound = (game.currentRound || 1) + 1;
   setRoundPhase(game, ROUND_PHASES.START_OF_ROUND);
+  game.startOfRoundWhoseTurn = game.initiativePlayerId;
   cleanupRoundStart(game);
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });

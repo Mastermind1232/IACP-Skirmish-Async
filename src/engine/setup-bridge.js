@@ -310,6 +310,7 @@ export async function runDraftRandom(game, client, deps, options = {}) {
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   game.draftRandomUsed = true;
   deps.setPhase(game, deps.PHASES.ROUND_ACTIVE, deps.ROUND_PHASES.START_OF_ROUND);
+  game.startOfRoundWhoseTurn = game.initiativePlayerId;
 
   if (game.boardId && game.selectedMap) {
     const boardChannel = await fetchGameChannel(client, game.boardId);

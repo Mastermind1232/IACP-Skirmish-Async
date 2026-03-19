@@ -74,6 +74,9 @@ function determineActingPlayer(game) {
   if (game.endOfRoundWhoseTurn) {
     return game.endOfRoundWhoseTurn === game.player1Id ? 1 : 2;
   }
+  if (game.startOfRoundWhoseTurn) {
+    return game.startOfRoundWhoseTurn === game.player1Id ? 1 : 2;
+  }
 
   // Pending combat states — the attacker/defender depends on the sub-state
   if (game.pendingCombat) {
@@ -149,7 +152,7 @@ const PENDING_KEYS = [
   'pendingStillFaster', 'pendingPowerTokenGrant', 'pendingCelebration',
   'pendingDcAbilityChoice', 'pendingRushPush', 'pendingLastResort',
   'pendingFalseOrders', 'forceVisionPending', 'setupAttachmentPhase',
-  'endOfRoundWhoseTurn',
+  'endOfRoundWhoseTurn', 'startOfRoundWhoseTurn',
 ];
 
 function capturePendingStates(game) {
