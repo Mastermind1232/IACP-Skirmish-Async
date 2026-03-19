@@ -120,6 +120,7 @@ import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/
 import { getActiveSelfPlayGameId, runSelfPlayLoop } from './src/ai/self-play.js';
 import { startQueue, stopQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
 import { parseTransitionKey } from './src/exploration/transition-key.js';
+import { getTopValidationCandidate } from './src/exploration/rank-seeds.js';
 import { snowflakeUsers, sanitizeMentions } from './src/discord/channel-helpers.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
@@ -3008,12 +3009,13 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.reply({ content: 'Self-play idle.', ephemeral: true }).catch(discordCatch);
           return;
         }
+        const modeLabel = qs.seedMode ? 'seed auto-select' : 'scenario round-robin';
         const lines = [
-          `**State:** ${qs.state}`,
+          `**State:** ${qs.state} (${modeLabel})`,
           `**Runs:** ${qs.runCount} (${qs.failCount} failed)`,
-          `**Current scenario:** ${qs.currentRunScenario || 'none'}`,
-          `**Rotation:** ${qs.rotationIndex} / ${qs.totalScenarios} scenarios`,
+          `**Current:** ${qs.currentRunScenario || 'none'}`,
         ];
+        if (!qs.seedMode) lines.push(`**Rotation:** ${qs.rotationIndex} / ${qs.totalScenarios} scenarios`);
         if (activeId) lines.push(`**Active game:** ${activeId}`);
         if (qs.pauseReason) lines.push(`**Pause reason:** ${qs.pauseReason}`);
         await interaction.reply({ content: lines.join('\n'), ephemeral: true }).catch(discordCatch);
@@ -3154,7 +3156,6 @@ client.on('interactionCreate', async (interaction) => {
         }
         return;
       }
-      const SELFPLAY_SCENARIOS = IMPLEMENTED_SCENARIOS.filter(s => !['eor_cc_window', 'sor_cc_window', 'mid_combat'].includes(s));
       try {
         startQueue({
           client,
@@ -3170,7 +3171,31 @@ client.on('interactionCreate', async (interaction) => {
             client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
             deleteGameFromDb,
           },
-          scenarios: SELFPLAY_SCENARIOS,
+          scenarios: [], // unused in seed mode
+          seedMode: true,
+          getNextSeed: () => getTopValidationCandidate(getDestructTestDecks),
+          onSeedRunComplete: async (artifact, seedConfig) => {
+            const dedupedKeys = artifact?.transitions_hit || [];
+            // Persist transition coverage (discord_count)
+            for (const key of dedupedKeys) {
+              const { roundPhase, pendingSet, actionType } = parseTransitionKey(key);
+              await upsertDiscordTransition(key, roundPhase, pendingSet, actionType);
+            }
+            // Persist episode (source='discord')
+            await insertExplorationEpisode({
+              episode_id: randomUUID(),
+              source: 'discord',
+              seed_config: { mapId: seedConfig.mapId, p1Deck: seedConfig.p1Deck.name, p2Deck: seedConfig.p2Deck.name },
+              total_steps: artifact?.total_steps || 0,
+              unique_transitions: dedupedKeys.length,
+              novel_transitions: 0,
+              invariant_errors: 0,
+              transitions_hit: dedupedKeys,
+              result: artifact?.result || 'unknown',
+              stop_reason: artifact?.stop_reason || 'unknown',
+              duration_ms: artifact?.duration_ms || 0,
+            });
+          },
           interGameDelayMs: 5000,
           actionCap: 500,
           delayMs: 200,
@@ -3187,7 +3212,7 @@ client.on('interactionCreate', async (interaction) => {
           },
         });
         await interaction.reply({
-          content: `**Self-play started** — ${SELFPLAY_SCENARIOS.length} scenarios, round-robin. Use \`/selfplay status\` to check.`,
+          content: '**Self-play started** — auto-selecting highest-ranked unvalidated seeds. Use `/selfplay status` to check.',
           ephemeral: false,
         }).catch(discordCatch);
       } catch (err) {

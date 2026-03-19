@@ -15,6 +15,7 @@
  */
 
 import pg from 'pg';
+import { rankSeeds } from '../../src/exploration/rank-seeds.js';
 
 const DB_URL = process.env.DATABASE_URL;
 if (!DB_URL) {
@@ -56,112 +57,8 @@ async function loadData(pool) {
   return { transitions, episodes: epRes.rows };
 }
 
-// ── Scoring ─────────────────────────────────────────────────────────────────
-
-/**
- * Compute rare_reach_score for an episode: SUM(1 / headless_count) for each
- * distinct transition the episode hit. Rewards seeds that reach low-coverage
- * (underexplored) transitions.
- */
-function computeRareReachScore(transitionsHit, transitionIndex) {
-  let score = 0;
-  for (const key of transitionsHit) {
-    const t = transitionIndex.get(key);
-    if (t && t.headless_count > 0) {
-      score += 1 / t.headless_count;
-    } else {
-      // Transition not in DB (shouldn't happen, but treat as maximally rare)
-      score += 1;
-    }
-  }
-  return score;
-}
-
-/**
- * Group episodes by seed_config and compute per-seed aggregate metrics.
- */
-function rankSeeds(episodes, transitions) {
-  // Group by canonical seed key
-  const groups = new Map();
-  for (const ep of episodes) {
-    const sc = ep.seed_config;
-    const key = `${sc.p1Deck} vs ${sc.p2Deck} @ ${sc.mapId}`;
-
-    if (!groups.has(key)) {
-      groups.set(key, {
-        seedKey: key,
-        p1Deck: sc.p1Deck,
-        p2Deck: sc.p2Deck,
-        mapId: sc.mapId,
-        episodes: [],
-      });
-    }
-    groups.get(key).episodes.push(ep);
-  }
-
-  // Score each seed group
-  const ranked = [];
-  for (const [, group] of groups) {
-    const eps = group.episodes;
-    const runs = eps.length;
-
-    // Aggregate: use best episode's metrics (max, not average — we want peak capability)
-    let bestRareReach = 0;
-    let bestUniqueTransitions = 0;
-    let bestNovelYield = 0;
-    let totalGsErrors = 0;
-    let anyCompleted = false;
-    // Collect all transitions reached across all runs of this seed
-    const allTransitionsReached = new Set();
-
-    for (const ep of eps) {
-      const hits = ep.transitions_hit || [];
-      const rareReach = computeRareReachScore(hits, transitions);
-      if (rareReach > bestRareReach) bestRareReach = rareReach;
-      if (ep.unique_transitions > bestUniqueTransitions) bestUniqueTransitions = ep.unique_transitions;
-      // novel_transitions: per-episode novel-yield relative to DB baseline at that batch's
-      // start. This is a ranking signal for how much novel territory this seed can reach.
-      // Two episodes (even in the same batch) may both claim credit for the same transition.
-      // That is intentional — it means both seeds can reach that territory.
-      if (ep.novel_transitions > bestNovelYield) bestNovelYield = ep.novel_transitions;
-      totalGsErrors += ep.invariant_errors || 0;
-      if (ep.result === 'completed') anyCompleted = true;
-      for (const key of hits) allTransitionsReached.add(key);
-    }
-
-    // Composite score: rare_reach * completion bonus
-    // Simple and inspectable. rare_reach_score is the primary signal.
-    const completionMultiplier = anyCompleted ? 1.5 : 1.0;
-    const compositeScore = bestRareReach * completionMultiplier;
-
-    // Find the rarest transitions this seed reaches
-    const rareTransitions = [];
-    for (const key of allTransitionsReached) {
-      const t = transitions.get(key);
-      if (t) {
-        rareTransitions.push({ key, headless_count: t.headless_count });
-      }
-    }
-    rareTransitions.sort((a, b) => a.headless_count - b.headless_count);
-
-    ranked.push({
-      ...group,
-      runs,
-      bestRareReach,
-      bestUniqueTransitions,
-      bestNovelYield,
-      totalGsErrors,
-      anyCompleted,
-      compositeScore,
-      totalTransitionsReached: allTransitionsReached.size,
-      rareTransitions: rareTransitions.slice(0, 5), // Top 5 rarest
-    });
-  }
-
-  // Sort by composite score descending
-  ranked.sort((a, b) => b.compositeScore - a.compositeScore);
-  return ranked;
-}
+// ── Scoring (imported from shared module) ────────────────────────────────────
+// computeRareReachScore and rankSeeds imported from ../../src/exploration/rank-seeds.js
 
 /**
  * Compute the coverage frontier: rarest transitions across all exploration.

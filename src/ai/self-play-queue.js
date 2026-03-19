@@ -1,8 +1,10 @@
 /**
- * Self-play queue runner: cycles through scenarios, captures execution traces,
- * pauses on failures for human review.
+ * Self-play queue runner: cycles through scenarios or auto-selected seeds,
+ * captures execution traces, pauses on failures for human review.
  *
- * Phase 1: deterministic round-robin, pause on any failure, in-memory state only.
+ * Modes:
+ * - Scenario mode (default): deterministic round-robin through CC scenarios.
+ * - Seed mode: auto-selects highest-ranked unvalidated headless seed each run.
  */
 
 import { runSelfPlayLoop, getActiveSelfPlayGameId } from './self-play.js';
@@ -77,6 +79,7 @@ export function getQueueStatus() {
     rotationIndex,
     pauseReason,
     totalScenarios: queueOpts?.scenarios?.length ?? 0,
+    seedMode: queueOpts?.seedMode ?? false,
   };
 }
 
@@ -92,6 +95,7 @@ async function _runQueueLoop() {
     interGameDelayMs = 5000, actionCap = 500, delayMs = 200,
     feedbackChannel, logChannel, saveGames,
     botLogsPost,
+    seedMode = false, getNextSeed, onSeedRunComplete,
   } = opts;
 
   const AI_USER_PREFIX = opts.AI_USER_PREFIX || 'ai_user_';
@@ -105,12 +109,30 @@ async function _runQueueLoop() {
       }
       if (queueState === 'draining') break;
 
-      const scenarioIdx = rotationIndex % scenarios.length;
-      const scenarioId = scenarios[scenarioIdx];
-      currentRunScenario = scenarioId;
-      const runNum = runCount + 1;
+      // ── Seed mode: auto-select from ranked headless exploration data ──
+      let scenarioId, scenarioIdx, seedConfig;
+      if (seedMode && getNextSeed) {
+        const seed = await getNextSeed();
+        if (!seed) {
+          console.log('[self-play-queue] No more seeds available. Stopping.');
+          break;
+        }
+        scenarioId = `seed:${seed.p1Deck.name}_vs_${seed.p2Deck.name}@${seed.mapId}`;
+        seedConfig = { mapId: seed.mapId, p1Deck: seed.p1Deck, p2Deck: seed.p2Deck };
+        scenarioIdx = null;
+        currentRunScenario = seed.seedKey;
+      } else {
+        scenarioIdx = rotationIndex % scenarios.length;
+        scenarioId = scenarios[scenarioIdx];
+        seedConfig = null;
+        currentRunScenario = scenarioId;
+      }
 
-      console.log(`[self-play-queue] Run #${runNum}: scenario ${scenarioId} (${scenarioIdx + 1}/${scenarios.length})`);
+      const runNum = runCount + 1;
+      const scenarioLabel = seedConfig
+        ? `seed: ${currentRunScenario}`
+        : `scenario ${scenarioId} (${scenarioIdx + 1}/${scenarios.length})`;
+      console.log(`[self-play-queue] Run #${runNum}: ${scenarioLabel}`);
 
       let gameId = null;
       let result = null;
@@ -120,7 +142,9 @@ async function _runQueueLoop() {
         // 1. Create game
         const aiP1 = `${AI_USER_PREFIX}1`;
         const aiP2 = `${AI_USER_PREFIX}2`;
-        const created = await createTestGame(client, guild, aiP1, scenarioId, feedbackChannel, { player2Id: aiP2 });
+        const createOpts = { player2Id: aiP2 };
+        if (seedConfig) createOpts.seedConfig = seedConfig;
+        const created = await createTestGame(client, guild, aiP1, seedConfig ? null : scenarioId, feedbackChannel, createOpts);
         gameId = created.gameId;
 
         const game = getGame(gameId);
@@ -139,7 +163,7 @@ async function _runQueueLoop() {
           guildId,
           actionCap,
           delayMs,
-          explorationMode: 'queue',
+          explorationMode: seedConfig ? 'seed_validation' : 'queue',
         });
         result = loopResult.result;
         artifact = loopResult.artifact;
@@ -174,9 +198,18 @@ async function _runQueueLoop() {
       }
       // Failed runs: SKIP cleanup — preserve Discord channels for human inspection
 
-      // 4. Post summary to logChannel
+      // 4. Seed-mode coverage persistence
+      if (seedConfig && onSeedRunComplete && artifact) {
+        try {
+          await onSeedRunComplete(artifact, seedConfig);
+        } catch (err) {
+          console.error('[self-play-queue] onSeedRunComplete error:', err.message);
+        }
+      }
+
+      // 5. Post summary to logChannel
       const summary = [
-        `**Run #${runNum}** — ${scenarioId} (${scenarioIdx + 1}/${scenarios.length})`,
+        `**Run #${runNum}** — ${scenarioLabel}`,
         `Result: **${result}** | Stop: ${artifact?.stop_reason || 'unknown'}`,
         `Steps: ${artifact?.total_steps ?? 0} | Handlers: ${artifact?.exercised_handlers?.length ?? '?'} | Actions: ${artifact?.seen_action_types?.length ?? '?'}`,
       ].join('\n');
@@ -184,7 +217,7 @@ async function _runQueueLoop() {
         await logChannel.send(summary);
       } catch {}
 
-      // 5. On failure: post to bot-logs, then pause
+      // 6. On failure: post to bot-logs, then pause
       if (result === 'failed') {
         failCount++;
         if (botLogsPost) {
@@ -193,11 +226,11 @@ async function _runQueueLoop() {
         pauseQueue(`auto: ${artifact?.stop_reason || 'unknown'}`);
       }
 
-      // 6. Increment counters
+      // 7. Increment counters
       runCount++;
-      rotationIndex++;
+      if (!seedMode) rotationIndex++;
 
-      // 7. Inter-game delay (skip if paused/draining — the pause gate handles wait)
+      // 8. Inter-game delay (skip if paused/draining — the pause gate handles wait)
       if (queueState === 'running' && interGameDelayMs > 0) {
         await new Promise(r => setTimeout(r, interGameDelayMs));
       }
