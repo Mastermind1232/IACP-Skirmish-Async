@@ -983,12 +983,18 @@ function getCombatActions(game, playerNum, deps) {
       // Compute surge abilities dynamically (they're not stored on combat state)
       const surgeKeys = getAttackerSurgeAbilities(combat);
       const surgesRemaining = combat.surgeRemaining ?? 0;
+      // Overload (Rebel Saboteur): may trigger the same surge ability up to twice per attack
+      const atkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+      const atkEff = getDcEffects()?.[atkDcName] || getDcEffects()?.[(atkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+      const maxSurgeUses = (atkEff?.specialAbilityIds || []).includes('overload_saboteur') ? 2 : 1;
 
       for (let i = 0; i < surgeKeys.length; i++) {
         const key = surgeKeys[i];
         const isDouble = key.startsWith('double:');
         const cost = isDouble ? 2 : 1;
         if (cost > surgesRemaining) continue;
+        // Skip surges already spent the max number of times
+        if (((combat.surgeSpentCount || {})[i] || 0) >= maxSurgeUses) continue;
 
         const label = SURGE_LABELS[key]
           || SURGE_LABELS[key.replace('double:', '')]
