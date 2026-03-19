@@ -574,6 +574,7 @@ function getActivationActions(game, playerNum, deps) {
       }
 
       // Attack: compute individual targets if deps available
+      const canComputeTargets = deps.getDcStats && deps.getMapSpaces && game.selectedMap?.id;
       const targets = computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps);
       if (targets.length > 0) {
         game.attackTargets = game.attackTargets || {};
@@ -587,8 +588,8 @@ function getActivationActions(game, playerNum, deps) {
             params: { msgId, dcName: meta.dcName, targetIndex: ti, targetFigureKey: t.figureKey },
           });
         }
-      } else {
-        // Fallback: generic attack action (no target info available)
+      } else if (!canComputeTargets) {
+        // Fallback: deps unavailable, offer generic attack (Discord handler will compute targets)
         actions.push({
           type: ACTION_TYPES.ATTACK_TARGET,
           customId: buildCustomId(ACTION_TYPES.ATTACK_TARGET, { msgId, figureIndex }),
@@ -596,6 +597,7 @@ function getActivationActions(game, playerNum, deps) {
           params: { msgId, dcName: meta.dcName },
         });
       }
+      // If canComputeTargets but targets is empty: no valid targets in range/LOS — don't offer attack
 
       // Interact — compute legal interact options for each figure of this DC
       const mapId = game.selectedMap?.id;
