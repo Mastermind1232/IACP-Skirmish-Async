@@ -3284,7 +3284,9 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: Power Token gain (Battle Scars, etc.) — requires active activation
-  if (entry.type === 'ccEffect' && (typeof entry.powerTokenGain === 'number' || entry.powerTokenGainIfDamagedGte)) {
+  // Skip if a more specific handler owns the ability (lookingForAFightChoice, apexPredator, etc.)
+  if (entry.type === 'ccEffect' && (typeof entry.powerTokenGain === 'number' || entry.powerTokenGainIfDamagedGte)
+    && !entry.lookingForAFightChoice) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);

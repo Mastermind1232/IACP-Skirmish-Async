@@ -16,6 +16,8 @@ const ALPHA = 0.002;         // Learning rate (smaller for neural stability)
 const HIDDEN_SIZE = 32;      // Hidden layer width
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
+const WEIGHT_DECAY = 0.0001;        // L2 regularization — gently pulls weights toward zero
+const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger with decay active
 
 const REPLAY_BUFFER_SIZE = 10000;   // Max transitions in ring buffer
 const REPLAY_BATCH_SIZE = 32;       // Transitions per mini-batch
@@ -852,26 +854,30 @@ function sanitizeNetwork(network, stats) {
 // ── Backpropagation ─────────────────────────────────────────────────────────
 
 /**
- * Manual backprop through dueling architecture with SGD update.
+ * Manual backprop through dueling architecture with SGD + L2 weight decay.
+ * Weight decay gently pulls weights toward zero (prevents explosion without hard caps).
+ * Emergency clamp at ±50 as a safety net that should never trigger with decay active.
  */
 function backpropUpdate(network, actionIdx, delta, alpha, h_pre, h, features) {
   const { W1, b1, Wv, Wa, ba } = network;
   const nActions = Wa.length; // Use actual network size, not constant
   const dAChosen = delta * ((nActions - 1) / nActions);
   const dAOther = delta * (-1 / nActions);
+  const decay = 1 - WEIGHT_DECAY;
+  const clamp = WEIGHT_CLAMP_EMERGENCY;
 
-  // Advantage head gradients
+  // Advantage head gradients + decay
   for (let m = 0; m < nActions; m++) {
     const dA = (m === actionIdx) ? dAChosen : dAOther;
     for (let j = 0; j < HIDDEN_SIZE; j++) {
-      Wa[m][j] += alpha * dA * h[j];
+      Wa[m][j] = Math.max(-clamp, Math.min(clamp, Wa[m][j] * decay + alpha * dA * h[j]));
     }
-    ba[m] += alpha * dA;
+    ba[m] += alpha * dA; // No decay on biases (standard practice)
   }
 
-  // Value head gradients
+  // Value head gradients + decay
   for (let j = 0; j < HIDDEN_SIZE; j++) {
-    Wv[j] += alpha * delta * h[j];
+    Wv[j] = Math.max(-clamp, Math.min(clamp, Wv[j] * decay + alpha * delta * h[j]));
   }
   network.bv += alpha * delta;
 
@@ -884,9 +890,9 @@ function backpropUpdate(network, actionIdx, delta, alpha, h_pre, h, features) {
     }
     const grad_pre = h_pre[j] > 0 ? grad_h : 0; // ReLU gate
 
-    // Input layer gradients
+    // Input layer gradients + decay
     for (let i = 0; i < NUM_FEATURES; i++) {
-      W1[j][i] += alpha * grad_pre * (features[i] || 0);
+      W1[j][i] = Math.max(-clamp, Math.min(clamp, W1[j][i] * decay + alpha * grad_pre * (features[i] || 0)));
     }
     b1[j] += alpha * grad_pre;
   }
