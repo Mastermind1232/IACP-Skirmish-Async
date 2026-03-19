@@ -65,7 +65,7 @@ const REWARD_WEIGHTS = {
   step: -0.02,            // Per-action cost — pushes toward faster game completion
 };
 
-const NUM_FEATURES = 26;
+const NUM_FEATURES = 36;
 
 const FEATURE_NAMES = [
   // Original 16 (indices 0-15 preserved for weight compatibility)
@@ -74,12 +74,23 @@ const FEATURE_NAMES = [
   'roundProgress', 'activationsRatio', 'inCombat', 'inMovement',
   'attackPower', 'bias',
   'enemyThreat', 'objectivePotential',
-  // New features (indices 16-25, auto-migrated with He init)
-  'myLowestFigHp', 'oppLowestFigHp',      // Per-DC health granularity
-  'myPowerTokens', 'oppPowerTokens',        // Power token economy
-  'myCcHandSize', 'oppCcHandSize',          // CC hand tempo
-  'myExhaustedRatio', 'oppExhaustedRatio',  // Activation order awareness
-  'myConditions', 'oppConditions',           // Condition pressure
+  // Batch 2: per-DC health (indices 16-17)
+  'myLowestFigHp', 'oppLowestFigHp',
+  // Batch 2: typed power tokens (indices 18-21, replaces lumped count)
+  'myOffensiveTokens', 'myDefensiveTokens',
+  'oppOffensiveTokens', 'oppDefensiveTokens',
+  // Batch 2: CC hand (indices 22-25)
+  'myCcHandSize', 'oppCcHandSize',
+  'myAvgCcCost', 'oppAvgCcCost',
+  // Batch 2: activation order (indices 26-28)
+  'myExhaustedRatio', 'oppExhaustedRatio',
+  'activationCountAdv',
+  // Batch 2: conditions — total + stun separated (indices 29-32)
+  'myConditions', 'oppConditions',
+  'myStunnedRatio', 'oppStunnedRatio',
+  // Batch 2: initiative + VP urgency (indices 33-35)
+  'hasInitiative',
+  'vpUrgency', 'oppVpUrgency',
 ];
 
 const ABSTRACT_TYPES = [
@@ -547,19 +558,25 @@ function getLowestFigHpRatio(dcHealthState, dcMessageMeta, playerNum) {
 }
 
 /**
- * Total power tokens for a player, normalized.
- * Each figure can hold 0-2 tokens typically; max ~8 for a 4-figure squad.
+ * Power token counts by type for a player.
+ * Returns { offensive, defensive } normalized to /4 each.
+ * Offensive = Hit + Surge tokens, Defensive = Block + Evade tokens.
  */
-function getPowerTokenCount(game, playerNum) {
+function getPowerTokensByType(game, playerNum) {
   const tokens = game.figurePowerTokens;
-  if (!tokens) return 0;
+  if (!tokens) return { offensive: 0, defensive: 0 };
   const myFigKeys = Object.keys(game.figurePositions?.[playerNum] || {});
-  let count = 0;
+  let off = 0, def = 0;
   for (const fk of myFigKeys) {
     const ft = tokens[fk];
-    if (Array.isArray(ft)) count += ft.length;
+    if (!Array.isArray(ft)) continue;
+    for (const t of ft) {
+      const tl = String(t).toLowerCase();
+      if (tl === 'hit' || tl === 'surge') off++;
+      else if (tl === 'block' || tl === 'evade') def++;
+    }
   }
-  return Math.min(count, 8) / 8;
+  return { offensive: Math.min(off, 4) / 4, defensive: Math.min(def, 4) / 4 };
 }
 
 /**
@@ -584,19 +601,43 @@ function getExhaustedRatio(game, playerNum) {
 }
 
 /**
- * Total conditions on a player's figures, normalized.
- * Stun, Weaken, Bleed are all negative — more conditions = worse position.
+ * Condition counts for a player's figures.
+ * Returns { total, stunned } — total conditions normalized /8,
+ * stunned figures as fraction of alive figures.
+ * Stun is separated because it blocks ALL actions (most impactful condition).
  */
-function getConditionCount(game, playerNum) {
+function getConditionCounts(game, playerNum) {
   const conditions = game.figureConditions;
-  if (!conditions) return 0;
   const myFigKeys = Object.keys(game.figurePositions?.[playerNum] || {});
-  let count = 0;
+  if (!conditions || myFigKeys.length === 0) return { total: 0, stunned: 0 };
+  let total = 0, stunned = 0;
   for (const fk of myFigKeys) {
     const fc = conditions[fk];
-    if (Array.isArray(fc)) count += fc.length;
+    if (!Array.isArray(fc)) continue;
+    total += fc.length;
+    if (fc.some(c => String(c).toLowerCase() === 'stun')) stunned++;
   }
-  return Math.min(count, 8) / 8;
+  return {
+    total: Math.min(total, 8) / 8,
+    stunned: stunned / myFigKeys.length,
+  };
+}
+
+/**
+ * Average CC cost in a player's hand, normalized.
+ * Higher avg cost = more powerful but harder to play.
+ */
+function getAvgCcCost(game, playerNum) {
+  const hand = playerNum === 1 ? game.player1CcHand : game.player2CcHand;
+  if (!Array.isArray(hand) || hand.length === 0) return 0;
+  let totalCost = 0;
+  for (const cardName of hand) {
+    try {
+      const effect = getCcEffect(cardName);
+      totalCost += typeof effect?.cost === 'number' ? effect.cost : 0;
+    } catch { /* unknown card */ }
+  }
+  return Math.min(totalCost / hand.length, 3) / 3; // Normalize: avg cost 0-3 → 0-1
 }
 
 // ── Feature Extraction ──────────────────────────────────────────────────────
@@ -620,6 +661,14 @@ export function extractFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
   const totalFigs = myFigs + oppFigs;
   const totalActs = myActs + oppActs;
 
+  // Typed power tokens
+  const myTokens = getPowerTokensByType(game, playerNum);
+  const oppTokens = getPowerTokensByType(game, oppNum);
+
+  // Conditions with Stun separated
+  const myCond = getConditionCounts(game, playerNum);
+  const oppCond = getConditionCounts(game, oppNum);
+
   return [
     /* 0  vpAdv             */ (myVP - oppVP) / 40,
     /* 1  myHpRatio         */ myHpRatio,
@@ -637,17 +686,32 @@ export function extractFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
     /* 13 bias              */ 1.0,
     /* 14 enemyThreat       */ getEnemyThreat(game, playerNum, dcMessageMeta),
     /* 15 objectivePotential */ getObjectivePotential(game, playerNum),
-    // New features (16-25) — auto-migrated W1 columns start with He init
+    // Per-DC health (16-17)
     /* 16 myLowestFigHp     */ getLowestFigHpRatio(dcHealthState, dcMessageMeta, playerNum),
     /* 17 oppLowestFigHp    */ getLowestFigHpRatio(dcHealthState, dcMessageMeta, oppNum),
-    /* 18 myPowerTokens     */ getPowerTokenCount(game, playerNum),
-    /* 19 oppPowerTokens    */ getPowerTokenCount(game, oppNum),
-    /* 20 myCcHandSize      */ getCcHandSizeNorm(game, playerNum),
-    /* 21 oppCcHandSize     */ getCcHandSizeNorm(game, oppNum),
-    /* 22 myExhaustedRatio  */ getExhaustedRatio(game, playerNum),
-    /* 23 oppExhaustedRatio */ getExhaustedRatio(game, oppNum),
-    /* 24 myConditions      */ getConditionCount(game, playerNum),
-    /* 25 oppConditions     */ getConditionCount(game, oppNum),
+    // Typed power tokens (18-21)
+    /* 18 myOffensiveTokens */ myTokens.offensive,
+    /* 19 myDefensiveTokens */ myTokens.defensive,
+    /* 20 oppOffensiveTokens*/ oppTokens.offensive,
+    /* 21 oppDefensiveTokens*/ oppTokens.defensive,
+    // CC hand (22-25)
+    /* 22 myCcHandSize      */ getCcHandSizeNorm(game, playerNum),
+    /* 23 oppCcHandSize     */ getCcHandSizeNorm(game, oppNum),
+    /* 24 myAvgCcCost       */ getAvgCcCost(game, playerNum),
+    /* 25 oppAvgCcCost      */ getAvgCcCost(game, oppNum),
+    // Activation order (26-28)
+    /* 26 myExhaustedRatio  */ getExhaustedRatio(game, playerNum),
+    /* 27 oppExhaustedRatio */ getExhaustedRatio(game, oppNum),
+    /* 28 activationCountAdv*/ totalActs > 0 ? (myActs - oppActs) / Math.max(totalActs, 1) : 0,
+    // Conditions — total + stun (29-32)
+    /* 29 myConditions      */ myCond.total,
+    /* 30 oppConditions     */ oppCond.total,
+    /* 31 myStunnedRatio    */ myCond.stunned,
+    /* 32 oppStunnedRatio   */ oppCond.stunned,
+    // Initiative + VP urgency (33-35)
+    /* 33 hasInitiative     */ game.initiativePlayerNum === playerNum ? 1 : 0,
+    /* 34 vpUrgency         */ 1 - Math.min(myVP, 40) / 40,
+    /* 35 oppVpUrgency      */ 1 - Math.min(oppVP, 40) / 40,
   ];
 }
 
