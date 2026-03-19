@@ -3088,7 +3088,7 @@ client.on('interactionCreate', async (interaction) => {
             buildAllDeps,
             getGame,
             atomicOpts,
-            actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState },
+            actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces },
             scenario: `seed:${p1DeckName}_vs_${p2DeckName}@${mapId}`,
             guildId: interaction.guild.id,
             actionCap: 500,
@@ -3165,7 +3165,7 @@ client.on('interactionCreate', async (interaction) => {
           buildAllDeps,
           getGame,
           atomicOpts,
-          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState },
+          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces },
           createTestGame,
           deleteGameChannelsAndGame,
           cleanupCtx: {
