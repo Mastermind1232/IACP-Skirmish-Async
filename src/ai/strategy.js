@@ -26,8 +26,9 @@ export function pickBestAction(engine, actions, playerNum) {
   // Filter out multi-step flows the AI can't complete
   const viable = actions.filter(a => !AI_UNSUPPORTED_TYPES.has(a.type));
   if (viable.length === 0) {
-    // All actions are unsupported — fall back to original list to avoid stuck_no_actions
-    return { action: actions[0], score: 0 };
+    // All actions are unsupported (e.g., only CC plays during combat window).
+    // Return null so the self-play loop can re-check with a different player.
+    return null;
   }
   if (viable.length === 1) return { action: viable[0], score: 0 };
 

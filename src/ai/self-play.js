@@ -82,6 +82,11 @@ function determineActingPlayer(game) {
   // Pending combat states — the attacker/defender depends on the sub-state
   if (game.pendingCombat) {
     const pc = game.pendingCombat;
+    // Combat ready check: both players must confirm — return whoever isn't ready
+    if (!pc.p1Ready || !pc.p2Ready) {
+      if (!pc.p1Ready && !pc.p2Ready) return 'both';
+      return pc.p1Ready ? 2 : 1;
+    }
     if (pc.rerollPhase) {
       // Defender rerolls first, then attacker
       return pc.rerollPhase === 'defender'
@@ -330,7 +335,18 @@ export async function runSelfPlayLoop(game, client, opts) {
         getAvailableActions: (pn) => getAvailableActions(g, pn, actionDeps),
       };
       const pick = pickBestAction(engineLike, allActions, allActions[0]._playerNum);
-      const chosen = pick?.action || allActions[0];
+      if (!pick) {
+        // All available actions are unsupported (e.g., only CC plays) — skip this step
+        consecutiveEmpty++;
+        if (consecutiveEmpty > 20) {
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_unsupported_only', surfaceCtx, traceData, explorationMode });
+          await insertSelfPlayRun(artifact);
+          return { result: 'failed', artifact };
+        }
+        if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+      const chosen = pick.action;
 
       // Route to handler
       const handlerKey = getHandlerKey(chosen.customId, 'button');
