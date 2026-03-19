@@ -41,24 +41,44 @@ const gameErrorThreads = new Map();
 
 /**
  * Delete the bot-logs error thread for a game, then clear the cached mapping.
+ * Falls back to searching by thread name if the in-memory map has no entry
+ * (e.g. after a bot restart).
  * @param {string} gameId
  * @param {object} [client] - Discord client. If provided, deletes the thread from Discord.
  */
 export async function clearGameErrorThread(gameId, client) {
+  let found = false;
   for (const [key, threadId] of gameErrorThreads.entries()) {
     if (key.endsWith(`_${gameId}`)) {
+      found = true;
       if (client && threadId) {
         try {
           const thread = await fetchGameChannel(client, threadId);
           if (thread) await thread.delete();
         } catch (err) {
-          // Thread already gone or inaccessible — that's fine
           if (err.code !== 10003 && err.code !== 10008) {
             console.error(`[clearGameErrorThread] Failed to delete thread for ${gameId}:`, err.message);
           }
         }
       }
       gameErrorThreads.delete(key);
+    }
+  }
+  // Fallback: search bot-logs channel by thread name (handles bot restarts)
+  if (!found && client) {
+    try {
+      let ch = null;
+      try { ch = await fetchGameChannel(client, BOT_LOGS_CHANNEL_ID); } catch {}
+      if (ch) {
+        const threads = await ch.threads.fetchActive();
+        const threadName = `IA${gameId} errors`;
+        const match = threads.threads.find(t => t.name === threadName);
+        if (match) await match.delete();
+      }
+    } catch (err) {
+      if (err.code !== 10003 && err.code !== 10008) {
+        console.error(`[clearGameErrorThread] Fallback search failed for ${gameId}:`, err.message);
+      }
     }
   }
 }
