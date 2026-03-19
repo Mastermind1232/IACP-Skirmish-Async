@@ -2,7 +2,7 @@
  * Win condition functions extracted from index.js.
  * Handles VP checks, tiebreakers, game-over posting, and defeat-related bookkeeping.
  */
-import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 
 /**
  * Check if either player has reached 40 VP or been eliminated.
@@ -138,11 +138,11 @@ export async function postGameOver(game, client, winnerId, reason, deps) {
     : `\uD83C\uDFC1 **GAME OVER** — ${reason}`;
   try {
     const ch = await fetchGameChannel(client, game.generalId);
-    await ch.send({
+    await ch.send(sanitizeMentions({
       content,
       embeds: [embed],
       allowedMentions: winnerId ? { users: [winnerId] } : undefined,
-    });
+    }));
   } catch (err) {
     console.error('Failed to post game over:', err);
   }
