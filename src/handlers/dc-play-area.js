@@ -181,11 +181,11 @@ export async function handleDcActivate(interaction, ctx) {
       new ButtonBuilder().setCustomId(`confirm_activate_${gameId}_${msgId}_${interaction.message.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`cancel_activate_${gameId}_${ownerId}`).setLabel('No').setStyle(ButtonStyle.Danger)
     );
-    await withDiscordRetry(() => playAreaCh.send({
+    await withDiscordRetry(() => playAreaCh.send(sanitizeMentions({
       content: `<@${ownerId}> You are not first to act. Activate anyway?`,
       components: [promptRow],
       allowedMentions: { users: [ownerId] },
-    }));
+    })));
     return;
   }
   try {
@@ -204,11 +204,11 @@ export async function handleDcActivate(interaction, ctx) {
     game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
     const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
     const actMinimap = await getActivationMinimapAttachment(game, msgId);
-    const actionsPayload = {
+    const actionsPayload = sanitizeMentions({
       content: pingContent,
       components: getDcActionButtons(msgId, dcName, displayName, game.dcActionsData[msgId], game),
       allowedMentions: { users: [ownerId] },
-    };
+    });
     if (actMinimap) actionsPayload.files = [actMinimap];
     const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
     game.dcActionsData[msgId].messageId = actionsMsg.id;
@@ -317,10 +317,10 @@ export async function handleDcActivate(interaction, ctx) {
     const logCh = await fetchGameChannel(client, game.generalId);
     const icon = ACTION_ICONS.activate || '⚡';
     const pLabel = `P${playerNum}`;
-    const logMsg = await logCh.send({
+    const logMsg = await logCh.send(sanitizeMentions({
       content: `${icon} <t:${Math.floor(Date.now() / 1000)}:t> — **${pLabel}:** <@${ownerId}> activated **${displayName}**!`,
       allowedMentions: { users: [ownerId] },
-    });
+    }));
     game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
     game.dcActivationLogMessageIds[msgId] = logMsg.id;
     // Still Faster Than You: if the opponent has SFTY active, post an interrupt prompt in the thread
