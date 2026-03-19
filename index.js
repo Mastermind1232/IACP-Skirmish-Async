@@ -3091,7 +3091,6 @@ client.on('interactionCreate', async (interaction) => {
             actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
             scenario: `seed:${p1DeckName}_vs_${p2DeckName}@${mapId}`,
             guildId: interaction.guild.id,
-            actionCap: 500,
             delayMs: 200,
             explorationMode: 'seed_validation',
           });
@@ -3198,7 +3197,6 @@ client.on('interactionCreate', async (interaction) => {
             });
           },
           interGameDelayMs: 5000,
-          actionCap: 500,
           delayMs: 200,
           feedbackChannel: interaction.channel,
           logChannel: interaction.channel,

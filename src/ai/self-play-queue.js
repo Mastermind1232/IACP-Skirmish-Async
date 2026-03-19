@@ -92,7 +92,7 @@ async function _runQueueLoop() {
     buildAllDeps, getGame, atomicOpts, actionDeps,
     createTestGame, deleteGameChannelsAndGame,
     cleanupCtx, scenarios,
-    interGameDelayMs = 5000, actionCap = 500, delayMs = 200,
+    interGameDelayMs = 5000, delayMs = 200,
     feedbackChannel, logChannel, saveGames,
     botLogsPost,
     seedMode = false, getNextSeed, onSeedRunComplete,
@@ -161,7 +161,6 @@ async function _runQueueLoop() {
           actionDeps,
           scenario: scenarioId,
           guildId,
-          actionCap,
           delayMs,
           explorationMode: seedConfig ? 'seed_validation' : 'queue',
         });

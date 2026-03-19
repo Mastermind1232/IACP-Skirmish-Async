@@ -169,7 +169,7 @@ const BUG_STOPS = new Set([
 
 /** Limit stop reasons (known V1 capability bounds). */
 const LIMIT_STOPS = new Set([
-  'unsupported_interaction_type', 'action_cap_reached', 'manual_stop',
+  'unsupported_interaction_type', 'manual_stop',
 ]);
 
 // ── Artifact builder ──────────────────────────────────────────────────────────
@@ -233,7 +233,6 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
  * @param {object}  opts.actionDeps - Deps for getAvailableActions (dcMessageMeta, dcExhaustedState, etc.)
  * @param {string}  [opts.scenario] - Scenario name for artifact
  * @param {string}  [opts.guildId] - Guild ID for artifact
- * @param {number}  [opts.actionCap=500] - Max actions before stopping
  * @param {number}  [opts.delayMs=200] - Delay between actions (ms)
  * @param {boolean} [opts.persistCompleted=false] - Also persist completed runs to DB
  * @returns {Promise<{ result: string, artifact: object }>}
@@ -241,7 +240,7 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
 export async function runSelfPlayLoop(game, client, opts) {
   const {
     buildAllDeps, getGame, atomicOpts, actionDeps = {},
-    scenario, guildId, actionCap = 500, delayMs = 200,
+    scenario, guildId, delayMs = 200,
     persistCompleted = false, explorationMode,
   } = opts;
 
@@ -271,7 +270,7 @@ export async function runSelfPlayLoop(game, client, opts) {
   game.player2Id = `${AI_USER_PREFIX}2`;
 
   try {
-    for (let step = 0; step < actionCap; step++) {
+    for (let step = 0; ; step++) {
       const g = getGame(game.gameId);
       if (!g || g.ended) {
         const wasManualStop = g?.selfPlayManualStop;
@@ -439,16 +438,10 @@ export async function runSelfPlayLoop(game, client, opts) {
 
       console.log(`[self-play] Step ${step}: P${chosen._playerNum} ${chosen.type} → ${chosen.customId}`);
 
-      if (delayMs > 0 && step < actionCap - 1) {
+      if (delayMs > 0) {
         await new Promise(r => setTimeout(r, delayMs));
       }
     }
-
-    // Hit action cap
-    const g = getGame(game.gameId) || game;
-    const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_cap_reached', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
-    await insertSelfPlayRun(artifact);
-    return { result: 'stopped', artifact };
 
   } finally {
     activeSelfPlayGameId = null;
