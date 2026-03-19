@@ -65,14 +65,21 @@ const REWARD_WEIGHTS = {
   step: -0.02,            // Per-action cost — pushes toward faster game completion
 };
 
-const NUM_FEATURES = 16;
+const NUM_FEATURES = 26;
 
 const FEATURE_NAMES = [
+  // Original 16 (indices 0-15 preserved for weight compatibility)
   'vpAdv', 'myHpRatio', 'oppHpRatio', 'hpAdv',
   'myFigsRatio', 'figsAdv', 'closeness', 'nearestEnemy',
   'roundProgress', 'activationsRatio', 'inCombat', 'inMovement',
   'attackPower', 'bias',
   'enemyThreat', 'objectivePotential',
+  // New features (indices 16-25, auto-migrated with He init)
+  'myLowestFigHp', 'oppLowestFigHp',      // Per-DC health granularity
+  'myPowerTokens', 'oppPowerTokens',        // Power token economy
+  'myCcHandSize', 'oppCcHandSize',          // CC hand tempo
+  'myExhaustedRatio', 'oppExhaustedRatio',  // Activation order awareness
+  'myConditions', 'oppConditions',           // Condition pressure
 ];
 
 const ABSTRACT_TYPES = [
@@ -517,6 +524,81 @@ function getObjectivePotential(game, playerNum) {
   return 1 - Math.min(globalMinDist, 10) / 10;
 }
 
+// ── Per-DC / Per-Figure Feature Helpers ──────────────────────────────────────
+
+/**
+ * Lowest surviving figure HP ratio for a player (0 = near death, 1 = full health).
+ * Tells the AI which side has a vulnerable figure.
+ */
+function getLowestFigHpRatio(dcHealthState, dcMessageMeta, playerNum) {
+  let lowest = 1;
+  let found = false;
+  for (const [msgId, healthArr] of dcHealthState) {
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta || meta.playerNum !== playerNum) continue;
+    for (const [cur, mx] of healthArr) {
+      if (mx <= 0 || cur <= 0) continue; // dead or invalid
+      found = true;
+      const ratio = cur / mx;
+      if (ratio < lowest) lowest = ratio;
+    }
+  }
+  return found ? lowest : 1;
+}
+
+/**
+ * Total power tokens for a player, normalized.
+ * Each figure can hold 0-2 tokens typically; max ~8 for a 4-figure squad.
+ */
+function getPowerTokenCount(game, playerNum) {
+  const tokens = game.figurePowerTokens;
+  if (!tokens) return 0;
+  const myFigKeys = Object.keys(game.figurePositions?.[playerNum] || {});
+  let count = 0;
+  for (const fk of myFigKeys) {
+    const ft = tokens[fk];
+    if (Array.isArray(ft)) count += ft.length;
+  }
+  return Math.min(count, 8) / 8;
+}
+
+/**
+ * CC hand size for a player, normalized (starting hand 3, max ~6).
+ */
+function getCcHandSizeNorm(game, playerNum) {
+  const hand = playerNum === 1 ? game.player1CcHand : game.player2CcHand;
+  if (!Array.isArray(hand)) return 0;
+  return Math.min(hand.length, 6) / 6;
+}
+
+/**
+ * Fraction of DCs exhausted (activated) this round.
+ * 1 = all activated, 0 = none activated.
+ */
+function getExhaustedRatio(game, playerNum) {
+  const activated = playerNum === 1 ? game.p1ActivatedDcIndices : game.p2ActivatedDcIndices;
+  const total = playerNum === 1 ? game.p1ActivationsTotal : game.p2ActivationsTotal;
+  if (!total || total <= 0) return 0;
+  const numActivated = Array.isArray(activated) ? activated.length : 0;
+  return Math.min(numActivated / total, 1);
+}
+
+/**
+ * Total conditions on a player's figures, normalized.
+ * Stun, Weaken, Bleed are all negative — more conditions = worse position.
+ */
+function getConditionCount(game, playerNum) {
+  const conditions = game.figureConditions;
+  if (!conditions) return 0;
+  const myFigKeys = Object.keys(game.figurePositions?.[playerNum] || {});
+  let count = 0;
+  for (const fk of myFigKeys) {
+    const fc = conditions[fk];
+    if (Array.isArray(fc)) count += fc.length;
+  }
+  return Math.min(count, 8) / 8;
+}
+
 // ── Feature Extraction ──────────────────────────────────────────────────────
 
 export function extractFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
@@ -555,6 +637,17 @@ export function extractFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
     /* 13 bias              */ 1.0,
     /* 14 enemyThreat       */ getEnemyThreat(game, playerNum, dcMessageMeta),
     /* 15 objectivePotential */ getObjectivePotential(game, playerNum),
+    // New features (16-25) — auto-migrated W1 columns start with He init
+    /* 16 myLowestFigHp     */ getLowestFigHpRatio(dcHealthState, dcMessageMeta, playerNum),
+    /* 17 oppLowestFigHp    */ getLowestFigHpRatio(dcHealthState, dcMessageMeta, oppNum),
+    /* 18 myPowerTokens     */ getPowerTokenCount(game, playerNum),
+    /* 19 oppPowerTokens    */ getPowerTokenCount(game, oppNum),
+    /* 20 myCcHandSize      */ getCcHandSizeNorm(game, playerNum),
+    /* 21 oppCcHandSize     */ getCcHandSizeNorm(game, oppNum),
+    /* 22 myExhaustedRatio  */ getExhaustedRatio(game, playerNum),
+    /* 23 oppExhaustedRatio */ getExhaustedRatio(game, oppNum),
+    /* 24 myConditions      */ getConditionCount(game, playerNum),
+    /* 25 oppConditions     */ getConditionCount(game, oppNum),
   ];
 }
 
