@@ -21,6 +21,7 @@ import {
   loadLearnings, saveLearnings, createGameTracer,
   pickSmartAction, abstractActionType, getLearningsStats,
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
+  recordTrainingCheckpoint,
 } from './learnings.js';
 import { unlinkSync } from 'fs';
 
@@ -441,6 +442,14 @@ async function main() {
       console.log(`  Updates this window: ${cp.updatesThisWindow} | Total: ${cp.totalUpdates}`);
       console.log(`  Replay buf: ${cp.replayBufSize} | Total stored: ${cp.replayTotalStored}`);
       console.log(`  NaN resets: ${cp.nanResets} | Wall: ${cp.wallTime}s`);
+      // Persist checkpoint to training history for plateau detection
+      recordTrainingCheckpoint(learnings, {
+        completed: cpCompleted, total: cpGames,
+        p1Wins: cpP1, p2Wins: cpP2,
+        avgVP: cpGames > 0 ? cpVP / cpGames : 0,
+        avgAbsDelta: parseFloat(cp.avgAbsDelta),
+        epsilon: parseFloat(cp.epsilon),
+      });
       // Reset window counters
       cpCompleted = 0; cpP1 = 0; cpP2 = 0; cpVP = 0; cpGames = 0;
       lastCheckpointUpdates = cpUpdatesNow;

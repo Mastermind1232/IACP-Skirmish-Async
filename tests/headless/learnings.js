@@ -1393,6 +1393,18 @@ export function loadLearnings(filePath) {
           nanResets: 0, tdErrorHistory: [],
         };
       }
+      // Migrate network from fewer input features to current NUM_FEATURES
+      // (e.g., 16 → N when new features are added)
+      if (data.network && data.network.W1[0] && data.network.W1[0].length < NUM_FEATURES) {
+        const oldFeatures = data.network.W1[0].length;
+        const heInit = Math.sqrt(2 / NUM_FEATURES);
+        for (let j = 0; j < data.network.W1.length; j++) {
+          for (let i = oldFeatures; i < NUM_FEATURES; i++) {
+            data.network.W1[j].push(randn() * heInit);
+          }
+        }
+        console.log(`[learnings] Migrated W1 input features: ${oldFeatures} → ${NUM_FEATURES}`);
+      }
       // Migrate network from fewer action types to current NUM_ACTIONS
       // (e.g., 15 → 22 when A2 splits were added)
       if (data.network && data.network.Wa.length < NUM_ACTIONS) {
@@ -1432,7 +1444,7 @@ export function loadLearnings(filePath) {
   const network = initializeNetwork();
   return {
     brainPhase: 5,
-    meta: { totalGames: 0, p1Wins: 0, p2Wins: 0, lastUpdated: null },
+    meta: { totalGames: 0, p1Wins: 0, p2Wins: 0, lastUpdated: null, trainingHistory: [] },
     network,
     targetNetwork: deepCopyNetwork(network),
     trainingStats: {
@@ -1715,6 +1727,34 @@ export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessage
 
     getTrace() { return trace; },
   };
+}
+
+// ── Training history ─────────────────────────────────────────────────────────
+
+/**
+ * Record a training checkpoint to the persistent training history.
+ * Called every N games during training so we can detect plateaus.
+ * @param {object} learnings
+ * @param {object} checkpoint - { games, completed, total, p1Wins, p2Wins, avgVP, avgAbsDelta, epsilon }
+ */
+export function recordTrainingCheckpoint(learnings, checkpoint) {
+  if (!learnings.meta.trainingHistory) learnings.meta.trainingHistory = [];
+  learnings.meta.trainingHistory.push({
+    totalGames: learnings.meta.totalGames,
+    completionRate: checkpoint.total > 0 ? checkpoint.completed / checkpoint.total : 0,
+    completed: checkpoint.completed,
+    total: checkpoint.total,
+    p1Wins: checkpoint.p1Wins || 0,
+    p2Wins: checkpoint.p2Wins || 0,
+    avgVP: checkpoint.avgVP || 0,
+    avgAbsDelta: checkpoint.avgAbsDelta || 0,
+    epsilon: checkpoint.epsilon || 0,
+    ts: Date.now(),
+  });
+  // Keep last 200 checkpoints (10,000 games at 50-game intervals)
+  if (learnings.meta.trainingHistory.length > 200) {
+    learnings.meta.trainingHistory.shift();
+  }
 }
 
 // ── Stats ───────────────────────────────────────────────────────────────────
