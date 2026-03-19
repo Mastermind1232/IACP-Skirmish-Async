@@ -21,61 +21,10 @@ import { getBoardStateForMovement, getMovementProfile, computeMovementCache } fr
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { createFakeChannel } from '../../src/headless/fake-interaction.js';
 import { assertFlowInvariants, assertSurfaceInvariants } from './flow-invariants.js';
+import { PENDING_STATE_KEYS, snapshotPendingStates } from '../../src/exploration/transition-key.js';
 
-// ── Pending State Keys ──────────────────────────────────────────────────────
-
-export const PENDING_STATE_KEYS = [
-  'pendingCombat',
-  'pendingNegation',
-  'pendingCelebration',
-  'pendingPowerTokenGrant',
-  'pendingDcAbilityChoice',
-  'pendingPounceSpaceChoice',
-  'pendingMissileSalvo',
-  'pendingCoverFire',
-  'pendingSpreadThePainCondPick',
-  'pendingStrainChoice',
-  'pendingStillFaster',
-  'pendingLastResort',
-  'pendingStrikeMeDown',
-  'pendingSlowOnTheDraw',
-  'pendingForceExhaustion',
-  'pendingIllicitArms',
-  'pendingPowerConverter',
-  'pendingThereIsNoTry',
-  'pendingToughLuck',
-  'pendingHunterProtocol',
-  'pendingBleeding',
-  'pendingEe3Carbine',
-  'pendingBoRifle',
-  'pendingRushPush',
-  'pendingShoulderRush',
-  'pendingFalseOrders',
-  'pendingOverwatchPlacement',
-  'pendingOrbitalBombardment',
-  'pendingBombDrop',
-  'pendingCcConfirmation',
-  'pendingCcChoice',
-  'pendingCcSpaceChoice',
-  'moveInProgress',
-  'endOfRoundWhoseTurn',
-];
-
-/** Check if a pending field is "active" (truthy, non-empty object). */
-function isPendingActive(val) {
-  if (!val) return false;
-  if (typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length === 0) return false;
-  return true;
-}
-
-/** Snapshot which pending states are active on a game. */
-function snapshotPendingStates(game) {
-  const snap = {};
-  for (const key of PENDING_STATE_KEYS) {
-    snap[key] = isPendingActive(game[key]);
-  }
-  return snap;
-}
+// Re-export so existing consumers (explorer-coverage, etc.) can still import from here
+export { PENDING_STATE_KEYS, snapshotPendingStates };
 
 // ── State Delta Snapshots (for card-effect detection) ────────────────────────
 

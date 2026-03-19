@@ -205,6 +205,42 @@ export async function initDb() {
       }
     }
 
+    // ── Exploration tables (headless explorer + coverage persistence) ─────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS exploration_transitions (
+        transition_key    TEXT PRIMARY KEY,
+        round_phase       TEXT,
+        pending_set       TEXT,
+        action_type       TEXT,
+        status            TEXT NOT NULL DEFAULT 'headless_seen',
+        headless_count    INTEGER NOT NULL DEFAULT 0,
+        discord_count     INTEGER NOT NULL DEFAULT 0,
+        invariant_fails   INTEGER NOT NULL DEFAULT 0,
+        context_tags      JSONB DEFAULT '{}',
+        scenarios_reaching JSONB DEFAULT '[]',
+        first_seen_at     TIMESTAMPTZ DEFAULT NOW(),
+        updated_at        TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS exploration_episodes (
+        episode_id        TEXT PRIMARY KEY,
+        source            TEXT NOT NULL DEFAULT 'headless',
+        seed_config       JSONB NOT NULL,
+        total_steps       INTEGER NOT NULL,
+        unique_transitions INTEGER NOT NULL DEFAULT 0,
+        novel_transitions  INTEGER NOT NULL DEFAULT 0,
+        invariant_errors  INTEGER NOT NULL DEFAULT 0,
+        transitions_hit   JSONB NOT NULL DEFAULT '[]',
+        result            TEXT,
+        stop_reason       TEXT,
+        duration_ms       INTEGER,
+        created_at        TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_exploration_transitions_status ON exploration_transitions (status)').catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_exploration_episodes_created ON exploration_episodes (created_at DESC)').catch(() => {});
+
     await seedAchievements();
     await seedCoverageRegions();
     console.log('[DB] PostgreSQL connected, all tables ready.');
@@ -1136,4 +1172,121 @@ export async function touchFavoriteDeckUsage(userId, favoriteId) {
   } catch (err) {
     console.error('[DB] touchFavoriteDeckUsage failed:', err.message);
   }
+}
+
+// ── Exploration (headless explorer coverage persistence) ─────────────────────
+
+/** Upsert a single exploration transition row. */
+export async function upsertExplorationTransition(row) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO exploration_transitions
+         (transition_key, round_phase, pending_set, action_type, status,
+          headless_count, invariant_fails, context_tags, scenarios_reaching)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (transition_key) DO UPDATE SET
+         headless_count = exploration_transitions.headless_count + $6,
+         invariant_fails = exploration_transitions.invariant_fails + $7,
+         context_tags = CASE
+           WHEN exploration_transitions.context_tags = '{}'::jsonb THEN $8
+           ELSE exploration_transitions.context_tags || $8
+         END,
+         scenarios_reaching = COALESCE(
+           (SELECT jsonb_agg(DISTINCT val)
+            FROM jsonb_array_elements(
+              COALESCE(exploration_transitions.scenarios_reaching, '[]'::jsonb) || $9
+            ) AS val),
+           '[]'::jsonb
+         ),
+         updated_at = NOW()`,
+      [
+        row.transition_key,
+        row.round_phase || null,
+        row.pending_set || null,
+        row.action_type || null,
+        row.status || 'headless_seen',
+        row.headless_count || 0,
+        row.invariant_fails || 0,
+        JSON.stringify(row.context_tags || {}),
+        JSON.stringify(row.scenarios_reaching || []),
+      ]
+    );
+  } catch (err) {
+    console.error('[DB] upsertExplorationTransition failed:', err.message);
+  }
+}
+
+/** Insert an exploration episode record. */
+export async function insertExplorationEpisode(episode) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO exploration_episodes
+         (episode_id, source, seed_config, total_steps, unique_transitions,
+          novel_transitions, invariant_errors, transitions_hit, result, stop_reason, duration_ms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        episode.episode_id,
+        episode.source || 'headless',
+        JSON.stringify(episode.seed_config),
+        episode.total_steps,
+        episode.unique_transitions || 0,
+        episode.novel_transitions || 0,
+        episode.invariant_errors || 0,
+        JSON.stringify(episode.transitions_hit || []),
+        episode.result || null,
+        episode.stop_reason || null,
+        episode.duration_ms || null,
+      ]
+    );
+  } catch (err) {
+    console.error('[DB] insertExplorationEpisode failed:', err.message);
+  }
+}
+
+/** Load all exploration transitions into memory. Returns Map<key, row>. */
+export async function loadExplorationTransitions() {
+  if (!pool) return new Map();
+  try {
+    const res = await pool.query('SELECT * FROM exploration_transitions');
+    const map = new Map();
+    for (const row of res.rows) {
+      map.set(row.transition_key, row);
+    }
+    return map;
+  } catch (err) {
+    console.error('[DB] loadExplorationTransitions failed:', err.message);
+    return new Map();
+  }
+}
+
+/**
+ * Upsert a discord-validated transition. Increments discord_count.
+ * Called after a Discord self-play run to record which transitions were proven.
+ */
+export async function upsertDiscordTransition(transitionKey, roundPhase, pendingSet, actionType) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO exploration_transitions
+         (transition_key, round_phase, pending_set, action_type, status, discord_count)
+       VALUES ($1, $2, $3, $4, 'discord_seen', 1)
+       ON CONFLICT (transition_key) DO UPDATE SET
+         discord_count = exploration_transitions.discord_count + 1,
+         status = CASE
+           WHEN exploration_transitions.status = 'headless_seen' THEN 'discord_proven'
+           ELSE exploration_transitions.status
+         END,
+         updated_at = NOW()`,
+      [transitionKey, roundPhase || null, pendingSet || null, actionType || null]
+    );
+  } catch (err) {
+    console.error('[DB] upsertDiscordTransition failed:', err.message);
+  }
+}
+
+/** Get the pool for direct queries (exploration use). */
+export function getPool() {
+  return pool;
 }

@@ -19,6 +19,7 @@ import {
   Routes,
 } from 'discord.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { randomUUID } from 'node:crypto';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
@@ -46,6 +47,8 @@ import {
   updateCoverageVerification,
   insertCoverageIncident,
   getCoverageIncidents,
+  upsertDiscordTransition,
+  insertExplorationEpisode,
 } from './src/db.js';
 import {
   getGame,
@@ -114,8 +117,9 @@ import { handleSelectMap as cmdSelectMap, handleConfirmMap as cmdConfirmMap, han
 import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDcEndActivation } from './src/domain/commands/dc-play-area-commands.js';
 import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
-import { getActiveSelfPlayGameId } from './src/ai/self-play.js';
+import { getActiveSelfPlayGameId, runSelfPlayLoop } from './src/ai/self-play.js';
 import { startQueue, stopQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
+import { parseTransitionKey } from './src/exploration/transition-key.js';
 import { snowflakeUsers, sanitizeMentions } from './src/discord/channel-helpers.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
@@ -716,6 +720,15 @@ function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, arg4, arg5, 
 /** Maps that are play-ready: have deployment zones, map-spaces (spaces/adjacency), and Play ready? checked so the bot can draw from the pool. */
 function getPlayReadyMaps() {
   return _getPlayReadyMapsPure({ getDeploymentZones, getMapRegistry, getMapSpaces });
+}
+
+/** Lazy-cached destruct test decks (for seed validation autocomplete + game creation). */
+let _destructTestDecks = null;
+function getDestructTestDecks() {
+  if (!_destructTestDecks) {
+    _destructTestDecks = JSON.parse(readFileSync(join(rootDir, 'data', 'destruct-test-decks.json'), 'utf8'));
+  }
+  return _destructTestDecks;
 }
 
 const client = new Client({
@@ -1757,8 +1770,11 @@ client.once('ready', async () => {
     const selfplay = new SlashCommandBuilder()
       .setName('selfplay')
       .setDescription('Dev-only AI-vs-AI self-play (admin only). Cycles through all scenarios.')
-      .addStringOption((o) => o.setName('action').setDescription('start, stop, or status').setRequired(true)
-        .addChoices({ name: 'start', value: 'start' }, { name: 'stop', value: 'stop' }, { name: 'status', value: 'status' }));
+      .addStringOption((o) => o.setName('action').setDescription('start, stop, status, or seed').setRequired(true)
+        .addChoices({ name: 'start', value: 'start' }, { name: 'stop', value: 'stop' }, { name: 'status', value: 'status' }, { name: 'seed', value: 'seed' }))
+      .addStringOption((o) => o.setName('p1_deck').setDescription('P1 deck name from destruct-test-decks.json (for seed)').setRequired(false).setAutocomplete(true))
+      .addStringOption((o) => o.setName('p2_deck').setDescription('P2 deck name from destruct-test-decks.json (for seed)').setRequired(false).setAutocomplete(true))
+      .addStringOption((o) => o.setName('map_id').setDescription('Map ID (for seed)').setRequired(false).setAutocomplete(true));
     const commandBody = [
       botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
       events.toJSON(), playai.toJSON(), addai.toJSON(),
@@ -2694,6 +2710,20 @@ client.on('interactionCreate', async (interaction) => {
         ).catch(() => {});
       }
     }
+    if (cmd === 'selfplay') {
+      const focused = interaction.options.getFocused(true);
+      const query = focused.value.toLowerCase();
+      if (focused.name === 'p1_deck' || focused.name === 'p2_deck') {
+        const decks = getDestructTestDecks();
+        const filtered = decks.map(d => d.name).filter(n => n.toLowerCase().includes(query)).slice(0, 25);
+        return interaction.respond(filtered.map(n => ({ name: n, value: n }))).catch(() => {});
+      }
+      if (focused.name === 'map_id') {
+        const maps = getPlayReadyMaps();
+        const filtered = maps.map(m => m.id).filter(id => id.toLowerCase().includes(query)).slice(0, 25);
+        return interaction.respond(filtered.map(id => ({ name: id, value: id }))).catch(() => {});
+      }
+    }
     return;
   }
   if (interaction.isChatInputCommand()) {
@@ -2996,6 +3026,119 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.reply({ content: 'Self-play stopping after current game.', ephemeral: false }).catch(discordCatch);
         } catch (err) {
           await interaction.reply({ content: err.message, ephemeral: true }).catch(discordCatch);
+        }
+        return;
+      }
+
+      // action === 'seed' — config-family replay of a ranked headless seed
+      if (action === 'seed') {
+        const p1DeckName = interaction.options.getString('p1_deck');
+        const p2DeckName = interaction.options.getString('p2_deck');
+        const mapId = interaction.options.getString('map_id');
+        if (!p1DeckName || !p2DeckName || !mapId) {
+          await interaction.reply({ content: 'Seed validation requires p1_deck, p2_deck, and map_id.', ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        if (getActiveSelfPlayGameId()) {
+          await interaction.reply({ content: `Self-play already active for game ${getActiveSelfPlayGameId()}. Stop it first.`, ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        const decks = getDestructTestDecks();
+        const p1Deck = decks.find(d => d.name === p1DeckName);
+        const p2Deck = decks.find(d => d.name === p2DeckName);
+        if (!p1Deck) {
+          await interaction.reply({ content: `Deck not found: "${p1DeckName}"`, ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        if (!p2Deck) {
+          await interaction.reply({ content: `Deck not found: "${p2DeckName}"`, ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        const maps = getPlayReadyMaps();
+        if (!maps.find(m => m.id === mapId)) {
+          await interaction.reply({ content: `Map not found in play-ready maps: "${mapId}"`, ephemeral: true }).catch(discordCatch);
+          return;
+        }
+
+        await interaction.reply({
+          content: `**Seed validation starting**: ${p1DeckName} vs ${p2DeckName} @ ${mapId}\nConfig-family replay (initiative/zone/CC draw randomized).`,
+          ephemeral: false,
+        }).catch(discordCatch);
+
+        // Create game with seed config override (bypass queue, single game)
+        const seedConfig = { mapId, p1Deck, p2Deck };
+        let gameId = null;
+        try {
+          const aiP1 = `${AI_USER_PREFIX}1`;
+          const aiP2 = `${AI_USER_PREFIX}2`;
+          const created = await createTestGame(client, interaction.guild, aiP1, null, interaction.channel, { player2Id: aiP2, seedConfig });
+          gameId = created.gameId;
+
+          const game = getGame(gameId);
+          if (!game) throw new Error('Game creation returned no game state');
+          game.selfPlay = true;
+          game.guildId = interaction.guild.id;
+          saveGames();
+
+          // Run self-play loop (single game, not queued)
+          const loopResult = await runSelfPlayLoop(game, client, {
+            buildAllDeps,
+            getGame,
+            atomicOpts,
+            actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState },
+            scenario: `seed:${p1DeckName}_vs_${p2DeckName}@${mapId}`,
+            guildId: interaction.guild.id,
+            actionCap: 500,
+            delayMs: 200,
+            explorationMode: 'seed_validation',
+          });
+
+          const artifact = loopResult.artifact;
+          const dedupedKeys = artifact?.transitions_hit || [];
+
+          // Persist transition coverage to exploration_transitions (discord_count)
+          for (const key of dedupedKeys) {
+            const { roundPhase, pendingSet, actionType } = parseTransitionKey(key);
+            await upsertDiscordTransition(key, roundPhase, pendingSet, actionType);
+          }
+
+          // Persist episode to exploration_episodes (source='discord')
+          await insertExplorationEpisode({
+            episode_id: randomUUID(),
+            source: 'discord',
+            seed_config: { mapId, p1Deck: p1DeckName, p2Deck: p2DeckName },
+            total_steps: artifact?.total_steps || 0,
+            unique_transitions: dedupedKeys.length,
+            novel_transitions: 0,
+            invariant_errors: 0,
+            transitions_hit: dedupedKeys,
+            result: artifact?.result || loopResult.result,
+            stop_reason: artifact?.stop_reason || 'unknown',
+            duration_ms: artifact?.duration_ms || 0,
+          });
+
+          // Cleanup on success; preserve on failure
+          if (loopResult.result !== 'failed' && gameId) {
+            try {
+              const g = getGame(gameId);
+              if (g) await deleteGameChannelsAndGame(g, gameId, {
+                client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+                deleteGameFromDb,
+              });
+            } catch (err) {
+              console.error(`[seed-validation] Cleanup failed for ${gameId}:`, err.message);
+            }
+          }
+
+          const resultMsg = [
+            `**Seed validation ${loopResult.result}**: ${p1DeckName} vs ${p2DeckName} @ ${mapId}`,
+            `Steps: ${artifact?.total_steps || 0} | Transitions: ${dedupedKeys.length} | Stop: ${artifact?.stop_reason || 'unknown'}`,
+          ].join('\n');
+          await interaction.followUp({ content: resultMsg }).catch(discordCatch);
+
+        } catch (err) {
+          console.error('[seed-validation] Error:', err);
+          await interaction.followUp({ content: `Seed validation failed: ${err.message}` }).catch(discordCatch);
         }
         return;
       }

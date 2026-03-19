@@ -238,13 +238,31 @@ export async function createTestGame(client, guild, userId, scenarioId, feedback
     };
     setGame(gameId, game);
 
+    const hasSeedConfig = options.seedConfig?.p1Deck && options.seedConfig?.p2Deck && options.seedConfig?.mapId;
     const scenarioImplemented = scenarioId && IMPLEMENTED_SCENARIOS.includes(scenarioId);
     const p2Label = p2IsBot ? 'the bot' : `<@${p2Id}>`;
     const mentionUsers = snowflakeUsers(p2IsBot ? [userId] : [userId, p2Id]);
     const killRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`kill_game_${gameId}`).setLabel('Kill Test Game').setStyle(ButtonStyle.Danger),
     );
-    if (scenarioImplemented) {
+    if (hasSeedConfig) {
+      // Config-family replay: exact decks + map from headless explorer seed.
+      // Bypasses scenario logic; initiative/zone/CC draw still randomized.
+      await runDraftRandom(game, client, { seedConfig: options.seedConfig });
+      game.seedValidation = true;
+      const p1Name = options.seedConfig.p1Deck.name || 'P1';
+      const p2Name = options.seedConfig.p2Deck.name || 'P2';
+      const mapLabel = options.seedConfig.mapId;
+      await generalChannel.send({
+        content: `Seed validation: **${p1Name}** vs **${p2Name}** @ **${mapLabel}**\nConfig-family replay (initiative/zone/CC draw randomized).`,
+      }).catch(() => {});
+      await generalChannel.send({ content: 'Done? Kill the game here:', components: [killRow] }).catch(() => {});
+      if (feedbackChannel && feedbackChannel.id !== generalChannel.id) {
+        await feedbackChannel.send({
+          content: `Seed validation game **IA Game #${gameId}** ready: ${p1Name} vs ${p2Name} @ ${mapLabel}`,
+        }).catch(() => {});
+      }
+    } else if (scenarioImplemented) {
       await runDraftRandom(game, client, { scenarioId });
 
       // Phase-jump mutator: mutate game state to target phase after runDraftRandom setup

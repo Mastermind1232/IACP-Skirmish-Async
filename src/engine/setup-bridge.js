@@ -135,17 +135,25 @@ export async function finishSetupAttachments(game, client, deps) {
  * @param {object} game
  * @param {import('discord.js').Client} client
  * @param {object} deps
- * @param {{ scenarioId?: string }} [options] - When scenarioId, use scenario decks and seed P1 hand
+ * @param {{ scenarioId?: string, seedConfig?: { mapId: string, p1Deck: object, p2Deck: object } }} [options]
+ *   scenarioId: use scenario decks and seed P1 hand
+ *   seedConfig: config-family replay — use exact map + decks from headless explorer seed
  */
 export async function runDraftRandom(game, client, deps, options = {}) {
-  const { scenarioId } = options;
+  const { scenarioId, seedConfig } = options;
   const generalChannel = await fetchGameChannel(client, game.generalId);
 
   // Map selection
   if (!game.mapSelected) {
     const playReadyMaps = deps.getPlayReadyMaps();
     if (playReadyMaps.length === 0) throw new Error('No play-ready maps available.');
-    const map = playReadyMaps[Math.floor(Math.random() * playReadyMaps.length)];
+    let map;
+    if (seedConfig?.mapId) {
+      map = playReadyMaps.find(m => m.id === seedConfig.mapId);
+      if (!map) throw new Error(`Seed map "${seedConfig.mapId}" not found in play-ready maps.`);
+    } else {
+      map = playReadyMaps[Math.floor(Math.random() * playReadyMaps.length)];
+    }
     game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
     game.mapSelected = true;
     deps.setPhase(game, deps.PHASES.INITIATIVE);
@@ -187,11 +195,19 @@ export async function runDraftRandom(game, client, deps, options = {}) {
     await deps.createHandThreads(client, game);
   }
 
-  // One side Rebels, one side Scum. Testready: load sample deck, then run viability check and retool before every launch
-  let p1Deck = { ...deps.DEFAULT_DECK_REBELS, dcList: [...(deps.DEFAULT_DECK_REBELS.dcList || [])], ccList: [...(deps.DEFAULT_DECK_REBELS.ccList || [])] };
-  let p2Deck = { ...deps.DEFAULT_DECK_SCUM, dcList: [...(deps.DEFAULT_DECK_SCUM.dcList || [])], ccList: [...(deps.DEFAULT_DECK_SCUM.ccList || [])] };
-  if (scenarioId) {
-    ({ p1Deck, p2Deck } = deps.retoolDecksForScenario(p1Deck, p2Deck, scenarioId));
+  // Deck selection: seedConfig overrides with exact decks, else default + scenario retool
+  let p1Deck, p2Deck;
+  if (seedConfig?.p1Deck && seedConfig?.p2Deck) {
+    // Config-family replay: use exact deck objects from headless explorer seed.
+    // Initiative, deployment zone, figure placement, and CC draw order are still randomized.
+    p1Deck = { ...seedConfig.p1Deck, dcList: [...(seedConfig.p1Deck.dcList || [])], ccList: [...(seedConfig.p1Deck.ccList || [])] };
+    p2Deck = { ...seedConfig.p2Deck, dcList: [...(seedConfig.p2Deck.dcList || [])], ccList: [...(seedConfig.p2Deck.ccList || [])] };
+  } else {
+    p1Deck = { ...deps.DEFAULT_DECK_REBELS, dcList: [...(deps.DEFAULT_DECK_REBELS.dcList || [])], ccList: [...(deps.DEFAULT_DECK_REBELS.ccList || [])] };
+    p2Deck = { ...deps.DEFAULT_DECK_SCUM, dcList: [...(deps.DEFAULT_DECK_SCUM.dcList || [])], ccList: [...(deps.DEFAULT_DECK_SCUM.ccList || [])] };
+    if (scenarioId) {
+      ({ p1Deck, p2Deck } = deps.retoolDecksForScenario(p1Deck, p2Deck, scenarioId));
+    }
   }
   await deps.applySquadSubmission(game, true, p1Deck, client);
   await deps.applySquadSubmission(game, false, p2Deck, client);

@@ -42,7 +42,7 @@ export function pickBestAction(engine, actions, playerNum) {
  * @param {number} playerNum
  * @returns {number}
  */
-function scoreAction(action, game, playerNum) {
+export function scoreAction(action, game, playerNum) {
   const type = action.type;
 
   // Phase gate: always ready up

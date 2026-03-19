@@ -17,6 +17,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
 import { getRecoveryReason } from '../engine/recovery.js';
 import { insertSelfPlayRun } from '../db.js';
+import { computeTransitionKey } from '../exploration/transition-key.js';
 
 // ── Concurrency guard ─────────────────────────────────────────────────────────
 
@@ -217,6 +218,7 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
     exercised_handlers: traceData?.exercisedHandlers ? [...traceData.exercisedHandlers] : [],
     seen_action_types: traceData?.seenActionTypes ? [...traceData.seenActionTypes] : [],
     triggered_pending_states: traceData?.triggeredPendingStates ? [...traceData.triggeredPendingStates] : [],
+    transitions_hit: traceData?.transitionsHit ? [...new Set(traceData.transitionsHit)] : [],
   };
 }
 
@@ -262,7 +264,8 @@ export async function runSelfPlayLoop(game, client, opts) {
   const exercisedHandlers = new Set();
   const seenActionTypes = new Set();
   const triggeredPendingStates = new Set();
-  const traceData = { exercisedHandlers, seenActionTypes, triggeredPendingStates };
+  const transitionsHit = [];
+  const traceData = { exercisedHandlers, seenActionTypes, triggeredPendingStates, transitionsHit };
 
   // Mark game as self-play (both players are AI)
   game.selfPlay = true;
@@ -417,6 +420,8 @@ export async function runSelfPlayLoop(game, client, opts) {
         for (const k of PENDING_KEYS) {
           if (gAfter[k] != null && gAfter[k] !== false) triggeredPendingStates.add(k);
         }
+        // Transition key: same identity as headless explorer (roundPhase|pendingSet|actionType)
+        transitionsHit.push(computeTransitionKey(gAfter, chosen.type));
       }
 
       console.log(`[self-play] Step ${step}: P${chosen._playerNum} ${chosen.type} → ${chosen.customId}`);
