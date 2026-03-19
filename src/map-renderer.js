@@ -625,6 +625,29 @@ export async function renderMap(mapId, options = {}) {
         ciX -= iconSize * 0.05;
       }
     }
+    // Damage badge — bottom-center, only shown when damage > 0
+    if (fig.damage > 0) {
+      const dmgFontSize = Math.max(10, Math.round(13 * scale));
+      const dmgText = String(fig.damage);
+      ctx.font = `bold ${dmgFontSize}px "${FONT_FAMILY}"`;
+      const dmgW = ctx.measureText(dmgText).width;
+      const badgeR = Math.max(dmgW / 2 + 4, dmgFontSize * 0.7);
+      const badgeX = cx;
+      const badgeY = cy + clipH * 0.6;
+      // Red circle background
+      ctx.fillStyle = 'rgba(200, 30, 30, 0.9)';
+      ctx.beginPath();
+      ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // White damage number
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(dmgText, badgeX, badgeY);
+    }
   }
 
   // Player zone labels: draw player Discord names over their deployment zones

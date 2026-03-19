@@ -122,7 +122,11 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
   const aCorners = corners(a.col, a.row);
   const bCorners = corners(b.col, b.row);
 
+  // IACP LOS rule: from any single point on the attacker's space, must see
+  // at least 2 corners of the target's space.  We test from each attacker
+  // corner as representative points.
   for (const [ax, ay] of aCorners) {
+    let visibleTargetCorners = 0;
     for (const [bx, by] of bCorners) {
       let wallBlocked = false;
       for (const w of walls) {
@@ -140,7 +144,8 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
         if (blockingSet.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
         if (figureBlockingCoords?.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
       }
-      if (!spaceBlocked) return true;
+      if (!spaceBlocked) visibleTargetCorners++;
+      if (visibleTargetCorners >= 2) return true;
     }
   }
   return false;

@@ -154,6 +154,19 @@ export function getFiguresForRender(game) {
       const figureSize = game.figureOrientations?.[figureKey] || baseSize;
       const powerTokens = game.figurePowerTokens?.[figureKey] || [];
       const conditions = game.figureConditions?.[figureKey] || [];
+      // Find damage for this figure from dcList healthState
+      let damage = 0;
+      let _dgCount = 0;
+      for (const d of dcList) {
+        if (resolveDcName(d) === dcName) {
+          _dgCount++;
+          if (_dgCount === dgIndex) {
+            const hs = d.healthState;
+            if (hs?.[figureIndex]) damage = hs[figureIndex][1] - hs[figureIndex][0];
+            break;
+          }
+        }
+      }
       figures.push({
         coord: space,
         color,
@@ -165,6 +178,7 @@ export function getFiguresForRender(game) {
         figureKey,
         powerTokens,
         conditions,
+        damage,
       });
     }
   }

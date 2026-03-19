@@ -174,7 +174,7 @@ const LIMIT_STOPS = new Set([
 
 // ── Artifact builder ──────────────────────────────────────────────────────────
 
-function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stopReason, error, surfaceCtx, traceData, explorationMode }) {
+function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stopReason, error, surfaceCtx, traceData, explorationMode, totalActionsDispatched }) {
   const now = new Date();
   const result = BUG_STOPS.has(stopReason) ? 'failed'
     : stopReason === 'completed' ? 'completed'
@@ -194,7 +194,7 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
     round_phase: game?.roundPhase ?? null,
     current_round: game?.currentRound ?? null,
     active_player: game?.currentActivationTurnPlayerId ?? null,
-    total_steps: ringBuffer.length,
+    total_steps: totalActionsDispatched ?? ringBuffer.length,
     last_action: ringBuffer.last?.customId ?? null,
     recent_actions: ringBuffer.toArray(),
     pending_states: game ? capturePendingStates(game) : {},
@@ -255,6 +255,7 @@ export async function runSelfPlayLoop(game, client, opts) {
   const ringBuffer = new ActionRingBuffer(50);
   let surfaceCtx = {};
   let consecutiveEmpty = 0;
+  let totalActionsDispatched = 0;
   let lastCustomIds = [];
 
   // Execution trace (Phase 1 queue runner)
@@ -275,7 +276,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       if (!g || g.ended) {
         const wasManualStop = g?.selfPlayManualStop;
         const stopReason = wasManualStop ? 'manual_stop' : 'completed';
-        const artifact = buildRunArtifact(g || game, { scenario, guildId, startedAt, ringBuffer, stopReason, surfaceCtx, traceData, explorationMode });
+        const artifact = buildRunArtifact(g || game, { scenario, guildId, startedAt, ringBuffer, stopReason, surfaceCtx, traceData, explorationMode, totalActionsDispatched });
         if (wasManualStop) await insertSelfPlayRun(artifact);
         else if (persistCompleted) await insertSelfPlayRun(artifact);
         return { result: wasManualStop ? 'stopped' : 'completed', artifact };
@@ -295,14 +296,13 @@ export async function runSelfPlayLoop(game, client, opts) {
       if (allActions.length === 0) {
         consecutiveEmpty++;
         if (consecutiveEmpty > 20) {
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_no_actions', surfaceCtx, traceData, explorationMode });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_no_actions', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
         if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
         continue;
       }
-      consecutiveEmpty = 0;
 
       // Action loop detection: same 3 actions repeating
       if (lastCustomIds.length >= 6) {
@@ -311,7 +311,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         if (a === b) {
           const loopPattern = lastCustomIds.slice(0, 3).join(' → ');
           const loopErr = new Error(`Repeating 3-action loop detected: ${loopPattern}`);
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode, totalActionsDispatched });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -327,7 +327,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         // All available actions are unsupported (e.g., only CC plays) — skip this step
         consecutiveEmpty++;
         if (consecutiveEmpty > 20) {
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_unsupported_only', surfaceCtx, traceData, explorationMode });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_unsupported_only', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -340,7 +340,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       const handlerKey = getHandlerKey(chosen.customId, 'button');
       if (!handlerKey) {
         surfaceCtx = { handlerKey: null, intendedSurface: 'button', discordOp: chosen.customId };
-        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode });
+        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
         await insertSelfPlayRun(artifact);
         return { result: 'failed', artifact };
       }
@@ -348,7 +348,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       const handler = getHandler(handlerKey);
       if (!handler) {
         surfaceCtx = { handlerKey, intendedSurface: 'button' };
-        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode });
+        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
         await insertSelfPlayRun(artifact);
         return { result: 'failed', artifact };
       }
@@ -403,7 +403,7 @@ export async function runSelfPlayLoop(game, client, opts) {
           || err.message?.includes('is not iterable');
         if (isCrash) {
           surfaceCtx.discordError = err.message;
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'handler_crash', error: err, surfaceCtx, traceData, explorationMode });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'handler_crash', error: err, surfaceCtx, traceData, explorationMode, totalActionsDispatched });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -411,7 +411,9 @@ export async function runSelfPlayLoop(game, client, opts) {
         console.warn(`[self-play] Step ${step} soft error: ${err.message}`);
       }
 
-      // Record action
+      // Record action — reset empty counter only when an action is actually dispatched
+      consecutiveEmpty = 0;
+      totalActionsDispatched++;
       ringBuffer.push({
         step,
         customId: chosen.customId,
@@ -444,7 +446,7 @@ export async function runSelfPlayLoop(game, client, opts) {
 
     // Hit action cap
     const g = getGame(game.gameId) || game;
-    const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_cap_reached', surfaceCtx, traceData, explorationMode });
+    const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_cap_reached', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
     await insertSelfPlayRun(artifact);
     return { result: 'stopped', artifact };
 
