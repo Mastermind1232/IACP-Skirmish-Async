@@ -79,23 +79,11 @@ function determineActingPlayer(game) {
     return game.startOfRoundWhoseTurn === game.player1Id ? 1 : 2;
   }
 
-  // Pending combat states — the attacker/defender depends on the sub-state
-  if (game.pendingCombat) {
-    const pc = game.pendingCombat;
-    // Combat ready check: both players must confirm — return whoever isn't ready
-    if (!pc.p1Ready || !pc.p2Ready) {
-      if (!pc.p1Ready && !pc.p2Ready) return 'both';
-      return pc.p1Ready ? 2 : 1;
-    }
-    if (pc.rerollPhase) {
-      // Defender rerolls first, then attacker
-      return pc.rerollPhase === 'defender'
-        ? (pc.defenderPlayerNum || (pc.attackerPlayerNum === 1 ? 2 : 1))
-        : pc.attackerPlayerNum;
-    }
-    if (pc.surgePhase) return pc.attackerPlayerNum;
-    return pc.attackerPlayerNum || 1;
-  }
+  // Pending combat — always check both players.
+  // getCombatActions already filters by player for each sub-state (ready check,
+  // attack/defense roll, reroll phase, surges, reactions like ThereIsNoTry, etc.).
+  // Trying to mirror that logic here caused bugs where we returned the wrong player.
+  if (game.pendingCombat) return 'both';
 
   // Current activation turn
   if (game.currentActivationTurnPlayerId) {
