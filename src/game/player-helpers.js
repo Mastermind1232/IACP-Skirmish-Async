@@ -68,3 +68,68 @@ export function deployMetadataKey(pn) { return pn === 1 ? 'player1DeployMetadata
 export function deployLabelsKey(pn)   { return pn === 1 ? 'player1DeployLabels' : 'player2DeployLabels'; }
 export function armyCostModifierKey(pn) { return pn === 1 ? 'player1ArmyCostModifier' : 'player2ArmyCostModifier'; }
 export function activatedDcIndicesKey(pn) { return pn === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices'; }
+
+// ── DC / playableBy matching ────────────────────────────────────────────────
+
+/**
+ * Check whether a DC name/keywords match a playableBy restriction.
+ * Shared by headless CC play and Discord CC hand attachment filter.
+ * @param {string} dcName - DC name (may include [DG N] suffix)
+ * @param {string} playableBy - playableBy string from CC effect
+ * @param {Function} getDcEffectsFn - returns all DC effects object
+ * @param {Function} getDcKeywordsFn - returns keywords map (game => {dcName: [kw...]})
+ * @param {object} game - game state
+ * @param {string} [displayName] - optional display name for name matching (Discord only)
+ * @returns {boolean}
+ */
+export function dcMatchesPlayableBy(dcName, playableBy, getDcEffectsFn, getDcKeywordsFn, game, displayName) {
+  if (!playableBy) return true;
+  const lower = playableBy.toLowerCase().trim();
+  if (!lower || lower === 'any figure') return true;
+
+  const dcBase = dcName.replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  const allDcEffects = (getDcEffectsFn ? getDcEffectsFn() : null) || {};
+  const dcData = allDcEffects[dcName] || allDcEffects[dcBase] || {};
+  const kwRaw = getDcKeywordsFn
+    ? (getDcKeywordsFn(game)?.[dcName] || getDcKeywordsFn(game)?.[dcBase] || [])
+    : (dcData.keywords || []);
+  const kwLower = kwRaw.map(k => String(k).toLowerCase());
+  const affiliationLower = (dcData.affiliation || '').toLowerCase();
+
+  const AFFILIATIONS = new Set(['imperial', 'rebel', 'scum', 'mercenary']);
+  const alternatives = lower.split(/\s+or\s+/i).map(a => a.trim().replace(/^"|"$/g, ''));
+
+  for (const alt of alternatives) {
+    if (alt === 'unique' || alt === 'any unique figure') {
+      if (dcData.unique) return true;
+      continue;
+    }
+    if (alt === 'any small figure') {
+      if (kwLower.includes('small')) return true;
+      continue;
+    }
+    // Name match — check both dcName and optional displayName
+    const dcLow = dcBase.toLowerCase();
+    if (dcLow.includes(alt) || alt.includes(dcLow)) return true;
+    if (displayName) {
+      const dispBase = String(displayName)
+        .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+        .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+        .trim().toLowerCase();
+      if (dispBase.includes(alt) || alt.includes(dispBase)) return true;
+    }
+    // Decompose into affiliation + keyword parts
+    const words = alt.split(/\s+/);
+    let reqAff = null;
+    const reqKwWords = [];
+    for (const w of words) {
+      if (AFFILIATIONS.has(w) && !reqAff) reqAff = w;
+      else reqKwWords.push(w);
+    }
+    const reqKw = reqKwWords.join(' ');
+    if (reqAff && affiliationLower !== reqAff && affiliationLower !== 'any') continue;
+    if (reqKw && !kwLower.includes(reqKw)) continue;
+    if (reqAff || reqKw) return true;
+  }
+  return false;
+}

@@ -30,6 +30,7 @@ import {
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, vpKey as vpKeyFn,
   opponentPlayerNum,
   getInitiativePlayerNum,
+  dcMatchesPlayableBy,
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
@@ -411,54 +412,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       displayName: typeof d === 'object' ? (d.displayName || d.dcName) : d,
     })).filter((o) => o.value);
     if (hasRestriction) {
-      const allKeywords = getDcKeywords(game) || {};
-      const allDcEffects = getDcEffects() || {};
-      const alternatives = playableBy.split(/\s+or\s+/i).map(a => a.trim().replace(/^"|"$/g, '').toLowerCase());
-      const AFFILIATIONS = new Set(['imperial', 'rebel', 'scum', 'mercenary']);
-      options = options.filter(o => {
-        const dcBase = String(o.dcName || '')
-          .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
-          .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
-          .trim();
-        const dispBase = String(o.displayName || dcBase)
-          .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
-          .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
-          .trim();
-        const dcData = allDcEffects[o.dcName] || allDcEffects[dcBase];
-        const affiliationLower = (dcData?.affiliation || '').toLowerCase();
-        const kw = allKeywords[o.dcName] || allKeywords[dcBase] || [];
-        const kwLower = kw.map(k => String(k).toLowerCase());
-        for (const alt of alternatives) {
-          // "Unique" check
-          if (alt === 'unique' || alt === 'any unique figure') {
-            if (dcData?.unique) return true;
-            continue;
-          }
-          // "Any Small Figure" check
-          if (alt === 'any small figure') {
-            if (kwLower.includes('small')) return true;
-            continue;
-          }
-          // Name match
-          const dcLow = dcBase.toLowerCase();
-          const dispLow = dispBase.toLowerCase();
-          if (dcLow.includes(alt) || alt.includes(dcLow) || dispLow.includes(alt) || alt.includes(dispLow))
-            return true;
-          // Decompose into affiliation + keyword parts
-          const words = alt.split(/\s+/);
-          let reqAff = null;
-          const reqKwWords = [];
-          for (const w of words) {
-            if (AFFILIATIONS.has(w) && !reqAff) reqAff = w;
-            else reqKwWords.push(w);
-          }
-          const reqKw = reqKwWords.join(' ');
-          if (reqAff && affiliationLower !== reqAff && affiliationLower !== 'any') continue;
-          if (reqKw && !kwLower.includes(reqKw)) continue;
-          if (reqAff || reqKw) return true;
-        }
-        return false;
-      });
+      options = options.filter(o => dcMatchesPlayableBy(
+        o.dcName, playableBy, getDcEffects, getDcKeywords, game, o.displayName
+      ));
     }
     // Remove internal fields before building select menu
     options = options.map(({ label, value }) => ({ label, value }));

@@ -3312,8 +3312,16 @@ export function resolveAbility(abilityId, context) {
       }
     }
     if (n < 1) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    if (figureKeys.length > 1) return { applied: false, manualMessage: 'Resolve manually: choose which figure gains the Power Token(s).' };
-    const fk = figureKeys[0];
+    if (figureKeys.length > 1 && !context.chosenFigureKey) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: figureKeys.map(fk => dcNameFromFigureKey(fk)),
+        targetFigureKeys: figureKeys,
+        logMessage: `Choose which figure gains ${n} Power Token(s):`,
+      };
+    }
+    const fk = context.chosenFigureKey || figureKeys[0];
     game.figurePowerTokens = game.figurePowerTokens || {};
     game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
     const current = game.figurePowerTokens[fk].length;

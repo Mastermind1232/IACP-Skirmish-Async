@@ -11,8 +11,9 @@
 
 import {
   ccHandKey, ccDiscardKey, ccAttachmentsKey, opponentPlayerNum,
-  getDcList, getDcMessageIds,
+  getDcList, getDcMessageIds, dcMatchesPlayableBy,
 } from '../game/player-helpers.js';
+import { getRange } from '../game/spatial.js';
 
 /**
  * Play a command card headlessly. All pre-selection checks (timing, legality,
@@ -204,28 +205,30 @@ function resolveInline(abilityId, context, deps) {
   const { resolveAbility } = deps;
 
   let result = resolveAbility(abilityId, context);
+  let ctx = { ...context };
 
-  // Handle requiresChoice → pick random option
-  if (result.requiresChoice && result.choiceOptions?.length > 0) {
+  // Handle cascaded choices (e.g., chooseOne → powerTokenGain figure selection)
+  for (let i = 0; i < 5 && result.requiresChoice && result.choiceOptions?.length > 0; i++) {
     const choiceIndex = Math.floor(Math.random() * result.choiceOptions.length);
     const chosenFigureKey = result.choiceValues?.[choiceIndex]
       ?? result.targetFigureKeys?.[choiceIndex]
       ?? null;
-    result = resolveAbility(abilityId, {
-      ...context,
+    ctx = {
+      ...ctx,
       choiceIndex,
       chosenOption: result.choiceOptions[choiceIndex],
       chosenFigureKey,
-    });
+    };
+    result = resolveAbility(abilityId, ctx);
   }
 
   // Handle requiresSpaceChoice → pick random valid space
   if (result.requiresSpaceChoice && result.validSpaces?.length > 0) {
     const chosenSpace = result.validSpaces[Math.floor(Math.random() * result.validSpaces.length)];
     result = resolveAbility(abilityId, {
-      ...context,
+      ...ctx,
       chosenSpace,
-      chosenFigureKey: result.chosenFigureKey ?? context.chosenFigureKey ?? null,
+      chosenFigureKey: result.chosenFigureKey ?? ctx.chosenFigureKey ?? null,
     });
   }
 
@@ -271,56 +274,34 @@ const EVENT_DRIVEN_TIMINGS = new Set([
   'whenhostilefigureentersadjacentspace',
 ]);
 
-/**
- * Check whether a DC name/keywords match a playableBy restriction.
- * Mirrors the attachment eligibility logic from handleAttachment.
- */
-function dcMatchesPlayableBy(dcName, playableBy, getDcEffectsFn, getDcKeywordsFn, game) {
-  if (!playableBy) return true;
-  const lower = playableBy.toLowerCase().trim();
-  if (!lower || lower === 'any figure') return true;
-
-  const dcBase = dcName.replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  const allDcEffects = (getDcEffectsFn ? getDcEffectsFn() : null) || {};
-  const dcData = allDcEffects[dcName] || allDcEffects[dcBase] || {};
-  const kwRaw = getDcKeywordsFn
-    ? (getDcKeywordsFn(game)?.[dcName] || getDcKeywordsFn(game)?.[dcBase] || [])
-    : (dcData.keywords || []);
-  const kwLower = kwRaw.map(k => String(k).toLowerCase());
-  const affiliationLower = (dcData.affiliation || '').toLowerCase();
-
-  const AFFILIATIONS = new Set(['imperial', 'rebel', 'scum', 'mercenary']);
-  const alternatives = lower.split(/\s+or\s+/i).map(a => a.trim().replace(/^"|"$/g, ''));
-
-  for (const alt of alternatives) {
-    if (alt === 'unique' || alt === 'any unique figure') {
-      if (dcData.unique) return true;
-      continue;
-    }
-    if (alt === 'any small figure') {
-      if (kwLower.includes('small')) return true;
-      continue;
-    }
-    const dcLow = dcBase.toLowerCase();
-    if (dcLow.includes(alt) || alt.includes(dcLow)) return true;
-    const words = alt.split(/\s+/);
-    let reqAff = null;
-    const reqKwWords = [];
-    for (const w of words) {
-      if (AFFILIATIONS.has(w) && !reqAff) reqAff = w;
-      else reqKwWords.push(w);
-    }
-    const reqKw = reqKwWords.join(' ');
-    if (reqAff && affiliationLower !== reqAff && affiliationLower !== 'any') continue;
-    if (reqKw && !kwLower.includes(reqKw)) continue;
-    if (reqAff || reqKw) return true;
-  }
-  return false;
-}
-
 /** Extract base DC name from a figure key like "Stormtrooper-1-0" → "Stormtrooper". */
 function figKeyToDcName(figureKey) {
   return figureKey.replace(/-\d+-\d+$/, '');
+}
+
+/** Get the position of the "source" figure for a CC — the figure that's playing it. */
+function getSourceFigurePos(game, playerNum, activeMsgId, cbt, timing, dcMessageMeta) {
+  // Combat: use attacker/defender figure position
+  if (ATTACKER_TIMINGS.has(timing) && cbt?.attackerFigureKey) {
+    return game.figurePositions?.[cbt.attackerPlayerNum]?.[cbt.attackerFigureKey] || null;
+  }
+  if (DEFENDER_TIMINGS.has(timing) && cbt?.defenderFigureKey) {
+    return game.figurePositions?.[cbt.defenderPlayerNum]?.[cbt.defenderFigureKey] || null;
+  }
+  if (COMBAT_ANY_TIMINGS.has(timing) && cbt?.attackerFigureKey) {
+    return game.figurePositions?.[cbt.attackerPlayerNum]?.[cbt.attackerFigureKey] || null;
+  }
+  // Activation: use active DC's first alive figure
+  if (activeMsgId && dcMessageMeta) {
+    const meta = dcMessageMeta.get(activeMsgId);
+    if (meta?.dcName) {
+      const poses = game.figurePositions?.[playerNum] || {};
+      for (const [fk, pos] of Object.entries(poses)) {
+        if (figKeyToDcName(fk) === meta.dcName) return pos;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -510,40 +491,69 @@ export function canResolveCcHeadless(game, playerNum, cardName, deps) {
     if (oppHand.length === 0) return false;
   }
 
-  // forcePushEffect (Force Push): needs SMALL hostile figures on the board
+  // forcePushEffect (Force Push): needs SMALL hostile within 3 spaces of source figure
   if (entry.forcePushEffect) {
     const dcEffects = (getDcEffectsFn ? getDcEffectsFn() : null) || {};
     const oppPoses = game.figurePositions?.[oppNum] || {};
-    const hasSmallHostile = Object.keys(oppPoses).some(fk => {
+    const srcPos = getSourceFigurePos(game, playerNum, activeMsgId, cbt, timing, deps.dcMessageMeta);
+    const hasSmallInRange = Object.entries(oppPoses).some(([fk, pos]) => {
       const dcN = figKeyToDcName(fk);
-      return (dcEffects[dcN]?.keywords || []).some(k => k.toUpperCase() === 'SMALL');
+      const isSmall = (dcEffects[dcN]?.keywords || []).some(k => k.toUpperCase() === 'SMALL');
+      if (!isSmall) return false;
+      if (srcPos && pos) return getRange(srcPos, pos) <= 4; // 3 range + 1 Massive buffer
+      return true; // no position info — be conservative
     });
-    if (!hasSmallHostile) return false;
+    if (!hasSmallInRange) return false;
   }
 
-  // darkEnergyEffect (Dark Energy): needs SMALL hostile figures on the board
+  // darkEnergyEffect (Dark Energy): needs SMALL hostile within 3 spaces of source figure
   if (entry.darkEnergyEffect) {
     const dcEffects = (getDcEffectsFn ? getDcEffectsFn() : null) || {};
     const oppPoses = game.figurePositions?.[oppNum] || {};
-    const hasSmallHostile = Object.keys(oppPoses).some(fk => {
+    const srcPos = getSourceFigurePos(game, playerNum, activeMsgId, cbt, timing, deps.dcMessageMeta);
+    const hasSmallInRange = Object.entries(oppPoses).some(([fk, pos]) => {
       const dcN = figKeyToDcName(fk);
-      return (dcEffects[dcN]?.keywords || []).some(k => k.toUpperCase() === 'SMALL');
+      const isSmall = (dcEffects[dcN]?.keywords || []).some(k => k.toUpperCase() === 'SMALL');
+      if (!isSmall) return false;
+      if (srcPos && pos) return getRange(srcPos, pos) <= 4; // 3 range + 1 Massive buffer
+      return true; // no position info — be conservative
     });
-    if (!hasSmallHostile) return false;
+    if (!hasSmallInRange) return false;
   }
 
-  // supportSpecialistEffect (Support Specialist): needs friendly DROID/TECHNICIAN/TROOPER on the board
+  // supportSpecialistEffect (Support Specialist): needs friendly DROID/TECHNICIAN/TROOPER within 3 of source
   if (entry.supportSpecialistEffect) {
     if (!activeMsgId) activeMsgId = findActiveActivationMsgIdLocal(game, playerNum, deps.dcMessageMeta);
     if (!activeMsgId) return false;
     const dcEffects = (getDcEffectsFn ? getDcEffectsFn() : null) || {};
     const myPoses = game.figurePositions?.[playerNum] || {};
     const SUPPORT_KW = new Set(['droid', 'technician', 'trooper']);
-    const hasEligible = Object.keys(myPoses).some(fk => {
+    const srcPos = getSourceFigurePos(game, playerNum, activeMsgId, cbt, timing, deps.dcMessageMeta);
+    const hasEligible = Object.entries(myPoses).some(([fk, pos]) => {
       const dcN = figKeyToDcName(fk);
-      return (dcEffects[dcN]?.keywords || []).some(k => SUPPORT_KW.has(k.toLowerCase()));
+      const hasKw = (dcEffects[dcN]?.keywords || []).some(k => SUPPORT_KW.has(k.toLowerCase()));
+      if (!hasKw) return false;
+      if (srcPos && pos) return getRange(srcPos, pos) <= 4; // 3 range + 1 Massive buffer
+      return true; // no position info — be conservative
     });
     if (!hasEligible) return false;
+  }
+
+  // chooseAdjacentHostileThen: need a hostile within range of the source figure
+  if (entry.chooseAdjacentHostileThen) {
+    const cah = entry.chooseAdjacentHostileThen;
+    const cahRange = cah.range ?? 1;
+    if (cahRange < 99) { // range 99 = targetAll (all with LOS), no proximity check
+      const srcPos = getSourceFigurePos(game, playerNum, activeMsgId, cbt, timing, deps.dcMessageMeta);
+      if (srcPos) {
+        const oppPoses = game.figurePositions?.[oppNum] || {};
+        // +1 buffer for Massive figure footprints (2x2 anchor offset)
+        const hasInRange = Object.values(oppPoses).some(pos =>
+          pos && getRange(srcPos, pos) <= cahRange + 1
+        );
+        if (!hasInRange) return false;
+      }
+    }
   }
 
   // chooseAdjacentHostileThen with requireBeneficialCondition (Disorient): needs hostile with Focus/Hidden

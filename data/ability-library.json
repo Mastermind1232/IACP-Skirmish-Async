@@ -1955,7 +1955,8 @@
         "splashDamage": 2,
         "splashConditions": [
           "Stun"
-        ]
+        ],
+        "range": 2
       },
       "wiredStatus": "wired"
     },
@@ -2775,7 +2776,8 @@
       "type": "ccEffect",
       "label": "Per your Damage choose hostile within 2, each suffers 1 (one auto)",
       "chooseAdjacentHostileThen": {
-        "damage": 1
+        "damage": 1,
+        "range": 2
       },
       "wiredStatus": "wired"
     },
