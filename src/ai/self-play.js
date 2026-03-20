@@ -483,7 +483,8 @@ export async function runSelfPlayLoop(game, client, opts) {
         transitionsHit.push(computeTransitionKey(gAfter, chosen.type));
       }
 
-      console.log(`[self-play] Step ${step}: P${chosen._playerNum} ${chosen.type} → ${chosen.customId}`);
+      const ccLabel = chosen.params?.cardName ? ` (${chosen.params.cardName})` : '';
+      console.log(`[self-play] Step ${step}: P${chosen._playerNum} ${chosen.type}${ccLabel} → ${chosen.customId}`);
 
       if (delayMs > 0) {
         await new Promise(r => setTimeout(r, delayMs));
