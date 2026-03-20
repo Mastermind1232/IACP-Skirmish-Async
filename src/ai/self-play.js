@@ -310,7 +310,7 @@ export async function runSelfPlayLoop(game, client, opts) {
             if (a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)) return false;
             return true;
           })
-          .map(a => ({ ...a, _playerNum: pn })));
+          .map(a => ({ ...a, _playerNum: pn, actingPlayer: pn })));
       }
 
       if (allActions.length === 0) {

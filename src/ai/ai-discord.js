@@ -177,7 +177,8 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
 
     // Get available actions for the AI, filtering suppressed CCs
     const actions = getAvailableActions(currentGame, aiPlayerNum, extraDeps)
-      .filter(a => !(a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)));
+      .filter(a => !(a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)))
+      .map(a => ({ ...a, actingPlayer: aiPlayerNum }));
     if (!actions || actions.length === 0) {
       return { steps: step, actions: actionLog };
     }

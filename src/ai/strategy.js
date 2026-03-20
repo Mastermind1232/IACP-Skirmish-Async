@@ -4,7 +4,7 @@
  * Falls back to pickSmartAction's built-in heuristic during epsilon-greedy exploration.
  */
 
-import { pickSmartAction, loadLearnings } from '../../tests/headless/learnings.js';
+import { pickSmartAction, loadLearnings, setGreedyMode } from '../../tests/headless/learnings.js';
 import { isCcAttachment } from '../data-loader.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -17,7 +17,10 @@ function getLearnings() {
   if (!_learnings) {
     const learningsPath = join(__dirname, '..', '..', 'tests', 'headless', 'learnings-data.json');
     _learnings = loadLearnings(learningsPath);
-    console.log(`[AI] Loaded Q-learning model (${_learnings.meta.totalGames} training games, phase ${_learnings.brainPhase})`);
+    // Discord uses greedy mode (no epsilon exploration / forced CC+surge exploration).
+    // Exploration is for training only — production should use pure exploitation.
+    setGreedyMode(true);
+    console.log(`[AI] Loaded Q-learning model (${_learnings.meta.totalGames} training games, phase ${_learnings.brainPhase}, greedy)`);
   }
   return _learnings;
 }
@@ -45,6 +48,34 @@ function isAiViable(action) {
 }
 
 /**
+ * Activation-phase heuristic: suppress premature end_activation when the DC
+ * still has productive options (move/attack/ability).
+ *
+ * The DQN assigns Q(end_activation) ≈ 5.89 vs Q(start_move) ≈ 5.48, because
+ * movement initiation has low immediate reward (payoff comes from subsequent
+ * move_toward steps, discounted by gamma). This causes the AI to end every
+ * activation without doing anything. Override by removing end_activation from
+ * the pool when productive actions exist.
+ *
+ * Also suppress pass_activation_turn when the player has activatable DCs,
+ * for the same reason — the model undervalues activating when no attacks
+ * are in range.
+ */
+const PRODUCTIVE_TYPES = new Set([
+  'move_figure', 'attack_target', 'dc_special',
+  'play_cc_special', 'play_cc_double', 'interact',
+]);
+const IDLE_TYPES = new Set(['dc_end_activation', 'pass_activation_turn']);
+
+function applyActivationHeuristic(actions) {
+  const hasProductive = actions.some(a => PRODUCTIVE_TYPES.has(a.type));
+  if (!hasProductive) return actions;
+  const filtered = actions.filter(a => !IDLE_TYPES.has(a.type));
+  // Safety: if filtering removed everything, return original
+  return filtered.length > 0 ? filtered : actions;
+}
+
+/**
  * Pick the best action using the trained neural network.
  * Filters unsupported actions, then delegates to pickSmartAction which uses
  * the dueling DQN for action group selection and within-group linear scorers
@@ -60,8 +91,12 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   if (!actions || actions.length === 0) return null;
 
   // Filter out actions the AI can't complete in Discord
-  const viable = actions.filter(isAiViable);
+  let viable = actions.filter(isAiViable);
   if (viable.length === 0) return null;
+
+  // Suppress premature end_activation / pass when productive actions exist
+  viable = applyActivationHeuristic(viable);
+
   if (viable.length === 1) return { action: viable[0], score: 0 };
 
   const game = engine.getState();
