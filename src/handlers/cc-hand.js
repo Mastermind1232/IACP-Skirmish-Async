@@ -33,7 +33,7 @@ import {
   dcMatchesPlayableBy,
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
-import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 
@@ -79,11 +79,11 @@ async function promptCommDisruption(game, gameId, playerNum, card, client, logGa
       new ButtonBuilder().setCustomId(`comm_disruption_play_${gameId}`).setLabel('Play Comm Disruption').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`comm_disruption_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
-    await withDiscordRetry(() => oppHandChannel.send({
+    await withDiscordRetry(() => oppHandChannel.send(sanitizeMentions({
       content: `<@${oppId}> Your opponent played **${card}** (cost ${playedCost}). You have **${spyCount}** friendly SPY group${spyCount !== 1 ? 's' : ''}. Play **Comm Disruption** to cancel it?`,
       components: [row],
       allowedMentions: { users: [oppId] },
-    }));
+    })));
     saveGames();
   } catch (err) {
     // Non-fatal: if we can't prompt, the game continues
@@ -666,11 +666,11 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     const oppHandChannel = await fetchGameChannel(interaction.client, oppHandId);
     if (oppHandChannel) {
       const oppId = getPlayerId(game, oppNum);
-      await oppHandChannel.send({
+      await oppHandChannel.send(sanitizeMentions({
         content: `Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
         components: [ctx.getNegationResponseButtons(gameId)],
         allowedMentions: { users: [oppId] },
-      }).catch(discordCatch);
+      })).catch(discordCatch);
     }
     await logGameAction(game, interaction.client, `Waiting for opponent to respond to **${card}**...`, { phase: 'ACTION', icon: 'hourglass' });
     const waitingMsg = await withDiscordRetry(() => handChannel.send({

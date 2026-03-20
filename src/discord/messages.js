@@ -17,6 +17,7 @@ export const GAME_PHASES = {
   INITIATIVE: { name: 'INITIATIVE', emoji: '🎲', color: PHASE_COLOR },
   DEPLOYMENT: { name: 'DEPLOYMENT', emoji: '📍', color: PHASE_COLOR },
   ROUND: { name: 'ROUND', emoji: '⚔️', color: PHASE_COLOR },
+  ACTION: { name: 'ACTION', emoji: '🎴', color: PHASE_COLOR },
 };
 
 /** Action icons for game log */
