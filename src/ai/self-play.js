@@ -457,6 +457,42 @@ export async function runSelfPlayLoop(game, client, opts) {
         continue;
       }
 
+      // Negation auto-resolve: cost-0 CCs set pendingNegation (opponent may play
+      // Negation to cancel). In AI self-play both sides are AI — auto-let-resolve
+      // by dispatching the negation_let_resolve handler so the game continues.
+      if (g.pendingNegation) {
+        const negCard = g.pendingNegation.card;
+        const negOppNum = g.pendingNegation.playedBy === 1 ? 2 : 1;
+        const negUserId = negOppNum === 1 ? g.player1Id : g.player2Id;
+        const negCustomId = `negation_let_resolve_${g.gameId}`;
+        try {
+          const negHandlerKey = getHandlerKey(negCustomId, 'button');
+          const negHandler = negHandlerKey ? getHandler(negHandlerKey) : null;
+          if (negHandler) {
+            const negInteraction = createLiveAiInteraction(negCustomId, negUserId, g, client);
+            negInteraction.client = client;
+            if (g.generalId) {
+              try { negInteraction.channel = await fetchGameChannel(client, g.generalId); negInteraction.message.channel = negInteraction.channel; } catch {}
+            }
+            const negGroup = getHandlerGroup(negHandlerKey);
+            if (negGroup) {
+              const negCtx = buildContext(negGroup, buildAllDeps());
+              await negHandler(negInteraction, negCtx);
+            } else {
+              await negHandler(negInteraction);
+            }
+            console.log(`[self-play] Negation auto-resolved: let "${negCard}" resolve (P${negOppNum} passed)`);
+          } else {
+            // Fallback: just clear the pending state
+            delete g.pendingNegation;
+            console.warn(`[self-play] Negation cleared (no handler for ${negCustomId})`);
+          }
+        } catch (err) {
+          delete g.pendingNegation;
+          console.warn(`[self-play] Negation auto-resolve error: ${err.message}`);
+        }
+      }
+
       // Record action — reset empty counter only when an action is actually dispatched
       consecutiveEmpty = 0;
       totalActionsDispatched++;

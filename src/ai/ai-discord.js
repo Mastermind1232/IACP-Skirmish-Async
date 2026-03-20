@@ -269,6 +269,40 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
         continue;
       }
 
+      // Negation auto-resolve: cost-0 CCs set pendingNegation. In AI-vs-human,
+      // the AI is one side — auto-let-resolve on the AI's behalf so the game continues.
+      // (The human opponent still gets normal Negation prompts when THEY play a CC.)
+      if (currentGame.pendingNegation && currentGame.pendingNegation.playedBy === aiPlayerNum) {
+        const negOppNum = aiPlayerNum === 1 ? 2 : 1;
+        const negUserId = negOppNum === 1 ? currentGame.player1Id : currentGame.player2Id;
+        const negCustomId = `negation_let_resolve_${currentGame.gameId}`;
+        try {
+          const negHandlerKey = getHandlerKey(negCustomId, 'button');
+          const negHandler = negHandlerKey ? getHandler(negHandlerKey) : null;
+          if (negHandler) {
+            const negInteraction = createLiveAiInteraction(negCustomId, negUserId, currentGame, client);
+            negInteraction.client = client;
+            if (currentGame.generalId) {
+              try { negInteraction.channel = await fetchGameChannel(client, currentGame.generalId); negInteraction.message.channel = negInteraction.channel; } catch {}
+            }
+            const negGroup = getHandlerGroup(negHandlerKey);
+            const allDepsNeg = buildAllDeps();
+            if (negGroup) {
+              const negCtx = buildContext(negGroup, allDepsNeg);
+              await negHandler(negInteraction, negCtx);
+            } else {
+              await negHandler(negInteraction);
+            }
+            console.log(`[AI] Negation auto-resolved: let "${currentGame.pendingNegation?.card || '?'}" resolve`);
+          } else {
+            delete currentGame.pendingNegation;
+          }
+        } catch (err) {
+          delete currentGame.pendingNegation;
+          console.warn(`[AI] Negation auto-resolve error: ${err.message}`);
+        }
+      }
+
       actionLog.push(chosen.customId);
       console.log(`[AI] Step ${step}: ${chosen.type} → ${chosen.customId}`);
     } catch (err) {

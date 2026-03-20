@@ -23,14 +23,23 @@ function getLearnings() {
 }
 
 /**
+ * CCs that have dedicated pending-state action paths (celebration_play_, etc.)
+ * and must NOT be played through the generic cc_confirm_play_ bridge.
+ * Playing them via the bridge bypasses precondition checks (e.g. "was a unique
+ * hostile actually defeated?") and wastes the card without the intended effect.
+ */
+const CC_HAS_DEDICATED_HANDLER = new Set(['Celebration']);
+
+/**
  * Filter out CC actions the AI can't complete in Discord.
  * - play_cc_special / play_cc_double: single-step button, always allowed
- * - play_cc: allowed UNLESS it's an attachment CC (requires DC-selection dropdown
- *   that has no available-action equivalent, stalling the game)
+ * - play_cc: blocked if attachment CC (requires DC-selection dropdown)
+ * - play_cc: blocked if card has a dedicated pending-state handler path
  */
 function isAiViable(action) {
-  if (action.type === 'play_cc' && action.params?.cardName && isCcAttachment(action.params.cardName)) {
-    return false;
+  if (action.type === 'play_cc' && action.params?.cardName) {
+    if (isCcAttachment(action.params.cardName)) return false;
+    if (CC_HAS_DEDICATED_HANDLER.has(action.params.cardName)) return false;
   }
   return true;
 }
