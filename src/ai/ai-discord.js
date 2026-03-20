@@ -158,6 +158,8 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
   if (!hasAi || !aiPlayerNum) return { steps: 0, actions: [] };
 
   const actionLog = [];
+  const suppressedCcPlays = new Set();
+  let lastRoundPhase = null;
 
   for (let step = 0; step < maxSteps; step++) {
     // Re-read game state (handlers may have mutated it)
@@ -166,8 +168,16 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
       return { steps: step, actions: actionLog };
     }
 
-    // Get available actions for the AI
-    const actions = getAvailableActions(currentGame, aiPlayerNum, extraDeps);
+    // Clear CC suppression when game phase changes
+    const curPhase = `${currentGame.roundPhase || '?'}|${currentGame.currentActivatingDcIndex ?? 'x'}`;
+    if (curPhase !== lastRoundPhase) {
+      suppressedCcPlays.clear();
+      lastRoundPhase = curPhase;
+    }
+
+    // Get available actions for the AI, filtering suppressed CCs
+    const actions = getAvailableActions(currentGame, aiPlayerNum, extraDeps)
+      .filter(a => !(a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)));
     if (!actions || actions.length === 0) {
       return { steps: step, actions: actionLog };
     }
@@ -248,6 +258,15 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
         await withAtomicGameLock(currentGame.gameId, atomicOpts, runHandler);
       } else {
         await runHandler();
+      }
+
+      // CC retry-loop prevention: suppress card if handler couldn't auto-resolve
+      if (currentGame.pendingIllegalCcPlay) {
+        const suppCard = currentGame.pendingIllegalCcPlay.card;
+        console.log(`[AI] CC suppressed: "${suppCard}" (${currentGame.pendingIllegalCcPlay.reason || 'manual'}) — will retry after phase change`);
+        suppressedCcPlays.add(suppCard);
+        delete currentGame.pendingIllegalCcPlay;
+        continue;
       }
 
       actionLog.push(chosen.customId);

@@ -257,6 +257,12 @@ export async function runSelfPlayLoop(game, client, opts) {
   let totalActionsDispatched = 0;
   let lastCustomIds = [];
 
+  // CC retry-loop prevention: track cards that hit the "illegal/manual" handler path.
+  // Keyed by "cardName|roundPhase|activatingDcIndex" so the same card can be retried
+  // in a different phase or activation context.
+  const suppressedCcPlays = new Set();
+  let lastRoundPhase = null;
+
   // Execution trace (Phase 1 queue runner)
   const exercisedHandlers = new Set();
   const seenActionTypes = new Set();
@@ -281,15 +287,30 @@ export async function runSelfPlayLoop(game, client, opts) {
         return { result: wasManualStop ? 'stopped' : 'completed', artifact };
       }
 
+      // Clear CC suppression when game phase changes (card may become legal in new context)
+      const curPhase = `${g.roundPhase || '?'}|${g.currentActivatingDcIndex ?? 'x'}`;
+      if (curPhase !== lastRoundPhase) {
+        if (suppressedCcPlays.size > 0) {
+          console.log(`[self-play] CC suppression cleared (phase ${lastRoundPhase} → ${curPhase}), was: ${[...suppressedCcPlays].join(', ')}`);
+        }
+        suppressedCcPlays.clear();
+        lastRoundPhase = curPhase;
+      }
+
       // Determine acting player
       const acting = determineActingPlayer(g);
       const playerNums = acting === 'both' ? [1, 2] : [acting];
 
-      // Gather actions for acting player(s)
+      // Gather actions for acting player(s), filtering suppressed CCs
       let allActions = [];
       for (const pn of playerNums) {
         const actions = getAvailableActions(g, pn, actionDeps);
-        allActions.push(...actions.map(a => ({ ...a, _playerNum: pn })));
+        allActions.push(...actions
+          .filter(a => {
+            if (a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)) return false;
+            return true;
+          })
+          .map(a => ({ ...a, _playerNum: pn })));
       }
 
       if (allActions.length === 0) {
@@ -420,6 +441,20 @@ export async function runSelfPlayLoop(game, client, opts) {
         }
         // Soft errors (invalid state transitions) — log and continue
         console.warn(`[self-play] Step ${step} soft error: ${err.message}`);
+      }
+
+      // CC retry-loop prevention: if the handler set pendingIllegalCcPlay, the card
+      // couldn't be auto-resolved. Suppress it for this phase/activation window and
+      // clean up the pending state so the game doesn't stall.
+      if (g.pendingIllegalCcPlay) {
+        const suppCard = g.pendingIllegalCcPlay.card;
+        const suppReason = g.pendingIllegalCcPlay.reason || 'unknown';
+        suppressedCcPlays.add(suppCard);
+        console.log(`[self-play] CC suppressed: "${suppCard}" (${suppReason}) — will retry after phase change`);
+        delete g.pendingIllegalCcPlay;
+        // Don't count this as a dispatched action — the card wasn't consumed
+        if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+        continue;
       }
 
       // Record action — reset empty counter only when an action is actually dispatched
