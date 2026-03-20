@@ -22,7 +22,7 @@ import {
   loadLearnings, saveLearnings, createGameTracer,
   pickSmartAction, abstractActionType, getLearningsStats,
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
-  recordTrainingCheckpoint, checkDivergence, setWeightDecay,
+  recordTrainingCheckpoint, checkDivergence, setWeightDecay, getQValues,
 } from './learnings.js';
 import { unlinkSync } from 'fs';
 
@@ -105,6 +105,13 @@ async function runOneGame(learnings, gameNum) {
   let lastMoveId = null;
   let sameTypeCount = 0;
   let lastActionType = null;
+
+  // Movement metrics — track how often the AI moves vs ends activation idle
+  let moveActions = 0;        // start_move, move_toward, move_away, move_lateral
+  let endActivations = 0;     // dc_end_activation (how often AI ends without doing anything)
+  let attackActions = 0;      // attack_target
+  let totalActivations = 0;   // activate_dc (total activation starts)
+  let passActivations = 0;    // pass_activation_turn
 
   // CC failure retry guard: track failures scoped to game context
   // Key: "P{n}:{cardName}:R{round}:{roundPhase}:{activatingDcIdx}"
@@ -263,7 +270,12 @@ async function runOneGame(learnings, gameNum) {
 
     if (!action) continue;
 
-    if (action.type === 'move_figure') lastMoveId = action.customId;
+    // Movement metrics tracking
+    if (action.type === 'move_figure') { moveActions++; lastMoveId = action.customId; }
+    else if (action.type === 'dc_end_activation') endActivations++;
+    else if (action.type === 'attack_target') attackActions++;
+    else if (action.type === 'activate_dc') totalActivations++;
+    else if (action.type === 'pass_activation_turn') passActivations++;
 
     // Intercept interact actions — resolve directly (bypass Discord UI)
     if (action.type === 'interact') {
@@ -381,6 +393,12 @@ async function runOneGame(learnings, gameNum) {
     p1VP: finalGame.player1VP?.total || 0,
     p2VP: finalGame.player2VP?.total || 0,
     finalRound,
+    // Movement metrics
+    moveActions,
+    attackActions,
+    endActivations,
+    totalActivations,
+    passActivations,
   };
 }
 
@@ -445,6 +463,11 @@ async function main() {
       p2VP: result.p2VP || 0,
       updates: updatesAfterGame - updatesBeforeGame,
       finalRound: result.finalRound || 1,
+      moveActions: result.moveActions || 0,
+      attackActions: result.attackActions || 0,
+      endActivations: result.endActivations || 0,
+      totalActivations: result.totalActivations || 0,
+      passActivations: result.passActivations || 0,
     });
 
     cpGames++;
@@ -565,6 +588,62 @@ async function main() {
     console.log(`Avg rounds to finish: ${avgRound.toFixed(1)} (lower = faster resolution)`);
     console.log(`Avg updates per game: ${avgUpdates.toFixed(0)} (lower = fewer iterations)`);
     console.log(`Decisive wins (VP diff >= 10): ${decisive}/${completedGames.length} (${(decisive/completedGames.length*100).toFixed(0)}%)`);
+  }
+
+  // Movement metrics
+  if (perGameResults.length > 0) {
+    const totalMoves = perGameResults.reduce((s, r) => s + r.moveActions, 0);
+    const totalAttacks = perGameResults.reduce((s, r) => s + r.attackActions, 0);
+    const totalEndAct = perGameResults.reduce((s, r) => s + r.endActivations, 0);
+    const totalAct = perGameResults.reduce((s, r) => s + r.totalActivations, 0);
+    const totalPass = perGameResults.reduce((s, r) => s + r.passActivations, 0);
+    const n = perGameResults.length;
+    console.log('\n=== Movement Metrics ===');
+    console.log(`Avg moves/game: ${(totalMoves / n).toFixed(1)} | Avg attacks/game: ${(totalAttacks / n).toFixed(1)}`);
+    console.log(`Avg activations/game: ${(totalAct / n).toFixed(1)} | Avg end_activation/game: ${(totalEndAct / n).toFixed(1)} | Avg pass/game: ${(totalPass / n).toFixed(1)}`);
+    const moveRatio = totalAct > 0 ? (totalMoves / totalAct * 100).toFixed(1) : 'N/A';
+    const idleRatio = totalAct > 0 ? ((totalEndAct + totalPass) / totalAct * 100).toFixed(1) : 'N/A';
+    console.log(`Move-to-activation ratio: ${moveRatio}% | Idle ratio (end+pass)/activations: ${idleRatio}%`);
+
+    // Per-window movement (10-game windows)
+    console.log('\n=== Movement Per Window (10-game) ===');
+    for (let w = 0; w < n; w += 10) {
+      const window = perGameResults.slice(w, w + 10);
+      const wMoves = window.reduce((s, r) => s + r.moveActions, 0) / window.length;
+      const wAtk = window.reduce((s, r) => s + r.attackActions, 0) / window.length;
+      const wEnd = window.reduce((s, r) => s + r.endActivations, 0) / window.length;
+      const wAct = window.reduce((s, r) => s + r.totalActivations, 0) / window.length;
+      console.log(`  Games ${w + 1}-${w + window.length}: moves=${wMoves.toFixed(1)} attacks=${wAtk.toFixed(1)} end_act=${wEnd.toFixed(1)} activations=${wAct.toFixed(1)}`);
+    }
+  }
+
+  // Q-value diagnostic: show Q-values for key action types
+  if (learnings.network) {
+    // Use a representative "round 1 start" feature vector to diagnose Q-values
+    const diagFeatures = new Array(36).fill(0);
+    diagFeatures[0] = 0;    // vpAdv = 0
+    diagFeatures[1] = 1.0;  // myHpRatio = full HP
+    diagFeatures[2] = 1.0;  // oppHpRatio = full HP
+    diagFeatures[3] = 0;    // hpAdv = 0
+    diagFeatures[8] = 8;    // avgDist = 8 (typical start-of-game)
+    const diagQ = getQValues(learnings, diagFeatures);
+    if (diagQ) {
+      const absTypes = [
+        'attack_close', 'attack_ranged', 'move_toward', 'move_away', 'move_lateral',
+        'move_done', 'start_move', 'activate', 'end_activation', 'pass',
+        'ability', 'spend_surge', 'skip_surges', 'reroll', 'other',
+        'play_cc', 'react_use', 'react_skip', 'surge_damage', 'surge_special',
+        'token_offense', 'token_defense', 'interact',
+      ];
+      console.log('\n=== Q-Value Diagnostic (round 1 start state) ===');
+      const keyTypes = ['start_move', 'move_toward', 'end_activation', 'pass', 'attack_close', 'attack_ranged', 'activate', 'play_cc', 'ability', 'interact'];
+      for (const t of keyTypes) {
+        const idx = absTypes.indexOf(t);
+        if (idx >= 0 && idx < diagQ.length) {
+          console.log(`  Q(${t}) = ${diagQ[idx].toFixed(3)}`);
+        }
+      }
+    }
   }
 
   // Within-group scorer weights (Phase 5)

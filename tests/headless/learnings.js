@@ -16,6 +16,7 @@ const ALPHA = 0.002;         // Learning rate (smaller for neural stability)
 const HIDDEN_SIZE = 32;      // Hidden layer width
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
+const N_STEP = 4;            // N-step returns — multi-step credit assignment (was 1)
 let WEIGHT_DECAY = 0.00003;       // L2 regularization — tuned via Branch C stabilization experiment (2026-03-20)
 const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger with decay active
 
@@ -67,9 +68,10 @@ const REWARD_WEIGHTS = {
   vp: 10.0,               // VP gained (primary win condition)
   dmg: 0.5,               // Enemy HP removed
   hp: -0.5,               // Own HP lost (negative = penalty)
-  dist: 0.1,              // Distance reduction to enemies
+  dist: 0.4,              // Distance reduction to enemies (was 0.1 — raised to make movement visible to DQN)
   terminal: 50.0,         // Win/loss bonus at game end
-  step: -0.02,            // Per-action cost — pushes toward faster game completion
+  step: -0.005,           // Per-action cost (was -0.02 — lowered so step penalty doesn't drown out dist signal)
+  activationAction: 0.15, // Bonus for productive actions during activation (move, attack, ability, interact)
 };
 
 const NUM_FEATURES = 36;
@@ -940,23 +942,53 @@ function updateTraceNeural(learnings, trace) {
   let deltaSum = 0;
   let count = 0;
 
-  // Backward sweep through trace
-  for (let i = trace.length - 1; i >= 0; i--) {
-    const entry = trace[i];
-    if (!entry.features) continue;
+  // Build valid-entry index (skip entries without features)
+  const validIdxs = [];
+  for (let i = 0; i < trace.length; i++) {
+    if (trace[i].features) validIdxs.push(i);
+  }
 
-    const { features, actionIdx, reward, nextFeatures, nextActionIdxs, done } = entry;
+  // Forward sweep: compute n-step returns for each valid entry.
+  // For entry at position p in validIdxs:
+  //   G_n = r_p + γ*r_{p+1} + ... + γ^(n-1)*r_{p+n-1} + γ^n * maxQ(s_{p+n})
+  // If a terminal (done) is hit within n steps, truncate there.
+  for (let vi = 0; vi < validIdxs.length; vi++) {
+    const i = validIdxs[vi];
+    const entry = trace[i];
+    const { features, actionIdx } = entry;
 
     // Forward pass on online network
     const { Q, h_pre, h } = forwardPass(network, features);
 
-    // Compute TD target
+    // Compute n-step return
+    let nStepReturn = 0;
+    let gammaK = 1.0;
+    let bootstrapFeatures = null;
+    let bootstrapActionIdxs = null;
+    let hitTerminal = false;
+    const stepsToUse = Math.min(N_STEP, validIdxs.length - vi);
+
+    for (let k = 0; k < stepsToUse; k++) {
+      const futureEntry = trace[validIdxs[vi + k]];
+      nStepReturn += gammaK * futureEntry.reward;
+      gammaK *= GAMMA;
+      if (futureEntry.done) {
+        hitTerminal = true;
+        break;
+      }
+      // The bootstrap state is the nextFeatures of the last step we accumulated
+      if (k === stepsToUse - 1) {
+        bootstrapFeatures = futureEntry.nextFeatures;
+        bootstrapActionIdxs = futureEntry.nextActionIdxs;
+      }
+    }
+
     let target;
-    if (done || !nextFeatures) {
-      target = reward;
+    if (hitTerminal || !bootstrapFeatures) {
+      target = nStepReturn;
     } else {
-      const maxQNext = getMaskedBestQ(targetNetwork, nextFeatures, nextActionIdxs);
-      target = reward + GAMMA * maxQNext;
+      const maxQNext = getMaskedBestQ(targetNetwork, bootstrapFeatures, bootstrapActionIdxs);
+      target = nStepReturn + gammaK * maxQNext;
     }
 
     // Clip TD error
@@ -1001,16 +1033,18 @@ function updateTraceNeural(learnings, trace) {
       stats.targetSyncs = (stats.targetSyncs || 0) + 1;
     }
 
-    // Store transition in replay buffer
+    // Store n-step transition in replay buffer
+    // Uses the n-step return and the n-step-ahead state for bootstrap
     if (learnings.replayBuffer) {
       const buf = learnings.replayBuffer;
       const transition = {
         features: features.slice(),
         actionIdx,
-        reward,
-        nextFeatures: nextFeatures ? nextFeatures.slice() : null,
-        nextActionIdxs: nextActionIdxs ? nextActionIdxs.slice() : null,
-        done: !!done,
+        reward: nStepReturn,    // n-step cumulative reward (not single-step)
+        nextFeatures: bootstrapFeatures ? bootstrapFeatures.slice() : null,
+        nextActionIdxs: bootstrapActionIdxs ? bootstrapActionIdxs.slice() : null,
+        done: hitTerminal,
+        nStepGamma: gammaK,     // γ^n for this transition's bootstrap discount
       };
       if (buf.transitions.length < REPLAY_BUFFER_SIZE) {
         buf.transitions.push(transition);
@@ -1051,12 +1085,14 @@ export function replayUpdate(learnings) {
       const { features, actionIdx, reward, nextFeatures, nextActionIdxs, done } = t;
       const { Q, h_pre, h } = forwardPass(network, features);
 
+      // Use stored n-step gamma if available (new transitions), fall back to GAMMA (legacy 1-step)
+      const bootstrapGamma = t.nStepGamma ?? GAMMA;
       let target;
       if (done || !nextFeatures) {
         target = reward;
       } else {
         const maxQNext = getMaskedBestQ(targetNetwork, nextFeatures, nextActionIdxs);
-        target = reward + GAMMA * maxQNext;
+        target = reward + bootstrapGamma * maxQNext;
       }
 
       const rawDelta = target - Q[actionIdx];
@@ -1632,7 +1668,16 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
         if (_ccPlaysThisGame <= CC_REWARD_CAP) ccBonus = CC_SHAPE_REWARD;
       }
 
-      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus;
+      // Activation-action bonus: reward productive actions during activation phase.
+      // Movement, attack, ability, and interact all deserve immediate credit because
+      // they advance board state. end_activation / pass get no bonus (just step cost).
+      const PRODUCTIVE_ABS_TYPES = new Set([
+        'start_move', 'move_toward', 'move_away', 'move_lateral', 'move_done',
+        'attack_close', 'attack_ranged', 'ability', 'interact',
+      ]);
+      const activationBonus = PRODUCTIVE_ABS_TYPES.has(absType) ? (REWARD_WEIGHTS.activationAction || 0) : 0;
+
+      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus + activationBonus;
       const actionIdx = ABSTRACT_TYPES.indexOf(absType);
       const wgFeatures = pickSmartAction._lastWgFeatures || null;
       const wgType = pickSmartAction._lastWgType || null;
@@ -2255,6 +2300,17 @@ export function checkDivergence(learnings) {
     reasons,
     signals,
   };
+}
+
+/**
+ * Get Q-values for a given feature vector. Used for diagnostics.
+ * @param {object} learnings
+ * @param {number[]} features
+ * @returns {number[]|null} Q-values array, or null if no network
+ */
+export function getQValues(learnings, features) {
+  if (!learnings.network) return null;
+  return forwardPass(learnings.network, features).Q;
 }
 
 export { ABSTRACT_TYPES, FEATURE_NAMES, NUM_FEATURES };
