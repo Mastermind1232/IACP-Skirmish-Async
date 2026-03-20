@@ -440,6 +440,8 @@ export function createFlowHarness(opts = {}) {
     getDcStats, getMapSpaces,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
     getPlayableCcFromHand,
+    getPlayableCcSpecialsForDc: deps.getPlayableCcSpecialsForDc,
+    getPlayableCcDoubleActionsForDc: deps.getPlayableCcDoubleActionsForDc,
   };
 
   // ── Step tracking ─────────────────────────────────────────────────────────

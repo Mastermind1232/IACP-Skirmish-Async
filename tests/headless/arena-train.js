@@ -76,6 +76,8 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
     dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
     getPlayableCcFromHand,
+    getPlayableCcSpecialsForDc: hDeps.getPlayableCcSpecialsForDc,
+    getPlayableCcDoubleActionsForDc: hDeps.getPlayableCcDoubleActionsForDc,
   };
 
   const tracer1 = createAgentTracer(learnings, 1, dcHealthState, dcMessageMeta, agent1.strategy.rewardMultipliers);
@@ -118,7 +120,7 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
       // Never unready a phase gate — wastes iterations in a ready/unready loop
       if (a.type === 'phase_gate_unready') return false;
       // Filter CC plays by deep precondition check
-      if (a.type === 'play_cc') {
+      if (a.type === 'play_cc' || a.type === 'play_cc_special' || a.type === 'play_cc_double') {
         return canResolveCcHeadless(g, a.actingPlayer, a.params.cardName, hDeps);
       }
       return true;
@@ -213,8 +215,16 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
     if (action.type === 'move_figure') lastMoveId = action.customId;
 
     // Intercept CC plays — resolve directly via headless path
-    if (action.type === 'play_cc') {
+    if (action.type === 'play_cc' || action.type === 'play_cc_special' || action.type === 'play_cc_double') {
       try {
+        // Deduct activation actions for special-action CCs (matching Discord dc-play-area.js:801-808)
+        if (action.type === 'play_cc_special' || action.type === 'play_cc_double') {
+          const actData = g.dcActionsData?.[action.params.msgId];
+          if (actData && typeof actData.remaining === 'number') {
+            if (action.type === 'play_cc_special') actData.remaining = Math.max(0, actData.remaining - 1);
+            else actData.remaining = 0;
+          }
+        }
         await playCommandCardHeadless(g, action.actingPlayer, action.params.cardName, hDeps);
       } catch (err) {
         // CC play failed — continue (canResolveCcHeadless should prevent most failures)

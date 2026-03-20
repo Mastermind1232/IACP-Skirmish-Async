@@ -37,6 +37,8 @@ export const ACTION_TYPES = {
   PASS_ACTIVATION_TURN: 'pass_activation_turn',
   END_ACTIVATION_PHASE: 'end_activation_phase',
   PLAY_CC: 'play_cc',
+  PLAY_CC_SPECIAL: 'play_cc_special',
+  PLAY_CC_DOUBLE: 'play_cc_double',
   CC_DRAW: 'cc_draw',
 
   // Combat
@@ -154,6 +156,13 @@ export function buildCustomId(type, params = {}) {
     // DC Special
     case ACTION_TYPES.DC_SPECIAL:
       return `dc_special_${params.specialIdx}_${msgId}`;
+
+    // CC Special Action / Double Action (played from DC, consumes actions)
+    // Prefix must match handler registration: dc_cc_special_ / dc_cc_double_
+    case ACTION_TYPES.PLAY_CC_SPECIAL:
+      return `dc_cc_special_${msgId}_${params.cardIndex}`;
+    case ACTION_TYPES.PLAY_CC_DOUBLE:
+      return `dc_cc_double_${msgId}_${params.cardIndex}`;
 
     // Interact
     case ACTION_TYPES.INTERACT:

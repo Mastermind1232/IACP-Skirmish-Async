@@ -180,6 +180,8 @@ async function recordGame() {
     dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
     getPlayableCcFromHand,
+    getPlayableCcSpecialsForDc: hDeps.getPlayableCcSpecialsForDc,
+    getPlayableCcDoubleActionsForDc: hDeps.getPlayableCcDoubleActionsForDc,
   };
 
   const replay = {

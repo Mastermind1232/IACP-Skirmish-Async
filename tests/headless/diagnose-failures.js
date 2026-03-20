@@ -67,6 +67,8 @@ async function diagnoseOneGame(learnings, gameNum) {
     dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
     getPlayableCcFromHand,
+    getPlayableCcSpecialsForDc: hDeps.getPlayableCcSpecialsForDc,
+    getPlayableCcDoubleActionsForDc: hDeps.getPlayableCcDoubleActionsForDc,
   };
 
   const tracer1 = createGameTracer(learnings, 1, dcHealthState, dcMessageMeta);
@@ -174,7 +176,7 @@ async function diagnoseOneGame(learnings, gameNum) {
       if (a.type === 'attack_target' && !a.params?.targetFigureKey) return false;
       if (a.type === 'phase_gate_unready') return false;
       if (a.type === 'interact' && a.params?.optionId === 'use_terminal') return false;
-      if (a.type === 'play_cc') {
+      if (a.type === 'play_cc' || a.type === 'play_cc_special' || a.type === 'play_cc_double') {
         return canResolveCcHeadless(g, a.actingPlayer, a.params.cardName, hDeps);
       }
       return true;
@@ -331,8 +333,15 @@ async function diagnoseOneGame(learnings, gameNum) {
       continue;
     }
 
-    if (action.type === 'play_cc') {
+    if (action.type === 'play_cc' || action.type === 'play_cc_special' || action.type === 'play_cc_double') {
       try {
+        if (action.type === 'play_cc_special' || action.type === 'play_cc_double') {
+          const actData = g.dcActionsData?.[action.params.msgId];
+          if (actData && typeof actData.remaining === 'number') {
+            if (action.type === 'play_cc_special') actData.remaining = Math.max(0, actData.remaining - 1);
+            else actData.remaining = 0;
+          }
+        }
         await playCommandCardHeadless(g, action.actingPlayer, action.params.cardName, hDeps);
       } catch {}
       tracer.afterAction(harness.getGame(), action);

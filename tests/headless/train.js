@@ -14,6 +14,7 @@ import { getBoardStateForMovement, getMovementProfile, computeMovementCache } fr
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
 import { parseCoord } from '../../src/game/coords.js';
+import { getCcHand } from '../../src/game/player-helpers.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
@@ -21,7 +22,7 @@ import {
   loadLearnings, saveLearnings, createGameTracer,
   pickSmartAction, abstractActionType, getLearningsStats,
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
-  recordTrainingCheckpoint,
+  recordTrainingCheckpoint, checkDivergence, setWeightDecay,
 } from './learnings.js';
 import { unlinkSync } from 'fs';
 
@@ -92,6 +93,8 @@ async function runOneGame(learnings, gameNum) {
     dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
     getPlayableCcFromHand,
+    getPlayableCcSpecialsForDc: hDeps.getPlayableCcSpecialsForDc,
+    getPlayableCcDoubleActionsForDc: hDeps.getPlayableCcDoubleActionsForDc,
   };
 
   const tracer1 = createGameTracer(learnings, 1, dcHealthState, dcMessageMeta);
@@ -161,7 +164,7 @@ async function runOneGame(learnings, gameNum) {
       // use_terminal costs an action with no mechanical effect — terminal CC bonus is passive
       if (a.type === 'interact' && a.params?.optionId === 'use_terminal') return false;
       // Filter CC plays by deep precondition check + retry guard
-      if (a.type === 'play_cc') {
+      if (a.type === 'play_cc' || a.type === 'play_cc_special' || a.type === 'play_cc_double') {
         if (!canResolveCcHeadless(g, a.actingPlayer, a.params.cardName, hDeps)) return false;
         const ccKey = `P${a.actingPlayer}:${a.params.cardName}:R${g.currentRound || 1}:${g.roundPhase || '?'}:${g.currentActivatingDcIndex ?? 'x'}`;
         if ((ccFailureCounts.get(ccKey) || 0) >= CC_MAX_RETRIES) return false;
@@ -292,8 +295,16 @@ async function runOneGame(learnings, gameNum) {
     }
 
     // Intercept CC plays — resolve directly via headless path
-    if (action.type === 'play_cc') {
+    if (action.type === 'play_cc' || action.type === 'play_cc_special' || action.type === 'play_cc_double') {
       try {
+        // Deduct activation actions for special-action CCs (matching Discord dc-play-area.js:801-808)
+        if (action.type === 'play_cc_special' || action.type === 'play_cc_double') {
+          const actData = g.dcActionsData?.[action.params.msgId];
+          if (actData && typeof actData.remaining === 'number') {
+            if (action.type === 'play_cc_special') actData.remaining = Math.max(0, actData.remaining - 1);
+            else actData.remaining = 0; // doubleActionSpecial consumes all actions
+          }
+        }
         await playCommandCardHeadless(g, action.actingPlayer, action.params.cardName, hDeps);
       } catch (err) {
         const ccKey = `P${action.actingPlayer}:${action.params.cardName}:R${g.currentRound || 1}:${g.roundPhase || '?'}:${g.currentActivatingDcIndex ?? 'x'}`;
@@ -303,6 +314,31 @@ async function runOneGame(learnings, gameNum) {
           console.error(`  [CC FAIL] game=${game.gameId} P${action.actingPlayer} "${action.params.cardName}" R${g.currentRound || 1} phase=${g.roundPhase} dcIdx=${g.currentActivatingDcIndex ?? 'none'} err=${err.message || err}`);
         }
       }
+      tracer.afterAction(harness.getGame(), action);
+      continue;
+    }
+
+    // Intercept strain_choice_discard (multi-step: pick count → pick specific CCs)
+    if (action.type === 'strain_choice_discard') {
+      const userId = action.actingPlayer === 1 ? g.player1Id : g.player2Id;
+      try {
+        await harness.submitAction(action.customId, userId);
+      } catch { /* fallthrough */ }
+      let g2 = harness.getGame();
+      let safetyLimit = 30;
+      while (g2.pendingStrainChoice?.discardTarget > 0 &&
+             (g2.pendingStrainChoice.discardedCount || 0) < g2.pendingStrainChoice.discardTarget &&
+             safetyLimit-- > 0) {
+        const hand = getCcHand(g2, g2.pendingStrainChoice.playerNum) || [];
+        if (hand.length === 0) break;
+        try {
+          await harness.submitAction(
+            `strain_cc_pick_${g2.gameId}_${encodeURIComponent(hand[0])}`, userId,
+          );
+        } catch { break; }
+        g2 = harness.getGame();
+      }
+      if (g2.pendingStrainChoice) delete g2.pendingStrainChoice;
       tracer.afterAction(harness.getGame(), action);
       continue;
     }
@@ -354,6 +390,13 @@ async function main() {
   const reset = args.includes('--reset');
 
   const noReplay = args.includes('--no-replay');
+  const wdArg = args.find(a => a.startsWith('--weight-decay='));
+  if (wdArg) {
+    const wdVal = parseFloat(wdArg.split('=')[1]);
+    if (isNaN(wdVal) || wdVal < 0) { console.error('Invalid --weight-decay value'); process.exit(1); }
+    setWeightDecay(wdVal);
+    console.log(`  Weight decay override: ${wdVal}`);
+  }
   const learnings = reset ? loadLearnings('/dev/null') // fresh default
                           : loadLearnings(LEARNINGS_PATH);
 
@@ -470,6 +513,20 @@ async function main() {
       // Save periodically
       saveLearnings(learnings, LEARNINGS_PATH);
       if (!noReplay) saveReplayBuffer(learnings, REPLAY_BUFFER_PATH);
+
+      // Divergence guardrail — check every 10 games, abort if V(s) or norms explode
+      const divCheck = checkDivergence(learnings);
+      if (!divCheck.ok) {
+        console.error(`\n!!! DIVERGENCE DETECTED at game ${i + 1} !!!`);
+        divCheck.reasons.forEach(r => console.error(`  - ${r}`));
+        console.log('Signals:', JSON.stringify(divCheck.signals, null, 2));
+        // Save checkpoint before aborting so we don't lose partial progress
+        const abortTag = `${learnings.meta.totalGames}_diverged`;
+        const abortPath = LEARNINGS_PATH.replace('.json', `-${abortTag}.json`);
+        saveLearnings(learnings, abortPath);
+        console.log(`Saved divergence checkpoint: ${abortPath}`);
+        process.exit(2);
+      }
     }
   }
 

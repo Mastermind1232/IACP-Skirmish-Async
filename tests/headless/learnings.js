@@ -16,8 +16,11 @@ const ALPHA = 0.002;         // Learning rate (smaller for neural stability)
 const HIDDEN_SIZE = 32;      // Hidden layer width
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
-const WEIGHT_DECAY = 0.000002;      // L2 regularization — reduced 50x from 0.0001 (was crushing strategic weights)
+let WEIGHT_DECAY = 0.00003;       // L2 regularization — tuned via Branch C stabilization experiment (2026-03-20)
 const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger with decay active
+
+/** Override weight decay for controlled experiments. Call before training. */
+export function setWeightDecay(v) { WEIGHT_DECAY = v; }
 
 const REPLAY_BUFFER_SIZE = 10000;   // Max transitions in ring buffer
 const REPLAY_BATCH_SIZE = 32;       // Transitions per mini-batch
@@ -27,6 +30,7 @@ const REPLAY_ALPHA = 0.001;         // Half of online ALPHA — guards against s
 
 // ── Within-Group Scorer (Phase 5) ───────────────────────────────────────────
 const ALPHA_WG = 0.01;           // Learning rate for within-group scorers (5x main)
+const ALPHA_WG_SURGE = 0.002;   // Surge scorer LR: 5x lower — prevent re-collapse after reset
 const WG_WEIGHT_CLAMP = 5.0;    // Max absolute weight value
 const WG_EPSILON_START = 0.10;   // Within-group exploration rate (start)
 const WG_EPSILON_MIN = 0.02;     // Within-group exploration rate (floor)
@@ -55,6 +59,7 @@ function getGroupCategory(absType) {
 }
 
 function getWgEpsilon(totalGames) {
+  if (_greedyMode) return 0;
   return Math.max(WG_EPSILON_MIN, WG_EPSILON_START * Math.exp(-totalGames / WG_EPSILON_DECAY));
 }
 
@@ -968,8 +973,9 @@ function updateTraceNeural(learnings, trace) {
     if (entry.wgFeatures && entry.wgType && learnings.withinGroupWeights) {
       const wgW = learnings.withinGroupWeights[entry.wgType];
       if (wgW) {
+        const alpha = entry.wgType === 'surge' ? ALPHA_WG_SURGE : ALPHA_WG;
         for (let fi = 0; fi < wgW.length; fi++) {
-          wgW[fi] += ALPHA_WG * delta * (entry.wgFeatures[fi] || 0);
+          wgW[fi] += alpha * delta * (entry.wgFeatures[fi] || 0);
           wgW[fi] = Math.max(-WG_WEIGHT_CLAMP, Math.min(WG_WEIGHT_CLAMP, wgW[fi]));
           if (!isFinite(wgW[fi])) wgW[fi] = 0;
         }
@@ -1107,7 +1113,7 @@ export function abstractActionType(action, game) {
   // DC specials
   if (t === 'dc_special') return 'ability';
   // CC play (dedicated type — hand management decision)
-  if (t === 'play_cc') return 'play_cc';
+  if (t === 'play_cc' || t === 'play_cc_special' || t === 'play_cc_double') return 'play_cc';
   // Attacks
   if (t === 'attack_target') {
     if (action.params?.targetFigureKey && game) {
@@ -1189,6 +1195,66 @@ export function abstractActionType(action, game) {
   return 'other';
 }
 
+// ── Surge Shaping Reward ────────────────────────────────────────────────────
+// Spending surges modifies pendingCombat but doesn't change HP/VP until
+// combat_resolve. Without shaping, surge-spend actions get reward ≈ step cost
+// (-0.02), making skip_surges artificially attractive. This gives proportional
+// immediate credit so the model learns that surges have tactical value.
+
+// Surge shaping rewards — must exceed (1-γ)*V(s) step cost to beat skip.
+// At γ=0.95, step cost = 0.05*V(s). Even at V(s)=20, step cost = 1.0.
+// V-scaling created a feedback loop (higher reward → higher V → higher step cost).
+// Instead: use large fixed constants that dominate step cost at any realistic V(s).
+// V(s) is bounded by ±50 terminal / ~50 steps → max ~14.  Step cost max ~0.70.
+// Constants at 1.5 per point give 6x–12x headroom over worst-case step cost.
+const SURGE_SHAPE_OFFENSE = 1.50;  // Per point of damage/pierce/blast/cleave
+const SURGE_SHAPE_ACCURACY = 1.50; // Flat bonus for accuracy surges
+const SURGE_SHAPE_RECOVER = 1.00;  // Per point of recover
+const SURGE_SHAPE_UTILITY = 1.00;  // Flat bonus for conditions/tokens/specials
+
+// Skip penalty when beneficial surge was available.
+// Fixed constant — large enough to make skip always worse than spending.
+// At 1.5, skip penalty is 6x worst-case step cost of 0.25.
+const SURGE_SKIP_PENALTY = 1.50;
+
+// CC shaping reward — playing a CC has no immediate HP/VP delta, so the model
+// never learns to prefer it over pass/activate. Same structural problem as
+// pre-fix surges. Flat bonus per CC play gives immediate credit.
+// CONSTRAINT: Combat Resupply (0-cost, always available) can be spammed
+// infinitely. Even a small per-play bonus causes V(s) explosion when the model
+// discovers this exploit (0.25 × 600 plays/game = +150 vs ±50 terminal).
+// Fix: cap reward to first CC_REWARD_CAP plays per game. 5 plays = ~1 per round
+// in a 5-round game. Total injection bounded at 5 × 0.25 = 1.25 (2.5% of terminal).
+const CC_SHAPE_REWARD = 0.25;
+const CC_REWARD_CAP = 5;
+
+function surgeShapingReward(action) {
+  if (!action?.type?.startsWith('combat_surge')) return 0;
+  const surgeKey = action.params?.surgeKey;
+  if (!surgeKey) return 0;
+  const parsed = parseSurgeEffect(surgeKey);
+  let bonus = 0;
+  // Offensive value: damage, pierce, blast, cleave
+  const offenseTotal = (parsed.damage || 0) + (parsed.pierce || 0)
+    + (parsed.blast || 0) + (parsed.cleave || 0);
+  bonus += SURGE_SHAPE_OFFENSE * offenseTotal;
+  // Accuracy
+  if ((parsed.accuracy || 0) > 0) bonus += SURGE_SHAPE_ACCURACY;
+  // Recovery
+  bonus += SURGE_SHAPE_RECOVER * (parsed.recover || 0);
+  // Utility: conditions, tokens, specials (any named flag)
+  if ((parsed.conditions?.length > 0) || parsed.surgeSelfFocus || parsed.surgeSelfHide
+    || parsed.surgeGrantHitToken || parsed.surgeGrantBlockToken || parsed.surgeGrantPowerToken
+    || parsed.surgeGrantEvade || parsed.surgeGrantExtraSurge || parsed.surgeStalkPrey
+    || parsed.surgeSquadCommand || parsed.surgeCancelDodge || parsed.surgeSpreadThePain
+    || parsed.surgeFellSwoop || parsed.surgeMastery || parsed.surgeInterrogate
+    || parsed.surgeHarass || parsed.surgeSuppressionStrain || parsed.surgeConcussiveBolt
+    || parsed.surgeAgitate || parsed.surgeFightingKnife || parsed.surgeBargain) {
+    bonus += SURGE_SHAPE_UTILITY;
+  }
+  return bonus;
+}
+
 // ── Snapshots & Rewards ─────────────────────────────────────────────────────
 
 export function captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta) {
@@ -1226,7 +1292,12 @@ export function computeReward(before, after, isTerminal, didWin) {
 
 // ── Action Selection ────────────────────────────────────────────────────────
 
+let _greedyMode = false;
+/** Set greedy mode: when true, both DQN epsilon and WG epsilon are forced to 0. */
+export function setGreedyMode(v) { _greedyMode = !!v; }
+
 function getEpsilon(totalGames) {
+  if (_greedyMode) return 0;
   return Math.max(0.05, 0.3 * Math.exp(-totalGames / 5000));
 }
 
@@ -1279,6 +1350,32 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     if (Q[idx] > bestQ) {
       bestQ = Q[idx];
       bestType = absType;
+    }
+  }
+
+  // Targeted surge exploration: when surge types are available, force spend
+  // 50% of the time to overcome the skip-heavy replay buffer distribution.
+  // Q-learning is off-policy, so forced exploration transitions are valid.
+  // Only active during training (epsilon > 0); greedy mode skips this.
+  if (!_greedyMode && epsilon > 0) {
+    const surgeSpendTypes = absTypes.filter(t =>
+      t === 'surge_damage' || t === 'surge_special' || t === 'spend_surge');
+    if (surgeSpendTypes.length > 0 && absTypes.includes('skip_surges')) {
+      if (Math.random() < 0.5) {
+        bestType = surgeSpendTypes[Math.floor(Math.random() * surgeSpendTypes.length)];
+      }
+    }
+
+    // Targeted CC exploration: force play_cc 15% of the time when available.
+    // Same rationale as surge exploration — overcome replay buffer distribution
+    // dominated by non-CC actions. Rate is lower than surge (15% vs 50%) because
+    // CC is available at ~20-40% of decisions (vs ~3% for surges).
+    // NOTE: Extended training (500+ games) with this + CC reward causes V(s)
+    // inflation. Keep training tranches to ~300 games for stability.
+    if (absTypes.includes('play_cc')) {
+      if (Math.random() < 0.15) {
+        bestType = 'play_cc';
+      }
     }
   }
 
@@ -1429,7 +1526,7 @@ function heuristicPick(allActions, game) {
   if (attacks.length > 0) return pickWithinGroup(attacks, 'attack_close', game, null, null, null, 0).action;
 
   // CC play — try before movement/activation
-  const ccPlay = allActions.filter(a => a.type === 'play_cc');
+  const ccPlay = allActions.filter(a => a.type === 'play_cc' || a.type === 'play_cc_special' || a.type === 'play_cc_double');
   if (ccPlay.length > 0) return pick(ccPlay);
 
   const specials = allActions.filter(a => a.type === 'dc_special');
@@ -1474,6 +1571,8 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
   const trace = [];
   let lastSnapshot = null;
   let lastFeatures = null;
+  let _hasBeneficialSurge = false; // True when beneficial surge spend was available at decision time
+  let _ccPlaysThisGame = 0; // Per-game CC play counter for reward cap
 
   return {
     beforeAction(game, playerActions) {
@@ -1487,6 +1586,18 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
 
       lastSnapshot = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
       lastFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+
+      // Detect whether any beneficial surge spend is available at this decision point.
+      // Used to penalize skip_surges when the agent had a positive-value option.
+      _hasBeneficialSurge = false;
+      if (playerActions) {
+        for (const a of playerActions) {
+          if (surgeShapingReward(a) > 0) {
+            _hasBeneficialSurge = true;
+            break;
+          }
+        }
+      }
     },
 
     afterAction(game, action) {
@@ -1499,7 +1610,29 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       }
       const afterSnap = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
       const nextFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
-      const reward = computeReward(lastSnapshot, afterSnap, false, false);
+
+      // ── Surge-aware reward shaping ──────────────────────────────────────────
+      // Large fixed constants dominate (1-γ)*V(s) step cost at any realistic V(s).
+      // No V-scaling — avoids feedback loop where higher rewards inflate V(s).
+      let surgeBonus = 0;
+      const isSurgeSpend = absType === 'spend_surge' || absType === 'surge_damage' || absType === 'surge_special';
+      const isSurgeSkip = absType === 'skip_surges';
+
+      if (isSurgeSpend) {
+        surgeBonus = surgeShapingReward(action);
+      } else if (isSurgeSkip && _hasBeneficialSurge) {
+        surgeBonus = -SURGE_SKIP_PENALTY;
+      }
+
+      // CC shaping: flat bonus for playing a CC (no immediate HP/VP delta otherwise)
+      // Capped per game to prevent unbounded reward from repeated 0-cost CCs.
+      let ccBonus = 0;
+      if (absType === 'play_cc') {
+        _ccPlaysThisGame++;
+        if (_ccPlaysThisGame <= CC_REWARD_CAP) ccBonus = CC_SHAPE_REWARD;
+      }
+
+      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus;
       const actionIdx = ABSTRACT_TYPES.indexOf(absType);
       const wgFeatures = pickSmartAction._lastWgFeatures || null;
       const wgType = pickSmartAction._lastWgType || null;
@@ -1600,6 +1733,19 @@ export function loadLearnings(filePath) {
           surge: new Array(4).fill(0), cc: new Array(4).fill(0),
         };
       }
+      // One-time migration: reset inverted surge WG weights to positive priors.
+      // The surge scorer drifted into a negative basin under the old reward signal,
+      // causing it to prefer the WORST surge options. Reset to domain-aligned priors:
+      // damageValue=+1.0 (prefer high-damage surges), isAccuracy=+0.5, isRecover=+0.3, bias=0.
+      if (data.withinGroupWeights?.surge && !data._surgeWgResetV1) {
+        const sw = data.withinGroupWeights.surge;
+        if (sw[3] < -1.0 || (sw[0] < 0 && sw[1] < 0 && sw[2] < 0)) {
+          data.withinGroupWeights.surge = [1.0, 0.5, 0.3, 0.0];
+          console.log('[learnings] Migrated surge WG weights from inverted basin → positive priors [1.0, 0.5, 0.3, 0.0]');
+        }
+        data._surgeWgResetV1 = true;
+      }
+
       data.brainPhase = 5;
       return data;
     }
@@ -1638,6 +1784,7 @@ export function saveLearnings(learnings, filePath) {
     affiliationStats: learnings.affiliationStats,
     matchups: learnings.matchups,
     withinGroupWeights: learnings.withinGroupWeights,
+    _surgeWgResetV1: learnings._surgeWgResetV1 || false,
   };
   writeFileSync(filePath, JSON.stringify(toSave));
 }
@@ -2016,3 +2163,98 @@ function getBestQ(network, features) {
   const { Q } = forwardPass(network, features);
   return Math.max(...Q);
 }
+
+/** Full Q-value vector for evaluation/diagnostics. */
+export function getFullQ(network, features) {
+  if (!network?.W1) return null;
+  return forwardPass(network, features);
+}
+
+// ── Divergence Monitor ───────────────────────────────────────────────────────
+// Fixed probe states for tracking V(s) and Q calibration during training.
+// These never change, so cross-checkpoint comparisons are apples-to-apples.
+
+const PROBE_STATES = [
+  // EARLY_GAME_COMBAT: R1, even, in combat
+  [0,0.9,0.9,0,0.5,0, 0.7,0.8,0.2,0.5,1,0, 0.5,1,0.3,0.2, 0.8,0.8, 0,0,0,0, 0.5,0.5,0.33,0.33, 0.2,0.2,0, 0,0,0,0, 1,0.75,0.75],
+  // MID_GAME_WINNING: R3, ahead, in combat
+  [0.25,0.8,0.5,0.3,0.57,0.14, 0.8,0.9,0.6,0.6,1,0, 0.7,1,0.4,0.3, 0.7,0.4, 0.25,0,0,0, 0.33,0.33,0.5,0.25, 0.5,0.33,0.1, 0,0.125,0,0, 1,0.5,0.75],
+  // LATE_GAME_LOSING: R4, behind, low HP, in combat
+  [-0.25,0.4,0.7,-0.3,0.43,-0.14, 0.9,0.9,0.8,0.4,1,0, 0.4,1,0.6,0.5, 0.3,0.7, 0,0.25,0.25,0, 0.17,0.5,0.25,0.5, 0.67,0.33,-0.2, 0.125,0,0,0, 0,0.9,0.5],
+];
+
+/**
+ * Check for training divergence. Returns { ok, signals } where ok=false means
+ * training should stop. Thresholds are empirically justified:
+ *   - V(s) should stay within ±200 (max undiscounted return ~160, γ=0.95 → ~3200 theoretical max;
+ *     200 gives 16x headroom over empirical V(s) ~9 at 5565v2, while catching 58k-scale blowups)
+ *   - Wv L2 norm should stay < 10 (was 0.59 at 5565v2; 10 gives 17x headroom)
+ *   - avgAbsTD should stay < 50 (was ~3 at 5565v2; catches 8000-scale explosion early)
+ */
+export function checkDivergence(learnings) {
+  const V_THRESHOLD = 200;
+  const WV_NORM_THRESHOLD = 10;
+  const TD_ERROR_THRESHOLD = 50;
+
+  const net = learnings.network;
+  if (!net) return { ok: true, signals: {} };
+
+  // V(s) on probe states
+  const vValues = PROBE_STATES.map(f => forwardPass(net, f).V);
+  const maxAbsV = Math.max(...vValues.map(v => Math.abs(v)));
+
+  // Wv L2 norm
+  const wvNorm = Math.sqrt(net.Wv.reduce((s, w) => s + w * w, 0));
+
+  // Key advantage head L2 norms
+  const surgeDmgIdx = ABSTRACT_TYPES.indexOf('surge_damage');
+  const skipIdx = ABSTRACT_TYPES.indexOf('skip_surges');
+  const ccIdx = ABSTRACT_TYPES.indexOf('play_cc');
+  const actIdx = ABSTRACT_TYPES.indexOf('activate');
+  const endIdx = ABSTRACT_TYPES.indexOf('end_activation');
+
+  function waNorm(idx) {
+    if (idx < 0 || !net.Wa[idx]) return 0;
+    return Math.sqrt(net.Wa[idx].reduce((s, w) => s + w * w, 0));
+  }
+
+  const headNorms = {
+    surge_damage: waNorm(surgeDmgIdx),
+    skip_surges: waNorm(skipIdx),
+    play_cc: waNorm(ccIdx),
+    activate: waNorm(actIdx),
+    end_activation: waNorm(endIdx),
+  };
+
+  const avgAbsTD = learnings.trainingStats?.avgAbsDelta || 0;
+
+  // Q calibration: on probe states, get Q[play_cc] vs Q[surge_damage] gap
+  const ccVsSurge = PROBE_STATES.map(f => {
+    const { Q } = forwardPass(net, f);
+    return Q[ccIdx] - Q[surgeDmgIdx];
+  });
+  const maxCcSurgeGap = Math.max(...ccVsSurge);
+
+  const signals = {
+    maxAbsV: +maxAbsV.toFixed(2),
+    vValues: vValues.map(v => +v.toFixed(2)),
+    wvNorm: +wvNorm.toFixed(4),
+    headNorms: Object.fromEntries(Object.entries(headNorms).map(([k, v]) => [k, +v.toFixed(4)])),
+    avgAbsTD: +avgAbsTD.toFixed(4),
+    ccVsSurgeGap: ccVsSurge.map(v => +v.toFixed(2)),
+    maxCcSurgeGap: +maxCcSurgeGap.toFixed(2),
+  };
+
+  const reasons = [];
+  if (maxAbsV > V_THRESHOLD) reasons.push(`|V(s)|=${maxAbsV.toFixed(1)} > ${V_THRESHOLD}`);
+  if (wvNorm > WV_NORM_THRESHOLD) reasons.push(`||Wv||=${wvNorm.toFixed(2)} > ${WV_NORM_THRESHOLD}`);
+  if (avgAbsTD > TD_ERROR_THRESHOLD) reasons.push(`avgTD=${avgAbsTD.toFixed(1)} > ${TD_ERROR_THRESHOLD}`);
+
+  return {
+    ok: reasons.length === 0,
+    reasons,
+    signals,
+  };
+}
+
+export { ABSTRACT_TYPES, FEATURE_NAMES, NUM_FEATURES };

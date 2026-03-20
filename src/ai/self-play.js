@@ -335,6 +335,18 @@ export async function runSelfPlayLoop(game, client, opts) {
       }
       const chosen = pick.action;
 
+      // CC play bridge: play_cc actions require multi-step UI (dropdown → confirm).
+      // Bypass the dropdown by pre-setting pendingCcConfirmation and routing
+      // directly to the confirm handler, which does the actual play.
+      if (chosen.type === 'play_cc' && chosen.params?.cardName) {
+        g.pendingCcConfirmation = {
+          playerNum: chosen._playerNum,
+          card: chosen.params.cardName,
+          ts: Date.now(),
+        };
+        chosen.customId = `cc_confirm_play_${g.gameId}`;
+      }
+
       // Route to handler
       const handlerKey = getHandlerKey(chosen.customId, 'button');
       if (!handlerKey) {

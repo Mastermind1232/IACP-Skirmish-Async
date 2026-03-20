@@ -411,6 +411,9 @@ export function canResolveCcHeadless(game, playerNum, cardName, deps) {
     if (!defenderMsgId) return false;
   }
 
+  // Lure of the Dark Side: multi-step hostile-figure-choice flow, not headless-resolvable
+  if (entry.lureOfTheDarkSide) return false;
+
   // Reduce to Rubble (placeRubbleOnTargetAndAdjacent): needs stored attack target
   if (entry.placeRubbleOnTargetAndAdjacent) {
     if (!game.lastAttackTargetSpacesForRubble?.length) return false;

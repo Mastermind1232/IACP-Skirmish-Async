@@ -1,20 +1,15 @@
 /**
  * AI strategy: selects the best action using the trained dueling neural network
- * from the headless Q-learning system (853 training games, Phase 5 brain).
+ * from the headless Q-learning system (Branch C, Phase 5 brain).
  * Falls back to pickSmartAction's built-in heuristic during epsilon-greedy exploration.
  */
 
 import { pickSmartAction, loadLearnings } from '../../tests/headless/learnings.js';
+import { isCcAttachment } from '../data-loader.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/**
- * Actions the AI can't complete (multi-step flows requiring dropdowns/modals).
- * Filtered out before scoring to prevent infinite loops.
- */
-const AI_UNSUPPORTED_TYPES = new Set(['play_cc']);
 
 // Lazy-loaded singleton — initialized on first use
 let _learnings = null;
@@ -25,6 +20,19 @@ function getLearnings() {
     console.log(`[AI] Loaded Q-learning model (${_learnings.meta.totalGames} training games, phase ${_learnings.brainPhase})`);
   }
   return _learnings;
+}
+
+/**
+ * Filter out CC actions the AI can't complete in Discord.
+ * - play_cc_special / play_cc_double: single-step button, always allowed
+ * - play_cc: allowed UNLESS it's an attachment CC (requires DC-selection dropdown
+ *   that has no available-action equivalent, stalling the game)
+ */
+function isAiViable(action) {
+  if (action.type === 'play_cc' && action.params?.cardName && isCcAttachment(action.params.cardName)) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -42,8 +50,8 @@ function getLearnings() {
 export function pickBestAction(engine, actions, playerNum, deps = {}) {
   if (!actions || actions.length === 0) return null;
 
-  // Filter out multi-step flows the AI can't complete
-  const viable = actions.filter(a => !AI_UNSUPPORTED_TYPES.has(a.type));
+  // Filter out actions the AI can't complete in Discord
+  const viable = actions.filter(isAiViable);
   if (viable.length === 0) return null;
   if (viable.length === 1) return { action: viable[0], score: 0 };
 

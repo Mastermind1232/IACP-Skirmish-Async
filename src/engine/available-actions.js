@@ -652,6 +652,32 @@ function getActivationActions(game, playerNum, deps) {
         }
       }
 
+      // CC Special Action CCs (timing: specialAction) — costs 1 action
+      if (deps.getPlayableCcSpecialsForDc && data.remaining >= 1) {
+        const ccSpecials = deps.getPlayableCcSpecialsForDc(game, playerNum, meta.dcName, meta.displayName);
+        for (let ci = 0; ci < ccSpecials.length; ci++) {
+          actions.push({
+            type: ACTION_TYPES.PLAY_CC_SPECIAL,
+            customId: buildCustomId(ACTION_TYPES.PLAY_CC_SPECIAL, { msgId, cardIndex: ci }),
+            description: `Play CC (Special Action): ${ccSpecials[ci]} (${displayName})`,
+            params: { msgId, dcName: meta.dcName, cardIndex: ci, cardName: ccSpecials[ci], actionCost: 1 },
+          });
+        }
+      }
+
+      // CC Double Action CCs (timing: doubleActionSpecial) — costs 2 actions
+      if (deps.getPlayableCcDoubleActionsForDc && data.remaining >= 2) {
+        const ccDoubles = deps.getPlayableCcDoubleActionsForDc(game, playerNum, meta.dcName, meta.displayName);
+        for (let ci = 0; ci < ccDoubles.length; ci++) {
+          actions.push({
+            type: ACTION_TYPES.PLAY_CC_DOUBLE,
+            customId: buildCustomId(ACTION_TYPES.PLAY_CC_DOUBLE, { msgId, cardIndex: ci }),
+            description: `Play CC (Double Action): ${ccDoubles[ci]} (${displayName})`,
+            params: { msgId, dcName: meta.dcName, cardIndex: ci, cardName: ccDoubles[ci], actionCost: 2 },
+          });
+        }
+      }
+
       // End activation early (forfeit remaining actions)
       actions.push({
         type: ACTION_TYPES.DC_END_ACTIVATION,
