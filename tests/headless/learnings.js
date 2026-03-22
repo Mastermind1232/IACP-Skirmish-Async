@@ -12,7 +12,9 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const GAMMA = 0.95;          // Discount factor
-let ALPHA = 0.001;           // Learning rate — halved for 64×46 network stability (2026-03-22)
+let ALPHA = 0.001;           // Base learning rate (scheduled — see getEffectiveAlpha)
+const ALPHA_TAU = 3000;      // Inverse-sqrt half-life in games
+const ALPHA_FLOOR = 0.0001;  // Minimum LR (10% of base)
 const HIDDEN_SIZE = 64;      // Hidden layer width (Phase 2: 32→64 for richer active-DC features)
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
@@ -22,14 +24,18 @@ const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger
 
 /** Override weight decay for controlled experiments. Call before training. */
 export function setWeightDecay(v) { WEIGHT_DECAY = v; }
-/** Override learning rate for controlled experiments. Call before training. */
+/** Override base learning rate for controlled experiments. Call before training. */
 export function setAlpha(v) { ALPHA = v; }
+/** Inverse-sqrt LR schedule: ALPHA / sqrt(1 + totalGames/TAU), floored. */
+export function getEffectiveAlpha(totalGames) {
+  return Math.max(ALPHA_FLOOR, ALPHA / Math.sqrt(1 + (totalGames || 0) / ALPHA_TAU));
+}
 
 const REPLAY_BUFFER_SIZE = 10000;   // Max transitions in ring buffer
 const REPLAY_BATCH_SIZE = 32;       // Transitions per mini-batch
 const REPLAY_UPDATES_PER_GAME = 4;  // Mini-batch updates after each game
 const REPLAY_MIN_SIZE = 256;        // Min buffer fill before replay starts
-const REPLAY_ALPHA = 0.001;         // Half of online ALPHA — guards against stale data
+// REPLAY_ALPHA: computed as half of scheduled ALPHA (see replayUpdate)
 
 // ── Within-Group Scorer (Phase 5) ───────────────────────────────────────────
 const ALPHA_WG = 0.01;           // Learning rate for within-group scorers (5x main)
@@ -1107,6 +1113,7 @@ function updateTraceNeural(learnings, trace) {
   const network = learnings.network;
   const targetNetwork = learnings.targetNetwork;
   const stats = learnings.trainingStats;
+  const effectiveAlpha = getEffectiveAlpha(learnings.meta?.totalGames);
   let deltaSum = 0;
   let count = 0;
 
@@ -1163,8 +1170,8 @@ function updateTraceNeural(learnings, trace) {
     const rawDelta = target - Q[actionIdx];
     const delta = Math.max(-DELTA_CLAMP, Math.min(DELTA_CLAMP, rawDelta));
 
-    // Backprop update
-    backpropUpdate(network, actionIdx, delta, ALPHA, h_pre, h, features);
+    // Backprop update (scheduled LR)
+    backpropUpdate(network, actionIdx, delta, effectiveAlpha, h_pre, h, features);
 
     // NaN safety
     sanitizeNetwork(network, stats);
@@ -1269,6 +1276,7 @@ export function replayUpdate(learnings) {
   if (!network || !targetNetwork) return;
 
   const bufLen = buf.transitions.length;
+  const replayAlpha = getEffectiveAlpha(learnings.meta?.totalGames) * 0.5; // Half of scheduled online alpha
 
   for (let batch = 0; batch < REPLAY_UPDATES_PER_GAME; batch++) {
     let deltaSum = 0;
@@ -1292,7 +1300,7 @@ export function replayUpdate(learnings) {
 
       const rawDelta = target - Q[actionIdx];
       const delta = Math.max(-DELTA_CLAMP, Math.min(DELTA_CLAMP, rawDelta));
-      backpropUpdate(network, actionIdx, delta, REPLAY_ALPHA, h_pre, h, features);
+      backpropUpdate(network, actionIdx, delta, replayAlpha, h_pre, h, features);
       sanitizeNetwork(network, stats);
 
       deltaSum += Math.abs(rawDelta);

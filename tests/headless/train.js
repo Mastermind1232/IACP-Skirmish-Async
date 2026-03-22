@@ -22,7 +22,7 @@ import {
   loadLearnings, saveLearnings, createGameTracer,
   pickSmartAction, abstractActionType, getLearningsStats,
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
-  recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, getQValues,
+  recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, getEffectiveAlpha, getQValues,
   extractFeatures,
 } from './learnings.js';
 import { unlinkSync } from 'fs';
@@ -595,7 +595,7 @@ async function main() {
       checkpoints.push(cp);
       console.log(`\n=== CHECKPOINT: Games ${cp.games} ===`);
       console.log(`  Completion: ${cp.completionRate} | Wins P1/P2: ${cp.p1p2} | Avg VP: ${cp.avgVP}`);
-      console.log(`  Avg |delta|: ${cp.avgAbsDelta} | Avg |w|: ${cp.avgAbsWeight} | epsilon: ${cp.epsilon}`);
+      console.log(`  Avg |delta|: ${cp.avgAbsDelta} | Avg |w|: ${cp.avgAbsWeight} | epsilon: ${cp.epsilon} | effAlpha: ${getEffectiveAlpha(learnings.meta?.totalGames).toFixed(6)}`);
       console.log(`  Updates this window: ${cp.updatesThisWindow} | Total: ${cp.totalUpdates}`);
       console.log(`  Replay buf: ${cp.replayBufSize} | Total stored: ${cp.replayTotalStored}`);
       console.log(`  NaN resets: ${cp.nanResets} | Wall: ${cp.wallTime}s`);
