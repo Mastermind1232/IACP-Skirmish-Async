@@ -12,12 +12,12 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const GAMMA = 0.95;          // Discount factor
-let ALPHA = 0.002;           // Learning rate (smaller for neural stability)
+let ALPHA = 0.001;           // Learning rate — halved for 64×46 network stability (2026-03-22)
 const HIDDEN_SIZE = 64;      // Hidden layer width (Phase 2: 32→64 for richer active-DC features)
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
 const N_STEP = 4;            // N-step returns — multi-step credit assignment (was 1)
-let WEIGHT_DECAY = 0.00003;       // L2 regularization — tuned via Branch C stabilization experiment (2026-03-20)
+let WEIGHT_DECAY = 0.0001;        // L2 regularization — increased 3.3× to fix slow weight drift (stability Branch A, 2026-03-22)
 const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger with decay active
 
 /** Override weight decay for controlled experiments. Call before training. */
