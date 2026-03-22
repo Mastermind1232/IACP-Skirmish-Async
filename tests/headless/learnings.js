@@ -12,8 +12,8 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const GAMMA = 0.95;          // Discount factor
-const ALPHA = 0.002;         // Learning rate (smaller for neural stability)
-const HIDDEN_SIZE = 32;      // Hidden layer width
+let ALPHA = 0.002;           // Learning rate (smaller for neural stability)
+const HIDDEN_SIZE = 64;      // Hidden layer width (Phase 2: 32→64 for richer active-DC features)
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
 const N_STEP = 4;            // N-step returns — multi-step credit assignment (was 1)
@@ -22,6 +22,8 @@ const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger
 
 /** Override weight decay for controlled experiments. Call before training. */
 export function setWeightDecay(v) { WEIGHT_DECAY = v; }
+/** Override learning rate for controlled experiments. Call before training. */
+export function setAlpha(v) { ALPHA = v; }
 
 const REPLAY_BUFFER_SIZE = 10000;   // Max transitions in ring buffer
 const REPLAY_BATCH_SIZE = 32;       // Transitions per mini-batch
@@ -32,10 +34,31 @@ const REPLAY_ALPHA = 0.001;         // Half of online ALPHA — guards against s
 // ── Within-Group Scorer (Phase 5) ───────────────────────────────────────────
 const ALPHA_WG = 0.01;           // Learning rate for within-group scorers (5x main)
 const ALPHA_WG_SURGE = 0.002;   // Surge scorer LR: 5x lower — prevent re-collapse after reset
+const ALPHA_WG_MOVE = 0.005;    // Move scorer LR: uses contrastive signal, not TD delta
 const WG_WEIGHT_CLAMP = 5.0;    // Max absolute weight value
 const WG_EPSILON_START = 0.10;   // Within-group exploration rate (start)
 const WG_EPSILON_MIN = 0.02;     // Within-group exploration rate (floor)
 const WG_EPSILON_DECAY = 3000;   // Games to decay within-group epsilon
+
+// ── Contrastive Move Scorer ──────────────────────────────────────────────────
+// The TD-delta-based WG update doesn't teach the move scorer which SPACE is
+// good — it only says whether "move_toward" was a good category. Fix: compute
+// a direct quality score for each candidate destination and do a contrastive
+// update that pushes the scorer toward better destinations.
+//
+// Quality score for a destination (0-1 features, higher = better):
+//   Q_dest = w_enemy * distToNearestEnemy     (closer to enemy = higher)
+//          - w_threat * threatAtDest           (less threat = higher)
+//          + w_obj * objectiveProximity        (closer to objective = higher)
+//          + w_ally * allySupport              (more allies nearby = higher)
+//          + w_eff * mpEfficiency              (cheaper step = higher)
+//
+// These are the TRUE domain-aligned quality weights, not learned — they define
+// what a "good destination" means. The learned WG weights should converge toward
+// something like these if learning works.
+const MOVE_QUALITY_WEIGHTS = [0.40, -0.15, 0.25, 0.10, 0.10, 0.0];
+// Number of random alternatives to sample for contrastive comparison.
+const MOVE_CONTRASTIVE_SAMPLES = 3;
 
 const ATTACK_FEATURE_NAMES = [
   'targetHpRatio', 'targetDistNorm', 'targetIsolated',
@@ -74,7 +97,7 @@ const REWARD_WEIGHTS = {
   activationAction: 0.15, // Bonus for productive actions during activation (move, attack, ability, interact)
 };
 
-const NUM_FEATURES = 36;
+const NUM_FEATURES = 46;
 
 const FEATURE_NAMES = [
   // Original 16 (indices 0-15 preserved for weight compatibility)
@@ -100,6 +123,17 @@ const FEATURE_NAMES = [
   // Batch 2: initiative + VP urgency (indices 33-35)
   'hasInitiative',
   'vpUrgency', 'oppVpUrgency',
+  // Phase 2: active-DC context (indices 36-45) — who is currently acting
+  'activeDcHpRatio',            // HP ratio of the currently activating figure
+  'activeDcSpeed',              // Speed stat normalized /8
+  'activeDcAttackPower',        // Expected damage from this DC's dice /8
+  'activeDcAttackRange',        // Attack range normalized /12
+  'activeDcDistToNearestEnemy', // Distance from active figure to nearest enemy /10
+  'activeDcIsStunned',          // 1 if active figure has Stun condition
+  'activeDcHasTargetsInRange',  // 1 if any enemy is within attack range + LOS approximation
+  'activeDcFigureCount',        // Surviving figures in this group /3
+  'activeDcDepletion',          // Fraction of group already defeated (0 = full, 1 = all dead)
+  'activeDcActionsLeft',        // Remaining actions this activation /2
 ];
 
 const ABSTRACT_TYPES = [
@@ -544,6 +578,138 @@ function getObjectivePotential(game, playerNum) {
   return 1 - Math.min(globalMinDist, 10) / 10;
 }
 
+// ── Active-DC Feature Helpers (Phase 2) ──────────────────────────────────────
+
+/**
+ * Find the currently activating DC's msgId for this player.
+ * Returns { msgId, meta, dcName } or null if no activation is in progress.
+ */
+function findActiveDcMsgId(game, playerNum, dcMessageMeta) {
+  // Primary: use currentActivatingDcIndex to look up the DC by position
+  const dcIdx = game.currentActivatingDcIndex;
+  const dcMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+  if (dcIdx != null && dcMsgIds && dcMsgIds[dcIdx]) {
+    const msgId = dcMsgIds[dcIdx];
+    const meta = dcMessageMeta?.get(msgId);
+    if (meta && meta.playerNum === playerNum) {
+      return { msgId, meta, dcName: meta.dcName };
+    }
+  }
+  // Fallback: scan dcActionsData for an entry belonging to this player
+  if (game.dcActionsData && dcMessageMeta) {
+    for (const [msgId, meta] of dcMessageMeta) {
+      if (meta?.playerNum === playerNum && game.dcActionsData?.[msgId]) {
+        return { msgId, meta, dcName: meta.dcName };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract active-DC context features for the currently activating figure.
+ * Returns a 10-element array (indices 36-45 of the feature vector).
+ * Returns all zeros when no activation is in progress (combat, gates, etc.).
+ */
+function getActiveDcFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
+  const result = new Float64Array(10); // all zeros by default
+
+  const active = findActiveDcMsgId(game, playerNum, dcMessageMeta);
+  if (!active) return result;
+
+  const { msgId, meta, dcName } = active;
+  const oppNum = playerNum === 1 ? 2 : 1;
+
+  // Load DC stats from effects data
+  let dcEffects;
+  try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
+  const lower = dcName.toLowerCase();
+  const ciKey = dcEffects ? Object.keys(dcEffects).find(k => k.toLowerCase() === lower) : null;
+  const eff = dcEffects?.[dcName] || (ciKey ? dcEffects[ciKey] : null);
+
+  // [0] activeDcHpRatio — HP of the active DC group
+  const healthArr = dcHealthState?.get(msgId);
+  if (healthArr) {
+    let cur = 0, max = 0;
+    for (const [c, m] of healthArr) { cur += c; max += m; }
+    result[0] = max > 0 ? cur / max : 0;
+
+    // [7] activeDcFigureCount — surviving figures in this group /3
+    let alive = 0;
+    for (const [c] of healthArr) { if (c > 0) alive++; }
+    result[7] = Math.min(alive, 3) / 3;
+
+    // [8] activeDcDepletion — fraction of group already dead
+    const total = healthArr.length;
+    result[8] = total > 0 ? (total - alive) / total : 0;
+  }
+
+  // [1] activeDcSpeed
+  if (eff?.speed) result[1] = Math.min(eff.speed, 8) / 8;
+
+  // [2] activeDcAttackPower — expected damage from this DC's dice
+  if (eff?.attack?.dice) {
+    let dmg = 0;
+    for (const die of eff.attack.dice) dmg += EXPECTED_DMG_PER_DIE[die] || 0;
+    result[2] = Math.min(dmg, 8) / 8;
+  }
+
+  // [3] activeDcAttackRange
+  const range = eff?.attack?.range || 1;
+  result[3] = Math.min(range, 12) / 12;
+
+  // Find the active figure's position
+  let activeFigPos = null;
+  const actionsData = game.dcActionsData?.[msgId];
+  const figureIndex = actionsData?.selectedFigure ?? 0;
+  const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const figureKey = `${dcName}-${dgIndex}-${figureIndex}`;
+  activeFigPos = game.figurePositions?.[playerNum]?.[figureKey];
+
+  // Fallback: try moveInProgress
+  if (!activeFigPos && game.moveInProgress) {
+    for (const moveState of Object.values(game.moveInProgress)) {
+      if (moveState?.currentPosition) { activeFigPos = moveState.currentPosition; break; }
+    }
+  }
+
+  if (activeFigPos) {
+    // [4] activeDcDistToNearestEnemy
+    const oppFigs = Object.entries(game.figurePositions?.[oppNum] || {});
+    let minDist = Infinity;
+    for (const [, pos] of oppFigs) {
+      const d = coordDistance(activeFigPos, pos);
+      if (d < minDist) minDist = d;
+    }
+    result[4] = isFinite(minDist) ? 1 - Math.min(minDist, 10) / 10 : 0;
+
+    // [6] activeDcHasTargetsInRange — any enemy within attack range?
+    if (oppFigs.length > 0) {
+      for (const [, pos] of oppFigs) {
+        if (coordDistance(activeFigPos, pos) <= range) {
+          result[6] = 1;
+          break;
+        }
+      }
+    }
+  }
+
+  // [5] activeDcIsStunned
+  if (game.figureConditions?.[figureKey]?.includes('Stun')) {
+    result[5] = 1;
+  }
+
+  // [9] activeDcActionsLeft — remaining actions this activation /2
+  if (actionsData && typeof actionsData.remaining === 'number') {
+    result[9] = Math.min(actionsData.remaining, 2) / 2;
+  } else {
+    result[9] = 1; // Default: assume 2 actions at start
+  }
+
+  return result;
+}
+
 // ── Per-DC / Per-Figure Feature Helpers ──────────────────────────────────────
 
 /**
@@ -721,6 +887,8 @@ export function extractFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
     /* 33 hasInitiative     */ game.initiativePlayerNum === playerNum ? 1 : 0,
     /* 34 vpUrgency         */ 1 - Math.min(myVP, 40) / 40,
     /* 35 oppVpUrgency      */ 1 - Math.min(oppVP, 40) / 40,
+    // Phase 2: active-DC context (indices 36-45)
+    ...getActiveDcFeatures(game, playerNum, dcHealthState, dcMessageMeta),
   ];
 }
 
@@ -1005,11 +1173,38 @@ function updateTraceNeural(learnings, trace) {
     if (entry.wgFeatures && entry.wgType && learnings.withinGroupWeights) {
       const wgW = learnings.withinGroupWeights[entry.wgType];
       if (wgW) {
-        const alpha = entry.wgType === 'surge' ? ALPHA_WG_SURGE : ALPHA_WG;
-        for (let fi = 0; fi < wgW.length; fi++) {
-          wgW[fi] += alpha * delta * (entry.wgFeatures[fi] || 0);
-          wgW[fi] = Math.max(-WG_WEIGHT_CLAMP, Math.min(WG_WEIGHT_CLAMP, wgW[fi]));
-          if (!isFinite(wgW[fi])) wgW[fi] = 0;
+        if (entry.wgType === 'move' && entry.moveContrastive) {
+          // ── Contrastive move scorer update ──────────────────────────────
+          // Instead of using the DQN TD delta (which doesn't distinguish
+          // good destinations from bad ones), compare the chosen space
+          // against sampled alternatives using domain-quality scores.
+          // Push weights toward features of the higher-quality destination.
+          const mc = entry.moveContrastive;
+          const chosenQ = mc.chosenQuality;
+          for (const alt of mc.alternatives) {
+            const altQ = alt.qualityScore;
+            if (Math.abs(chosenQ - altQ) < 0.01) continue; // skip ties
+            // advantage > 0 means chosen was better, < 0 means alt was better
+            const advantage = chosenQ - altQ;
+            // Clamp advantage to [-1, 1] to prevent large updates
+            const clampedAdv = Math.max(-1, Math.min(1, advantage));
+            // Update: push weights toward chosen features when chosen is better,
+            // toward alt features when alt is better (feature diff * advantage)
+            for (let fi = 0; fi < wgW.length; fi++) {
+              const featDiff = (mc.chosen[fi] || 0) - (alt.features[fi] || 0);
+              wgW[fi] += ALPHA_WG_MOVE * clampedAdv * featDiff;
+              wgW[fi] = Math.max(-WG_WEIGHT_CLAMP, Math.min(WG_WEIGHT_CLAMP, wgW[fi]));
+              if (!isFinite(wgW[fi])) wgW[fi] = 0;
+            }
+          }
+        } else {
+          // Standard TD-delta-based WG update (attack, surge, CC)
+          const alpha = entry.wgType === 'surge' ? ALPHA_WG_SURGE : ALPHA_WG;
+          for (let fi = 0; fi < wgW.length; fi++) {
+            wgW[fi] += alpha * delta * (entry.wgFeatures[fi] || 0);
+            wgW[fi] = Math.max(-WG_WEIGHT_CLAMP, Math.min(WG_WEIGHT_CLAMP, wgW[fi]));
+            if (!isFinite(wgW[fi])) wgW[fi] = 0;
+          }
         }
       }
     }
@@ -1264,6 +1459,22 @@ const SURGE_SKIP_PENALTY = 1.50;
 const CC_SHAPE_REWARD = 0.25;
 const CC_REWARD_CAP = 5;
 
+// ── Movement-Specific Reward Shaping ─────────────────────────────────────────
+// Problem: movement payoff is delayed (positioning → future attack), but TD
+// updates only see the immediate near-zero reward. The global dist:0.4 in
+// computeReward uses army-average distance, which dilutes single-figure moves.
+//
+// Fix: reward the ACTIVE FIGURE's positioning improvement on move actions.
+// Three targeted terms:
+//   1. MOVE_CLOSING_REWARD — per-space closing toward nearest enemy (only when
+//      the active figure was out of attack range before the move).
+//   2. MOVE_ENGAGE_BONUS — one-time bonus for transitioning from "no targets in
+//      range" to "targets in range" (the whole point of moving).
+//   3. Cap per-activation to prevent pacing exploit (walk back/forth).
+const MOVE_CLOSING_REWARD = 0.15;  // per space closed — 3 spaces = 0.45 ≈ one dmg pip
+const MOVE_ENGAGE_BONUS = 0.50;    // one-time for entering attack range
+const MOVE_REWARD_CAP_PER_ACT = 1.5; // max movement shaping per activation
+
 function surgeShapingReward(action) {
   if (!action?.type?.startsWith('combat_surge')) return 0;
   const surgeKey = action.params?.surgeKey;
@@ -1297,6 +1508,44 @@ export function captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta) {
   const oppNum = playerNum === 1 ? 2 : 1;
   const myHp = getHpTotals(dcHealthState, dcMessageMeta, playerNum);
   const oppHp = getHpTotals(dcHealthState, dcMessageMeta, oppNum);
+
+  // Active-figure positioning for movement shaping
+  let activeFigDist = null;   // distance from active figure to nearest enemy
+  let activeFigHasTargets = false; // can the active figure attack anyone right now?
+  const active = findActiveDcMsgId(game, playerNum, dcMessageMeta);
+  if (active) {
+    const { msgId, meta } = active;
+    const dcName = active.dcName;
+    let dcEffects; try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
+    const eff = dcEffects?.[dcName];
+    const range = eff?.attack?.range || 1;
+    const actionsData = game.dcActionsData?.[msgId];
+    const figureIndex = actionsData?.selectedFigure ?? 0;
+    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : '1';
+    const figureKey = `${dcName}-${dgIndex}-${figureIndex}`;
+    let pos = game.figurePositions?.[playerNum]?.[figureKey];
+    if (!pos && game.moveInProgress) {
+      for (const ms of Object.values(game.moveInProgress)) {
+        if (ms?.currentPosition) { pos = ms.currentPosition; break; }
+      }
+    }
+    if (pos) {
+      const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
+      let minD = Infinity;
+      for (const oPos of oppFigs) {
+        const d = coordDistance(pos, oPos);
+        if (d < minD) minD = d;
+      }
+      activeFigDist = isFinite(minD) ? minD : null;
+      if (oppFigs.length > 0) {
+        for (const oPos of oppFigs) {
+          if (coordDistance(pos, oPos) <= range) { activeFigHasTargets = true; break; }
+        }
+      }
+    }
+  }
+
   return {
     myVP: (playerNum === 1 ? game.player1VP : game.player2VP)?.total || 0,
     oppVP: (oppNum === 1 ? game.player1VP : game.player2VP)?.total || 0,
@@ -1307,6 +1556,8 @@ export function captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta) {
     avgDist: getAvgDistToEnemy(game, playerNum),
     myFigs: Object.keys(game.figurePositions?.[playerNum] || {}).length,
     oppFigs: Object.keys(game.figurePositions?.[oppNum] || {}).length,
+    activeFigDist,
+    activeFigHasTargets,
   };
 }
 
@@ -1340,6 +1591,7 @@ function getEpsilon(totalGames) {
 export function pickSmartAction(allActions, game, learnings, playerNum, dcHealthState, dcMessageMeta) {
   pickSmartAction._lastWgFeatures = null;
   pickSmartAction._lastWgType = null;
+  pickSmartAction._lastMoveContrastive = null;
   if (allActions.length === 0) return null;
   if (allActions.length === 1) return allActions[0];
 
@@ -1420,6 +1672,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     learnings.withinGroupWeights, dcHealthState, dcMessageMeta, learnings.meta.totalGames);
   pickSmartAction._lastWgFeatures = wgResult.wgFeatures;
   pickSmartAction._lastWgType = wgResult.wgType;
+  pickSmartAction._lastMoveContrastive = wgResult.moveContrastive || null;
   return wgResult.action;
 }
 
@@ -1451,7 +1704,7 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     return { action: pick(actions), wgFeatures: null, wgType: null };
   }
 
-  // Move scorer (Phase 5 Slice 2 — learned)
+  // Move scorer (Phase 5 Slice 2 — learned with contrastive signal)
   if (absType === 'move_toward' || absType === 'move_away' || absType === 'move_lateral') {
     const group = 'move';
     const weights = wgWeights?.[group];
@@ -1459,13 +1712,24 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     // Filter out "done" actions for scoring — they have no coord to evaluate
     const spaceActions = actions.filter(a => a.params?.coord && !a.params?.done);
     if (weights && spaceActions.length > 0 && Math.random() >= getWgEpsilon(totalGames || 0)) {
-      let bestScore = -Infinity, bestAction = null, bestFeatures = null;
-      for (const a of spaceActions) {
+      // Score all candidates with both learned weights and quality weights
+      const allCandidates = spaceActions.map(a => {
         const f = extractMoveFeatures(a, game, playerNum);
-        const score = dotProductWg(weights, f);
-        if (score > bestScore) { bestScore = score; bestAction = a; bestFeatures = f; }
+        return { action: a, features: f, learnedScore: dotProductWg(weights, f), qualityScore: dotProductWg(MOVE_QUALITY_WEIGHTS, f) };
+      });
+      allCandidates.sort((a, b) => b.learnedScore - a.learnedScore);
+      const chosen = allCandidates[0];
+      // Sample alternatives for contrastive update (up to MOVE_CONTRASTIVE_SAMPLES)
+      const others = allCandidates.slice(1);
+      const sampled = [];
+      for (let i = 0; i < Math.min(MOVE_CONTRASTIVE_SAMPLES, others.length); i++) {
+        const idx = Math.floor(Math.random() * others.length);
+        sampled.push(others.splice(idx, 1)[0]);
       }
-      return { action: bestAction, wgFeatures: bestFeatures, wgType: group };
+      return {
+        action: chosen.action, wgFeatures: chosen.features, wgType: group,
+        moveContrastive: { chosenQuality: chosen.qualityScore, chosen: chosen.features, alternatives: sampled },
+      };
     }
     // Fallback: heuristic (nearest enemy)
     if (spaceActions.length > 0) {
@@ -1609,6 +1873,7 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
   let lastFeatures = null;
   let _hasBeneficialSurge = false; // True when beneficial surge spend was available at decision time
   let _ccPlaysThisGame = 0; // Per-game CC play counter for reward cap
+  let _moveShapingThisActivation = 0; // Accumulated movement shaping in current activation
 
   return {
     beforeAction(game, playerActions) {
@@ -1668,6 +1933,39 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
         if (_ccPlaysThisGame <= CC_REWARD_CAP) ccBonus = CC_SHAPE_REWARD;
       }
 
+      // ── Movement-specific reward shaping ─────────────────────────────────────
+      // Targets the core failure mode: movement has delayed payoff but near-zero
+      // immediate reward. We give the ACTIVE FIGURE credit for closing distance
+      // or entering attack range, but ONLY when it wasn't already in range.
+      // Reset per-activation counter on activate/end_activation.
+      let moveBonus = 0;
+      const isMoveAction = absType === 'move_toward' || absType === 'move_away' || absType === 'move_lateral';
+      if (absType === 'activate' || absType === 'end_activation') {
+        _moveShapingThisActivation = 0;
+      }
+      if (isMoveAction && lastSnapshot.activeFigDist != null && afterSnap.activeFigDist != null
+          && _moveShapingThisActivation < MOVE_REWARD_CAP_PER_ACT) {
+        // Only shape when the figure was NOT already in attack range before moving.
+        // If already in range, movement is tactical repositioning — let the existing
+        // distance reward handle it. This prevents rewarding random shuffling in melee.
+        if (!lastSnapshot.activeFigHasTargets) {
+          // Term 1: per-space closing reward
+          const distClosed = lastSnapshot.activeFigDist - afterSnap.activeFigDist;
+          if (distClosed > 0) {
+            const closingReward = Math.min(distClosed, 5) * MOVE_CLOSING_REWARD;
+            moveBonus += closingReward;
+          }
+          // Term 2: engagement bonus — transitioned from "no targets" to "targets in range"
+          if (afterSnap.activeFigHasTargets) {
+            moveBonus += MOVE_ENGAGE_BONUS;
+          }
+          // Enforce per-activation cap
+          const room = MOVE_REWARD_CAP_PER_ACT - _moveShapingThisActivation;
+          moveBonus = Math.min(moveBonus, room);
+          _moveShapingThisActivation += moveBonus;
+        }
+      }
+
       // Activation-action bonus: reward productive actions during activation phase.
       // Movement, attack, ability, and interact all deserve immediate credit because
       // they advance board state. end_activation / pass get no bonus (just step cost).
@@ -1677,14 +1975,15 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       ]);
       const activationBonus = PRODUCTIVE_ABS_TYPES.has(absType) ? (REWARD_WEIGHTS.activationAction || 0) : 0;
 
-      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus + activationBonus;
+      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus + moveBonus + activationBonus;
       const actionIdx = ABSTRACT_TYPES.indexOf(absType);
       const wgFeatures = pickSmartAction._lastWgFeatures || null;
       const wgType = pickSmartAction._lastWgType || null;
+      const moveContrastive = pickSmartAction._lastMoveContrastive || null;
       trace.push({
         features: lastFeatures, actionIdx, reward, nextFeatures,
         nextActionIdxs: null, done: false,
-        wgFeatures, wgType,
+        wgFeatures, wgType, moveContrastive,
       });
       lastSnapshot = null;
       lastFeatures = null;
@@ -1746,6 +2045,31 @@ export function loadLearnings(filePath) {
         }
         console.log(`[learnings] Migrated W1 input features: ${oldFeatures} → ${NUM_FEATURES}`);
       }
+      // Migrate hidden layer from smaller to larger size (e.g., 32 → 64)
+      // Warm-start: existing neurons keep their learned weights, new neurons get fresh init.
+      if (data.network && data.network.W1.length < HIDDEN_SIZE) {
+        const oldHidden = data.network.W1.length;
+        const nFeatures = data.network.W1[0].length;
+        const heInit = Math.sqrt(2 / nFeatures);
+        const xavierV = Math.sqrt(2 / (HIDDEN_SIZE + 1));
+        const xavierA = Math.sqrt(2 / (HIDDEN_SIZE + (data.network.Wa?.length || NUM_ACTIONS)));
+        // Add new rows to W1 (input→hidden) and b1
+        for (let j = oldHidden; j < HIDDEN_SIZE; j++) {
+          const row = [];
+          for (let i = 0; i < nFeatures; i++) row.push(randn() * heInit);
+          data.network.W1.push(row);
+          data.network.b1.push(0);
+          // Extend Wv (value head)
+          data.network.Wv.push(randn() * xavierV);
+        }
+        // Extend each Wa row (advantage head) with new hidden columns
+        for (let k = 0; k < data.network.Wa.length; k++) {
+          for (let j = oldHidden; j < HIDDEN_SIZE; j++) {
+            data.network.Wa[k].push(randn() * xavierA);
+          }
+        }
+        console.log(`[learnings] Migrated hidden size: ${oldHidden} → ${HIDDEN_SIZE} (warm-start: ${oldHidden} neurons preserved, ${HIDDEN_SIZE - oldHidden} new)`);
+      }
       // Migrate network from fewer action types to current NUM_ACTIONS
       // (e.g., 15 → 22 when A2 splits were added)
       if (data.network && data.network.Wa.length < NUM_ACTIONS) {
@@ -1791,6 +2115,27 @@ export function loadLearnings(filePath) {
         data._surgeWgResetV1 = true;
       }
 
+      // One-time migration: reset inverted move WG weights to mild priors.
+      // The move scorer drifted into a strongly negative basin (bias ≈ -5, all weights negative)
+      // creating a "never move" death spiral — no movement → no positive signal → stays negative.
+      // Feature semantics (all 0-1 normalized, higher = more of that quality):
+      //   [0] distToNearestEnemy: 1=adjacent, 0=far → positive weight = prefer closer (aggression)
+      //   [1] threatAtDest: 1=high threat, 0=safe → negative weight = avoid danger
+      //   [2] objectiveProximity: 1=on objective, 0=far → positive weight = prefer objectives
+      //   [3] allySupport: 1=allies nearby, 0=isolated → mild positive = prefer grouped positions
+      //   [4] mpEfficiency: 1=cheap step, 0=costly → positive = prefer efficient movement
+      //   [5] bias: should be mildly positive to encourage movement over standing still
+      // Reset to mild domain-aligned priors rather than zeros:
+      if (data.withinGroupWeights?.move && !data._moveWgResetV1) {
+        const mw = data.withinGroupWeights.move;
+        if (mw[5] < -2.0 || (mw[0] < 0 && mw[2] < 0 && mw[4] < 0)) {
+          //                   enemy_close  threat  objective  ally   efficiency  bias
+          data.withinGroupWeights.move = [0.5, -0.3, 0.5, 0.2, 0.3, 0.5];
+          console.log('[learnings] Migrated move WG weights from inverted basin → mild priors [0.5, -0.3, 0.5, 0.2, 0.3, 0.5]');
+        }
+        data._moveWgResetV1 = true;
+      }
+
       data.brainPhase = 5;
       return data;
     }
@@ -1830,6 +2175,7 @@ export function saveLearnings(learnings, filePath) {
     matchups: learnings.matchups,
     withinGroupWeights: learnings.withinGroupWeights,
     _surgeWgResetV1: learnings._surgeWgResetV1 || false,
+    _moveWgResetV1: learnings._moveWgResetV1 || false,
   };
   writeFileSync(filePath, JSON.stringify(toSave));
 }
@@ -2220,12 +2566,12 @@ export function getFullQ(network, features) {
 // These never change, so cross-checkpoint comparisons are apples-to-apples.
 
 const PROBE_STATES = [
-  // EARLY_GAME_COMBAT: R1, even, in combat
-  [0,0.9,0.9,0,0.5,0, 0.7,0.8,0.2,0.5,1,0, 0.5,1,0.3,0.2, 0.8,0.8, 0,0,0,0, 0.5,0.5,0.33,0.33, 0.2,0.2,0, 0,0,0,0, 1,0.75,0.75],
-  // MID_GAME_WINNING: R3, ahead, in combat
-  [0.25,0.8,0.5,0.3,0.57,0.14, 0.8,0.9,0.6,0.6,1,0, 0.7,1,0.4,0.3, 0.7,0.4, 0.25,0,0,0, 0.33,0.33,0.5,0.25, 0.5,0.33,0.1, 0,0.125,0,0, 1,0.5,0.75],
-  // LATE_GAME_LOSING: R4, behind, low HP, in combat
-  [-0.25,0.4,0.7,-0.3,0.43,-0.14, 0.9,0.9,0.8,0.4,1,0, 0.4,1,0.6,0.5, 0.3,0.7, 0,0.25,0.25,0, 0.17,0.5,0.25,0.5, 0.67,0.33,-0.2, 0.125,0,0,0, 0,0.9,0.5],
+  // EARLY_GAME_COMBAT: R1, even, in combat               + Phase 2 active-DC: healthy melee figure, enemies far
+  [0,0.9,0.9,0,0.5,0, 0.7,0.8,0.2,0.5,1,0, 0.5,1,0.3,0.2, 0.8,0.8, 0,0,0,0, 0.5,0.5,0.33,0.33, 0.2,0.2,0, 0,0,0,0, 1,0.75,0.75, 1.0,0.5,0.54,0.08,0.3,0,0,0.67,0,1],
+  // MID_GAME_WINNING: R3, ahead, in combat                + Phase 2 active-DC: ranged figure, targets in range
+  [0.25,0.8,0.5,0.3,0.57,0.14, 0.8,0.9,0.6,0.6,1,0, 0.7,1,0.4,0.3, 0.7,0.4, 0.25,0,0,0, 0.33,0.33,0.5,0.25, 0.5,0.33,0.1, 0,0.125,0,0, 1,0.5,0.75, 0.8,0.63,0.29,0.42,0.7,0,1,0.33,0,0.5],
+  // LATE_GAME_LOSING: R4, behind, low HP, in combat       + Phase 2 active-DC: wounded, stunned, no actions left
+  [-0.25,0.4,0.7,-0.3,0.43,-0.14, 0.9,0.9,0.8,0.4,1,0, 0.4,1,0.6,0.5, 0.3,0.7, 0,0.25,0.25,0, 0.17,0.5,0.25,0.5, 0.67,0.33,-0.2, 0.125,0,0,0, 0,0.9,0.5, 0.3,0.5,0.54,0.08,0.8,1,0,0.33,0.33,0],
 ];
 
 /**

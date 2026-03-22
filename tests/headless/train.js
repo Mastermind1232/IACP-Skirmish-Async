@@ -22,7 +22,8 @@ import {
   loadLearnings, saveLearnings, createGameTracer,
   pickSmartAction, abstractActionType, getLearningsStats,
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
-  recordTrainingCheckpoint, checkDivergence, setWeightDecay, getQValues,
+  recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, getQValues,
+  extractFeatures,
 } from './learnings.js';
 import { unlinkSync } from 'fs';
 
@@ -112,6 +113,19 @@ async function runOneGame(learnings, gameNum) {
   let attackActions = 0;      // attack_target
   let totalActivations = 0;   // activate_dc (total activation starts)
   let passActivations = 0;    // pass_activation_turn
+
+  // Phase 2 metrics — richer activation quality tracking
+  let productiveActions = 0;  // move, attack, ability, interact (not end/pass)
+  let round1DistStart = null; // average distance at start of round 1
+  let round1DistEnd = null;   // average distance at end of round 1
+  let prematureEndAct = 0;    // end_activation when a productive action was available
+  let attackWhenTargetsInRange = 0;   // chose attack when hasTargetsInRange=1
+  let moveWhenTargetsInRange = 0;     // chose move when hasTargetsInRange=1
+  let endWhenTargetsInRange = 0;      // chose end_activation when hasTargetsInRange=1
+  let moveWhenNoTargets = 0;          // chose move when hasTargetsInRange=0
+  let endWhenNoTargets = 0;           // chose end_activation when hasTargetsInRange=0
+  let decisionsWithTargets = 0;       // total decisions where hasTargetsInRange=1
+  let decisionsWithoutTargets = 0;    // total decisions where hasTargetsInRange=0
 
   // CC failure retry guard: track failures scoped to game context
   // Key: "P{n}:{cardName}:R{round}:{roundPhase}:{activatingDcIdx}"
@@ -277,6 +291,43 @@ async function runOneGame(learnings, gameNum) {
     else if (action.type === 'activate_dc') totalActivations++;
     else if (action.type === 'pass_activation_turn') passActivations++;
 
+    // Phase 2 metrics: productive actions and target-in-range conditioning
+    const PRODUCTIVE_TYPES = new Set(['move_figure', 'move_pick_space', 'attack_target', 'dc_special', 'interact']);
+    if (PRODUCTIVE_TYPES.has(action.type)) productiveActions++;
+
+    // Round 1 distance tracking
+    if ((g.currentRound || 1) === 1 && round1DistStart === null) {
+      round1DistStart = distToNearestEnemy(
+        Object.values(g.figurePositions?.[actingPN] || {})[0] || 'a1', g, actingPN);
+    }
+
+    // Premature end-activation detection: ended when productive actions existed
+    if (action.type === 'dc_end_activation') {
+      const hadProductive = playerActions.some(a =>
+        a.type === 'move_figure' || a.type === 'attack_target' || a.type === 'dc_special' || a.type === 'interact');
+      if (hadProductive) prematureEndAct++;
+    }
+
+    // Conditioning on activeDcHasTargetsInRange (feature index 42)
+    if (action.type === 'activate_dc' || action.type === 'move_figure' ||
+        action.type === 'attack_target' || action.type === 'dc_end_activation' ||
+        action.type === 'move_pick_space') {
+      try {
+        const feats = extractFeatures(g, actingPN, dcHealthState, dcMessageMeta);
+        const hasTargets = feats[42]; // activeDcHasTargetsInRange
+        if (hasTargets > 0.5) {
+          decisionsWithTargets++;
+          if (action.type === 'attack_target') attackWhenTargetsInRange++;
+          else if (action.type === 'move_figure' || action.type === 'move_pick_space') moveWhenTargetsInRange++;
+          else if (action.type === 'dc_end_activation') endWhenTargetsInRange++;
+        } else {
+          decisionsWithoutTargets++;
+          if (action.type === 'move_figure' || action.type === 'move_pick_space') moveWhenNoTargets++;
+          else if (action.type === 'dc_end_activation') endWhenNoTargets++;
+        }
+      } catch { /* feature extraction can fail in edge states */ }
+    }
+
     // Intercept interact actions — resolve directly (bypass Discord UI)
     if (action.type === 'interact') {
       const p = action.params;
@@ -365,6 +416,16 @@ async function runOneGame(learnings, gameNum) {
     }
   }
 
+  // Capture round-1 distance end before finalize
+  const preFinGame = harness.getGame();
+  if (round1DistStart !== null && round1DistEnd === null) {
+    const figs1 = Object.values(preFinGame.figurePositions?.[1] || {});
+    const figs2 = Object.values(preFinGame.figurePositions?.[2] || {});
+    if (figs1.length > 0 && figs2.length > 0) {
+      round1DistEnd = distToNearestEnemy(figs1[0], preFinGame, 1);
+    }
+  }
+
   // Finalize — both tracers update Q-values
   const finalGame = harness.getGame();
   tracer1.finalize(finalGame, true);  // Only tracer1 updates meta
@@ -399,6 +460,18 @@ async function runOneGame(learnings, gameNum) {
     endActivations,
     totalActivations,
     passActivations,
+    // Phase 2 metrics
+    productiveActions,
+    round1DistClosed: (round1DistStart !== null && round1DistEnd !== null)
+      ? round1DistStart - round1DistEnd : null,
+    prematureEndAct,
+    attackWhenTargetsInRange,
+    moveWhenTargetsInRange,
+    endWhenTargetsInRange,
+    moveWhenNoTargets,
+    endWhenNoTargets,
+    decisionsWithTargets,
+    decisionsWithoutTargets,
   };
 }
 
@@ -414,6 +487,13 @@ async function main() {
     if (isNaN(wdVal) || wdVal < 0) { console.error('Invalid --weight-decay value'); process.exit(1); }
     setWeightDecay(wdVal);
     console.log(`  Weight decay override: ${wdVal}`);
+  }
+  const alphaArg = args.find(a => a.startsWith('--alpha='));
+  if (alphaArg) {
+    const alphaVal = parseFloat(alphaArg.split('=')[1]);
+    if (isNaN(alphaVal) || alphaVal <= 0) { console.error('Invalid --alpha value'); process.exit(1); }
+    setAlpha(alphaVal);
+    console.log(`  Alpha (learning rate) override: ${alphaVal}`);
   }
   const learnings = reset ? loadLearnings('/dev/null') // fresh default
                           : loadLearnings(LEARNINGS_PATH);
@@ -468,6 +548,17 @@ async function main() {
       endActivations: result.endActivations || 0,
       totalActivations: result.totalActivations || 0,
       passActivations: result.passActivations || 0,
+      // Phase 2
+      productiveActions: result.productiveActions || 0,
+      round1DistClosed: result.round1DistClosed,
+      prematureEndAct: result.prematureEndAct || 0,
+      attackWhenTargetsInRange: result.attackWhenTargetsInRange || 0,
+      moveWhenTargetsInRange: result.moveWhenTargetsInRange || 0,
+      endWhenTargetsInRange: result.endWhenTargetsInRange || 0,
+      moveWhenNoTargets: result.moveWhenNoTargets || 0,
+      endWhenNoTargets: result.endWhenNoTargets || 0,
+      decisionsWithTargets: result.decisionsWithTargets || 0,
+      decisionsWithoutTargets: result.decisionsWithoutTargets || 0,
     });
 
     cpGames++;
@@ -620,12 +711,22 @@ async function main() {
   // Q-value diagnostic: show Q-values for key action types
   if (learnings.network) {
     // Use a representative "round 1 start" feature vector to diagnose Q-values
-    const diagFeatures = new Array(36).fill(0);
+    const numFeatures = learnings.network.W1[0]?.length || 46;
+    const diagFeatures = new Array(numFeatures).fill(0);
     diagFeatures[0] = 0;    // vpAdv = 0
     diagFeatures[1] = 1.0;  // myHpRatio = full HP
     diagFeatures[2] = 1.0;  // oppHpRatio = full HP
     diagFeatures[3] = 0;    // hpAdv = 0
     diagFeatures[8] = 8;    // avgDist = 8 (typical start-of-game)
+    // Phase 2 active-DC: healthy melee figure, enemies far
+    if (numFeatures >= 46) {
+      diagFeatures[36] = 1.0; // activeDcHpRatio
+      diagFeatures[37] = 0.5; // activeDcSpeed
+      diagFeatures[38] = 0.54; // activeDcAttackPower
+      diagFeatures[39] = 0.08; // activeDcAttackRange (melee)
+      diagFeatures[40] = 0.2; // activeDcDistToNearestEnemy (far)
+      diagFeatures[45] = 1.0; // activeDcActionsLeft (full)
+    }
     const diagQ = getQValues(learnings, diagFeatures);
     if (diagQ) {
       const absTypes = [
@@ -669,6 +770,44 @@ async function main() {
     const wVP = window.reduce((s, r) => s + r.p1VP + r.p2VP, 0) / window.length;
     const wUpdates = window.reduce((s, r) => s + r.updates, 0);
     console.log(`  Games ${w + 1}-${w + window.length}: ${wCompleted}/${window.length} completed, avgVP: ${wVP.toFixed(1)}, updates: ${wUpdates}`);
+  }
+
+  // Phase 2 metrics: activation quality and target conditioning
+  if (perGameResults.length > 0) {
+    const n = perGameResults.length;
+    const totalAct = perGameResults.reduce((s, r) => s + r.totalActivations, 0);
+    const totalProductive = perGameResults.reduce((s, r) => s + r.productiveActions, 0);
+    const totalPremature = perGameResults.reduce((s, r) => s + r.prematureEndAct, 0);
+    const r1Closed = perGameResults.filter(r => r.round1DistClosed !== null);
+    const avgR1Closed = r1Closed.length > 0
+      ? r1Closed.reduce((s, r) => s + r.round1DistClosed, 0) / r1Closed.length : null;
+
+    console.log('\n=== Phase 2: Activation Quality ===');
+    console.log(`  Avg productive actions/game: ${(totalProductive / n).toFixed(1)}`);
+    console.log(`  Avg productive/activation: ${totalAct > 0 ? (totalProductive / totalAct).toFixed(2) : 'N/A'}`);
+    console.log(`  Premature end_activation/game: ${(totalPremature / n).toFixed(2)} (ended with productive actions available)`);
+    if (avgR1Closed !== null) {
+      console.log(`  Round-1 distance closed (avg): ${avgR1Closed.toFixed(1)} spaces`);
+    }
+
+    // Target conditioning: how behavior changes based on activeDcHasTargetsInRange
+    const totWithTargets = perGameResults.reduce((s, r) => s + r.decisionsWithTargets, 0);
+    const totNoTargets = perGameResults.reduce((s, r) => s + r.decisionsWithoutTargets, 0);
+    const totAtkInRange = perGameResults.reduce((s, r) => s + r.attackWhenTargetsInRange, 0);
+    const totMoveInRange = perGameResults.reduce((s, r) => s + r.moveWhenTargetsInRange, 0);
+    const totEndInRange = perGameResults.reduce((s, r) => s + r.endWhenTargetsInRange, 0);
+    const totMoveNoTgt = perGameResults.reduce((s, r) => s + r.moveWhenNoTargets, 0);
+    const totEndNoTgt = perGameResults.reduce((s, r) => s + r.endWhenNoTargets, 0);
+
+    console.log('\n=== Phase 2: Action Conditioning on hasTargetsInRange ===');
+    if (totWithTargets > 0) {
+      console.log(`  When targets IN range (${totWithTargets} decisions):`);
+      console.log(`    attack: ${(totAtkInRange/totWithTargets*100).toFixed(1)}% | move: ${(totMoveInRange/totWithTargets*100).toFixed(1)}% | end: ${(totEndInRange/totWithTargets*100).toFixed(1)}%`);
+    }
+    if (totNoTargets > 0) {
+      console.log(`  When targets NOT in range (${totNoTargets} decisions):`);
+      console.log(`    move: ${(totMoveNoTgt/totNoTargets*100).toFixed(1)}% | end: ${(totEndNoTgt/totNoTargets*100).toFixed(1)}%`);
+    }
   }
 
   console.log(`\nLearnings saved to ${LEARNINGS_PATH}`);
