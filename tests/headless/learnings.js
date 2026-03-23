@@ -58,11 +58,15 @@ const WG_EPSILON_DECAY = 3000;   // Games to decay within-group epsilon
 //          + w_obj * objectiveProximity        (closer to objective = higher)
 //          + w_ally * allySupport              (more allies nearby = higher)
 //          + w_eff * mpEfficiency              (cheaper step = higher)
+//          - w_exposed * destInEnemyRange      (fewer enemies can hit = better)
+//          + w_onObj * destOnObjective         (on/adjacent to objective = better)
+//          + w_adjAlly * destAdjacentToAlly    (adjacent to friendly = better)
 //
 // These are the TRUE domain-aligned quality weights, not learned — they define
 // what a "good destination" means. The learned WG weights should converge toward
 // something like these if learning works.
-const MOVE_QUALITY_WEIGHTS = [0.40, -0.15, 0.25, 0.10, 0.10, 0.0];
+//                                              enemy  threat  obj   ally   eff   bias  exposed  onObj  adjAlly
+const MOVE_QUALITY_WEIGHTS = [                  0.40, -0.15,  0.25, 0.10,  0.10, 0.0, -0.15,   0.30,  0.15];
 // Number of random alternatives to sample for contrastive comparison.
 const MOVE_CONTRASTIVE_SAMPLES = 3;
 
@@ -74,6 +78,7 @@ const ATTACK_FEATURE_NAMES = [
 const MOVE_FEATURE_NAMES = [
   'distToNearestEnemy', 'threatAtDest', 'objectiveProximity',
   'allySupport', 'mpEfficiency', 'bias',
+  'destInEnemyRange', 'destOnObjective', 'destAdjacentToAlly',
 ];
 
 const SURGE_FEATURE_NAMES = ['damageValue', 'isAccuracy', 'isRecover', 'bias'];
@@ -103,7 +108,7 @@ const REWARD_WEIGHTS = {
   activationAction: 0.15, // Bonus for productive actions during activation (move, attack, ability, interact)
 };
 
-const NUM_FEATURES = 46;
+const NUM_FEATURES = 49;
 
 const FEATURE_NAMES = [
   // Original 16 (indices 0-15 preserved for weight compatibility)
@@ -140,6 +145,10 @@ const FEATURE_NAMES = [
   'activeDcFigureCount',        // Surviving figures in this group /3
   'activeDcDepletion',          // Fraction of group already defeated (0 = full, 1 = all dead)
   'activeDcActionsLeft',        // Remaining actions this activation /2
+  // Phase 5: positional-awareness (indices 46-48) — help DQN value movement
+  'fractionInRange',            // Fraction of my figures with ≥1 enemy in attack range
+  'objectivesContested',        // Fraction of objectives with a friendly figure within 2 spaces
+  'avgAllyDistToObjective',     // 1 - avg distance from all allies to nearest objective /10
 ];
 
 const ABSTRACT_TYPES = [
@@ -272,7 +281,7 @@ function extractAttackFeatures(action, game, dcHealthState, dcMessageMeta) {
  * Precomputes shared data (enemy positions, objectives) once, then scores each coord.
  */
 function extractMoveFeatures(action, game, playerNum) {
-  const features = new Float64Array(6);
+  const features = new Float64Array(9);
   features[5] = 1.0; // bias
 
   const coord = action.params?.coord;
@@ -306,13 +315,13 @@ function extractMoveFeatures(action, game, playerNum) {
     features[1] = Math.min(1, threat / 10);
   }
 
-  // [2] objectiveProximity — distance to nearest objective (terminals + mission tokens)
+  // Gather objective coords once for [2] and [7]
   let mapTokens;
   try { mapTokens = getMapTokensData(); } catch { mapTokens = null; }
   const mapId = game.selectedMap?.id;
+  const objCoords = [];
   if (mapTokens && mapId && mapTokens[mapId]) {
     const mapData = mapTokens[mapId];
-    const objCoords = [];
     if (Array.isArray(mapData.terminals)) objCoords.push(...mapData.terminals);
     const variant = game.selectedMission?.variant;
     const missionKey = variant ? `mission${variant.toUpperCase()}` : null;
@@ -321,16 +330,18 @@ function extractMoveFeatures(action, game, playerNum) {
         if (Array.isArray(coords)) objCoords.push(...coords);
       }
     }
-    if (objCoords.length > 0) {
-      let minObjDist = 10;
-      for (const oc of objCoords) {
-        try {
-          const d = coordDistance(coord, oc);
-          if (d < minObjDist) minObjDist = d;
-        } catch { /* skip invalid */ }
-      }
-      features[2] = 1 - Math.min(minObjDist, 10) / 10;
+  }
+
+  // [2] objectiveProximity — distance to nearest objective (terminals + mission tokens)
+  if (objCoords.length > 0) {
+    let minObjDist = 10;
+    for (const oc of objCoords) {
+      try {
+        const d = coordDistance(coord, oc);
+        if (d < minObjDist) minObjDist = d;
+      } catch { /* skip invalid */ }
     }
+    features[2] = 1 - Math.min(minObjDist, 10) / 10;
   }
 
   // [3] allySupport — friendly figures within 3 spaces of destination
@@ -346,6 +357,29 @@ function extractMoveFeatures(action, game, playerNum) {
   const totalMp = moveState?.totalMp || moveState?.mpRemaining || 4;
   const cost = action.params?.cost || 1;
   features[4] = 1 - Math.min(cost, totalMp) / totalMp;
+
+  // [6] destInEnemyRange — fraction of enemy figures that can attack this destination
+  if (dcEffects && oppFigs.length > 0) {
+    let inRange = 0;
+    for (const [fk, pos] of oppFigs) {
+      const dcName = fk.replace(/-\d+-\d+$/, '');
+      const range = getAttackRange(dcEffects, dcName);
+      if (coordDistance(pos, coord) <= range) inRange++;
+    }
+    features[6] = Math.min(inRange, 4) / 4;
+  }
+
+  // [7] destOnObjective — 1 if destination is within 1 space of an objective/terminal
+  for (const oc of objCoords) {
+    try {
+      if (coordDistance(coord, oc) <= 1) { features[7] = 1.0; break; }
+    } catch { /* skip invalid */ }
+  }
+
+  // [8] destAdjacentToAlly — 1 if destination is adjacent (dist ≤ 1) to a friendly figure
+  for (const pos of myFigs) {
+    if (coordDistance(coord, pos) <= 1) { features[8] = 1.0; break; }
+  }
 
   return features;
 }
@@ -582,6 +616,82 @@ function getObjectivePotential(game, playerNum) {
 
   if (!isFinite(globalMinDist)) return 0;
   return 1 - Math.min(globalMinDist, 10) / 10;
+}
+
+// ── Positional Awareness (Phase 5) ──────────────────────────────────────────
+
+/**
+ * Compute 3 army-level positional features to help the DQN value movement.
+ * Returns [fractionInRange, objectivesContested, avgAllyDistToObjective].
+ */
+function getPositionalAwarenessFeatures(game, playerNum) {
+  const result = new Float64Array(3);
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const myFigEntries = Object.entries(game.figurePositions?.[playerNum] || {});
+  const oppFigEntries = Object.entries(game.figurePositions?.[oppNum] || {});
+  if (myFigEntries.length === 0) return result;
+
+  let dcEffects;
+  try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
+
+  // [0] fractionInRange — fraction of my figures with ≥1 enemy in attack range
+  if (dcEffects && oppFigEntries.length > 0) {
+    let inRange = 0;
+    for (const [fk, pos] of myFigEntries) {
+      const dcName = fk.replace(/-\d+-\d+$/, '');
+      const range = getAttackRange(dcEffects, dcName);
+      for (const [, ePos] of oppFigEntries) {
+        if (coordDistance(pos, ePos) <= range) { inRange++; break; }
+      }
+    }
+    result[0] = inRange / myFigEntries.length;
+  }
+
+  // Gather objective coords for [1] and [2]
+  let mapTokens;
+  try { mapTokens = getMapTokensData(); } catch { mapTokens = null; }
+  const mapId = game.selectedMap?.id;
+  const objCoords = [];
+  if (mapTokens && mapId && mapTokens[mapId]) {
+    const mapData = mapTokens[mapId];
+    if (Array.isArray(mapData.terminals)) objCoords.push(...mapData.terminals);
+    const variant = game.selectedMission?.variant;
+    const missionKey = variant ? `mission${variant.toUpperCase()}` : null;
+    if (missionKey && mapData[missionKey]?.positions) {
+      for (const coords of Object.values(mapData[missionKey].positions)) {
+        if (Array.isArray(coords)) objCoords.push(...coords);
+      }
+    }
+  }
+
+  if (objCoords.length > 0) {
+    // [1] objectivesContested — fraction of objectives with a friendly within 2 spaces
+    let contested = 0;
+    for (const oc of objCoords) {
+      try {
+        for (const [, pos] of myFigEntries) {
+          if (coordDistance(pos, oc) <= 2) { contested++; break; }
+        }
+      } catch { /* skip */ }
+    }
+    result[1] = contested / objCoords.length;
+
+    // [2] avgAllyDistToObjective — avg of each ally's min distance to any objective
+    let totalDist = 0;
+    for (const [, pos] of myFigEntries) {
+      let minD = 10;
+      for (const oc of objCoords) {
+        try {
+          const d = coordDistance(pos, oc);
+          if (d < minD) minD = d;
+        } catch { /* skip */ }
+      }
+      totalDist += minD;
+    }
+    result[2] = 1 - Math.min(totalDist / myFigEntries.length, 10) / 10;
+  }
+
+  return result;
 }
 
 // ── Active-DC Feature Helpers (Phase 2) ──────────────────────────────────────
@@ -895,6 +1005,8 @@ export function extractFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
     /* 35 oppVpUrgency      */ 1 - Math.min(oppVP, 40) / 40,
     // Phase 2: active-DC context (indices 36-45)
     ...getActiveDcFeatures(game, playerNum, dcHealthState, dcMessageMeta),
+    // Phase 5: positional-awareness (indices 46-48)
+    ...getPositionalAwarenessFeatures(game, playerNum),
   ];
 }
 
@@ -2106,9 +2218,14 @@ export function loadLearnings(filePath) {
       if (!data.replayBuffer) data.replayBuffer = { transitions: [], writeIdx: 0, count: 0 };
       if (!data.withinGroupWeights) {
         data.withinGroupWeights = {
-          attack: new Array(6).fill(0), move: new Array(6).fill(0),
+          attack: new Array(6).fill(0), move: new Array(9).fill(0),
           surge: new Array(4).fill(0), cc: new Array(4).fill(0),
         };
+      }
+      // Migrate move scorer from 6 → 9 features (Phase 5 move-feature upgrade)
+      if (data.withinGroupWeights?.move && data.withinGroupWeights.move.length === 6) {
+        data.withinGroupWeights.move.push(0, 0, 0); // destInEnemyRange, destOnObjective, destAdjacentToAlly
+        console.log('[learnings] Migrated move WG weights 6 → 9 features (added destInEnemyRange, destOnObjective, destAdjacentToAlly)');
       }
       // One-time migration: reset inverted surge WG weights to positive priors.
       // The surge scorer drifted into a negative basin under the old reward signal,
@@ -2137,9 +2254,9 @@ export function loadLearnings(filePath) {
       if (data.withinGroupWeights?.move && !data._moveWgResetV1) {
         const mw = data.withinGroupWeights.move;
         if (mw[5] < -2.0 || (mw[0] < 0 && mw[2] < 0 && mw[4] < 0)) {
-          //                   enemy_close  threat  objective  ally   efficiency  bias
-          data.withinGroupWeights.move = [0.5, -0.3, 0.5, 0.2, 0.3, 0.5];
-          console.log('[learnings] Migrated move WG weights from inverted basin → mild priors [0.5, -0.3, 0.5, 0.2, 0.3, 0.5]');
+          //                   enemy_close  threat  objective  ally   efficiency  bias  exposed  onObj  adjAlly
+          data.withinGroupWeights.move = [0.5, -0.3, 0.5, 0.2, 0.3, 0.5, 0, 0, 0];
+          console.log('[learnings] Migrated move WG weights from inverted basin → mild priors [0.5, -0.3, 0.5, 0.2, 0.3, 0.5, 0, 0, 0]');
         }
         data._moveWgResetV1 = true;
       }
@@ -2164,7 +2281,7 @@ export function loadLearnings(filePath) {
     matchups: [],
     replayBuffer: { transitions: [], writeIdx: 0, count: 0 },
     withinGroupWeights: {
-      attack: new Array(6).fill(0), move: new Array(6).fill(0),
+      attack: new Array(6).fill(0), move: new Array(9).fill(0),
       surge: new Array(4).fill(0), cc: new Array(4).fill(0),
     },
   };
