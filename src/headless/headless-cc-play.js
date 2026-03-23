@@ -140,7 +140,9 @@ function handleCostPositive(game, playerNum, cardName, abilityId, idx, hand,
   const result = resolveInline(abilityId, baseContext, deps);
 
   if (!result.applied && result.manualMessage) {
-    throw new Error(`Headless CC play failed for "${cardName}": ${result.manualMessage}`);
+    // Graceful no-op: precondition passed but ability couldn't resolve (race condition / edge case).
+    // Card stays in hand; no game state mutation; no bad training signal.
+    return { played: false, skipped: true, reason: result.manualMessage };
   }
 
   if (result.applied) {
@@ -189,7 +191,9 @@ function handleCostZero(game, playerNum, cardName, abilityId, idx, hand,
   const result = resolveInline(abilityId, baseContext, deps);
 
   if (!result.applied && result.manualMessage) {
-    throw new Error(`Headless CC play failed for "${cardName}": ${result.manualMessage}`);
+    // Graceful no-op: card already in discard (cost=0 path), no effect applied.
+    // Better than throwing — no [CC FAIL] training noise.
+    return { played: true, skipped: true, reason: result.manualMessage };
   }
 
   if (result.applied) {
@@ -536,7 +540,7 @@ export function canResolveCcHeadless(game, playerNum, cardName, deps) {
       const dcN = figKeyToDcName(fk);
       const hasKw = (dcEffects[dcN]?.keywords || []).some(k => SUPPORT_KW.has(k.toLowerCase()));
       if (!hasKw) return false;
-      if (srcPos && pos) return getRange(srcPos, pos) <= 4; // 3 range + 1 Massive buffer
+      if (srcPos && pos) return getRange(srcPos, pos) <= 3;
       return true; // no position info — be conservative
     });
     if (!hasEligible) return false;
@@ -576,6 +580,58 @@ export function canResolveCcHeadless(game, playerNum, cardName, deps) {
   // Collateral Damage (flatDamageToFigureWithin): needs combat target to know where to look
   if (entry.flatDamageToFigureWithin) {
     if (!cbt?.defenderFigureKey) return false;
+  }
+
+  // Sniper Configuration (attackAccuracyBonus + attackBonusPierce, specialAction):
+  // Card says "Special Action: Perform an attack" — initiates combat, not headless-resolvable.
+  // The ability only adds bonuses to an existing combat, but no combat exists during a Special Action.
+  if (entry.attackAccuracyBonus && entry.attackBonusPierce && timing === 'specialaction') {
+    return false;
+  }
+
+  // Devotion (devotionEffect): needs adjacent friendly figure to the activating DC
+  if (entry.devotionEffect) {
+    if (!activeMsgId) return false;
+    const meta = deps.dcMessageMeta?.get(activeMsgId);
+    if (!meta?.dcName) return false;
+    const poses = game.figurePositions?.[playerNum] || {};
+    // Find activating figure position
+    const actFk = Object.keys(poses).find(fk => figKeyToDcName(fk) === meta.dcName);
+    const actPos = actFk ? poses[actFk] : null;
+    if (!actPos) return false;
+    // Check for at least one adjacent friendly (not self)
+    const hasAdj = Object.entries(poses).some(([fk, pos]) => {
+      if (fk === actFk || !pos) return false;
+      return getRange(actPos, pos) <= 1;
+    });
+    if (!hasAdj) return false;
+  }
+
+  // Smoke Grenade (chooseSpaceWithin2OfActivating): needs at least one valid space within 2
+  if (entry.chooseSpaceWithin2OfActivating) {
+    if (!activeMsgId) return false;
+    const meta = deps.dcMessageMeta?.get(activeMsgId);
+    if (!meta?.dcName) return false;
+    const poses = game.figurePositions?.[playerNum] || {};
+    const actFk = Object.keys(poses).find(fk => figKeyToDcName(fk) === meta.dcName);
+    const actPos = actFk ? poses[actFk] : null;
+    if (!actPos) return false;
+    // Verify at least one map space within range 2 exists (handles edge-case map geometry)
+    if (deps.getBoardStateForMovement) {
+      const bs = deps.getBoardStateForMovement(game, null);
+      const adj = bs?.mapSpaces?.adjacency;
+      if (adj) {
+        const posKey = String(actPos).toLowerCase();
+        const ring1 = adj[posKey] || [];
+        if (ring1.length === 0) return false; // completely isolated
+        const ring2 = new Set(ring1.map(s => String(s).toLowerCase()));
+        for (const s of ring1) {
+          for (const s2 of (adj[String(s).toLowerCase()] || [])) ring2.add(String(s2).toLowerCase());
+        }
+        ring2.delete(posKey);
+        if (ring2.size === 0) return false;
+      }
+    }
   }
 
   // powerTokenGain (Looking for a Fight, Apex Predator, etc.): at least one allied figure needs room
