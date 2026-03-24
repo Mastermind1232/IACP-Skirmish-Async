@@ -54,10 +54,34 @@ const REPLAY_MIN_SIZE = 256;        // Min buffer fill before replay starts
 const ALPHA_WG = 0.01;           // Learning rate for within-group scorers (5x main)
 const ALPHA_WG_SURGE = 0.002;   // Surge scorer LR: 5x lower — prevent re-collapse after reset
 const ALPHA_WG_MOVE = 0.005;    // Move scorer LR: uses contrastive signal, not TD delta
-const WG_WEIGHT_CLAMP = 25.0;   // Max absolute weight value (raised from 5.0 to prevent scorer saturation)
+let WG_WEIGHT_CLAMP = 10.0;     // Max absolute weight value (moderate: 5→25 overshot, 10 preserves learning room without saturation)
 const WG_EPSILON_START = 0.10;   // Within-group exploration rate (start)
 const WG_EPSILON_MIN = 0.02;     // Within-group exploration rate (floor)
 const WG_EPSILON_DECAY = 3000;   // Games to decay within-group epsilon
+
+// ── WG-Specific Weight Decay ────────────────────────────────────────────────
+// WG scorers had NO L2 regularization — weights drifted to clamp boundary.
+// Per-scorer decay pulls weights back toward zero each update step.
+// Attack scorer saturated fastest (all 6 weights at ±25), so gets strongest decay.
+// Move scorer saturated 4/9 weights; gets moderate decay.
+// Surge/CC are healthy — light decay as preventive measure.
+const WG_DECAY_ATTACK = 0.001;   // Strong: all weights saturated, need active pullback
+const WG_DECAY_MOVE = 0.0005;    // Moderate: 4/9 saturated, some features still learning
+const WG_DECAY_SURGE = 0.0001;   // Light: preventive only — not currently saturated
+const WG_DECAY_CC = 0.0001;      // Light: preventive only — not currently saturated
+
+/** Override WG weight clamp for experiments. */
+export function setWgWeightClamp(v) { WG_WEIGHT_CLAMP = v; }
+
+function getWgDecay(wgType) {
+  switch (wgType) {
+    case 'attack': return WG_DECAY_ATTACK;
+    case 'move': return WG_DECAY_MOVE;
+    case 'surge': return WG_DECAY_SURGE;
+    case 'cc': return WG_DECAY_CC;
+    default: return 0;
+  }
+}
 
 // ── Contrastive Move Scorer ──────────────────────────────────────────────────
 // The TD-delta-based WG update doesn't teach the move scorer which SPACE is
@@ -1318,29 +1342,23 @@ function updateTraceNeural(learnings, trace) {
       sanitizeNetwork(network, stats);
     }
 
-    // Within-group scorer update (Phase 5)
+    // Within-group scorer update (Phase 5) — now with per-scorer L2 decay
     if (entry.wgFeatures && entry.wgType && learnings.withinGroupWeights) {
       const wgW = learnings.withinGroupWeights[entry.wgType];
       if (wgW) {
+        const wgDecay = getWgDecay(entry.wgType);
         if (entry.wgType === 'move' && entry.moveContrastive) {
           // ── Contrastive move scorer update ──────────────────────────────
-          // Instead of using the DQN TD delta (which doesn't distinguish
-          // good destinations from bad ones), compare the chosen space
-          // against sampled alternatives using domain-quality scores.
-          // Push weights toward features of the higher-quality destination.
           const mc = entry.moveContrastive;
           const chosenQ = mc.chosenQuality;
           for (const alt of mc.alternatives) {
             const altQ = alt.qualityScore;
-            if (Math.abs(chosenQ - altQ) < 0.01) continue; // skip ties
-            // advantage > 0 means chosen was better, < 0 means alt was better
+            if (Math.abs(chosenQ - altQ) < 0.01) continue;
             const advantage = chosenQ - altQ;
-            // Clamp advantage to [-1, 1] to prevent large updates
             const clampedAdv = Math.max(-1, Math.min(1, advantage));
-            // Update: push weights toward chosen features when chosen is better,
-            // toward alt features when alt is better (feature diff * advantage)
             for (let fi = 0; fi < wgW.length; fi++) {
               const featDiff = (mc.chosen[fi] || 0) - (alt.features[fi] || 0);
+              wgW[fi] *= (1 - wgDecay); // L2 decay before gradient step
               wgW[fi] += ALPHA_WG_MOVE * clampedAdv * featDiff;
               wgW[fi] = Math.max(-WG_WEIGHT_CLAMP, Math.min(WG_WEIGHT_CLAMP, wgW[fi]));
               if (!isFinite(wgW[fi])) wgW[fi] = 0;
@@ -1350,6 +1368,7 @@ function updateTraceNeural(learnings, trace) {
           // Standard TD-delta-based WG update (attack, surge, CC)
           const alpha = entry.wgType === 'surge' ? ALPHA_WG_SURGE : ALPHA_WG;
           for (let fi = 0; fi < wgW.length; fi++) {
+            wgW[fi] *= (1 - wgDecay); // L2 decay before gradient step
             wgW[fi] += alpha * delta * (entry.wgFeatures[fi] || 0);
             wgW[fi] = Math.max(-WG_WEIGHT_CLAMP, Math.min(WG_WEIGHT_CLAMP, wgW[fi]));
             if (!isFinite(wgW[fi])) wgW[fi] = 0;

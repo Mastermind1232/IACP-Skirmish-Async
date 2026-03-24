@@ -518,12 +518,16 @@ function getActivationActions(game, playerNum, deps) {
     }
 
     if (hasActivatableDc) {
-      // Can pass activation turn
-      actions.push({
-        type: ACTION_TYPES.PASS_ACTIVATION_TURN,
-        customId: buildCustomId(ACTION_TYPES.PASS_ACTIVATION_TURN, { gameId }),
-        description: 'Pass activation turn',
-      });
+      // Can pass activation turn — but only if opponent has MORE activations (matches handler guard)
+      const otherPlayerNum = playerNum === 1 ? 2 : 1;
+      const otherRem = otherPlayerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+      if (otherRem > activationsRemaining) {
+        actions.push({
+          type: ACTION_TYPES.PASS_ACTIVATION_TURN,
+          customId: buildCustomId(ACTION_TYPES.PASS_ACTIVATION_TURN, { gameId }),
+          description: 'Pass activation turn',
+        });
+      }
     } else {
       // Has activations on paper but no DCs to activate (all exhausted/dead)
       // Offer end activation phase to prevent deadlock

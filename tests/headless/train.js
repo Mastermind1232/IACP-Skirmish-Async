@@ -24,7 +24,7 @@ import {
   pickSmartAction, abstractActionType, getLearningsStats,
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
   recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, getEffectiveAlpha, getQValues,
-  extractFeatures, setEncoderType, getEncoderType,
+  extractFeatures, setEncoderType, getEncoderType, setWgWeightClamp,
 } from './learnings.js';
 import { buildGraph, graphForwardPass } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
@@ -116,6 +116,17 @@ async function runOneGame(learnings, gameNum) {
   let totalActivations = 0;   // activate_dc (total activation starts)
   let passActivations = 0;    // pass_activation_turn
 
+  // ── Runaway-loop diagnostics ────────────────────────────────────────────
+  // Track per-game action type histogram + detect runaway windows (>200 iterations
+  // with >50% of actions being the same type in a 50-action window).
+  const actionTypeHist = {};  // absType → count
+  let totalIterations = 0;
+  let runawayWindowCount = 0; // windows where same type dominates
+  let runawayDominantType = null; // most common type in runaway windows
+  const RUNAWAY_WINDOW = 50;
+  const RUNAWAY_THRESHOLD = 0.5; // >50% same type in window = runaway
+  const recentActions = [];   // ring buffer of last RUNAWAY_WINDOW action types
+
   // Phase 2 metrics — richer activation quality tracking
   let productiveActions = 0;  // move, attack, ability, interact (not end/pass)
   let round1DistStart = null; // average distance at start of round 1
@@ -134,6 +145,30 @@ async function runOneGame(learnings, gameNum) {
   const ccFailureCounts = new Map();  // key → count
   const CC_MAX_RETRIES = 3;
 
+  // ── No-progress loop breaker ──────────────────────────────────────────────
+  // Track a lightweight board state fingerprint. If the fingerprint doesn't
+  // change for NO_PROGRESS_LIMIT consecutive iterations, force progress.
+  let lastFingerprint = '';
+  let noProgressCount = 0;
+  const NO_PROGRESS_LIMIT = 40; // 40 iterations with zero state change = stuck
+  let stopReason = 'normal'; // track how the game ended
+
+  function boardFingerprint(g) {
+    // Lightweight hash: round, VP, phase, figure count, total HP, active DC
+    const p1hp = dcHealthState ? [...dcHealthState.values()].reduce((s, arr) => {
+      for (const fig of arr) if (fig) s += fig[0]; return s;
+    }, 0) : 0;
+    const p1figs = Object.keys(g.figurePositions?.[1] || {}).length;
+    const p2figs = Object.keys(g.figurePositions?.[2] || {}).length;
+    const p1vp = g.player1VP?.total || 0;
+    const p2vp = g.player2VP?.total || 0;
+    const activeDc = g.currentActivatingDcIndex ?? -1;
+    const round = g.currentRound || 1;
+    const phase = g.roundPhase || '?';
+    const pending = g.pendingCombat ? 'C' : g.moveInProgress ? 'M' : g.phaseGate ? 'G' : '';
+    return `${round}:${phase}:${p1vp}:${p2vp}:${p1figs}:${p2figs}:${p1hp}:${activeDc}:${pending}`;
+  }
+
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const g = harness.getGame();
     if (g.ended) break;
@@ -143,6 +178,7 @@ async function runOneGame(learnings, gameNum) {
       const p1vp = g.player1VP?.total || 0;
       const p2vp = g.player2VP?.total || 0;
       g.ended = true;
+      stopReason = 'round_cap';
       if (p1vp > p2vp) g.winnerId = g.player1Id;
       else if (p2vp > p1vp) g.winnerId = g.player2Id;
       else {
@@ -154,6 +190,54 @@ async function runOneGame(learnings, gameNum) {
         else g.winnerId = null; // true draw
       }
       break;
+    }
+
+    // ── Auto-resolve mandatory two-player confirmations (zero learning value) ──
+    // Phase gates: both players must "ready" — no decision involved.
+    // Submit for each player sequentially; the handler sets ready flags internally.
+    // After both submit, bothReady triggers dispatchPhaseAdvance which clears the gate.
+    if (g.phaseGate) {
+      const gateId = `phase_gate_ready_${g.gameId}`;
+      try { await harness.submitAction(gateId, g.player1Id); } catch {}
+      if (g.phaseGate) {
+        try { await harness.submitAction(gateId, g.player2Id); } catch {}
+      }
+      continue; // Re-enter loop to process new state
+    }
+    // Combat ready: both players must confirm — no decision involved.
+    // Submit for each player sequentially so the handler sets ready flags.
+    if (g.pendingCombat && (!g.pendingCombat.p1Ready || !g.pendingCombat.p2Ready)) {
+      const combatReadyId = `combat_ready_${g.gameId}`;
+      if (!g.pendingCombat.p1Ready) {
+        try { await harness.submitAction(combatReadyId, g.player1Id); } catch {}
+      }
+      if (g.pendingCombat && !g.pendingCombat.p2Ready) {
+        try { await harness.submitAction(combatReadyId, g.player2Id); } catch {}
+      }
+      continue;
+    }
+    // ── No-progress loop detection ─────────────────────────────────────────
+    const fp = boardFingerprint(g);
+    if (fp === lastFingerprint) {
+      noProgressCount++;
+      if (noProgressCount >= NO_PROGRESS_LIMIT) {
+        // Force end the game — award winner by VP, tiebreak by figures
+        const p1vp = g.player1VP?.total || 0;
+        const p2vp = g.player2VP?.total || 0;
+        g.ended = true;
+        stopReason = 'no_progress';
+        if (p1vp > p2vp) g.winnerId = g.player1Id;
+        else if (p2vp > p1vp) g.winnerId = g.player2Id;
+        else {
+          const p1F = Object.keys(g.figurePositions?.[1] || {}).length;
+          const p2F = Object.keys(g.figurePositions?.[2] || {}).length;
+          g.winnerId = p1F > p2F ? g.player1Id : p1F < p2F ? g.player2Id : null;
+        }
+        break;
+      }
+    } else {
+      noProgressCount = 0;
+      lastFingerprint = fp;
     }
 
     // Prevent OOM: clear accumulated state every 200 iterations
@@ -293,6 +377,22 @@ async function runOneGame(learnings, gameNum) {
     else if (action.type === 'activate_dc') totalActivations++;
     else if (action.type === 'pass_activation_turn') passActivations++;
 
+    // Runaway-loop diagnostics — track action type histogram + sliding window
+    totalIterations++;
+    const absT = abstractActionType(action, g);
+    actionTypeHist[absT] = (actionTypeHist[absT] || 0) + 1;
+    recentActions.push(absT);
+    if (recentActions.length > RUNAWAY_WINDOW) recentActions.shift();
+    if (recentActions.length === RUNAWAY_WINDOW && totalIterations > 200) {
+      const freq = {};
+      for (const t of recentActions) freq[t] = (freq[t] || 0) + 1;
+      const topEntry = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+      if (topEntry && topEntry[1] / RUNAWAY_WINDOW > RUNAWAY_THRESHOLD) {
+        runawayWindowCount++;
+        runawayDominantType = topEntry[0];
+      }
+    }
+
     // Phase 2 metrics: productive actions and target-in-range conditioning
     const PRODUCTIVE_TYPES = new Set(['move_figure', 'move_pick_space', 'attack_target', 'dc_special', 'interact']);
     if (PRODUCTIVE_TYPES.has(action.type)) productiveActions++;
@@ -418,6 +518,11 @@ async function runOneGame(learnings, gameNum) {
     }
   }
 
+  // Set stopReason for MAX_ITERATIONS case (loop exhausted without game ending)
+  if (!harness.getGame().ended && stopReason === 'normal') {
+    stopReason = 'max_iterations';
+  }
+
   // Capture round-1 distance end before finalize
   const preFinGame = harness.getGame();
   if (round1DistStart !== null && round1DistEnd === null) {
@@ -474,6 +579,12 @@ async function runOneGame(learnings, gameNum) {
     endWhenNoTargets,
     decisionsWithTargets,
     decisionsWithoutTargets,
+    // Runaway-loop diagnostics
+    totalIterations,
+    runawayWindowCount,
+    runawayDominantType,
+    actionTypeHist,
+    stopReason,
   };
 }
 
@@ -504,6 +615,13 @@ async function main() {
     setEncoderType(encVal);
     console.log(`  Encoder type: ${encVal}`);
   }
+  const wgClampArg = args.find(a => a.startsWith('--wg-clamp='));
+  if (wgClampArg) {
+    const wgVal = parseFloat(wgClampArg.split('=')[1]);
+    if (isNaN(wgVal) || wgVal <= 0) { console.error('Invalid --wg-clamp value'); process.exit(1); }
+    setWgWeightClamp(wgVal);
+    console.log(`  WG weight clamp override: ${wgVal}`);
+  }
 
   const learnings = reset ? loadLearnings('/dev/null') // fresh default
                           : loadLearnings(LEARNINGS_PATH);
@@ -531,6 +649,8 @@ async function main() {
   const perGameResults = [];
   const checkpoints = [];
   let cpCompleted = 0, cpP1 = 0, cpP2 = 0, cpVP = 0, cpGames = 0;
+  let cpRunawayGames = 0, cpRunawayWindows = 0, cpTotalIters = 0; // runaway accumulators
+  const cpStopReasons = {}; // stopReason → count per checkpoint window
   const startTime = Date.now();
   const updatesBefore = learnings.trainingStats?.totalUpdates || 0;
   let lastCheckpointUpdates = updatesBefore;
@@ -569,7 +689,18 @@ async function main() {
       endWhenNoTargets: result.endWhenNoTargets || 0,
       decisionsWithTargets: result.decisionsWithTargets || 0,
       decisionsWithoutTargets: result.decisionsWithoutTargets || 0,
+      // Runaway diagnostics
+      totalIterations: result.totalIterations || 0,
+      runawayWindowCount: result.runawayWindowCount || 0,
+      runawayDominantType: result.runawayDominantType || null,
+      stopReason: result.stopReason || 'normal',
     });
+
+    // Log runaway games immediately
+    if (result.runawayWindowCount > 0) {
+      const topTypes = Object.entries(result.actionTypeHist || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      console.log(`  ⚠ RUNAWAY game ${i + 1}: ${result.runawayWindowCount} windows, dominant=${result.runawayDominantType}, iters=${result.totalIterations}, top: ${topTypes.map(([t,c]) => `${t}:${c}`).join(' ')}`);
+    }
 
     cpGames++;
     cpVP += gameVP;
@@ -579,6 +710,11 @@ async function main() {
       if (result.winnerLabel === 'P1') { p1Wins++; cpP1++; }
       if (result.winnerLabel === 'P2') { p2Wins++; cpP2++; }
     }
+    // Accumulate runaway stats
+    cpTotalIters += result.totalIterations || 0;
+    cpRunawayWindows += result.runawayWindowCount || 0;
+    if (result.runawayWindowCount > 0) cpRunawayGames++;
+    cpStopReasons[result.stopReason || 'normal'] = (cpStopReasons[result.stopReason || 'normal'] || 0) + 1;
 
     // 50-game checkpoint
     if ((i + 1) % 50 === 0) {
@@ -609,6 +745,23 @@ async function main() {
       console.log(`  Updates this window: ${cp.updatesThisWindow} | Total: ${cp.totalUpdates}`);
       console.log(`  Replay buf: ${cp.replayBufSize} | Total stored: ${cp.replayTotalStored}`);
       console.log(`  NaN resets: ${cp.nanResets} | Wall: ${cp.wallTime}s`);
+      // WG scorer diagnostics
+      if (learnings.withinGroupWeights) {
+        const wg = learnings.withinGroupWeights;
+        const fmtW = (arr) => arr.map(w => w.toFixed(2)).join(', ');
+        const maxAbs = (arr) => Math.max(...arr.map(Math.abs)).toFixed(2);
+        const saturated = (arr, clamp) => arr.filter(w => Math.abs(w) >= clamp * 0.95).length;
+        const clamp = 10.0; // current WG_WEIGHT_CLAMP
+        if (wg.attack) console.log(`  WG attack: [${fmtW(wg.attack)}] max|w|=${maxAbs(wg.attack)} sat=${saturated(wg.attack, clamp)}/6`);
+        if (wg.move) console.log(`  WG move:   [${fmtW(wg.move)}] max|w|=${maxAbs(wg.move)} sat=${saturated(wg.move, clamp)}/9`);
+        if (wg.surge) console.log(`  WG surge:  [${fmtW(wg.surge)}] max|w|=${maxAbs(wg.surge)} sat=${saturated(wg.surge, clamp)}/4`);
+        if (wg.cc) console.log(`  WG cc:     [${fmtW(wg.cc)}] max|w|=${maxAbs(wg.cc)} sat=${saturated(wg.cc, clamp)}/4`);
+      }
+      // Runaway-loop checkpoint summary
+      const avgIters = cpGames > 0 ? (cpTotalIters / cpGames).toFixed(0) : 0;
+      console.log(`  Runaway: ${cpRunawayGames}/${cpGames} games, ${cpRunawayWindows} total windows, avg iters/game: ${avgIters}`);
+      const srStr = Object.entries(cpStopReasons).map(([r,c]) => `${r}:${c}`).join(' ');
+      console.log(`  StopReason: ${srStr}`);
       // Persist checkpoint to training history for plateau detection
       recordTrainingCheckpoint(learnings, {
         completed: cpCompleted, total: cpGames,
@@ -619,6 +772,8 @@ async function main() {
       });
       // Reset window counters
       cpCompleted = 0; cpP1 = 0; cpP2 = 0; cpVP = 0; cpGames = 0;
+      cpRunawayGames = 0; cpRunawayWindows = 0; cpTotalIters = 0;
+      for (const k of Object.keys(cpStopReasons)) delete cpStopReasons[k];
       lastCheckpointUpdates = cpUpdatesNow;
     }
 
