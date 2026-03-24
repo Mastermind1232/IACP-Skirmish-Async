@@ -8,6 +8,11 @@ import { parseCoord } from '../../src/game/coords.js';
 import { getDcEffects, getMapTokensData, getCcEffect } from '../../src/data-loader.js';
 import { parseSurgeEffect } from '../../src/game/combat.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import {
+  buildGraph, initGraphNetwork, graphForwardPass, graphBackpropUpdate,
+  getGraphMaskedBestQ, deepCopyGraphNetwork, sanitizeGraphNetwork,
+  serializeGraphNetwork, getGraphNetworkStats, deepCopyGraph, migrateGraphNetwork,
+} from './graph-encoder.js';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -21,6 +26,14 @@ const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
 const N_STEP = 4;            // N-step returns — multi-step credit assignment (was 1)
 let WEIGHT_DECAY = 0.0001;        // L2 regularization — increased 3.3× to fix slow weight drift (stability Branch A, 2026-03-22)
 const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger with decay active
+
+// ── Encoder Type Switch ──────────────────────────────────────────────────────
+// 'flat' = original 49-dim scalar features (production default)
+// 'graph' = GNN-based relational state encoder (experimental)
+let ENCODER_TYPE = 'flat';
+/** Switch encoder type. Call before training/eval. */
+export function setEncoderType(type) { ENCODER_TYPE = type; }
+export function getEncoderType() { return ENCODER_TYPE; }
 
 /** Override weight decay for controlled experiments. Call before training. */
 export function setWeightDecay(v) { WEIGHT_DECAY = v; }
@@ -41,7 +54,7 @@ const REPLAY_MIN_SIZE = 256;        // Min buffer fill before replay starts
 const ALPHA_WG = 0.01;           // Learning rate for within-group scorers (5x main)
 const ALPHA_WG_SURGE = 0.002;   // Surge scorer LR: 5x lower — prevent re-collapse after reset
 const ALPHA_WG_MOVE = 0.005;    // Move scorer LR: uses contrastive signal, not TD delta
-const WG_WEIGHT_CLAMP = 5.0;    // Max absolute weight value
+const WG_WEIGHT_CLAMP = 25.0;   // Max absolute weight value (raised from 5.0 to prevent scorer saturation)
 const WG_EPSILON_START = 0.10;   // Within-group exploration rate (start)
 const WG_EPSILON_MIN = 0.02;     // Within-group exploration rate (floor)
 const WG_EPSILON_DECAY = 3000;   // Games to decay within-group epsilon
@@ -1222,8 +1235,10 @@ function updateTraceNeural(learnings, trace) {
     };
   }
 
-  const network = learnings.network;
-  const targetNetwork = learnings.targetNetwork;
+  const useGraph = ENCODER_TYPE === 'graph' && learnings.graphNetwork;
+  const network = useGraph ? null : learnings.network;
+  const targetNetwork = useGraph ? learnings.graphTargetNetwork : learnings.targetNetwork;
+  const gNet = useGraph ? learnings.graphNetwork : null;
   const stats = learnings.trainingStats;
   const effectiveAlpha = getEffectiveAlpha(learnings.meta?.totalGames);
   let deltaSum = 0;
@@ -1245,7 +1260,17 @@ function updateTraceNeural(learnings, trace) {
     const { features, actionIdx } = entry;
 
     // Forward pass on online network
-    const { Q, h_pre, h } = forwardPass(network, features);
+    let Q, h_pre, h, graphCache;
+    if (useGraph) {
+      const result = graphForwardPass(gNet, features); // features is a graph object in graph mode
+      Q = result.Q;
+      graphCache = result.cache;
+    } else {
+      const result = forwardPass(network, features);
+      Q = result.Q;
+      h_pre = result.h_pre;
+      h = result.h;
+    }
 
     // Compute n-step return
     let nStepReturn = 0;
@@ -1274,7 +1299,9 @@ function updateTraceNeural(learnings, trace) {
     if (hitTerminal || !bootstrapFeatures) {
       target = nStepReturn;
     } else {
-      const maxQNext = getMaskedBestQ(targetNetwork, bootstrapFeatures, bootstrapActionIdxs);
+      const maxQNext = useGraph
+        ? getGraphMaskedBestQ(targetNetwork, bootstrapFeatures, bootstrapActionIdxs)
+        : getMaskedBestQ(targetNetwork, bootstrapFeatures, bootstrapActionIdxs);
       target = nStepReturn + gammaK * maxQNext;
     }
 
@@ -1283,10 +1310,13 @@ function updateTraceNeural(learnings, trace) {
     const delta = Math.max(-DELTA_CLAMP, Math.min(DELTA_CLAMP, rawDelta));
 
     // Backprop update (scheduled LR)
-    backpropUpdate(network, actionIdx, delta, effectiveAlpha, h_pre, h, features);
-
-    // NaN safety
-    sanitizeNetwork(network, stats);
+    if (useGraph) {
+      graphBackpropUpdate(gNet, graphCache, actionIdx, delta, effectiveAlpha, WEIGHT_DECAY);
+      sanitizeGraphNetwork(gNet, stats);
+    } else {
+      backpropUpdate(network, actionIdx, delta, effectiveAlpha, h_pre, h, features);
+      sanitizeNetwork(network, stats);
+    }
 
     // Within-group scorer update (Phase 5)
     if (entry.wgFeatures && entry.wgType && learnings.withinGroupWeights) {
@@ -1342,7 +1372,11 @@ function updateTraceNeural(learnings, trace) {
 
     // Target network sync
     if (stats.totalUpdates > 0 && stats.totalUpdates % TARGET_UPDATE_INTERVAL === 0) {
-      learnings.targetNetwork = deepCopyNetwork(network);
+      if (useGraph) {
+        learnings.graphTargetNetwork = deepCopyGraphNetwork(gNet);
+      } else {
+        learnings.targetNetwork = deepCopyNetwork(network);
+      }
       stats.lastTargetSync = stats.totalUpdates;
       stats.targetSyncs = (stats.targetSyncs || 0) + 1;
     }
@@ -1352,10 +1386,12 @@ function updateTraceNeural(learnings, trace) {
     if (learnings.replayBuffer) {
       const buf = learnings.replayBuffer;
       const transition = {
-        features: features.slice(),
+        features: useGraph ? deepCopyGraph(features) : features.slice(),
         actionIdx,
         reward: nStepReturn,    // n-step cumulative reward (not single-step)
-        nextFeatures: bootstrapFeatures ? bootstrapFeatures.slice() : null,
+        nextFeatures: bootstrapFeatures
+          ? (useGraph ? deepCopyGraph(bootstrapFeatures) : bootstrapFeatures.slice())
+          : null,
         nextActionIdxs: bootstrapActionIdxs ? bootstrapActionIdxs.slice() : null,
         done: hitTerminal,
         nStepGamma: gammaK,     // γ^n for this transition's bootstrap discount
@@ -1382,10 +1418,13 @@ export function replayUpdate(learnings) {
   const buf = learnings.replayBuffer;
   if (!buf || buf.transitions.length < REPLAY_MIN_SIZE) return;
 
-  const network = learnings.network;
-  const targetNetwork = learnings.targetNetwork;
+  const useGraph = ENCODER_TYPE === 'graph' && learnings.graphNetwork;
+  const network = useGraph ? null : learnings.network;
+  const targetNetwork = useGraph ? learnings.graphTargetNetwork : learnings.targetNetwork;
+  const gNet = useGraph ? learnings.graphNetwork : null;
   const stats = learnings.trainingStats;
-  if (!network || !targetNetwork) return;
+  if (!useGraph && (!network || !targetNetwork)) return;
+  if (useGraph && (!gNet || !targetNetwork)) return;
 
   const bufLen = buf.transitions.length;
   const replayAlpha = getEffectiveAlpha(learnings.meta?.totalGames) * 0.5; // Half of scheduled online alpha
@@ -1398,7 +1437,15 @@ export function replayUpdate(learnings) {
       if (!t || !t.features) continue;
 
       const { features, actionIdx, reward, nextFeatures, nextActionIdxs, done } = t;
-      const { Q, h_pre, h } = forwardPass(network, features);
+      let Q, h_pre, h, graphCache;
+      if (useGraph) {
+        const result = graphForwardPass(gNet, features);
+        Q = result.Q;
+        graphCache = result.cache;
+      } else {
+        const result = forwardPass(network, features);
+        Q = result.Q; h_pre = result.h_pre; h = result.h;
+      }
 
       // Use stored n-step gamma if available (new transitions), fall back to GAMMA (legacy 1-step)
       const bootstrapGamma = t.nStepGamma ?? GAMMA;
@@ -1406,20 +1453,31 @@ export function replayUpdate(learnings) {
       if (done || !nextFeatures) {
         target = reward;
       } else {
-        const maxQNext = getMaskedBestQ(targetNetwork, nextFeatures, nextActionIdxs);
+        const maxQNext = useGraph
+          ? getGraphMaskedBestQ(targetNetwork, nextFeatures, nextActionIdxs)
+          : getMaskedBestQ(targetNetwork, nextFeatures, nextActionIdxs);
         target = reward + bootstrapGamma * maxQNext;
       }
 
       const rawDelta = target - Q[actionIdx];
       const delta = Math.max(-DELTA_CLAMP, Math.min(DELTA_CLAMP, rawDelta));
-      backpropUpdate(network, actionIdx, delta, replayAlpha, h_pre, h, features);
-      sanitizeNetwork(network, stats);
+      if (useGraph) {
+        graphBackpropUpdate(gNet, graphCache, actionIdx, delta, replayAlpha, WEIGHT_DECAY);
+        sanitizeGraphNetwork(gNet, stats);
+      } else {
+        backpropUpdate(network, actionIdx, delta, replayAlpha, h_pre, h, features);
+        sanitizeNetwork(network, stats);
+      }
 
       deltaSum += Math.abs(rawDelta);
       stats.totalUpdates++;
 
       if (stats.totalUpdates > 0 && stats.totalUpdates % TARGET_UPDATE_INTERVAL === 0) {
-        learnings.targetNetwork = deepCopyNetwork(network);
+        if (useGraph) {
+          learnings.graphTargetNetwork = deepCopyGraphNetwork(gNet);
+        } else {
+          learnings.targetNetwork = deepCopyNetwork(network);
+        }
         stats.lastTargetSync = stats.totalUpdates;
         stats.targetSyncs = (stats.targetSyncs || 0) + 1;
       }
@@ -1741,12 +1799,18 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     return heuristicPick(strategicActions, game);
   }
 
-  // Exploitation: compute Q via dueling neural network
-  const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
-  const network = learnings.network;
-  if (!network) return heuristicPick(strategicActions, game);
-
-  const { Q } = forwardPass(network, features);
+  // Exploitation: compute Q via neural network (flat or graph encoder)
+  let Q;
+  if (ENCODER_TYPE === 'graph' && learnings.graphNetwork) {
+    const graph = buildGraph(game, playerNum, dcHealthState, dcMessageMeta);
+    const result = graphForwardPass(learnings.graphNetwork, graph);
+    Q = result.Q;
+  } else {
+    const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+    const network = learnings.network;
+    if (!network) return heuristicPick(strategicActions, game);
+    Q = forwardPass(network, features).Q;
+  }
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
   if (absTypes.length === 0) return heuristicPick(strategicActions, game);
 
@@ -2006,7 +2070,9 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       }
 
       lastSnapshot = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
-      lastFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+      lastFeatures = ENCODER_TYPE === 'graph'
+        ? buildGraph(game, playerNum, dcHealthState, dcMessageMeta)
+        : extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
 
       // Detect whether any beneficial surge spend is available at this decision point.
       // Used to penalize skip_surges when the agent had a positive-value option.
@@ -2030,7 +2096,9 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
         return;
       }
       const afterSnap = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
-      const nextFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+      const nextFeatures = ENCODER_TYPE === 'graph'
+        ? buildGraph(game, playerNum, dcHealthState, dcMessageMeta)
+        : extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
 
       // ── Surge-aware reward shaping ──────────────────────────────────────────
       // Large fixed constants dominate (1-γ)*V(s) step cost at any realistic V(s).
@@ -2262,11 +2330,21 @@ export function loadLearnings(filePath) {
       }
 
       data.brainPhase = 5;
+      // Graph encoder: initialize if ENCODER_TYPE=graph and not yet present
+      if (ENCODER_TYPE === 'graph') {
+        if (data.graphNetwork) {
+          migrateGraphNetwork(data.graphNetwork);
+          data.graphTargetNetwork = deepCopyGraphNetwork(data.graphNetwork);
+        } else {
+          data.graphNetwork = initGraphNetwork(NUM_ACTIONS);
+          data.graphTargetNetwork = deepCopyGraphNetwork(data.graphNetwork);
+        }
+      }
       return data;
     }
   } catch { /* start fresh */ }
   const network = initializeNetwork();
-  return {
+  const result = {
     brainPhase: 5,
     meta: { totalGames: 0, p1Wins: 0, p2Wins: 0, lastUpdated: null, trainingHistory: [] },
     network,
@@ -2285,6 +2363,11 @@ export function loadLearnings(filePath) {
       surge: new Array(4).fill(0), cc: new Array(4).fill(0),
     },
   };
+  if (ENCODER_TYPE === 'graph') {
+    result.graphNetwork = initGraphNetwork(NUM_ACTIONS);
+    result.graphTargetNetwork = deepCopyGraphNetwork(result.graphNetwork);
+  }
+  return result;
 }
 
 export function saveLearnings(learnings, filePath) {
@@ -2302,6 +2385,11 @@ export function saveLearnings(learnings, filePath) {
     _surgeWgResetV1: learnings._surgeWgResetV1 || false,
     _moveWgResetV1: learnings._moveWgResetV1 || false,
   };
+  // Persist graph network if present (target network rebuilt on load)
+  if (learnings.graphNetwork) {
+    toSave.graphNetwork = serializeGraphNetwork(learnings.graphNetwork);
+    toSave.encoderType = ENCODER_TYPE;
+  }
   writeFileSync(filePath, JSON.stringify(toSave));
 }
 
@@ -2643,12 +2731,18 @@ export function getLearningsStats(learnings) {
 
   const ts = learnings.trainingStats || {};
 
+  // If graph encoder is active, also report graph network stats
+  let graphStats = null;
+  if (ENCODER_TYPE === 'graph' && learnings.graphNetwork) {
+    graphStats = getGraphNetworkStats(learnings.graphNetwork);
+  }
+
   return {
     totalGames: learnings.meta.totalGames,
     p1Wins: learnings.meta.p1Wins,
     p2Wins: learnings.meta.p2Wins,
-    weightCount,
-    avgAbsWeight: weightCount > 0 ? totalAbsWeight / weightCount : 0,
+    weightCount: graphStats ? graphStats.weightCount : weightCount,
+    avgAbsWeight: graphStats ? graphStats.avgAbsWeight : (weightCount > 0 ? totalAbsWeight / weightCount : 0),
     weightRange: [-maxAbsWeight, maxAbsWeight],
     totalUpdates: ts.totalUpdates || 0,
     avgAbsDelta: ts.avgAbsDelta || 0,
@@ -2660,6 +2754,8 @@ export function getLearningsStats(learnings) {
     replayBufferSize: learnings.replayBuffer ? learnings.replayBuffer.transitions.length : 0,
     replayTotalStored: learnings.replayBuffer ? learnings.replayBuffer.count : 0,
     withinGroupWeights: learnings.withinGroupWeights || null,
+    encoderType: ENCODER_TYPE,
+    graphStats,
   };
 }
 
@@ -2711,6 +2807,16 @@ export function checkDivergence(learnings) {
   const V_THRESHOLD = 200;
   const WV_NORM_THRESHOLD = 10;
   const TD_ERROR_THRESHOLD = 50;
+
+  // Graph mode: simplified divergence check (no flat probe states)
+  if (ENCODER_TYPE === 'graph' && learnings.graphNetwork) {
+    const avgAbsTD = learnings.trainingStats?.avgAbsDelta || 0;
+    const gStats = getGraphNetworkStats(learnings.graphNetwork);
+    const reasons = [];
+    if (avgAbsTD > TD_ERROR_THRESHOLD) reasons.push(`avgTD=${avgAbsTD.toFixed(1)} > ${TD_ERROR_THRESHOLD}`);
+    if (gStats.avgAbsWeight > 5.0) reasons.push(`graph avg|w|=${gStats.avgAbsWeight.toFixed(3)} > 5.0`);
+    return { ok: reasons.length === 0, reasons, signals: { avgAbsTD, graphAvgAbsW: gStats.avgAbsWeight } };
+  }
 
   const net = learnings.network;
   if (!net) return { ok: true, signals: {} };
@@ -2780,6 +2886,15 @@ export function checkDivergence(learnings) {
  * @returns {number[]|null} Q-values array, or null if no network
  */
 export function getQValues(learnings, features) {
+  if (ENCODER_TYPE === 'graph' && learnings.graphNetwork) {
+    // In graph mode, features is a flat array from diagnostics — build a synthetic graph
+    // For now, use graphForwardPass if a graph object is passed, otherwise fall through to flat
+    if (features && typeof features === 'object' && features.nodes) {
+      return graphForwardPass(learnings.graphNetwork, features).Q;
+    }
+    // Flat diagnostic features can't be used with graph encoder — return null
+    return null;
+  }
   if (!learnings.network) return null;
   return forwardPass(learnings.network, features).Q;
 }

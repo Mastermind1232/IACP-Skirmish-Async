@@ -5,7 +5,8 @@
  * Usage:
  *   node tests/headless/train.js [numGames] [--reset]
  *   node tests/headless/train.js 100        # Train 100 games
- *   node tests/headless/train.js 50 --reset # Wipe learnings and train 50
+ *   node tests/headless/train.js 50 --reset   # Wipe learnings and train 50
+ *   node tests/headless/train.js 50 --encoder=graph  # Train with graph encoder
  */
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
@@ -23,8 +24,9 @@ import {
   pickSmartAction, abstractActionType, getLearningsStats,
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
   recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, getEffectiveAlpha, getQValues,
-  extractFeatures,
+  extractFeatures, setEncoderType, getEncoderType,
 } from './learnings.js';
+import { buildGraph, graphForwardPass } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -495,6 +497,14 @@ async function main() {
     setAlpha(alphaVal);
     console.log(`  Alpha (learning rate) override: ${alphaVal}`);
   }
+  const encoderArg = args.find(a => a.startsWith('--encoder='));
+  if (encoderArg) {
+    const encVal = encoderArg.split('=')[1];
+    if (encVal !== 'flat' && encVal !== 'graph') { console.error('Invalid --encoder value (flat|graph)'); process.exit(1); }
+    setEncoderType(encVal);
+    console.log(`  Encoder type: ${encVal}`);
+  }
+
   const learnings = reset ? loadLearnings('/dev/null') // fresh default
                           : loadLearnings(LEARNINGS_PATH);
 
@@ -709,8 +719,46 @@ async function main() {
   }
 
   // Q-value diagnostic: show Q-values for key action types
-  if (learnings.network) {
-    // Use a representative "round 1 start" feature vector to diagnose Q-values
+  const absTypes = [
+    'attack_close', 'attack_ranged', 'move_toward', 'move_away', 'move_lateral',
+    'move_done', 'start_move', 'activate', 'end_activation', 'pass',
+    'ability', 'spend_surge', 'skip_surges', 'reroll', 'other',
+    'play_cc', 'react_use', 'react_skip', 'surge_damage', 'surge_special',
+    'token_offense', 'token_defense', 'interact',
+  ];
+  const keyTypes = ['start_move', 'move_toward', 'end_activation', 'pass', 'attack_close', 'attack_ranged', 'activate', 'play_cc', 'ability', 'interact'];
+
+  if (getEncoderType() === 'graph' && learnings.graphNetwork) {
+    // Graph mode: build a synthetic 4-node graph for diagnostic
+    const synthNodes = [
+      { features: [1, 1.0, 0.5, 0.54, 0.08, 1, 0, 0, 1.0] },  // ally active melee, full HP, bias=1
+      { features: [1, 0.8, 0.4, 0.40, 0.16, 0, 0, 0, 1.0] },  // ally passive ranged
+      { features: [0, 1.0, 0.5, 0.54, 0.08, 0, 0, 0, 1.0] },  // enemy full HP melee
+      { features: [0, 0.7, 0.4, 0.40, 0.16, 0, 0, 0, 1.0] },  // enemy damaged ranged
+    ];
+    // Features: team, hpRatio, speed, attackPower, normRange, isActive, isStunned, bias, distToNearestEnemy
+    // Build fully-connected edges: [normDist, inAttackRange, sameTeam]
+    const synthEdges = [];
+    for (let i = 0; i < synthNodes.length; i++) {
+      for (let j = 0; j < synthNodes.length; j++) {
+        if (i === j) continue;
+        const sameTeam = synthNodes[i].features[0] === synthNodes[j].features[0] ? 1.0 : 0.0;
+        synthEdges.push({ src: i, dst: j, features: [0.5, 0.0, sameTeam] }); // normDist=0.5, not in range
+      }
+    }
+    const synthGraph = { nodes: synthNodes, edges: synthEdges, numNodes: synthNodes.length };
+    const result = graphForwardPass(learnings.graphNetwork, synthGraph);
+    if (result && result.Q) {
+      console.log('\n=== Q-Value Diagnostic [GRAPH] (synthetic round-1 state) ===');
+      for (const t of keyTypes) {
+        const idx = absTypes.indexOf(t);
+        if (idx >= 0 && idx < result.Q.length) {
+          console.log(`  Q(${t}) = ${result.Q[idx].toFixed(3)}`);
+        }
+      }
+    }
+  } else if (learnings.network) {
+    // Flat mode: use representative feature vector
     const numFeatures = learnings.network.W1[0]?.length || 46;
     const diagFeatures = new Array(numFeatures).fill(0);
     diagFeatures[0] = 0;    // vpAdv = 0
@@ -729,15 +777,7 @@ async function main() {
     }
     const diagQ = getQValues(learnings, diagFeatures);
     if (diagQ) {
-      const absTypes = [
-        'attack_close', 'attack_ranged', 'move_toward', 'move_away', 'move_lateral',
-        'move_done', 'start_move', 'activate', 'end_activation', 'pass',
-        'ability', 'spend_surge', 'skip_surges', 'reroll', 'other',
-        'play_cc', 'react_use', 'react_skip', 'surge_damage', 'surge_special',
-        'token_offense', 'token_defense', 'interact',
-      ];
       console.log('\n=== Q-Value Diagnostic (round 1 start state) ===');
-      const keyTypes = ['start_move', 'move_toward', 'end_activation', 'pass', 'attack_close', 'attack_ranged', 'activate', 'play_cc', 'ability', 'interact'];
       for (const t of keyTypes) {
         const idx = absTypes.indexOf(t);
         if (idx >= 0 && idx < diagQ.length) {
