@@ -314,10 +314,26 @@ export function formatCoverageSummary(artifact, runNum) {
     `  DC specials:        ${dcSpecials}`,
     ``,
     `── VP per Round ───────────────────────────────`,
-    ...((artifact.vp_per_round || []).length > 0
-      ? artifact.vp_per_round.map(r => `  Round ${r.round}: P1=${r.p1}  P2=${r.p2}`)
-      : ['  (no round transitions recorded)']),
-    `  Final:   P1=${artifact.p1_vp ?? 0}  P2=${artifact.p2_vp ?? 0}`,
+    ...(() => {
+      const rounds = artifact.vp_per_round || [];
+      if (rounds.length === 0) return ['  (no round transitions recorded)'];
+      const lines = [];
+      let prevP1 = 0, prevP2 = 0;
+      let zeroGainRounds = 0;
+      for (const r of rounds) {
+        const d1 = r.p1 - prevP1, d2 = r.p2 - prevP2;
+        const totalGain = d1 + d2;
+        const flag = totalGain === 0 ? (++zeroGainRounds >= 2 ? ' 🔴' : ' 🟡') : (zeroGainRounds = 0, '');
+        lines.push(`  Round ${r.round}: P1=${r.p1} (+${d1})  P2=${r.p2} (+${d2})${flag}`);
+        prevP1 = r.p1; prevP2 = r.p2;
+      }
+      // Final round (game-end VP vs last snapshot)
+      const fd1 = (artifact.p1_vp ?? 0) - prevP1, fd2 = (artifact.p2_vp ?? 0) - prevP2;
+      const fTotal = fd1 + fd2;
+      const fFlag = fTotal === 0 ? (++zeroGainRounds >= 2 ? ' 🔴' : ' 🟡') : '';
+      lines.push(`  Final:   P1=${artifact.p1_vp ?? 0} (+${fd1})  P2=${artifact.p2_vp ?? 0} (+${fd2})${fFlag}`);
+      return lines;
+    })(),
     ``,
     `── Strategy ───────────────────────────────────`,
     `  Encoder:            ${rs.encoder ?? 'unknown'}`,
