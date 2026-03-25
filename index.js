@@ -2179,6 +2179,119 @@ async function maybeAddRequestButtons(message) {
 client.on('messageCreate', async (message) => {
   try {
   if (!botReady) return;
+
+  // ── MCP selfplay trigger ────────────────────────────────────────────────────
+  // Allows Claude Code MCP to start/stop/status self-play via text message.
+  // Only the bot's own messages (sent via MCP) are accepted, only in #bothelpers.
+  if (message.author.id === client.user?.id && message.content.startsWith('selfplaymcp')) {
+    const mcpBothelpersId = '1481314970666008607';
+    if (message.channel.id !== mcpBothelpersId) return;
+
+    const mcpArgs = message.content.trim().split(/\s+/).slice(1);
+    const mcpAction = mcpArgs[0] || 'start';
+    const reply = (text) => message.channel.send(text).catch(() => {});
+
+    if (mcpAction === 'status') {
+      const qs = getQueueStatus();
+      const activeId = getActiveSelfPlayGameId();
+      if (qs.state === 'idle' && !activeId) {
+        await reply('Self-play idle.');
+      } else {
+        const modeLabel = qs.seedMode ? 'seed auto-select' : 'scenario round-robin';
+        const lines = [
+          `**State:** ${qs.state} (${modeLabel})`,
+          `**Runs:** ${qs.runCount} (${qs.failCount} failed)`,
+          `**Current:** ${qs.currentRunScenario || 'none'}`,
+        ];
+        if (activeId) lines.push(`**Active game:** ${activeId}`);
+        if (qs.pauseReason) lines.push(`**Pause reason:** ${qs.pauseReason}`);
+        await reply(lines.join('\n'));
+      }
+      return;
+    }
+
+    if (mcpAction === 'stop') {
+      try {
+        stopQueue();
+        await reply('Self-play stopping after current game.');
+      } catch (err) {
+        await reply(`Stop failed: ${err.message}`);
+      }
+      return;
+    }
+
+    // mcpAction === 'start' (default)
+    const qs = getQueueStatus();
+    if (qs.state === 'paused') {
+      try {
+        resumeQueue();
+        await reply(`**Self-play resumed** — was paused (${qs.pauseReason || 'unknown'}).`);
+      } catch (err) {
+        await reply(`Resume failed: ${err.message}`);
+      }
+      return;
+    }
+    try {
+      const guild = message.guild;
+      startQueue({
+        client,
+        guild,
+        guildId: guild.id,
+        buildAllDeps,
+        getGame,
+        atomicOpts,
+        actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
+        createTestGame,
+        deleteGameChannelsAndGame,
+        cleanupCtx: {
+          client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+          deleteGameFromDb,
+        },
+        scenarios: [],
+        seedMode: true,
+        getNextSeed: () => getTopValidationCandidate(getDestructTestDecks),
+        onSeedRunComplete: async (artifact, seedConfig) => {
+          const dedupedKeys = artifact?.transitions_hit || [];
+          for (const key of dedupedKeys) {
+            const { roundPhase, pendingSet, actionType } = parseTransitionKey(key);
+            await upsertDiscordTransition(key, roundPhase, pendingSet, actionType);
+          }
+          await insertExplorationEpisode({
+            episode_id: randomUUID(),
+            source: 'discord',
+            seed_config: { mapId: seedConfig.mapId, p1Deck: seedConfig.p1Deck.name, p2Deck: seedConfig.p2Deck.name },
+            total_steps: artifact?.total_steps || 0,
+            unique_transitions: dedupedKeys.length,
+            novel_transitions: 0,
+            invariant_errors: 0,
+            transitions_hit: dedupedKeys,
+            result: artifact?.result || 'unknown',
+            stop_reason: artifact?.stop_reason || 'unknown',
+            duration_ms: artifact?.duration_ms || 0,
+          });
+        },
+        interGameDelayMs: 5000,
+        delayMs: 200,
+        feedbackChannel: message.channel,
+        logChannel: message.channel,
+        saveGames,
+        AI_USER_PREFIX,
+        botLogsPost: async (artifact) => {
+          try {
+            await logGameErrorToBotLogs(client, guild, artifact.game_id,
+              new Error(`Self-play ${artifact.stop_reason}: ${artifact.error_message || 'no details'}`),
+              'selfplay');
+          } catch {}
+        },
+      });
+      await reply('**Self-play started (MCP)** — auto-selecting highest-ranked unvalidated seeds.');
+    } catch (err) {
+      await reply(`Start failed: ${err.message}`);
+    }
+    return;
+  }
+  // ── End MCP selfplay trigger ────────────────────────────────────────────────
+
   if (message.author.bot) return;
 
   // Forum post first message: set up lobby buttons (thread isn't messageable until author posts)
