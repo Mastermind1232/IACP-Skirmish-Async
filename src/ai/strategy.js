@@ -4,7 +4,7 @@
  * Falls back to pickSmartAction's built-in heuristic during epsilon-greedy exploration.
  */
 
-import { pickSmartAction, loadLearnings, setGreedyMode } from '../../tests/headless/learnings.js';
+import { pickSmartAction, loadLearnings, setGreedyMode, setEncoderType, getEncoderType } from '../../tests/headless/learnings.js';
 import { isCcAttachment } from '../data-loader.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -20,7 +20,16 @@ function getLearnings() {
     // Discord uses greedy mode (no epsilon exploration / forced CC+surge exploration).
     // Exploration is for training only — production should use pure exploitation.
     setGreedyMode(true);
-    console.log(`[AI] Loaded Q-learning model (${_learnings.meta.totalGames} training games, phase ${_learnings.brainPhase}, greedy)`);
+    // Activate graph encoder if the checkpoint contains a trained graph network.
+    // The graph GNN provides spatial/relational awareness that the flat DQN lacks.
+    if (_learnings.graphNetwork) {
+      setEncoderType('graph');
+      console.log(`[AI] Graph encoder ACTIVE — checkpoint has graphNetwork`);
+    } else {
+      console.log(`[AI] Graph encoder not available — using flat DQN`);
+    }
+    const encoder = getEncoderType();
+    console.log(`[AI] Loaded Q-learning model (${_learnings.meta.totalGames} training games, phase ${_learnings.brainPhase}, encoder=${encoder}, greedy)`);
   }
   return _learnings;
 }
@@ -75,9 +84,17 @@ const PRODUCTIVE_TYPES = new Set([
 ]);
 const IDLE_TYPES = new Set(['dc_end_activation', 'pass_activation_turn']);
 
+// Instrumentation: track how often the heuristic overrides the DQN
+let _heuristicOverrides = 0;
+let _heuristicCalls = 0;
+export function getHeuristicStats() { return { overrides: _heuristicOverrides, calls: _heuristicCalls }; }
+
 function applyActivationHeuristic(actions) {
+  _heuristicCalls++;
   const hasProductive = actions.some(a => PRODUCTIVE_TYPES.has(a.type));
   if (!hasProductive) return actions;
+  const hasIdle = actions.some(a => IDLE_TYPES.has(a.type));
+  if (hasIdle) _heuristicOverrides++;
   const filtered = actions.filter(a => !IDLE_TYPES.has(a.type));
   // Safety: if filtering removed everything, return original
   return filtered.length > 0 ? filtered : actions;

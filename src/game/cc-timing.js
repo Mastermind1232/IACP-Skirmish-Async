@@ -111,8 +111,11 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenattackdeclaredonyou':
       return ctx.duringAttack && ctx.isDefender;
     case 'beforeyoudeclareattack':
-    case 'whenyoudeclareattack':
+      // Played during your activation, before picking an attack target
       return ctx.duringActivation;
+    case 'whenyoudeclareattack':
+      // Played after attack is declared (combat/pendingCombat exists)
+      return ctx.duringAttack && ctx.isAttacker;
     case 'afterattack':
     case 'afterattackdice':
       return ctx.duringAttack;
