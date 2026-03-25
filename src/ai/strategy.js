@@ -6,6 +6,7 @@
 
 import { pickSmartAction, loadLearnings, setGreedyMode, setEncoderType, getEncoderType } from '../../tests/headless/learnings.js';
 import { isCcAttachment } from '../data-loader.js';
+import { getRange } from '../game/spatial.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -178,12 +179,37 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   // Suppress premature end_activation / pass when productive actions exist
   viable = applyActivationHeuristic(viable);
 
-  // Suppress forfeiting movement when actual spaces exist. The DQN picks
-  // "done" immediately, causing figures to stand still and never reach enemies.
+  // Move-toward-enemies heuristic: when picking movement spaces, suppress "done"
+  // and pick the space that minimizes distance to the nearest enemy figure.
+  // The DQN's within-group scorer produces random walks on the Discord map.
   const moveDone = viable.filter(a => a.type === 'move_pick_space' && a.params?.done);
-  const moveSpaces = viable.filter(a => a.type === 'move_pick_space' && !a.params?.done);
-  if (moveDone.length > 0 && moveSpaces.length > 0) {
-    viable = viable.filter(a => !(a.type === 'move_pick_space' && a.params?.done));
+  const moveSpaces = viable.filter(a => a.type === 'move_pick_space' && !a.params?.done && a.params?.coord);
+  if (moveSpaces.length > 0) {
+    const game = engine.getState();
+    const actingPn = moveSpaces[0].actingPlayer || moveSpaces[0]._playerNum;
+    const enemyPn = actingPn === 1 ? 2 : 1;
+    const enemyPositions = Object.values(game.figurePositions?.[enemyPn] || {}).filter(Boolean);
+    if (enemyPositions.length > 0) {
+      // Pick space closest to nearest enemy
+      let bestAction = moveSpaces[0], bestDist = Infinity;
+      for (const a of moveSpaces) {
+        const coord = String(a.params.coord).toLowerCase();
+        let minEnemyDist = Infinity;
+        for (const ePos of enemyPositions) {
+          const d = getRange(coord, String(ePos).toLowerCase());
+          if (d < minEnemyDist) minEnemyDist = d;
+        }
+        if (minEnemyDist < bestDist) {
+          bestDist = minEnemyDist;
+          bestAction = a;
+        }
+      }
+      return { action: bestAction, score: 0 };
+    }
+    // No enemy positions found — just suppress done and let DQN pick
+    if (moveDone.length > 0) {
+      viable = viable.filter(a => !(a.type === 'move_pick_space' && a.params?.done));
+    }
   }
 
   if (viable.length === 1) {
@@ -198,8 +224,7 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
 
   // Force-attack heuristic: when attack_target actions are available, always
   // pick one. The DQN's Q(attack) < Q(move) in Discord selfplay, causing 0 VP
-  // games. Headless trains fine (35-35 VP) but Discord action space differs.
-  // This forces combat so we can verify the full pipeline end-to-end.
+  // games. This forces combat to verify the full pipeline end-to-end.
   const attackActions = viable.filter(a => a.type === 'attack_target');
   if (attackActions.length > 0) {
     _heuristicOverrides++;
