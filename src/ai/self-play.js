@@ -127,6 +127,24 @@ function determineActingPlayer(game) {
   if (game.pendingFalseOrders) return game.pendingFalseOrders.controllerPlayerNum || 'both';
   if (game.forceVisionPending) return 'both';
 
+  // Post-combat abilities (after pendingCombat is deleted)
+  if (game.pendingBoltslinger) return game.pendingBoltslinger.attackerPlayerNum || 'both';
+  if (game.pendingIndiscriminateFire) return game.pendingIndiscriminateFire.attackerPlayerNum || 'both';
+  if (game.pendingHeavyFire) return game.pendingHeavyFire.attackerPlayerNum || 'both';
+  if (game.pendingHavocShot) return game.pendingHavocShot.attackerPlayerNum || 'both';
+  if (game.pendingWantonDestruction) return game.pendingWantonDestruction.ownerPlayerNum || 'both';
+  if (game.pendingDeflect) return game.pendingDeflect.defenderPlayerNum || game.pendingDeflect.attackerPlayerNum || 'both';
+  if (game.pendingReaction) return game.pendingReaction.defenderPlayerNum || 'both';
+  if (game.pendingMastery) return game.pendingMastery.attackerPlayerNum || 'both';
+  if (game.pendingInterrogate) return game.pendingInterrogate.attackerPlayerNum || 'both';
+  if (game.pendingFigurehead) return game.pendingFigurehead.defenderPlayerNum || 'both';
+  if (game.pendingCleave) return game.pendingCleave.attackerPlayerNum || 'both';
+  if (game.pendingFightingKnife) return game.pendingFightingKnife.attackerPlayerNum || 'both';
+  if (game.pendingConcussiveBolt) return game.pendingConcussiveBolt.attackerPlayerNum || 'both';
+  if (game.pendingExtraProtection) return 'both';
+  if (game.pendingSelfDestruct) return game.pendingSelfDestruct.defenderPlayerNum || 'both';
+  if (game.pendingExecutorInterrupt) return 'both';
+
   // Move in progress — keyed by moveKey, each entry has playerNum
   if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) {
     const firstEntry = Object.values(game.moveInProgress)[0];
@@ -168,6 +186,15 @@ const PENDING_KEYS = [
   'pendingEe3Carbine', 'pendingBoRifle', 'pendingOverrideAttackDice',
   // Placement sub-states
   'pendingOverwatchPlacement', 'pendingBombDrop', 'pendingOrbitalBombardment',
+  // Post-combat abilities (set during finishCombatResolution after pendingCombat is deleted)
+  'pendingBoltslinger', 'pendingIndiscriminateFire', 'pendingHeavyFire',
+  'pendingHavocShot', 'pendingWantonDestruction', 'pendingDeflect',
+  'pendingReaction', 'pendingMastery', 'pendingInterrogate',
+  // Pre-resolution combat abilities (set while pendingCombat still exists)
+  'pendingFigurehead', 'pendingCleave', 'pendingFightingKnife',
+  'pendingConcussiveBolt', 'pendingAssassinsBlade', 'pendingExtraProtection',
+  'pendingSelfDestruct', 'pendingExecutorInterrupt', 'pendingPunishingStrike',
+  'pendingSuppressiveFireMp',
 ];
 
 function capturePendingStates(game) {
@@ -536,6 +563,20 @@ export async function runSelfPlayLoop(game, client, opts) {
             return true;
           })
           .map(a => ({ ...a, _playerNum: pn, actingPlayer: pn })));
+      }
+
+      // Fallback: if acting player returned empty, try the other player
+      // (handles status_phase_ where P1 already ended but P2 still needs to click)
+      if (allActions.length === 0 && acting !== 'both') {
+        const otherPn = acting === 1 ? 2 : 1;
+        const otherActions = getAvailableActions(g, otherPn, actionDeps);
+        allActions.push(...otherActions
+          .filter(a => {
+            if (a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)) return false;
+            if (bannedStaleActions.has(a.customId)) return false;
+            return true;
+          })
+          .map(a => ({ ...a, _playerNum: otherPn, actingPlayer: otherPn })));
       }
 
       if (allActions.length === 0) {

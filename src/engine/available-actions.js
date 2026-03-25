@@ -293,6 +293,111 @@ function getRoundActiveActions(game, playerNum, deps) {
     return getMovementActions(game, playerNum, deps);
   }
 
+  // ── Post-combat pending abilities ──────────────────────────────────────────
+  // Set during finishCombatResolution AFTER pendingCombat is deleted.
+  if (game.pendingBoltslinger) {
+    const bl = game.pendingBoltslinger;
+    if (playerNum === bl.attackerPlayerNum) {
+      const acts = (bl.targets || []).slice(0, 4).map((t, i) => ({
+        type: 'boltslinger_target', customId: `boltslinger_target_${gameId}_${i}`,
+        description: `Boltslinger: deal 1 Dmg to ${t.label}`,
+      }));
+      acts.push({ type: 'boltslinger_skip', customId: `boltslinger_skip_${gameId}`, description: 'Skip Boltslinger' });
+      return acts;
+    }
+    return [];
+  }
+  if (game.pendingIndiscriminateFire) {
+    const idf = game.pendingIndiscriminateFire;
+    if (playerNum === idf.attackerPlayerNum) {
+      const acts = (idf.availableDice || []).slice(0, 5).map((d, i) => ({
+        type: 'indiscriminate_die', customId: `indiscriminate_die_${gameId}_${i}`,
+        description: `Indiscriminate Fire: ${d.color} die`,
+      }));
+      acts.push({ type: 'indiscriminate_skip', customId: `indiscriminate_skip_${gameId}`, description: 'Skip Indiscriminate Fire' });
+      return acts;
+    }
+    return [];
+  }
+  if (game.pendingHeavyFire) {
+    const hf = game.pendingHeavyFire;
+    if (playerNum === (hf.attackerPlayerNum || hf.ownerPlayerNum)) {
+      return [
+        { type: 'heavy_fire_use', customId: `heavy_fire_use_${gameId}`, description: 'Use Heavy Fire' },
+        { type: 'heavy_fire_skip', customId: `heavy_fire_skip_${gameId}`, description: 'Skip Heavy Fire' },
+      ];
+    }
+    return [];
+  }
+  if (game.pendingHavocShot) {
+    const hs = game.pendingHavocShot;
+    if (playerNum === hs.attackerPlayerNum) {
+      const acts = (hs.targets || []).slice(0, 4).map((t, i) => ({
+        type: 'havoc_shot_target', customId: `havoc_shot_target_${gameId}_${i}`,
+        description: `Havoc Shot: ${t.label}`,
+      }));
+      acts.push({ type: 'havoc_shot_skip', customId: `havoc_shot_skip_${gameId}`, description: 'Skip Havoc Shot' });
+      return acts;
+    }
+    return [];
+  }
+  if (game.pendingWantonDestruction) {
+    const wd = game.pendingWantonDestruction;
+    if (playerNum === wd.ownerPlayerNum) {
+      return [
+        { type: 'wanton_use', customId: `wanton_use_${gameId}`, description: 'Use Wanton Destruction (discard 1 CC)' },
+        { type: 'wanton_skip', customId: `wanton_skip_${gameId}`, description: 'Skip Wanton Destruction' },
+      ];
+    }
+    return [];
+  }
+  if (game.pendingDeflect) {
+    const df = game.pendingDeflect;
+    if (playerNum === (df.defenderPlayerNum || df.attackerPlayerNum)) {
+      const acts = (df.targets || []).slice(0, 4).map((t, i) => ({
+        type: 'deflect_target', customId: `deflect_target_${gameId}_${i}`,
+        description: `Deflect: ${t.label}`,
+      }));
+      acts.push({ type: 'deflect_skip', customId: `deflect_skip_${gameId}`, description: 'Skip Deflect' });
+      return acts;
+    }
+    return [];
+  }
+  if (game.pendingReaction) {
+    const rx = game.pendingReaction;
+    if (playerNum === rx.defenderPlayerNum) {
+      return [
+        { type: 'reaction_use', customId: `reaction_use_${gameId}`, description: 'Use Reaction' },
+        { type: 'reaction_skip', customId: `reaction_skip_${gameId}`, description: 'Skip Reaction' },
+      ];
+    }
+    return [];
+  }
+  if (game.pendingMastery) {
+    const ms = game.pendingMastery;
+    if (playerNum === ms.attackerPlayerNum) {
+      const acts = (ms.eligible || []).map((e, i) => ({
+        type: 'mastery_pick', customId: `mastery_pick_${gameId}_${e.discardKey || i}`,
+        description: `Mastery: discard ${e.label || e.discardKey}`,
+      }));
+      acts.push({ type: 'mastery_skip', customId: `mastery_skip_${gameId}`, description: 'Skip Mastery' });
+      return acts;
+    }
+    return [];
+  }
+  if (game.pendingInterrogate) {
+    const it = game.pendingInterrogate;
+    if (playerNum === it.attackerPlayerNum) {
+      const acts = (it.opponentHandSnapshot || []).map((card, i) => ({
+        type: 'interrogate_pick', customId: `interrogate_pick_${gameId}_${i}`,
+        description: `Interrogate: look at ${card}`,
+      }));
+      acts.push({ type: 'interrogate_skip', customId: `interrogate_skip_${gameId}`, description: 'Skip Interrogation' });
+      return acts;
+    }
+    return [];
+  }
+
   // Pending DC ability choice (chooseOne mechanic)
   if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) {
     const choiceActions = getDcAbilityChoiceActions(game, playerNum, deps);
@@ -1024,6 +1129,69 @@ function getCombatActions(game, playerNum, deps) {
       });
     }
     return actions;
+  }
+
+  // ── Pre-resolution combat pending abilities ───────────────────────────────
+  // These are set during resolution while pendingCombat still exists.
+  // They send Discord buttons and wait for player input before combat can continue.
+
+  if (game.pendingFigurehead) {
+    const fh = game.pendingFigurehead;
+    if (playerNum === fh.defenderPlayerNum) {
+      return [
+        { type: 'figurehead_use', customId: `figurehead_use_${gameId}`, description: 'Use Figurehead (redirect attack)' },
+        { type: 'figurehead_skip', customId: `figurehead_skip_${gameId}`, description: 'Skip Figurehead' },
+      ];
+    }
+    return [];
+  }
+
+  if (game.pendingCleave) {
+    const cl = game.pendingCleave;
+    if (playerNum === cl.attackerPlayerNum) {
+      return (cl.targets || []).map((t, i) => ({
+        type: 'cleave_target', customId: `cleave_target_${gameId}_${i}`,
+        description: `Cleave ${cl.surgeCleave || ''} to ${t.label}`,
+      }));
+    }
+    return [];
+  }
+
+  if (game.pendingFightingKnife) {
+    const fk = game.pendingFightingKnife;
+    if (playerNum === fk.attackerPlayerNum) {
+      const acts = (fk.targets || []).map((t, i) => ({
+        type: 'fighting_knife_target', customId: `fighting_knife_target_${gameId}_${i}`,
+        description: `Fighting Knife: ${t.label}`,
+      }));
+      acts.push({ type: 'fighting_knife_skip', customId: `fighting_knife_skip_${gameId}`, description: 'Skip Fighting Knife' });
+      return acts;
+    }
+    return [];
+  }
+
+  if (game.pendingConcussiveBolt) {
+    const cb = game.pendingConcussiveBolt;
+    if (playerNum === cb.attackerPlayerNum) {
+      const acts = (cb.adjSpaces || []).slice(0, 4).map((sp) => ({
+        type: 'concussive_bolt_push', customId: `concussive_bolt_push_${gameId}_${sp}`,
+        description: `Push to ${String(sp).toUpperCase()}`,
+      }));
+      acts.push({ type: 'concussive_bolt_skip', customId: `concussive_bolt_skip_${gameId}`, description: 'Skip Concussive Bolt' });
+      return acts;
+    }
+    return [];
+  }
+
+  if (game.pendingExtraProtection) {
+    const ep = game.pendingExtraProtection;
+    if (playerNum === (ep.defenderPlayerNum || defenderPn)) {
+      return [
+        { type: 'extra_protection_play', customId: `extra_protection_play_${gameId}`, description: 'Use Extra Protection' },
+        { type: 'extra_protection_skip', customId: `extra_protection_skip_${gameId}`, description: 'Skip Extra Protection' },
+      ];
+    }
+    return [];
   }
 
   // Surge assignment phase — list each spendable surge ability
