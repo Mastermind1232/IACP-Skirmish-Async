@@ -84,9 +84,35 @@ const PRODUCTIVE_TYPES = new Set([
 ]);
 const IDLE_TYPES = new Set(['dc_end_activation', 'pass_activation_turn']);
 
-// Instrumentation: track how often the heuristic overrides the DQN
+// ── Per-game runtime instrumentation ────────────────────────────────────────
+// Tracks graph vs flat decisions, heuristic overrides, and fallbacks.
+// Reset at the start of each self-play game for clean per-game accounting.
+let _graphDecisions = 0;
+let _flatDecisions = 0;
 let _heuristicOverrides = 0;
 let _heuristicCalls = 0;
+let _singleActionSkips = 0; // actions with only 1 viable option (no DQN call)
+
+export function resetRuntimeStats() {
+  _graphDecisions = 0;
+  _flatDecisions = 0;
+  _heuristicOverrides = 0;
+  _heuristicCalls = 0;
+  _singleActionSkips = 0;
+}
+
+export function getRuntimeStats() {
+  return {
+    graphDecisions: _graphDecisions,
+    flatDecisions: _flatDecisions,
+    heuristicOverrides: _heuristicOverrides,
+    heuristicCalls: _heuristicCalls,
+    singleActionSkips: _singleActionSkips,
+    encoder: _learnings ? getEncoderType() : 'not_loaded',
+  };
+}
+
+// Legacy export for backward compat
 export function getHeuristicStats() { return { overrides: _heuristicOverrides, calls: _heuristicCalls }; }
 
 function applyActivationHeuristic(actions) {
@@ -122,12 +148,23 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   // Suppress premature end_activation / pass when productive actions exist
   viable = applyActivationHeuristic(viable);
 
-  if (viable.length === 1) return { action: viable[0], score: 0 };
+  if (viable.length === 1) {
+    _singleActionSkips++;
+    return { action: viable[0], score: 0 };
+  }
 
   const game = engine.getState();
   const learnings = getLearnings();
   const dcHealthState = deps.dcHealthState || new Map();
   const dcMessageMeta = deps.dcMessageMeta || new Map();
+
+  // Track whether graph or flat encoder is used for this decision
+  const encoderNow = getEncoderType();
+  if (encoderNow === 'graph' && learnings.graphNetwork) {
+    _graphDecisions++;
+  } else {
+    _flatDecisions++;
+  }
 
   const picked = pickSmartAction(viable, game, learnings, playerNum, dcHealthState, dcMessageMeta);
   if (picked) return { action: picked, score: 0 };

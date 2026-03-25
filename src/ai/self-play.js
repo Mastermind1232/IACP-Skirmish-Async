@@ -8,7 +8,7 @@
 
 import { execSync } from 'child_process';
 import { getAvailableActions } from '../engine/available-actions.js';
-import { pickBestAction, getCheckpointVersion } from './strategy.js';
+import { pickBestAction, getCheckpointVersion, resetRuntimeStats, getRuntimeStats } from './strategy.js';
 import { createLiveAiInteraction, AI_USER_PREFIX } from './ai-discord.js';
 import { getHandlerKey } from '../router.js';
 import { getHandler, getHandlerGroup } from '../handlers/index.js';
@@ -253,6 +253,8 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
     seen_action_types: Object.keys(actionTypeCounts),
     triggered_pending_states: traceData?.triggeredPendingStates ? [...traceData.triggeredPendingStates] : [],
     transitions_hit: traceData?.transitionsHit ? [...new Set(traceData.transitionsHit)] : [],
+    // Per-game strategy runtime stats (graph vs flat, heuristic)
+    runtime_stats: getRuntimeStats(),
   };
 }
 
@@ -286,6 +288,7 @@ export function formatCoverageSummary(artifact, runNum) {
   const sortedActions = Object.entries(atc).sort((a, b) => b[1] - a[1]);
   const actionLines = sortedActions.map(([type, count]) => `  ${type}: ${count}`).join('\n');
 
+  const rs = artifact.runtime_stats || {};
   const header = runNum != null ? `SMOKE RUN #${runNum}` : `SELF-PLAY RUN`;
   return [
     `══ ${header} ${'═'.repeat(Math.max(0, 50 - header.length))}`,
@@ -306,6 +309,14 @@ export function formatCoverageSummary(artifact, runNum) {
     `  Strain choices:     ${strainChoices}`,
     `  CC plays:           ${ccPlays}`,
     `  DC specials:        ${dcSpecials}`,
+    ``,
+    `── Strategy ───────────────────────────────────`,
+    `  Encoder:            ${rs.encoder ?? 'unknown'}`,
+    `  Graph decisions:    ${rs.graphDecisions ?? 0}`,
+    `  Flat decisions:     ${rs.flatDecisions ?? 0}`,
+    `  Single-action skips:${rs.singleActionSkips ?? 0}`,
+    `  Heuristic calls:    ${rs.heuristicCalls ?? 0}`,
+    `  Heuristic overrides:${rs.heuristicOverrides ?? 0}`,
     ``,
     `── Coverage ───────────────────────────────────`,
     `  Handlers exercised: ${artifact.exercised_handlers?.length ?? 0}`,
@@ -368,6 +379,9 @@ export async function runSelfPlayLoop(game, client, opts) {
   const transitionsHit = [];
   let figureDefeats = 0;
   const traceData = { exercisedHandlers, actionTypeCounts, triggeredPendingStates, transitionsHit };
+
+  // Reset per-game strategy counters (graph vs flat, heuristic overrides)
+  resetRuntimeStats();
 
   // Mark game as self-play (both players are AI)
   game.selfPlay = true;
