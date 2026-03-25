@@ -196,6 +196,17 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   const dcHealthState = deps.dcHealthState || new Map();
   const dcMessageMeta = deps.dcMessageMeta || new Map();
 
+  // Force-attack heuristic: when attack_target actions are available, always
+  // pick one. The DQN's Q(attack) < Q(move) in Discord selfplay, causing 0 VP
+  // games. Headless trains fine (35-35 VP) but Discord action space differs.
+  // This forces combat so we can verify the full pipeline end-to-end.
+  const attackActions = viable.filter(a => a.type === 'attack_target');
+  if (attackActions.length > 0) {
+    _heuristicOverrides++;
+    _heuristicOverridesAttackLegal++;
+    return { action: attackActions[Math.floor(Math.random() * attackActions.length)], score: 0 };
+  }
+
   // Track whether graph or flat encoder is used for this decision
   const encoderNow = getEncoderType();
   if (encoderNow === 'graph' && learnings.graphNetwork) {

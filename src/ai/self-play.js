@@ -233,8 +233,11 @@ const BUG_STOPS = new Set([
 
 /** Limit stop reasons (known V1 capability bounds). */
 const LIMIT_STOPS = new Set([
-  'unsupported_interaction_type', 'manual_stop',
+  'unsupported_interaction_type', 'manual_stop', 'round_limit',
 ]);
+
+/** Max rounds before force-ending a selfplay game. Real IA games are 4-6 rounds. */
+const MAX_ROUNDS = 8;
 
 // ── Artifact builder ──────────────────────────────────────────────────────────
 
@@ -508,6 +511,14 @@ export async function runSelfPlayLoop(game, client, opts) {
         if (wasManualStop) await insertSelfPlayRun(artifact);
         else if (persistCompleted) await insertSelfPlayRun(artifact);
         return { result: wasManualStop ? 'stopped' : 'completed', artifact };
+      }
+
+      // Round limit — prevent infinite games when AI never scores VP
+      if ((g.currentRound ?? 1) > MAX_ROUNDS) {
+        console.warn(`[self-play] Round limit reached (round ${g.currentRound} > ${MAX_ROUNDS})`);
+        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'round_limit', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
+        await insertSelfPlayRun(artifact);
+        return { result: 'stopped', artifact };
       }
 
       // Clear CC suppression when game phase changes (card may become legal in new context)
