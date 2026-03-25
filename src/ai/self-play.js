@@ -488,7 +488,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         if (consecutiveEmpty === 1) {
           // Log diagnostic on first empty to help debug stuck states
           const pendingStates = PENDING_KEYS.filter(k => g[k] != null && g[k] !== false);
-          console.warn(`[self-play] Empty actions — pending: [${pendingStates.join(', ')}], phase=${g.phase}, roundPhase=${g.roundPhase}, acting=${actingPlayer}, round=${g.round}`);
+          console.warn(`[self-play] Empty actions — pending: [${pendingStates.join(', ')}], phase=${g.phase}, roundPhase=${g.roundPhase}, acting=${acting}, round=${g.round}`);
         }
         if (consecutiveEmpty > 20) {
           const pendingStates = PENDING_KEYS.filter(k => g[k] != null && g[k] !== false);
