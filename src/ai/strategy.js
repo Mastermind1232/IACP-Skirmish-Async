@@ -86,15 +86,15 @@ function isAiViable(action) {
  */
 /**
  * High-value action types that justify suppressing end_activation/pass.
- * IMPORTANT: move_figure is deliberately EXCLUDED. The parity check showed
- * that forcing movement when only move_figure is "productive" causes the
- * within-group move scorer to send figures AWAY from enemies (destOnObjective=3.87,
- * distToNearestEnemy=0.039), starving combat and VP. Headless without this
- * heuristic scores 35-35 VP vs Discord's 0-0 VP with the old heuristic.
+ * move_figure IS included: without it, the DQN picks end_activation before
+ * figures ever move, causing 0 attacks across 32 rounds. Even imperfect
+ * movement is better than standing still — figures must close distance
+ * to generate attack_target actions.
  */
 const COMBAT_PRODUCTIVE_TYPES = new Set([
   'attack_target', 'dc_special',
   'play_cc_special', 'play_cc_double', 'interact',
+  'move_figure',
 ]);
 const IDLE_TYPES = new Set(['dc_end_activation', 'pass_activation_turn']);
 
@@ -144,14 +144,6 @@ function applyActivationHeuristic(actions) {
   const hasIdle = actions.some(a => IDLE_TYPES.has(a.type));
 
   if (!hasIdle) return actions; // nothing to suppress
-
-  // Track: would the OLD heuristic have fired? (move_figure alone counted as productive)
-  const hasMoveOnly = !hasCombatProductive && actions.some(a => a.type === 'move_figure');
-  if (hasMoveOnly) {
-    _heuristicOverridesMoveOnly++; // old heuristic would have forced movement here
-    return actions; // NEW: let the DQN decide freely (it may end activation — that's OK)
-  }
-
   if (!hasCombatProductive) return actions; // no high-value actions, let DQN pick
 
   // Suppress idle when combat-productive actions exist
@@ -185,6 +177,14 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
 
   // Suppress premature end_activation / pass when productive actions exist
   viable = applyActivationHeuristic(viable);
+
+  // Suppress forfeiting movement when actual spaces exist. The DQN picks
+  // "done" immediately, causing figures to stand still and never reach enemies.
+  const moveDone = viable.filter(a => a.type === 'move_pick_space' && a.params?.done);
+  const moveSpaces = viable.filter(a => a.type === 'move_pick_space' && !a.params?.done);
+  if (moveDone.length > 0 && moveSpaces.length > 0) {
+    viable = viable.filter(a => !(a.type === 'move_pick_space' && a.params?.done));
+  }
 
   if (viable.length === 1) {
     _singleActionSkips++;
