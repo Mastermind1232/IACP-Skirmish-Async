@@ -36,12 +36,14 @@ export function buildScorecardEmbed(game, missionBonus) {
   const totalLabel = (bonus1 || bonus2)
     ? `**P1:** ${total1} (${vp1.total}+${bonus1}) \u2003 **P2:** ${total2} (${vp2.total}+${bonus2})`
     : `**P1:** ${total1} \u2003 **P2:** ${total2}`;
+  const roundLabel = game.currentRound ? `Round ${game.currentRound}` : '';
   const fields = [
     { name: 'Players', value: `**P1:** <@${game.player1Id}>\n**P2:** <@${game.player2Id}>`, inline: false },
     { name: 'Total VP', value: totalLabel, inline: false },
-    { name: 'Kills', value: `**P1:** ${vp1.kills} \u2003 **P2:** ${vp2.kills}`, inline: false },
-    { name: 'Objectives', value: `**P1:** ${vp1.objectives} \u2003 **P2:** ${vp2.objectives}`, inline: false },
+    { name: 'Kill VP', value: `**P1:** ${vp1.kills} \u2003 **P2:** ${vp2.kills}`, inline: false },
+    { name: 'Objective VP', value: `**P1:** ${vp1.objectives} \u2003 **P2:** ${vp2.objectives}`, inline: false },
   ];
+  if (roundLabel) fields.push({ name: 'Round', value: roundLabel, inline: false });
   if (game.initiativeDetermined) {
     const zoneLabel = getInitiativePlayerZoneLabel(game);
     const initiativeValue = p1HasInitiative
