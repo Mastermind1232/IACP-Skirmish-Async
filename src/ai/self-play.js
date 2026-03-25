@@ -8,7 +8,7 @@
 
 import { execSync } from 'child_process';
 import { getAvailableActions } from '../engine/available-actions.js';
-import { pickBestAction, getCheckpointVersion, resetRuntimeStats, getRuntimeStats } from './strategy.js';
+import { pickBestAction, getCheckpointVersion, getCheckpointFile, resetRuntimeStats, getRuntimeStats } from './strategy.js';
 import { createLiveAiInteraction, AI_USER_PREFIX } from './ai-discord.js';
 import { getHandlerKey } from '../router.js';
 import { getHandler, getHandlerGroup } from '../handlers/index.js';
@@ -217,6 +217,7 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
     stop_reason: stopReason,
     commit_sha: getCommitSha(),
     checkpoint_games: getCheckpointVersion(),
+    checkpoint_file: getCheckpointFile(),
     map: game?.selectedMap?.id ?? null,
     p1_squad: game?.player1Squad ?? null,
     p2_squad: game?.player2Squad ?? null,
@@ -293,7 +294,8 @@ export function formatCoverageSummary(artifact, runNum) {
   return [
     `══ ${header} ${'═'.repeat(Math.max(0, 50 - header.length))}`,
     `Game:       ${artifact.game_id}`,
-    `Seed:       ${p1Label} vs ${p2Label}@${artifact.map || '?'} | checkpoint: ${artifact.checkpoint_games ?? '?'}`,
+    `Seed:       ${p1Label} vs ${p2Label}@${artifact.map || '?'}`,
+    `Checkpoint: ${artifact.checkpoint_file ?? '?'} (${artifact.checkpoint_games ?? '?'} games) | commit: ${artifact.commit_sha ?? '?'}`,
     `Result:     ${artifact.result} (${artifact.total_rounds ?? '?'} rounds, ${artifact.total_steps} steps, ${durSec}s)`,
     vpLine,
     ``,

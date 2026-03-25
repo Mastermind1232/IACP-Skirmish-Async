@@ -13,9 +13,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Lazy-loaded singleton — initialized on first use
 let _learnings = null;
+let _learningsFile = null;
 function getLearnings() {
   if (!_learnings) {
     const learningsPath = join(__dirname, '..', '..', 'tests', 'headless', 'learnings-data.json');
+    _learningsFile = 'learnings-data.json';
     _learnings = loadLearnings(learningsPath);
     // Discord uses greedy mode (no epsilon exploration / forced CC+surge exploration).
     // Exploration is for training only — production should use pure exploitation.
@@ -40,6 +42,10 @@ function getLearnings() {
  */
 export function getCheckpointVersion() {
   return _learnings?.meta?.totalGames ?? null;
+}
+
+export function getCheckpointFile() {
+  return _learningsFile;
 }
 
 /**
