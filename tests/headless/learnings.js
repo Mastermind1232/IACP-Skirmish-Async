@@ -73,6 +73,25 @@ const WG_DECAY_CC = 0.0001;      // Light: preventive only — not currently sat
 /** Override WG weight clamp for experiments. */
 export function setWgWeightClamp(v) { WG_WEIGHT_CLAMP = v; }
 
+// ── Move Quality Signal ──────────────────────────────────────────────────────
+// When enabled, estimates the best available move destination quality using
+// current WG move weights and injects it as a 33rd dimension into the graph
+// state embedding. This tells the DQN "good moves are available" at the
+// start_move vs end_activation decision point.
+let USE_MOVE_QUALITY_SIGNAL = false;
+export function setMoveQualitySignalFlag(v) { USE_MOVE_QUALITY_SIGNAL = v; }
+
+// ── Figure-Boundary N-Step Truncation ────────────────────────────────────────
+// When enabled, N-step returns stop at figure activation boundaries (pseudo-terminal).
+// Disable with --no-boundary-fix for A/B control arm.
+let BOUNDARY_FIX_ENABLED = true;
+export function setBoundaryFix(v) { BOUNDARY_FIX_ENABLED = !!v; }
+
+// ── WG Move Decay Fix (permanent) ────────────────────────────────────────────
+// Fixed: contrastive move update was applying L2 decay once PER ALTERNATIVE
+// (3x per update). Attack/surge/CC apply L2 once per update. Fix: L2 is now
+// applied once before the alternatives loop, matching all other scorers.
+
 function getWgDecay(wgType) {
   switch (wgType) {
     case 'attack': return WG_DECAY_ATTACK;
@@ -419,6 +438,121 @@ function extractMoveFeatures(action, game, playerNum) {
   }
 
   return features;
+}
+
+/**
+ * Estimate the quality of the best available move for the active figure.
+ * Uses WG move weights to score approximate post-move destination features.
+ * Returns a scalar in [0,1]: higher = better moves available.
+ * Returns 0 if targets are already in range (should attack, not move).
+ */
+function estimateMoveQuality(game, playerNum, dcHealthState, dcMessageMeta, wgMoveWeights) {
+  if (!wgMoveWeights || wgMoveWeights.length < 9) return 0;
+
+  const active = findActiveDcMsgId(game, playerNum, dcMessageMeta);
+  if (!active) return 0;
+
+  const { msgId, meta, dcName } = active;
+  const oppNum = playerNum === 1 ? 2 : 1;
+
+  let dcEffects;
+  try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
+  const lower = dcName.toLowerCase();
+  const ciKey = dcEffects ? Object.keys(dcEffects).find(k => k.toLowerCase() === lower) : null;
+  const eff = dcEffects?.[dcName] || (ciKey ? dcEffects[ciKey] : null);
+  const speed = eff?.speed || 4;
+  const attackRange = eff?.attack?.range || 1;
+
+  // Find active figure position
+  const actionsData = game.dcActionsData?.[msgId];
+  const figureIndex = actionsData?.selectedFigure ?? 0;
+  const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const figureKey = `${dcName}-${dgIndex}-${figureIndex}`;
+  let pos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!pos && game.moveInProgress) {
+    for (const ms of Object.values(game.moveInProgress)) {
+      if (ms?.currentPosition) { pos = ms.currentPosition; break; }
+    }
+  }
+  if (!pos) return 0;
+
+  const oppFigs = Object.entries(game.figurePositions?.[oppNum] || {});
+  const myFigs = Object.values(game.figurePositions?.[playerNum] || {});
+
+  // If targets already in range, move quality is 0 (should attack instead)
+  for (const [, oPos] of oppFigs) {
+    if (coordDistance(pos, oPos) <= attackRange) return 0;
+  }
+
+  // [0] distToNearestEnemy — after optimal move, min dist reduced by speed
+  let minEnemyDist = 10;
+  for (const [, oPos] of oppFigs) {
+    const d = coordDistance(pos, oPos);
+    if (d < minEnemyDist) minEnemyDist = d;
+  }
+  const f0 = 1 - Math.min(Math.max(0, minEnemyDist - speed), 10) / 10;
+
+  // [1] threatAtDest — unknown, conservative estimate: 0
+  const f1 = 0;
+
+  // [2] objectiveProximity — after move, distance to nearest objective reduced by speed
+  let minObjDist = 10;
+  let mapTokens;
+  try { mapTokens = getMapTokensData(); } catch { mapTokens = null; }
+  const mapId = game.selectedMap?.id;
+  const objCoords = [];
+  if (mapTokens && mapId && mapTokens[mapId]) {
+    const mapData = mapTokens[mapId];
+    if (Array.isArray(mapData.terminals)) objCoords.push(...mapData.terminals);
+    const variant = game.selectedMission?.variant;
+    const missionKey = variant ? `mission${variant.toUpperCase()}` : null;
+    if (missionKey && mapData[missionKey]?.positions) {
+      for (const coords of Object.values(mapData[missionKey].positions)) {
+        if (Array.isArray(coords)) objCoords.push(...coords);
+      }
+    }
+  }
+  for (const oc of objCoords) {
+    try {
+      const d = coordDistance(pos, oc);
+      if (d < minObjDist) minObjDist = d;
+    } catch { /* skip invalid */ }
+  }
+  const f2 = 1 - Math.min(Math.max(0, minObjDist - speed), 10) / 10;
+
+  // [3] allySupport — allies within (speed + 3) range of current position
+  let nearbyAllies = 0;
+  for (const aPos of myFigs) {
+    if (coordDistance(pos, aPos) <= speed + 3) nearbyAllies++;
+  }
+  const f3 = Math.min(nearbyAllies, 4) / 4;
+
+  // [4] mpEfficiency — assume efficient full-speed use
+  const f4 = 1.0;
+
+  // [5] bias — 0
+  // [6] destInEnemyRange — optimistic: assume we find a safe hex
+  const f6 = 0;
+
+  // [7] destOnObjective — can reach an objective within speed?
+  const f7 = minObjDist <= speed ? 1.0 : 0;
+
+  // [8] destAdjacentToAlly — can reach adjacent to any ally?
+  let f8 = 0;
+  for (const aPos of myFigs) {
+    if (coordDistance(pos, aPos) <= speed + 1) { f8 = 1.0; break; }
+  }
+
+  // Score with WG move weights
+  const approx = [f0, f1, f2, f3, f4, 0, f6, f7, f8];
+  let score = 0;
+  for (let i = 0; i < 9; i++) {
+    score += wgMoveWeights[i] * approx[i];
+  }
+
+  // Normalize to [0,1] — 15.0 is approximate max achievable score
+  return Math.max(0, Math.min(1, score / 15.0));
 }
 
 /**
@@ -807,9 +941,10 @@ function getActiveDcFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
     result[2] = Math.min(dmg, 8) / 8;
   }
 
-  // [3] activeDcAttackRange
-  const range = eff?.attack?.range || 1;
-  result[3] = Math.min(range, 12) / 12;
+  // [3] activeDcAttackRange — derive from attack type (no numeric range in data)
+  const isRangedDc = eff?.attack?.type === 'range';
+  const range = isRangedDc ? 20 : 1;
+  result[3] = isRangedDc ? 1.0 : 1 / 12;
 
   // Find the active figure's position
   let activeFigPos = null;
@@ -1267,12 +1402,38 @@ function updateTraceNeural(learnings, trace) {
   const effectiveAlpha = getEffectiveAlpha(learnings.meta?.totalGames);
   let deltaSum = 0;
   let count = 0;
+  let boundaryTruncations = 0;
+  let nStepLengthSum = 0;
 
   // Build valid-entry index (skip entries without features)
   const validIdxs = [];
   for (let i = 0; i < trace.length; i++) {
     if (trace[i].features) validIdxs.push(i);
   }
+
+  // ── Pre-pass: compute same-figure chain length for each valid entry ────────
+  // Groups consecutive valid entries by activeDcMsgId. Chain length = number of
+  // entries sharing the same figure identity in an unbroken run.
+  const chainLenByVi = new Int16Array(validIdxs.length);
+  {
+    let chainStart = 0;
+    for (let vi = 1; vi <= validIdxs.length; vi++) {
+      const prevMsgId = trace[validIdxs[vi - 1]].activeDcMsgId;
+      const curMsgId = vi < validIdxs.length ? trace[validIdxs[vi]].activeDcMsgId : null;
+      if (curMsgId !== prevMsgId) {
+        const len = vi - chainStart;
+        for (let j = chainStart; j < vi; j++) chainLenByVi[j] = len;
+        chainStart = vi;
+      }
+    }
+  }
+
+  // Per-chain-type instrumentation counters
+  let glueEntryCount = 0, realEntryCount = 0;
+  let glueBoundaryTrunc = 0, realBoundaryTrunc = 0;
+  let glueNStepSum = 0, realNStepSum = 0;
+  let glueRewardSum = 0, realRewardSum = 0;
+  const chainHist = [0, 0, 0, 0, 0, 0]; // [1, 2, 3-5, 6-10, 11-20, 21+]
 
   // Forward sweep: compute n-step returns for each valid entry.
   // For entry at position p in validIdxs:
@@ -1296,18 +1457,32 @@ function updateTraceNeural(learnings, trace) {
       h = result.h;
     }
 
-    // Compute n-step return
+    // Compute n-step return with figure-boundary awareness
     let nStepReturn = 0;
     let gammaK = 1.0;
     let bootstrapFeatures = null;
     let bootstrapActionIdxs = null;
     let hitTerminal = false;
+    let hitBoundary = false;
+    let effectiveSteps = 0;
     const stepsToUse = Math.min(N_STEP, validIdxs.length - vi);
 
     for (let k = 0; k < stepsToUse; k++) {
       const futureEntry = trace[validIdxs[vi + k]];
+      // ── Figure-boundary truncation ────────────────────────────────
+      // Treat as pseudo-terminal: accumulate same-figure rewards only,
+      // then STOP with no bootstrap. prevEntry.nextFeatures is unsafe
+      // because end_activation dispatch deletes dcActionsData before
+      // afterAction captures nextFeatures — graph active-figure readout
+      // would be null/wrong.
+      if (BOUNDARY_FIX_ENABLED && k > 0 && futureEntry.activeDcMsgId !== entry.activeDcMsgId) {
+        hitBoundary = true;
+        boundaryTruncations++;
+        break;
+      }
       nStepReturn += gammaK * futureEntry.reward;
       gammaK *= GAMMA;
+      effectiveSteps++;
       if (futureEntry.done) {
         hitTerminal = true;
         break;
@@ -1318,9 +1493,28 @@ function updateTraceNeural(learnings, trace) {
         bootstrapActionIdxs = futureEntry.nextActionIdxs;
       }
     }
+    nStepLengthSum += effectiveSteps;
+
+    // ── Per-chain-type tracking ──────────────────────────────────────
+    const chainLen = chainLenByVi[vi] || 1;
+    const isGlue = chainLen <= 2;
+    if (isGlue) {
+      glueEntryCount++;
+      glueNStepSum += effectiveSteps;
+      glueRewardSum += Math.abs(entry.reward);
+      if (hitBoundary) glueBoundaryTrunc++;
+    } else {
+      realEntryCount++;
+      realNStepSum += effectiveSteps;
+      realRewardSum += Math.abs(entry.reward);
+      if (hitBoundary) realBoundaryTrunc++;
+    }
+    const bucket = chainLen <= 1 ? 0 : chainLen <= 2 ? 1 : chainLen <= 5 ? 2
+                 : chainLen <= 10 ? 3 : chainLen <= 20 ? 4 : 5;
+    chainHist[bucket]++;
 
     let target;
-    if (hitTerminal || !bootstrapFeatures) {
+    if (hitTerminal || hitBoundary || !bootstrapFeatures) {
       target = nStepReturn;
     } else {
       const maxQNext = useGraph
@@ -1351,6 +1545,10 @@ function updateTraceNeural(learnings, trace) {
           // ── Contrastive move scorer update ──────────────────────────────
           const mc = entry.moveContrastive;
           const chosenQ = mc.chosenQuality;
+          // L2 decay: apply once per update (matches attack/surge/CC scorers)
+          for (let fi = 0; fi < wgW.length; fi++) {
+            wgW[fi] *= (1 - wgDecay);
+          }
           for (const alt of mc.alternatives) {
             const altQ = alt.qualityScore;
             if (Math.abs(chosenQ - altQ) < 0.01) continue;
@@ -1358,7 +1556,6 @@ function updateTraceNeural(learnings, trace) {
             const clampedAdv = Math.max(-1, Math.min(1, advantage));
             for (let fi = 0; fi < wgW.length; fi++) {
               const featDiff = (mc.chosen[fi] || 0) - (alt.features[fi] || 0);
-              wgW[fi] *= (1 - wgDecay); // L2 decay before gradient step
               wgW[fi] += ALPHA_WG_MOVE * clampedAdv * featDiff;
               wgW[fi] = Math.max(-WG_WEIGHT_CLAMP, Math.min(WG_WEIGHT_CLAMP, wgW[fi]));
               if (!isFinite(wgW[fi])) wgW[fi] = 0;
@@ -1429,6 +1626,24 @@ function updateTraceNeural(learnings, trace) {
     const prevAvg = stats.avgAbsDelta || 0;
     stats.avgAbsDelta = prevAvg * 0.95 + (deltaSum / count) * 0.05;
   }
+  // ── Boundary truncation diagnostics ──────────────────────────────
+  stats.boundaryTruncations = (stats.boundaryTruncations || 0) + boundaryTruncations;
+  stats.lastBoundaryTruncRate = count > 0 ? +(boundaryTruncations / count).toFixed(4) : 0;
+  stats.lastEffectiveNStep = count > 0 ? +(nStepLengthSum / count).toFixed(2) : 0;
+
+  // ── Per-chain-type diagnostics (glue ≤2 vs real >2) ───────────────
+  stats.lastGlueEntryCount = glueEntryCount;
+  stats.lastRealEntryCount = realEntryCount;
+  stats.lastGlueBoundaryTruncRate = glueEntryCount > 0 ? +(glueBoundaryTrunc / glueEntryCount).toFixed(4) : 0;
+  stats.lastRealBoundaryTruncRate = realEntryCount > 0 ? +(realBoundaryTrunc / realEntryCount).toFixed(4) : 0;
+  stats.lastGlueEffectiveNStep = glueEntryCount > 0 ? +(glueNStepSum / glueEntryCount).toFixed(2) : 0;
+  stats.lastRealEffectiveNStep = realEntryCount > 0 ? +(realNStepSum / realEntryCount).toFixed(2) : 0;
+  stats.lastAvgGlueReward = glueEntryCount > 0 ? +(glueRewardSum / glueEntryCount).toFixed(4) : 0;
+  stats.lastAvgRealReward = realEntryCount > 0 ? +(realRewardSum / realEntryCount).toFixed(4) : 0;
+  stats.lastChainLengthHist = {
+    '1': chainHist[0], '2': chainHist[1], '3-5': chainHist[2],
+    '6-10': chainHist[3], '11-20': chainHist[4], '21+': chainHist[5],
+  };
 }
 
 // ── Experience Replay ────────────────────────────────────────────────────
@@ -1672,6 +1887,18 @@ const MOVE_CLOSING_REWARD = 0.15;  // per space closed — 3 spaces = 0.45 ≈ o
 const MOVE_ENGAGE_BONUS = 0.50;    // one-time for entering attack range
 const MOVE_REWARD_CAP_PER_ACT = 1.5; // max movement shaping per activation
 
+// ── start_move decision bonus (permanent, Phase 4 validated) ───────────────
+// The graph encoder suppresses Q(start_move) relative to Q(end_activation)
+// by ~0.45 due to bootstrap values, overriding the +0.15 activation bonus.
+// This bonus directly rewards the TYPE-LEVEL decision to begin movement when
+// the active figure has no targets in attack range (i.e., movement is the
+// only way to reach combat). Validated in Phase 4 A/B: flipped Q-gap from
+// -0.37 to +0.04, increased movement 75-109%, no quality/stability harm.
+// Override via --move-decision-bonus= CLI arg (0 to disable for experiments).
+let MOVE_DECISION_BONUS = 0.30;  // permanent graph default (Phase 4 result)
+/** Override move-decision bonus for controlled experiments. */
+export function setMoveDecisionBonus(v) { MOVE_DECISION_BONUS = v; }
+
 function surgeShapingReward(action) {
   if (!action?.type?.startsWith('combat_surge')) return 0;
   const surgeKey = action.params?.surgeKey;
@@ -1715,7 +1942,12 @@ export function captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta) {
     const dcName = active.dcName;
     let dcEffects; try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
     const eff = dcEffects?.[dcName];
-    const range = eff?.attack?.range || 1;
+    // Derive effective attack range from attack type (matches available-actions.js logic).
+    // getDcEffects has attack.type ("melee"/"range") but no numeric range field.
+    // Ranged figures can attack any target in LOS (accuracy checked at roll time) → use 20.
+    // Melee figures attack adjacent → use 1.
+    const isRanged = eff?.attack?.type === 'range';
+    const range = isRanged ? 20 : 1;
     const actionsData = game.dcActionsData?.[msgId];
     const figureIndex = actionsData?.selectedFigure ?? 0;
     const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
@@ -1822,6 +2054,9 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   let Q;
   if (ENCODER_TYPE === 'graph' && learnings.graphNetwork) {
     const graph = buildGraph(game, playerNum, dcHealthState, dcMessageMeta);
+    if (USE_MOVE_QUALITY_SIGNAL && learnings.withinGroupWeights?.move) {
+      graph.moveQualitySignal = estimateMoveQuality(game, playerNum, dcHealthState, dcMessageMeta, learnings.withinGroupWeights.move);
+    }
     const result = graphForwardPass(learnings.graphNetwork, graph);
     Q = result.Q;
   } else {
@@ -2077,6 +2312,8 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
   let _hasBeneficialSurge = false; // True when beneficial surge spend was available at decision time
   let _ccPlaysThisGame = 0; // Per-game CC play counter for reward cap
   let _moveShapingThisActivation = 0; // Accumulated movement shaping in current activation
+  let lastActiveDcMsgId = null;       // Frozen pre-action figure identity (boundary key)
+  let lastActiveFigIdx = null;        // Frozen pre-action subfigure index (v2 / diagnostics)
 
   return {
     beforeAction(game, playerActions) {
@@ -2089,9 +2326,24 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       }
 
       lastSnapshot = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
-      lastFeatures = ENCODER_TYPE === 'graph'
-        ? buildGraph(game, playerNum, dcHealthState, dcMessageMeta)
-        : extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+      if (ENCODER_TYPE === 'graph') {
+        lastFeatures = buildGraph(game, playerNum, dcHealthState, dcMessageMeta);
+        if (USE_MOVE_QUALITY_SIGNAL && learnings.withinGroupWeights?.move) {
+          lastFeatures.moveQualitySignal = estimateMoveQuality(game, playerNum, dcHealthState, dcMessageMeta, learnings.withinGroupWeights.move);
+        }
+      } else {
+        lastFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+      }
+
+      // ── Freeze figure identity from PRE-ACTION state ──────────────────
+      // MUST capture here, not in afterAction. During end_activation dispatch,
+      // cleanupActivation() deletes dcActionsData[msgId] before submitAction
+      // returns — post-dispatch reads would get null.
+      const activeDc = findActiveDcMsgId(game, playerNum, dcMessageMeta);
+      lastActiveDcMsgId = activeDc ? activeDc.msgId : null;
+      lastActiveFigIdx = activeDc
+        ? (game.dcActionsData?.[activeDc.msgId]?.selectedFigure ?? 0)
+        : null;
 
       // Detect whether any beneficial surge spend is available at this decision point.
       // Used to penalize skip_surges when the agent had a positive-value option.
@@ -2115,9 +2367,15 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
         return;
       }
       const afterSnap = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
-      const nextFeatures = ENCODER_TYPE === 'graph'
-        ? buildGraph(game, playerNum, dcHealthState, dcMessageMeta)
-        : extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+      let nextFeatures;
+      if (ENCODER_TYPE === 'graph') {
+        nextFeatures = buildGraph(game, playerNum, dcHealthState, dcMessageMeta);
+        if (USE_MOVE_QUALITY_SIGNAL && learnings.withinGroupWeights?.move) {
+          nextFeatures.moveQualitySignal = estimateMoveQuality(game, playerNum, dcHealthState, dcMessageMeta, learnings.withinGroupWeights.move);
+        }
+      } else {
+        nextFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+      }
 
       // ── Surge-aware reward shaping ──────────────────────────────────────────
       // Large fixed constants dominate (1-γ)*V(s) step cost at any realistic V(s).
@@ -2173,6 +2431,15 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
         }
       }
 
+      // ── start_move decision bonus ──────────────────────────────────────────
+      // Rewards the TYPE-LEVEL decision to begin movement when no targets are
+      // in attack range. This directly addresses the graph encoder's tendency
+      // to suppress Q(start_move) relative to Q(end_activation) via bootstrap.
+      let moveDecisionBonus = 0;
+      if (MOVE_DECISION_BONUS > 0 && absType === 'start_move' && lastSnapshot && !lastSnapshot.activeFigHasTargets) {
+        moveDecisionBonus = MOVE_DECISION_BONUS;
+      }
+
       // Activation-action bonus: reward productive actions during activation phase.
       // Movement, attack, ability, and interact all deserve immediate credit because
       // they advance board state. end_activation / pass get no bonus (just step cost).
@@ -2182,7 +2449,7 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       ]);
       const activationBonus = PRODUCTIVE_ABS_TYPES.has(absType) ? (REWARD_WEIGHTS.activationAction || 0) : 0;
 
-      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus + moveBonus + activationBonus;
+      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus + moveBonus + moveDecisionBonus + activationBonus;
       const actionIdx = ABSTRACT_TYPES.indexOf(absType);
       const wgFeatures = pickSmartAction._lastWgFeatures || null;
       const wgType = pickSmartAction._lastWgType || null;
@@ -2191,9 +2458,13 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
         features: lastFeatures, actionIdx, reward, nextFeatures,
         nextActionIdxs: null, done: false,
         wgFeatures, wgType, moveContrastive,
+        activeDcMsgId: lastActiveDcMsgId,   // v1 boundary truncation key
+        activeFigIdx: lastActiveFigIdx,     // stored for v2 / diagnostics
       });
       lastSnapshot = null;
       lastFeatures = null;
+      lastActiveDcMsgId = null;
+      lastActiveFigIdx = null;
     },
 
     finalize(game, updateMeta = false) {

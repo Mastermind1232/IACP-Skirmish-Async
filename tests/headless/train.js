@@ -24,9 +24,10 @@ import {
   pickSmartAction, abstractActionType, getLearningsStats,
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
   recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, getEffectiveAlpha, getQValues,
-  extractFeatures, setEncoderType, getEncoderType, setWgWeightClamp,
+  extractFeatures, setEncoderType, getEncoderType, setWgWeightClamp, setMoveDecisionBonus,
+  setMoveQualitySignalFlag, setBoundaryFix,
 } from './learnings.js';
-import { buildGraph, graphForwardPass } from './graph-encoder.js';
+import { buildGraph, graphForwardPass, setAttentionPool, setRichEdges, setMoveQualitySignal } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -622,9 +623,39 @@ async function main() {
     setWgWeightClamp(wgVal);
     console.log(`  WG weight clamp override: ${wgVal}`);
   }
+  const moveDecBonusArg = args.find(a => a.startsWith('--move-decision-bonus='));
+  if (moveDecBonusArg) {
+    const mdVal = parseFloat(moveDecBonusArg.split('=')[1]);
+    if (isNaN(mdVal) || mdVal < 0) { console.error('Invalid --move-decision-bonus value'); process.exit(1); }
+    setMoveDecisionBonus(mdVal);
+    console.log(`  Move decision bonus: ${mdVal}`);
+  }
+  if (args.includes('--attention-pool')) {
+    setAttentionPool(true);
+    console.log(`  Attention pooling: ENABLED`);
+  }
+  if (args.includes('--rich-edges')) {
+    setRichEdges(true);
+    console.log(`  Rich edge features: ENABLED (dstCanAttackSrc, srcCanMoveToDst)`);
+  }
+  if (args.includes('--move-quality-signal')) {
+    setMoveQualitySignal(true);
+    setMoveQualitySignalFlag(true);
+    console.log(`  Move quality signal: ENABLED (WG-scored move opportunity → DQN input)`);
+  }
+  if (args.includes('--no-boundary-fix')) {
+    setBoundaryFix(false);
+    console.log(`  Boundary fix: DISABLED (A/B control arm)`);
+  }
+
+  // A/B experiment: custom checkpoint load / save paths
+  const checkpointArg = args.find(a => a.startsWith('--checkpoint='));
+  const outputArg = args.find(a => a.startsWith('--output='));
+  const loadPath = checkpointArg ? join(__dirname, checkpointArg.split('=')[1]) : LEARNINGS_PATH;
+  const savePath = outputArg ? join(__dirname, outputArg.split('=')[1]) : LEARNINGS_PATH;
 
   const learnings = reset ? loadLearnings('/dev/null') // fresh default
-                          : loadLearnings(LEARNINGS_PATH);
+                          : loadLearnings(loadPath);
 
   if (reset) {
     try { unlinkSync(REPLAY_BUFFER_PATH); } catch {}
@@ -639,6 +670,8 @@ async function main() {
   TEST_DECKS.forEach(d => d.dcList.forEach(dc => uniqueDcs.add(dc)));
   console.log(`Training ${numGames} games (starting from ${learnings.meta.totalGames} prior games)`);
   console.log(`  Deck pool: ${TEST_DECKS.length} decks, ${uniqueDcs.size} unique DCs`);
+  if (checkpointArg) console.log(`  Load checkpoint: ${loadPath}`);
+  if (outputArg) console.log(`  Save output: ${savePath}`);
   if (reset) console.log('  (learnings reset)');
 
   let completed = 0;
@@ -762,6 +795,17 @@ async function main() {
       console.log(`  Runaway: ${cpRunawayGames}/${cpGames} games, ${cpRunawayWindows} total windows, avg iters/game: ${avgIters}`);
       const srStr = Object.entries(cpStopReasons).map(([r,c]) => `${r}:${c}`).join(' ');
       console.log(`  StopReason: ${srStr}`);
+      // Boundary + chain-type diagnostics
+      const ts = learnings.trainingStats;
+      if (ts.lastBoundaryTruncRate != null) {
+        console.log(`  Boundary: truncRate=${ts.lastBoundaryTruncRate} effN=${ts.lastEffectiveNStep}`);
+        console.log(`    Glue(≤2): ${ts.lastGlueEntryCount} entries, truncRate=${ts.lastGlueBoundaryTruncRate}, effN=${ts.lastGlueEffectiveNStep}, avg|r|=${ts.lastAvgGlueReward}`);
+        console.log(`    Real(>2): ${ts.lastRealEntryCount} entries, truncRate=${ts.lastRealBoundaryTruncRate}, effN=${ts.lastRealEffectiveNStep}, avg|r|=${ts.lastAvgRealReward}`);
+        if (ts.lastChainLengthHist) {
+          const h = ts.lastChainLengthHist;
+          console.log(`    ChainHist: 1:${h['1']} 2:${h['2']} 3-5:${h['3-5']} 6-10:${h['6-10']} 11-20:${h['11-20']} 21+:${h['21+']}`);
+        }
+      }
       // Persist checkpoint to training history for plateau detection
       recordTrainingCheckpoint(learnings, {
         completed: cpCompleted, total: cpGames,
@@ -790,7 +834,7 @@ async function main() {
         `epsilon: ${stats.epsilon.toFixed(3)}`
       );
       // Save periodically
-      saveLearnings(learnings, LEARNINGS_PATH);
+      saveLearnings(learnings, savePath);
       if (!noReplay) saveReplayBuffer(learnings, REPLAY_BUFFER_PATH);
 
       // Divergence guardrail — check every 10 games, abort if V(s) or norms explode
@@ -801,7 +845,7 @@ async function main() {
         console.log('Signals:', JSON.stringify(divCheck.signals, null, 2));
         // Save checkpoint before aborting so we don't lose partial progress
         const abortTag = `${learnings.meta.totalGames}_diverged`;
-        const abortPath = LEARNINGS_PATH.replace('.json', `-${abortTag}.json`);
+        const abortPath = savePath.replace('.json', `-${abortTag}.json`);
         saveLearnings(learnings, abortPath);
         console.log(`Saved divergence checkpoint: ${abortPath}`);
         process.exit(2);
@@ -809,7 +853,7 @@ async function main() {
     }
   }
 
-  saveLearnings(learnings, LEARNINGS_PATH);
+  saveLearnings(learnings, savePath);
   if (!noReplay) saveReplayBuffer(learnings, REPLAY_BUFFER_PATH);
 
   const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -1005,7 +1049,7 @@ async function main() {
     }
   }
 
-  console.log(`\nLearnings saved to ${LEARNINGS_PATH}`);
+  console.log(`\nLearnings saved to ${savePath}`);
 }
 
 main().catch(err => {
