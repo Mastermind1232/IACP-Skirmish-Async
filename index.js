@@ -2278,6 +2278,40 @@ client.on('messageCreate', async (message) => {
   try {
   if (!botReady) return;
 
+  // ── Kill all selfplay games (MCP) ────────────────────────────────────────────
+  // Deletes all active games (channels + DB) — use before starting fresh selfplay.
+  if (message.content.startsWith('killgamemcp')) {
+    const mcpBothelpersId = '1481314970666008607';
+    if (message.channel.id !== mcpBothelpersId) return;
+    const reply = (text) => message.channel.send(text).catch(() => {});
+
+    // Stop selfplay queue first if running
+    try { stopQueue(); } catch {}
+
+    const gamesMap = getGamesMap();
+    const gameIds = [...gamesMap.keys()];
+    if (gameIds.length === 0) {
+      await reply('No active games to kill.');
+      return;
+    }
+    let killed = 0;
+    for (const gid of gameIds) {
+      const game = gamesMap.get(gid);
+      if (!game) continue;
+      try {
+        await deleteGameChannelsAndGame(game, gid, {
+          client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+          deleteGameFromDb,
+        });
+        killed++;
+      } catch (err) {
+        console.error(`[killgamemcp] Failed to delete game ${gid}:`, err.message);
+      }
+    }
+    await reply(`**Killed ${killed}/${gameIds.length} game(s).** Channels and DB cleaned up.`);
+    return;
+  }
+
   // ── MCP selfplay trigger ────────────────────────────────────────────────────
   // Allows starting/stopping self-play via text message in #bothelpers.
   // Accepts messages from any source (human, webhook, MCP) — bothelpers is admin-gated.
@@ -2340,6 +2374,24 @@ client.on('messageCreate', async (message) => {
       return;
     }
     try {
+      // Auto-cleanup: delete any existing games before starting fresh selfplay
+      const gamesMap = getGamesMap();
+      const staleIds = [...gamesMap.keys()];
+      if (staleIds.length > 0) {
+        for (const gid of staleIds) {
+          const g = gamesMap.get(gid);
+          if (!g) continue;
+          try {
+            await deleteGameChannelsAndGame(g, gid, {
+              client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+              deleteGameFromDb,
+            });
+          } catch (err) {
+            console.error(`[selfplaymcp] Pre-start cleanup failed for ${gid}:`, err.message);
+          }
+        }
+        await reply(`Cleaned up ${staleIds.length} stale game(s) before starting.`);
+      }
       const guild = message.guild;
       startQueue({
         client,
