@@ -7,7 +7,7 @@
  * - Seed mode: auto-selects highest-ranked unvalidated headless seed each run.
  */
 
-import { runSelfPlayLoop, getActiveSelfPlayGameId } from './self-play.js';
+import { runSelfPlayLoop, getActiveSelfPlayGameId, formatCoverageSummary } from './self-play.js';
 
 // ── Queue state (in-memory only) ─────────────────────────────────────────────
 
@@ -162,6 +162,7 @@ async function _runQueueLoop() {
           scenario: scenarioId,
           guildId,
           delayMs,
+          persistCompleted: true,
           explorationMode: seedConfig ? 'seed_validation' : 'queue',
         });
         result = loopResult.result;
@@ -206,14 +207,17 @@ async function _runQueueLoop() {
         }
       }
 
-      // 5. Post summary to logChannel
-      const summary = [
-        `**Run #${runNum}** — ${scenarioLabel}`,
-        `Result: **${result}** | Stop: ${artifact?.stop_reason || 'unknown'}`,
-        `Steps: ${artifact?.total_steps ?? 0} | Handlers: ${artifact?.exercised_handlers?.length ?? '?'} | Actions: ${artifact?.seen_action_types?.length ?? '?'}`,
-      ].join('\n');
+      // 5. Post structured coverage summary to logChannel
+      const summary = artifact
+        ? formatCoverageSummary(artifact, runNum)
+        : `**Run #${runNum}** — ${scenarioLabel}\nResult: **${result}**`;
+      console.log(summary);
       try {
-        await logChannel.send(summary);
+        // Discord message limit is 2000 chars — truncate if needed
+        const discordSummary = summary.length > 1950
+          ? summary.slice(0, 1950) + '\n... (truncated)'
+          : summary;
+        await logChannel.send(`\`\`\`\n${discordSummary}\n\`\`\``);
       } catch {}
 
       // 6. On failure: post to bot-logs, then pause

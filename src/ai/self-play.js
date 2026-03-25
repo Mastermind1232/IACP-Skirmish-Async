@@ -8,7 +8,7 @@
 
 import { execSync } from 'child_process';
 import { getAvailableActions } from '../engine/available-actions.js';
-import { pickBestAction } from './strategy.js';
+import { pickBestAction, getCheckpointVersion } from './strategy.js';
 import { createLiveAiInteraction, AI_USER_PREFIX } from './ai-discord.js';
 import { getHandlerKey } from '../router.js';
 import { getHandler, getHandlerGroup } from '../handlers/index.js';
@@ -159,6 +159,22 @@ function capturePendingStates(game) {
   return out;
 }
 
+// ── Figure count snapshot (for defeat detection) ─────────────────────────────
+
+function countAliveFigures(game) {
+  let count = 0;
+  if (game.deployedCards) {
+    for (const dc of Object.values(game.deployedCards)) {
+      if (dc.figures) {
+        for (const fig of Object.values(dc.figures)) {
+          if (fig.health > 0) count++;
+        }
+      }
+    }
+  }
+  return count;
+}
+
 // ── Stop reason classification ────────────────────────────────────────────────
 
 /** Bug stop reasons (real problems to fix). */
@@ -174,11 +190,24 @@ const LIMIT_STOPS = new Set([
 
 // ── Artifact builder ──────────────────────────────────────────────────────────
 
-function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stopReason, error, surfaceCtx, traceData, explorationMode, totalActionsDispatched }) {
+function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stopReason, error, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats }) {
   const now = new Date();
   const result = BUG_STOPS.has(stopReason) ? 'failed'
     : stopReason === 'completed' ? 'completed'
     : 'stopped';
+
+  // Derive winner from VP
+  const p1vp = game?.player1VP ?? 0;
+  const p2vp = game?.player2VP ?? 0;
+  const winner = stopReason !== 'completed' ? null
+    : p1vp > p2vp ? 'player1'
+    : p2vp > p1vp ? 'player2'
+    : 'draw';
+
+  // Convert actionTypeCounts Map to plain object
+  const actionTypeCounts = traceData?.actionTypeCounts
+    ? Object.fromEntries(traceData.actionTypeCounts)
+    : {};
 
   return {
     game_id: game?.gameId ?? 'unknown',
@@ -187,6 +216,7 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
     result,
     stop_reason: stopReason,
     commit_sha: getCommitSha(),
+    checkpoint_games: getCheckpointVersion(),
     map: game?.selectedMap?.id ?? null,
     p1_squad: game?.player1Squad ?? null,
     p2_squad: game?.player2Squad ?? null,
@@ -212,11 +242,79 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
     recovery_fired: false,
     recovery_count: 0,
     exploration_mode: explorationMode ?? null,
+    // Coverage data
+    winner,
+    p1_vp: p1vp,
+    p2_vp: p2vp,
+    total_rounds: game?.currentRound ?? null,
+    figure_defeats: figureDefeats ?? 0,
+    action_type_counts: actionTypeCounts,
     exercised_handlers: traceData?.exercisedHandlers ? [...traceData.exercisedHandlers] : [],
-    seen_action_types: traceData?.seenActionTypes ? [...traceData.seenActionTypes] : [],
+    seen_action_types: Object.keys(actionTypeCounts),
     triggered_pending_states: traceData?.triggeredPendingStates ? [...traceData.triggeredPendingStates] : [],
     transitions_hit: traceData?.transitionsHit ? [...new Set(traceData.transitionsHit)] : [],
   };
+}
+
+// ── Structured coverage summary ───────────────────────────────────────────────
+
+/**
+ * Format a human-readable coverage summary for a completed self-play run.
+ * Suitable for console output and Discord bot-logs posting.
+ */
+export function formatCoverageSummary(artifact, runNum) {
+  const atc = artifact.action_type_counts || {};
+  const durSec = ((artifact.duration_ms || 0) / 1000).toFixed(1);
+  const vpLine = artifact.winner
+    ? `Winner: ${artifact.winner} | VP: ${artifact.p1_vp}-${artifact.p2_vp}`
+    : `Result: ${artifact.result} (${artifact.stop_reason})`;
+
+  // Squad labels
+  const p1Label = artifact.p1_squad?.name || 'P1';
+  const p2Label = artifact.p2_squad?.name || 'P2';
+
+  // Key combat counters
+  const attacks = atc.attack_target || 0;
+  const surgeSpends = atc.combat_surge_spend || 0;
+  const surgeSkips = atc.combat_surge_skip || 0;
+  const combatReady = atc.combat_resolve_ready || 0;
+  const ccPlays = atc.play_cc || 0;
+  const dcSpecials = atc.dc_special || 0;
+  const strainChoices = (artifact.triggered_pending_states || []).includes('pendingStrainChoice') ? 'yes' : 'no';
+
+  // Top action types (sorted by count descending)
+  const sortedActions = Object.entries(atc).sort((a, b) => b[1] - a[1]);
+  const actionLines = sortedActions.map(([type, count]) => `  ${type}: ${count}`).join('\n');
+
+  const header = runNum != null ? `SMOKE RUN #${runNum}` : `SELF-PLAY RUN`;
+  return [
+    `══ ${header} ${'═'.repeat(Math.max(0, 50 - header.length))}`,
+    `Game:       ${artifact.game_id}`,
+    `Seed:       ${p1Label} vs ${p2Label}@${artifact.map || '?'} | checkpoint: ${artifact.checkpoint_games ?? '?'}`,
+    `Result:     ${artifact.result} (${artifact.total_rounds ?? '?'} rounds, ${artifact.total_steps} steps, ${durSec}s)`,
+    vpLine,
+    ``,
+    `── Action Counts ──────────────────────────────`,
+    actionLines || '  (none)',
+    ``,
+    `── Combat Events ──────────────────────────────`,
+    `  Attacks declared:   ${attacks}`,
+    `  Combat resolutions: ${combatReady}`,
+    `  Surge spends:       ${surgeSpends}`,
+    `  Surge skips:        ${surgeSkips}`,
+    `  Figure defeats:     ${artifact.figure_defeats ?? 0}`,
+    `  Strain choices:     ${strainChoices}`,
+    `  CC plays:           ${ccPlays}`,
+    `  DC specials:        ${dcSpecials}`,
+    ``,
+    `── Coverage ───────────────────────────────────`,
+    `  Handlers exercised: ${artifact.exercised_handlers?.length ?? 0}`,
+    `  Action types seen:  ${artifact.seen_action_types?.length ?? 0}`,
+    `  Pending states hit: [${(artifact.triggered_pending_states || []).join(', ')}]`,
+    `  Unique transitions: ${artifact.transitions_hit?.length ?? 0}`,
+    artifact.error_message ? `\n── Error ──────────────────────────────────────\n  ${artifact.error_message}` : '',
+    `${'═'.repeat(52)}`,
+  ].filter(Boolean).join('\n');
 }
 
 // ── Main self-play loop ───────────────────────────────────────────────────────
@@ -265,10 +363,11 @@ export async function runSelfPlayLoop(game, client, opts) {
 
   // Execution trace (Phase 1 queue runner)
   const exercisedHandlers = new Set();
-  const seenActionTypes = new Set();
+  const actionTypeCounts = new Map();  // type → count (replaces Set for richer coverage data)
   const triggeredPendingStates = new Set();
   const transitionsHit = [];
-  const traceData = { exercisedHandlers, seenActionTypes, triggeredPendingStates, transitionsHit };
+  let figureDefeats = 0;
+  const traceData = { exercisedHandlers, actionTypeCounts, triggeredPendingStates, transitionsHit };
 
   // Mark game as self-play (both players are AI)
   game.selfPlay = true;
@@ -281,7 +380,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       if (!g || g.ended) {
         const wasManualStop = g?.selfPlayManualStop;
         const stopReason = wasManualStop ? 'manual_stop' : 'completed';
-        const artifact = buildRunArtifact(g || game, { scenario, guildId, startedAt, ringBuffer, stopReason, surfaceCtx, traceData, explorationMode, totalActionsDispatched });
+        const artifact = buildRunArtifact(g || game, { scenario, guildId, startedAt, ringBuffer, stopReason, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
         if (wasManualStop) await insertSelfPlayRun(artifact);
         else if (persistCompleted) await insertSelfPlayRun(artifact);
         return { result: wasManualStop ? 'stopped' : 'completed', artifact };
@@ -316,7 +415,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       if (allActions.length === 0) {
         consecutiveEmpty++;
         if (consecutiveEmpty > 20) {
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_no_actions', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_no_actions', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -331,7 +430,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         if (a === b) {
           const loopPattern = lastCustomIds.slice(0, 3).join(' → ');
           const loopErr = new Error(`Repeating 3-action loop detected: ${loopPattern}`);
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode, totalActionsDispatched });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -347,7 +446,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         // All available actions are unsupported (e.g., only CC plays) — skip this step
         consecutiveEmpty++;
         if (consecutiveEmpty > 20) {
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_unsupported_only', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_unsupported_only', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -368,11 +467,14 @@ export async function runSelfPlayLoop(game, client, opts) {
         chosen.customId = `cc_confirm_play_${g.gameId}`;
       }
 
+      // Snapshot alive figures before dispatch (for defeat detection)
+      const figuresBefore = countAliveFigures(g);
+
       // Route to handler
       const handlerKey = getHandlerKey(chosen.customId, 'button');
       if (!handlerKey) {
         surfaceCtx = { handlerKey: null, intendedSurface: 'button', discordOp: chosen.customId };
-        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
+        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
         await insertSelfPlayRun(artifact);
         return { result: 'failed', artifact };
       }
@@ -380,7 +482,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       const handler = getHandler(handlerKey);
       if (!handler) {
         surfaceCtx = { handlerKey, intendedSurface: 'button' };
-        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched });
+        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
         await insertSelfPlayRun(artifact);
         return { result: 'failed', artifact };
       }
@@ -435,7 +537,7 @@ export async function runSelfPlayLoop(game, client, opts) {
           || err.message?.includes('is not iterable');
         if (isCrash) {
           surfaceCtx.discordError = err.message;
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'handler_crash', error: err, surfaceCtx, traceData, explorationMode, totalActionsDispatched });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'handler_crash', error: err, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -493,6 +595,13 @@ export async function runSelfPlayLoop(game, client, opts) {
         }
       }
 
+      // Detect figure defeats via pre/post diff
+      const gPostDispatch = getGame(game.gameId);
+      if (gPostDispatch) {
+        const figuresAfter = countAliveFigures(gPostDispatch);
+        if (figuresAfter < figuresBefore) figureDefeats += (figuresBefore - figuresAfter);
+      }
+
       // Record action — reset empty counter only when an action is actually dispatched
       consecutiveEmpty = 0;
       totalActionsDispatched++;
@@ -509,7 +618,7 @@ export async function runSelfPlayLoop(game, client, opts) {
 
       // Trace collection
       exercisedHandlers.add(handlerKey);
-      seenActionTypes.add(chosen.type);
+      actionTypeCounts.set(chosen.type, (actionTypeCounts.get(chosen.type) || 0) + 1);
       const gAfter = getGame(game.gameId);
       if (gAfter) {
         for (const k of PENDING_KEYS) {

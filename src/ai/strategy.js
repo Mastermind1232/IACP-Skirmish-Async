@@ -26,6 +26,14 @@ function getLearnings() {
 }
 
 /**
+ * Return the loaded checkpoint's totalGames count (e.g. 13862).
+ * Returns null if the model hasn't been loaded yet.
+ */
+export function getCheckpointVersion() {
+  return _learnings?.meta?.totalGames ?? null;
+}
+
+/**
  * CCs that have dedicated pending-state action paths (celebration_play_, etc.)
  * and must NOT be played through the generic cc_confirm_play_ bridge.
  * Playing them via the bridge bypasses precondition checks (e.g. "was a unique
