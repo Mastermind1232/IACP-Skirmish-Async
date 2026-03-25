@@ -11,6 +11,7 @@ import { getInitiativePlayerNum, getPlayerId } from '../game/player-helpers.js';
 import { PHASES } from '../game/phase.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
+import { captureManualKillDiagnostic } from '../ai/self-play.js';
 
 /** Build a short description of the current game state after an undo, so players know what to do next. */
 function describeGameState(game) {
@@ -393,6 +394,7 @@ export async function handleKillGame(interaction, ctx) {
     return;
   }
   try {
+    try { await captureManualKillDiagnostic(game, gameId); } catch (e) { console.warn('[kill_game] Pre-kill dump failed:', e.message); }
     await deleteGameChannelsAndGame(game, gameId, ctx);
     await interaction.followUp({ content: `Game **IA Game #${gameId}** deleted. All channels removed.`, ephemeral: true }).catch(discordCatch);
   } catch (err) {

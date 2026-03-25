@@ -281,6 +281,34 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
   };
 }
 
+// ── Manual kill diagnostic ────────────────────────────────────────────────────
+
+/**
+ * Capture a diagnostic snapshot before manually killing a game.
+ * Lightweight version of buildRunArtifact for non-selfplay kill paths.
+ */
+export async function captureManualKillDiagnostic(game, gameId) {
+  const pendingStates = capturePendingStates(game);
+  const artifact = {
+    game_id: gameId,
+    guild_id: game.guildId ?? null,
+    scenario: null,
+    result: 'stopped',
+    stop_reason: 'manual_kill',
+    commit_sha: getCommitSha(),
+    phase: game.phase ?? null,
+    round_phase: game.roundPhase ?? null,
+    current_round: game.currentRound ?? null,
+    pending_states: pendingStates,
+    recovery_reason: getRecoveryReason(game),
+    p1_vp: game.player1VP?.total ?? 0,
+    p2_vp: game.player2VP?.total ?? 0,
+    failed_at: new Date(),
+  };
+  await insertSelfPlayRun(artifact);
+  return artifact;
+}
+
 // ── Structured coverage summary ───────────────────────────────────────────────
 
 /**
@@ -464,6 +492,33 @@ export async function runSelfPlayLoop(game, client, opts) {
         suppressedCcPlays.clear();
         bannedStaleActions.clear();
         lastRoundPhase = curPhase;
+      }
+
+      // Auto-resolve phase gates (both players are AI — bypass DQN inference)
+      if (g.phaseGate) {
+        const gateCustomId = `phase_gate_ready_${g.gameId}`;
+        const gateHandlerKey = getHandlerKey(gateCustomId, 'button');
+        const gateHandler = gateHandlerKey ? getHandler(gateHandlerKey) : null;
+        if (gateHandler) {
+          for (const pn of [1, 2]) {
+            if (!g.phaseGate) break;
+            const isReady = pn === 1 ? g.phaseGate.p1Ready : g.phaseGate.p2Ready;
+            if (isReady) continue;
+            const userId = pn === 1 ? g.player1Id : g.player2Id;
+            const gateInteraction = createLiveAiInteraction(gateCustomId, userId, g, client);
+            gateInteraction.client = client;
+            if (g.generalId) {
+              try { gateInteraction.channel = await fetchGameChannel(client, g.generalId); gateInteraction.message.channel = gateInteraction.channel; } catch {}
+            }
+            const gateGroup = getHandlerGroup(gateHandlerKey);
+            if (gateGroup) {
+              await gateHandler(gateInteraction, buildContext(gateGroup, buildAllDeps()));
+            } else {
+              await gateHandler(gateInteraction);
+            }
+          }
+        }
+        continue;
       }
 
       // Determine acting player

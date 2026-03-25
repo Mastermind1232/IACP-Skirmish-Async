@@ -118,7 +118,7 @@ import { handleSelectMap as cmdSelectMap, handleConfirmMap as cmdConfirmMap, han
 import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDcEndActivation } from './src/domain/commands/dc-play-area-commands.js';
 import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
-import { getActiveSelfPlayGameId, runSelfPlayLoop } from './src/ai/self-play.js';
+import { getActiveSelfPlayGameId, runSelfPlayLoop, captureManualKillDiagnostic } from './src/ai/self-play.js';
 import { startQueue, stopQueue, pauseQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
 import { parseTransitionKey } from './src/exploration/transition-key.js';
 import { getTopValidationCandidate } from './src/exploration/rank-seeds.js';
@@ -2299,6 +2299,7 @@ client.on('messageCreate', async (message) => {
       const game = gamesMap.get(gid);
       if (!game) continue;
       try {
+        try { await captureManualKillDiagnostic(game, gid); } catch (e) { console.warn(`[killgamemcp] Pre-kill dump failed for ${gid}:`, e.message); }
         await deleteGameChannelsAndGame(game, gid, {
           client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
           deleteGameFromDb,
@@ -2469,6 +2470,7 @@ client.on('messageCreate', async (message) => {
       return;
     }
     try {
+      try { await captureManualKillDiagnostic(game, killGameId); } catch (e) { console.warn(`[killgamemcp] Pre-kill dump failed for ${killGameId}:`, e.message); }
       await deleteGameChannelsAndGame(game, killGameId, {
         client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
         deleteGameFromDb,
