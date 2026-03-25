@@ -318,7 +318,7 @@ export function formatCoverageSummary(artifact, runNum) {
     `  Flat decisions:     ${rs.flatDecisions ?? 0}`,
     `  Single-action skips:${rs.singleActionSkips ?? 0}`,
     `  Heuristic calls:    ${rs.heuristicCalls ?? 0}`,
-    `  Heuristic overrides:${rs.heuristicOverrides ?? 0}`,
+    `  Heuristic overrides:${rs.heuristicOverrides ?? 0} (${rs.heuristicOverridesAttackLegal ?? 0} with attack legal)`,
     ``,
     `── Coverage ───────────────────────────────────`,
     `  Handlers exercised: ${artifact.exercised_handlers?.length ?? 0}`,

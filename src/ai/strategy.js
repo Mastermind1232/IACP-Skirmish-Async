@@ -96,6 +96,7 @@ const IDLE_TYPES = new Set(['dc_end_activation', 'pass_activation_turn']);
 let _graphDecisions = 0;
 let _flatDecisions = 0;
 let _heuristicOverrides = 0;
+let _heuristicOverridesAttackLegal = 0; // overrides where attack_target was in the pool
 let _heuristicCalls = 0;
 let _singleActionSkips = 0; // actions with only 1 viable option (no DQN call)
 
@@ -103,6 +104,7 @@ export function resetRuntimeStats() {
   _graphDecisions = 0;
   _flatDecisions = 0;
   _heuristicOverrides = 0;
+  _heuristicOverridesAttackLegal = 0;
   _heuristicCalls = 0;
   _singleActionSkips = 0;
 }
@@ -112,6 +114,7 @@ export function getRuntimeStats() {
     graphDecisions: _graphDecisions,
     flatDecisions: _flatDecisions,
     heuristicOverrides: _heuristicOverrides,
+    heuristicOverridesAttackLegal: _heuristicOverridesAttackLegal,
     heuristicCalls: _heuristicCalls,
     singleActionSkips: _singleActionSkips,
     encoder: _learnings ? getEncoderType() : 'not_loaded',
@@ -126,7 +129,10 @@ function applyActivationHeuristic(actions) {
   const hasProductive = actions.some(a => PRODUCTIVE_TYPES.has(a.type));
   if (!hasProductive) return actions;
   const hasIdle = actions.some(a => IDLE_TYPES.has(a.type));
-  if (hasIdle) _heuristicOverrides++;
+  if (hasIdle) {
+    _heuristicOverrides++;
+    if (actions.some(a => a.type === 'attack_target')) _heuristicOverridesAttackLegal++;
+  }
   const filtered = actions.filter(a => !IDLE_TYPES.has(a.type));
   // Safety: if filtering removed everything, return original
   return filtered.length > 0 ? filtered : actions;
