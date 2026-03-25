@@ -46,6 +46,16 @@ async function getPlayerChannelName(guild, userId) {
 }
 
 /**
+ * Get Admin role permission override for game channels.
+ * Allows admins to view all game channels for moderation/monitoring.
+ */
+function getAdminOverride(guild) {
+  const adminRole = guild.roles.cache.find(r => r.name === 'Admin');
+  if (!adminRole) return [];
+  return [{ id: adminRole.id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages }];
+}
+
+/**
  * Create p1 and p2 Play Area channels.
  */
 export async function createPlayAreaChannels(guild, gameCategory, prefix, player1Id, player2Id) {
@@ -53,6 +63,7 @@ export async function createPlayAreaChannels(guild, gameCategory, prefix, player
   const p2Name = await getPlayerChannelName(guild, player2Id);
   const playAreaPerms = [
     { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages },
+    ...getAdminOverride(guild),
     ...(isDiscordSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages }] : []),
     ...(isDiscordSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages }] : []),
     { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.CreatePrivateThreads | PermissionFlagsBits.ManageThreads | PermissionFlagsBits.SendMessagesInThreads },
@@ -126,6 +137,7 @@ export async function createGameChannels(guild, player1Id, player2Id, deps) {
   const isSnowflake = isDiscordSnowflake;
   const playerPerms = [
     { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
+    ...getAdminOverride(guild),
     ...(isSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel }] : []),
     ...(isSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel }] : []),
     { id: botId, allow: PermissionFlagsBits.ViewChannel },
@@ -170,6 +182,7 @@ export async function createBoardChannel(guild, gameCategory, prefix, player1Id,
   const botId = guild.client.user.id;
   const boardPerms = [
     { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
+    ...getAdminOverride(guild),
     ...(isDiscordSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages }] : []),
     ...(isDiscordSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages }] : []),
     { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
