@@ -2069,6 +2069,104 @@ client.once('ready', async () => {
       return;
     }
 
+    // --- Selfplay API (MCP / external trigger) ---
+
+    if (req.method === 'POST' && req.url === '/api/selfplay' && guildId) {
+      const data = await readBody(req);
+      const action = data.action || 'start';
+
+      if (action === 'status') {
+        const qs = getQueueStatus();
+        const activeId = getActiveSelfPlayGameId();
+        jsonRes(res, 200, { ...qs, activeGameId: activeId });
+        return;
+      }
+
+      if (action === 'stop') {
+        try {
+          stopQueue();
+          jsonRes(res, 200, { ok: true, message: 'Self-play stopping after current game.' });
+        } catch (err) {
+          jsonRes(res, 400, { error: err.message });
+        }
+        return;
+      }
+
+      // action === 'start'
+      const qs = getQueueStatus();
+      if (qs.state === 'paused') {
+        try {
+          resumeQueue();
+          jsonRes(res, 200, { ok: true, message: `Self-play resumed (was paused: ${qs.pauseReason}).` });
+        } catch (err) {
+          jsonRes(res, 400, { error: err.message });
+        }
+        return;
+      }
+      try {
+        const guild = await client.guilds.fetch(guildId).catch(() => null);
+        if (!guild) { jsonRes(res, 500, { error: 'Guild not found' }); return; }
+        const bothelpersChannel = await client.channels.fetch('1481314970666008607').catch(() => null);
+        if (!bothelpersChannel) { jsonRes(res, 500, { error: '#bothelpers channel not found' }); return; }
+
+        startQueue({
+          client,
+          guild,
+          guildId: guild.id,
+          buildAllDeps,
+          getGame,
+          atomicOpts,
+          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
+          createTestGame,
+          deleteGameChannelsAndGame,
+          cleanupCtx: {
+            client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+            deleteGameFromDb,
+          },
+          scenarios: [],
+          seedMode: true,
+          getNextSeed: () => getTopValidationCandidate(getDestructTestDecks),
+          onSeedRunComplete: async (artifact, seedConfig) => {
+            const dedupedKeys = artifact?.transitions_hit || [];
+            for (const key of dedupedKeys) {
+              const { roundPhase, pendingSet, actionType } = parseTransitionKey(key);
+              await upsertDiscordTransition(key, roundPhase, pendingSet, actionType);
+            }
+            await insertExplorationEpisode({
+              episode_id: randomUUID(),
+              source: 'discord',
+              seed_config: { mapId: seedConfig.mapId, p1Deck: seedConfig.p1Deck.name, p2Deck: seedConfig.p2Deck.name },
+              total_steps: artifact?.total_steps || 0,
+              unique_transitions: dedupedKeys.length,
+              novel_transitions: 0,
+              invariant_errors: 0,
+              transitions_hit: dedupedKeys,
+              result: artifact?.result || 'unknown',
+              stop_reason: artifact?.stop_reason || 'unknown',
+              duration_ms: artifact?.duration_ms || 0,
+            });
+          },
+          interGameDelayMs: 5000,
+          delayMs: 200,
+          feedbackChannel: bothelpersChannel,
+          logChannel: bothelpersChannel,
+          saveGames,
+          AI_USER_PREFIX,
+          botLogsPost: async (artifact) => {
+            try {
+              await logGameErrorToBotLogs(client, guild, artifact.game_id,
+                new Error(`Self-play ${artifact.stop_reason}: ${artifact.error_message || 'no details'}`),
+                'selfplay');
+            } catch {}
+          },
+        });
+        jsonRes(res, 200, { ok: true, message: 'Self-play started — auto-selecting seeds.' });
+      } catch (err) {
+        jsonRes(res, 400, { error: err.message });
+      }
+      return;
+    }
+
     // --- Testgame (existing) ---
 
     if (req.method === 'POST' && req.url === '/testgame' && guildId) {
@@ -2181,9 +2279,9 @@ client.on('messageCreate', async (message) => {
   if (!botReady) return;
 
   // ── MCP selfplay trigger ────────────────────────────────────────────────────
-  // Allows Claude Code MCP to start/stop/status self-play via text message.
-  // Only the bot's own messages (sent via MCP) are accepted, only in #bothelpers.
-  if (message.author.id === client.user?.id && message.content.startsWith('selfplaymcp')) {
+  // Allows starting/stopping self-play via text message in #bothelpers.
+  // Accepts messages from any source (human, webhook, MCP) — bothelpers is admin-gated.
+  if (message.content.startsWith('selfplaymcp')) {
     const mcpBothelpersId = '1481314970666008607';
     if (message.channel.id !== mcpBothelpersId) return;
 
