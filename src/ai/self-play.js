@@ -92,7 +92,10 @@ function determineActingPlayer(game) {
 
   // Blocking pending sub-states — check whose turn it is
   if (game.pendingNegation) {
-    return game.pendingNegation.targetPlayerId === game.player1Id ? 1 : 2;
+    // Negation goes to the OPPONENT of the player who played the CC
+    const negPlayedBy = game.pendingNegation.playedBy;
+    const negOpponent = negPlayedBy === 1 ? 2 : 1;
+    return negOpponent;
   }
   if (game.pendingCcConfirmation) {
     return game.pendingCcConfirmation.playerId === game.player1Id ? 1 : 2;
