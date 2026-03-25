@@ -755,15 +755,18 @@ export async function runSelfPlayLoop(game, client, opts) {
         handlerKey,
         ts: Date.now(),
       });
-      lastCustomIds.push(chosen.customId);
+      const stampedId = `${chosen.customId}::P${chosen._playerNum}`;
+      lastCustomIds.push(stampedId);
       if (lastCustomIds.length > 6) lastCustomIds.shift();
 
-      // Stale-action detection: if same customId picked twice in a row, handler likely
-      // rejected it without changing state. Ban it to prevent looping.
+      // Stale-action detection: if same customId+player picked twice in a row, handler
+      // likely rejected it without changing state. Ban it to prevent looping.
+      // Uses player-stamped IDs so different players dispatching the same customId
+      // (e.g. both readying for combat) doesn't trigger a false ban.
       const lci = lastCustomIds.length;
       if (lci >= 2 && lastCustomIds[lci - 1] === lastCustomIds[lci - 2]) {
-        bannedStaleActions.add(lastCustomIds[lci - 1]);
-        console.log(`[self-play] Banning stale action: ${lastCustomIds[lci - 1]}`);
+        bannedStaleActions.add(chosen.customId);
+        console.log(`[self-play] Banning stale action: ${chosen.customId}`);
       }
 
       // Trace collection
