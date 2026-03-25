@@ -119,7 +119,7 @@ import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDc
 import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
 import { getActiveSelfPlayGameId, runSelfPlayLoop } from './src/ai/self-play.js';
-import { startQueue, stopQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
+import { startQueue, stopQueue, pauseQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
 import { parseTransitionKey } from './src/exploration/transition-key.js';
 import { getTopValidationCandidate } from './src/exploration/rank-seeds.js';
 import { snowflakeUsers, sanitizeMentions } from './src/discord/channel-helpers.js';
@@ -2308,6 +2308,16 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    if (mcpAction === 'pause') {
+      try {
+        pauseQueue('manual (MCP)');
+        await reply('**Self-play paused** (MCP). Send `selfplaymcp start` to resume.');
+      } catch (err) {
+        await reply(`Pause failed: ${err.message}`);
+      }
+      return;
+    }
+
     if (mcpAction === 'stop') {
       try {
         stopQueue();
@@ -2389,6 +2399,35 @@ client.on('messageCreate', async (message) => {
     return;
   }
   // ── End MCP selfplay trigger ────────────────────────────────────────────────
+
+  // ── MCP killgame trigger ──────────────────────────────────────────────────
+  if (message.content.startsWith('killgamemcp')) {
+    const mcpBothelpersId = '1481314970666008607';
+    if (message.channel.id !== mcpBothelpersId) return;
+    const killArgs = message.content.trim().split(/\s+/).slice(1);
+    const killGameId = killArgs[0];
+    const reply = (text) => message.channel.send(text).catch(() => {});
+    if (!killGameId) {
+      await reply('Usage: `killgamemcp <gameId>` (e.g., `killgamemcp 00001`)');
+      return;
+    }
+    const game = getGame(killGameId);
+    if (!game) {
+      await reply(`Game **${killGameId}** not found.`);
+      return;
+    }
+    try {
+      await deleteGameChannelsAndGame(game, killGameId, {
+        client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+        deleteGameFromDb,
+      });
+      await reply(`Game **IA Game #${killGameId}** deleted. All channels removed.`);
+    } catch (err) {
+      await reply(`Kill failed: ${err.message}`);
+    }
+    return;
+  }
+  // ── End MCP killgame trigger ──────────────────────────────────────────────
 
   if (message.author.bot) return;
 

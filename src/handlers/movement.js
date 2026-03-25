@@ -20,6 +20,8 @@ function _cleanupMoveState(game, moveKey, msgId) {
   delete game.moveInProgress[moveKey];
   if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
   if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
+  // Reset remaining MP so forfeited points don't carry over to the next Move action
+  if (game.movementBank?.[msgId]) game.movementBank[msgId].remaining = 0;
 }
 
 /**
