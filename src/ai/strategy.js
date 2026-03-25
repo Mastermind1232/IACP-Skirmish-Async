@@ -84,8 +84,16 @@ function isAiViable(action) {
  * for the same reason — the model undervalues activating when no attacks
  * are in range.
  */
-const PRODUCTIVE_TYPES = new Set([
-  'move_figure', 'attack_target', 'dc_special',
+/**
+ * High-value action types that justify suppressing end_activation/pass.
+ * IMPORTANT: move_figure is deliberately EXCLUDED. The parity check showed
+ * that forcing movement when only move_figure is "productive" causes the
+ * within-group move scorer to send figures AWAY from enemies (destOnObjective=3.87,
+ * distToNearestEnemy=0.039), starving combat and VP. Headless without this
+ * heuristic scores 35-35 VP vs Discord's 0-0 VP with the old heuristic.
+ */
+const COMBAT_PRODUCTIVE_TYPES = new Set([
+  'attack_target', 'dc_special',
   'play_cc_special', 'play_cc_double', 'interact',
 ]);
 const IDLE_TYPES = new Set(['dc_end_activation', 'pass_activation_turn']);
@@ -96,17 +104,21 @@ const IDLE_TYPES = new Set(['dc_end_activation', 'pass_activation_turn']);
 let _graphDecisions = 0;
 let _flatDecisions = 0;
 let _heuristicOverrides = 0;
-let _heuristicOverridesAttackLegal = 0; // overrides where attack_target was in the pool
+let _heuristicOverridesAttackLegal = 0;
+let _heuristicOverridesMoveOnly = 0;    // would-have-overridden but move_figure was the only "productive" option
 let _heuristicCalls = 0;
-let _singleActionSkips = 0; // actions with only 1 viable option (no DQN call)
+let _singleActionSkips = 0;
+let _endActSuppressed = 0;              // end_activation/pass actually removed from pool
 
 export function resetRuntimeStats() {
   _graphDecisions = 0;
   _flatDecisions = 0;
   _heuristicOverrides = 0;
   _heuristicOverridesAttackLegal = 0;
+  _heuristicOverridesMoveOnly = 0;
   _heuristicCalls = 0;
   _singleActionSkips = 0;
+  _endActSuppressed = 0;
 }
 
 export function getRuntimeStats() {
@@ -115,8 +127,10 @@ export function getRuntimeStats() {
     flatDecisions: _flatDecisions,
     heuristicOverrides: _heuristicOverrides,
     heuristicOverridesAttackLegal: _heuristicOverridesAttackLegal,
+    heuristicOverridesMoveOnly: _heuristicOverridesMoveOnly,
     heuristicCalls: _heuristicCalls,
     singleActionSkips: _singleActionSkips,
+    endActSuppressed: _endActSuppressed,
     encoder: _learnings ? getEncoderType() : 'not_loaded',
   };
 }
@@ -126,15 +140,27 @@ export function getHeuristicStats() { return { overrides: _heuristicOverrides, c
 
 function applyActivationHeuristic(actions) {
   _heuristicCalls++;
-  const hasProductive = actions.some(a => PRODUCTIVE_TYPES.has(a.type));
-  if (!hasProductive) return actions;
+  const hasCombatProductive = actions.some(a => COMBAT_PRODUCTIVE_TYPES.has(a.type));
   const hasIdle = actions.some(a => IDLE_TYPES.has(a.type));
-  if (hasIdle) {
-    _heuristicOverrides++;
-    if (actions.some(a => a.type === 'attack_target')) _heuristicOverridesAttackLegal++;
+
+  if (!hasIdle) return actions; // nothing to suppress
+
+  // Track: would the OLD heuristic have fired? (move_figure alone counted as productive)
+  const hasMoveOnly = !hasCombatProductive && actions.some(a => a.type === 'move_figure');
+  if (hasMoveOnly) {
+    _heuristicOverridesMoveOnly++; // old heuristic would have forced movement here
+    return actions; // NEW: let the DQN decide freely (it may end activation — that's OK)
   }
-  const filtered = actions.filter(a => !IDLE_TYPES.has(a.type));
-  // Safety: if filtering removed everything, return original
+
+  if (!hasCombatProductive) return actions; // no high-value actions, let DQN pick
+
+  // Suppress idle when combat-productive actions exist
+  _heuristicOverrides++;
+  if (actions.some(a => a.type === 'attack_target')) _heuristicOverridesAttackLegal++;
+  const filtered = actions.filter(a => {
+    if (IDLE_TYPES.has(a.type)) { _endActSuppressed++; return false; }
+    return true;
+  });
   return filtered.length > 0 ? filtered : actions;
 }
 
