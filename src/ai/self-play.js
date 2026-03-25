@@ -488,7 +488,16 @@ export async function runSelfPlayLoop(game, client, opts) {
         if (consecutiveEmpty === 1) {
           // Log diagnostic on first empty to help debug stuck states
           const pendingStates = PENDING_KEYS.filter(k => g[k] != null && g[k] !== false);
-          console.warn(`[self-play] Empty actions — pending: [${pendingStates.join(', ')}], phase=${g.phase}, roundPhase=${g.roundPhase}, acting=${acting}, round=${g.round}`);
+          const combatSnap = g.pendingCombat ? JSON.stringify({
+            p1Ready: g.pendingCombat.p1Ready, p2Ready: g.pendingCombat.p2Ready,
+            attackRoll: !!g.pendingCombat.attackRoll, defenseRoll: !!g.pendingCombat.defenseRoll,
+            rerollPhase: g.pendingCombat.rerollPhase || null,
+            pendingSurges: !!g.pendingCombat.pendingSurges, surgeRemaining: g.pendingCombat.surgeRemaining,
+            attackerPn: g.pendingCombat.attackerPlayerNum,
+          }) : 'none';
+          // Scan ALL game.pending* keys (not just PENDING_KEYS) to find unknown blockers
+          const allPending = Object.keys(g).filter(k => k.startsWith('pending') && g[k] != null && g[k] !== false);
+          console.warn(`[self-play] Empty actions — pending: [${pendingStates.join(', ')}], allPending: [${allPending.join(', ')}], combat: ${combatSnap}, phase=${g.phase}, roundPhase=${g.roundPhase}, acting=${acting}, round=${g.round}`);
         }
         if (consecutiveEmpty > 20) {
           const pendingStates = PENDING_KEYS.filter(k => g[k] != null && g[k] !== false);
