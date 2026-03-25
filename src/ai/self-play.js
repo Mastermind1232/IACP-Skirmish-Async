@@ -393,6 +393,11 @@ export async function runSelfPlayLoop(game, client, opts) {
   let totalActionsDispatched = 0;
   let lastCustomIds = [];
 
+  // Stale-action safety net: if the same action is picked twice consecutively without
+  // changing game state, the handler likely rejected it (stun, boxed in, etc.).
+  // Ban it until the phase changes to prevent infinite loops.
+  const bannedStaleActions = new Set();
+
   // CC retry-loop prevention: track cards that hit the "illegal/manual" handler path.
   // Keyed by "cardName|roundPhase|activatingDcIndex" so the same card can be retried
   // in a different phase or activation context.
@@ -436,6 +441,7 @@ export async function runSelfPlayLoop(game, client, opts) {
           console.log(`[self-play] CC suppression cleared (phase ${lastRoundPhase} → ${curPhase}), was: ${[...suppressedCcPlays].join(', ')}`);
         }
         suppressedCcPlays.clear();
+        bannedStaleActions.clear();
         lastRoundPhase = curPhase;
       }
 
@@ -443,13 +449,14 @@ export async function runSelfPlayLoop(game, client, opts) {
       const acting = determineActingPlayer(g);
       const playerNums = acting === 'both' ? [1, 2] : [acting];
 
-      // Gather actions for acting player(s), filtering suppressed CCs
+      // Gather actions for acting player(s), filtering suppressed CCs and stale actions
       let allActions = [];
       for (const pn of playerNums) {
         const actions = getAvailableActions(g, pn, actionDeps);
         allActions.push(...actions
           .filter(a => {
             if (a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)) return false;
+            if (bannedStaleActions.has(a.customId)) return false;
             return true;
           })
           .map(a => ({ ...a, _playerNum: pn, actingPlayer: pn })));
@@ -658,6 +665,14 @@ export async function runSelfPlayLoop(game, client, opts) {
       });
       lastCustomIds.push(chosen.customId);
       if (lastCustomIds.length > 6) lastCustomIds.shift();
+
+      // Stale-action detection: if same customId picked twice in a row, handler likely
+      // rejected it without changing state. Ban it to prevent looping.
+      const lci = lastCustomIds.length;
+      if (lci >= 2 && lastCustomIds[lci - 1] === lastCustomIds[lci - 2]) {
+        bannedStaleActions.add(lastCustomIds[lci - 1]);
+        console.log(`[self-play] Banning stale action: ${lastCustomIds[lci - 1]}`);
+      }
 
       // Trace collection
       exercisedHandlers.add(handlerKey);

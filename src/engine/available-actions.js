@@ -564,12 +564,25 @@ function getActivationActions(game, playerNum, deps) {
       // This DC has actions remaining — can move, attack, interact, or special
       const displayName = meta.displayName || meta.dcName;
       const figureIndex = data.selectedFigure ?? 0;
-      actions.push({
-        type: ACTION_TYPES.MOVE_FIGURE,
-        customId: buildCustomId(ACTION_TYPES.MOVE_FIGURE, { msgId, figureIndex }),
-        description: `Move with ${displayName}`,
-        params: { msgId, dcName: meta.dcName },
-      });
+
+      // Build figureKey for condition checks (stun, massive, position)
+      const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+      const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+      const figConditions = game.figureConditions?.[figureKey] || [];
+      const isStunned = figConditions.includes('Stun');
+      const hasPosition = !!game.figurePositions?.[playerNum]?.[figureKey];
+
+      // Stunned/no-position/massive-locked/To-the-Limit figures cannot Move
+      if (!isStunned && hasPosition
+          && !game.massiveMovementLocked?.[figureKey]
+          && !game.activationExtraActionThenStun?.[msgId]) {
+        actions.push({
+          type: ACTION_TYPES.MOVE_FIGURE,
+          customId: buildCustomId(ACTION_TYPES.MOVE_FIGURE, { msgId, figureIndex }),
+          description: `Move with ${displayName}`,
+          params: { msgId, dcName: meta.dcName },
+        });
+      }
 
       // Arsenal / Epic Arsenal: if DC has Arsenal and no override dice yet, offer dice pick
       const arsenalActions = getArsenalPickActions(game, playerNum, msgId, deps);
@@ -577,9 +590,9 @@ function getActivationActions(game, playerNum, deps) {
         actions.push(...arsenalActions);
       }
 
-      // Attack: compute individual targets if deps available
+      // Attack: compute individual targets if deps available (stunned figures cannot attack)
       const canComputeTargets = deps.getDcStats && deps.getMapSpaces && game.selectedMap?.id;
-      const targets = computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps);
+      const targets = isStunned ? [] : computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps);
       if (targets.length > 0) {
         game.attackTargets = game.attackTargets || {};
         game.attackTargets[`${msgId}_${figureIndex}`] = targets;
@@ -592,7 +605,7 @@ function getActivationActions(game, playerNum, deps) {
             params: { msgId, dcName: meta.dcName, targetIndex: ti, targetFigureKey: t.figureKey },
           });
         }
-      } else if (!canComputeTargets) {
+      } else if (!canComputeTargets && !isStunned) {
         // Fallback: deps unavailable, offer generic attack (Discord handler will compute targets)
         actions.push({
           type: ACTION_TYPES.ATTACK_TARGET,
