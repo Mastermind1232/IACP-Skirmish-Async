@@ -97,36 +97,40 @@ function determineActingPlayer(game) {
     const negOpponent = negPlayedBy === 1 ? 2 : 1;
     return negOpponent;
   }
+  // Comm Disruption prompt — opponent of the CC player must respond
+  if (game.pendingCommDisruptionPrompt) {
+    return game.pendingCommDisruptionPrompt.targetPlayerNum || 'both';
+  }
   if (game.pendingCcConfirmation) {
-    return game.pendingCcConfirmation.playerId === game.player1Id ? 1 : 2;
+    return game.pendingCcConfirmation.playerNum || 'both';
   }
-  if (game.pendingCcChoice?.playerId) {
-    return game.pendingCcChoice.playerId === game.player1Id ? 1 : 2;
+  if (game.pendingCcChoice) {
+    return game.pendingCcChoice.playerNum || 'both';
   }
-  if (game.pendingCcSpaceChoice?.playerId) {
-    return game.pendingCcSpaceChoice.playerId === game.player1Id ? 1 : 2;
+  if (game.pendingCcSpaceChoice) {
+    return game.pendingCcSpaceChoice.playerNum || 'both';
   }
   if (game.pendingStrainChoice && Object.keys(game.pendingStrainChoice).length > 0) {
-    const pid = game.pendingStrainChoice.playerId;
-    return pid === game.player1Id ? 1 : (pid === game.player2Id ? 2 : 'both');
+    return game.pendingStrainChoice.playerNum || 'both';
   }
   if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) {
-    const pid = game.pendingDcAbilityChoice.playerId;
-    return pid === game.player1Id ? 1 : (pid === game.player2Id ? 2 : 'both');
+    // pendingDcAbilityChoice is keyed by msgId_specialIdx — extract first entry's playerNum
+    const firstEntry = Object.values(game.pendingDcAbilityChoice)[0];
+    return firstEntry?.playerNum || 'both';
   }
   if (game.pendingCoverFire) return game.pendingCoverFire.defenderPlayerNum || 'both';
   if (game.pendingStillFaster) return 'both';
   if (game.pendingPowerTokenGrant) return game.pendingPowerTokenGrant.playerNum || 'both';
-  if (game.pendingCelebration) return game.pendingCelebration.playerNum || 'both';
+  if (game.pendingCelebration) return game.pendingCelebration.attackerPlayerNum || 'both';
   if (game.pendingRushPush) return game.pendingRushPush.playerNum || 'both';
-  if (game.pendingLastResort) return game.pendingLastResort.playerNum || 'both';
-  if (game.pendingFalseOrders) return game.pendingFalseOrders.playerNum || 'both';
+  if (game.pendingLastResort) return game.pendingLastResort.defenderPlayerNum || 'both';
+  if (game.pendingFalseOrders) return game.pendingFalseOrders.controllerPlayerNum || 'both';
   if (game.forceVisionPending) return 'both';
 
-  // Move in progress
+  // Move in progress — keyed by moveKey, each entry has playerNum
   if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) {
-    const pid = game.moveInProgress.playerId;
-    return pid === game.player1Id ? 1 : (pid === game.player2Id ? 2 : 'both');
+    const firstEntry = Object.values(game.moveInProgress)[0];
+    return firstEntry?.playerNum || 'both';
   }
 
   // Pending end-turn
@@ -143,13 +147,27 @@ function determineActingPlayer(game) {
 // ── Pending state snapshot ────────────────────────────────────────────────────
 
 const PENDING_KEYS = [
+  // Core phases
   'phaseGate', 'pendingCombat', 'moveInProgress', 'pendingEndTurn',
-  'pendingNegation', 'pendingCoverFire', 'pendingStrainChoice',
+  'setupAttachmentPhase', 'endOfRoundWhoseTurn', 'startOfRoundWhoseTurn',
+  // CC / negation / disruption
+  'pendingNegation', 'pendingCommDisruptionPrompt',
   'pendingCcConfirmation', 'pendingCcChoice', 'pendingCcSpaceChoice',
-  'pendingStillFaster', 'pendingPowerTokenGrant', 'pendingCelebration',
-  'pendingDcAbilityChoice', 'pendingRushPush', 'pendingLastResort',
-  'pendingFalseOrders', 'forceVisionPending', 'setupAttachmentPhase',
-  'endOfRoundWhoseTurn', 'startOfRoundWhoseTurn',
+  'pendingIllegalCcPlay',
+  // Combat sub-states
+  'pendingCoverFire', 'pendingStrainChoice', 'pendingStillFaster',
+  'pendingStrikeMeDown', 'pendingSlowOnTheDraw', 'pendingForceExhaustion',
+  'pendingIllicitArms', 'pendingPowerConverter', 'pendingThereIsNoTry',
+  'pendingToughLuck', 'pendingHunterProtocol',
+  // Ability / activation sub-states
+  'pendingPowerTokenGrant', 'pendingCelebration', 'pendingDcAbilityChoice',
+  'pendingRushPush', 'pendingLastResort', 'pendingFalseOrders',
+  'forceVisionPending', 'pendingBleeding', 'pendingSpreadThePainCondPick',
+  'pendingPounceSpaceChoice', 'pendingMissileSalvo', 'pendingShoulderRush',
+  // Weapon choice
+  'pendingEe3Carbine', 'pendingBoRifle', 'pendingOverrideAttackDice',
+  // Placement sub-states
+  'pendingOverwatchPlacement', 'pendingBombDrop', 'pendingOrbitalBombardment',
 ];
 
 function capturePendingStates(game) {
@@ -467,7 +485,14 @@ export async function runSelfPlayLoop(game, client, opts) {
 
       if (allActions.length === 0) {
         consecutiveEmpty++;
+        if (consecutiveEmpty === 1) {
+          // Log diagnostic on first empty to help debug stuck states
+          const pendingStates = PENDING_KEYS.filter(k => g[k] != null && g[k] !== false);
+          console.warn(`[self-play] Empty actions — pending: [${pendingStates.join(', ')}], phase=${g.phase}, roundPhase=${g.roundPhase}, acting=${actingPlayer}, round=${g.round}`);
+        }
         if (consecutiveEmpty > 20) {
+          const pendingStates = PENDING_KEYS.filter(k => g[k] != null && g[k] !== false);
+          console.error(`[self-play] stuck_no_actions — pending: [${pendingStates.join(', ')}], phase=${g.phase}, roundPhase=${g.roundPhase}, round=${g.round}`);
           const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_no_actions', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };

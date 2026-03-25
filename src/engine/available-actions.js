@@ -262,6 +262,12 @@ function getRoundActiveActions(game, playerNum, deps) {
     return getNegationActions(game, playerNum);
   }
 
+  // Comm Disruption prompt — opponent must respond before game continues
+  if (game.pendingCommDisruptionPrompt) {
+    const cdActions = getCommDisruptionActions(game, playerNum);
+    if (cdActions.length > 0) return cdActions;
+  }
+
   if (game.pendingCombat) {
     const combatActions = getCombatActions(game, playerNum, deps);
     // Append playable CCs alongside combat actions (combat-timing windows)
@@ -1147,6 +1153,18 @@ function getNegationActions(game, playerNum) {
       customId: `negation_let_resolve_${game.gameId}`,
       description: 'Let card resolve',
     },
+  ];
+}
+
+// ── Comm Disruption ──────────────────────────────────────────────────────────
+
+function getCommDisruptionActions(game, playerNum) {
+  const cd = game.pendingCommDisruptionPrompt;
+  if (!cd || cd.targetPlayerNum !== playerNum) return [];
+  const gameId = game.gameId;
+  return [
+    { type: ACTION_TYPES.COMM_DISRUPTION_PLAY, customId: buildCustomId(ACTION_TYPES.COMM_DISRUPTION_PLAY, { gameId }), description: 'Play Comm Disruption to cancel' },
+    { type: ACTION_TYPES.COMM_DISRUPTION_SKIP, customId: buildCustomId(ACTION_TYPES.COMM_DISRUPTION_SKIP, { gameId }), description: 'Skip Comm Disruption' },
   ];
 }
 
