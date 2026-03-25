@@ -190,15 +190,15 @@ const LIMIT_STOPS = new Set([
 
 // ── Artifact builder ──────────────────────────────────────────────────────────
 
-function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stopReason, error, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats }) {
+function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stopReason, error, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound }) {
   const now = new Date();
   const result = BUG_STOPS.has(stopReason) ? 'failed'
     : stopReason === 'completed' ? 'completed'
     : 'stopped';
 
-  // Derive winner from VP
-  const p1vp = game?.player1VP ?? 0;
-  const p2vp = game?.player2VP ?? 0;
+  // Derive winner from VP (.total because playerNVP is {total, kills, objectives})
+  const p1vp = game?.player1VP?.total ?? 0;
+  const p2vp = game?.player2VP?.total ?? 0;
   const winner = stopReason !== 'completed' ? null
     : p1vp > p2vp ? 'player1'
     : p2vp > p1vp ? 'player2'
@@ -247,6 +247,7 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
     winner,
     p1_vp: p1vp,
     p2_vp: p2vp,
+    vp_per_round: vpPerRound ?? [],
     total_rounds: game?.currentRound ?? null,
     figure_defeats: figureDefeats ?? 0,
     action_type_counts: actionTypeCounts,
@@ -311,6 +312,12 @@ export function formatCoverageSummary(artifact, runNum) {
     `  Strain choices:     ${strainChoices}`,
     `  CC plays:           ${ccPlays}`,
     `  DC specials:        ${dcSpecials}`,
+    ``,
+    `── VP per Round ───────────────────────────────`,
+    ...((artifact.vp_per_round || []).length > 0
+      ? artifact.vp_per_round.map(r => `  Round ${r.round}: P1=${r.p1}  P2=${r.p2}`)
+      : ['  (no round transitions recorded)']),
+    `  Final:   P1=${artifact.p1_vp ?? 0}  P2=${artifact.p2_vp ?? 0}`,
     ``,
     `── Strategy ───────────────────────────────────`,
     `  Encoder:            ${rs.encoder ?? 'unknown'}`,
@@ -380,6 +387,8 @@ export async function runSelfPlayLoop(game, client, opts) {
   const triggeredPendingStates = new Set();
   const transitionsHit = [];
   let figureDefeats = 0;
+  const vpPerRound = [];          // [{round, p1, p2}, ...] — snapshot at each round transition
+  let lastTrackedRound = game.currentRound ?? 1;
   const traceData = { exercisedHandlers, actionTypeCounts, triggeredPendingStates, transitionsHit };
 
   // Reset per-game strategy counters (graph vs flat, heuristic overrides)
@@ -396,7 +405,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       if (!g || g.ended) {
         const wasManualStop = g?.selfPlayManualStop;
         const stopReason = wasManualStop ? 'manual_stop' : 'completed';
-        const artifact = buildRunArtifact(g || game, { scenario, guildId, startedAt, ringBuffer, stopReason, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
+        const artifact = buildRunArtifact(g || game, { scenario, guildId, startedAt, ringBuffer, stopReason, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
         if (wasManualStop) await insertSelfPlayRun(artifact);
         else if (persistCompleted) await insertSelfPlayRun(artifact);
         return { result: wasManualStop ? 'stopped' : 'completed', artifact };
@@ -431,7 +440,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       if (allActions.length === 0) {
         consecutiveEmpty++;
         if (consecutiveEmpty > 20) {
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_no_actions', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_no_actions', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -446,7 +455,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         if (a === b) {
           const loopPattern = lastCustomIds.slice(0, 3).join(' → ');
           const loopErr = new Error(`Repeating 3-action loop detected: ${loopPattern}`);
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -462,7 +471,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         // All available actions are unsupported (e.g., only CC plays) — skip this step
         consecutiveEmpty++;
         if (consecutiveEmpty > 20) {
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_unsupported_only', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_unsupported_only', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -490,7 +499,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       const handlerKey = getHandlerKey(chosen.customId, 'button');
       if (!handlerKey) {
         surfaceCtx = { handlerKey: null, intendedSurface: 'button', discordOp: chosen.customId };
-        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
+        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
         await insertSelfPlayRun(artifact);
         return { result: 'failed', artifact };
       }
@@ -498,7 +507,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       const handler = getHandler(handlerKey);
       if (!handler) {
         surfaceCtx = { handlerKey, intendedSurface: 'button' };
-        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
+        const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'unroutable_action', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
         await insertSelfPlayRun(artifact);
         return { result: 'failed', artifact };
       }
@@ -553,7 +562,7 @@ export async function runSelfPlayLoop(game, client, opts) {
           || err.message?.includes('is not iterable');
         if (isCrash) {
           surfaceCtx.discordError = err.message;
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'handler_crash', error: err, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats });
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'handler_crash', error: err, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
@@ -642,6 +651,17 @@ export async function runSelfPlayLoop(game, client, opts) {
         }
         // Transition key: same identity as headless explorer (roundPhase|pendingSet|actionType)
         transitionsHit.push(computeTransitionKey(gAfter, chosen.type));
+
+        // VP-per-round snapshot: capture VP totals when the round number advances
+        const curRound = gAfter.currentRound ?? 1;
+        if (curRound > lastTrackedRound) {
+          vpPerRound.push({
+            round: lastTrackedRound,
+            p1: gAfter.player1VP?.total ?? 0,
+            p2: gAfter.player2VP?.total ?? 0,
+          });
+          lastTrackedRound = curRound;
+        }
       }
 
       const ccLabel = chosen.params?.cardName ? ` (${chosen.params.cardName})` : '';
