@@ -190,8 +190,9 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     const enemyPn = actingPn === 1 ? 2 : 1;
     const enemyPositions = Object.values(game.figurePositions?.[enemyPn] || {}).filter(Boolean);
     if (enemyPositions.length > 0) {
-      // Pick space closest to nearest enemy
-      let bestAction = moveSpaces[0], bestDist = Infinity;
+      // Pick space closest to nearest enemy (random tiebreak to prevent oscillation)
+      const bestSpaces = [];
+      let bestDist = Infinity;
       for (const a of moveSpaces) {
         const coord = String(a.params.coord).toLowerCase();
         let minEnemyDist = Infinity;
@@ -201,9 +202,13 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
         }
         if (minEnemyDist < bestDist) {
           bestDist = minEnemyDist;
-          bestAction = a;
+          bestSpaces.length = 0;
+          bestSpaces.push(a);
+        } else if (minEnemyDist === bestDist) {
+          bestSpaces.push(a);
         }
       }
+      const bestAction = bestSpaces[Math.floor(Math.random() * bestSpaces.length)];
       return { action: bestAction, score: 0 };
     }
     // No enemy positions found — just suppress done and let DQN pick
