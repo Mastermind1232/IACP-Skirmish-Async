@@ -184,19 +184,10 @@ async function _runQueueLoop() {
         };
       }
 
-      // 3. Cleanup policy
-      if (result !== 'failed' && gameId) {
-        // Completed/stopped: clean up Discord channels
-        try {
-          const game = getGame(gameId);
-          if (game) {
-            await deleteGameChannelsAndGame(game, gameId, cleanupCtx);
-          }
-        } catch (err) {
-          console.error(`[self-play-queue] Cleanup failed for ${gameId}:`, err.message);
-        }
-      }
-      // Failed runs: SKIP cleanup — preserve Discord channels for human inspection
+      // 3. Cleanup policy — preserve channels for ALL runs so humans can inspect
+      // the game state after completion. Channels are cleaned up manually via
+      // killgamemcp before the next run.
+      // Failed runs already preserved channels; now completed/stopped do too.
 
       // 4. Seed-mode coverage persistence
       if (seedConfig && onSeedRunComplete && artifact) {
@@ -233,9 +224,12 @@ async function _runQueueLoop() {
       runCount++;
       if (!seedMode) rotationIndex++;
 
-      // 8. Inter-game delay (skip if paused/draining — the pause gate handles wait)
-      if (queueState === 'running' && interGameDelayMs > 0) {
-        await new Promise(r => setTimeout(r, interGameDelayMs));
+      // 8. Auto-stop after each game — one-game-at-a-time cadence.
+      // Channels are preserved for human inspection. Start a new run
+      // manually via selfplaymcp after reviewing.
+      if (queueState === 'running') {
+        console.log('[self-play-queue] Auto-stopping after 1 game (inspect channels, then restart)');
+        pauseQueue('auto: single-game cadence');
       }
     }
   } finally {
