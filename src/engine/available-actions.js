@@ -702,8 +702,24 @@ function getActivationActions(game, playerNum, deps) {
       }
 
       // Attack: compute individual targets if deps available (stunned figures cannot attack)
+      // Enforce 1-attack-per-activation rule: if already attacked, only offer attack if
+      // the DC has Assault, or a free/bonus attack is pending.
+      const alreadyAttacked = !!game.attackPerformedThisActivation?.[msgId];
+      let attackBlocked = false;
+      if (alreadyAttacked) {
+        const hasFreeAttack = game.freeAttackBonusPending?.[msgId] != null
+          || game.pounceAttackPending?.[msgId] != null
+          || game.fellSwoopFreeAttack?.[msgId]
+          || game.pummelTwoAttacksThisActivation?.[msgId];
+        const hasIRMultiAttack = !!game.imperialRetrofittingMultiAttack?.[msgId];
+        if (!hasFreeAttack && !hasIRMultiAttack) {
+          const dcAbilityText = getDcEffects()?.[meta.dcName]?.abilityText || '';
+          const hasAssault = /\bAssault:/i.test(dcAbilityText);
+          if (!hasAssault) attackBlocked = true;
+        }
+      }
       const canComputeTargets = deps.getDcStats && deps.getMapSpaces && game.selectedMap?.id;
-      const targets = isStunned ? [] : computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps);
+      const targets = (isStunned || attackBlocked) ? [] : computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps);
       if (targets.length > 0) {
         game.attackTargets = game.attackTargets || {};
         game.attackTargets[`${msgId}_${figureIndex}`] = targets;
@@ -716,7 +732,7 @@ function getActivationActions(game, playerNum, deps) {
             params: { msgId, dcName: meta.dcName, targetIndex: ti, targetFigureKey: t.figureKey },
           });
         }
-      } else if (!canComputeTargets && !isStunned) {
+      } else if (!canComputeTargets && !isStunned && !attackBlocked) {
         // Fallback: deps unavailable, offer generic attack (Discord handler will compute targets)
         actions.push({
           type: ACTION_TYPES.ATTACK_TARGET,
