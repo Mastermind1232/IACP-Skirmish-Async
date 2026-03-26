@@ -149,7 +149,9 @@ export async function postGameOver(game, client, winnerId, reason, deps) {
   }
   if (deps.isDbConfigured()) {
     deps.insertCompletedGame(game).catch((err) => console.error('[DB] insertCompletedGame:', err));
-    if (deps.achievementsChannelId && game.player1Id && game.player2Id) {
+    // Skip achievements for AI selfplay games — AI player IDs start with 'ai_player_'
+    const isAiGame = game.player1Id?.startsWith('ai_player_') || game.player2Id?.startsWith('ai_player_');
+    if (deps.achievementsChannelId && game.player1Id && game.player2Id && !isAiGame) {
       (async () => {
         try {
           const [stats1, stats2] = await Promise.all([
