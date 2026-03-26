@@ -119,6 +119,7 @@ export async function resolveVpTiebreaker(game, client, tiedVp, deps) {
  */
 export async function postGameOver(game, client, winnerId, reason, deps) {
   game.ended = true;
+  game.gameEndReason = reason ?? null;
   deps.setPhase(game, deps.PHASES.ENDED);
   game.winnerId = winnerId ?? game.winnerId ?? null;
   deps.cleanupGameLock(game.gameId);

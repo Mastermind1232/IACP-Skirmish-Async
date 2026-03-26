@@ -260,6 +260,16 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
     ? Object.fromEntries(traceData.actionTypeCounts)
     : {};
 
+  // End-condition telemetry: figure counts per player at game end
+  const p1FiguresRemaining = Object.keys(game?.figurePositions?.[1] || {}).length;
+  const p2FiguresRemaining = Object.keys(game?.figurePositions?.[2] || {}).length;
+
+  // game_end_reason: the reason from checkWinConditions/postGameOver (e.g. "elimination", "40 VP")
+  // For non-completed stops, derive from stopReason directly
+  const gameEndReason = stopReason === 'completed'
+    ? (game?.gameEndReason ?? (p1FiguresRemaining === 0 || p2FiguresRemaining === 0 ? 'elimination (inferred)' : 'unknown'))
+    : stopReason;
+
   return {
     game_id: game?.gameId ?? 'unknown',
     guild_id: guildId ?? null,
@@ -308,6 +318,10 @@ function buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stop
     transitions_hit: traceData?.transitionsHit ? [...new Set(traceData.transitionsHit)] : [],
     // Per-game strategy runtime stats (graph vs flat, heuristic)
     runtime_stats: getRuntimeStats(),
+    // End-condition telemetry
+    game_end_reason: gameEndReason,
+    p1_figures_remaining: p1FiguresRemaining,
+    p2_figures_remaining: p2FiguresRemaining,
   };
 }
 
@@ -512,9 +526,17 @@ export async function runSelfPlayLoop(game, client, opts) {
     for (let step = 0; ; step++) {
       const g = getGame(game.gameId);
       if (!g || g.ended) {
+        // Capture final-round VP snapshot (round transitions only fire mid-game)
+        const finalGame = g || game;
+        vpPerRound.push({
+          round: finalGame?.currentRound ?? lastTrackedRound,
+          p1: finalGame?.player1VP?.total ?? 0,
+          p2: finalGame?.player2VP?.total ?? 0,
+          final: true,
+        });
         const wasManualStop = g?.selfPlayManualStop;
         const stopReason = wasManualStop ? 'manual_stop' : 'completed';
-        const artifact = buildRunArtifact(g || game, { scenario, guildId, startedAt, ringBuffer, stopReason, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
+        const artifact = buildRunArtifact(finalGame, { scenario, guildId, startedAt, ringBuffer, stopReason, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
         if (wasManualStop) await insertSelfPlayRun(artifact);
         else if (persistCompleted) await insertSelfPlayRun(artifact);
         return { result: wasManualStop ? 'stopped' : 'completed', artifact };
@@ -523,6 +545,13 @@ export async function runSelfPlayLoop(game, client, opts) {
       // Round limit — prevent infinite games when AI never scores VP
       if ((g.currentRound ?? 1) > MAX_ROUNDS) {
         console.warn(`[self-play] Round limit reached (round ${g.currentRound} > ${MAX_ROUNDS})`);
+        // Capture VP snapshot at round-limit termination
+        vpPerRound.push({
+          round: g.currentRound ?? lastTrackedRound,
+          p1: g.player1VP?.total ?? 0,
+          p2: g.player2VP?.total ?? 0,
+          final: true,
+        });
         const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'round_limit', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
         await insertSelfPlayRun(artifact);
         return { result: 'stopped', artifact };

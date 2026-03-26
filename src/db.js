@@ -205,6 +205,31 @@ export async function initDb() {
       }
     }
 
+    // Phase 2: VP/coverage/telemetry columns (were computed but silently dropped)
+    for (const col of [
+      { name: 'checkpoint_games', type: 'INT' },
+      { name: 'checkpoint_file', type: 'TEXT' },
+      { name: 'winner', type: 'TEXT' },
+      { name: 'p1_vp', type: 'INT DEFAULT 0' },
+      { name: 'p2_vp', type: 'INT DEFAULT 0' },
+      { name: 'vp_per_round', type: "JSONB DEFAULT '[]'" },
+      { name: 'total_rounds', type: 'INT' },
+      { name: 'figure_defeats', type: 'INT DEFAULT 0' },
+      { name: 'action_type_counts', type: "JSONB DEFAULT '{}'" },
+      { name: 'transitions_hit', type: "JSONB DEFAULT '[]'" },
+      { name: 'runtime_stats', type: "JSONB DEFAULT '{}'" },
+      // End-condition telemetry
+      { name: 'game_end_reason', type: 'TEXT' },
+      { name: 'p1_figures_remaining', type: 'INT' },
+      { name: 'p2_figures_remaining', type: 'INT' },
+    ]) {
+      try {
+        await pool.query(`ALTER TABLE selfplay_runs ADD COLUMN ${col.name} ${col.type}`);
+      } catch (err) {
+        if (err.code !== '42701') console.error(`[DB] ALTER selfplay_runs add ${col.name}:`, err.message);
+      }
+    }
+
     // ── Exploration tables (headless explorer + coverage persistence) ─────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS exploration_transitions (
@@ -313,9 +338,13 @@ export async function insertSelfPlayRun(artifact) {
         recovery_reason, error_message, error_stack, handler_key,
         intended_surface, actual_channel, discord_op, discord_error,
         started_at, failed_at, duration_ms, recovery_fired, recovery_count,
-        exploration_mode, exercised_handlers, seen_action_types, triggered_pending_states
+        exploration_mode, exercised_handlers, seen_action_types, triggered_pending_states,
+        checkpoint_games, checkpoint_file, winner, p1_vp, p2_vp,
+        vp_per_round, total_rounds, figure_defeats, action_type_counts,
+        transitions_hit, runtime_stats,
+        game_end_reason, p1_figures_remaining, p2_figures_remaining
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48
       )`,
       [
         artifact.game_id, artifact.guild_id ?? null, artifact.scenario ?? null,
@@ -335,6 +364,15 @@ export async function insertSelfPlayRun(artifact) {
         JSON.stringify(artifact.exercised_handlers ?? []),
         JSON.stringify(artifact.seen_action_types ?? []),
         JSON.stringify(artifact.triggered_pending_states ?? []),
+        // Phase 2: VP/coverage/telemetry (previously dropped)
+        artifact.checkpoint_games ?? null, artifact.checkpoint_file ?? null,
+        artifact.winner ?? null, artifact.p1_vp ?? 0, artifact.p2_vp ?? 0,
+        JSON.stringify(artifact.vp_per_round ?? []), artifact.total_rounds ?? null,
+        artifact.figure_defeats ?? 0, JSON.stringify(artifact.action_type_counts ?? {}),
+        JSON.stringify(artifact.transitions_hit ?? []), JSON.stringify(artifact.runtime_stats ?? {}),
+        // End-condition telemetry
+        artifact.game_end_reason ?? null,
+        artifact.p1_figures_remaining ?? null, artifact.p2_figures_remaining ?? null,
       ]
     );
   } catch (err) {
