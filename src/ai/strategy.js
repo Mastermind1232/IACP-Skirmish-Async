@@ -111,6 +111,12 @@ let _heuristicCalls = 0;
 let _singleActionSkips = 0;
 let _endActSuppressed = 0;              // end_activation/pass actually removed from pool
 
+// Shadow evaluation: measures organic attack preference at the key decision node.
+// When force-attack fires, we also query the graph for what it WOULD have picked.
+let _activationEntryWithAttack = 0;     // decisions where attack_target was available
+let _graphWouldAttack = 0;              // shadow: graph would have picked attack organically
+let _graphWouldNotAttack = 0;           // shadow: graph preferred non-attack action
+
 export function resetRuntimeStats() {
   _graphDecisions = 0;
   _flatDecisions = 0;
@@ -120,6 +126,9 @@ export function resetRuntimeStats() {
   _heuristicCalls = 0;
   _singleActionSkips = 0;
   _endActSuppressed = 0;
+  _activationEntryWithAttack = 0;
+  _graphWouldAttack = 0;
+  _graphWouldNotAttack = 0;
 }
 
 export function getRuntimeStats() {
@@ -132,6 +141,9 @@ export function getRuntimeStats() {
     heuristicCalls: _heuristicCalls,
     singleActionSkips: _singleActionSkips,
     endActSuppressed: _endActSuppressed,
+    activationEntryWithAttack: _activationEntryWithAttack,
+    graphWouldAttack: _graphWouldAttack,
+    graphWouldNotAttack: _graphWouldNotAttack,
     encoder: _learnings ? getEncoderType() : 'not_loaded',
   };
 }
@@ -253,8 +265,23 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   // games. This forces combat to verify the full pipeline end-to-end.
   const attackActions = viable.filter(a => a.type === 'attack_target');
   if (attackActions.length > 0) {
+    _activationEntryWithAttack++;
     _heuristicOverrides++;
     _heuristicOverridesAttackLegal++;
+
+    // Shadow evaluation: query the graph for what it WOULD have picked.
+    // Pure measurement — does not change the action taken.
+    try {
+      const shadowPick = pickSmartAction(viable, game, learnings, playerNum, dcHealthState, dcMessageMeta);
+      if (shadowPick && shadowPick.type === 'attack_target') {
+        _graphWouldAttack++;
+      } else {
+        _graphWouldNotAttack++;
+      }
+    } catch {
+      _graphWouldNotAttack++; // shadow eval failed — count as non-attack
+    }
+
     return { action: attackActions[Math.floor(Math.random() * attackActions.length)], score: 0 };
   }
 
