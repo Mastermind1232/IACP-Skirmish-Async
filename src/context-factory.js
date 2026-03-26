@@ -20,6 +20,7 @@ const COMBAT_DEPS = [
   'calculateKillVp', 'checkHuntDissent', 'decrementActivationIfGroupDefeated',
   'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
   'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage',
+  'sendBleedingPrompt',
 ];
 
 const CONTEXT_GROUPS = {
