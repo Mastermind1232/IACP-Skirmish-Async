@@ -429,7 +429,14 @@ export function formatCoverageSummary(artifact, runNum) {
     `  Action types seen:  ${artifact.seen_action_types?.length ?? 0}`,
     `  Pending states hit: [${(artifact.triggered_pending_states || []).join(', ')}]`,
     `  Unique transitions: ${artifact.transitions_hit?.length ?? 0}`,
-    artifact.error_message ? `\n── Error ──────────────────────────────────────\n  ${artifact.error_message}` : '',
+    artifact.error_message ? [
+      ``,
+      `── Error ──────────────────────────────────────`,
+      `  ${artifact.error_message}`,
+      artifact.handler_key ? `  Handler: ${artifact.handler_key}` : null,
+      artifact.discord_op ? `  CustomId: ${artifact.discord_op}` : null,
+      artifact.error_stack ? `  Stack: ${artifact.error_stack.split('\n').slice(1, 4).map(l => l.trim()).join(' → ')}` : null,
+    ].filter(Boolean).join('\n') : '',
     `${'═'.repeat(52)}`,
   ].filter(Boolean).join('\n');
 }
@@ -693,6 +700,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       if (g.generalId) {
         try {
           interaction.channel = await fetchGameChannel(client, g.generalId);
+          if (!interaction.channel) console.warn(`[self-play] Step ${step}: fetchGameChannel returned null for ${g.generalId} (handler: ${handlerKey}, customId: ${chosen.customId})`);
           interaction.message.channel = interaction.channel;
         } catch {}
       }

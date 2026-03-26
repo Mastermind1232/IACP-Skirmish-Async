@@ -2339,6 +2339,7 @@ export async function handleCombatReady(interaction, ctx) {
   }
   if (playerNum === 1) combat.p1Ready = true;
   else combat.p2Ready = true;
+  if (!interaction.message?.channel) throw new Error(`handleCombatReady: interaction.message.channel is null (gameId=${gameId}, generalId=${game.generalId})`);
   await interaction.message.channel.send(`**Player ${playerNum}** has indicated they are ready to roll combat.`);
   if (!combat.p1Ready || !combat.p2Ready) {
     saveGames();
@@ -2356,6 +2357,7 @@ export async function handleCombatReady(interaction, ctx) {
       .setStyle(ButtonStyle.Danger)
   );
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (!thread) throw new Error(`handleCombatReady: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
   const rollMsgSent = await thread.send({
     embeds: [combatEmbed],
     components: [rollRow],
@@ -2397,6 +2399,7 @@ export async function handleCombatRoll(interaction, ctx) {
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (!thread) throw new Error(`handleCombatRoll: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
   const effectiveAttackerPlayerNum = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
 
   // C4: On the Lam — recheck LOS before rolling; if defender moved out of LOS, attack auto-misses
@@ -3109,6 +3112,7 @@ export async function handleCombatReroll(interaction, ctx) {
   }
   if (!expectedPlayer || !await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only P${expectedPlayer} can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`)) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (!thread) throw new Error(`handleCombatReroll: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
 
   // Helper: get the dominant icon type of a die result for Double or Nothing
   const _getDomIcon = (d) => {
@@ -4484,6 +4488,7 @@ export async function handleCombatSurge(interaction, ctx) {
   const effectiveAttackerForSurge = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
   if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerForSurge, canActAsPlayer, 'Only the attacker may spend surge.')) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (!thread) throw new Error(`handleCombatSurge: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
   // Overload (Rebel Saboteur): may trigger the same surge ability up to twice per attack
   const getDcEffS = ctx.getDcEffects || (() => ({}));
   const atkEffS = getDcEffS()[combat.attackerDcName] || getDcEffS()[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
