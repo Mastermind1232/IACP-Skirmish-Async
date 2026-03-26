@@ -111,11 +111,18 @@ let _heuristicCalls = 0;
 let _singleActionSkips = 0;
 let _endActSuppressed = 0;              // end_activation/pass actually removed from pool
 
-// Shadow evaluation: measures organic attack preference at the key decision node.
-// When force-attack fires, we also query the graph for what it WOULD have picked.
+// Shadow evaluation: measures organic preference at the two key decision nodes.
+// 1. Force-attack node: when attack is available, would graph have picked attack?
 let _activationEntryWithAttack = 0;     // decisions where attack_target was available
 let _graphWouldAttack = 0;              // shadow: graph would have picked attack organically
 let _graphWouldNotAttack = 0;           // shadow: graph preferred non-attack action
+// 2. Idle-suppression node: when end_act/pass is removed, what did graph prefer?
+let _idleSupFired = 0;                  // idle suppression decisions (reached shadow eval)
+let _idleSupForcedSingle = 0;           // suppression left only 1 action (no graph choice)
+let _idleSupGraphWouldIdle = 0;         // shadow: graph preferred end_act/pass (overridden)
+let _idleSupGraphWouldAttack = 0;       // shadow: graph preferred attack
+let _idleSupGraphWouldMove = 0;         // shadow: graph preferred move_figure
+let _idleSupGraphWouldOther = 0;        // shadow: graph preferred interact/cc/etc.
 
 export function resetRuntimeStats() {
   _graphDecisions = 0;
@@ -129,6 +136,12 @@ export function resetRuntimeStats() {
   _activationEntryWithAttack = 0;
   _graphWouldAttack = 0;
   _graphWouldNotAttack = 0;
+  _idleSupFired = 0;
+  _idleSupForcedSingle = 0;
+  _idleSupGraphWouldIdle = 0;
+  _idleSupGraphWouldAttack = 0;
+  _idleSupGraphWouldMove = 0;
+  _idleSupGraphWouldOther = 0;
 }
 
 export function getRuntimeStats() {
@@ -144,6 +157,12 @@ export function getRuntimeStats() {
     activationEntryWithAttack: _activationEntryWithAttack,
     graphWouldAttack: _graphWouldAttack,
     graphWouldNotAttack: _graphWouldNotAttack,
+    idleSupFired: _idleSupFired,
+    idleSupForcedSingle: _idleSupForcedSingle,
+    idleSupGraphWouldIdle: _idleSupGraphWouldIdle,
+    idleSupGraphWouldAttack: _idleSupGraphWouldAttack,
+    idleSupGraphWouldMove: _idleSupGraphWouldMove,
+    idleSupGraphWouldOther: _idleSupGraphWouldOther,
     encoder: _learnings ? getEncoderType() : 'not_loaded',
   };
 }
@@ -189,7 +208,9 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   if (viable.length === 0) return null;
 
   // Suppress premature end_activation / pass when productive actions exist
+  const preIdleViable = viable.some(a => IDLE_TYPES.has(a.type)) ? [...viable] : null;
   viable = applyActivationHeuristic(viable);
+  const idleWasSuppressed = preIdleViable !== null && viable.length < preIdleViable.length;
 
   // Move-toward-enemies heuristic: when picking movement spaces, suppress "done"
   // and pick the space that minimizes distance to the nearest enemy figure.
@@ -252,6 +273,7 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
 
   if (viable.length === 1) {
     _singleActionSkips++;
+    if (idleWasSuppressed) _idleSupForcedSingle++;
     return { action: viable[0], score: 0 };
   }
 
@@ -259,6 +281,20 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   const learnings = getLearnings();
   const dcHealthState = deps.dcHealthState || new Map();
   const dcMessageMeta = deps.dcMessageMeta || new Map();
+
+  // Idle-suppression shadow eval: what did graph prefer BEFORE idle was removed?
+  if (idleWasSuppressed && preIdleViable) {
+    _idleSupFired++;
+    try {
+      const shadowPick = pickSmartAction(preIdleViable, game, learnings, playerNum, dcHealthState, dcMessageMeta);
+      if (shadowPick) {
+        if (IDLE_TYPES.has(shadowPick.type)) _idleSupGraphWouldIdle++;
+        else if (shadowPick.type === 'attack_target') _idleSupGraphWouldAttack++;
+        else if (shadowPick.type === 'move_figure') _idleSupGraphWouldMove++;
+        else _idleSupGraphWouldOther++;
+      }
+    } catch { /* shadow eval failed */ }
+  }
 
   // Force-attack heuristic: when attack_target actions are available, always
   // pick one. The DQN's Q(attack) < Q(move) in Discord selfplay, causing 0 VP
