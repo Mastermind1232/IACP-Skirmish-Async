@@ -700,7 +700,6 @@ export async function runSelfPlayLoop(game, client, opts) {
       if (g.generalId) {
         try {
           interaction.channel = await fetchGameChannel(client, g.generalId);
-          if (!interaction.channel) console.warn(`[self-play] Step ${step}: fetchGameChannel returned null for ${g.generalId} (handler: ${handlerKey}, customId: ${chosen.customId})`);
           interaction.message.channel = interaction.channel;
         } catch {}
       }
@@ -716,6 +715,11 @@ export async function runSelfPlayLoop(game, client, opts) {
 
       // Dispatch through handler
       try {
+        // Fail fast if general channel is null — running a handler without it
+        // causes null.send crashes deep in handler code with no useful context.
+        if (!interaction.channel) {
+          throw new Error(`General channel null after retries (generalId=${g.generalId}, handler=${handlerKey}, customId=${chosen.customId})`);
+        }
         const group = getHandlerGroup(handlerKey);
         const runHandler = async () => {
           if (group) {
@@ -736,7 +740,8 @@ export async function runSelfPlayLoop(game, client, opts) {
         const isCrash = err.message?.includes('Cannot read')
           || err.message?.includes('is not a function')
           || err.message?.includes('is not defined')
-          || err.message?.includes('is not iterable');
+          || err.message?.includes('is not iterable')
+          || err.message?.includes('channel null after retries');
         if (isCrash) {
           surfaceCtx.discordError = err.message;
           const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'handler_crash', error: err, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });

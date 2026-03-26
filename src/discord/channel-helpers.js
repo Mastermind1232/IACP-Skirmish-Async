@@ -2,6 +2,8 @@
  * Centralized channel-fetch helpers to replace scattered client.channels.fetch() calls.
  */
 
+import { withDiscordRetry } from '../error-handling.js';
+
 /** Check if a string is a valid Discord snowflake (filters synthetic AI user IDs). */
 export const isDiscordSnowflake = (id) => /^\d{17,20}$/.test(id);
 
@@ -21,23 +23,36 @@ export function sanitizeMentions(payload) {
 }
 
 /**
- * Fetch a combat thread by its ID. Returns null on missing/deleted threads.
+ * Fetch a combat thread by its ID. Retries on transient Discord errors (rate
+ * limits, 5xx, network). Returns null only when the channel genuinely doesn't
+ * exist (e.g. 404 Not Found / Unknown Channel).
  * @param {import('discord.js').Client} client
  * @param {string|null|undefined} threadId
  * @returns {Promise<import('discord.js').ThreadChannel|null>}
  */
 export async function fetchCombatThread(client, threadId) {
-  if (!client?.channels?.fetch) return null;
-  return client.channels.fetch(threadId).catch(() => null);
+  if (!client?.channels?.fetch || !threadId) return null;
+  try {
+    return await withDiscordRetry(() => client.channels.fetch(threadId));
+  } catch {
+    // Non-retryable error (404/10003 Unknown Channel, invalid ID, etc.)
+    return null;
+  }
 }
 
 /**
- * Fetch any game channel (general, play-area, hand, etc.). Returns null on failure.
+ * Fetch any game channel (general, play-area, hand, etc.). Retries on transient
+ * Discord errors. Returns null only when the channel genuinely doesn't exist.
  * @param {import('discord.js').Client} client
  * @param {string|null|undefined} channelId
  * @returns {Promise<import('discord.js').TextChannel|null>}
  */
 export async function fetchGameChannel(client, channelId) {
-  if (!client?.channels?.fetch) return null;
-  return client.channels.fetch(channelId).catch(() => null);
+  if (!client?.channels?.fetch || !channelId) return null;
+  try {
+    return await withDiscordRetry(() => client.channels.fetch(channelId));
+  } catch {
+    // Non-retryable error (channel deleted, invalid ID, etc.)
+    return null;
+  }
 }
