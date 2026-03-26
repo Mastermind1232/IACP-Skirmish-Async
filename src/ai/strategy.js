@@ -190,7 +190,19 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     const enemyPn = actingPn === 1 ? 2 : 1;
     const enemyPositions = Object.values(game.figurePositions?.[enemyPn] || {}).filter(Boolean);
     if (enemyPositions.length > 0) {
-      // Pick space closest to nearest enemy (random tiebreak to prevent oscillation)
+      // Compute current distance from figure's position to nearest enemy
+      const moveEntry = Object.values(game.moveInProgress || {})[0];
+      const curPos = moveEntry?.currentPosition || moveEntry?.startCoord;
+      let currentDist = Infinity;
+      if (curPos) {
+        const cp = String(curPos).toLowerCase();
+        for (const ePos of enemyPositions) {
+          const d = getRange(cp, String(ePos).toLowerCase());
+          if (d < currentDist) currentDist = d;
+        }
+      }
+
+      // Pick spaces that STRICTLY improve distance to nearest enemy
       const bestSpaces = [];
       let bestDist = Infinity;
       for (const a of moveSpaces) {
@@ -208,8 +220,17 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
           bestSpaces.push(a);
         }
       }
-      const bestAction = bestSpaces[Math.floor(Math.random() * bestSpaces.length)];
-      return { action: bestAction, score: 0 };
+
+      // Only move if it strictly improves distance; otherwise stop to save MP
+      if (bestDist < currentDist) {
+        const bestAction = bestSpaces[Math.floor(Math.random() * bestSpaces.length)];
+        return { action: bestAction, score: 0 };
+      }
+      // No improvement possible — pick "done" if available, else pick randomly
+      if (moveDone.length > 0) {
+        return { action: moveDone[0], score: 0 };
+      }
+      return { action: bestSpaces[Math.floor(Math.random() * bestSpaces.length)], score: 0 };
     }
     // No enemy positions found — just suppress done and let DQN pick
     if (moveDone.length > 0) {
