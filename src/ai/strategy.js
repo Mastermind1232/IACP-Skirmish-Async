@@ -86,17 +86,17 @@ function isAiViable(action) {
  * are in range.
  */
 /**
- * High-value action types that justify suppressing end_activation/pass.
- * move_figure IS included: without it, the DQN picks end_activation before
- * figures ever move, causing 0 attacks across 32 rounds. Even imperfect
- * movement is better than standing still — figures must close distance
- * to generate attack_target actions.
+ * Action types considered "productive" for idle-suppression decisions.
+ * Split into two tiers:
+ * - COMBAT_ACTIONS: attack/special/interact/CC — graph manages these autonomously
+ * - move_figure: the graph undervalues movement and will idle instead of closing
+ *   distance; suppression only fires when move is the SOLE productive option.
  */
-const COMBAT_PRODUCTIVE_TYPES = new Set([
+const COMBAT_ACTIONS = new Set([
   'attack_target', 'dc_special',
   'play_cc_special', 'play_cc_double', 'interact',
-  'move_figure',
 ]);
+const COMBAT_PRODUCTIVE_TYPES = new Set([...COMBAT_ACTIONS, 'move_figure']);
 const IDLE_TYPES = new Set(['dc_end_activation', 'pass_activation_turn']);
 
 // ── Per-game runtime instrumentation ────────────────────────────────────────
@@ -106,10 +106,13 @@ let _graphDecisions = 0;
 let _flatDecisions = 0;
 let _heuristicOverrides = 0;
 let _heuristicOverridesAttackLegal = 0;
-let _heuristicOverridesMoveOnly = 0;    // would-have-overridden but move_figure was the only "productive" option
+let _heuristicOverridesMoveOnly = 0;    // suppression fired with move_figure as sole productive type
 let _heuristicCalls = 0;
 let _singleActionSkips = 0;
 let _endActSuppressed = 0;              // end_activation/pass actually removed from pool
+// Context breakdown: times idle suppression was skipped because graph had real combat options
+let _idleSupSkippedAttack = 0;          // skipped: attack_target was available → graph decides
+let _idleSupSkippedSpecial = 0;         // skipped: dc_special/interact/CC available (no attack) → graph decides
 
 // Shadow evaluation: measures organic preference at the two key decision nodes.
 // 1. Force-attack node: when attack is available, would graph have picked attack?
@@ -133,6 +136,8 @@ export function resetRuntimeStats() {
   _heuristicCalls = 0;
   _singleActionSkips = 0;
   _endActSuppressed = 0;
+  _idleSupSkippedAttack = 0;
+  _idleSupSkippedSpecial = 0;
   _activationEntryWithAttack = 0;
   _graphWouldAttack = 0;
   _graphWouldNotAttack = 0;
@@ -154,6 +159,8 @@ export function getRuntimeStats() {
     heuristicCalls: _heuristicCalls,
     singleActionSkips: _singleActionSkips,
     endActSuppressed: _endActSuppressed,
+    idleSupSkippedAttack: _idleSupSkippedAttack,
+    idleSupSkippedSpecial: _idleSupSkippedSpecial,
     activationEntryWithAttack: _activationEntryWithAttack,
     graphWouldAttack: _graphWouldAttack,
     graphWouldNotAttack: _graphWouldNotAttack,
@@ -172,15 +179,25 @@ export function getHeuristicStats() { return { overrides: _heuristicOverrides, c
 
 function applyActivationHeuristic(actions) {
   _heuristicCalls++;
-  const hasCombatProductive = actions.some(a => COMBAT_PRODUCTIVE_TYPES.has(a.type));
   const hasIdle = actions.some(a => IDLE_TYPES.has(a.type));
-
   if (!hasIdle) return actions; // nothing to suppress
-  if (!hasCombatProductive) return actions; // no high-value actions, let DQN pick
 
-  // Suppress idle when combat-productive actions exist
+  const hasMove = actions.some(a => a.type === 'move_figure');
+  const hasAttack = actions.some(a => a.type === 'attack_target');
+  const hasSpecial = actions.some(a => COMBAT_ACTIONS.has(a.type) && a.type !== 'attack_target');
+  const hasCombatProductive = hasMove || hasAttack || hasSpecial;
+
+  if (!hasCombatProductive) return actions; // no productive actions at all, let graph pick
+
+  // Narrowed rule: only suppress idle when move_figure is the SOLE productive type.
+  // When attack/special/interact/CC are available, graph chooses freely.
+  if (hasAttack) { _idleSupSkippedAttack++; return actions; }
+  if (hasSpecial) { _idleSupSkippedSpecial++; return actions; }
+  if (!hasMove) return actions; // safety: shouldn't reach here
+
+  // move_figure is the only productive option — suppress idle to force movement
   _heuristicOverrides++;
-  if (actions.some(a => a.type === 'attack_target')) _heuristicOverridesAttackLegal++;
+  _heuristicOverridesMoveOnly++;
   const filtered = actions.filter(a => {
     if (IDLE_TYPES.has(a.type)) { _endActSuppressed++; return false; }
     return true;
