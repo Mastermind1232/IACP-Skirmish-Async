@@ -87,10 +87,9 @@ function isAiViable(action) {
  */
 /**
  * Action types considered "productive" for idle-suppression decisions.
- * Split into two tiers:
- * - COMBAT_ACTIONS: attack/special/interact/CC — graph manages these autonomously
- * - move_figure: the graph undervalues movement and will idle instead of closing
- *   distance; suppression only fires when move is the SOLE productive option.
+ * Run 74 proved narrowing to move-only collapsed combat (7 attacks in 9 rounds).
+ * The graph undervalues ALL non-attack actions, not just movement. Broad
+ * suppression of idle when ANY productive action exists is required.
  */
 const COMBAT_ACTIONS = new Set([
   'attack_target', 'dc_special',
@@ -182,22 +181,19 @@ function applyActivationHeuristic(actions) {
   const hasIdle = actions.some(a => IDLE_TYPES.has(a.type));
   if (!hasIdle) return actions; // nothing to suppress
 
-  const hasMove = actions.some(a => a.type === 'move_figure');
+  const hasCombatProductive = actions.some(a => COMBAT_PRODUCTIVE_TYPES.has(a.type));
+  if (!hasCombatProductive) return actions; // no productive actions, let graph pick
+
+  // Broad suppression: remove idle when ANY productive action exists.
+  // Run 74 proved narrowing to move-only collapsed combat — the graph undervalues
+  // all non-attack actions (specials, CC, interact), not just movement.
+  _heuristicOverrides++;
+  // Context-breakdown counters for attribution
   const hasAttack = actions.some(a => a.type === 'attack_target');
   const hasSpecial = actions.some(a => COMBAT_ACTIONS.has(a.type) && a.type !== 'attack_target');
-  const hasCombatProductive = hasMove || hasAttack || hasSpecial;
-
-  if (!hasCombatProductive) return actions; // no productive actions at all, let graph pick
-
-  // Narrowed rule: only suppress idle when move_figure is the SOLE productive type.
-  // When attack/special/interact/CC are available, graph chooses freely.
-  if (hasAttack) { _idleSupSkippedAttack++; return actions; }
-  if (hasSpecial) { _idleSupSkippedSpecial++; return actions; }
-  if (!hasMove) return actions; // safety: shouldn't reach here
-
-  // move_figure is the only productive option — suppress idle to force movement
-  _heuristicOverrides++;
-  _heuristicOverridesMoveOnly++;
+  const hasMove = actions.some(a => a.type === 'move_figure');
+  if (hasAttack) _heuristicOverridesAttackLegal++;
+  if (hasMove && !hasAttack && !hasSpecial) _heuristicOverridesMoveOnly++;
   const filtered = actions.filter(a => {
     if (IDLE_TYPES.has(a.type)) { _endActSuppressed++; return false; }
     return true;
