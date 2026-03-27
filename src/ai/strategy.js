@@ -296,17 +296,16 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     } catch { /* shadow eval failed */ }
   }
 
-  // Force-attack heuristic: when attack_target actions are available, always
-  // pick one. The DQN's Q(attack) < Q(move) in Discord selfplay, causing 0 VP
-  // games. This forces combat to verify the full pipeline end-to-end.
+  // Force-attack heuristic: DISABLED — shadow eval in run 67 proved 100% redundant
+  // (graph chose attack organically in 36/36 cases). Counters kept for validation.
+  // To restore: set FORCE_ATTACK_ENABLED = true.
+  const FORCE_ATTACK_ENABLED = false;
   const attackActions = viable.filter(a => a.type === 'attack_target');
   if (attackActions.length > 0) {
     _activationEntryWithAttack++;
-    _heuristicOverrides++;
-    _heuristicOverridesAttackLegal++;
 
-    // Shadow evaluation: query the graph for what it WOULD have picked.
-    // Pure measurement — does not change the action taken.
+    // Shadow evaluation: track what graph picks when attack is available.
+    // With force-attack disabled, this measures live organic attack rate.
     try {
       const shadowPick = pickSmartAction(viable, game, learnings, playerNum, dcHealthState, dcMessageMeta);
       if (shadowPick && shadowPick.type === 'attack_target') {
@@ -315,10 +314,15 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
         _graphWouldNotAttack++;
       }
     } catch {
-      _graphWouldNotAttack++; // shadow eval failed — count as non-attack
+      _graphWouldNotAttack++;
     }
 
-    return { action: attackActions[Math.floor(Math.random() * attackActions.length)], score: 0 };
+    if (FORCE_ATTACK_ENABLED) {
+      _heuristicOverrides++;
+      _heuristicOverridesAttackLegal++;
+      return { action: attackActions[Math.floor(Math.random() * attackActions.length)], score: 0 };
+    }
+    // Fall through to graph DQN — let it pick organically
   }
 
   // Track whether graph or flat encoder is used for this decision
