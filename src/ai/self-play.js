@@ -568,6 +568,32 @@ export async function runSelfPlayLoop(game, client, opts) {
         lastRoundPhase = curPhase;
       }
 
+      // Auto-resolve start-of-round window (both players just acknowledge — no decision)
+      if (g.startOfRoundWhoseTurn && g.roundPhase === 'start_of_round') {
+        const sorCustomId = `end_start_of_round_${g.gameId}`;
+        const sorHandlerKey = getHandlerKey(sorCustomId, 'button');
+        const sorHandler = sorHandlerKey ? getHandler(sorHandlerKey) : null;
+        if (sorHandler) {
+          while (g.startOfRoundWhoseTurn) {
+            const userId = g.startOfRoundWhoseTurn;
+            const sorInteraction = createLiveAiInteraction(sorCustomId, userId, g, client);
+            sorInteraction.client = client;
+            if (g.generalId) {
+              try { sorInteraction.channel = await fetchGameChannel(client, g.generalId); sorInteraction.message.channel = sorInteraction.channel; } catch {}
+            }
+            const sorGroup = getHandlerGroup(sorHandlerKey);
+            if (sorGroup) {
+              await sorHandler(sorInteraction, buildContext(sorGroup, buildAllDeps()));
+            } else {
+              await sorHandler(sorInteraction);
+            }
+            totalActionsDispatched++;
+            ringBuffer.push({ step: totalActionsDispatched, type: 'end_start_of_round', customId: sorCustomId, playerNum: userId === g.player1Id ? 1 : 2, handlerKey: sorHandlerKey, ts: Date.now() });
+          }
+        }
+        continue;
+      }
+
       // Auto-resolve phase gates (both players are AI — bypass DQN inference)
       if (g.phaseGate) {
         const gateCustomId = `phase_gate_ready_${g.gameId}`;
