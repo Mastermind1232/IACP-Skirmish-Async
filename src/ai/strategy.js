@@ -130,7 +130,11 @@ let _idleSupForcedSingle = 0;           // suppression left only 1 action (no gr
 let _idleSupGraphWouldIdle = 0;         // shadow: graph preferred end_act/pass (overridden)
 let _idleSupGraphWouldAttack = 0;       // shadow: graph preferred attack
 let _idleSupGraphWouldMove = 0;         // shadow: graph preferred move_figure
-let _idleSupGraphWouldOther = 0;        // shadow: graph preferred interact/cc/etc.
+let _idleSupGraphWouldOther = 0;        // shadow: graph preferred interact/cc/etc. (legacy aggregate)
+// Refined "other" breakdown: which specific non-attack class did the graph prefer?
+let _idleSupGraphWouldDcSpecial = 0;
+let _idleSupGraphWouldInteract = 0;
+let _idleSupGraphWouldPlayCc = 0;
 
 export function resetRuntimeStats() {
   _graphDecisions = 0;
@@ -157,6 +161,9 @@ export function resetRuntimeStats() {
   _idleSupGraphWouldAttack = 0;
   _idleSupGraphWouldMove = 0;
   _idleSupGraphWouldOther = 0;
+  _idleSupGraphWouldDcSpecial = 0;
+  _idleSupGraphWouldInteract = 0;
+  _idleSupGraphWouldPlayCc = 0;
 }
 
 export function getRuntimeStats() {
@@ -185,6 +192,9 @@ export function getRuntimeStats() {
     idleSupGraphWouldAttack: _idleSupGraphWouldAttack,
     idleSupGraphWouldMove: _idleSupGraphWouldMove,
     idleSupGraphWouldOther: _idleSupGraphWouldOther,
+    idleSupGraphWouldDcSpecial: _idleSupGraphWouldDcSpecial,
+    idleSupGraphWouldInteract: _idleSupGraphWouldInteract,
+    idleSupGraphWouldPlayCc: _idleSupGraphWouldPlayCc,
     encoder: _learnings ? getEncoderType() : 'not_loaded',
   };
 }
@@ -326,7 +336,12 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
         if (IDLE_TYPES.has(shadowPick.type)) _idleSupGraphWouldIdle++;
         else if (shadowPick.type === 'attack_target') _idleSupGraphWouldAttack++;
         else if (shadowPick.type === 'move_figure') _idleSupGraphWouldMove++;
-        else _idleSupGraphWouldOther++;
+        else {
+          _idleSupGraphWouldOther++;
+          if (shadowPick.type === 'dc_special') _idleSupGraphWouldDcSpecial++;
+          else if (shadowPick.type === 'interact') _idleSupGraphWouldInteract++;
+          else if (shadowPick.type === 'play_cc_special' || shadowPick.type === 'play_cc_double') _idleSupGraphWouldPlayCc++;
+        }
       }
     } catch { /* shadow eval failed */ }
   }
