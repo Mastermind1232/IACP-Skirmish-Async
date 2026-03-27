@@ -109,9 +109,15 @@ let _heuristicOverridesMoveOnly = 0;    // suppression fired with move_figure as
 let _heuristicCalls = 0;
 let _singleActionSkips = 0;
 let _endActSuppressed = 0;              // end_activation/pass actually removed from pool
-// Context breakdown: times idle suppression was skipped because graph had real combat options
-let _idleSupSkippedAttack = 0;          // skipped: attack_target was available → graph decides
-let _idleSupSkippedSpecial = 0;         // skipped: dc_special/interact/CC available (no attack) → graph decides
+// Context breakdown: times idle suppression was skipped (from narrowing experiment, now unused)
+let _idleSupSkippedAttack = 0;
+let _idleSupSkippedSpecial = 0;
+// Per-class breakdown: which productive types were available when idle suppression fired (overlapping)
+let _idleSupWithAttack = 0;             // attack_target was in pool
+let _idleSupWithDcSpecial = 0;          // dc_special was in pool
+let _idleSupWithPlayCc = 0;             // play_cc_special or play_cc_double was in pool
+let _idleSupWithInteract = 0;           // interact was in pool
+let _idleSupWithMove = 0;              // move_figure was in pool
 
 // Shadow evaluation: measures organic preference at the two key decision nodes.
 // 1. Force-attack node: when attack is available, would graph have picked attack?
@@ -137,6 +143,11 @@ export function resetRuntimeStats() {
   _endActSuppressed = 0;
   _idleSupSkippedAttack = 0;
   _idleSupSkippedSpecial = 0;
+  _idleSupWithAttack = 0;
+  _idleSupWithDcSpecial = 0;
+  _idleSupWithPlayCc = 0;
+  _idleSupWithInteract = 0;
+  _idleSupWithMove = 0;
   _activationEntryWithAttack = 0;
   _graphWouldAttack = 0;
   _graphWouldNotAttack = 0;
@@ -160,6 +171,11 @@ export function getRuntimeStats() {
     endActSuppressed: _endActSuppressed,
     idleSupSkippedAttack: _idleSupSkippedAttack,
     idleSupSkippedSpecial: _idleSupSkippedSpecial,
+    idleSupWithAttack: _idleSupWithAttack,
+    idleSupWithDcSpecial: _idleSupWithDcSpecial,
+    idleSupWithPlayCc: _idleSupWithPlayCc,
+    idleSupWithInteract: _idleSupWithInteract,
+    idleSupWithMove: _idleSupWithMove,
     activationEntryWithAttack: _activationEntryWithAttack,
     graphWouldAttack: _graphWouldAttack,
     graphWouldNotAttack: _graphWouldNotAttack,
@@ -188,12 +204,18 @@ function applyActivationHeuristic(actions) {
   // Run 74 proved narrowing to move-only collapsed combat — the graph undervalues
   // all non-attack actions (specials, CC, interact), not just movement.
   _heuristicOverrides++;
-  // Context-breakdown counters for attribution
+  // Context-breakdown counters for attribution (per-class, overlapping)
   const hasAttack = actions.some(a => a.type === 'attack_target');
-  const hasSpecial = actions.some(a => COMBAT_ACTIONS.has(a.type) && a.type !== 'attack_target');
+  const hasDcSpecial = actions.some(a => a.type === 'dc_special');
+  const hasPlayCc = actions.some(a => a.type === 'play_cc_special' || a.type === 'play_cc_double');
+  const hasInteract = actions.some(a => a.type === 'interact');
   const hasMove = actions.some(a => a.type === 'move_figure');
-  if (hasAttack) _heuristicOverridesAttackLegal++;
-  if (hasMove && !hasAttack && !hasSpecial) _heuristicOverridesMoveOnly++;
+  if (hasAttack) { _heuristicOverridesAttackLegal++; _idleSupWithAttack++; }
+  if (hasDcSpecial) _idleSupWithDcSpecial++;
+  if (hasPlayCc) _idleSupWithPlayCc++;
+  if (hasInteract) _idleSupWithInteract++;
+  if (hasMove) _idleSupWithMove++;
+  if (hasMove && !hasAttack && !hasDcSpecial && !hasPlayCc && !hasInteract) _heuristicOverridesMoveOnly++;
   const filtered = actions.filter(a => {
     if (IDLE_TYPES.has(a.type)) { _endActSuppressed++; return false; }
     return true;
