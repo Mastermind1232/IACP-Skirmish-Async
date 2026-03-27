@@ -500,8 +500,8 @@ export async function renderMap(mapId, options = {}) {
           const dw = Math.round(tw * tScale);
           const dh = Math.round(th * tScale);
           const isLarge = cols > 1 || rows > 1;
-          const outlineGap = isLarge ? Math.max(2, Math.round(3 * scale)) : -1;
-          const outlineWidth = isLarge ? Math.max(2, Math.round(3 * scale)) : 2;
+          const outlineGap = isLarge ? Math.max(2, Math.round(3 * scale)) : -2;
+          const outlineWidth = isLarge ? Math.max(2, Math.round(3 * scale)) : 3;
           // Draw colored outline outside the figure
           ctx.strokeStyle = fig.color || '#fff';
           ctx.lineWidth = outlineWidth;
@@ -524,10 +524,13 @@ export async function renderMap(mapId, options = {}) {
           }
           ctx.clip();
           // Rotate image 90° when orientation is swapped vs base size (e.g. 3x2 vs base 2x3)
+          // OR when image aspect ratio mismatches clip area (e.g. landscape image in portrait 1x2 clip)
           const baseSize = (fig.baseSize || size).toLowerCase();
           const [baseCols = 1, baseRows = 1] = baseSize.split('x').map(Number);
           const orientationSwapped = baseCols !== baseRows && cols === baseRows && rows === baseCols;
-          if (orientationSwapped) {
+          const imageIsLandscape = tw > th;
+          const aspectMismatch = !isSquare && (imageIsLandscape !== (clipW > clipH));
+          if (orientationSwapped || aspectMismatch) {
             ctx.translate(cx, cy);
             ctx.rotate(Math.PI / 2);
             // Re-scale image to fit the rotated clip area (swap width/height for scaling)
@@ -569,7 +572,7 @@ export async function renderMap(mapId, options = {}) {
     }
     // Power Tokens: up to 3 slots at top-left of unit
     const powerTokenTypes = (fig.powerTokens || []).slice(0, 3);
-    const ptSize = Math.max(12, clipRadius * (powerTokenTypes.length > 2 ? 0.38 : 0.45));
+    const ptSize = Math.max(14, clipRadius * (powerTokenTypes.length > 2 ? 0.5 : 0.6));
     const ptConfig = getTokenImagesConfig().powerTokens || {};
     const figX0 = cx - clipW;
     const figY0 = cy - clipH;
@@ -589,6 +592,8 @@ export async function renderMap(mapId, options = {}) {
       }
     }
     const ptResults = await Promise.all(ptLoadPromises);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     for (const result of ptResults) {
       if (!result) continue;
       const px = figX0 + result.i * (ptSize * 0.9);
@@ -600,12 +605,13 @@ export async function renderMap(mapId, options = {}) {
       const dh = Math.round(th * tScale);
       ctx.drawImage(result.img, px, py, dw, dh);
     }
+    ctx.imageSmoothingEnabled = false;
     // Pre-load condition icon images in parallel, then draw sequentially (stacking leftward)
     const conditionIcons = (fig.conditions || []).slice(0, 5);
     if (conditionIcons.length > 0) {
       const COND_SLOT = { Bleeding: 1, Stunned: 2, Weakened: 3, Focused: 4, Hidden: 5 };
       const condSizeStr = (fig.baseSize || fig.figureSize || '1x1');
-      const iconSize = Math.max(12, Math.min(clipW, clipH) * 0.5);
+      const iconSize = Math.max(14, Math.min(clipW, clipH) * 0.65);
       const condImgPromises = conditionIcons.map((cond) => {
         const slot = COND_SLOT[cond] || 1;
         const condIconFile = `Icon-${slot}-${cond} ${condSizeStr}.png`;
