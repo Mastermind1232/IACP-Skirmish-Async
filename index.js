@@ -1427,6 +1427,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     checkPostCombatSurges,
     finishCombatResolution,
     normalizeCoord,
+    sendBleedingPrompt,
   });
 }
 
