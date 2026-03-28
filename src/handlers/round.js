@@ -103,7 +103,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   // Phase gate: both players confirm before advancing to status phase
   const { sendPhaseGateMessages: _eorSendGate } = ctx;
   if (_eorSendGate) {
-    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    await interaction.message?.edit({ components: [] }).catch(discordCatch);
     await _eorSendGate(game, 'post_end_of_round', ctx);
     saveGames();
     return;
@@ -756,7 +756,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     const ruleCtx = { logGameAction, checkWinConditions, getMapTokensData, getSpaceController, isFigureInDeploymentZone, getFiguresOnOrAdjacentToSpace, client };
     const { gameEnded } = await runEndOfRoundRules(game, mapId, variant, endOfRoundRules, ruleCtx);
     if (gameEnded) {
-      await interaction.message.edit({ components: [] }).catch(discordCatch);
+      await interaction.message?.edit({ components: [] }).catch(discordCatch);
       saveGames();
       return;
     }
@@ -784,7 +784,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     if (damageEvents.length > 0) {
       await checkWinConditions(game, client);
       if (game.ended) {
-        await interaction.message.edit({ components: [] }).catch(discordCatch);
+        await interaction.message?.edit({ components: [] }).catch(discordCatch);
         saveGames();
         return;
       }
@@ -885,7 +885,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   }
 
   if (interaction) {
-    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    await interaction.message?.edit({ components: [] }).catch(discordCatch);
   }
   saveGames();
 }
