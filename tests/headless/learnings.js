@@ -164,7 +164,7 @@ const REWARD_WEIGHTS = {
   activationAction: 0.15, // Bonus for productive actions during activation (move, attack, ability, interact)
 };
 
-const NUM_FEATURES = 49;
+const NUM_FEATURES = 50;
 
 const FEATURE_NAMES = [
   // Original 16 (indices 0-15 preserved for weight compatibility)
@@ -205,6 +205,8 @@ const FEATURE_NAMES = [
   'fractionInRange',            // Fraction of my figures with ≥1 enemy in attack range
   'objectivesContested',        // Fraction of objectives with a friendly figure within 2 spaces
   'avgAllyDistToObjective',     // 1 - avg distance from all allies to nearest objective /10
+  // Phase 6: dc_special visibility (index 49)
+  'activeDcHasSpecial',         // 1 if active DC has at least one usable special ability
 ];
 
 const ABSTRACT_TYPES = [
@@ -998,6 +1000,42 @@ function getActiveDcFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
   return result;
 }
 
+/**
+ * Binary feature: does the active DC have at least one usable special ability?
+ * Returns 1 if yes, 0 otherwise. Checks: not stunned, actions remaining, not already used.
+ */
+function getActiveDcHasSpecial(game, playerNum, dcMessageMeta) {
+  const active = findActiveDcMsgId(game, playerNum, dcMessageMeta);
+  if (!active) return 0;
+
+  const { msgId, dcName } = active;
+  const actionsData = game.dcActionsData?.[msgId];
+  const remaining = actionsData?.remaining ?? 2;
+  if (remaining < 1) return 0;
+
+  // Stun check
+  const figureIndex = actionsData?.selectedFigure ?? 0;
+  const dgMatch = (active.meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const figureKey = `${dcName}-${dgIndex}-${figureIndex}`;
+  if ((game.figureConditions?.[figureKey] || []).includes('Stun')) return 0;
+
+  // Check specials from dc-effects data
+  let dcEffects;
+  try { dcEffects = getDcEffects(); } catch { return 0; }
+  const lower = dcName.toLowerCase();
+  const ciKey = Object.keys(dcEffects).find(k => k.toLowerCase() === lower);
+  const eff = dcEffects?.[dcName] || (ciKey ? dcEffects[ciKey] : null);
+  const specials = eff?.specials || [];
+  if (specials.length === 0) return 0;
+
+  const specialsUsed = actionsData?.specialsUsed || [];
+  for (let si = 0; si < specials.length; si++) {
+    if (!specialsUsed.includes(si) && remaining >= 1) return 1;
+  }
+  return 0;
+}
+
 // ── Per-DC / Per-Figure Feature Helpers ──────────────────────────────────────
 
 /**
@@ -1179,6 +1217,8 @@ export function extractFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
     ...getActiveDcFeatures(game, playerNum, dcHealthState, dcMessageMeta),
     // Phase 5: positional-awareness (indices 46-48)
     ...getPositionalAwarenessFeatures(game, playerNum),
+    // Phase 6: dc_special visibility (index 49)
+    /* 49 activeDcHasSpecial */ getActiveDcHasSpecial(game, playerNum, dcMessageMeta),
   ];
 }
 
@@ -1871,6 +1911,15 @@ const SURGE_SKIP_PENALTY = 1.50;
 const CC_SHAPE_REWARD = 0.25;
 const CC_REWARD_CAP = 5;
 
+// ── DC Special (ability) Reward Shaping ──────────────────────────────────────
+// Problem: dc_special maps to abstract type 'ability' but has no dedicated reward
+// signal. Discord shadow eval (runs 75-76) showed 0% organic pick rate across
+// 178 decisions where dc_special was available. The DQN cannot distinguish
+// "use ability" from "end activation" because both produce the same +0.15 bonus.
+// Fix: flat bonus per dc_special use, capped per game (same pattern as CC shaping).
+const DC_SPECIAL_REWARD = 1.0;
+const DC_SPECIAL_CAP = 8;  // ~1-2 per DC per game for a 4-DC army
+
 // ── Movement-Specific Reward Shaping ─────────────────────────────────────────
 // Problem: movement payoff is delayed (positioning → future attack), but TD
 // updates only see the immediate near-zero reward. The global dist:0.4 in
@@ -2311,6 +2360,7 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
   let lastFeatures = null;
   let _hasBeneficialSurge = false; // True when beneficial surge spend was available at decision time
   let _ccPlaysThisGame = 0; // Per-game CC play counter for reward cap
+  let _dcSpecialPlaysThisGame = 0; // Per-game dc_special counter for reward cap
   let _moveShapingThisActivation = 0; // Accumulated movement shaping in current activation
   let lastActiveDcMsgId = null;       // Frozen pre-action figure identity (boundary key)
   let lastActiveFigIdx = null;        // Frozen pre-action subfigure index (v2 / diagnostics)
@@ -2398,6 +2448,14 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
         if (_ccPlaysThisGame <= CC_REWARD_CAP) ccBonus = CC_SHAPE_REWARD;
       }
 
+      // DC Special shaping: flat bonus for using a dc_special ability.
+      // Capped per game to prevent spam (same pattern as CC shaping).
+      let dcSpecialBonus = 0;
+      if (absType === 'ability') {
+        _dcSpecialPlaysThisGame++;
+        if (_dcSpecialPlaysThisGame <= DC_SPECIAL_CAP) dcSpecialBonus = DC_SPECIAL_REWARD;
+      }
+
       // ── Movement-specific reward shaping ─────────────────────────────────────
       // Targets the core failure mode: movement has delayed payoff but near-zero
       // immediate reward. We give the ACTIVE FIGURE credit for closing distance
@@ -2449,7 +2507,7 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       ]);
       const activationBonus = PRODUCTIVE_ABS_TYPES.has(absType) ? (REWARD_WEIGHTS.activationAction || 0) : 0;
 
-      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus + moveBonus + moveDecisionBonus + activationBonus;
+      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus + dcSpecialBonus + moveBonus + moveDecisionBonus + activationBonus;
       const actionIdx = ABSTRACT_TYPES.indexOf(absType);
       const wgFeatures = pickSmartAction._lastWgFeatures || null;
       const wgType = pickSmartAction._lastWgType || null;

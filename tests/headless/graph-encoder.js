@@ -11,7 +11,7 @@ import { parseCoord } from '../../src/game/coords.js';
 import { getDcEffects } from '../../src/data-loader.js';
 
 // ── Graph Constants ──────────────────────────────────────────────────────────
-const GRAPH_NODE_DIM = 9;       // features per node (added distToNearestEnemy)
+const GRAPH_NODE_DIM = 10;      // features per node (added hasUsableSpecial)
 const GRAPH_EMBED_DIM = 16;     // node embedding size
 const GRAPH_EDGE_DIM = 5;       // edge features: normDist, inRange, sameTeam, dstCanAttackSrc, srcCanMoveToDst
 const GRAPH_LAYERS = 2;         // message-passing layers
@@ -69,6 +69,7 @@ export function buildGraph(game, playerNum, dcHealthState, dcMessageMeta) {
   // Find active DC for this player
   let activeDcName = null;
   let activeFigIdx = 0;
+  let activeDcHasUsableSpecial = 0;
   const dcIdx = game.currentActivatingDcIndex;
   const dcMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
   if (dcIdx != null && dcMsgIds && dcMsgIds[dcIdx]) {
@@ -76,7 +77,28 @@ export function buildGraph(game, playerNum, dcHealthState, dcMessageMeta) {
     const meta = dcMessageMeta?.get(msgId);
     if (meta && meta.playerNum === playerNum) {
       activeDcName = meta.dcName;
-      activeFigIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const actionsData = game.dcActionsData?.[msgId];
+      activeFigIdx = actionsData?.selectedFigure ?? 0;
+
+      // Check if active DC has usable special abilities
+      const lower = activeDcName.toLowerCase();
+      const ciKey = dcEffectsData ? Object.keys(dcEffectsData).find(k => k.toLowerCase() === lower) : null;
+      const activeEff = dcEffectsData?.[activeDcName] || (ciKey ? dcEffectsData[ciKey] : null);
+      const specials = activeEff?.specials || [];
+      if (specials.length > 0) {
+        const specialsUsed = actionsData?.specialsUsed || [];
+        const remaining = actionsData?.remaining ?? 2;
+        const figKey = `${activeDcName}-1-${activeFigIdx}`;
+        const isStunned = (game.figureConditions?.[figKey] || []).includes('Stun');
+        if (!isStunned) {
+          for (let si = 0; si < specials.length; si++) {
+            if (!specialsUsed.includes(si) && remaining >= 1) {
+              activeDcHasUsableSpecial = 1;
+              break;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -127,8 +149,11 @@ export function buildGraph(game, playerNum, dcHealthState, dcMessageMeta) {
         isStunned = 1.0;
       }
 
+      // hasUsableSpecial: only set for the active figure
+      const hasSpecial = isActive > 0 ? activeDcHasUsableSpecial : 0;
+
       nodes.push({
-        features: [team, hpRatio, speed, attackPower, normRange, isActive, isStunned, 1.0, 0.0], // slot 8 = distToNearestEnemy (filled below)
+        features: [team, hpRatio, speed, attackPower, normRange, isActive, isStunned, 1.0, 0.0, hasSpecial], // slot 8 = distToNearestEnemy (filled below), slot 9 = hasUsableSpecial
         team,
         attackRange,  // raw range for edge computation
         rawSpeed: eff?.speed || 4,  // raw speed for edge computation
@@ -140,7 +165,7 @@ export function buildGraph(game, playerNum, dcHealthState, dcMessageMeta) {
   // Handle empty board (shouldn't happen, but safety)
   if (nodes.length === 0) {
     nodes.push({
-      features: [0, 0, 0, 0, 0, 0, 0, 1.0, 1.0],
+      features: [0, 0, 0, 0, 0, 0, 0, 1.0, 1.0, 0],
       team: 0,
       attackRange: 1,
       rawSpeed: 4,

@@ -255,6 +255,7 @@ function getCcDrawActions(game, playerNum) {
 
 function getRoundActiveActions(game, playerNum, deps) {
   const playerId = getPlayerId(game, playerNum);
+  const gameId = game.gameId;
 
   // Check for pending sub-states first
   // Negation must be checked before combat/movement — it blocks all play until resolved
@@ -275,7 +276,6 @@ function getRoundActiveActions(game, playerNum, deps) {
       const hand = playerNum === 1 ? game.player1CcHand : game.player2CcHand;
       if (hand?.length) {
         const playable = deps.getPlayableCcFromHand(game, playerNum, hand);
-        const gameId = game.gameId;
         for (let i = 0; i < playable.length; i++) {
           combatActions.push({
             type: ACTION_TYPES.PLAY_CC,

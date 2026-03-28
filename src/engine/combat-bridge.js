@@ -2744,6 +2744,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       if (meta) {
         const channelId = getPlayAreaId(game, meta.playerNum);
         const channel = await fetchGameChannel(client, channelId);
+        if (!channel) continue;
         const dcMsg = await channel.messages.fetch(msgId);
         const exhausted = dcExhaustedState.get(msgId) ?? false;
         const healthState = dcHealthState.get(msgId) || [];
