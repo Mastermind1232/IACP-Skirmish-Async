@@ -77,7 +77,9 @@ export function buildHandDisplayPayload(hand, deck, gameId, game = null, playerN
     .setColor(COLORS.DARK_EMBED));
 
   // One embed per card (thumbnail = same size as DC embeds in Play Area)
-  for (let i = 0; i < hand.length; i++) {
+  // Discord allows max 10 embeds per message (1 header + 9 cards)
+  const maxCardEmbeds = 9;
+  for (let i = 0; i < Math.min(hand.length, maxCardEmbeds); i++) {
     const card = hand[i];
     const path = getCommandCardImagePath(card);
     const ext = path ? (path.toLowerCase().endsWith('.png') ? 'png' : 'jpg') : 'jpg';
