@@ -2364,6 +2364,137 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    // mcpAction === 'seed' — single seeded game (same pattern as /selfplay seed slash command)
+    if (mcpAction === 'seed') {
+      // Parse: selfplaymcp seed <p1deck> <p2deck> <mapId>
+      // Deck names may contain spaces, so we match: seed <name> <name> <mapId>
+      // Convention: mapId is always hyphenated (no spaces), deck names are everything between
+      const seedText = message.content.replace(/^selfplaymcp\s+seed\s+/i, '').trim();
+      // Split from the end: last token is mapId, second-to-last group is p2deck, first group is p1deck
+      // Since deck names have spaces, use known map list to find the split point
+      const maps = getPlayReadyMaps();
+      const mapIds = maps.map(m => m.id);
+      let mapId = null, decksPart = null;
+      for (const mid of mapIds) {
+        if (seedText.endsWith(mid)) {
+          mapId = mid;
+          decksPart = seedText.slice(0, -(mid.length)).trim();
+          break;
+        }
+      }
+      if (!mapId || !decksPart) {
+        await reply('Usage: `selfplaymcp seed <p1deck> <p2deck> <mapId>`\nExample: `selfplaymcp seed Imperial Hunters Double Lammy corellian-underground`');
+        return;
+      }
+      // Split deck names: try all possible split points and match against known decks
+      const decks = getDestructTestDecks();
+      const deckNames = decks.map(d => d.name);
+      let p1Deck = null, p2Deck = null;
+      for (const dName of deckNames) {
+        if (decksPart.startsWith(dName + ' ')) {
+          const remainder = decksPart.slice(dName.length + 1).trim();
+          if (deckNames.includes(remainder)) {
+            p1Deck = decks.find(d => d.name === dName);
+            p2Deck = decks.find(d => d.name === remainder);
+            break;
+          }
+        }
+      }
+      if (!p1Deck || !p2Deck) {
+        await reply(`Could not parse deck names from: "${decksPart}"\nKnown decks: ${deckNames.join(', ')}`);
+        return;
+      }
+      if (getActiveSelfPlayGameId()) {
+        await reply(`Self-play already active for game ${getActiveSelfPlayGameId()}. Stop it first.`);
+        return;
+      }
+
+      await reply(`**Seed game starting (MCP)**: ${p1Deck.name} vs ${p2Deck.name} @ ${mapId}`);
+
+      try {
+        // Auto-cleanup stale games
+        const gamesMap = getGamesMap();
+        const staleIds = [...gamesMap.keys()];
+        if (staleIds.length > 0) {
+          for (const gid of staleIds) {
+            const g = gamesMap.get(gid);
+            if (!g) continue;
+            try {
+              await deleteGameChannelsAndGame(g, gid, {
+                client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+                deleteGameFromDb,
+              });
+            } catch (err) {
+              console.error(`[selfplaymcp seed] Pre-start cleanup failed for ${gid}:`, err.message);
+            }
+          }
+          await reply(`Cleaned up ${staleIds.length} stale game(s) before starting.`);
+        }
+
+        const seedConfig = { mapId, p1Deck, p2Deck };
+        const aiP1 = `${AI_USER_PREFIX}1`;
+        const aiP2 = `${AI_USER_PREFIX}2`;
+        const created = await createTestGame(client, message.guild, aiP1, null, message.channel, { player2Id: aiP2, seedConfig });
+        const gameId = created.gameId;
+
+        const game = getGame(gameId);
+        if (!game) throw new Error('Game creation returned no game state');
+        game.selfPlay = true;
+        game.guildId = message.guild.id;
+        saveGames();
+
+        const loopResult = await runSelfPlayLoop(game, client, {
+          buildAllDeps,
+          getGame,
+          atomicOpts,
+          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
+          scenario: `seed:${p1Deck.name}_vs_${p2Deck.name}@${mapId}`,
+          guildId: message.guild.id,
+          delayMs: 200,
+          explorationMode: 'seed_validation',
+        });
+
+        const artifact = loopResult.artifact;
+        const dedupedKeys = artifact?.transitions_hit || [];
+        for (const key of dedupedKeys) {
+          const { roundPhase, pendingSet, actionType } = parseTransitionKey(key);
+          await upsertDiscordTransition(key, roundPhase, pendingSet, actionType);
+        }
+        await insertExplorationEpisode({
+          episode_id: randomUUID(),
+          source: 'discord',
+          seed_config: { mapId, p1Deck: p1Deck.name, p2Deck: p2Deck.name },
+          total_steps: artifact?.total_steps || 0,
+          unique_transitions: dedupedKeys.length,
+          novel_transitions: 0,
+          invariant_errors: 0,
+          transitions_hit: dedupedKeys,
+          result: artifact?.result || loopResult.result,
+          stop_reason: artifact?.stop_reason || 'unknown',
+          duration_ms: artifact?.duration_ms || 0,
+        });
+
+        // Cleanup on success; preserve on failure
+        if (loopResult.result !== 'failed' && gameId) {
+          try {
+            const finalGame = getGame(gameId);
+            if (finalGame) {
+              await deleteGameChannelsAndGame(finalGame, gameId, {
+                client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState,
+                deleteGameFromDb,
+              });
+            }
+          } catch (cleanErr) {
+            console.error(`[selfplaymcp seed] Post-game cleanup failed:`, cleanErr.message);
+          }
+        }
+      } catch (err) {
+        await reply(`Seed game failed: ${err.message}`);
+        console.error(`[selfplaymcp seed] Error:`, err);
+      }
+      return;
+    }
+
     // mcpAction === 'start' (default)
     const qs = getQueueStatus();
     if (qs.state === 'paused') {
