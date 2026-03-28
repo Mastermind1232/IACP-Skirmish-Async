@@ -118,7 +118,7 @@ import { handleSelectMap as cmdSelectMap, handleConfirmMap as cmdConfirmMap, han
 import { handlePerformAction as cmdPerformAction, handleDcEndActivation as cmdDcEndActivation } from './src/domain/commands/dc-play-area-commands.js';
 import { createDomainEvent, clearSeqCounter as clearDomainSeqCounter } from './src/domain/events.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
-import { getActiveSelfPlayGameId, runSelfPlayLoop, captureManualKillDiagnostic } from './src/ai/self-play.js';
+import { getActiveSelfPlayGameId, runSelfPlayLoop, captureManualKillDiagnostic, formatCoverageSummary } from './src/ai/self-play.js';
 import { startQueue, stopQueue, pauseQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
 import { parseTransitionKey } from './src/exploration/transition-key.js';
 import { getTopValidationCandidate } from './src/exploration/rank-seeds.js';
@@ -2473,6 +2473,17 @@ client.on('messageCreate', async (message) => {
           stop_reason: artifact?.stop_reason || 'unknown',
           duration_ms: artifact?.duration_ms || 0,
         });
+
+        // Post full artifact to bothelpers
+        if (artifact) {
+          try {
+            const summary = formatCoverageSummary(artifact);
+            const discordSummary = summary.length > 1950
+              ? summary.slice(0, 1950) + '\n... (truncated)'
+              : summary;
+            await reply(`\`\`\`\n${discordSummary}\n\`\`\``);
+          } catch {}
+        }
 
         // Cleanup on success; preserve on failure
         if (loopResult.result !== 'failed' && gameId) {

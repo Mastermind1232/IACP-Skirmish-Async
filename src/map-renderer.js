@@ -484,8 +484,8 @@ export async function renderMap(mapId, options = {}) {
     // For square footprints use a circle; for rectangular use a rounded rect matching footprint
     const isSquare = cols === rows;
     const fillFactor = 0.9;
-    const clipW = isSquare ? baseTokenSize * (cols === 1 ? 1 : cols * 1.05) / 2 : cols * sdx * fillFactor / 2;
-    const clipH = isSquare ? baseTokenSize * (rows === 1 ? 1 : rows * 1.05) / 2 : rows * sdy * fillFactor / 2;
+    const clipW = isSquare ? baseTokenSize * (cols === 1 ? 0.92 : cols * 1.05) / 2 : cols * sdx * fillFactor / 2;
+    const clipH = isSquare ? baseTokenSize * (rows === 1 ? 0.92 : rows * 1.05) / 2 : rows * sdy * fillFactor / 2;
     const clipRadius = isSquare ? clipW : Math.min(clipW, clipH);
     const cornerRadius = Math.max(8, Math.round(12 * scale));
     let drewImage = false;
@@ -501,7 +501,7 @@ export async function renderMap(mapId, options = {}) {
           const dh = Math.round(th * tScale);
           const isLarge = cols > 1 || rows > 1;
           const outlineGap = isLarge ? Math.max(2, Math.round(3 * scale)) : -2;
-          const outlineWidth = isLarge ? Math.max(2, Math.round(3 * scale)) : 3;
+          const outlineWidth = isLarge ? Math.max(2, Math.round(3 * scale)) : 5;
           // Draw colored outline outside the figure
           ctx.strokeStyle = fig.color || '#fff';
           ctx.lineWidth = outlineWidth;
