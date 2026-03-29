@@ -591,21 +591,26 @@ export async function runSelfPlayLoop(game, client, opts) {
         const sorHandlerKey = getHandlerKey(sorCustomId, 'button');
         const sorHandler = sorHandlerKey ? getHandler(sorHandlerKey) : null;
         if (sorHandler) {
-          while (g.startOfRoundWhoseTurn) {
-            const userId = g.startOfRoundWhoseTurn;
-            const sorInteraction = createLiveAiInteraction(sorCustomId, userId, g, client);
-            sorInteraction.client = client;
-            if (g.generalId) {
-              try { sorInteraction.channel = await fetchGameChannel(client, g.generalId); sorInteraction.message.channel = sorInteraction.channel; } catch {}
+          try {
+            console.log(`[self-play] Resolving start-of-round window (round ${g.currentRound})`);
+            while (g.startOfRoundWhoseTurn) {
+              const userId = g.startOfRoundWhoseTurn;
+              const sorInteraction = createLiveAiInteraction(sorCustomId, userId, g, client);
+              sorInteraction.client = client;
+              if (g.generalId) {
+                try { sorInteraction.channel = await fetchGameChannel(client, g.generalId); sorInteraction.message.channel = sorInteraction.channel; } catch {}
+              }
+              const sorGroup = getHandlerGroup(sorHandlerKey);
+              if (sorGroup) {
+                await sorHandler(sorInteraction, buildContext(sorGroup, buildAllDeps()));
+              } else {
+                await sorHandler(sorInteraction);
+              }
+              totalActionsDispatched++;
+              ringBuffer.push({ step: totalActionsDispatched, type: 'end_start_of_round', customId: sorCustomId, playerNum: userId === g.player1Id ? 1 : 2, handlerKey: sorHandlerKey, ts: Date.now() });
             }
-            const sorGroup = getHandlerGroup(sorHandlerKey);
-            if (sorGroup) {
-              await sorHandler(sorInteraction, buildContext(sorGroup, buildAllDeps()));
-            } else {
-              await sorHandler(sorInteraction);
-            }
-            totalActionsDispatched++;
-            ringBuffer.push({ step: totalActionsDispatched, type: 'end_start_of_round', customId: sorCustomId, playerNum: userId === g.player1Id ? 1 : 2, handlerKey: sorHandlerKey, ts: Date.now() });
+          } catch (err) {
+            console.error(`[self-play] SOR handler crash (round ${g.currentRound}): ${err.message}`, err.stack?.split('\n').slice(0, 3).join('\n'));
           }
         }
         continue;
@@ -613,26 +618,32 @@ export async function runSelfPlayLoop(game, client, opts) {
 
       // Auto-resolve phase gates (both players are AI — bypass DQN inference)
       if (g.phaseGate) {
+        const gatePhaseName = g.phaseGate.phase;
         const gateCustomId = `phase_gate_ready_${g.gameId}`;
         const gateHandlerKey = getHandlerKey(gateCustomId, 'button');
         const gateHandler = gateHandlerKey ? getHandler(gateHandlerKey) : null;
         if (gateHandler) {
-          for (const pn of [1, 2]) {
-            if (!g.phaseGate) break;
-            const isReady = pn === 1 ? g.phaseGate.p1Ready : g.phaseGate.p2Ready;
-            if (isReady) continue;
-            const userId = pn === 1 ? g.player1Id : g.player2Id;
-            const gateInteraction = createLiveAiInteraction(gateCustomId, userId, g, client);
-            gateInteraction.client = client;
-            if (g.generalId) {
-              try { gateInteraction.channel = await fetchGameChannel(client, g.generalId); gateInteraction.message.channel = gateInteraction.channel; } catch {}
+          try {
+            console.log(`[self-play] Resolving phase gate: ${gatePhaseName}`);
+            for (const pn of [1, 2]) {
+              if (!g.phaseGate) break;
+              const isReady = pn === 1 ? g.phaseGate.p1Ready : g.phaseGate.p2Ready;
+              if (isReady) continue;
+              const userId = pn === 1 ? g.player1Id : g.player2Id;
+              const gateInteraction = createLiveAiInteraction(gateCustomId, userId, g, client);
+              gateInteraction.client = client;
+              if (g.generalId) {
+                try { gateInteraction.channel = await fetchGameChannel(client, g.generalId); gateInteraction.message.channel = gateInteraction.channel; } catch {}
+              }
+              const gateGroup = getHandlerGroup(gateHandlerKey);
+              if (gateGroup) {
+                await gateHandler(gateInteraction, buildContext(gateGroup, buildAllDeps()));
+              } else {
+                await gateHandler(gateInteraction);
+              }
             }
-            const gateGroup = getHandlerGroup(gateHandlerKey);
-            if (gateGroup) {
-              await gateHandler(gateInteraction, buildContext(gateGroup, buildAllDeps()));
-            } else {
-              await gateHandler(gateInteraction);
-            }
+          } catch (err) {
+            console.error(`[self-play] Phase gate crash (${gatePhaseName}): ${err.message}`, err.stack?.split('\n').slice(0, 3).join('\n'));
           }
         }
         continue;
