@@ -392,19 +392,20 @@ export function getDcStats(dcName) {
       'lasat_honor_guard','shock_and_awe','flawless_execution','expertise','regenerate_bossk',
       'sidestep_nexu_elite','sidestep_nexu_reg','ee3_carbine']);
     let specials = eff.specials;
+    let specialIds = [];
     if (!specials && eff.specialAbilityIds?.length) {
       const lib = getAbilityLibrary() || {};
-      specials = eff.specialAbilityIds
-        .filter((id) => {
-          if (PASSIVE_ONLY_IDS.has(id)) return false;
-          const entry = lib.abilities?.[id];
-          if (entry?.category === 'passive') return false;
-          return true;
-        })
-        .map((id) => {
-          const entry = lib.abilities?.[id];
-          return entry?.label || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-        });
+      const filtered = eff.specialAbilityIds.filter((id) => {
+        if (PASSIVE_ONLY_IDS.has(id)) return false;
+        const entry = lib.abilities?.[id];
+        if (entry?.category === 'passive') return false;
+        return true;
+      });
+      specialIds = filtered;
+      specials = filtered.map((id) => {
+        const entry = lib.abilities?.[id];
+        return entry?.label || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      });
     }
     return {
       health: eff.health ?? null,
@@ -414,6 +415,7 @@ export function getDcStats(dcName) {
       attack: eff.attack ?? null,
       defense: eff.defense ?? null,
       specials: specials || [],
+      specialIds,
       specialCosts: eff.specialCosts || [],
       passives: eff.passives || [],
       abilityText: eff.abilityText || '',

@@ -969,9 +969,8 @@ export async function runSelfPlayLoop(game, client, opts) {
           trackCoverage(`cc:${chosen.params.cardName}`);
         }
         // DC special ability
-        if (chosen.type === 'dc_special' && chosen.params?.specialName) {
-          // specialName is the ability id from specialAbilityIds[]
-          trackCoverage(`ability_dc_special:${chosen.params.specialName}`);
+        if (chosen.type === 'dc_special' && chosen.params?.specialId) {
+          trackCoverage(`ability_dc_special:${chosen.params.specialId}`);
         }
         // Surge selected
         if (chosen.type === 'combat_surge' && chosen.params?.surgeKey) {

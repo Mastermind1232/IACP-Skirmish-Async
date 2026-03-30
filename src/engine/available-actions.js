@@ -777,6 +777,7 @@ function getActivationActions(game, playerNum, deps) {
       if (deps.getDcStats) {
         const dcStats = deps.getDcStats(meta.dcName);
         const specials = dcStats?.specials || [];
+        const specialIds = dcStats?.specialIds || [];
         const specialCosts = dcStats?.specialCosts || [];
         const specialsUsed = data.specialsUsed || [];
         const isStunned = (game.figureConditions?.[`${meta.dcName}-1-${figureIndex}`] || []).includes('Stun');
@@ -791,7 +792,7 @@ function getActivationActions(game, playerNum, deps) {
             type: ACTION_TYPES.DC_SPECIAL,
             customId: buildCustomId(ACTION_TYPES.DC_SPECIAL, { msgId, specialIdx: si }),
             description: `${specials[si]} (${displayName})`,
-            params: { msgId, dcName: meta.dcName, specialIdx: si, specialName: specials[si], cost },
+            params: { msgId, dcName: meta.dcName, specialIdx: si, specialName: specials[si], specialId: specialIds[si] || null, cost },
           });
         }
       }
