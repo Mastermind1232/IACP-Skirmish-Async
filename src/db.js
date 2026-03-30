@@ -1601,6 +1601,38 @@ export async function getCoverageSummary() {
   }
 }
 
+/**
+ * Batch-set verified status for coverage items that passed correctness checks.
+ * Only sets verified=true for passing items (never clears existing verification).
+ * @param {Map<string, {verified: boolean, verified_by: string}>} verifiedItems
+ */
+export async function batchSetCoverageVerified(verifiedItems) {
+  if (!pool || !verifiedItems || verifiedItems.size === 0) return;
+  try {
+    const ids = [];
+    const bys = [];
+    for (const [id, { verified, verified_by }] of verifiedItems) {
+      if (verified) {
+        ids.push(id);
+        bys.push(verified_by);
+      }
+    }
+    if (ids.length === 0) return;
+    await pool.query(
+      `UPDATE coverage_items AS c SET
+         verified = true,
+         verified_by = v.vby,
+         verified_at = NOW(),
+         updated_at = NOW()
+       FROM (SELECT unnest($1::text[]) AS item_id, unnest($2::text[]) AS vby) v
+       WHERE c.item_id = v.item_id`,
+      [ids, bys]
+    );
+  } catch (err) {
+    console.error('[DB] batchSetCoverageVerified failed:', err.message);
+  }
+}
+
 /** Get the pool for direct queries (exploration use). */
 export function getPool() {
   return pool;

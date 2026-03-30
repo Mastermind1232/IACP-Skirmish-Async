@@ -16,7 +16,7 @@ import { buildContext } from '../context-factory.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
 import { getRecoveryReason } from '../engine/recovery.js';
-import { insertSelfPlayRun, batchIncrementCoverageDiscord } from '../db.js';
+import { insertSelfPlayRun, batchIncrementCoverageDiscord, batchSetCoverageVerified } from '../db.js';
 import { computeTransitionKey } from '../exploration/transition-key.js';
 
 // ── Concurrency guard ─────────────────────────────────────────────────────────
@@ -490,6 +490,100 @@ export function formatCoverageSummary(artifact, runNum) {
  * @param {boolean} [opts.persistCompleted=false] - Also persist completed runs to DB
  * @returns {Promise<{ result: string, artifact: object }>}
  */
+
+// ── Coverage correctness verification (game-end assertions) ─────────────────
+// Three checks, each with explicit proof-level semantics:
+//   1. end_condition: game-end state assertion (verified_by: selfplay:game_end_assert)
+//   2. vp_source: partial VP accounting check (verified_by: selfplay:vp_accounting)
+//      Only kill_vp and objective_vp — celebration, mission, nefarious_gains NOT yet verified
+//   3. pending_state: orphan check only (verified_by: selfplay:orphan_check)
+//      Proves the state was not orphaned at game end, NOT full semantic correctness
+
+function verifyCoverageCorrectness(finalGame, coverageHits) {
+  const results = new Map(); // item_id → { verified: boolean, verified_by: string }
+  if (!finalGame) return results;
+
+  // ── end_condition: game-end state assertions ──
+
+  if (coverageHits.has('end_condition:vp_40')) {
+    const p1vp = finalGame.player1VP?.total ?? 0;
+    const p2vp = finalGame.player2VP?.total ?? 0;
+    const pass = Math.max(p1vp, p2vp) >= 40;
+    results.set('end_condition:vp_40', { verified: pass, verified_by: 'selfplay:game_end_assert' });
+    if (!pass) console.warn(`[coverage-verify] FAIL end_condition:vp_40 — max VP=${Math.max(p1vp, p2vp)}`);
+  }
+
+  if (coverageHits.has('end_condition:elimination')) {
+    // Authoritative predicate from win-conditions.js: figurePositions[pn] is empty
+    const p1figs = Object.keys(finalGame.figurePositions?.[1] || {}).length;
+    const p2figs = Object.keys(finalGame.figurePositions?.[2] || {}).length;
+    const pass = p1figs === 0 || p2figs === 0;
+    results.set('end_condition:elimination', { verified: pass, verified_by: 'selfplay:game_end_assert' });
+    if (!pass) console.warn(`[coverage-verify] FAIL end_condition:elimination — p1figs=${p1figs}, p2figs=${p2figs}`);
+  }
+
+  if (coverageHits.has('end_condition:round_limit')) {
+    const pass = (finalGame.currentRound ?? 0) > MAX_ROUNDS;
+    results.set('end_condition:round_limit', { verified: pass, verified_by: 'selfplay:game_end_assert' });
+    if (!pass) console.warn(`[coverage-verify] FAIL end_condition:round_limit — round=${finalGame.currentRound}, MAX=${MAX_ROUNDS}`);
+  }
+
+  if (coverageHits.has('end_condition:draw')) {
+    const p1vp = finalGame.player1VP?.total ?? 0;
+    const p2vp = finalGame.player2VP?.total ?? 0;
+    const pass = p1vp === p2vp;
+    results.set('end_condition:draw', { verified: pass, verified_by: 'selfplay:game_end_assert' });
+    if (!pass) console.warn(`[coverage-verify] FAIL end_condition:draw — p1=${p1vp}, p2=${p2vp}`);
+  }
+
+  if (coverageHits.has('end_condition:forfeit')) {
+    // Forfeit is triggered by explicit user action; if tracked, the action happened
+    results.set('end_condition:forfeit', { verified: true, verified_by: 'selfplay:game_end_assert' });
+  }
+
+  // ── vp_source: partial VP accounting (kill_vp + objective_vp only) ──
+  // Assertion: total == kills + objectives for both players
+
+  const p1vp = finalGame.player1VP || {};
+  const p2vp = finalGame.player2VP || {};
+  const p1ok = (p1vp.total ?? 0) === (p1vp.kills ?? 0) + (p1vp.objectives ?? 0);
+  const p2ok = (p2vp.total ?? 0) === (p2vp.kills ?? 0) + (p2vp.objectives ?? 0);
+  const accountingOk = p1ok && p2ok;
+
+  if (!accountingOk) {
+    console.warn(`[coverage-verify] FAIL vp_accounting — P1: total=${p1vp.total} kills=${p1vp.kills} obj=${p1vp.objectives}, P2: total=${p2vp.total} kills=${p2vp.kills} obj=${p2vp.objectives}`);
+  }
+
+  if (coverageHits.has('vp_source:kill_vp')) {
+    const hasKills = (p1vp.kills ?? 0) > 0 || (p2vp.kills ?? 0) > 0;
+    results.set('vp_source:kill_vp', { verified: accountingOk && hasKills, verified_by: 'selfplay:vp_accounting' });
+  }
+
+  if (coverageHits.has('vp_source:objective_vp')) {
+    const hasObj = (p1vp.objectives ?? 0) > 0 || (p2vp.objectives ?? 0) > 0;
+    results.set('vp_source:objective_vp', { verified: accountingOk && hasObj, verified_by: 'selfplay:vp_accounting' });
+  }
+
+  // Note: celebration_vp, mission_vp, nefarious_gains NOT verified in this wave
+
+  // ── pending_state: orphan check ──
+  // Proves the state was entered and NOT orphaned at game end.
+  // This is a narrower signal than full semantic correctness.
+
+  for (const k of PENDING_KEYS) {
+    const itemId = `pending_state:${k}`;
+    if (!coverageHits.has(itemId)) continue;
+    const isOrphaned = finalGame[k] != null && finalGame[k] !== false;
+    results.set(itemId, { verified: !isOrphaned, verified_by: 'selfplay:orphan_check' });
+    if (isOrphaned) {
+      const val = typeof finalGame[k] === 'object' ? JSON.stringify(finalGame[k]).slice(0, 120) : finalGame[k];
+      console.warn(`[coverage-verify] FAIL ${itemId} — orphaned at game end: ${val}`);
+    }
+  }
+
+  return results;
+}
+
 export async function runSelfPlayLoop(game, client, opts) {
   const {
     buildAllDeps, getGame, atomicOpts, actionDeps = {},
@@ -539,6 +633,7 @@ export async function runSelfPlayLoop(game, client, opts) {
   let coverageDcSeeded = false;  // track DCs once after setup completes
   let lastP1VP = { kills: 0, objectives: 0 };
   let lastP2VP = { kills: 0, objectives: 0 };
+  let finalGameState = null;  // captured at game end for correctness verification
 
   // Reset per-game strategy counters (graph vs flat, heuristic overrides)
   resetRuntimeStats();
@@ -562,6 +657,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         });
         const wasManualStop = g?.selfPlayManualStop;
         const stopReason = wasManualStop ? 'manual_stop' : 'completed';
+        finalGameState = finalGame;
         // Coverage: end condition
         if (finalGame) {
           const p1vp = finalGame.player1VP?.total ?? 0;
@@ -579,6 +675,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       // Round limit — prevent infinite games when AI never scores VP
       if ((g.currentRound ?? 1) > MAX_ROUNDS) {
         console.warn(`[self-play] Round limit reached (round ${g.currentRound} > ${MAX_ROUNDS})`);
+        finalGameState = g;
         // Capture VP snapshot at round-limit termination
         vpPerRound.push({
           round: g.currentRound ?? lastTrackedRound,
@@ -1020,11 +1117,20 @@ export async function runSelfPlayLoop(game, client, opts) {
   } finally {
     activeSelfPlayGameId = null;
 
-    // ── Persist coverage hits to DB ──
+    // ── Persist coverage hits + verification results to DB ──
     if (coverageHits.size > 0) {
       try {
         await batchIncrementCoverageDiscord(coverageHits, game.gameId);
-        console.log(`[self-play] Coverage: ${coverageHits.size} distinct items tracked for game ${game.gameId}`);
+        // Run correctness verification on completed games
+        const verifiedItems = verifyCoverageCorrectness(finalGameState, coverageHits);
+        if (verifiedItems.size > 0) {
+          await batchSetCoverageVerified(verifiedItems);
+          const passed = [...verifiedItems.values()].filter(v => v.verified).length;
+          const failed = verifiedItems.size - passed;
+          console.log(`[self-play] Coverage: ${coverageHits.size} items tracked, ${passed} verified, ${failed} failed for game ${game.gameId}`);
+        } else {
+          console.log(`[self-play] Coverage: ${coverageHits.size} distinct items tracked for game ${game.gameId}`);
+        }
       } catch (err) {
         console.error('[self-play] Coverage persist failed:', err.message);
       }

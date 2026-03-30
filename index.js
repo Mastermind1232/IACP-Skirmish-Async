@@ -2399,23 +2399,24 @@ client.on('messageCreate', async (message) => {
         await reply('No coverage data. Run `node scripts/seed-coverage.js` first.');
         return;
       }
-      const header = '```\nPvP Coverage Report\n═══════════════════════════════════════════════════════\nCategory             Total  Wired  Exercised  Gap%  HardGaps\n';
+      const header = '```\nPvP Coverage Report\n═══════════════════════════════════════════════════════════════\nCategory             Total  Wired  Exercised  Verified  Gap%  HardGaps\n';
       const lines = [];
-      let grandTotal = 0, grandWired = 0, grandExercised = 0, grandHardGaps = 0;
+      let grandTotal = 0, grandWired = 0, grandExercised = 0, grandVerified = 0, grandHardGaps = 0;
       for (const r of rows) {
         const gap = r.wired > 0 ? Math.round(100 * (1 - r.exercised / r.wired)) : 0;
         lines.push(
-          `${r.category.padEnd(21)}${String(r.total).padStart(5)}${String(r.wired).padStart(7)}${String(r.exercised).padStart(10)}${String(gap + '%').padStart(5)}${String(r.hard_gaps).padStart(10)}`
+          `${r.category.padEnd(21)}${String(r.total).padStart(5)}${String(r.wired).padStart(7)}${String(r.exercised).padStart(10)}${String(r.verified).padStart(10)}${String(gap + '%').padStart(5)}${String(r.hard_gaps).padStart(10)}`
         );
         grandTotal += r.total;
         grandWired += r.wired;
         grandExercised += r.exercised;
+        grandVerified += r.verified;
         grandHardGaps += r.hard_gaps;
       }
       const grandGap = grandWired > 0 ? Math.round(100 * (1 - grandExercised / grandWired)) : 0;
-      lines.push('───────────────────────────────────────────────────────');
+      lines.push('───────────────────────────────────────────────────────────────');
       lines.push(
-        `${'TOTAL'.padEnd(21)}${String(grandTotal).padStart(5)}${String(grandWired).padStart(7)}${String(grandExercised).padStart(10)}${String(grandGap + '%').padStart(5)}${String(grandHardGaps).padStart(10)}`
+        `${'TOTAL'.padEnd(21)}${String(grandTotal).padStart(5)}${String(grandWired).padStart(7)}${String(grandExercised).padStart(10)}${String(grandVerified).padStart(10)}${String(grandGap + '%').padStart(5)}${String(grandHardGaps).padStart(10)}`
       );
       await reply(header + lines.join('\n') + '\n```');
       return;
