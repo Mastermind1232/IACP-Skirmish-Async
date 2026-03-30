@@ -16,7 +16,7 @@ import { buildContext } from '../context-factory.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
 import { getRecoveryReason } from '../engine/recovery.js';
-import { insertSelfPlayRun } from '../db.js';
+import { insertSelfPlayRun, batchIncrementCoverageDiscord } from '../db.js';
 import { computeTransitionKey } from '../exploration/transition-key.js';
 
 // ── Concurrency guard ─────────────────────────────────────────────────────────
@@ -531,6 +531,15 @@ export async function runSelfPlayLoop(game, client, opts) {
   let lastTrackedRound = game.currentRound ?? 1;
   const traceData = { exercisedHandlers, actionTypeCounts, triggeredPendingStates, transitionsHit };
 
+  // Coverage ledger accumulator — batched to DB at game end
+  const coverageHits = new Map();
+  function trackCoverage(itemId) {
+    coverageHits.set(itemId, (coverageHits.get(itemId) || 0) + 1);
+  }
+  let coverageDcSeeded = false;  // track DCs once after setup completes
+  let lastP1VP = { kills: 0, objectives: 0 };
+  let lastP2VP = { kills: 0, objectives: 0 };
+
   // Reset per-game strategy counters (graph vs flat, heuristic overrides)
   resetRuntimeStats();
 
@@ -553,6 +562,14 @@ export async function runSelfPlayLoop(game, client, opts) {
         });
         const wasManualStop = g?.selfPlayManualStop;
         const stopReason = wasManualStop ? 'manual_stop' : 'completed';
+        // Coverage: end condition
+        if (finalGame) {
+          const p1vp = finalGame.player1VP?.total ?? 0;
+          const p2vp = finalGame.player2VP?.total ?? 0;
+          if (p1vp >= 40 || p2vp >= 40) trackCoverage('end_condition:vp_40');
+          else if (wasManualStop) { /* no end_condition for manual stop */ }
+          else trackCoverage('end_condition:elimination');
+        }
         const artifact = buildRunArtifact(finalGame, { scenario, guildId, startedAt, ringBuffer, stopReason, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
         if (wasManualStop) await insertSelfPlayRun(artifact);
         else if (persistCompleted) await insertSelfPlayRun(artifact);
@@ -569,6 +586,7 @@ export async function runSelfPlayLoop(game, client, opts) {
           p2: g.player2VP?.total ?? 0,
           final: true,
         });
+        trackCoverage('end_condition:round_limit');
         const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'round_limit', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
         await insertSelfPlayRun(artifact);
         return { result: 'stopped', artifact };
@@ -938,6 +956,58 @@ export async function runSelfPlayLoop(game, client, opts) {
           });
           lastTrackedRound = curRound;
         }
+
+        // ── Coverage ledger tracking ──
+        // Handler
+        trackCoverage(`handler:${handlerKey}`);
+        // Pending states
+        for (const k of PENDING_KEYS) {
+          if (gAfter[k] != null && gAfter[k] !== false) trackCoverage(`pending_state:${k}`);
+        }
+        // CC played
+        if (chosen.type === 'play_cc' && chosen.params?.cardName) {
+          trackCoverage(`cc:${chosen.params.cardName}`);
+        }
+        // DC special ability
+        if (chosen.type === 'dc_special' && chosen.params?.specialName) {
+          // specialName is the ability id from specialAbilityIds[]
+          trackCoverage(`ability_dc_special:${chosen.params.specialName}`);
+        }
+        // Surge selected
+        if (chosen.type === 'combat_surge' && chosen.params?.surgeKey) {
+          trackCoverage(`ability_surge:${chosen.params.surgeKey}`);
+        }
+        // DC deployment: seed once after setup → activation transition
+        if (!coverageDcSeeded && gAfter.roundPhase && gAfter.roundPhase !== 'setup') {
+          coverageDcSeeded = true;
+          for (const pNum of [1, 2]) {
+            const positions = gAfter[`player${pNum}FigurePositions`] || gAfter.figurePositions?.[pNum];
+            if (positions && typeof positions === 'object') {
+              for (const figKey of Object.keys(positions)) {
+                // figKey is the DC message ID; dcName is in the figure's metadata
+                const meta = gAfter[`player${pNum}DcMeta`]?.[figKey] || gAfter.dcMeta?.[pNum]?.[figKey];
+                if (meta?.dcName) trackCoverage(`dc:${meta.dcName}`);
+              }
+            }
+          }
+          // Fallback: extract DCs from squad lists if meta not available
+          if (coverageHits.size === 0 || ![...coverageHits.keys()].some(k => k.startsWith('dc:'))) {
+            for (const sq of [gAfter.player1Squad, gAfter.player2Squad]) {
+              if (sq?.dcList) for (const dc of sq.dcList) trackCoverage(`dc:${dc}`);
+            }
+          }
+        }
+        // VP source tracking: detect VP changes
+        const p1vp = gAfter.player1VP || {};
+        const p2vp = gAfter.player2VP || {};
+        if ((p1vp.kills ?? 0) > lastP1VP.kills || (p2vp.kills ?? 0) > lastP2VP.kills) {
+          trackCoverage('vp_source:kill_vp');
+        }
+        if ((p1vp.objectives ?? 0) > lastP1VP.objectives || (p2vp.objectives ?? 0) > lastP2VP.objectives) {
+          trackCoverage('vp_source:objective_vp');
+        }
+        lastP1VP = { kills: p1vp.kills ?? 0, objectives: p1vp.objectives ?? 0 };
+        lastP2VP = { kills: p2vp.kills ?? 0, objectives: p2vp.objectives ?? 0 };
       }
 
       const ccLabel = chosen.params?.cardName ? ` (${chosen.params.cardName})` : '';
@@ -950,6 +1020,16 @@ export async function runSelfPlayLoop(game, client, opts) {
 
   } finally {
     activeSelfPlayGameId = null;
+
+    // ── Persist coverage hits to DB ──
+    if (coverageHits.size > 0) {
+      try {
+        await batchIncrementCoverageDiscord(coverageHits, game.gameId);
+        console.log(`[self-play] Coverage: ${coverageHits.size} distinct items tracked for game ${game.gameId}`);
+      } catch (err) {
+        console.error('[self-play] Coverage persist failed:', err.message);
+      }
+    }
   }
 }
 

@@ -293,8 +293,37 @@ export async function initDb() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_incidents_game ON incidents (game_id)').catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents (created_at DESC)').catch(() => {});
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS coverage_items (
+        item_id           TEXT PRIMARY KEY,
+        category          TEXT NOT NULL,
+        name              TEXT NOT NULL,
+        parent_id         TEXT,
+        wired             BOOLEAN DEFAULT TRUE,
+        headless_count    INT DEFAULT 0,
+        discord_count     INT DEFAULT 0,
+        last_discord_game TEXT,
+        last_discord_at   TIMESTAMPTZ,
+        verified          BOOLEAN DEFAULT FALSE,
+        verified_by       TEXT,
+        verified_at       TIMESTAMPTZ,
+        notes             TEXT,
+        updated_at        TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_cov_category ON coverage_items(category)').catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_cov_unexercised ON coverage_items(category) WHERE discord_count = 0').catch(() => {});
+
     await seedAchievements();
     await seedCoverageRegions();
+    // Check coverage_items: warn if empty (seed via: node scripts/seed-coverage.js --backfill)
+    try {
+      const covCheck = await pool.query('SELECT count(*)::int AS c FROM coverage_items');
+      if (covCheck.rows[0].c === 0) {
+        console.warn('[DB] coverage_items is empty — run: node scripts/seed-coverage.js --backfill');
+      }
+    } catch {}
+
     console.log('[DB] PostgreSQL connected, all tables ready.');
   } catch (err) {
     console.error('[DB] Failed to connect:', err.message);
@@ -1466,6 +1495,109 @@ export async function markIncidentMirrorsCleaned(incidentIds) {
     );
   } catch (err) {
     console.error('[DB] markIncidentMirrorsCleaned failed:', err.message);
+  }
+}
+
+// ── Coverage Items CRUD ──────────────────────────────────────────────
+
+/** Upsert a single coverage item. On conflict, update name/wired/parent_id. */
+export async function upsertCoverageItem(itemId, category, name, opts = {}) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO coverage_items (item_id, category, name, parent_id, wired, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (item_id) DO UPDATE SET
+         name = EXCLUDED.name,
+         wired = EXCLUDED.wired,
+         parent_id = COALESCE(EXCLUDED.parent_id, coverage_items.parent_id),
+         updated_at = NOW()`,
+      [itemId, category, name, opts.parent_id ?? null, opts.wired !== false]
+    );
+  } catch (err) {
+    console.error('[DB] upsertCoverageItem failed:', err.message);
+  }
+}
+
+/**
+ * Batch-increment discord_count for multiple coverage items.
+ * @param {Map<string,number>} hits - Map of itemId → increment count
+ * @param {string} gameId - The game that produced these hits
+ */
+export async function batchIncrementCoverageDiscord(hits, gameId) {
+  if (!pool || !hits || hits.size === 0) return;
+  try {
+    const ids = [];
+    const counts = [];
+    for (const [id, count] of hits) {
+      ids.push(id);
+      counts.push(count);
+    }
+    await pool.query(
+      `UPDATE coverage_items AS c SET
+         discord_count = c.discord_count + v.inc,
+         last_discord_game = $3,
+         last_discord_at = NOW(),
+         updated_at = NOW()
+       FROM (SELECT unnest($1::text[]) AS item_id, unnest($2::int[]) AS inc) v
+       WHERE c.item_id = v.item_id`,
+      [ids, counts, gameId]
+    );
+  } catch (err) {
+    console.error('[DB] batchIncrementCoverageDiscord failed:', err.message);
+  }
+}
+
+/**
+ * Get unexercised (or under-exercised) coverage items.
+ * @param {object} opts - { category, limit, minDiscord }
+ */
+export async function getCoverageGaps(opts = {}) {
+  if (!pool) return [];
+  try {
+    const { category, limit = 10, minDiscord = 0 } = opts;
+    const conditions = ['discord_count <= $1', 'wired = true'];
+    const params = [minDiscord];
+    if (category) {
+      params.push(category);
+      conditions.push(`category = $${params.length}`);
+    }
+    params.push(limit);
+    const res = await pool.query(
+      `SELECT item_id, category, name, discord_count, parent_id
+       FROM coverage_items
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY discord_count ASC, name
+       LIMIT $${params.length}`,
+      params
+    );
+    return res.rows;
+  } catch (err) {
+    console.error('[DB] getCoverageGaps failed:', err.message);
+    return [];
+  }
+}
+
+/** Get per-category coverage summary. */
+export async function getCoverageSummary() {
+  if (!pool) return [];
+  try {
+    const res = await pool.query(
+      `SELECT
+         category,
+         count(*)::int AS total,
+         count(*) FILTER (WHERE wired = true)::int AS wired,
+         count(*) FILTER (WHERE discord_count > 0)::int AS exercised,
+         count(*) FILTER (WHERE wired = false)::int AS hard_gaps,
+         count(*) FILTER (WHERE verified = true)::int AS verified
+       FROM coverage_items
+       GROUP BY category
+       ORDER BY category`
+    );
+    return res.rows;
+  } catch (err) {
+    console.error('[DB] getCoverageSummary failed:', err.message);
+    return [];
   }
 }
 

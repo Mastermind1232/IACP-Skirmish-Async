@@ -50,6 +50,8 @@ import {
   upsertDiscordTransition,
   insertExplorationEpisode,
   resolveIncident,
+  getCoverageSummary,
+  getCoverageGaps,
 } from './src/db.js';
 import {
   getGame,
@@ -2361,6 +2363,61 @@ client.on('messageCreate', async (message) => {
       } catch (err) {
         await reply(`Stop failed: ${err.message}`);
       }
+      return;
+    }
+
+    // Coverage report
+    if (mcpAction === 'coverage') {
+      const subCmd = mcpArgs[1] || 'summary';
+
+      if (subCmd === 'gaps') {
+        const categories = ['dc', 'cc', 'ability_dc_special', 'ability_surge', 'pending_state', 'handler', 'end_condition', 'vp_source'];
+        const lines = ['**Coverage Gaps** (top unexercised wired items per category)\n'];
+        for (const cat of categories) {
+          const gaps = await getCoverageGaps({ category: cat, limit: 5, minDiscord: 0 });
+          if (gaps.length === 0) continue;
+          lines.push(`**${cat}** — ${gaps.length} shown:`);
+          for (const g of gaps) {
+            lines.push(`  \`${g.item_id}\` (${g.discord_count}x)`);
+          }
+        }
+        // Split if too long for Discord (2000 char limit)
+        const text = lines.join('\n');
+        if (text.length > 1900) {
+          const mid = Math.floor(lines.length / 2);
+          await reply(lines.slice(0, mid).join('\n'));
+          await reply(lines.slice(mid).join('\n'));
+        } else {
+          await reply(text);
+        }
+        return;
+      }
+
+      // Default: summary
+      const rows = await getCoverageSummary();
+      if (!rows.length) {
+        await reply('No coverage data. Run `node scripts/seed-coverage.js` first.');
+        return;
+      }
+      const header = '```\nPvP Coverage Report\n═══════════════════════════════════════════════════════\nCategory             Total  Wired  Exercised  Gap%  HardGaps\n';
+      const lines = [];
+      let grandTotal = 0, grandWired = 0, grandExercised = 0, grandHardGaps = 0;
+      for (const r of rows) {
+        const gap = r.wired > 0 ? Math.round(100 * (1 - r.exercised / r.wired)) : 0;
+        lines.push(
+          `${r.category.padEnd(21)}${String(r.total).padStart(5)}${String(r.wired).padStart(7)}${String(r.exercised).padStart(10)}${String(gap + '%').padStart(5)}${String(r.hard_gaps).padStart(10)}`
+        );
+        grandTotal += r.total;
+        grandWired += r.wired;
+        grandExercised += r.exercised;
+        grandHardGaps += r.hard_gaps;
+      }
+      const grandGap = grandWired > 0 ? Math.round(100 * (1 - grandExercised / grandWired)) : 0;
+      lines.push('───────────────────────────────────────────────────────');
+      lines.push(
+        `${'TOTAL'.padEnd(21)}${String(grandTotal).padStart(5)}${String(grandWired).padStart(7)}${String(grandExercised).padStart(10)}${String(grandGap + '%').padStart(5)}${String(grandHardGaps).padStart(10)}`
+      );
+      await reply(header + lines.join('\n') + '\n```');
       return;
     }
 
