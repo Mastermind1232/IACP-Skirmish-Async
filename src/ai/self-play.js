@@ -237,7 +237,7 @@ const LIMIT_STOPS = new Set([
 ]);
 
 /** Max rounds before force-ending a selfplay game. Real IA games are 4-6 rounds. */
-const MAX_ROUNDS = 8;
+const MAX_ROUNDS = 7;
 
 // ── Artifact builder ──────────────────────────────────────────────────────────
 
