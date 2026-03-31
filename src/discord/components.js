@@ -636,6 +636,62 @@ export function buildLetterRows(cells, msgId, figureIndex) {
   return rows;
 }
 
+/**
+ * Canonical tier-1 row picker: groups spaces by row number and returns "Row N" buttons.
+ * Used by the generic space_row_ handler and by flow-specific row pickers (deploy, movement).
+ * @param {string[]} spaces - valid space coordinates (e.g. ['a3','b3','c4'])
+ * @param {string} customIdPrefix - button customId prefix, row number is appended (e.g. 'space_row_00001_abc_')
+ * @param {object} [options]
+ * @param {import('discord.js').ButtonStyle} [options.style=ButtonStyle.Primary] - button style
+ * @returns {{ rows: ActionRowBuilder[], available: string[] }}
+ */
+export function buildRowPickerButtons(spaces, customIdPrefix, options = {}) {
+  const { style = ButtonStyle.Primary } = options;
+  const normalized = (spaces || []).map((s) => normalizeCoord(s));
+  const { sortedRows } = groupSpacesByRow(normalized);
+  const btns = sortedRows.map((rowNum) =>
+    new ButtonBuilder()
+      .setCustomId(`${customIdPrefix}${rowNum}`)
+      .setLabel(`Row ${rowNum}`)
+      .setStyle(style)
+  );
+  const rows = [];
+  for (let i = 0; i < btns.length; i += MAX_BUTTONS_PER_ROW) {
+    rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + MAX_BUTTONS_PER_ROW)));
+  }
+  return { rows: rows.slice(0, MAX_ROWS_PER_MESSAGE), available: normalized };
+}
+
+/**
+ * Filter a list of space coordinates to only those in a specific row.
+ * @param {string[]} spaces - normalized coordinates
+ * @param {number} rowNum - row number to keep
+ * @returns {string[]}
+ */
+export function filterSpacesToRow(spaces, rowNum) {
+  return (spaces || []).filter((s) => {
+    const m = s.match(/^[a-z]+(\d+)$/i);
+    return m && parseInt(m[1], 10) === rowNum;
+  });
+}
+
+/**
+ * Clean up a single pending space pick entry after cell selection or cancel.
+ * @param {object} game
+ * @param {string} contextKey
+ */
+export function cleanupSpacePick(game, contextKey) {
+  if (game.pendingSpacePick) delete game.pendingSpacePick[contextKey];
+}
+
+/**
+ * Clean up ALL pending space pick state — called on game end / teardown.
+ * @param {object} game
+ */
+export function cleanupAllSpacePicks(game) {
+  delete game.pendingSpacePick;
+}
+
 /** Action rows for movement space selection: move_pick_${msgId}_${figureIndex}_${space}. */
 export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces, size = '1x1') {
   // Build a labelMap so buttons show bottom-left corner of each placement instead of top-left.

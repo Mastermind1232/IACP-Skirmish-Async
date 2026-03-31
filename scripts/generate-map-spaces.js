@@ -1,6 +1,10 @@
 /**
  * Generates initial map-spaces.json from deployment zones + map registry.
- * Builds full grid, orthogonal adjacency, default terrain.
+ * Builds full grid with orthogonal AND diagonal adjacency per IA rules:
+ *   "A space is adjacent to each other space that shares an edge or corner."
+ *   "Spaces on either side of the diagonal intersection of walls, doors,
+ *    and/or blocking terrain are not adjacent."
+ *   "A space that is blocking terrain is not adjacent to any other space."
  * Run: node scripts/generate-map-spaces.js
  *
  * Use extract-map-spaces.html to refine: mark impassable edges, terrain.
@@ -47,24 +51,79 @@ function buildMapSpaces(mapId, numCols, numRows, impassableEdges = [], movementB
     ...(movementBlockingEdges || []).map(edgeKeyFromArr),
   ]);
 
+  // Build blocking terrain set for diagonal adjacency checks
+  const blockingSet = new Set(blocking.map(s => String(s).toLowerCase()));
+
   for (let row = 0; row < numRows; row++) {
     for (let col = 0; col < numCols; col++) {
       const k = coordKey(col, row);
       spaces.push(k);
       terrain[k] = terrainOverrides[k] || 'normal';
 
+      // "A space that is blocking terrain is not adjacent to any other space."
+      if (blockingSet.has(k)) {
+        adjacency[k] = [];
+        continue;
+      }
+
       const neighbors = [];
-      const deltas = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-      for (const [dc, dr] of deltas) {
+
+      // Orthogonal neighbors (share an edge)
+      const orthoDeltas = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      for (const [dc, dr] of orthoDeltas) {
         const nc = col + dc, nr = row + dr;
         if (nc >= 0 && nc < numCols && nr >= 0 && nr < numRows) {
           const nk = coordKey(nc, nr);
+          if (blockingSet.has(nk)) continue;
           const edgeKey = [k, nk].sort().join('|');
           if (!impSet.has(edgeKey)) {
             neighbors.push(nk);
           }
         }
       }
+
+      // Diagonal neighbors (share a corner)
+      // Blocked when walls/doors/blocking terrain at the corner block both
+      // orthogonal paths around it. For A↔B diagonal with intermediates C, D:
+      //   pathC open = edge A↔C passable AND C not blocking AND edge C↔B passable
+      //   pathD open = edge A↔D passable AND D not blocking AND edge D↔B passable
+      //   diagonal open = pathC OR pathD
+      const diagDeltas = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+      for (const [dc, dr] of diagDeltas) {
+        const nc = col + dc, nr = row + dr;
+        if (nc < 0 || nc >= numCols || nr < 0 || nr >= numRows) continue;
+        const nk = coordKey(nc, nr);        // B (diagonal target)
+        if (blockingSet.has(nk)) continue;
+
+        const ck = coordKey(col + dc, row); // C (shares row with A, col with B)
+        const dk = coordKey(col, row + dr); // D (shares col with A, row with B)
+
+        const cInBounds = (col + dc) >= 0 && (col + dc) < numCols;
+        const dInBounds = (row + dr) >= 0 && (row + dr) < numRows;
+
+        // Path through C: A→C→B
+        let pathC = false;
+        if (cInBounds) {
+          const cBlocking = blockingSet.has(ck);
+          const acEdge = [k, ck].sort().join('|');
+          const cbEdge = [ck, nk].sort().join('|');
+          pathC = !cBlocking && !impSet.has(acEdge) && !impSet.has(cbEdge);
+        }
+
+        // Path through D: A→D→B
+        let pathD = false;
+        if (dInBounds) {
+          const dBlocking = blockingSet.has(dk);
+          const adEdge = [k, dk].sort().join('|');
+          const dbEdge = [dk, nk].sort().join('|');
+          pathD = !dBlocking && !impSet.has(adEdge) && !impSet.has(dbEdge);
+        }
+
+        if (pathC || pathD) {
+          neighbors.push(nk);
+        }
+      }
+
       adjacency[k] = neighbors;
     }
   }

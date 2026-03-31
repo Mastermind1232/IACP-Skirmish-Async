@@ -326,6 +326,10 @@ const CONTEXT_GROUPS = {
     'validateDeckLegal', 'buildSquadConfirmText',
   ],
 
+  spacePicker: [
+    'getGame',
+  ],
+
   combatSpecialEffects: [
     'getGame', 'saveGames', 'client', 'canActAsPlayer',
     'dcMessageMeta', 'dcHealthState', 'dcExhaustedState',

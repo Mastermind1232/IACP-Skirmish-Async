@@ -4193,7 +4193,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
   // Don't deferUpdate for handlers that need to show a modal (modal requires unacknowledged interaction)
-  const MODAL_PREFIXES = ['devaron_crate_push_', 'krykna_push_', 'fav_save_', 'fav_rename_', 'fav_list_rename_'];
+  const MODAL_PREFIXES = ['devaron_crate_push_', 'krykna_push_', 'fav_save_', 'fav_rename_', 'fav_list_rename_', 'fav_choose_'];
   if (!MODAL_PREFIXES.includes(buttonKey)) {
     await interaction.deferUpdate().catch(discordCatch);
   }

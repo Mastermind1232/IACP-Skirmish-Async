@@ -24,7 +24,7 @@ import { stripBrackets, cardNameEquals } from '../game/card-names.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
-import { chunkButtonsToRows } from '../discord/components.js';
+import { chunkButtonsToRows, buildRowPickerButtons } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { _matchesKeywordPhrase } from '../game/validation.js';
 
@@ -1189,26 +1189,15 @@ export async function handleDeploymentFig(interaction, ctx) {
       } catch {}
     }
     const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
-    // If too many rows for one message, use two-tier row picker
-    const useRowPicker = rows.length > BTM_PER_MSG;
-    if (useRowPicker) {
-      const { buildDeployRowButtons } = ctx;
-      const { rows: rowBtns } = buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
-      const replyPayload = { content: `${promptText}\nChoose a row:`, components: rowBtns.slice(0, BTM_PER_MSG), ephemeral: false, fetchReply: true };
-      if (mapAttachment) replyPayload.files = [mapAttachment];
-      const replyMsg = await interaction.followUp(replyPayload).catch(() => null);
-      const gridIds = [];
-      if (replyMsg?.id) gridIds.push(replyMsg.id);
-      game.deploySpaceGridMessageIds[gridKey] = gridIds;
-    } else {
-      const firstRows = rows.slice(0, BTM_PER_MSG);
-      const replyPayload = { content: promptText, components: firstRows, ephemeral: false, fetchReply: true };
-      if (mapAttachment) replyPayload.files = [mapAttachment];
-      const replyMsg = await interaction.followUp(replyPayload).catch(() => null);
-      const gridIds = [];
-      if (replyMsg?.id) gridIds.push(replyMsg.id);
-      game.deploySpaceGridMessageIds[gridKey] = gridIds;
-    }
+    // Always use two-tier row picker for cell selection
+    const zoneStyle = playerZone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
+    const { rows: rowBtns } = buildRowPickerButtons(validSpaces, `deploy_row_${gameId}_${playerNum}_${flatIndex}_`, { style: zoneStyle });
+    const replyPayload = { content: `${promptText}\nChoose a row:`, components: rowBtns.slice(0, BTM_PER_MSG), ephemeral: false, fetchReply: true };
+    if (mapAttachment) replyPayload.files = [mapAttachment];
+    const replyMsg = await interaction.followUp(replyPayload).catch(() => null);
+    const gridIds = [];
+    if (replyMsg?.id) gridIds.push(replyMsg.id);
+    game.deploySpaceGridMessageIds[gridKey] = gridIds;
   } else {
     // No deployment zones defined for this map — interaction was already deferred so
     // showModal() would fail. Fall back to a followUp message instead.
@@ -1289,7 +1278,6 @@ export async function handleDeploymentOrient(interaction, ctx) {
   game.deploySpaceGridMessageIds = game.deploySpaceGridMessageIds || {};
   const gridKey = `${playerNum}_${flatIndex}`;
   const gridIds = [];
-  const useRowPicker = rows.length > BTM_PER_MSG;
   try {
     const isInitiative = playerNum === initiativePlayerNum;
     const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
@@ -1306,20 +1294,13 @@ export async function handleDeploymentOrient(interaction, ctx) {
     const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
     const [oCols, oRows] = orientation.split('x').map(Number);
     const promptText = `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${orientation} unit — ${oCols} wide, ${oRows} tall):`;
-    if (useRowPicker) {
-      const { buildDeployRowButtons } = ctx;
-      const { rows: rowBtns } = buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
-      const editPayload = { content: `${promptText}\nChoose a row:`, components: rowBtns.slice(0, BTM_PER_MSG) };
-      if (mapAttachment) editPayload.files = [mapAttachment];
-      await interaction.message.edit(editPayload);
-      if (interaction.message?.id) gridIds.push(interaction.message.id);
-    } else {
-      const firstRows = rows.slice(0, BTM_PER_MSG);
-      const editPayload = { content: promptText, components: firstRows };
-      if (mapAttachment) editPayload.files = [mapAttachment];
-      await interaction.message.edit(editPayload);
-      if (interaction.message?.id) gridIds.push(interaction.message.id);
-    }
+    // Always use two-tier row picker for cell selection
+    const zoneStyle = playerZone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
+    const { rows: rowBtns } = buildRowPickerButtons(validSpaces, `deploy_row_${gameId}_${playerNum}_${flatIndex}_`, { style: zoneStyle });
+    const editPayload = { content: `${promptText}\nChoose a row:`, components: rowBtns.slice(0, BTM_PER_MSG) };
+    if (mapAttachment) editPayload.files = [mapAttachment];
+    await interaction.message.edit(editPayload);
+    if (interaction.message?.id) gridIds.push(interaction.message.id);
   } catch (err) {
     console.error('Failed to show deploy grid after orientation:', err);
   }
@@ -1469,7 +1450,8 @@ export async function handleDeployRowBack(interaction, ctx) {
   const promptText = isLarge
     ? `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${figureSize} unit):`
     : `Pick a space for **${label.replace(/^Deploy /, '')}**:`;
-  const { rows: rowBtns } = buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
+  const zoneStyle = playerZone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
+  const { rows: rowBtns } = buildRowPickerButtons(validSpaces, `deploy_row_${gameId}_${playerNum}_${flatIndex}_`, { style: zoneStyle });
   try {
     await interaction.message.edit({ content: `${promptText}\nChoose a row:`, components: rowBtns.slice(0, 5) });
   } catch {
@@ -2443,9 +2425,11 @@ export async function _sendAttachmentDropdown(game, gameId, playerNum, card, cli
     .addOptions(options);
   const restrictionNote = restriction ? ` *(${restriction.restrictionText} only)*` : '';
   const pending = game.setupAttachmentPending[playerNum] || [];
+  const ownerId = getPlayerId(game, playerNum);
   const payload = {
-    content: `**Setup — place Skirmish Upgrade${pending.length > 1 ? ` (${pending.length} remaining)` : ''}:** **${card}**${restrictionNote}. Choose which Deployment Card to attach it to:`,
+    content: `<@${ownerId}> **Setup — place Skirmish Upgrade${pending.length > 1 ? ` (${pending.length} remaining)` : ''}:** **${card}**${restrictionNote}. Choose which Deployment Card to attach it to:`,
     components: [new ActionRowBuilder().addComponents(select)],
+    allowedMentions: { users: [ownerId] },
   };
   const imgRel = getDcImagePath(card);
   if (imgRel) {

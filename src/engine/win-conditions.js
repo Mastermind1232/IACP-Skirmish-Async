@@ -3,6 +3,7 @@
  * Handles VP checks, tiebreakers, game-over posting, and defeat-related bookkeeping.
  */
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
+import { cleanupAllSpacePicks } from '../discord/components.js';
 
 /**
  * Check if either player has reached 40 VP or been eliminated.
@@ -124,6 +125,7 @@ export async function postGameOver(game, client, winnerId, reason, deps) {
   game.winnerId = winnerId ?? game.winnerId ?? null;
   deps.cleanupGameLock(game.gameId);
   deps.cleanupGameMaps(game.gameId);
+  cleanupAllSpacePicks(game);
   if (deps.clearBuffer) deps.clearBuffer(game.gameId);
   if (deps.clearEventLogSeqCounter) deps.clearEventLogSeqCounter(game.gameId);
   if (deps.clearDomainSeqCounter) deps.clearDomainSeqCounter(game.gameId);

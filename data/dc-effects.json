@@ -7075,7 +7075,7 @@
     },
     "Paz Vizsla": {
       "abilityText": "Heavy Repeater: While performing a Ranged attack, you may suffer 1 Strain to apply +1 Hit, Blast 2, or +3 Accuracy to the attack results.\n\nSubmit or Fight: When you would suffer Damage from Strain, you may return any number of Command cards from your discard pile to the game box to prevent that much Damage.",
-      "keywords": [],
+      "keywords": ["Mobile", "Vehicle", "Heavy Weapon", "Brawler"],
       "cost": 7,
       "subCost": 0,
       "health": 13,

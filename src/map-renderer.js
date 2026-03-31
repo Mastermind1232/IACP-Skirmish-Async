@@ -500,8 +500,8 @@ export async function renderMap(mapId, options = {}) {
           const dw = Math.round(tw * tScale);
           const dh = Math.round(th * tScale);
           const isLarge = cols > 1 || rows > 1;
-          const outlineGap = isLarge ? Math.max(2, Math.round(3 * scale)) : -4;
-          const outlineWidth = isLarge ? Math.max(2, Math.round(3 * scale)) : 5;
+          const outlineGap = isLarge ? Math.max(2, Math.round(3 * scale)) : -6;
+          const outlineWidth = isLarge ? Math.max(2, Math.round(3 * scale)) : 7;
           // Draw colored outline outside the figure
           ctx.strokeStyle = fig.color || '#fff';
           ctx.lineWidth = outlineWidth;
