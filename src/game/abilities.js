@@ -6592,7 +6592,7 @@ export function resolveAbility(abilityId, context) {
           const figIdx = actD?.selectedFigure ?? 0;
           const fkForMid = Object.keys(game.figurePositions?.[playerNum] || {}).find(fk => fk.startsWith(`${metaForMid.dcName}-`) && fk.endsWith(`-${figIdx}`));
           if (fkForMid) {
-            game.figurePowerTokens[fkForMid] = [...(game.figurePowerTokens[fkForMid] || []), 'Hit'];
+            grantPowerTokens(game, fkForMid, 'Hit', 1);
             results.push(`**${nm}** +Hit Token`);
           }
         }
@@ -7083,8 +7083,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     // Phase 2: grant Hit Token to chosen figure
     if (chosenFigureKey) {
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[chosenFigureKey] = [...(game.figurePowerTokens[chosenFigureKey] || []), 'Hit'];
+      grantPowerTokens(game, chosenFigureKey, 'Hit', 1);
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       return { applied: true, logMessage: `**Field Supply** — **${dcName}** gained 1 Hit Token. (Surge Token also allowed; for a 2nd figure, apply manually.)` };
     }
@@ -7097,9 +7096,8 @@ export function resolveAbility(abilityId, context) {
       // Auto-grant to nearest friendly if no position data
       const fks = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => !actKeys.includes(fk));
       if (!fks.length) return { applied: false, manualMessage: 'No friendly figures to grant tokens to.' };
-      game.figurePowerTokens = game.figurePowerTokens || {};
       const targets = fks.slice(0, 2);
-      const names = targets.map((fk) => { game.figurePowerTokens[fk] = [...(game.figurePowerTokens[fk] || []), 'Hit']; return dcNameFromFigureKey(fk); });
+      const names = targets.map((fk) => { grantPowerTokens(game, fk, 'Hit', 1); return dcNameFromFigureKey(fk); });
       return { applied: true, logMessage: `**Field Supply** — Hit Token granted to: ${names.join(', ')}.` };
     }
     const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
