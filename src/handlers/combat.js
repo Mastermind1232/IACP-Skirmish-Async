@@ -5183,9 +5183,9 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
   const { attackerPlayerNum, combatThreadId } = game.pendingSpreadThePainCondPick;
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Not your choice.')) return;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  const combat = game.pendingCombat;
-  if (!combat || combat.gameId !== gameId) return;
   game.pendingSpreadThePainCondPick = null;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) { saveGames(); return; }
 
   const thread = await fetchCombatThread(interaction.client, combatThreadId);
   if (!thread) { saveGames(); return; }

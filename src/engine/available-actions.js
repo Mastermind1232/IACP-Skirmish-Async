@@ -1236,6 +1236,14 @@ function getCombatActions(game, playerNum, deps) {
     return [];
   }
 
+  // Mid-combat pending sub-states: set during surge/token handling and resolved
+  // via buttons outside getCombatActions. Block ALL combat actions so the defender
+  // can't submit COMBAT_RESOLVE before the attacker resolves the sub-state.
+  if (game.pendingSpreadThePainCondPick || game.pendingRogueOneTokenPick ||
+      game.pendingSurgeOverflow || game.pendingZilloDiscard) {
+    return [];
+  }
+
   // Surge assignment phase — list each spendable surge ability
   if (combat.pendingSurges || combat.surgeRemaining > 0) {
     if (playerNum === attackerPn) {
