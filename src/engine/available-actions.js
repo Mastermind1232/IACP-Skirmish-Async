@@ -1223,6 +1223,19 @@ function getCombatActions(game, playerNum, deps) {
     return [];
   }
 
+  // Executor interrupt (Royal Guard Champion): fires during damage resolution when
+  // a friendly figure is defeated within 3 spaces. Blocks combat until resolved.
+  if (game.pendingExecutorInterrupt) {
+    const ex = game.pendingExecutorInterrupt;
+    if (playerNum === ex.rgcPlayerNum) {
+      return [
+        { type: 'executor_use', customId: `executor_use_${gameId}_${ex.rgcMsgId}`, description: 'Use Executor (move 2 + free attack)' },
+        { type: 'executor_skip', customId: `executor_skip_${gameId}_${ex.rgcMsgId}`, description: 'Skip Executor' },
+      ];
+    }
+    return [];
+  }
+
   // Surge assignment phase — list each spendable surge ability
   if (combat.pendingSurges || combat.surgeRemaining > 0) {
     if (playerNum === attackerPn) {

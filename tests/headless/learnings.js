@@ -1850,8 +1850,8 @@ export function abstractActionType(action, game) {
   if (t === 'strain_choice_discard') return 'react_use';
   if (t === 'strain_choice_alldmg') return 'react_skip';
   // Interrupt use/skip decisions (reuse react_use/react_skip from A2)
-  if (t === 'still_faster_use' || t === 'hunter_protocol_trigger' || t === 'last_resort_use') return 'react_use';
-  if (t === 'still_faster_skip' || t === 'hunter_protocol_skip' || t === 'last_resort_skip') return 'react_skip';
+  if (t === 'still_faster_use' || t === 'hunter_protocol_trigger' || t === 'last_resort_use' || t === 'executor_use') return 'react_use';
+  if (t === 'still_faster_skip' || t === 'hunter_protocol_skip' || t === 'last_resort_skip' || t === 'executor_skip') return 'react_skip';
   if (t === 'still_faster_dc_pick') return 'ability';
   // Combat-reaction defensive abilities — use vs skip (learned binary decision)
   if (t === 'strike_me_down_yes' || t === 'slow_on_draw_yes' || t === 'force_exhaustion_yes' ||

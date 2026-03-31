@@ -2424,7 +2424,6 @@ export async function handleCombatRoll(interaction, ctx) {
   } = ctx;
   const getInnateRerolls = ctx.getInnateRerolls || (() => ({ attackReroll: 0, defenseReroll: 0 }));
   const gameId = parseCustomId(interaction.customId, 'combat_roll_');
-  console.log(`[roll-diag] handleCombatRoll entry, customId=${interaction.customId}`);
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -4414,7 +4413,6 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   // Rogue One: even with 0 surge, show the surge UI if the attacker can gain surge via token sharing
   const _rogueOneBtns = buildRogueOneSurgeButton(game, combat);
   const hasRogueOneOption = _rogueOneBtns.length > 0;
-  console.log(`[surge-diag] dcName="${combat.attackerDcName}" totalSurge=${totalSurge} surgeAbs=${surgeAbilities.length} affordable=${affordable.length} bleed=${!!combat.attackerConds?.includes('Bleed')} rogueOne=${hasRogueOneOption}`);
   if ((totalSurge > 0 && (affordable.length > 0 || combat.attackerConds?.includes('Bleed'))) || hasRogueOneOption) {
     combat.surgeRemaining = totalSurge;
     combat.surgeDamage = 0;
@@ -4771,9 +4769,6 @@ export async function handleCombatSurge(interaction, ctx) {
     }
   }
   // Check for power token overflow before showing next surge choices
-  if (game.testPvpOverflowPath) {
-    console.log(`[overflow-diag] surge overflow check: pendingOverflow=${JSON.stringify(game.pendingPowerTokenOverflow)}, pendingSurgeOverflow=${JSON.stringify(game.pendingSurgeOverflow)}`);
-  }
   if (game.pendingPowerTokenOverflow?.length > 0) {
     game.pendingSurgeOverflow = { combatThreadId: combat.combatThreadId, attackerPlayerNum: combat.attackerPlayerNum };
     await sendPowerTokenOverflowUI(game, gameId, thread, combat.attackerPlayerNum, saveGames);
