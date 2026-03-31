@@ -357,6 +357,17 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
   }
 
+  // [COMBAT-TRACE] Selfplay diagnostic — log per-combat resolution details
+  if (game.selfPlay) {
+    const _ctDefHs = dcHealthState.get(targetMsgId);
+    const _ctDefHp = _ctDefHs?.[targetFigIndex];
+    const _ctPrevHp = Array.isArray(_ctDefHp) ? _ctDefHp[0] : '?';
+    const _ctMaxHp = Array.isArray(_ctDefHp) ? _ctDefHp[1] : '?';
+    const _ctRoll = combat.attackRoll || {};
+    const _ctDef = combat.defenseRoll || {};
+    console.log(`[COMBAT-TRACE] ${combat.attackerDcName} → ${targetDcName} | hit=${hit} dmg=${damage} | atk=[${_ctRoll.dmg}d,${_ctRoll.acc}a,${_ctRoll.surge}s] def=[${_ctDef.block}b,${_ctDef.evade}e,${_ctDef.dodge ? 'D' : '-'}] | surge_dmg=${combat.surgeDamage || 0} pierce=${(combat.surgePierce || 0) + (combat.bonusPierce || 0)} | hp=${_ctPrevHp}/${_ctMaxHp}→${hit ? Math.max(0, _ctPrevHp - damage) : _ctPrevHp} | defeated=${hit && _ctPrevHp > 0 && (_ctPrevHp - damage) <= 0 ? 'YES' : 'no'}`);
+  }
+
   let _fdNeedsEmbedRefresh = false;
   if (damage > 0 && targetMsgId) {
     let { newHp: newCur } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, damage, defenderPlayerNum);

@@ -215,12 +215,13 @@ function capturePendingStates(game) {
 
 function countAliveFigures(game) {
   let count = 0;
-  if (game.deployedCards) {
-    for (const dc of Object.values(game.deployedCards)) {
-      if (dc.figures) {
-        for (const fig of Object.values(dc.figures)) {
-          if (fig.health > 0) count++;
-        }
+  for (const pn of [1, 2]) {
+    const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+    if (!dcList) continue;
+    for (const dc of dcList) {
+      if (!dc?.healthState) continue;
+      for (const figHp of dc.healthState) {
+        if (Array.isArray(figHp) && figHp[0] > 0) count++;
       }
     }
   }
@@ -376,9 +377,9 @@ export function formatCoverageSummary(artifact, runNum) {
 
   // Key combat counters
   const attacks = atc.attack_target || 0;
-  const surgeSpends = atc.combat_surge_spend || 0;
-  const surgeSkips = atc.combat_surge_skip || 0;
-  const combatReady = atc.combat_resolve_ready || 0;
+  const surgeSpends = atc.combat_surge || 0;
+  const surgeSkips = atc.combat_skip_surges || 0;
+  const combatResolutions = atc.combat_resolve || 0;
   const ccPlays = atc.play_cc || 0;
   const dcSpecials = atc.dc_special || 0;
   const strainChoices = (artifact.triggered_pending_states || []).includes('pendingStrainChoice') ? 'yes' : 'no';
@@ -402,7 +403,7 @@ export function formatCoverageSummary(artifact, runNum) {
     ``,
     `── Combat Events ──────────────────────────────`,
     `  Attacks declared:   ${attacks}`,
-    `  Combat resolutions: ${combatReady}`,
+    `  Combat resolutions: ${combatResolutions}`,
     `  Surge spends:       ${surgeSpends}`,
     `  Surge skips:        ${surgeSkips}`,
     `  Figure defeats:     ${artifact.figure_defeats ?? 0}`,
@@ -879,7 +880,6 @@ export async function runSelfPlayLoop(game, client, opts) {
           a.type === 'combat_surge' && a.params?.surgeKey && TOKEN_SURGE_PATTERNS.test(a.params.surgeKey)
         );
         if (tokenSurge && tokenSurge.customId !== chosen.customId) {
-          console.log(`[overflow-diag] Forcing token surge: ${tokenSurge.params.surgeKey} (was: ${chosen.params?.surgeKey})`);
           chosen = tokenSurge;
         }
       }
