@@ -269,6 +269,12 @@ function getRoundActiveActions(game, playerNum, deps) {
     if (cdActions.length > 0) return cdActions;
   }
 
+  // Power Token Overflow takes priority over combat — must discard before continuing
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    const overflowActions = getOverflowActions(game, playerNum);
+    if (overflowActions.length > 0) return overflowActions;
+  }
+
   if (game.pendingCombat) {
     const combatActions = getCombatActions(game, playerNum, deps);
     // Append playable CCs alongside combat actions (combat-timing windows)
