@@ -500,7 +500,7 @@ export async function renderMap(mapId, options = {}) {
           const dw = Math.round(tw * tScale);
           const dh = Math.round(th * tScale);
           const isLarge = cols > 1 || rows > 1;
-          const outlineGap = isLarge ? Math.max(2, Math.round(3 * scale)) : -3;
+          const outlineGap = isLarge ? Math.max(2, Math.round(3 * scale)) : -4;
           const outlineWidth = isLarge ? Math.max(2, Math.round(3 * scale)) : 5;
           // Draw colored outline outside the figure
           ctx.strokeStyle = fig.color || '#fff';
@@ -572,7 +572,7 @@ export async function renderMap(mapId, options = {}) {
     }
     // Power Tokens: up to 3 slots at top-left of unit
     const powerTokenTypes = (fig.powerTokens || []).slice(0, 3);
-    const ptSize = Math.max(14, clipRadius * (powerTokenTypes.length > 2 ? 0.5 : 0.6));
+    const ptSize = Math.max(14, clipRadius * (powerTokenTypes.length > 2 ? 0.375 : 0.45));
     const ptConfig = getTokenImagesConfig().powerTokens || {};
     const figX0 = cx - clipW;
     const figY0 = cy - clipH;
@@ -611,7 +611,7 @@ export async function renderMap(mapId, options = {}) {
     if (conditionIcons.length > 0) {
       const COND_SLOT = { Bleeding: 1, Stunned: 2, Weakened: 3, Focused: 4, Hidden: 5 };
       const condSizeStr = (fig.baseSize || fig.figureSize || '1x1');
-      const iconSize = Math.max(14, Math.min(clipW, clipH) * 0.65);
+      const iconSize = Math.max(14, Math.min(clipW, clipH) * 0.4875);
       const condImgPromises = conditionIcons.map((cond) => {
         const slot = COND_SLOT[cond] || 1;
         const condIconFile = `Icon-${slot}-${cond} ${condSizeStr}.png`;
