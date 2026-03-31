@@ -2427,7 +2427,8 @@ client.on('messageCreate', async (message) => {
       // Parse: selfplaymcp seed <p1deck> <p2deck> <mapId>
       // Deck names may contain spaces, so we match: seed <name> <name> <mapId>
       // Convention: mapId is always hyphenated (no spaces), deck names are everything between
-      const seedText = message.content.replace(/^selfplaymcp\s+seed\s+/i, '').trim();
+      const seedTextRaw = message.content.replace(/^selfplaymcp\s+seed\s+/i, '').trim();
+      const seedText = seedTextRaw.replace(/--test-overflow\s*/g, '').trim();
       // Split from the end: last token is mapId, second-to-last group is p2deck, first group is p1deck
       // Since deck names have spaces, use known map list to find the split point
       const maps = getPlayReadyMaps();
@@ -2499,6 +2500,8 @@ client.on('messageCreate', async (message) => {
         if (!game) throw new Error('Game creation returned no game state');
         game.selfPlay = true;
         game.guildId = message.guild.id;
+        // Test flag: --test-overflow routes through PvP overflow prompt path
+        if (seedTextRaw.includes('--test-overflow')) game.testPvpOverflowPath = true;
         saveGames();
 
         const loopResult = await runSelfPlayLoop(game, client, {

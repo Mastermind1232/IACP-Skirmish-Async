@@ -428,6 +428,12 @@ function getRoundActiveActions(game, playerNum, deps) {
     if (tokenActions.length > 0) return tokenActions;
   }
 
+  // Pending Power Token Overflow — player must discard excess tokens
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    const overflowActions = getOverflowActions(game, playerNum);
+    if (overflowActions.length > 0) return overflowActions;
+  }
+
   // Pending Cover Fire
   if (game.pendingCoverFire) {
     const coverActions = getCoverFireActions(game, playerNum);
@@ -1558,6 +1564,26 @@ function getPowerTokenActions(game, playerNum) {
     customId: buildCustomId(ACTION_TYPES.POWER_TOKEN_CHOICE, { gameId, tokenType }),
     description: `Choose ${tokenType} power token`,
     params: { tokenType },
+  }));
+}
+
+// ── Power Token Overflow Discard ──────────────────────────────────────────
+
+function getOverflowActions(game, playerNum) {
+  const overflowArr = game.pendingPowerTokenOverflow;
+  if (!overflowArr?.length) return [];
+  const entry = overflowArr[0];
+  const { figureKey } = entry;
+  // Determine which player owns this figure
+  const ownerPn = Object.entries(game.figurePositions || {}).find(([, figs]) => figs[figureKey])?.[0];
+  if (ownerPn && Number(ownerPn) !== playerNum) return [];
+  const tokens = game.figurePowerTokens?.[figureKey] || [];
+  const gameId = game.gameId;
+  return tokens.map((tokenType, i) => ({
+    type: ACTION_TYPES.PT_OVERFLOW_DISCARD,
+    customId: `pt_overflow_${gameId}_${playerNum}_${figureKey}_${i}`,
+    description: `Discard ${tokenType} token (overflow)`,
+    params: { figureKey, tokenIndex: i, tokenType },
   }));
 }
 

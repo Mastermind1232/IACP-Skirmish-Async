@@ -43,7 +43,7 @@ export function grantPowerTokens(game, figureKey, tokenType, count, max) {
   const totalTokens = game.figurePowerTokens[figureKey].length;
   const overflow = totalTokens - cap;
   if (overflow > 0) {
-    if (game.selfPlay) {
+    if (game.selfPlay && !game.testPvpOverflowPath) {
       // Auto-discard oldest tokens to stay at cap — AI keeps the newly granted ones
       game.figurePowerTokens[figureKey].splice(0, overflow);
     } else {

@@ -119,6 +119,10 @@ function determineActingPlayer(game) {
     return firstEntry?.playerNum || 'both';
   }
   if (game.pendingCoverFire) return game.pendingCoverFire.defenderPlayerNum || 'both';
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    const entry = game.pendingPowerTokenOverflow[0];
+    return entry.playerNum || 'both';
+  }
   if (game.pendingStillFaster) return 'both';
   if (game.pendingPowerTokenGrant) return game.pendingPowerTokenGrant.playerNum || 'both';
   if (game.pendingCelebration) return game.pendingCelebration.attackerPlayerNum || 'both';
@@ -173,7 +177,7 @@ const PENDING_KEYS = [
   'pendingCcConfirmation', 'pendingCcChoice', 'pendingCcSpaceChoice',
   'pendingIllegalCcPlay',
   // Combat sub-states
-  'pendingCoverFire', 'pendingStrainChoice', 'pendingStillFaster',
+  'pendingCoverFire', 'pendingPowerTokenOverflow', 'pendingStrainChoice', 'pendingStillFaster',
   'pendingStrikeMeDown', 'pendingSlowOnTheDraw', 'pendingForceExhaustion',
   'pendingIllicitArms', 'pendingPowerConverter', 'pendingThereIsNoTry',
   'pendingToughLuck', 'pendingHunterProtocol',
@@ -643,9 +647,23 @@ export async function runSelfPlayLoop(game, client, opts) {
   game.player1Id = `${AI_USER_PREFIX}1`;
   game.player2Id = `${AI_USER_PREFIX}2`;
 
+  // Test flag: route overflow through PvP prompt path (set via selfplaymcp seed --test-overflow)
+  let testOverflowInjected = false;
+
   try {
     for (let step = 0; ; step++) {
       const g = getGame(game.gameId);
+
+      // Test: inject 2 power tokens on all figures once deployed (forces overflow on surge token grants)
+      if (g?.testPvpOverflowPath && !testOverflowInjected && g.figurePositions) {
+        const allFigs = [...Object.keys(g.figurePositions[1] || {}), ...Object.keys(g.figurePositions[2] || {})];
+        if (allFigs.length > 0) {
+          g.figurePowerTokens = g.figurePowerTokens || {};
+          for (const fk of allFigs) g.figurePowerTokens[fk] = ['Block', 'Evade'];
+          testOverflowInjected = true;
+          console.log(`[self-play] TEST: Injected 2 power tokens on ${allFigs.length} figures to force overflow path`);
+        }
+      }
       if (!g || g.ended) {
         // Capture final-round VP snapshot (round transitions only fire mid-game)
         const finalGame = g || game;

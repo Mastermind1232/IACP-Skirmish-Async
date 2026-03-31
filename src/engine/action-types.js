@@ -70,6 +70,7 @@ export const ACTION_TYPES = {
   POWER_TOKEN_CHOICE: 'power_token_choice',
   COVER_FIRE_BLOCK: 'cover_fire_block',
   COVER_FIRE_SKIP: 'cover_fire_skip',
+  PT_OVERFLOW_DISCARD: 'pt_overflow',
   SPREAD_PAIN_COND: 'spread_pain_cond',
   STRAIN_CHOICE_ALLDMG: 'strain_choice_alldmg',
   STRAIN_CHOICE_DISCARD: 'strain_choice_discard',
