@@ -2424,6 +2424,7 @@ export async function handleCombatRoll(interaction, ctx) {
   } = ctx;
   const getInnateRerolls = ctx.getInnateRerolls || (() => ({ attackReroll: 0, defenseReroll: 0 }));
   const gameId = parseCustomId(interaction.customId, 'combat_roll_');
+  console.log(`[roll-diag] handleCombatRoll entry, customId=${interaction.customId}`);
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -4269,15 +4270,18 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
 
   const hasAtkCohesion = (combat.squadCohesionTokens?.attacker || []).length > 0;
   const hasDefCohesion = (combat.squadCohesionTokens?.defender || []).length > 0;
-  if (!_vagueBlockTokens && (attackerTokens.length > 0 || hasAtkCohesion)) {
-    combat.tokenPhase = 'attacker';
-    await sendTokenWindow(thread, game.gameId, 'attacker', attackerTokens, combat.attackerDisplayName, combat);
-    return;
-  }
-  if (!_vagueBlockTokens && (defenderTokens.length > 0 || hasDefCohesion)) {
-    combat.tokenPhase = 'defender';
-    await sendTokenWindow(thread, game.gameId, 'defender', defenderTokens, combat.target.label, combat);
-    return;
+  // Self-play: skip interactive token spending windows (AI doesn't have combat_token_ actions)
+  if (!game.selfPlay) {
+    if (!_vagueBlockTokens && (attackerTokens.length > 0 || hasAtkCohesion)) {
+      combat.tokenPhase = 'attacker';
+      await sendTokenWindow(thread, game.gameId, 'attacker', attackerTokens, combat.attackerDisplayName, combat);
+      return;
+    }
+    if (!_vagueBlockTokens && (defenderTokens.length > 0 || hasDefCohesion)) {
+      combat.tokenPhase = 'defender';
+      await sendTokenWindow(thread, game.gameId, 'defender', defenderTokens, combat.target.label, combat);
+      return;
+    }
   }
   await proceedAfterTokens(thread, game, combat, ctx);
 }
@@ -4410,7 +4414,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   // Rogue One: even with 0 surge, show the surge UI if the attacker can gain surge via token sharing
   const _rogueOneBtns = buildRogueOneSurgeButton(game, combat);
   const hasRogueOneOption = _rogueOneBtns.length > 0;
-  if (game.testPvpOverflowPath) console.log(`[surge-diag] dcName="${combat.attackerDcName}" totalSurge=${totalSurge} surgeAbs=${surgeAbilities.length} affordable=${affordable.length} bleed=${!!combat.attackerConds?.includes('Bleed')} rogueOne=${hasRogueOneOption}`);
+  console.log(`[surge-diag] dcName="${combat.attackerDcName}" totalSurge=${totalSurge} surgeAbs=${surgeAbilities.length} affordable=${affordable.length} bleed=${!!combat.attackerConds?.includes('Bleed')} rogueOne=${hasRogueOneOption}`);
   if ((totalSurge > 0 && (affordable.length > 0 || combat.attackerConds?.includes('Bleed'))) || hasRogueOneOption) {
     combat.surgeRemaining = totalSurge;
     combat.surgeDamage = 0;
