@@ -4410,6 +4410,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   // Rogue One: even with 0 surge, show the surge UI if the attacker can gain surge via token sharing
   const _rogueOneBtns = buildRogueOneSurgeButton(game, combat);
   const hasRogueOneOption = _rogueOneBtns.length > 0;
+  if (game.testPvpOverflowPath) console.log(`[surge-diag] dcName="${combat.attackerDcName}" totalSurge=${totalSurge} surgeAbs=${surgeAbilities.length} affordable=${affordable.length} bleed=${!!combat.attackerConds?.includes('Bleed')} rogueOne=${hasRogueOneOption}`);
   if ((totalSurge > 0 && (affordable.length > 0 || combat.attackerConds?.includes('Bleed'))) || hasRogueOneOption) {
     combat.surgeRemaining = totalSurge;
     combat.surgeDamage = 0;
