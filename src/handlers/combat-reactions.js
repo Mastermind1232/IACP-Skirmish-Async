@@ -6,6 +6,7 @@ import { discordCatch } from '../error-handling.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
+import { sendPowerTokenOverflowUI } from './combat.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -268,6 +269,12 @@ export async function handleHunterProtocol(interaction, ctx) {
     if (_hpThread) await _hpThread.send(`**Hunter Protocol** — Triggered **${_hpLabel}** again (cost: ${_hpCost}). Surge remaining: ${_hpCombat.surgeRemaining}`).catch(discordCatch);
   } else {
     if (_hpThread) await _hpThread.send('**Hunter Protocol** — Skipped second trigger.').catch(discordCatch);
+  }
+  // Check for power token overflow before resuming surge
+  if (_hpGame.pendingPowerTokenOverflow?.length > 0) {
+    _hpGame.pendingSurgeOverflow = { combatThreadId: _hpCombat.combatThreadId, attackerPlayerNum: _hpAtk };
+    if (_hpThread) await sendPowerTokenOverflowUI(_hpGame, _hpGameId, _hpThread, _hpAtk, saveGames);
+    return;
   }
   // Continue surge flow
   if ((_hpCombat.surgeRemaining || 0) <= 0) {

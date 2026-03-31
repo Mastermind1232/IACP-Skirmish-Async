@@ -76,6 +76,43 @@ export async function sendReadyToResolveRolls(thread, gameId) {
 }
 
 /**
+ * Resume the surge choice UI (or send ready-to-resolve if surges are done).
+ * Shared helper used by overflow resolution, Spread the Pain, and power token choice handlers.
+ */
+export async function resumeSurgeChoiceOrResolve(game, gameId, combat, thread, ctx) {
+  if ((combat.surgeRemaining || 0) <= 0) {
+    combat.surgeRemaining = 0;
+    await sendReadyToResolveRolls(thread, gameId);
+    return;
+  }
+  const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
+  const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
+  const remaining = combat.surgeRemaining || 0;
+  const atkEff = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const maxUses = (atkEff?.specialAbilityIds || []).includes('overload_saboteur') ? 2 : 1;
+  const kdfX = combat.attackRoll?.surge ?? 0;
+  const kdfHas = (atkEff?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
+  const surgeRows = [];
+  for (let i = 0; i < surgeAbilities.length; i++) {
+    const k = surgeAbilities[i];
+    const cost = (k?.startsWith?.('double:') ? 2 : (ctx.getAbility?.(k)?.surgeCost ?? 1));
+    if (cost > remaining) continue;
+    if (((combat.surgeSpentCount || {})[i] || 0) >= maxUses) continue;
+    let label = (getSurgeLabel(k) || k).slice(0, 80);
+    if (kdfHas && /\bx\b/i.test(label)) label = label.replace(/\bX\b/gi, String(kdfX));
+    const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
+    surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_${i}`).setLabel(btnLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary));
+  }
+  if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed) {
+    surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_bleed_prevention`).setLabel('Spend 1 Surge — Prevent Bleed').setStyle(ButtonStyle.Secondary));
+  }
+  surgeRows.push(...buildRogueOneSurgeButton(game, combat));
+  surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
+  const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
+  await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
+}
+
+/**
  * Apply direct unpreventable strain/damage to a figure (Relentless, etc.).
  * Handles defeat, VP, activations update.
  */
@@ -4728,6 +4765,12 @@ export async function handleCombatSurge(interaction, ctx) {
       }
     }
   }
+  // Check for power token overflow before showing next surge choices
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    game.pendingSurgeOverflow = { combatThreadId: combat.combatThreadId, attackerPlayerNum: combat.attackerPlayerNum };
+    await sendPowerTokenOverflowUI(game, gameId, thread, combat.attackerPlayerNum, saveGames);
+    return; // pause surge — overflow handler will resume
+  }
   if (combat.surgeRemaining <= 0 || choice === 'done') {
     combat.surgeRemaining = 0;
     await sendReadyToResolveRolls(thread, gameId);
@@ -5100,42 +5143,22 @@ export async function handlePowerTokenChoice(interaction, ctx) {
       await ch.send(`**Power Token(s) granted:** ${lines.join(', ')}`).catch(discordCatch);
       // Check for overflow and prompt discard if needed
       if (game.pendingPowerTokenOverflow?.length > 0) {
+        const _ptCombat = game.pendingCombat;
+        if (_ptCombat && (_ptCombat.surgeRemaining || 0) > 0) {
+          game.pendingSurgeOverflow = { combatThreadId: channelId, attackerPlayerNum: playerNum };
+        }
         await sendPowerTokenOverflowUI(game, gameId, ch, playerNum, saveGames);
         return; // wait for overflow resolution before continuing
       }
     }
   }
-  // If we're mid-surge and there are still surges remaining, continue the surge flow
+  // If mid-surge, resume surge choice UI (only if surges remain — avoids
+  // incorrectly sending "ready to resolve" for non-surge token grants like Flawless Execution)
   const combat = game.pendingCombat;
-  if (combat?.surgeRemaining > 0 && channelId) {
+  if (combat && channelId && (combat.surgeRemaining || 0) > 0) {
     const thread = await fetchCombatThread(interaction.client, channelId);
     if (thread) {
-      const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
-      const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
-      const remaining = combat.surgeRemaining || 0;
-      // Overload (Rebel Saboteur): allow same surge to be used twice
-      const _ptAtkEff = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-      const _ptMaxUses = (_ptAtkEff?.specialAbilityIds || []).includes('overload_saboteur') ? 2 : 1;
-      // Krayt Dragon Fury: resolve X in labels
-      const _kdfXValPT = combat.attackRoll?.surge ?? 0;
-      const _kdfAtkEffPT = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-      const _kdfHasPT = (_kdfAtkEffPT?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
-      const surgeRows = [];
-      for (let i = 0; i < surgeAbilities.length; i++) {
-        const k = surgeAbilities[i];
-        const cost = (k?.startsWith?.('double:') ? 2 : (ctx.getAbility?.(k)?.surgeCost ?? 1));
-        if (cost > remaining) continue;
-        if (((combat.surgeSpentCount || {})[i] || 0) >= _ptMaxUses) continue;
-        let label = (getSurgeLabel(k) || k).slice(0, 80);
-        if (_kdfHasPT && /\bx\b/i.test(label)) label = label.replace(/\bX\b/gi, String(_kdfXValPT));
-        const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
-        surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_${i}`).setLabel(btnLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary));
-      }
-      // Rogue One: discard a power token from a friendly figure for +1 Surge
-      surgeRows.push(...buildRogueOneSurgeButton(game, combat));
-      surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
-      const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
-      await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
+      await resumeSurgeChoiceOrResolve(game, gameId, combat, thread, ctx);
     }
   }
   saveGames();
@@ -5170,40 +5193,14 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
     await thread.send(`**Spread the Pain** — **${cond}** chosen. Will apply post-combat.`).catch(discordCatch);
   }
 
-  // Resume surge phase
-  if ((combat.surgeRemaining || 0) > 0) {
-    const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
-    const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
-    const remaining = combat.surgeRemaining;
-    // Overload (Rebel Saboteur): allow same surge to be used twice
-    const _spAtkEff = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-    const _spMaxUses = (_spAtkEff?.specialAbilityIds || []).includes('overload_saboteur') ? 2 : 1;
-    // Krayt Dragon Fury: resolve X in labels
-    const _kdfXValSP = combat.attackRoll?.surge ?? 0;
-    const _kdfAtkEffSP = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-    const _kdfHasSP = (_kdfAtkEffSP?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
-    const surgeRows = [];
-    for (let i = 0; i < surgeAbilities.length; i++) {
-      const k = surgeAbilities[i];
-      const cost = (k?.startsWith?.('double:') ? 2 : (ctx.getAbility?.(k)?.surgeCost ?? 1));
-      if (cost > remaining) continue;
-      if (((combat.surgeSpentCount || {})[i] || 0) >= _spMaxUses) continue;
-      let label = (getSurgeLabel(k) || k).slice(0, 80);
-      if (_kdfHasSP && /\bx\b/i.test(label)) label = label.replace(/\bX\b/gi, String(_kdfXValSP));
-      const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
-      surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_${i}`).setLabel(btnLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary));
-    }
-    if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed) {
-      surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_bleed_prevention`).setLabel('Spend 1 Surge — Prevent Bleed').setStyle(ButtonStyle.Secondary));
-    }
-    // Rogue One: discard a power token from a friendly figure for +1 Surge
-    surgeRows.push(...buildRogueOneSurgeButton(game, combat));
-    surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
-    const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
-    await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
-  } else {
-    await sendReadyToResolveRolls(thread, gameId);
+  // Check for power token overflow before resuming surge
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    game.pendingSurgeOverflow = { combatThreadId, attackerPlayerNum };
+    await sendPowerTokenOverflowUI(game, gameId, thread, attackerPlayerNum, saveGames);
+    return;
   }
+  // Resume surge phase
+  await resumeSurgeChoiceOrResolve(game, gameId, combat, thread, ctx);
   saveGames();
 }
 
@@ -5920,6 +5917,19 @@ export async function handlePowerTokenOverflowDiscard(interaction, ctx) {
       if (ch) {
         await sendPowerTokenOverflowUI(game, gameId, ch, nextEntry.playerNum || playerNum, saveGames);
         return; // saveGames already called
+      }
+    }
+
+    // Resume surge flow if overflow originated from surge resolution
+    if (game.pendingSurgeOverflow) {
+      const { combatThreadId, attackerPlayerNum: atkNum } = game.pendingSurgeOverflow;
+      game.pendingSurgeOverflow = null;
+      const combat = game.pendingCombat;
+      if (combat && combatThreadId) {
+        const surgeThread = await fetchCombatThread(interaction.client, combatThreadId);
+        if (surgeThread) {
+          await resumeSurgeChoiceOrResolve(game, gameId, combat, surgeThread, ctx);
+        }
       }
     }
   }
