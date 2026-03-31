@@ -4771,6 +4771,9 @@ export async function handleCombatSurge(interaction, ctx) {
     }
   }
   // Check for power token overflow before showing next surge choices
+  if (game.testPvpOverflowPath) {
+    console.log(`[overflow-diag] surge overflow check: pendingOverflow=${JSON.stringify(game.pendingPowerTokenOverflow)}, pendingSurgeOverflow=${JSON.stringify(game.pendingSurgeOverflow)}`);
+  }
   if (game.pendingPowerTokenOverflow?.length > 0) {
     game.pendingSurgeOverflow = { combatThreadId: combat.combatThreadId, attackerPlayerNum: combat.attackerPlayerNum };
     await sendPowerTokenOverflowUI(game, gameId, thread, combat.attackerPlayerNum, saveGames);

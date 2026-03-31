@@ -42,6 +42,9 @@ export function grantPowerTokens(game, figureKey, tokenType, count, max) {
   // Check for overflow
   const totalTokens = game.figurePowerTokens[figureKey].length;
   const overflow = totalTokens - cap;
+  if (game.testPvpOverflowPath) {
+    console.log(`[overflow-diag] grantPowerTokens: ${figureKey} +${count} ${tokenType}, total=${totalTokens}, cap=${cap}, overflow=${overflow}, selfPlay=${game.selfPlay}, testPvp=${game.testPvpOverflowPath}`);
+  }
   if (overflow > 0) {
     if (game.selfPlay && !game.testPvpOverflowPath) {
       // Auto-discard oldest tokens to stay at cap — AI keeps the newly granted ones

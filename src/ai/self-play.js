@@ -870,7 +870,19 @@ export async function runSelfPlayLoop(game, client, opts) {
         if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
         continue;
       }
-      const chosen = pick.action;
+      let chosen = pick.action;
+
+      // Test override: when --test-overflow, prefer token-granting surges to force overflow
+      if (g.testPvpOverflowPath && chosen.type === 'combat_surge') {
+        const TOKEN_SURGE_PATTERNS = /token|block 1|evade(?!\s*cancel)/i;
+        const tokenSurge = allActions.find(a =>
+          a.type === 'combat_surge' && a.params?.surgeKey && TOKEN_SURGE_PATTERNS.test(a.params.surgeKey)
+        );
+        if (tokenSurge && tokenSurge.customId !== chosen.customId) {
+          console.log(`[overflow-diag] Forcing token surge: ${tokenSurge.params.surgeKey} (was: ${chosen.params?.surgeKey})`);
+          chosen = tokenSurge;
+        }
+      }
 
       // CC play bridge: play_cc actions require multi-step UI (dropdown → confirm).
       // Bypass the dropdown by pre-setting pendingCcConfirmation and routing
