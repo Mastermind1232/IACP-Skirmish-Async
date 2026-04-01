@@ -79,7 +79,7 @@ export async function clearPreGameSetup(game, client) {
     ...(game.deploymentZoneMessageId ? [game.deploymentZoneMessageId] : []),
     ...(game.setupLogMessageIds || []),
   ];
-  if (ids.length === 0) return;
+  if (ids.length === 0 && !game.p1HandId && !game.p2HandId) return;
   try {
     const ch = await fetchGameChannel(client, game.generalId);
     for (const id of ids) {
@@ -94,5 +94,19 @@ export async function clearPreGameSetup(game, client) {
     game.setupLogMessageIds = [];
   } catch (err) {
     console.error('Failed to clear pre-game setup:', err);
+  }
+
+  // Clear deck-selection artifacts from hand channels
+  for (const handId of [game.p1HandId, game.p2HandId]) {
+    if (!handId) continue;
+    try {
+      const handCh = await fetchGameChannel(client, handId);
+      const msgs = await handCh.messages.fetch({ limit: 50 });
+      for (const msg of msgs.values()) {
+        try { await msg.delete(); } catch {}
+      }
+    } catch (err) {
+      console.error('Failed to clear hand channel setup messages:', err);
+    }
   }
 }

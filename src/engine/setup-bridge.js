@@ -318,6 +318,10 @@ export async function runDraftRandom(game, client, deps, options = {}) {
     await boardChannel.send(payload);
   }
 
+  // Clear general-channel setup messages + hand-channel deck-selection artifacts
+  // before posting fresh hand content
+  await deps.clearPreGameSetup(game, client);
+
   // Shuffle + draw starting 3 CCs. Scenario may seed P1 hand (e.g. smoke_grenade forces Smoke Grenade)
   const drawStartingHand = async (playerNum) => {
     const squad = deps.getSquad(game, playerNum);
@@ -393,7 +397,6 @@ export async function runDraftRandom(game, client, deps, options = {}) {
     deps.setRoundPhase(game, deps.ROUND_PHASES.ACTIVATION);
     await deps.sendRoundActivationPhaseMessage(game, client);
   }
-  await deps.clearPreGameSetup(game, client);
   deps.saveGames();
 }
 
