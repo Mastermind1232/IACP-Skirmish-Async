@@ -35,7 +35,7 @@ import {
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
-import { chunkButtonsToRows } from '../discord/components.js';
+import { chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 
 /**
  * C14: After a CC is played, check if opponent has Comm Disruption in hand
@@ -492,8 +492,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     }
     if (result.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
       // Space choice required: commit play, then send space grid + map (reusable pick-a-space pattern).
-      const { getBoardStateForMovement, getSpaceChoiceRows, getMapAttachmentForSpaces } = ctx;
-      if (!getBoardStateForMovement || !getSpaceChoiceRows || !getMapAttachmentForSpaces) {
+      const { getBoardStateForMovement, getMapAttachmentForSpaces } = ctx;
+      if (!getBoardStateForMovement || !getMapAttachmentForSpaces) {
         await interaction.followUp({ content: 'Space choice not supported (missing helpers). Resolve manually.', ephemeral: true }).catch(discordCatch);
         return;
       }
@@ -522,13 +522,19 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
       game.pendingCcSpaceChoice = { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces, chosenFigureKey: result.chosenFigureKey ?? null };
       const boardState = getBoardStateForMovement(game, null);
-      const mapSpaces = boardState?.mapSpaces || { spaces: result.validSpaces };
-      const { rows, available: ccAvail, overflowed: ccOverflowed } = getSpaceChoiceRows(`cc_space_${gameId}_`, result.validSpaces, mapSpaces);
+      const ccMapSpaces = boardState?.mapSpaces || { spaces: result.validSpaces };
+      const ccHeader = `**Pick a space** (for **${card}**)`;
+      const ccContextKey = gameId;
+      game.pendingSpacePick = game.pendingSpacePick || {};
+      game.pendingSpacePick[ccContextKey] = {
+        validSpaces: result.validSpaces,
+        cellPrefix: `cc_space_${gameId}_`,
+        mapSpaces: ccMapSpaces,
+        headerText: ccHeader,
+      };
+      const { rows: ccRowBtns } = buildRowPickerButtons(result.validSpaces, `space_row_${ccContextKey}_`);
       const mapAttachment = await getMapAttachmentForSpaces(game, result.validSpaces);
-      const ccComponents = ccOverflowed
-        ? [ctx.buildSpaceSelectMenu('cc_space_sel_', gameId, ccAvail)]
-        : rows.slice(0, 5);
-      const payload = { content: `**Pick a space** (for **${card}**):`, components: ccComponents, fetchReply: true };
+      const payload = { content: `${ccHeader}:\nChoose a row:`, components: ccRowBtns.slice(0, 5), fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await handChannel.send(payload).catch(discordCatch);
       // C14: Comm Disruption — prompt opponent if they have it in hand
@@ -832,6 +838,7 @@ export async function handleCcSpacePick(interaction, ctx) {
   const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  cleanupSpacePick(game, gameId);
   const pending = game.pendingCcSpaceChoice;
   if (!pending || pending.gameId !== gameId) {
     await interaction.followUp({ content: 'No pending space choice for this game.', ephemeral: true }).catch(discordCatch);
@@ -864,7 +871,7 @@ export async function handleCcSpacePick(interaction, ctx) {
 
 /** @param {import('discord.js').ButtonInteraction} interaction — choice button for choose-one CC (e.g. Retaliation). */
 export async function handleCcChoice(interaction, ctx) {
-  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, getBoardStateForMovement, getSpaceChoiceRows, getMapAttachmentForSpaces, client, saveGames } = ctx;
+  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, getBoardStateForMovement, getMapAttachmentForSpaces, client, saveGames } = ctx;
   const parts = splitCustomId(interaction.customId, 'cc_choice_');
   const gameId = parts[0];
   const chosenLabel = parts.slice(1).join('_');
@@ -905,7 +912,7 @@ export async function handleCcChoice(interaction, ctx) {
   delete game.pendingCcChoice;
   const aarResult = await applyAbilityResult(result, { game, playerNum, client, ctx });
   if (!aarResult.handled && aarResult.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
-    if (!getBoardStateForMovement || !getSpaceChoiceRows || !getMapAttachmentForSpaces) {
+    if (!getBoardStateForMovement || !getMapAttachmentForSpaces) {
       await logGameAction(game, client, 'CC effect: Space choice not supported. Resolve manually.', { phase: 'ACTION', icon: 'card' });
       saveGames();
       return;
@@ -922,13 +929,19 @@ export async function handleCcChoice(interaction, ctx) {
     const handCh = await fetchGameChannel(client, handChannelId);
     if (handCh) {
       const boardState2 = getBoardStateForMovement(game, null);
-      const mapSpaces2 = boardState2?.mapSpaces || { spaces: result.validSpaces };
-      const { rows: spaceRows, available: ccAvail2, overflowed: ccOverflowed2 } = getSpaceChoiceRows(`cc_space_${gameId}_`, result.validSpaces, mapSpaces2);
+      const cc2MapSpaces = boardState2?.mapSpaces || { spaces: result.validSpaces };
+      const cc2Header = `**Pick a space** (for **${pending.card ?? pending.abilityId}**)`;
+      const cc2ContextKey = gameId;
+      game.pendingSpacePick = game.pendingSpacePick || {};
+      game.pendingSpacePick[cc2ContextKey] = {
+        validSpaces: result.validSpaces,
+        cellPrefix: `cc_space_${gameId}_`,
+        mapSpaces: cc2MapSpaces,
+        headerText: cc2Header,
+      };
+      const { rows: cc2RowBtns } = buildRowPickerButtons(result.validSpaces, `space_row_${cc2ContextKey}_`);
       const mapAttachment2 = await getMapAttachmentForSpaces(game, result.validSpaces);
-      const ccComponents2 = ccOverflowed2
-        ? [ctx.buildSpaceSelectMenu('cc_space_sel_', gameId, ccAvail2)]
-        : spaceRows.slice(0, 5);
-      const payload2 = { content: `**Pick a space** (for **${pending.card ?? pending.abilityId}**):`, components: ccComponents2 };
+      const payload2 = { content: `${cc2Header}:\nChoose a row:`, components: cc2RowBtns.slice(0, 5) };
       if (mapAttachment2) payload2.files = [mapAttachment2];
       await handCh.send(payload2).catch(discordCatch);
     }
