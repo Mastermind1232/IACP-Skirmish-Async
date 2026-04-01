@@ -77,15 +77,6 @@ const CONTEXT_GROUPS = {
     'getGame', 'dcMessageMeta', 'clearMoveGridMessages', 'getMoveMpButtonRows',
   ],
 
-  moveLetter: [
-    'getGame', 'dcMessageMeta', 'clearMoveGridMessages', 'getMoveSpaceGridRows',
-    'buildLetterRows',
-  ],
-
-  moveBackLetters: [
-    'getGame', 'dcMessageMeta', 'clearMoveGridMessages', 'buildLetterRows',
-  ],
-
   movePick: [
     'getGame', 'dcMessageMeta', 'clearMoveGridMessages', 'getBoardStateForMovement',
     'getMovementProfile', 'ensureMovementCache', 'computeMovementCache',

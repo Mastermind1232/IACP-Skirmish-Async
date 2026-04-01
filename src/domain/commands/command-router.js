@@ -21,8 +21,6 @@ export const PREFIX_TO_COMMAND = {
   // Movement
   'move_mp_': COMMAND_TYPES.StartMovement,
   'move_pick_': COMMAND_TYPES.MoveToSpace,
-  'move_letter_': COMMAND_TYPES.MoveLetter,
-  'move_back_letters_': COMMAND_TYPES.MoveBackLetters,
   'move_adjust_mp_': COMMAND_TYPES.MoveAdjustMp,
   // Combat
   'attack_target_': COMMAND_TYPES.AttackTarget,
@@ -158,10 +156,6 @@ export function parsePayloadFromCustomId(customId, prefix) {
     case 'move_pick_':
       return { gameId: parts[0], coord: parts[1] };
 
-    case 'move_letter_':
-      return { gameId: parts[0], letter: parts[1] };
-
-    case 'move_back_letters_':
     case 'move_adjust_mp_':
       return { gameId: parts[0] };
 

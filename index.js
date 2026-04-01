@@ -399,8 +399,6 @@ import {
   getDcToggleButton,
   getDcPlayAreaComponents as getDcPlayAreaComponentsFromDiscord,
   getMoveMpButtonRows,
-  getMoveSpaceGridRows,
-  buildLetterRows,
   getSpaceChoiceRows,
   getDeployFigureLabelsFromDiscord,
   getDeployButtonRowsFromDiscord,
@@ -3116,7 +3114,7 @@ function buildAllDeps() {
     // Discord UI (imported)
     logGameAction, getInitiativePlayerZoneLabel,
     getHandTooltipEmbed, getHandSquadButtons, getMapSelectionTooltipEmbed,
-    getMoveMpButtonRows, getMoveSpaceGridRows, buildLetterRows,
+    getMoveMpButtonRows,
     getSpaceChoiceRows, getActionsCounterContent,
     updateActivationsMessage, getGeneralSetupButtons, getMapTypeButtons,
     getMapConfirmButton, getMissionSelectDrawMenu, getMissionSelectionPickMenu,
@@ -4221,8 +4219,6 @@ client.on('interactionCreate', async (interaction) => {
       // Movement
       'move_mp_',
       'move_pick_',
-      'move_letter_',
-      'move_back_letters_',
       'move_adjust_mp_',
       // Combat core
       'attack_target_',

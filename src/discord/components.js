@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
-import { normalizeCoord, bottomLeftCoord } from '../game/coords.js';
+import { normalizeCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
 import { isDcCompanion } from '../data-loader.js';
 import { cardNameIncludes } from '../game/card-names.js';
@@ -615,26 +615,6 @@ export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
   return rows;
 }
 
-/** Action rows for two-tier movement column picker: move_letter_${msgId}_${figureIndex}_${letter}. */
-export function buildLetterRows(cells, msgId, figureIndex) {
-  const counts = {};
-  for (const c of cells) {
-    const letter = c.match(/^([a-z]+)/)?.[1] ?? c[0];
-    counts[letter] = (counts[letter] || 0) + 1;
-  }
-  const letters = Object.keys(counts).sort();
-  const btns = letters.map((letter) =>
-    new ButtonBuilder()
-      .setCustomId(`move_letter_${msgId}_${figureIndex}_${letter}`)
-      .setLabel(letter.toUpperCase())
-      .setStyle(ButtonStyle.Primary)
-  );
-  const rows = [];
-  for (let i = 0; i < btns.length; i += 5) {
-    rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
-  }
-  return rows;
-}
 
 /**
  * Canonical tier-1 row picker: groups spaces by row number and returns "Row N" buttons.
@@ -690,20 +670,6 @@ export function cleanupSpacePick(game, contextKey) {
  */
 export function cleanupAllSpacePicks(game) {
   delete game.pendingSpacePick;
-}
-
-/** Action rows for movement space selection: move_pick_${msgId}_${figureIndex}_${space}. */
-export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces, size = '1x1') {
-  // Build a labelMap so buttons show bottom-left corner of each placement instead of top-left.
-  const labelMap = {};
-  if (size && size !== '1x1') {
-    for (const space of validSpaces) {
-      const norm = normalizeCoord(space);
-      labelMap[norm] = bottomLeftCoord(norm, size).toUpperCase();
-    }
-  }
-  // Pass Infinity so all reachable cells get buttons; overflow is sent across multiple messages in movement.js
-  return getSpaceChoiceRows(`move_pick_${msgId}_${figureIndex}_`, validSpaces, mapSpaces, Infinity, labelMap);
 }
 
 /**

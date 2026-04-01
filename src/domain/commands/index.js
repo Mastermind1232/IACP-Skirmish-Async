@@ -32,8 +32,6 @@ export const COMMAND_TYPES = {
   CancelActivate: 'CancelActivate',
   DcEndActivation: 'DcEndActivation',
   // Movement extras
-  MoveLetter: 'MoveLetter',
-  MoveBackLetters: 'MoveBackLetters',
   MoveAdjustMp: 'MoveAdjustMp',
   // Combat extras
   AttackTarget: 'AttackTarget',

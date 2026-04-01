@@ -57,7 +57,7 @@ describe('command-router', () => {
       'end_end_of_round_', 'end_start_of_round_', 'status_phase_',
       'dc_activate_', 'end_turn_', 'dc_end_activation_', 'pass_activation_turn_',
       'confirm_activate_', 'cancel_activate_',
-      'move_mp_', 'move_pick_', 'move_letter_', 'move_back_letters_', 'move_adjust_mp_',
+      'move_mp_', 'move_pick_', 'move_adjust_mp_',
       'attack_target_', 'combat_ready_', 'combat_roll_', 'combat_surge_',
       'combat_reroll_', 'combat_resolve_ready_', 'combat_passive_', 'combat_token_',
     ];
