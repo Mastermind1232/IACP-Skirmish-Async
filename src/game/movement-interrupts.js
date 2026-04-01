@@ -8,11 +8,11 @@
  * opportunities, then return structured trigger data for the handler to post
  * notifications/buttons.
  */
-import { normalizeCoord, getFootprintCells } from './coords.js';
-import { getMapSpaces, getDcEffects } from '../data-loader.js';
+import { normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
+import { getMapSpaces, getMapTokensData, getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { getCcHand, getPlayerId, opponentPlayerNum, getDcMessageIds, getDcList } from './player-helpers.js';
-import { getRange } from './spatial.js';
+import { countSpaces } from './spatial.js';
 import { cardNameIncludes } from './card-names.js';
 
 /**
@@ -56,6 +56,13 @@ export function detectPostMoveInterrupts(game, movingPlayerNum, movingFigureKey,
   const mapId = game.selectedMap?.id;
   const rawMapSpaces = mapId ? getMapSpaces(mapId) : null;
   const adjacency = rawMapSpaces?.adjacency || {};
+  const _miAllDoors = (mapId && getMapTokensData) ? (getMapTokensData()[mapId]?.doors || []) : [];
+  const _miOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+  const _miClosedDoorEdges = new Set(
+    _miAllDoors
+      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !_miOpenedSet.has(`${a}|${b}`) && !_miOpenedSet.has(`${b}|${a}`); })
+      .map(e => edgeKey(e[0], e[1]))
+  );
   const oppNum = opponentPlayerNum(movingPlayerNum);
   const hostilePositions = game.figurePositions?.[oppNum] || {};
   const triggers = [];
@@ -128,8 +135,8 @@ export function detectPostMoveInterrupts(game, movingPlayerNum, movingFigureKey,
       {
         // Only check for Mak specifically
         if (hf.dcName === "Mak Eshka'rey") {
-          const distAfter = getRange(enteringSpace, hf.pos);
-          const distBefore = getRange(exitingSpace, hf.pos);
+          const distAfter = countSpaces(rawMapSpaces, enteringSpace, hf.pos, _miClosedDoorEdges);
+          const distBefore = countSpaces(rawMapSpaces, exitingSpace, hf.pos, _miClosedDoorEdges);
           // Trigger when entering within 3 spaces (was further, now within)
           if (distAfter <= 3 && distBefore > 3) {
             if (hasCardInHand(game, oppNum, 'Disengage')) {

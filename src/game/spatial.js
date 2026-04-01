@@ -198,6 +198,43 @@ export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist) {
   return false;
 }
 
+/**
+ * Counting-spaces distance: BFS shortest-path on the map adjacency graph.
+ * Returns the number of movement steps a small figure would need.
+ * Respects walls/blocking terrain (pre-excluded from adjacency graph).
+ * Optionally blocks closed-door edges via blockedEdges set.
+ * @param {object} mapSpaces - { adjacency: { [coord]: string[] } }
+ * @param {string} coordA - source coord
+ * @param {string} coordB - target coord
+ * @param {Set<string>|null} [blockedEdges] - edgeKey-format strings for closed doors
+ * @param {number} [maxDist=50] - BFS depth cap
+ * @returns {number} distance (0 if same, Infinity if unreachable)
+ */
+export function countSpaces(mapSpaces, coordA, coordB, blockedEdges = null, maxDist = 50) {
+  if (!mapSpaces?.adjacency || !coordA || !coordB) return Infinity;
+  const a = coordA.toLowerCase(), b = coordB.toLowerCase();
+  if (a === b) return 0;
+  const visited = new Set([a]);
+  let frontier = [a];
+  for (let d = 1; d <= maxDist; d++) {
+    const next = [];
+    for (const c of frontier) {
+      for (const adj of (mapSpaces.adjacency[c] || [])) {
+        const s = String(adj).toLowerCase();
+        if (blockedEdges) {
+          const ek = [c, s].sort().join('|');
+          if (blockedEdges.has(ek)) continue;
+        }
+        if (s === b) return d;
+        if (!visited.has(s)) { visited.add(s); next.push(s); }
+      }
+    }
+    frontier = next;
+    if (!frontier.length) break;
+  }
+  return Infinity;
+}
+
 // ── Figure enumeration ──────────────────────────────────────────────────────
 
 /**

@@ -11,7 +11,9 @@ import {
   getInitiativePlayerNum, opponentPlayerNum, getHandChannelId,
 } from '../game/player-helpers.js';
 import { bottomLeftCoord, normalizeCoord, getFootprintCells } from '../game/coords.js';
-import { getRange } from '../game/spatial.js';
+import { countSpaces } from '../game/spatial.js';
+import { edgeKey } from '../game/coords.js';
+import { getMapTokensData } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { requireGame } from '../utils/guards.js';
@@ -782,14 +784,22 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
     }
     case 'arms_distribution_deploy': {
       game[`armsDistDeployFired_p${ability.playerNum}`] = true;
-      // Find all friendly figures within 3 spaces of Ko-Tun
+      // Find all friendly figures within 3 spaces of Ko-Tun (graph distance)
       const kotunPos = game.figurePositions?.[ability.playerNum]?.[ability.figureKey];
-      const ms = getMapSpaces(game.selectedMap?.id);
+      const _adMapId = game.selectedMap?.id;
+      const _adMs = _adMapId ? getMapSpaces(_adMapId) : null;
+      const _adAllDoors = _adMapId ? (getMapTokensData()?.[_adMapId]?.doors || []) : [];
+      const _adOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+      const _adClosedDoorEdges = new Set(
+        _adAllDoors
+          .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !_adOpenedSet.has(`${a}|${b}`) && !_adOpenedSet.has(`${b}|${a}`); })
+          .map(e => edgeKey(e[0], e[1]))
+      );
       const eligible = [];
       for (const [fk, fpos] of Object.entries(game.figurePositions?.[ability.playerNum] || {})) {
         if (!fpos || fk === ability.figureKey) continue;
-        const dist = getRange(kotunPos, fpos, ms, game);
-        if (dist != null && dist <= 3) {
+        const dist = countSpaces(_adMs, kotunPos, fpos, _adClosedDoorEdges);
+        if (dist <= 3) {
           eligible.push(fk);
         }
       }

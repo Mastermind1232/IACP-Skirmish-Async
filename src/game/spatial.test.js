@@ -8,6 +8,7 @@ import {
   isWithinSpaces,
   getFiguresWithinRange,
   getFiguresAdjacentTo,
+  countSpaces,
 } from './spatial.js';
 
 describe('getRange', () => {
@@ -109,6 +110,74 @@ describe('isWithinSpaces', () => {
   });
   it('returns false with no adjacency data', () => {
     assert.ok(!isWithinSpaces({}, 'a1', 'a2', 1));
+  });
+});
+
+describe('countSpaces', () => {
+  // Open grid with diagonals: a1↔a2, a1↔b1, a1↔b2, a2↔b2, b1↔b2, b1↔c1, b2↔c2, c1↔c2
+  const openGrid = {
+    adjacency: {
+      a1: ['a2', 'b1', 'b2'],
+      a2: ['a1', 'b2'],
+      b1: ['a1', 'b2', 'c1', 'a2', 'c2'],
+      b2: ['a1', 'a2', 'b1', 'c2'],
+      c1: ['b1', 'c2', 'b2'],
+      c2: ['b2', 'c1', 'b1'],
+    },
+  };
+
+  it('returns 0 for same coord', () => {
+    assert.strictEqual(countSpaces(openGrid, 'a1', 'a1'), 0);
+  });
+  it('returns 1 for diagonal-adjacent (open space)', () => {
+    assert.strictEqual(countSpaces(openGrid, 'a1', 'b2'), 1);
+  });
+  it('returns 2 for two-step path', () => {
+    assert.strictEqual(countSpaces(openGrid, 'a1', 'c2'), 2);
+  });
+
+  // Wall scenario: c3 and d4 NOT directly adjacent (wall between)
+  // Path must go c3→c4→d4 (2 steps)
+  const wallGrid = {
+    adjacency: {
+      c3: ['c4', 'd3'],  // c3 NOT adjacent to d4 (wall blocks diagonal)
+      c4: ['c3', 'd4'],
+      d3: ['c3', 'd4'],
+      d4: ['c4', 'd3'],  // d4 NOT adjacent to c3
+    },
+  };
+  it('returns 2 when wall forces detour', () => {
+    assert.strictEqual(countSpaces(wallGrid, 'c3', 'd4'), 2);
+  });
+
+  // Door scenario: r11↔r12 adjacent in graph, but closed door blocks
+  const doorGrid = {
+    adjacency: {
+      r11: ['r12', 'r10', 's11'],
+      r12: ['r11', 'r13', 's12'],
+      r10: ['r11', 's10'],
+      s11: ['r11', 's10', 's12'],
+      s10: ['r10', 's11'],
+      s12: ['r12', 's11', 'r13'],
+      r13: ['r12', 's12'],
+    },
+  };
+  it('returns 1 when door is open (no blockedEdges)', () => {
+    assert.strictEqual(countSpaces(doorGrid, 'r11', 'r12'), 1);
+  });
+  it('returns longer path when door is closed (blockedEdges)', () => {
+    const closedDoors = new Set(['r11|r12']);
+    const dist = countSpaces(doorGrid, 'r11', 'r12', closedDoors);
+    assert.ok(dist > 1, `closed door forces detour: got ${dist}`);
+    assert.strictEqual(dist, 3); // r11→s11→s12→r12
+  });
+
+  it('returns Infinity for unreachable coord', () => {
+    const disconnected = { adjacency: { a1: ['a2'], a2: ['a1'] } };
+    assert.strictEqual(countSpaces(disconnected, 'a1', 'z99'), Infinity);
+  });
+  it('returns Infinity with no adjacency data', () => {
+    assert.strictEqual(countSpaces({}, 'a1', 'a2'), Infinity);
   });
 });
 

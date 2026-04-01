@@ -3,11 +3,11 @@
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapSpaces, getMapTokensData } from '../data-loader.js';
-import { parseCoord, normalizeCoord, getFootprintCells } from './coords.js';
+import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
-import { getRange as _spatialGetRange } from './spatial.js';
+import { countSpaces as _countSpaces } from './spatial.js';
 
 
 /**
@@ -48,8 +48,23 @@ import { applyCondition, resetCondition, filterCondition, isConditionImmune, HAR
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList } from './player-helpers.js';
-import { hasLineOfSight, isWithinRange } from './spatial.js';
+import { hasLineOfSight } from './spatial.js';
 import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
+
+/** Graph-distance helper: countSpaces with automatic mapSpaces + closed-door resolution from game state. */
+function _countGameSpaces(game, coordA, coordB) {
+  const mapId = game.selectedMap?.id;
+  const ms = mapId ? getMapSpaces(mapId) : null;
+  if (!ms) return Infinity;
+  const allDoors = getMapTokensData()?.[mapId]?.doors || [];
+  const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+  const closedDoorEdges = new Set(
+    allDoors
+      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`); })
+      .map(e => edgeKey(e[0], e[1]))
+  );
+  return _countSpaces(ms, coordA, coordB, closedDoorEdges);
+}
 
 /**
  * Compute BFS shortest path between two spaces, then detect hostile figures
@@ -368,11 +383,11 @@ export function resolveAbility(abilityId, context) {
       const validSpaces = [];
       for (const coord of Object.keys(mapSpaces)) {
         if (occupiedSet.has(coord)) continue;
-        if (maxDistanceFromTarget != null && getRng) {
-          if (getRng(targetPos, coord) > maxDistanceFromTarget) continue;
+        if (maxDistanceFromTarget != null) {
+          if (_countGameSpaces(game, targetPos, coord) > maxDistanceFromTarget) continue;
         }
-        if (mustAdjacentToActivator && attackerPos && getRng) {
-          if (getRng(attackerPos, coord) !== 1) continue;
+        if (mustAdjacentToActivator && attackerPos) {
+          if (_countGameSpaces(game, attackerPos, coord) !== 1) continue;
         }
         validSpaces.push(coord);
       }
@@ -402,7 +417,7 @@ export function resolveAbility(abilityId, context) {
         if (!_pusherKws.includes('MASSIVE')) continue;
       }
       // Range check
-      if (getRng && attackerPos && getRng(attackerPos, coord) > range) continue;
+      if (attackerPos && _countGameSpaces(game, attackerPos, coord) > range) continue;
       // LOS check
       if (requiresLos && losCheck && attackerPos && mapSpaces) {
         if (!losCheck(attackerPos, coord, mapSpaces)) continue;
@@ -552,8 +567,8 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, coord] of Object.entries(enemyPositions)) {
       if (!coord) continue;
-      if (getRng && attackerPos && maxRange < 999) {
-        const dist = getRng(attackerPos, coord);
+      if (attackerPos && maxRange < 999) {
+        const dist = _countGameSpaces(game, attackerPos, coord);
         if (dist > maxRange) continue;
       }
       if (requiresLos && losCheck && attackerPos && mapSpaces) {
@@ -670,8 +685,8 @@ export function resolveAbility(abilityId, context) {
     const candidates = [];
     for (const [fk, coord] of Object.entries(allFriendlyPositions)) {
       if (!coord || activatingKeys.includes(fk)) continue;
-      if (getRng && attackerPos) {
-        const dist = getRng(attackerPos, coord);
+      if (attackerPos) {
+        const dist = _countGameSpaces(game, attackerPos, coord);
         if (dist > maxRange) continue;
       }
       const dn = dcNameFromFigureKey(fk);
@@ -712,7 +727,7 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (getRng && getRng(activatingPos, pos) > 3) continue;
+      if (_countGameSpaces(game, activatingPos, pos) > 3) continue;
       validTargets.push(fk);
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: '**Battlefield Leadership** — No other friendly figures within 3 spaces.' };
@@ -743,7 +758,7 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (getRng && getRng(activatingPos, pos) > 4) continue;
+      if (_countGameSpaces(game, activatingPos, pos) > 4) continue;
       validTargets.push(fk);
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: '**Emperor** — No other friendly figures within 4 spaces.' };
@@ -804,7 +819,7 @@ export function resolveAbility(abilityId, context) {
     const targets = [];
     for (const [fk, pos] of Object.entries(oppPositions)) {
       if (!pos) continue;
-      const dist = typeof getRng === 'function' ? getRng(gideonPos, pos) : 999;
+      const dist = _countGameSpaces(game, gideonPos, pos);
       if (dist > 4) continue;
       // Power tokens
       const powerTokens = game.figurePowerTokens?.[fk] || [];
@@ -852,7 +867,7 @@ export function resolveAbility(abilityId, context) {
     for (const pn of [playerNum, enemyNum]) {
       for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
         if (fk === activatingKey || !pos) continue;
-        if (getRng && getRng(activatingPos, pos) > 4) continue;
+        if (_countGameSpaces(game, activatingPos, pos) > 4) continue;
         validTargets.push(fk);
       }
     }
@@ -930,7 +945,7 @@ export function resolveAbility(abilityId, context) {
     const dcEffects = typeof getEff === 'function' ? getEff() : null;
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (getRng && getRng(activatingPos, pos) > 2) continue;
+      if (_countGameSpaces(game, activatingPos, pos) > 2) continue;
       // Must be Imperial affiliation
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = dcEffects?.[fkDcName];
@@ -965,7 +980,7 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (getRng && getRng(activatingPos, pos) > 2) continue;
+      if (_countGameSpaces(game, activatingPos, pos) > 2) continue;
       validTargets.push(fk);
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: '**Order** — No other friendly figures within 2 spaces.' };
@@ -999,7 +1014,7 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (getRng && getRng(activatingPos, pos) > 1) continue; // adjacent = within 1
+      if (_countGameSpaces(game, activatingPos, pos) > 1) continue; // adjacent = within 1
       validTargets.push(fk);
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: '**Bombardment** — No adjacent friendly figures.' };
@@ -1038,7 +1053,7 @@ export function resolveAbility(abilityId, context) {
       if (activatingPos) {
         for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
           if (fk === activatingKey || !pos || alreadyChosen.has(fk)) continue;
-          if (getRng && getRng(activatingPos, pos) > 1) continue;
+          if (_countGameSpaces(game, activatingPos, pos) > 1) continue;
           const fkDcName = dcNameFromFigureKey(fk);
           const fkEff = dcEffects?.[fkDcName];
           const fkKeywords = (fkEff?.keywords || []).map(k => k.toUpperCase());
@@ -1065,7 +1080,7 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (getRng && getRng(activatingPos, pos) > 1) continue; // adjacent
+      if (_countGameSpaces(game, activatingPos, pos) > 1) continue; // adjacent
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = dcEffects?.[fkDcName];
       const fkKeywords = (fkEff?.keywords || []).map(k => k.toUpperCase());
@@ -1140,7 +1155,7 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (getRng && getRng(activatingPos, pos) > 4) continue;
+      if (_countGameSpaces(game, activatingPos, pos) > 4) continue;
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = dcEffects?.[fkDcName];
       if (!fkEff) continue;
@@ -1178,7 +1193,7 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (getRng && getRng(activatingPos, pos) > 4) continue;
+      if (_countGameSpaces(game, activatingPos, pos) > 4) continue;
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = dcEffects?.[fkDcName];
       if (!fkEff) continue;
@@ -1244,7 +1259,7 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (getRng && getRng(activatingPos, pos) > 2) continue;
+      if (_countGameSpaces(game, activatingPos, pos) > 2) continue;
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = dcEffects?.[fkDcName];
       if (!fkEff) continue;
@@ -1481,7 +1496,7 @@ export function resolveAbility(abilityId, context) {
       const targetDcName = dcNameFromFigureKey(fk);
       const targetStats = getStatsForDc(targetDcName);
       if ((targetStats?.cost ?? 99) > foMaxCost) continue;
-      if (getRng && getRng(activatingPos, pos) > foMaxRange) continue;
+      if (_countGameSpaces(game, activatingPos, pos) > foMaxRange) continue;
       validTargets.push(fk);
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: '**False Orders** — No hostile figures with cost ≤ 4 within 4 spaces.' };
@@ -1496,7 +1511,6 @@ export function resolveAbility(abilityId, context) {
   // dcSpecial: chooseFriendlyToFocus (Incentivize, Do or Do Not) — pick a friendly figure matching criteria → Focus it
   if (entry.type === 'dcSpecial' && entry.chooseFriendlyToFocus) {
     const { game, msgId, meta, playerNum, targetFigureKey, dcMessageMeta, dcHealthState } = context;
-    const getRange = context.getRange || (() => 99);
     if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
     const dcEffects = getDcEffects() || {};
     // Phase 2: figure chosen → apply Focus
@@ -1544,7 +1558,7 @@ export function resolveAbility(abilityId, context) {
       const eff = dcEffects[fkDcName];
       // Range check
       if (entry.choiceRange && activatingPos) {
-        const dist = getRange(activatingPos, pos);
+        const dist = _countGameSpaces(game, activatingPos, pos);
         if (dist > entry.choiceRange) continue;
       }
       // Elite check
@@ -2211,7 +2225,7 @@ export function resolveAbility(abilityId, context) {
       const validTargets = [];
       for (const [fk, pos] of Object.entries(enemyPositions)) {
         if (!pos) continue;
-        const dist = typeof getRng === 'function' ? getRng(activatingPos, pos, mapId) : 999;
+        const dist = _countGameSpaces(game, activatingPos, pos);
         if (dist > maxRange) continue;
         if (requiresLos && typeof losCheck === 'function' && !losCheck(activatingPos, pos, mapId)) continue;
         validTargets.push({ figureKey: fk, dist });
@@ -3072,7 +3086,7 @@ export function resolveAbility(abilityId, context) {
         return { applied: true, logMessage: `${mpNote} Original target cost (${origCost}) exceeds 10 — resolve manually.`, refreshMovementBank: true, activeMsgId: msgId };
       }
       // Range check: original target within 3 spaces of the card player
-      if (swapperPosNorm && originalTargetCoord && !isWithinRange(swapperPosNorm, originalTargetCoord, 3)) {
+      if (swapperPosNorm && originalTargetCoord && _countGameSpaces(game, swapperPosNorm, originalTargetCoord) > 3) {
         return { applied: true, logMessage: `${mpNote} Original target is not within 3 spaces of activating figure — resolve manually.`, refreshMovementBank: true, activeMsgId: msgId };
       }
     }
@@ -3211,13 +3225,12 @@ export function resolveAbility(abilityId, context) {
     const fk = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     const activatorPos = fk ? game.figurePositions?.[playerNum]?.[fk] : null;
     const roundNum = game.currentRound || 1;
-    const getRng = context.getRange ?? _spatialGetRange;
 
     // Find friendly figures within 3 spaces (including self)
     const eligible = [];
     for (const [efk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos || !activatorPos) continue;
-      if (getRng(activatorPos, pos) > 3) continue;
+      if (_countGameSpaces(game, activatorPos, pos) > 3) continue;
       const existing = (game.figurePowerTokens?.[efk] || []).length;
       if (existing >= getMaxPowerTokens(efk)) continue; // already at max tokens
       eligible.push(efk);
@@ -5046,14 +5059,13 @@ export function resolveAbility(abilityId, context) {
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
     if (!activatorPos) return { applied: false, manualMessage: 'Resolve manually: position unknown.' };
-    const getRng = context.getRange ?? _spatialGetRange;
     const losCheck = context.hasLineOfSight ?? null;
     const mapId = game.selectedMap?.id;
     const mapSpaces = mapId ? getMapSpaces(mapId) : null;
     const hostiles = [];
     for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
       if (!coord) continue;
-      if (getRng(activatorPos, coord) > 3) continue;
+      if (_countGameSpaces(game, activatorPos, coord) > 3) continue;
       if (losCheck && mapSpaces && !losCheck(activatorPos, coord, mapSpaces)) continue;
       hostiles.push(fk);
     }
@@ -5184,14 +5196,13 @@ export function resolveAbility(abilityId, context) {
     const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
-    const getRng = context.getRange ?? _spatialGetRange;
     const refreshIds = [];
     const parts = [];
     let count = 0;
     if (activatorPos && dcHealthState) {
       for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
         if (!coord || count >= 3) continue;
-        if (getRng(activatorPos, coord) > 2) continue;
+        if (_countGameSpaces(game, activatorPos, coord) > 2) continue;
         const fMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
         if (!fMsgId) continue;
         const hs = dcHealthState.get(fMsgId) || [];
@@ -5417,8 +5428,6 @@ export function resolveAbility(abilityId, context) {
     const cahRange = cah.range ?? 1;
     const cahLos = cah.requiresLos ?? false;
     const cahAll = cah.targetAll ?? false;
-    // Range helper: use context if available, else Manhattan distance via parseCoord
-    const getRng = context.getRange ?? _spatialGetRange;
     const losCheck = context.hasLineOfSight ?? null;
     const mapSpacesForLos = cahLos ? getMapSpaces(mapId) : null;
     // Activator position for range/LOS checks
@@ -5437,7 +5446,7 @@ export function resolveAbility(abilityId, context) {
       // Extended path: range + optional LOS filter
       for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
         if (!coord) continue;
-        if (activatorPos && getRng(activatorPos, coord) > cahRange) continue;
+        if (activatorPos && _countGameSpaces(game, activatorPos, coord) > cahRange) continue;
         if (cahLos && losCheck && activatorPos && mapSpacesForLos) {
           if (!losCheck(activatorPos, coord, mapSpacesForLos)) continue;
         }
@@ -6097,7 +6106,7 @@ export function resolveAbility(abilityId, context) {
       const validSpaces = [];
       for (const coord of Object.keys(mapSpaces)) {
         if (occupiedSet.has(coord)) continue;
-        if (getRng && getRng(targetPos, coord) > pushDist) continue;
+        if (_countGameSpaces(game, targetPos, coord) > pushDist) continue;
         validSpaces.push(coord);
       }
       if (validSpaces.length === 0) return { applied: false, manualMessage: 'Reposition — no valid landing spaces.' };
@@ -6282,9 +6291,8 @@ export function resolveAbility(abilityId, context) {
     const activatingPositions = activatingKeys.map((k) => game.figurePositions?.[playerNum]?.[k]).filter(Boolean);
     if (activatingPositions.length > 0) {
       const hostilePositions = Object.values(game.figurePositions?.[oppNum] || {}).filter(Boolean);
-      const getRng = context.getRange ?? _spatialGetRange;
       const hasAdjacentHostile = activatingPositions.some((aPos) =>
-        hostilePositions.some((hPos) => getRng(String(aPos).toLowerCase(), String(hPos).toLowerCase()) <= 1)
+        hostilePositions.some((hPos) => _countGameSpaces(game, String(aPos).toLowerCase(), String(hPos).toLowerCase()) <= 1)
       );
       if (hasAdjacentHostile) {
         return { applied: false, manualMessage: 'Rebel Graffiti: Cannot gain VP — there are adjacent hostile figures.' };
@@ -6545,15 +6553,7 @@ export function resolveAbility(abilityId, context) {
       const eff = dcEffects[dcName] || dcEffects[dcName.replace(/\s*\[.*\]\s*$/, '')] || {};
       const kws = (eff.keywords || []).map(k => String(k).toUpperCase());
       if (!kws.includes('TROOPER') && !kws.includes('GUARDIAN')) continue;
-      // Compute distance via getRange if available (Manhattan); fallback to include all
-      const dist = mapSpaces ? null : 0; // we'll use getRange from context if present
-      // Use getRange from imports if possible — it's not directly imported but we can compute
-      const [r1, c1] = String(selfPos).toUpperCase().split(/(\d+)/).filter(Boolean);
-      const [r2, c2] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
-      const rowDist = Math.abs((r1?.charCodeAt(0) ?? 0) - (r2?.charCodeAt(0) ?? 0));
-      const colDist = Math.abs(parseInt(c1 || '0') - parseInt(c2 || '0'));
-      const approxDist = rowDist + colDist;
-      if (approxDist > 4) continue;
+      if (_countGameSpaces(game, selfPos, pos) > 4) continue;
       // Find the msgId for this figure
       const figMid = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
       if (!figMid) continue;
@@ -6919,12 +6919,7 @@ export function resolveAbility(abilityId, context) {
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos || activatingKeys.includes(fk)) continue;
       const dcName = dcNameFromFigureKey(fk);
-      // Rough distance check (Manhattan)
-      const [r1, c1] = String(activatingPos).toUpperCase().split(/(\d+)/).filter(Boolean);
-      const [r2, c2] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
-      const rowDist = Math.abs((r1?.charCodeAt(0) ?? 0) - (r2?.charCodeAt(0) ?? 0));
-      const colDist = Math.abs(parseInt(c1 || '0') - parseInt(c2 || '0'));
-      if (rowDist + colDist > 2) continue;
+      if (_countGameSpaces(game, activatingPos, pos) > 2) continue;
       friendlyFigureKeys.push(fk);
       friendlyLabels.push(dcName);
     }
@@ -7067,11 +7062,7 @@ export function resolveAbility(abilityId, context) {
     const allSpaces = Object.keys(adj);
     let validSpaces = allSpaces;
     if (actPos) {
-      const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
-      validSpaces = allSpaces.filter((sp) => {
-        const [sr, sc] = String(sp).toUpperCase().split(/(\d+)/).filter(Boolean);
-        return Math.abs((ar?.charCodeAt(0) ?? 0) - (sr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(sc || '0')) <= 8;
-      });
+      validSpaces = allSpaces.filter((sp) => _countGameSpaces(game, actPos, sp) <= 8);
     }
     if (!validSpaces.length) validSpaces = allSpaces.slice(0, 25);
     return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Hidden Trap** — Choose the terminal space:' };
@@ -7100,13 +7091,11 @@ export function resolveAbility(abilityId, context) {
       const names = targets.map((fk) => { grantPowerTokens(game, fk, 'Hit', 1); return dcNameFromFigureKey(fk); });
       return { applied: true, logMessage: `**Field Supply** — Hit Token granted to: ${names.join(', ')}.` };
     }
-    const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
     const nearbyKeys = [];
     const nearbyLabels = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos || actKeys.includes(fk)) continue;
-      const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
-      if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
+      if (_countGameSpaces(game, actPos, pos) > 3) continue;
       nearbyKeys.push(fk);
       nearbyLabels.push(dcNameFromFigureKey(fk));
     }
@@ -7480,11 +7469,10 @@ export function resolveAbility(abilityId, context) {
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
-    const getRng = context.getRange ?? _spatialGetRange;
     const validTargets = [];
     for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
       if (!coord) continue;
-      if (activatorPos && getRng(activatorPos, coord) > 3) continue;
+      if (activatorPos && _countGameSpaces(game, activatorPos, coord) > 3) continue;
       // SMALL check: skip LARGE and MASSIVE figures
       const targetDcName = dcNameFromFigureKey(fk);
       const targetStats = getStatsForDc(targetDcName);
@@ -7611,11 +7599,7 @@ export function resolveAbility(abilityId, context) {
     const validLabels = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos || actKeys.includes(fk)) continue;
-      if (actPos) {
-        const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
-        const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
-        if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
-      }
+      if (actPos && _countGameSpaces(game, actPos, pos) > 3) continue;
       const dcN = dcNameFromFigureKey(fk);
       const eff = dcEffects[dcN] || {};
       const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
@@ -7649,11 +7633,7 @@ export function resolveAbility(abilityId, context) {
     const validLabels = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos || actKeys.includes(fk)) continue;
-      if (actPos) {
-        const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
-        const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
-        if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 2) continue;
-      }
+      if (actPos && _countGameSpaces(game, actPos, pos) > 2) continue;
       validKeys.push(fk); validLabels.push(dcNameFromFigureKey(fk));
     }
     if (!validKeys.length) return { applied: false, manualMessage: 'No friendly figures within 2 spaces.' };
@@ -7804,11 +7784,7 @@ export function resolveAbility(abilityId, context) {
     const validLabels = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos || actKeys.includes(fk)) continue;
-      if (actPos) {
-        const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
-        const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
-        if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
-      }
+      if (actPos && _countGameSpaces(game, actPos, pos) > 3) continue;
       validKeys.push(fk); validLabels.push(dcNameFromFigureKey(fk));
     }
     if (!validKeys.length) return { applied: false, manualMessage: 'No friendly figures within 3 spaces for Coordinated Attack.' };
@@ -7866,11 +7842,7 @@ export function resolveAbility(abilityId, context) {
         const eff = dcEffects[dcN] || {};
         const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
         if (kws.includes('MASSIVE') || kws.includes('LARGE')) continue; // only SMALL figures
-        if (actPos) {
-          const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
-          const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
-          if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
-        }
+        if (actPos && _countGameSpaces(game, actPos, pos) > 3) continue;
         validKeys.push(fk); validLabels.push(`${dcN} (P${pn})`);
       }
     }
@@ -8073,11 +8045,7 @@ export function resolveAbility(abilityId, context) {
     const validLabels = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos || actKeys.includes(fk)) continue;
-      if (actPos) {
-        const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
-        const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
-        if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
-      }
+      if (actPos && _countGameSpaces(game, actPos, pos) > 3) continue;
       validKeys.push(fk); validLabels.push(dcNameFromFigureKey(fk));
     }
     if (!validKeys.length) return { applied: false, manualMessage: 'No friendly figures within 3 spaces. Resolve manually.' };

@@ -7,6 +7,7 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
 import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { bottomLeftCoord, edgeKey, normalizeCoord } from '../game/coords.js';
+import { countSpaces } from '../game/spatial.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -985,6 +986,7 @@ async function buildAndSendAttackTargets(
   // Doors block LOS (rules: "Doors block line of sight and adjacency", p.27).
   // Energy shields block LOS but not movement (rules: "A space containing an energy shield blocks LOS", p.29).
   let effectiveMs = ms;
+  let closedDoorEdges;
   {
     const losMapId = game.selectedMap?.id;
     const allDoors = (getMapTokensData && losMapId) ? (getMapTokensData()[losMapId]?.doors || []) : [];
@@ -993,6 +995,7 @@ async function buildAndSendAttackTargets(
       const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase();
       return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`);
     });
+    closedDoorEdges = new Set(closedEdges.map(e => edgeKey(e[0], e[1])));
     const shieldSpaces = (game.ancillaryTokens?.energyShield || []).map(s => String(s).toLowerCase());
     // C54: Smoke Grenade tokens block LOS
     const smokeSpaces = (game.ancillaryTokens?.smoke || []).map(s => String(s).toLowerCase());
@@ -1065,7 +1068,7 @@ async function buildAndSendAttackTargets(
     const dcName = dcNameFromFigureKey(k);
     const size = game.figureOrientations?.[k] || getFigureSize(dcName);
     const cells = getFootprintCells(coord, size);
-    const dist = Math.min(...attackerFpCells.flatMap(ac => cells.map(tc => getRange(ac, tc))));
+    const dist = Math.min(...attackerFpCells.flatMap(ac => cells.map(tc => countSpaces(ms, ac, tc, closedDoorEdges))));
     if (dist < minRange || dist > effectiveMaxRange) continue;
     const iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
     if (iMustGoAlone?.playerNum === enemyPlayerNum && dist > iMustGoAlone.spaces) continue;
@@ -1152,7 +1155,7 @@ async function buildAndSendAttackTargets(
       const npc = npcArray[i];
       if (npc.defeated) continue;
       const coord = String(npc.coord).toLowerCase();
-      const dist = Math.min(...attackerFpCells.map(ac => getRange(ac, coord)));
+      const dist = Math.min(...attackerFpCells.map(ac => countSpaces(ms, ac, coord, closedDoorEdges)));
       if (dist < minRange || dist > effectiveMaxRange) continue;
       const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, effectiveMs, allFigureBlockingCoords));
       const label = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${i + 1} (${npc.hp}/${npc.maxHp} ${hpLabel})`;
@@ -1165,7 +1168,7 @@ async function buildAndSendAttackTargets(
       const hp = typeof game.crateHealth?.[origCoord] === 'number' ? game.crateHealth[origCoord] : 5;
       if (hp <= 0) continue;
       const coord = String(curCoord).toLowerCase();
-      const dist = Math.min(...attackerFpCells.map(ac => getRange(ac, coord)));
+      const dist = Math.min(...attackerFpCells.map(ac => countSpaces(ms, ac, coord, closedDoorEdges)));
       if (dist < minRange || dist > effectiveMaxRange) continue;
       const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, effectiveMs, allFigureBlockingCoords));
       targets.push({ figureKey: `npc_crate_${origCoord}`, coord, label: `Crate @ ${coord.toUpperCase()} (${hp}/5 HP)`, hasLOS: los, dist, isNpc: true, npcType: 'crate', crateOrigCoord: origCoord });
@@ -1185,14 +1188,14 @@ async function buildAndSendAttackTargets(
   // Autofire chain attack: restrict targets to within 3 spaces of original target
   if (game.autofireChainTargetSpace?.[msgId]) {
     const _chainSpace = game.autofireChainTargetSpace[msgId];
-    const _chainFiltered = targets.filter(t => getRange(_chainSpace, t.coord) <= 3);
+    const _chainFiltered = targets.filter(t => countSpaces(ms, _chainSpace, t.coord, closedDoorEdges) <= 3);
     if (_chainFiltered.length > 0) targets.splice(0, targets.length, ..._chainFiltered);
     delete game.autofireChainTargetSpace[msgId];
   }
   // Barrage (CT-1701) second attack: restrict targets to within 3 spaces of first target
   if (game.barrageTargetSpace?.[msgId]) {
     const _barrageSpace = game.barrageTargetSpace[msgId];
-    const _barrageFiltered = targets.filter(t => getRange(_barrageSpace, t.coord) <= 3);
+    const _barrageFiltered = targets.filter(t => countSpaces(ms, _barrageSpace, t.coord, closedDoorEdges) <= 3);
     if (_barrageFiltered.length > 0) targets.splice(0, targets.length, ..._barrageFiltered);
     delete game.barrageTargetSpace[msgId];
   }
@@ -2747,7 +2750,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     getFigureSize, getFootprintCells, getRange, hasLineOfSight,
     getBoardStateForMovement, getMovementProfile, computeMovementCache,
     getMapAttachmentForSpaces,
-    saveGames, FIGURE_LETTERS,
+    saveGames, FIGURE_LETTERS, getMapTokensData,
   } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
@@ -2847,6 +2850,15 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Compute closed-door edges for graph-distance counting
+  const foMapId = game.selectedMap?.id;
+  const foAllDoors = (getMapTokensData && foMapId) ? (getMapTokensData()[foMapId]?.doors || []) : [];
+  const foOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+  const foClosedDoorEdges = new Set(
+    foAllDoors
+      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !foOpenedSet.has(`${a}|${b}`) && !foOpenedSet.has(`${b}|${a}`); })
+      .map(e => edgeKey(e[0], e[1]))
+  );
   // Collect all other figures as potential targets
   const allOtherPositions = {};
   for (const [figKey, pos] of Object.entries(game.figurePositions?.[1] || {})) {
@@ -2857,7 +2869,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   }
   const foTargets = [];
   for (const [figKey, targetPos] of Object.entries(allOtherPositions)) {
-    const dist = getRange ? getRange(controlledPos, targetPos, ms) : 1;
+    const dist = countSpaces(ms, controlledPos, targetPos, foClosedDoorEdges);
     if (dist < foMinRange || dist > foEffectiveMaxRange) continue;
     const los = hasLineOfSight ? hasLineOfSight(controlledPos, targetPos, ms, []) : true;
     const fkMatch = figKey.match(/^(.+)-(\d+)-(\d+)$/);

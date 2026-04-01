@@ -4,11 +4,11 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
+import { getMapSpaces, getMapTokensData, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
-import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
+import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
@@ -808,7 +808,17 @@ export async function handleAttackTarget(interaction, ctx) {
     return;
   }
   const attackerPlayerNum = meta.playerNum;
-  const { getRange, hasLineOfSight } = ctx;
+  const { hasLineOfSight } = ctx;
+  // Compute graph-distance dependencies for countSpaces calls
+  const _csMapId = game.selectedMap?.id;
+  const _csRawMs = _csMapId ? getMapSpaces(_csMapId) : null;
+  const _csAllDoors = (_csMapId && getMapTokensData) ? (getMapTokensData()[_csMapId]?.doors || []) : [];
+  const _csOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+  const _csClosedDoorEdges = new Set(
+    _csAllDoors
+      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !_csOpenedSet.has(`${a}|${b}`) && !_csOpenedSet.has(`${b}|${a}`); })
+      .map(e => edgeKey(e[0], e[1]))
+  );
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the owner can attack.')) return;
   if (target.hasLOS === false) {
     await interaction.followUp({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch(discordCatch);
@@ -1102,8 +1112,7 @@ export async function handleAttackTarget(interaction, ctx) {
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
   const nextPierce = (game.nextAttackBonusPierce?.[attackerPlayerNum] || 0) + (overrideDice?.pierce || 0);
   const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerPlayerNum] || 0) + (overrideDice?.bonusAccuracy || 0) + (game._closeQuartersBonusAcc || 0);
-  const [minRange, maxRange] = attackInfo.range || [1, 3];
-  const isRanged = minRange >= 2 || maxRange >= 3;
+  const isRanged = attackInfo.type === 'range';
   const distanceToTarget = target.dist ?? 1;
   game.pendingCombat = {
     gameId: game.gameId,
@@ -1485,7 +1494,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const dgIdx = (dc?.displayName || dn).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
         const kFk = `${dn}-${dgIdx}-0`;
         const kPos = game.figurePositions?.[pn]?.[kFk];
-        if (!kPos || !_getRange) continue;
+        if (!kPos) continue;
         const figPos = game.figurePositions?.[pn]?.[figKey];
         if (!figPos) continue;
         // Check ACS on Krennic
@@ -1493,7 +1502,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const kAtts = kMsgId ? (game.p1DcAttachments?.[kMsgId] || game.p2DcAttachments?.[kMsgId] || []) : [];
         const hasACS = cardNameIncludes(kAtts, 'Advanced Com Systems');
         const maxRange = hasACS ? 3 : 2;
-        if (_getRange(kPos, figPos) > maxRange) continue;
+        if (countSpaces(_csRawMs, kPos, figPos, _csClosedDoorEdges) > maxRange) continue;
         // Check if figure is TROOPER or GUARDIAN
         const figDcName = dcNameFromFigureKey(figKey);
         const figKws = (getDcKeywordsGlobal(game)[figDcName] || []).map(k => String(k).toUpperCase());
@@ -1525,7 +1534,7 @@ export async function handleAttackTarget(interaction, ctx) {
             if (!pos || fk === attackerFigureKey) return false;
             const fkDcName = dcNameFromFigureKey(fk);
             const fkKws = (_fokKwMap[fkDcName] || []).map(k => String(k).toUpperCase());
-            return fkKws.includes('WOOKIEE') && _getRange(pos, defPos) <= 2;
+            return fkKws.includes('WOOKIEE') && countSpaces(_csRawMs, pos, defPos, _csClosedDoorEdges) <= 2;
           });
           if (hasFriendlyWookiee) {
             game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
@@ -1720,7 +1729,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Shared Intuition (Tress Hacnua): +1 Hit while attacking if another friendly HUNTER within 3 has LOS to target
-  if (atkSpecialIds.includes('shared_intuition') && getRange && hasLineOfSight && mapSpaces && targetCoord) {
+  if (atkSpecialIds.includes('shared_intuition') && hasLineOfSight && mapSpaces && targetCoord) {
     const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     if (attackerPos) {
       const friendlyPoses = game.figurePositions?.[attackerPlayerNum] || {};
@@ -1731,7 +1740,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         const fkKeywords = (fkEff?.keywords || []).map((k) => String(k).toUpperCase());
         if (!fkKeywords.includes('HUNTER')) continue;
-        if (getRange(attackerPos, pos) > 3) continue;
+        if (countSpaces(_csRawMs, attackerPos, pos, _csClosedDoorEdges) > 3) continue;
         if (!hasLineOfSight(pos, targetCoord, mapSpaces, null)) continue;
         game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
         await thread.send(`**Shared Intuition** — ${fkDcName} (HUNTER) is within 3 spaces with LOS to target: +1 Hit.`);
@@ -1833,7 +1842,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Much to Learn (Ezra Bridger): +1 reroll if friendly unique within 3 spaces
-  if (atkSpecialIds.includes('much_to_learn') && getRange && mapSpaces) {
+  if (atkSpecialIds.includes('much_to_learn') && _csRawMs) {
     const atkPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     if (atkPos) {
       const friendlyPos = game.figurePositions?.[attackerPlayerNum] || {};
@@ -1842,7 +1851,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!fkEff?.unique) continue;
-        if (getRange(atkPos, pos) > 3) continue;
+        if (countSpaces(_csRawMs, atkPos, pos, _csClosedDoorEdges) > 3) continue;
         game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
         const isFU = (fkEff?.keywords || []).map(k => String(k).toUpperCase()).includes('FORCE USER');
         const note = isFU ? ' (FORCE USER nearby — may turn die to any side instead)' : '';
@@ -1950,7 +1959,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Airborne Commander (Gar Saxon): friendly Mobile figures within 4 spaces may use Gar Saxon's surge abilities
-  if (mapSpaces && getRange) {
+  if (_csRawMs) {
     const atkPosAC = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     const atkKwsAC = (getDcKeywordsGlobal(game)[meta.dcName] || []).map(k => String(k).toUpperCase());
     const attackerIsMobile = atkKwsAC.includes('MOBILE');
@@ -1961,7 +1970,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!(fkEff?.specialAbilityIds || []).includes('airborne_commander_gar_saxon')) continue;
-        if (getRange(atkPosAC, pos) > 4) continue;
+        if (countSpaces(_csRawMs, atkPosAC, pos, _csClosedDoorEdges) > 4) continue;
         if (!attackerIsMobile) {
           await thread.send(`**Airborne Commander** — ${fkDcName} is within 4 spaces, but **${meta.dcName}** does not have the **Mobile** keyword. Surge sharing skipped.`).catch(discordCatch);
           break;
@@ -1994,7 +2003,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const _afAtts = _afSorinMsgId ? (game.p1DcAttachments?.[_afSorinMsgId] || game.p2DcAttachments?.[_afSorinMsgId] || []) : [];
         const _afHasACS = cardNameIncludes(_afAtts, 'Advanced Com Systems');
         const _afMaxRange = _afHasACS ? 2 : 1;
-        const _afDist = _getRange ? _getRange(atkPosAF, pos) : Infinity;
+        const _afDist = _csRawMs ? countSpaces(_csRawMs, atkPosAF, pos, _csClosedDoorEdges) : Infinity;
         if (_afDist > _afMaxRange) continue;
         if (!attackerIsDroidOrVehicle) {
           await thread.send(`**Advanced Firepower** — ${fkDcName} is within range, but **${meta.dcName}** is not a DROID or VEHICLE. Surge sharing skipped.`).catch(discordCatch);
@@ -5591,8 +5600,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     content: '**Pre-combat window** — Both players: resolve any Command Cards, etc. When ready, click **Ready to roll combat dice** below.',
     components: [readyRow],
   });
-  const [minRange, maxRange] = attackInfo.range || [1, 3];
-  const isRanged = minRange >= 2 || maxRange >= 3;
+  const isRanged = attackInfo.type === 'range';
   game.pendingCombat = {
     gameId,
     attackerPlayerNum: controlledPlayerNum,

@@ -2,13 +2,14 @@
  * Round handlers: end_end_of_round_, end_start_of_round_
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDcEffects, getMapSpaces, getFormCards, getCcEffectsData } from '../data-loader.js';
+import { getDcEffects, getMapSpaces, getFormCards, getCcEffectsData, getMapTokensData as _getMapTokensData } from '../data-loader.js';
 import { getConfig, getFormsChosenByTeamClawdites } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, buildFigureButtonLabel, getMaxPowerTokens } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
-import { getRange } from '../game/spatial.js';
+import { countSpaces } from '../game/spatial.js';
+import { edgeKey } from '../game/coords.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getDeploymentZones, getCcEffect } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
@@ -1297,11 +1298,20 @@ async function _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, 
     await logGameAction(game, client, `🐌 **Force Slow** — **${dc.displayName || dc.dcName}** has no figure on board. Skipped.`, { phase: 'ROUND', icon: 'round' });
     return;
   }
-  // Find hostile figures within 3 spaces
+  // Find hostile figures within 3 spaces (graph distance)
+  const _fsMapId = game.selectedMap?.id;
+  const _fsMs = _fsMapId ? getMapSpaces(_fsMapId) : null;
+  const _fsAllDoors = _fsMapId ? (_getMapTokensData()?.[_fsMapId]?.doors || []) : [];
+  const _fsOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+  const _fsClosedDoorEdges = new Set(
+    _fsAllDoors
+      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !_fsOpenedSet.has(`${a}|${b}`) && !_fsOpenedSet.has(`${b}|${a}`); })
+      .map(e => edgeKey(e[0], e[1]))
+  );
   const hostiles = [];
   for (const [fk, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
     if (!pos) continue;
-    if (getRange(calPos, pos) <= 3) hostiles.push({ fk, dcName: dcNameFromFigureKey(fk) });
+    if (countSpaces(_fsMs, calPos, pos, _fsClosedDoorEdges) <= 3) hostiles.push({ fk, dcName: dcNameFromFigureKey(fk) });
   }
   if (hostiles.length === 0) {
     await logGameAction(game, client, `🐌 **Force Slow** — No hostile figures within 3 spaces of **${dc.displayName || dc.dcName}**. Skipped.`, { phase: 'ROUND', icon: 'round' });

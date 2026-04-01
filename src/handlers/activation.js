@@ -3,13 +3,13 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getCcEffectsData, getDcEffects, getMapSpaces, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
+import { getCcEffectsData, getDcEffects, getMapSpaces, getMapTokensData, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
-import { parseCoord } from '../game/coords.js';
+import { parseCoord, edgeKey } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, awardKillVp } from '../game/index.js';
-import { getRange, getAllFigureCoords } from '../game/spatial.js';
+import { getAllFigureCoords, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
@@ -47,6 +47,21 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
  * Returns { companionName, companionStats, isCoActivation } or null.
  * isCoActivation is true for Junk Droid (Ugnaught) which co-activates rather than before/after.
  */
+/** Graph-distance helper: countSpaces with automatic mapSpaces + closed-door resolution from game state. */
+function _countGameSpaces(game, coordA, coordB) {
+  const mapId = game.selectedMap?.id;
+  const ms = mapId ? getMapSpaces(mapId) : null;
+  if (!ms) return Infinity;
+  const allDoors = getMapTokensData()?.[mapId]?.doors || [];
+  const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+  const closedDoorEdges = new Set(
+    allDoors
+      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`); })
+      .map(e => edgeKey(e[0], e[1]))
+  );
+  return countSpaces(ms, coordA, coordB, closedDoorEdges);
+}
+
 function getCompanionForDc(dcName, attachments) {
   const eff = getDcEffects();
   if (!eff) return null;
@@ -132,7 +147,7 @@ async function maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, clien
     const kws = (fkEff.keywords || []).map(k => String(k).toUpperCase());
     if (!kws.includes('TROOPER') && !kws.includes('LEADER')) continue;
     if ((fkEff.cost ?? 99) > 6) continue;
-    if (getRange(originPos, pos) > 2) continue;
+    if (_countGameSpaces(game, originPos, pos) > 2) continue;
     validTargets.push(fk);
   }
   if (validTargets.length === 0) return;
@@ -1218,14 +1233,13 @@ export async function handleConfirmActivate(interaction, ctx) {
     const _iwbaDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _iwbaSelfFk = `Cassian Andor-${_iwbaDgIndex}-0`;
     const _iwbaSelfPos = game.figurePositions?.[meta.playerNum]?.[_iwbaSelfFk];
-    const _iwbaGetRange = ctx.getRange || getRange;
     if (_iwbaSelfPos) {
       // Find friendly figures within 2 spaces that are alive (not self)
       const _iwbaHs = ctx.dcHealthState;
       const _iwbaTargets = [];
       for (const [fk, pos] of Object.entries(game.figurePositions?.[meta.playerNum] || {})) {
         if (!pos || fk === _iwbaSelfFk) continue;
-        if (_iwbaGetRange(_iwbaSelfPos, pos) > 2) continue;
+        if (_countGameSpaces(game, _iwbaSelfPos, pos) > 2) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         // Check alive: find msgId and check HP > 0
         let fkMsgId = ctx.findDcMessageIdForFigure(game.gameId, meta.playerNum, fk);
@@ -1316,16 +1330,15 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Hunger (Wampa Regular/Elite): position-aware hostile proximity check
   {
-    const _getRange = ctx.getRange;
     const _hungerCheck = (dcName, range, mpGain, elite) => {
       if (meta.dcName !== dcName) return false;
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const figureKey = `${dcName}-${dgIndex}-0`;
       const pos = game.figurePositions?.[meta.playerNum]?.[figureKey];
-      if (!pos || !_getRange) return false;
+      if (!pos) return false;
       const enemyNum = opponentPlayerNum(meta.playerNum);
       const hostilePos = Object.values(game.figurePositions?.[enemyNum] || {});
-      const anyHostileInRange = hostilePos.some(hp => hp && _getRange(pos, hp) <= range);
+      const anyHostileInRange = hostilePos.some(hp => hp && _countGameSpaces(game, pos, hp) <= range);
       return !anyHostileInRange;
     };
     if (meta.dcName === 'Wampa' && _hungerCheck('Wampa', 3, 2, false)) {
@@ -1354,13 +1367,12 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Tactical Movement (Fenn Signis): choose a friendly figure within 3 → gains 2 MP
   if (meta.dcName === 'Fenn Signis') {
-    const _getRange = ctx.getRange;
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const selfFk = `${meta.dcName}-${dgIndex}-0`;
     const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
-    if (selfPos && _getRange) {
+    if (selfPos) {
       const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
-        .filter(([fk, fp]) => fk !== selfFk && fp && _getRange(selfPos, fp) <= 3);
+        .filter(([fk, fp]) => fk !== selfFk && fp && _countGameSpaces(game, selfPos, fp) <= 3);
       if (friendlyFigs.length > 0) {
         const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
           const label = dcNameFromFigureKey(fk);
@@ -1406,15 +1418,14 @@ export async function handleConfirmActivate(interaction, ctx) {
   // Advanced Weapons Research (Director Krennic): friendly within range gains 1 Hit or Surge Token
   // Range is 2 (or 3 with Advanced Com Systems attachment)
   if (meta.dcName === 'Director Krennic') {
-    const _getRange = ctx.getRange;
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const selfFk = `Director Krennic-${dgIndex}-0`;
     const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
-    if (selfPos && _getRange) {
+    if (selfPos) {
       const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
       const _awrRange = cardNameIncludes(_awrAtts, 'Advanced Com Systems') ? 3 : 2;
       const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
-        .filter(([fk, fp]) => fk !== selfFk && fp && _getRange(selfPos, fp) <= _awrRange);
+        .filter(([fk, fp]) => fk !== selfFk && fp && _countGameSpaces(game, selfPos, fp) <= _awrRange);
       if (friendlyFigs.length > 0) {
         const btns = friendlyFigs.slice(0, 3).map(([fk]) => {
           const label = dcNameFromFigureKey(fk);
@@ -1565,7 +1576,6 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // General's Orders (General Weiss): choose up to 2 friendlies; each gains 2 MP
   if (_mountedIds.includes('generals_orders_weiss')) {
-    const _goGetRange = ctx.getRange || getRange;
     const _goDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _goSelfFk = `${meta.dcName}-${_goDgIndex}-0`;
     const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
@@ -1584,12 +1594,11 @@ export async function handleConfirmActivate(interaction, ctx) {
   // Long-Laid Plans (Thrawn): distribute N power tokens (N = round#) among friendlies within 3
   if (_mountedIds.includes('long_laid_plans_thrawn')) {
     const roundNum = game.currentRound || 1;
-    const _llpGetRange = ctx.getRange || getRange;
     const _llpDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _llpSelfFk = `${meta.dcName}-${_llpDgIndex}-0`;
     const _llpSelfPos = game.figurePositions?.[meta.playerNum]?.[_llpSelfFk];
     const _llpFriendlies = _llpSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
-      .filter(([fk, fp]) => fp && _llpGetRange(_llpSelfPos, fp) <= 3) : [];
+      .filter(([fk, fp]) => fp && _countGameSpaces(game, _llpSelfPos, fp) <= 3) : [];
     if (_llpFriendlies.length > 0 && roundNum > 0) {
       game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: roundNum, ability: 'longlaid', tokenTypes: ['Hit', 'Block', 'Surge', 'Evade'] };
       const btns = _llpFriendlies.map(([fk]) =>
@@ -1690,12 +1699,11 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Arms Distribution (Ko-Tun): distribute 2 power tokens among friendlies within 3
   if (_mountedIds.includes('arms_distribution_kotun')) {
-    const _adGetRange = ctx.getRange || getRange;
     const _adDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _adSelfFk = `${meta.dcName}-${_adDgIndex}-0`;
     const _adSelfPos = game.figurePositions?.[meta.playerNum]?.[_adSelfFk];
     const _adFriendlies = _adSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
-      .filter(([fk, fp]) => fp && _adGetRange(_adSelfPos, fp) <= 3) : [];
+      .filter(([fk, fp]) => fp && _countGameSpaces(game, _adSelfPos, fp) <= 3) : [];
     if (_adFriendlies.length > 0) {
       game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: 2, ability: 'armsdist', tokenTypes: ['Hit', 'Block'] };
       const btns = _adFriendlies.slice(0, 4).map(([fk]) =>
@@ -1709,12 +1717,11 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Trust Goes Both Ways (Jyn Erso): choose a friendly within 3 to gain 1 MP
   if (_mountedIds.includes('trust_goes_both_ways_jyn')) {
-    const _tgbwGetRange = ctx.getRange || getRange;
     const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _tgbwSelfFk = `${meta.dcName}-${_tgbwDgIndex}-0`;
     const _tgbwSelfPos = game.figurePositions?.[meta.playerNum]?.[_tgbwSelfFk];
     const _tgbwFriendlies = _tgbwSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
-      .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && _tgbwGetRange(_tgbwSelfPos, fp) <= 3) : [];
+      .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && _countGameSpaces(game, _tgbwSelfPos, fp) <= 3) : [];
     if (_tgbwFriendlies.length > 0) {
       const btns = _tgbwFriendlies.slice(0, 4).map(([fk]) =>
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
@@ -1902,7 +1909,6 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
     // Motivation (UNIQUE): exhaust during activation — friendly with lower cost + LOS discards harmful or recovers 1, gains 1 MP
     if (cardNameIncludes(_suActivationUpgrades, 'Motivation') && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[msgId], 'Motivation')) {
-      const _motGetRange = ctx.getRange || getRange;
       const _motHasLos = ctx.hasLineOfSight;
       const _motMapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
       const _motDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -2055,11 +2061,10 @@ export async function handleConfirmActivate(interaction, ctx) {
       const eff = getDcEffects()?.[dc.dcName];
       if (!(eff?.specialAbilityIds || []).includes('i_make_the_rules_cad_bane')) continue;
       if (dc.dcName === meta.dcName && pn === meta.playerNum) continue; // "another figure"
-      const _getRange = ctx.getRange;
       const cadDgIdx = (dc.displayName || dc.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const cadFk = `${dc.dcName}-${cadDgIdx}-0`;
       const cadPos = game.figurePositions?.[pn]?.[cadFk];
-      if (!cadPos || !_getRange) continue;
+      if (!cadPos) continue;
       // Grant 1 MP to each HUNTER within 4 of Cad Bane
       const friendlyFigs = game.figurePositions?.[pn] || {};
       for (const [fk, fp] of Object.entries(friendlyFigs)) {
@@ -2067,7 +2072,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         const fDcName = dcNameFromFigureKey(fk);
         const fEff = getDcEffects()?.[fDcName];
         if (!(fEff?.keywords || []).some(k => String(k).toUpperCase() === 'HUNTER')) continue;
-        if (_getRange(cadPos, fp) > 4) continue;
+        if (_countGameSpaces(game, cadPos, fp) > 4) continue;
         // Find the msgId for this HUNTER figure
         for (const [mId, mMeta] of dcMessageMeta) {
           if (mMeta.gameId !== game.gameId || mMeta.playerNum !== pn || mMeta.dcName !== fDcName) continue;
@@ -2255,7 +2260,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         let isAdj = false;
         for (const rc of rCells) {
           for (const ac of actCells) {
-            if (getRange(rc, ac) === 1) { isAdj = true; break; }
+            if (_countGameSpaces(game, rc, ac) === 1) { isAdj = true; break; }
           }
           if (isAdj) break;
         }
@@ -2731,12 +2736,11 @@ export async function handleActPassive(interaction, ctx) {
       delete game.pendingTokenDistribution;
     } else {
       // Show figure picker again for next token
-      const _tdGetRange = getRange;
       const _tdDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _tdSelfFk = `${meta.dcName}-${_tdDgIndex}-0`;
       const _tdSelfPos = game.figurePositions?.[meta.playerNum]?.[_tdSelfFk];
       const _tdFriendlies = _tdSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
-        .filter(([fk2, fp]) => fp && _tdGetRange(_tdSelfPos, fp) <= 3) : [];
+        .filter(([fk2, fp]) => fp && _countGameSpaces(game, _tdSelfPos, fp) <= 3) : [];
       if (_tdFriendlies.length > 0) {
         const btns = _tdFriendlies.slice(0, 4).map(([fk2]) =>
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_${fk2}`).setLabel(dcNameFromFigureKey(fk2)).setStyle(ButtonStyle.Primary)
@@ -3574,13 +3578,12 @@ export async function handleItWillBeAlrightUse(interaction, ctx) {
   const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const selfFk = `Cassian Andor-${dgIndex}-0`;
   const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
-  const _getRange = ctx.getRange || getRange;
 
   // Find eligible targets within 2 spaces
   const targets = [];
   for (const [fk, pos] of Object.entries(game.figurePositions?.[meta.playerNum] || {})) {
     if (!pos || fk === selfFk) continue;
-    if (_getRange(selfPos, pos) > 2) continue;
+    if (_countGameSpaces(game, selfPos, pos) > 2) continue;
     const fkDcName = dcNameFromFigureKey(fk);
     const fkMsgId = ctx.findDcMessageIdForFigure(gameId, meta.playerNum, fk);
     if (!fkMsgId) continue;

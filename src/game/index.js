@@ -80,6 +80,7 @@ export {
   isWithinRange,
   hasLineOfSight,
   isWithinSpaces,
+  countSpaces,
   getFiguresWithinRange,
   getFiguresAdjacentTo,
 } from './spatial.js';

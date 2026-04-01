@@ -99,6 +99,35 @@ describe('headless combat resolution', () => {
     assert.ok(game.ended, 'game.ended flag set');
   });
 
+  it('RNG-03: melee attackInfo.type produces isRanged=false, ranged produces true', async () => {
+    const { getDcStats } = await import('../../src/data-loader.js');
+
+    // Wampa (Elite) — melee, red-only dice pool. Most vulnerable to the old bug.
+    const wampaStats = getDcStats('Wampa (Elite)');
+    assert.ok(wampaStats?.attack, 'Wampa (Elite) has attack data');
+    assert.strictEqual(wampaStats.attack.type, 'melee', 'Wampa attack type is melee');
+    const wampaIsRanged = wampaStats.attack.type === 'range';
+    assert.strictEqual(wampaIsRanged, false, 'Wampa must NOT be classified as ranged');
+
+    // Gamorrean Guard (Elite) — melee, red-only dice pool.
+    const gamorreanStats = getDcStats('Gamorrean Guard (Elite)');
+    assert.ok(gamorreanStats?.attack, 'Gamorrean Guard (Elite) has attack data');
+    assert.strictEqual(gamorreanStats.attack.type, 'melee', 'Gamorrean attack type is melee');
+    const gamorreanIsRanged = gamorreanStats.attack.type === 'range';
+    assert.strictEqual(gamorreanIsRanged, false, 'Gamorrean must NOT be classified as ranged');
+
+    // IG-88 — ranged. Verify ranged still works.
+    const igStats = getDcStats('IG-88');
+    assert.ok(igStats?.attack, 'IG-88 has attack data');
+    assert.strictEqual(igStats.attack.type, 'range', 'IG-88 attack type is range');
+    const igIsRanged = igStats.attack.type === 'range';
+    assert.strictEqual(igIsRanged, true, 'IG-88 must be classified as ranged');
+
+    // Verify no .range property on any attackInfo (confirms fallback was the bug vector)
+    assert.strictEqual(wampaStats.attack.range, undefined, 'Wampa attack has no .range property');
+    assert.strictEqual(gamorreanStats.attack.range, undefined, 'Gamorrean attack has no .range property');
+  });
+
   it('VP award triggers game end at 40', async () => {
     const { game, deps } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])

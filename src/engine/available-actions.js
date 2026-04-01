@@ -9,11 +9,12 @@
 import { ACTION_TYPES, buildCustomId } from './action-types.js';
 import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum, getCcHand, getDcList, getActivatedDcIndices } from '../game/player-helpers.js';
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
-import { getRange, hasLineOfSight } from '../game/spatial.js';
+import { hasLineOfSight, countSpaces } from '../game/spatial.js';
+import { edgeKey } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 import { getLegalInteractOptions } from '../game/board-helpers.js';
-import { isDcCompanion, getDcEffects } from '../data-loader.js';
+import { isDcCompanion, getDcEffects, getMapTokensData } from '../data-loader.js';
 
 /**
  * Get all available actions for a player in the current game state.
@@ -2071,6 +2072,14 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   const [minRange, maxRange] = attackInfo.range || (isRanged ? [1, 20] : [1, 1]);
   const ms = getMapSpaces(game.selectedMap.id);
   if (!ms) return [];
+  const _aaMapId = game.selectedMap.id;
+  const _aaAllDoors = getMapTokensData()?.[_aaMapId]?.doors || [];
+  const _aaOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+  const _aaClosedDoorEdges = new Set(
+    _aaAllDoors
+      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !_aaOpenedSet.has(`${a}|${b}`) && !_aaOpenedSet.has(`${b}|${a}`); })
+      .map(e => edgeKey(e[0], e[1]))
+  );
 
   const enemyPn = opponentPlayerNum(playerNum);
   const enemyPositions = game.figurePositions?.[enemyPn] || {};
@@ -2078,7 +2087,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
 
   for (const [fk, coord] of Object.entries(enemyPositions)) {
     if (!coord) continue;
-    const dist = getRange(String(attackerPos).toLowerCase(), String(coord).toLowerCase());
+    const dist = countSpaces(ms, String(attackerPos).toLowerCase(), String(coord).toLowerCase(), _aaClosedDoorEdges);
     if (dist < minRange || dist > maxRange) continue;
 
     // LOS check (skip figure blocking for simplicity — full version is in dc-play-area)
