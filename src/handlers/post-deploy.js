@@ -10,12 +10,12 @@ import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getInitiativePlayerNum, opponentPlayerNum, getHandChannelId,
 } from '../game/player-helpers.js';
-import { normalizeCoord, getFootprintCells } from '../game/coords.js';
+import { bottomLeftCoord, normalizeCoord, getFootprintCells } from '../game/coords.js';
 import { getRange } from '../game/spatial.js';
 import { discordCatch } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { requireGame } from '../utils/guards.js';
-import { chunkButtonsToRows } from '../discord/components.js';
+import { buildRowPickerButtons, chunkButtonsToRows, cleanupSpacePick } from '../discord/components.js';
 import { splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
@@ -422,7 +422,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
  * so it can be called by both the auto-advance and picker flows.
  */
 async function _startMovementForFigure(game, gameId, client, ctx, fig) {
-  const { logGameAction, saveGames, dcMessageMeta, getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementMinimapAttachment, getMoveSpaceGridRows } = ctx;
+  const { logGameAction, saveGames, dcMessageMeta, getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementMinimapAttachment } = ctx;
   const q = game.postDeployQueue;
   if (!q) return;
   const active = q.activeAbility;
@@ -503,21 +503,45 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
   const isMultiTile = profile.size && profile.size !== '1x1';
   game.moveGridMessageIds = game.moveGridMessageIds || {};
 
-  const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces, profile.size);
-  const minimap = getMovementMinimapAttachment ? await getMovementMinimapAttachment(game, msgId, figureKey, buttonSpaces) : null;
+  // Build labelMap for multi-tile figures (show bottom-left coords)
+  const labelMap = {};
+  if (isMultiTile) {
+    for (const s of buttonSpaces) {
+      const n = normalizeCoord(s);
+      labelMap[n] = bottomLeftCoord(n, profile.size).toUpperCase();
+    }
+  }
   const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
+  const minimapCells = isMultiTile
+    ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
+    : buttonSpaces;
+  const minimap = getMovementMinimapAttachment ? await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells) : null;
 
   const totalFigs = active.moveFigures.length;
   const resolvedCount = active._resolvedFigures?.length || 0;
   const remainingCount = totalFigs - resolvedCount;
   const figLabel = totalFigs > 1 ? ` (${remainingCount} remaining)` : '';
-  const skipBtn = new ButtonBuilder()
-    .setCustomId(`pd_move_skip_${gameId}_${playerNum}_${moveKey}`)
-    .setLabel('Skip Movement')
-    .setStyle(ButtonStyle.Secondary);
 
-  const firstRows = rows.slice(0, 4);
-  firstRows.push(new ActionRowBuilder().addComponents(skipBtn));
+  // Store pendingSpacePick for generic row→cell handler
+  const moveContextKey = `${gameId}_${moveKey}`;
+  const moveHeader = `🛬 **${active.abilityLabel || 'Post-Deploy'}**${figLabel} — <@${ownerId}>, move **${dcName}** (**${mp}** MP):${multiTileNote}`;
+  const moveActionBtns = [
+    { customId: `pd_move_skip_${gameId}_${playerNum}_${moveKey}`, label: 'Skip Movement', style: ButtonStyle.Secondary },
+  ];
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[moveContextKey] = {
+    validSpaces: buttonSpaces,
+    cellPrefix: `move_pick_${msgId}_${figureIndex}_`,
+    mapSpaces: boardState.mapSpaces,
+    labelMap,
+    headerText: moveHeader,
+    actionButtons: moveActionBtns,
+  };
+  const { rows: moveRowBtns } = buildRowPickerButtons(buttonSpaces, `space_row_${moveContextKey}_`);
+  const actionBtns = moveActionBtns.map(b =>
+    new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
+  );
+  const actionRow = new ActionRowBuilder().addComponents(...actionBtns);
 
   // Find the game-log channel to post the movement UI
   const generalChannel = await fetchGameChannel(client, game.generalId);
@@ -527,23 +551,14 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
   }
 
   const payload = {
-    content: `🛬 **${active.abilityLabel || 'Post-Deploy'}**${figLabel} — <@${ownerId}>, move **${dcName}** (**${mp}** MP):${multiTileNote}`,
-    components: firstRows,
+    content: `${moveHeader}\nChoose a row:`,
+    components: [...moveRowBtns.slice(0, 4), actionRow],
     allowedMentions: { users: [ownerId] },
   };
   if (minimap) payload.files = [minimap];
 
   const gridMsg = await generalChannel.send(payload).catch(() => null);
   game.moveGridMessageIds[moveKey] = gridMsg?.id ? [gridMsg.id] : [];
-
-  // Post overflow rows
-  for (let i = 4; i < rows.length; i += 5) {
-    const more = rows.slice(i, i + 5);
-    if (more.length > 0) {
-      const follow = await generalChannel.send({ content: null, components: more }).catch(() => null);
-      if (follow?.id) game.moveGridMessageIds[moveKey].push(follow.id);
-    }
-  }
 
   if (saveGames) saveGames();
 }
@@ -604,7 +619,7 @@ async function _advanceAfterFigure(game, gameId, client, ctx, figureKey) {
 // ── Interactive ability posting ──────────────────────────────────────────────
 
 async function postInteractiveAbility(game, gameId, ability, client, ctx) {
-  const { logGameAction, saveGames, dcMessageMeta, getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementMinimapAttachment, getMoveSpaceGridRows } = ctx;
+  const { logGameAction, saveGames, dcMessageMeta, getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementMinimapAttachment } = ctx;
   const ownerId = getPlayerId(game, ability.playerNum);
 
   switch (ability.abilityId) {
@@ -1328,6 +1343,9 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
 
   // Read figureKey BEFORE cleaning up moveInProgress (needed for smooth_landing tracking)
   const skippedFigureKey = game.moveInProgress?.[moveKey]?.figureKey || null;
+
+  // Clean up pendingSpacePick
+  cleanupSpacePick(game, `${gameId}_${moveKey}`);
 
   // Clean up moveInProgress
   if (game.moveInProgress?.[moveKey]) {

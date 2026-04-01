@@ -6,7 +6,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { cardNameIncludes } from '../game/card-names.js';
-import { bottomLeftCoord, edgeKey } from '../game/coords.js';
+import { bottomLeftCoord, edgeKey, normalizeCoord } from '../game/coords.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -1268,7 +1268,6 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     getBoardStateForMovement,
     getMovementProfile,
     computeMovementCache,
-    buildLetterRows,
     getMovementMinimapAttachment,
     clearMoveGridMessages,
     getLegalInteractOptions,
@@ -1473,30 +1472,45 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       };
       game.moveGridMessageIds = game.moveGridMessageIds || {};
       const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
+      const labelMap = {};
+      if (isMultiTile) {
+        for (const s of buttonSpaces) {
+          const n = normalizeCoord(s);
+          labelMap[n] = bottomLeftCoord(n, profile.size).toUpperCase();
+        }
+      }
       const minimapCells = isMultiTile
         ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
         : buttonSpaces;
       const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells);
-      const letterRows = buildLetterRows(buttonSpaces, msgId, figureIndex);
-      const manualPickButtons = [
-        new ButtonBuilder()
-          .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
-          .setLabel('🗺️ Pick Path Manually')
-          .setStyle(ButtonStyle.Secondary),
+      // Store pendingSpacePick for generic row→cell handler
+      const moveContextKey = `${meta.gameId}_${moveKey}`;
+      const moveHeader = `**Move** — Pick destination (**${mpRemaining}** MP remaining):${multiTileNote}`;
+      const moveActionBtns = [
+        { customId: `move_adjust_mp_${msgId}_${figureIndex}`, label: 'Pick Path Manually', style: ButtonStyle.Secondary },
       ];
       if (mpRemaining > 0 && !game.urgencyMustSpendAll?.[msgId]) {
-        manualPickButtons.push(
-          new ButtonBuilder()
-            .setCustomId(`move_pick_${msgId}_${figureIndex}_done`)
-            .setLabel('End Movement')
-            .setStyle(ButtonStyle.Danger)
+        moveActionBtns.push(
+          { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'End Movement', style: ButtonStyle.Danger }
         );
       }
-      const manualPickRow = new ActionRowBuilder().addComponents(...manualPickButtons);
-      const firstRows = [...letterRows.slice(0, 4), manualPickRow];
+      game.pendingSpacePick = game.pendingSpacePick || {};
+      game.pendingSpacePick[moveContextKey] = {
+        validSpaces: buttonSpaces,
+        cellPrefix: `move_pick_${msgId}_${figureIndex}_`,
+        mapSpaces: boardState.mapSpaces,
+        labelMap,
+        headerText: moveHeader,
+        actionButtons: moveActionBtns,
+      };
+      const { rows: moveRowBtns } = buildRowPickerButtons(buttonSpaces, `space_row_${moveContextKey}_`);
+      const actionBtns = moveActionBtns.map(b =>
+        new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
+      );
+      const actionRow = new ActionRowBuilder().addComponents(...actionBtns);
       const firstPayload = {
-        content: `**Move** — Pick a column (**${mpRemaining}** MP remaining):${multiTileNote}`,
-        components: firstRows,
+        content: `${moveHeader}\nChoose a row:`,
+        components: [...moveRowBtns.slice(0, 4), actionRow],
         ephemeral: false,
         fetchReply: true,
       };

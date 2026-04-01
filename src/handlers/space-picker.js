@@ -9,7 +9,10 @@
  * 5. Flow's cell handler calls cleanupSpacePick(game, contextKey) on resolution
  *
  * pendingSpacePick[contextKey] shape:
- *   { validSpaces, cellPrefix, mapSpaces, labelMap?, headerText?, style? }
+ *   { validSpaces, cellPrefix, mapSpaces, labelMap?, headerText?, style?, actionButtons? }
+ *
+ * actionButtons (optional): serializable button descriptors shown alongside Back on cell view
+ * and alongside rows on row view. Format: [{ customId, label, style (ButtonStyle int) }]
  *
  * contextKey format: must start with gameId (e.g. '00001_msgId' or '00001_msgId_figIdx').
  * gameId is extracted as contextKey.split('_')[0].
@@ -66,9 +69,12 @@ export async function handleSpaceRow(interaction, ctx) {
     .setCustomId(`space_row_back_${contextKey}`)
     .setLabel('Back to Rows')
     .setStyle(ButtonStyle.Secondary);
-  const backRow = new ActionRowBuilder().addComponents(backBtn);
+  const extraBtns = (pending.actionButtons || []).map(b =>
+    new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style || ButtonStyle.Secondary)
+  );
+  const actionRow = new ActionRowBuilder().addComponents(backBtn, ...extraBtns);
 
-  const components = [...cellRows.slice(0, 4), backRow];
+  const components = [...cellRows.slice(0, 4), actionRow];
 
   try {
     await interaction.message.edit({
@@ -112,15 +118,24 @@ export async function handleSpaceRowBack(interaction, ctx) {
     { style: pending.style || ButtonStyle.Primary },
   );
 
+  const maxRowBtns = pending.actionButtons?.length ? 4 : 5;
+  const components = rows.slice(0, maxRowBtns);
+  if (pending.actionButtons?.length) {
+    const extraBtns = pending.actionButtons.map(b =>
+      new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style || ButtonStyle.Secondary)
+    );
+    components.push(new ActionRowBuilder().addComponents(...extraBtns));
+  }
+
   try {
     await interaction.message.edit({
       content: pending.headerText || 'Pick a row:',
-      components: rows.slice(0, 5),
+      components,
     });
   } catch {
     await interaction.followUp({
       content: pending.headerText || 'Pick a row:',
-      components: rows.slice(0, 5),
+      components,
       ephemeral: false,
     }).catch(discordCatch);
   }

@@ -2,9 +2,10 @@
  * Movement handlers: move_mp_, move_adjust_mp_, move_pick_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapSpaces } from '../data-loader.js';
-import { bottomLeftCoord, getFootprintCells } from '../game/coords.js';
+import { bottomLeftCoord, getFootprintCells, normalizeCoord } from '../game/coords.js';
 import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens } from '../game/index.js';
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
@@ -37,7 +38,6 @@ export async function handleMoveMp(interaction, ctx) {
     ensureMovementCache,
     getSpacesAtCost,
     clearMoveGridMessages,
-    getMoveSpaceGridRows,
     getMovementMinimapAttachment,
     client,
   } = ctx;
@@ -116,47 +116,52 @@ export async function handleMoveMp(interaction, ctx) {
       components: [],
     }).catch(discordCatch);
   }
-  const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces, profile.size);
-  const gridIds = [];
-  const firstSpaceRows = rows.slice(0, SPACE_ROWS_ON_FIRST);
-  const adjustRowButtons = [
-    new ButtonBuilder()
-      .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
-      .setLabel('Adjust movement points spent')
-      .setStyle(ButtonStyle.Secondary),
+  // Build 2-step row→cell picker via generic space_row_ handler
+  const labelMap = {};
+  if (isMultiTile) {
+    for (const s of buttonSpaces) {
+      const n = normalizeCoord(s);
+      labelMap[n] = bottomLeftCoord(n, profile.size).toUpperCase();
+    }
+  }
+  const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
+  const moveContextKey = `${meta.gameId}_${moveKey}`;
+  const moveHeader = `**Move** — Pick destination (**${mp}** MP):${multiTileNote}`;
+  const moveActionBtns = [
+    { customId: `move_adjust_mp_${msgId}_${figureIndex}`, label: 'Adjust movement points spent', style: ButtonStyle.Secondary },
   ];
   if (mpRemaining > 0 && !game.urgencyMustSpendAll?.[msgId]) {
-    adjustRowButtons.push(
-      new ButtonBuilder()
-        .setCustomId(`move_pick_${msgId}_${figureIndex}_done`)
-        .setLabel('End Movement')
-        .setStyle(ButtonStyle.Danger)
+    moveActionBtns.push(
+      { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'End Movement', style: ButtonStyle.Danger }
     );
   }
-  const adjustRow = new ActionRowBuilder().addComponents(...adjustRowButtons);
-  const firstRows = [...firstSpaceRows, adjustRow];
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[moveContextKey] = {
+    validSpaces: buttonSpaces,
+    cellPrefix: `move_pick_${msgId}_${figureIndex}_`,
+    mapSpaces: boardState.mapSpaces,
+    labelMap,
+    headerText: moveHeader,
+    actionButtons: moveActionBtns,
+  };
+  const { rows: moveRowBtns } = buildRowPickerButtons(buttonSpaces, `space_row_${moveContextKey}_`);
+  const actionBtns = moveActionBtns.map(b =>
+    new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
+  );
+  const actionRow = new ActionRowBuilder().addComponents(...actionBtns);
   const minimapCells = isMultiTile
     ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
     : spaces;
   const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells);
-  const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
   const gridPayload = {
-    content: `**Move** — Pick destination (**${mp}** MP):${multiTileNote}`,
-    components: firstRows,
+    content: `${moveHeader}\nChoose a row:`,
+    components: [...moveRowBtns.slice(0, 4), actionRow],
     fetchReply: true,
   };
   if (moveMinimap) gridPayload.files = [moveMinimap];
   const gridMsg = await interaction.followUp(gridPayload).catch(() => null);
-  if (gridMsg?.id) gridIds.push(gridMsg.id);
-  for (let i = SPACE_ROWS_ON_FIRST; i < rows.length; i += BTM_PER_MSG) {
-    const more = rows.slice(i, i + BTM_PER_MSG);
-    if (more.length > 0) {
-      const follow = await interaction.channel.send({ content: null, components: more }).catch(() => null);
-      if (follow?.id) gridIds.push(follow.id);
-    }
-  }
   game.moveGridMessageIds = game.moveGridMessageIds || {};
-  game.moveGridMessageIds[moveKey] = gridIds;
+  game.moveGridMessageIds[moveKey] = gridMsg?.id ? [gridMsg.id] : [];
 }
 
 /**
@@ -185,6 +190,7 @@ export async function handleMoveAdjustMp(interaction, ctx) {
   const game = await requireGame(interaction, getGame, meta.gameId);
   if (!game) return;
   const moveKey = `${msgId}_${figureIndex}`;
+  cleanupSpacePick(game, `${meta.gameId}_${moveKey}`);
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
     await interaction.followUp({ content: 'Move session expired.', ephemeral: true }).catch(discordCatch);
@@ -418,6 +424,7 @@ export async function handleMovePick(interaction, ctx) {
   const game = await requireGame(interaction, getGame, meta.gameId);
   if (!game) return;
   const moveKey = `${msgId}_${figureIndex}`;
+  cleanupSpacePick(game, `${meta.gameId}_${moveKey}`);
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
     await interaction.followUp({ content: 'Move session expired.', ephemeral: true }).catch(discordCatch);
@@ -751,7 +758,7 @@ export async function handleMovePick(interaction, ctx) {
         } catch { /* already gone */ }
         moveState.distanceMessageId = null;
       }
-      // Show two-tier column picker for new position with remaining MP.
+      // Show 2-step row→cell picker for new position with remaining MP.
       // cache.cells only stores topLeft cells — no filtering needed.
       const newButtonSpaces = [...nextCache.cells.keys()];
       const newIsMultiTile = nextProfile.size && nextProfile.size !== '1x1';
@@ -760,17 +767,35 @@ export async function handleMovePick(interaction, ctx) {
         ? newButtonSpaces.map((tl) => bottomLeftCoord(tl, nextProfile.size))
         : newButtonSpaces;
       const newMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, newMinimapCells);
-      const newLetterRows = buildLetterRows(newButtonSpaces, msgId, figureIndex);
-      const newManualPickRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
-          .setLabel('🗺️ Pick Path Manually')
-          .setStyle(ButtonStyle.Secondary)
+      const newLabelMap = {};
+      if (newIsMultiTile) {
+        for (const s of newButtonSpaces) {
+          const n = normalizeCoord(s);
+          newLabelMap[n] = bottomLeftCoord(n, nextProfile.size).toUpperCase();
+        }
+      }
+      const newMoveContextKey = `${meta.gameId}_${moveKey}`;
+      const newMoveHeader = `**Move** — Pick destination (**${newMp}** MP remaining):${newMultiTileNote}`;
+      const newMoveActionBtns = [
+        { customId: `move_adjust_mp_${msgId}_${figureIndex}`, label: 'Pick Path Manually', style: ButtonStyle.Secondary },
+      ];
+      game.pendingSpacePick = game.pendingSpacePick || {};
+      game.pendingSpacePick[newMoveContextKey] = {
+        validSpaces: newButtonSpaces,
+        cellPrefix: `move_pick_${msgId}_${figureIndex}_`,
+        mapSpaces: nextBoard.mapSpaces,
+        labelMap: newLabelMap,
+        headerText: newMoveHeader,
+        actionButtons: newMoveActionBtns,
+      };
+      const { rows: newRowBtns } = buildRowPickerButtons(newButtonSpaces, `space_row_${newMoveContextKey}_`);
+      const newActionBtns = newMoveActionBtns.map(b =>
+        new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
       );
-      const newFirstRows = [...newLetterRows.slice(0, 4), newManualPickRow];
+      const newActionRow = new ActionRowBuilder().addComponents(...newActionBtns);
       const newFirstPayload = {
-        content: `**Move** — Pick a column (**${newMp}** MP remaining):${newMultiTileNote}`,
-        components: newFirstRows,
+        content: `${newMoveHeader}\nChoose a row:`,
+        components: [...newRowBtns.slice(0, 4), newActionRow],
         fetchReply: true,
       };
       if (newMinimap) newFirstPayload.files = [newMinimap];
