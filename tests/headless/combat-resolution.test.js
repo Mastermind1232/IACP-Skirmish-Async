@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../fixtures/game-builder.js';
+import { createFlowHarness } from './flow-harness.js';
 
 describe('headless combat resolution', () => {
   it('reduces target HP when damage is applied', () => {
@@ -126,6 +127,47 @@ describe('headless combat resolution', () => {
     // Verify no .range property on any attackInfo (confirms fallback was the bug vector)
     assert.strictEqual(wampaStats.attack.range, undefined, 'Wampa attack has no .range property');
     assert.strictEqual(gamorreanStats.attack.range, undefined, 'Gamorrean attack has no .range property');
+  });
+
+  it('RNG-01/02: attack target distance uses graph distance via buildAndSendAttackTargets', async () => {
+    // Map: mos-eisley-outskirts (flow-harness default, pinned explicitly here).
+    // Coords: e5 ↔ f6 are diagonal-adjacent in this map's adjacency graph.
+    //   Graph distance = 1 (diagonal neighbors share an edge).
+    //   Manhattan distance = 2 (|e-f| + |5-6| = 1+1 = 2).
+    // This test exercises the real Discord handler path (buildAndSendAttackTargets)
+    // via the flow harness, NOT the headless computeAttackTargets shortcut.
+    const fh = createFlowHarness({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Stormtrooper (Regular)' }],
+    });
+    const game = fh.getGame();
+
+    // Set channel IDs so handlers can fetch channels via fake client
+    game.p1PlayAreaId = 'p1-play-area';
+    game.p2PlayAreaId = 'p2-play-area';
+    game.generalId = 'general-channel';
+
+    // Pin positions to known diagonal-adjacent pair
+    const p1FigKey = Object.keys(game.figurePositions[1])[0];
+    const p2FigKey = Object.keys(game.figurePositions[2])[0];
+    game.figurePositions[1][p1FigKey] = 'e5';
+    game.figurePositions[2][p2FigKey] = 'f6';
+
+    // Activate P1's DC
+    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
+    assert.ok(activateAction, 'P1 has activate action');
+    await fh.act(activateAction.customId, 'player1');
+
+    // Find and submit attack target
+    const attackAction = fh.getActions(1).find(a => a.type === 'attack_target');
+    assert.ok(attackAction, 'P1 has attack target action after activation');
+    await fh.act(attackAction.customId, 'player1');
+
+    // pendingCombat.distanceToTarget must be graph distance (1), not Manhattan (2)
+    assert.ok(game.pendingCombat, 'pendingCombat was created');
+    assert.strictEqual(game.pendingCombat.distanceToTarget, 1,
+      'Diagonal-adjacent target: graph distance=1, not Manhattan=2');
   });
 
   it('VP award triggers game end at 40', async () => {
