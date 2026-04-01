@@ -312,7 +312,7 @@ export async function handleYHSIW(interaction, ctx) {
   if (isTransfer) {
     // Transfer the token from target to Moff Gideon
     const { targetFk, token, gideonFk, gideonPlayerNum, oppPlayerNum } = pending;
-    const isPowerToken = ['Block', 'Evade', 'Hit', 'Surge'].includes(token);
+    const isPowerToken = ['Block', 'Evade', 'Damage', 'Surge'].includes(token);
     if (isPowerToken) {
       // Remove from target
       const tTokens = game.figurePowerTokens?.[targetFk] || [];

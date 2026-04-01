@@ -60,7 +60,7 @@ export function buildScorecardEmbed(game, missionBonus) {
  * @param {number} dgIndex - Deployment group index (e.g. 1)
  * @param {[number, number][]} healthState - Per-figure [cur, max]
  * @param {string[][]} [conditionsByFigure] - Optional per-figure condition names (e.g. [['Stun'], ['Weaken']])
- * @param {string[][]} [tokensByFigure] - Optional per-figure power token names (e.g. [['Hit', 'Block']])
+ * @param {string[][]} [tokensByFigure] - Optional per-figure power token names (e.g. [['Damage', 'Block']])
  */
 export function formatHealthSection(dgIndex, healthState, conditionsByFigure, tokensByFigure, nicknamesByFigure) {
   if (!healthState?.length) return 'Health\n—/—';

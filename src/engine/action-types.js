@@ -43,6 +43,7 @@ export const ACTION_TYPES = {
 
   // Combat
   COMBAT_READY: 'combat_ready',
+  COMBAT_GATE: 'combat_gate',
   COMBAT_ROLL: 'combat_roll',
   COMBAT_REROLL: 'combat_reroll',
   COMBAT_SURGE: 'combat_surge',
@@ -149,6 +150,8 @@ export function buildCustomId(type, params = {}) {
       return `dc_attack_${msgId}_f${figureIndex}`;
     case ACTION_TYPES.COMBAT_READY:
       return `combat_ready_${gameId}`;
+    case ACTION_TYPES.COMBAT_GATE:
+      return `combat_gate_${gameId}`;
     case ACTION_TYPES.COMBAT_ROLL:
       return `combat_roll_${gameId}`;
     case ACTION_TYPES.COMBAT_SURGE:

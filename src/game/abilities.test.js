@@ -370,7 +370,7 @@ test('resolveAbility Primary Target applies Focus and attackBonusHits', () => {
   const dcMessageMeta = new Map([['msg-pt', { gameId: 'g-pt', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [Group 1]' }]]);
   const result = resolveAbility('Primary Target', { game, playerNum: 1, combat, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.ok(result.logMessage?.includes('Hit'));
+  assert.ok(result.logMessage?.includes('Damage'));
   assert.strictEqual(combat.bonusHits, 1);
   assert.strictEqual(game.figureConditions['Boba Fett-1-0']?.includes('Focus'), true);
 });

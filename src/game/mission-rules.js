@@ -221,7 +221,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
       const missionData = getMapTokensData()[mapId]?.[missionSide];
       const tokenTypes = missionData?.tokenTypes || [];
       const positions = missionData?.positions || {};
-      const colorToPowerToken = { yellow: 'Surge', blue: 'Evade', green: 'Block', red: 'Hit' };
+      const colorToPowerToken = { yellow: 'Surge', blue: 'Evade', green: 'Block', red: 'Damage' };
       const vpByPlayer = { 1: 0, 2: 0 };
       const tokensGranted = [];
       for (const [id, coords] of Object.entries(positions)) {
@@ -484,7 +484,7 @@ export async function runStartOfRoundRules(game, mapId, variant, rules, ctx = {}
     const missionData = getMapTokensData()[mapId]?.[missionSide];
     const tokenTypes = missionData?.tokenTypes || [];
     const positions = missionData?.positions || {};
-    const colorToPowerToken = { blue: 'Block', red: 'Hit', yellow: 'Surge' };
+    const colorToPowerToken = { blue: 'Block', red: 'Damage', yellow: 'Surge' };
     game.crateTokens = game.crateTokens || {};
     const placed = [];
     for (const [id, coords] of Object.entries(positions)) {

@@ -890,7 +890,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
             const { grants } = game.pendingPowerTokenGrant;
             const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
             const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
-            const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+            const btns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
               new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
             );
             await ptThread.send({
@@ -2183,7 +2183,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         const { grants } = game.pendingPowerTokenGrant;
         const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
         const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
-        const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+        const btns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
           new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
         );
         await ptThread.send({
@@ -2369,7 +2369,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       .setLabel('Skip (no attack)')
       .setStyle(ButtonStyle.Secondary);
     await interaction.followUp({
-      content: `**Lure of the Dark Side** — **${controlledName}** gained 2 Hit Tokens. Choose a target to attack (within 4 spaces):`,
+      content: `**Lure of the Dark Side** — **${controlledName}** gained 2 Damage Tokens. Choose a target to attack (within 4 spaces):`,
       components: [new ActionRowBuilder().addComponents(atkBtn, skipBtn)],
       ephemeral: false,
     }).catch(discordCatch);
@@ -2850,15 +2850,32 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  // Compute closed-door edges for graph-distance counting
+  // Compute closed-door edges for graph-distance counting AND LOS
   const foMapId = game.selectedMap?.id;
   const foAllDoors = (getMapTokensData && foMapId) ? (getMapTokensData()[foMapId]?.doors || []) : [];
   const foOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
-  const foClosedDoorEdges = new Set(
-    foAllDoors
-      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !foOpenedSet.has(`${a}|${b}`) && !foOpenedSet.has(`${b}|${a}`); })
-      .map(e => edgeKey(e[0], e[1]))
-  );
+  const foClosedEdges = foAllDoors.filter(e => {
+    const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase();
+    return !foOpenedSet.has(`${a}|${b}`) && !foOpenedSet.has(`${b}|${a}`);
+  });
+  const foClosedDoorEdges = new Set(foClosedEdges.map(e => edgeKey(e[0], e[1])));
+  // Build LOS-aware mapSpaces: merge closed doors + energy shields + smoke
+  let losMs = ms;
+  {
+    const shieldSpaces = (game.ancillaryTokens?.energyShield || []).map(s => String(s).toLowerCase());
+    const smokeSpaces = (game.ancillaryTokens?.smoke || []).map(s => String(s).toLowerCase());
+    const extraBlocking = [...shieldSpaces, ...smokeSpaces];
+    const mergedImpassable = foClosedEdges.length > 0
+      ? [...(ms?.impassableEdges || []), ...foClosedEdges]
+      : ms?.impassableEdges;
+    if (foClosedEdges.length > 0 || extraBlocking.length > 0) {
+      losMs = {
+        ...ms,
+        impassableEdges: mergedImpassable || [],
+        blocking: extraBlocking.length > 0 ? [...(ms?.blocking || []), ...extraBlocking] : ms?.blocking,
+      };
+    }
+  }
   // Collect all other figures as potential targets
   const allOtherPositions = {};
   for (const [figKey, pos] of Object.entries(game.figurePositions?.[1] || {})) {
@@ -2871,7 +2888,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   for (const [figKey, targetPos] of Object.entries(allOtherPositions)) {
     const dist = countSpaces(ms, controlledPos, targetPos, foClosedDoorEdges);
     if (dist < foMinRange || dist > foEffectiveMaxRange) continue;
-    const los = hasLineOfSight ? hasLineOfSight(controlledPos, targetPos, ms, []) : true;
+    const los = hasLineOfSight ? hasLineOfSight(controlledPos, targetPos, losMs, null) : true;
     const fkMatch = figKey.match(/^(.+)-(\d+)-(\d+)$/);
     const targetDcName = fkMatch ? dcNameFromFigureKey(figKey) : figKey;
     const dg = fkMatch ? fkMatch[2] : '1';

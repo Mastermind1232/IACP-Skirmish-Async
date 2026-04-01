@@ -175,7 +175,7 @@ export async function handleVetInstincts(interaction, ctx) {
   if (choice === 'hit') {
     combat.attackRoll = { ...combat.attackRoll, dmg: (combat.attackRoll?.dmg || 0) + 1 };
     combat.vetInstinctsAttackApplied = true;
-    if (thread) await thread.send('**Veteran Instincts** — +1 Hit added to attack roll.').catch(discordCatch);
+    if (thread) await thread.send('**Veteran Instincts** — +1 Damage added to attack roll.').catch(discordCatch);
   } else if (choice === 'surge') {
     combat.attackRoll = { ...combat.attackRoll, surge: (combat.attackRoll?.surge || 0) + 1 };
     combat.vetInstinctsAttackApplied = true;
@@ -279,7 +279,7 @@ export async function handleHunterProtocol(interaction, ctx) {
   // Continue surge flow
   if ((_hpCombat.surgeRemaining || 0) <= 0) {
     _hpCombat.surgeRemaining = 0;
-    if (_hpThread) await sendReadyToResolveRolls(_hpThread, _hpGameId);
+    if (_hpThread) await sendReadyToResolveRolls(_hpThread, _hpGameId, _hpGame, ctx);
   } else {
     const _hpSurgeAbilities = getAttackerSurgeAbilities(_hpCombat);
     const _hpRemaining = _hpCombat.surgeRemaining || 0;

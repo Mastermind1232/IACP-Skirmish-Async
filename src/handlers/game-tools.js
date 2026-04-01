@@ -229,10 +229,15 @@ export async function handleUndo(interaction, ctx) {
         const ch = await fetchGameChannel(client, game.generalId);
         const msg = await ch.messages.fetch(last.roundMessageId).catch(() => null);
         if (msg) {
+          const _undoMyRem = game.p1ActivationsRemaining ?? 0;
+          const _undoOppRem = game.p2ActivationsRemaining ?? 0;
+          const prevPlayerNum = last.previousTurnPlayerId === game.player1Id ? 1 : 2;
+          const _myAct = prevPlayerNum === 1 ? _undoMyRem : _undoOppRem;
+          const _theirAct = prevPlayerNum === 1 ? _undoOppRem : _undoMyRem;
           const passRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
               .setCustomId(`pass_activation_turn_${last.gameId || gameId}`)
-              .setLabel('Pass turn to opponent')
+              .setLabel(`Pass (opponent has ${_theirAct - _myAct} more activation${_theirAct - _myAct !== 1 ? 's' : ''} than you)`)
               .setStyle(ButtonStyle.Secondary)
           );
           await msg.edit({

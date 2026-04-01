@@ -222,6 +222,13 @@ async function recoverPendingCombat(game, gameId, ctx) {
     return 'Re-sent combat roll button';
   }
 
+  // Combat sub-phase gate active → re-send gate buttons
+  if (combat.combatGate) {
+    const { sendCombatGate } = await import('./combat.js');
+    await sendCombatGate(thread, game, combat, combat.combatGate.phase, ctx);
+    return `Re-sent combat gate (${combat.combatGate.phase})`;
+  }
+
   // Reroll phase active → re-send reroll UI
   if (combat.rerollPhase) {
     // Import sendRerollUI at the call site to avoid circular dependency
@@ -233,7 +240,7 @@ async function recoverPendingCombat(game, gameId, ctx) {
   // Attack roll set, defense roll set, no reroll phase → re-send ready to resolve
   if (combat.attackRoll && combat.defenseRoll && !combat.rerollPhase) {
     if (sendReadyToResolveRolls) {
-      await sendReadyToResolveRolls(thread, gameId);
+      await sendReadyToResolveRolls(thread, gameId, game, ctx);
       return 'Re-sent ready-to-resolve-rolls button';
     }
   }
@@ -732,7 +739,7 @@ async function recoverPendingPowerTokenGrant(game, gameId, ctx) {
   const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
   const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
   const countLabel = totalCount > 1 ? `${totalCount} tokens` : '1 token';
-  const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+  const btns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
     new ButtonBuilder()
       .setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`)
       .setLabel(t)

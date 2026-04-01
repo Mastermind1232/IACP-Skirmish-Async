@@ -61,8 +61,14 @@ function buildReactionPrompt(cards, playerLabel) {
   return `${playerLabel} — you have reaction card(s) in hand: ${cardList}. Play from your Hand channel if desired.`;
 }
 
-/** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after. */
-export async function sendReadyToResolveRolls(thread, gameId) {
+/** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after.
+ * Now uses the combat gate system so both players must confirm. */
+export async function sendReadyToResolveRolls(thread, gameId, game, ctx) {
+  if (game?.pendingCombat) {
+    await sendCombatGate(thread, game, game.pendingCombat, 'pre_resolve', ctx);
+    return;
+  }
+  // Fallback: legacy single-button (shouldn't happen in normal flow)
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`combat_resolve_ready_${gameId}`)
@@ -75,6 +81,217 @@ export async function sendReadyToResolveRolls(thread, gameId) {
   }));
 }
 
+// ── Combat Sub-Phase Gates ─────────────────────────────────────────────────
+// Between each major combat step, both players must click "Ready" before
+// the game proceeds.  This prevents information leakage in async play
+// (e.g. "I'd only Zillo if you Bib").
+
+const COMBAT_GATE_LABELS = {
+  post_roll:              '🎲 Dice rolled — review results before rerolls.',
+  post_attacker_reroll:   '🔄 Attacker rerolls complete — review before proceeding.',
+  post_forced_reroll:     '🔄 Forced rerolls complete — review before proceeding.',
+  post_defender_reroll:   '🔄 All rerolls complete — review before modifications.',
+  pre_resolve:            '⚔️ Ready to resolve combat?',
+};
+
+/**
+ * Send a combat sub-phase gate to the combat thread.
+ * Both players must click Ready before the combat flow continues.
+ * Self-play games skip the gate and advance immediately.
+ */
+export async function sendCombatGate(thread, game, combat, subPhase, ctx) {
+  // Self-play: skip gates entirely
+  if (game.selfPlay) {
+    await dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx);
+    return;
+  }
+
+  const label = COMBAT_GATE_LABELS[subPhase] || 'Combat checkpoint — both players confirm to proceed.';
+  combat.combatGate = { phase: subPhase, p1Ready: false, p2Ready: false };
+
+  const atkPn = combat.attackerPlayerNum || 1;
+  const defPn = opponentPlayerNum(atkPn);
+  const atkId = getPlayerId(game, atkPn);
+  const defId = getPlayerId(game, defPn);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`combat_gate_${game.gameId}`)
+      .setLabel('✅ Ready')
+      .setStyle(ButtonStyle.Success),
+  );
+
+  const atkLabel = atkId ? `<@${atkId}>` : `P${atkPn}`;
+  const defLabel = defId ? `<@${defId}>` : `P${defPn}`;
+  const content = `🔔 ${label}\n${atkLabel} (ATK) ⏳ | ${defLabel} (DEF) ⏳\nBoth players: click **Ready** when done with reactions. Play Command Cards from your Hand first.`;
+
+  await withDiscordRetry(() => thread.send({
+    content,
+    components: [row],
+    allowedMentions: { users: [atkId, defId].filter(Boolean) },
+  }));
+}
+
+/**
+ * Handle combat_gate_ button click.
+ */
+export async function handleCombatGateReady(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'combat_gate_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+
+  const combat = game.pendingCombat;
+  if (!combat?.combatGate) {
+    await interaction.followUp({ content: 'No pending combat gate.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const gate = combat.combatGate;
+  const userId = interaction.user.id;
+  const isP1 = userId === game.player1Id;
+  const isP2 = userId === game.player2Id;
+  if (!isP1 && !isP2 && !game.isTestGame) {
+    await interaction.followUp({ content: 'Only players in this game can use this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Test game: P1 acts for both — first click = P1, second = P2
+  let effectivePn = isP1 ? 1 : 2;
+  if (game.isTestGame && isP1) {
+    effectivePn = gate.p1Ready ? 2 : 1;
+  }
+
+  if (effectivePn === 1) {
+    if (gate.p1Ready) { await interaction.followUp({ content: "You're already ready.", ephemeral: true }).catch(discordCatch); return; }
+    gate.p1Ready = true;
+  } else {
+    if (gate.p2Ready) { await interaction.followUp({ content: "You're already ready.", ephemeral: true }).catch(discordCatch); return; }
+    gate.p2Ready = true;
+  }
+
+  const label = COMBAT_GATE_LABELS[gate.phase] || 'Combat checkpoint';
+  const atkPn = combat.attackerPlayerNum || 1;
+  const defPn = opponentPlayerNum(atkPn);
+  const atkId = getPlayerId(game, atkPn);
+  const defId = getPlayerId(game, defPn);
+  const atkLabel = atkId ? `<@${atkId}>` : `P${atkPn}`;
+  const defLabel = defId ? `<@${defId}>` : `P${defPn}`;
+  const atkStatus = (atkPn === 1 ? gate.p1Ready : gate.p2Ready) ? '✅' : '⏳';
+  const defStatus = (defPn === 1 ? gate.p1Ready : gate.p2Ready) ? '✅' : '⏳';
+
+  if (!gate.p1Ready || !gate.p2Ready) {
+    const content = `🔔 ${label}\n${atkLabel} (ATK) ${atkStatus} | ${defLabel} (DEF) ${defStatus}\nBoth players: click **Ready** when done with reactions.`;
+    await interaction.message.edit({ content, components: interaction.message.components }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
+  // Both ready — advance
+  await interaction.message.edit({
+    content: `✅ ${label} — Both players ready. Proceeding...`,
+    components: [],
+  }).catch(discordCatch);
+
+  const subPhase = gate.phase;
+  delete combat.combatGate;
+
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (!thread) { saveGames(); return; }
+
+  await dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx);
+  saveGames();
+}
+
+/**
+ * Dispatch to the next combat step after a gate is cleared.
+ */
+async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
+  const saveGames = ctx.saveGames;
+
+  switch (subPhase) {
+    case 'post_roll': {
+      // Proceed to reroll phases
+      const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
+      if ((combat.attackerRerollsRemaining || 0) > 0) {
+        combat.rerollPhase = 'attacker';
+        await sendRerollUI(thread, game, combat, 'attacker');
+      } else if (hasForcedRerolls) {
+        combat.rerollPhase = 'forced';
+        await sendRerollUI(thread, game, combat, 'forced');
+      } else if ((combat.defenderRerollsRemaining || 0) > 0) {
+        combat.rerollPhase = 'defender';
+        await sendRerollUI(thread, game, combat, 'defender');
+      } else {
+        // No rerolls at all — proceed to modifications
+        combat.rerollPhase = null;
+        await proceedAfterRerolls(thread, game, combat, ctx);
+      }
+      break;
+    }
+
+    case 'post_attacker_reroll': {
+      // Attacker done → forced rerolls or defender
+      const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
+      if (hasForcedRerolls) {
+        combat.rerollPhase = 'forced';
+        await sendRerollUI(thread, game, combat, 'forced');
+      } else {
+        // Demoralizing Monologue: add forced defender reroll if pending
+        if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
+          combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
+          combat.demoralizingMonologueApplied = true;
+          game.forceDefenderRerollOne = null;
+        }
+        if ((combat.defenderRerollsRemaining || 0) > 0) {
+          combat.rerollPhase = 'defender';
+          await sendRerollUI(thread, game, combat, 'defender');
+        } else {
+          combat.rerollPhase = null;
+          await proceedAfterRerolls(thread, game, combat, ctx);
+        }
+      }
+      break;
+    }
+
+    case 'post_forced_reroll': {
+      // Forced done → defender rerolls
+      if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
+        combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
+        combat.demoralizingMonologueApplied = true;
+        game.forceDefenderRerollOne = null;
+      }
+      if ((combat.defenderRerollsRemaining || 0) > 0) {
+        combat.rerollPhase = 'defender';
+        await sendRerollUI(thread, game, combat, 'defender');
+      } else {
+        combat.rerollPhase = null;
+        await proceedAfterRerolls(thread, game, combat, ctx);
+      }
+      break;
+    }
+
+    case 'post_defender_reroll': {
+      combat.rerollPhase = null;
+      await proceedAfterRerolls(thread, game, combat, ctx);
+      break;
+    }
+
+    case 'pre_resolve': {
+      const { resolveCombatAfterRolls } = ctx;
+      if (resolveCombatAfterRolls) {
+        await resolveCombatAfterRolls(game, combat, ctx.client);
+      }
+      break;
+    }
+
+    default:
+      console.warn(`[combat-gate] Unknown sub-phase: ${subPhase}`);
+  }
+}
+
+
 /**
  * Resume the surge choice UI (or send ready-to-resolve if surges are done).
  * Shared helper used by overflow resolution, Spread the Pain, and power token choice handlers.
@@ -82,7 +299,7 @@ export async function sendReadyToResolveRolls(thread, gameId) {
 export async function resumeSurgeChoiceOrResolve(game, gameId, combat, thread, ctx) {
   if ((combat.surgeRemaining || 0) <= 0) {
     combat.surgeRemaining = 0;
-    await sendReadyToResolveRolls(thread, gameId);
+    await sendReadyToResolveRolls(thread, gameId, game, ctx);
     return;
   }
   const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
@@ -1966,7 +2183,7 @@ export async function handleAttackTarget(interaction, ctx) {
     if (atkPosAC) {
       const friendlyPosAC = game.figurePositions?.[attackerPlayerNum] || {};
       for (const [fk, pos] of Object.entries(friendlyPosAC)) {
-        if (fk === attackerFigureKey || !pos) continue;
+        if (!pos) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!(fkEff?.specialAbilityIds || []).includes('airborne_commander_gar_saxon')) continue;
@@ -2470,7 +2687,7 @@ export async function handleCombatRoll(interaction, ctx) {
         combat.defenseDiceResults = [];
         combat.defenseDiceCount = 0;
         await thread.send('**On the Lam** — Target moved out of line of sight. The attack misses.');
-        await sendReadyToResolveRolls(thread, game.gameId);
+        await sendReadyToResolveRolls(thread, game.gameId, game, ctx);
         saveGames();
         return;
       }
@@ -2508,11 +2725,11 @@ export async function handleCombatRoll(interaction, ctx) {
     // Veteran Instincts: attacker may add +1 Hit or +1 Surge to this roll
     if (game.vetInstinctsActiveThisActivation?.[attackerPlayerNum] && !combat.vetInstinctsAttackApplied) {
       const _viRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_hit`).setLabel('+1 Hit').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_hit`).setLabel('+1 Damage').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${attackerPlayerNum}Id`] ?? ''}> add +1 Hit or +1 Surge to the attack roll?`, components: [_viRow] }).catch(discordCatch);
+      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${attackerPlayerNum}Id`] ?? ''}> add +1 Damage or +1 Surge to the attack roll?`, components: [_viRow] }).catch(discordCatch);
       saveGames();
       return;
     }
@@ -2915,23 +3132,8 @@ export async function handleCombatRoll(interaction, ctx) {
     // G12: Track which die indices have been rerolled (each die max once)
     combat.attackerRerolledIndices = [];
     combat.defenderRerolledIndices = [];
-    const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
-    if (atkRerolls > 0 || defRerolls > 0 || hasForcedRerolls) {
-      if (atkRerolls > 0) {
-        combat.rerollPhase = 'attacker';
-        await sendRerollUI(thread, game, combat, 'attacker');
-      } else if (hasForcedRerolls) {
-        combat.rerollPhase = 'forced';
-        await sendRerollUI(thread, game, combat, 'forced');
-      } else {
-        combat.rerollPhase = 'defender';
-        await sendRerollUI(thread, game, combat, 'defender');
-      }
-      saveGames();
-      return;
-    }
-    // No rerolls available — proceed directly
-    await proceedAfterRerolls(thread, game, combat, ctx);
+    // Combat gate: both players review dice results before reroll window
+    await sendCombatGate(thread, game, combat, 'post_roll', ctx);
     saveGames();
     return;
   }
@@ -3219,20 +3421,8 @@ export async function handleCombatReroll(interaction, ctx) {
       saveGames();
       return;
     }
-    // All forced rerolls done — move to defender
-    if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
-      combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
-      combat.demoralizingMonologueApplied = true;
-      game.forceDefenderRerollOne = null;
-    }
-    combat.rerollPhase = 'defender';
-    if ((combat.defenderRerollsRemaining || 0) > 0) {
-      await sendRerollUI(thread, game, combat, 'defender');
-      saveGames();
-      return;
-    }
-    combat.rerollPhase = null;
-    await proceedAfterRerolls(thread, game, combat, ctx);
+    // All forced rerolls done — combat gate before defender rerolls
+    await sendCombatGate(thread, game, combat, 'post_forced_reroll', ctx);
     saveGames();
     return;
   }
@@ -3345,33 +3535,14 @@ export async function handleCombatReroll(interaction, ctx) {
 
   // Check if current side is done (clicked done or exhausted rerolls)
   if (side === 'atk' && (choice === 'done' || combat.attackerRerollsRemaining <= 0)) {
-    // Route through forced reroll queue before defender
-    if ((combat.forcedRerollQueue || []).length > 0) {
-      combat.rerollPhase = 'forced';
-      await sendRerollUI(thread, game, combat, 'forced');
-      saveGames();
-      return;
-    }
-    combat.rerollPhase = 'defender';
-    // Demoralizing Monologue: if flag still pending, add forced reroll for defender now
-    if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
-      combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
-      combat.demoralizingMonologueApplied = true;
-      game.forceDefenderRerollOne = null;
-    }
-    if ((combat.defenderRerollsRemaining || 0) > 0) {
-      await sendRerollUI(thread, game, combat, 'defender');
-      saveGames();
-      return;
-    }
-    combat.rerollPhase = null;
-    await proceedAfterRerolls(thread, game, combat, ctx);
+    // Combat gate: both players review attacker rerolls before proceeding
+    await sendCombatGate(thread, game, combat, 'post_attacker_reroll', ctx);
     saveGames();
     return;
   }
   if (side === 'def' && (choice === 'done' || combat.defenderRerollsRemaining <= 0)) {
-    combat.rerollPhase = null;
-    await proceedAfterRerolls(thread, game, combat, ctx);
+    // Combat gate: both players review defender rerolls before modifications
+    await sendCombatGate(thread, game, combat, 'post_defender_reroll', ctx);
     saveGames();
     return;
   }
@@ -3560,7 +3731,7 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
 
 /** Returns [{type, index}] of tokens the role is allowed to spend */
 function getEligibleTokens(game, figureKey, role) {
-  const allowed = role === 'attacker' ? ['Hit', 'Surge', 'Wild'] : ['Block', 'Evade', 'Wild'];
+  const allowed = role === 'attacker' ? ['Damage', 'Surge', 'Wild'] : ['Block', 'Evade', 'Wild'];
   return (game.figurePowerTokens?.[figureKey] || [])
     .map((type, index) => ({ type, index }))
     .filter(t => allowed.includes(t.type));
@@ -3608,7 +3779,7 @@ function getSquadCohesionTokens(game, combat, role) {
   if (!koTunInRange) return null;
 
   // Gather tokens from friendly REBEL figures within 3 spaces of the combat figure
-  const allowed = role === 'attacker' ? ['Hit', 'Surge', 'Wild'] : ['Block', 'Evade', 'Wild'];
+  const allowed = role === 'attacker' ? ['Damage', 'Surge', 'Wild'] : ['Block', 'Evade', 'Wild'];
   const cohesionTokens = [];
   for (const [fk, pos] of Object.entries(friendlyPos)) {
     if (fk === combatFigureKey) continue; // skip own tokens (already shown normally)
@@ -3670,7 +3841,7 @@ async function sendTokenWindow(thread, gameId, role, tokens, displayName, combat
 
 /** Sends Wild type selection: attacker picks Hit/Surge; defender picks Block/Evade */
 async function sendWildTypeWindow(thread, gameId, role) {
-  const types = role === 'attacker' ? ['Hit', 'Surge'] : ['Block', 'Evade'];
+  const types = role === 'attacker' ? ['Damage', 'Surge'] : ['Block', 'Evade'];
   const btns = types.map(t =>
     new ButtonBuilder()
       .setCustomId(`combat_token_${gameId}_wild_${t.toLowerCase()}`)
@@ -3686,7 +3857,7 @@ async function sendWildTypeWindow(thread, gameId, role) {
 /** Apply token bonus to combat state. isAttacker flag enables Unhinged Director +2. */
 function applyTokenBonus(combat, type, isAttacker) {
   const bonus = (isAttacker ? combat.attackerUnhingedBonus : combat.defenderUnhingedBonus) ? 2 : 1;
-  if (type === 'Hit')   combat.bonusHits  = (combat.bonusHits  || 0) + bonus;
+  if (type === 'Damage') combat.bonusHits  = (combat.bonusHits  || 0) + bonus;
   if (type === 'Surge') combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + bonus;
   if (type === 'Block') combat.bonusBlock = (combat.bonusBlock || 0) + bonus;
   if (type === 'Evade') combat.bonusEvade = (combat.bonusEvade || 0) + bonus;
@@ -3697,7 +3868,7 @@ async function sendPowerTokenChoicePrompt(thread, gameId, grants) {
   const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
   const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
   const countLabel = totalCount > 1 ? `${totalCount} tokens` : '1 token';
-  const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+  const btns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
     new ButtonBuilder()
       .setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`)
       .setLabel(t)
@@ -4111,12 +4282,12 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       const _ctsHeraDcName = dcNameFromFigureKey(_ctsHeraFk);
       const btns = [
         new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_acc`).setLabel('+2 Accuracy').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_hit`).setLabel('+1 Hit').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_hit`).setLabel('+1 Damage').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       ];
       await thread.send({
-        content: `**Call the Shots** (${_ctsHeraDcName}): Apply +2 Accuracy, +1 Hit, or +1 Surge to **${combat.attackerDcName}**'s attack?`,
+        content: `**Call the Shots** (${_ctsHeraDcName}): Apply +2 Accuracy, +1 Damage, or +1 Surge to **${combat.attackerDcName}**'s attack?`,
         components: [new ActionRowBuilder().addComponents(btns)],
       });
       saveGames?.();
@@ -4133,7 +4304,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     if ((hrEff?.specialAbilityIds || []).includes('heavy_repeater_paz') && (hrEff?.attack?.type === 'range' || combat.attackType === 'Ranged')) {
       combat.pendingCombatPassive = 'heavy_repeater';
       const btns = [
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_hit`).setLabel('+1 Hit (1 Strain)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_hit`).setLabel('+1 Damage (1 Strain)').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_blast`).setLabel('Blast 2 (1 Strain)').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_acc`).setLabel('+3 Accuracy (1 Strain)').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
@@ -4247,7 +4418,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
   // Dodge check (now AFTER rerolls and Defensive Stance conversion)
   if (combat.defenseRoll.dodge) {
     await thread.send('**DODGE!** The attack misses — all damage and effects negated.');
-    await sendReadyToResolveRolls(thread, game.gameId);
+    await sendReadyToResolveRolls(thread, game.gameId, game, ctx);
     return;
   }
 
@@ -4478,7 +4649,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     });
     return;
   }
-  await sendReadyToResolveRolls(thread, game.gameId);
+  await sendReadyToResolveRolls(thread, game.gameId, game, ctx);
 }
 
 /**
@@ -4674,7 +4845,7 @@ export async function handleCombatSurge(interaction, ctx) {
       }
       // Power token grants to attacker's figurePowerTokens
       if ((mod.surgeGrantHitToken || 0) > 0 && combat.attackerFigureKey) {
-        grantPowerTokens(game, combat.attackerFigureKey, 'Hit', mod.surgeGrantHitToken);
+        grantPowerTokens(game, combat.attackerFigureKey, 'Damage', mod.surgeGrantHitToken);
       }
       if ((mod.surgeGrantBlockToken || 0) > 0 && combat.attackerFigureKey) {
         grantPowerTokens(game, combat.attackerFigureKey, 'Block', mod.surgeGrantBlockToken);
@@ -4785,7 +4956,7 @@ export async function handleCombatSurge(interaction, ctx) {
   }
   if (combat.surgeRemaining <= 0 || choice === 'done') {
     combat.surgeRemaining = 0;
-    await sendReadyToResolveRolls(thread, gameId);
+    await sendReadyToResolveRolls(thread, gameId, game, ctx);
   } else {
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const remaining = combat.surgeRemaining || 0;
@@ -4860,7 +5031,7 @@ export async function handleCombatToken(interaction, ctx) {
   // Wild type resolution: combat_token_{gameId}_wild_{hit|surge|block|evade}
   if (role === 'wild') {
     if (!combat.pendingWildRole || combat.pendingWildTokenIndex == null) return;
-    const typeMap = { hit: 'Hit', surge: 'Surge', block: 'Block', evade: 'Evade' };
+    const typeMap = { damage: 'Damage', surge: 'Surge', block: 'Block', evade: 'Evade' };
     const resolvedType = typeMap[choice];
     if (!resolvedType) return;
     applyTokenBonus(combat, resolvedType, combat.pendingWildRole === 'attacker');
@@ -5133,10 +5304,10 @@ export async function handleCleaveTarget(interaction, ctx) {
 export async function handlePowerTokenChoice(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames } = ctx;
-  const match = interaction.customId.match(/^power_token_choice_([^_]+)_(hit|surge|block|evade)$/);
+  const match = interaction.customId.match(/^power_token_choice_([^_]+)_(damage|hit|surge|block|evade)$/);
   if (!match) { await interaction.followUp({ content: 'Invalid token choice.', ephemeral: true }).catch(discordCatch); return; }
   const [, gameId, typeRaw] = match;
-  const type = typeRaw[0].toUpperCase() + typeRaw.slice(1); // 'Hit', 'Surge', 'Block', 'Evade'
+  const type = typeRaw === 'damage' ? 'Damage' : typeRaw === 'hit' ? 'Damage' : typeRaw[0].toUpperCase() + typeRaw.slice(1); // 'Damage', 'Surge', 'Block', 'Evade'
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (!game.pendingPowerTokenGrant?.grants?.length) { await interaction.followUp({ content: 'No pending token grant found.', ephemeral: true }).catch(discordCatch); return; }
@@ -5298,7 +5469,7 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
 async function _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx) {
   const remaining = combat.surgeRemaining || 0;
   if (remaining <= 0 && getRogueOneDonors(game, combat).length === 0) {
-    await sendReadyToResolveRolls(thread, gameId);
+    await sendReadyToResolveRolls(thread, gameId, game, ctx);
     return;
   }
   const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
@@ -5800,7 +5971,7 @@ export async function handleZilloDiscard(interaction, ctx) {
 // ─── Power Token Overflow (G73) ─────────────────────────────────────────────
 
 /** Token-type emoji map for display. */
-const TOKEN_EMOJI = { Hit: '🔴', Surge: '⚡', Block: '🛡️', Evade: '🟢' };
+const TOKEN_EMOJI = { Damage: '🔴', Hit: '🔴', Surge: '⚡', Block: '🛡️', Evade: '🟢' };
 
 /**
  * Check whether game.pendingPowerTokenOverflow has any entries and, if so,

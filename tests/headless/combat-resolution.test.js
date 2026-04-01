@@ -170,6 +170,75 @@ describe('headless combat resolution', () => {
       'Diagonal-adjacent target: graph distance=1, not Manhattan=2');
   });
 
+  it('G65: MASSIVE figure excluded from figure blocking in buildAndSendAttackTargets', async () => {
+    // Layout on mos-eisley-outskirts:
+    //   P1 Stormtrooper (Elite) fig 0 at e2 (ranged attacker, maxRange=3)
+    //   P2 AT-RT at e3 (MASSIVE, 2x2 → footprint e3,f3,e4,f4) — interposed
+    //   P2 Stormtrooper (Regular) fig 0 at e5 (target, graph distance ≤3)
+    //
+    // G65 rule: MASSIVE figures are excluded from the figure-blocking set.
+    // Without the exemption, AT-RT cells (e3,e4) block LOS from e2 to e5.
+    // With the exemption, LOS passes through and target.hasLOS === true.
+    //
+    // We submit dc_attack_{msgId}_f0 to exercise the REAL buildAndSendAttackTargets
+    // (not the headless computeAttackTargets which uses null figure blocking).
+    const fh = createFlowHarness({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Stormtrooper (Elite)' }],
+      p2Army: [{ dcName: 'AT-RT' }, { dcName: 'Stormtrooper (Regular)' }],
+    });
+    const game = fh.getGame();
+    const dcMeta = fh.getDcMessageMeta();
+
+    // Set channel IDs so handlers can fetch channels
+    game.p1PlayAreaId = 'p1-play-area';
+    game.p2PlayAreaId = 'p2-play-area';
+    game.generalId = 'general-channel';
+
+    // Find P1's DC msgId
+    let p1MsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.playerNum === 1 && meta.gameId === game.gameId) { p1MsgId = msgId; break; }
+    }
+    assert.ok(p1MsgId, 'P1 DC msgId found');
+
+    // Pin all figure positions to controlled coords
+    const p1Figs = Object.keys(game.figurePositions[1]);
+    game.figurePositions[1][p1Figs[0]] = 'e2';
+    for (let i = 1; i < p1Figs.length; i++) game.figurePositions[1][p1Figs[i]] = `t${17 + i}`;
+
+    const p2Figs = Object.keys(game.figurePositions[2]);
+    const atrtFig = p2Figs.find(fk => fk.startsWith('AT-RT'));
+    const regularFigs = p2Figs.filter(fk => fk.startsWith('Stormtrooper (Regular)'));
+    assert.ok(atrtFig, 'AT-RT figure key found');
+    assert.ok(regularFigs.length >= 1, 'Stormtrooper (Regular) figure keys found');
+
+    game.figurePositions[2][atrtFig] = 'e3';
+    game.figureOrientations = game.figureOrientations || {};
+    game.figureOrientations[atrtFig] = '2x2';
+    game.figurePositions[2][regularFigs[0]] = 'e5';
+    for (let i = 1; i < regularFigs.length; i++) game.figurePositions[2][regularFigs[i]] = `s${15 + i}`;
+
+    // Activate P1's DC
+    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
+    assert.ok(activateAction, 'P1 has activate action');
+    await fh.act(activateAction.customId, 'player1');
+
+    // Submit dc_attack_ to trigger real buildAndSendAttackTargets (not headless shortcut)
+    const harness = fh.getHarness();
+    await harness.submitAction(`dc_attack_${p1MsgId}_f0`, 'player1');
+
+    // Verify handler-computed targets
+    const targetKey = `${p1MsgId}_0`;
+    const targets = game.attackTargets?.[targetKey];
+    assert.ok(targets, `attackTargets[${targetKey}] populated by buildAndSendAttackTargets`);
+
+    const targetAtE5 = targets.find(t => String(t.coord).toLowerCase() === 'e5');
+    assert.ok(targetAtE5, 'Stormtrooper (Regular) at e5 appears in attack targets');
+    assert.strictEqual(targetAtE5.hasLOS, true,
+      'G65: MASSIVE AT-RT at e3 must NOT block LOS from e2 to e5 — figure excluded from blocking set');
+  });
+
   it('VP award triggers game end at 40', async () => {
     const { game, deps } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])

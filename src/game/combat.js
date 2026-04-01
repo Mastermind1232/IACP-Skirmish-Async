@@ -75,14 +75,14 @@ export function getInnateRerolls(dcName) {
 
 /** Display labels for surge abilities (subset; raw key used if missing). */
 export const SURGE_LABELS = {
-  'damage 1': '+1 Hit', 'damage 2': '+2 Hits', 'damage 3': '+3 Hits',
+  'damage 1': '+1 Damage', 'damage 2': '+2 Damage', 'damage 3': '+3 Damage',
   'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3',
   'accuracy 1': '+1 Accuracy', 'accuracy 2': '+2 Accuracy', 'accuracy 3': '+3 Accuracy',
   'stun': 'Stun', 'weaken': 'Weaken', 'bleed': 'Bleed', 'hide': 'Hide', 'focus': 'Focus',
   'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3',
   'cleave 1': 'Cleave 1', 'cleave 2': 'Cleave 2', 'cleave X': 'Cleave X', 'recover X': 'Recover X',
-  '+1 hit': '+1 Hit', '+2 hits': '+2 Hits', '+1 hit, stun': '+1 Hit, Stun', '+1 hit, pierce 1': '+1 Hit, Pierce 1',
-  'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Hits, Hide',
+  '+1 hit': '+1 Damage', '+2 hits': '+2 Damage', '+1 hit, stun': '+1 Damage, Stun', '+1 hit, pierce 1': '+1 Damage, Pierce 1',
+  'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Damage, Hide',
   'agitate': 'Agitate', 'fell_swoop': 'Fell Swoop', 'mastery': 'Mastery', 'interrogate': 'Interrogate',
   'utinni_vp_1': 'Utinni! (+1 VP)',
   'autofire_chain': 'Chain Attack (within 3)',
@@ -91,6 +91,8 @@ export const SURGE_LABELS = {
   'gain 1': '+1 VP',
   'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1',
   'evade token': 'Gain Evade Token',
+  'hit token': 'Gain Damage Token',
+  'hit token 2': 'Gain 2 Damage Tokens',
 };
 
 /** Get attacker's surge abilities from dc-effects + combat.bonusSurgeAbilities (CCs like Spinning Kick).

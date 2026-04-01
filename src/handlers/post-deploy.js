@@ -693,24 +693,32 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
           playerNum: ability.playerNum,
           figureKey: ability.figureKey,
           tokenRemaining: 4,
+          alreadyReceived: [],
         };
         await _startNextMovement(game, gameId, client, ctx);
       } else if (adjFriendlies.length === 1) {
-        // Only one adjacent — auto-pick
+        // Only one adjacent — auto-pick, then let player choose movement order
         const friend = adjFriendlies[0];
-        stMoveFigures.push({ figureKey: friend.figureKey, dcName: friend.dcName, mp: 2 });
         await logGameAction(game, client, `⚡ **Strike Team** — **${ability.dcName}** and **${friend.dcName}** each gain **2 MP**.`, { phase: 'ROUND', icon: 'deployed' });
         game.postDeployQueue.activeAbility = {
           abilityId: 'strike_team',
           abilityLabel: 'Strike Team',
-          step: 'movement',
-          moveFigures: stMoveFigures,
-          currentFigureIdx: 0,
+          step: 'order_pick',
+          cassianMoveFigure: stMoveFigures[0],
+          friendMoveFigure: { figureKey: friend.figureKey, dcName: friend.dcName, mp: 2 },
           playerNum: ability.playerNum,
           figureKey: ability.figureKey,
           tokenRemaining: 4,
+          alreadyReceived: [],
         };
-        await _startNextMovement(game, gameId, client, ctx);
+        const orderBtns = [
+          new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${ability.playerNum}_cassian`).setLabel(`Move ${ability.dcName} first`).setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${ability.playerNum}_friend`).setLabel(`Move ${friend.dcName} first`).setStyle(ButtonStyle.Primary),
+        ];
+        await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose who moves first:`, {
+          components: [new ActionRowBuilder().addComponents(orderBtns)],
+          allowedMentions: { users: [ownerId] },
+        });
       } else {
         // Multiple adjacent — player picks
         game.postDeployQueue.activeAbility = {
@@ -721,6 +729,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
           tokenRemaining: 4,
           playerNum: ability.playerNum,
           figureKey: ability.figureKey,
+          alreadyReceived: [],
         };
         const btns = adjFriendlies.map(f => new ButtonBuilder()
           .setCustomId(`pd_strike_adj_${gameId}_${ability.playerNum}_${f.figureKey}`)
@@ -797,7 +806,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       );
       const eligible = [];
       for (const [fk, fpos] of Object.entries(game.figurePositions?.[ability.playerNum] || {})) {
-        if (!fpos || fk === ability.figureKey) continue;
+        if (!fpos) continue;
         const dist = countSpaces(_adMs, kotunPos, fpos, _adClosedDoorEdges);
         if (dist <= 3) {
           eligible.push(fk);
@@ -920,7 +929,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
   }
 }
 
-// ── Strike Team: Hit Token distribution ──────────────────────────────────────
+// ── Strike Team: Damage Token distribution ──────────────────────────────────────
 
 async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction) {
   const active = game.postDeployQueue?.activeAbility;
@@ -933,10 +942,12 @@ async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGa
   const dzSpaces = (dzData?.[mapId]?.[zone] || []).map(s => String(s).toLowerCase());
   const dzSet = new Set(dzSpaces);
 
-  // Find friendlies outside deployment zone
+  // Find friendlies outside deployment zone (exclude figures that already received a token)
+  const alreadyReceivedSet = new Set(active.alreadyReceived || []);
   const outsideZone = [];
   for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
     if (!pos) continue;
+    if (alreadyReceivedSet.has(fk)) continue;
     if (!dzSet.has(String(pos).toLowerCase())) {
       outsideZone.push({ figureKey: fk, dcName: dcNameFromFigureKey(fk) });
     }
@@ -960,7 +971,7 @@ async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGa
     .setStyle(ButtonStyle.Secondary)
   );
   const rows = chunkButtonsToRows(btns);
-  await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose up to **${active.tokenRemaining}** friendly figure(s) outside your deployment zone to gain **1 Hit Token** each:`, {
+  await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose up to **${active.tokenRemaining}** friendly figure(s) outside your deployment zone to gain **1 Damage Token** each:`, {
     components: rows,
     allowedMentions: { users: [ownerId] },
   });
@@ -1255,19 +1266,60 @@ export async function handleStrikeTeamAdjPick(interaction, ctx) {
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
-  // Set up movement for both Cassian and chosen friend
+  // Let player choose movement order
   if (active) {
     const cassianMove = active.cassianMoveFigure || { figureKey: cassianFk, dcName: cassianName, mp: 2 };
-    active.step = 'movement';
-    active.moveFigures = [cassianMove, { figureKey: friendFk, dcName: friendDcName, mp: 2 }];
-    active.currentFigureIdx = 0;
-    await _startNextMovement(game, gameId, client, ctx);
+    active.step = 'order_pick';
+    active.cassianMoveFigure = cassianMove;
+    active.friendMoveFigure = { figureKey: friendFk, dcName: friendDcName, mp: 2 };
+    const ownerId = getPlayerId(game, playerNum);
+    const orderBtns = [
+      new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${playerNum}_cassian`).setLabel(`Move ${cassianName} first`).setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${playerNum}_friend`).setLabel(`Move ${friendDcName} first`).setStyle(ButtonStyle.Primary),
+    ];
+    await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose who moves first:`, {
+      components: [new ActionRowBuilder().addComponents(orderBtns)],
+      allowedMentions: { users: [ownerId] },
+    });
   }
   saveGames();
 }
 
 /**
- * Strike Team: player picks a figure outside deployment zone for Hit Token.
+ * Strike Team: player chooses movement order (Cassian first or friend first).
+ */
+export async function handleStrikeTeamOrderPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
+  const parts = splitCustomId(interaction.customId, 'pd_strike_order_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const choice = parts[2]; // 'cassian' or 'friend'
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const active = game.postDeployQueue?.activeAbility;
+  if (!active || active.abilityId !== 'strike_team' || active.step !== 'order_pick') return;
+
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  const cassianMove = active.cassianMoveFigure;
+  const friendMove = active.friendMoveFigure;
+  active.step = 'movement';
+  active.moveFigures = choice === 'friend'
+    ? [friendMove, cassianMove]
+    : [cassianMove, friendMove];
+  active.currentFigureIdx = 0;
+  await _startNextMovement(game, gameId, client, ctx);
+  saveGames();
+}
+
+/**
+ * Strike Team: player picks a figure outside deployment zone for Damage Token.
  */
 export async function handleStrikeTeamTokenPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
@@ -1287,10 +1339,12 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
   if (!active || active.abilityId !== 'strike_team') return;
 
   const dcName = dcNameFromFigureKey(figureKey);
-  grantPowerTokens(game, figureKey, 'Hit', 1);
+  grantPowerTokens(game, figureKey, 'Damage', 1);
   active.tokenRemaining -= 1;
+  if (!active.alreadyReceived) active.alreadyReceived = [];
+  active.alreadyReceived.push(figureKey);
 
-  await logGameAction(game, client, `⚡ **Strike Team** — **${dcName}** gains **1 Hit Token** (${active.tokenRemaining} remaining).`, { phase: 'ROUND', icon: 'deployed' });
+  await logGameAction(game, client, `⚡ **Strike Team** — **${dcName}** gains **1 Damage Token** (${active.tokenRemaining} remaining).`, { phase: 'ROUND', icon: 'deployed' });
   if (game.pendingPowerTokenOverflow?.length > 0) {
     await sendPowerTokenOverflowUI(game, gameId, interaction.channel, playerNum, saveGames);
   }
@@ -1307,7 +1361,7 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
 }
 
 /**
- * Strike Team: player is done distributing Hit Tokens.
+ * Strike Team: player is done distributing Damage Tokens.
  */
 export async function handleStrikeTeamTokenDone(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
@@ -1539,10 +1593,10 @@ export async function handleArmsDistFigPick(interaction, ctx) {
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
-  const tokenBtns = ['Hit', 'Surge', 'Block', 'Evade'].map(t => new ButtonBuilder()
+  const tokenBtns = ['Damage', 'Surge', 'Block', 'Evade'].map(t => new ButtonBuilder()
     .setCustomId(`pd_arms_dist_token_${gameId}_${playerNum}_${t}`)
     .setLabel(t)
-    .setStyle(t === 'Hit' || t === 'Surge' ? ButtonStyle.Danger : ButtonStyle.Primary)
+    .setStyle(t === 'Damage' || t === 'Surge' ? ButtonStyle.Danger : ButtonStyle.Primary)
   );
   await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — Choose a Power Token type for **${dcName}**:`, {
     components: [new ActionRowBuilder().addComponents(tokenBtns)],
@@ -1558,7 +1612,7 @@ export async function handleArmsDistTokenPick(interaction, ctx) {
   const parts = splitCustomId(interaction.customId, 'pd_arms_dist_token_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
-  const tokenType = parts[2]; // 'Hit', 'Surge', 'Block', or 'Evade'
+  const tokenType = parts[2]; // 'Damage', 'Surge', 'Block', or 'Evade'
 
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;

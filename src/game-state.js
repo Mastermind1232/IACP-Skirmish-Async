@@ -125,6 +125,16 @@ function migrateGame(g) {
   if (g.player1Squad?.ccList) sanitizeCcNames(g.player1Squad.ccList);
   if (g.player2Squad?.ccList) sanitizeCcNames(g.player2Squad.ccList);
 
+  // Migrate 'Hit' power tokens to 'Damage' (renamed for IACP correctness)
+  if (g.figurePowerTokens) {
+    for (const fk of Object.keys(g.figurePowerTokens)) {
+      const arr = g.figurePowerTokens[fk];
+      if (Array.isArray(arr)) {
+        for (let i = 0; i < arr.length; i++) { if (arr[i] === 'Hit') arr[i] = 'Damage'; }
+      }
+    }
+  }
+
   ensureGameShape(g);
 }
 

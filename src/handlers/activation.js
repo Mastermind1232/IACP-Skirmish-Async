@@ -332,7 +332,7 @@ export async function handlePassActivationTurn(interaction, ctx) {
         passRows.push(new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`pass_activation_turn_${gameId}`)
-            .setLabel('Pass turn to opponent')
+            .setLabel(`Pass (opponent has ${justPassedRem - newCurrentRem} more activation${justPassedRem - newCurrentRem !== 1 ? 's' : ''} than you)`)
             .setStyle(ButtonStyle.Secondary)
         ));
       }
@@ -690,6 +690,32 @@ export async function handleEndTurn(interaction, ctx) {
     await logGameAction(game, client, `🛡️ **Hold the Line** — **${meta.displayName || 'Baze Malbus'}** gained **${_htlBlockCount} Block Token${_htlBlockCount !== 1 ? 's' : ''}** (${_htlBlockCount} hostile${_htlBlockCount !== 1 ? 's' : ''} with LOS).`, { phase: 'ROUND', icon: 'activate' });
   }
 
+  // Trust Goes Both Ways (Jyn Erso): end-of-activation trigger (limit once per round, shared with start-of-activation)
+  {
+    const _tgbwEff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((_tgbwEff?.specialAbilityIds || []).includes('trust_goes_both_ways_jyn')) {
+      const _tgbwRoundKey = `trustBothWays_${dcMsgId}`;
+      if (!game.roundFigureAbilityUsed?.[_tgbwRoundKey]) {
+        const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _tgbwSelfFk = `${meta.dcName}-${_tgbwDgIndex}-0`;
+        const _tgbwSelfPos = game.figurePositions?.[meta.playerNum]?.[_tgbwSelfFk];
+        const _tgbwFriendlies = _tgbwSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
+          .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && _countGameSpaces(game, _tgbwSelfPos, fp) <= 1) : [];
+        if (_tgbwFriendlies.length > 0) {
+          const ownerId = getPlayerId(game, meta.playerNum);
+          const btns = _tgbwFriendlies.slice(0, 4).map(([fk]) =>
+            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${dcMsgId}_trustboth_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+          );
+          btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${dcMsgId}_trustboth_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+          await logGameAction(game, client, `<@${ownerId}> 🤝 **Trust Goes Both Ways** (end of activation) — Choose an adjacent friendly figure. You and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`, {
+            components: chunkButtonsToRows(btns),
+            allowedMentions: { users: [ownerId] },
+          });
+        }
+      }
+    }
+  }
+
   const actionsData = game.dcActionsData?.[dcMsgId];
   if (actionsData?.threadId) {
     try {
@@ -777,7 +803,7 @@ export async function handleEndTurn(interaction, ctx) {
         passRows.push(new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`pass_activation_turn_${gameId}`)
-            .setLabel('Pass turn to opponent')
+            .setLabel(`Pass (opponent has ${justActedRem - newCurrentRem} more activation${justActedRem - newCurrentRem !== 1 ? 's' : ''} than you)`)
             .setStyle(ButtonStyle.Secondary)
         ));
       }
@@ -924,7 +950,7 @@ export async function handleDcEndActivation(interaction, ctx) {
         passRows.push(new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`pass_activation_turn_${gameId}`)
-            .setLabel('Pass turn to opponent')
+            .setLabel(`Pass (opponent has ${justActedRem - newCurrentRem} more activation${justActedRem - newCurrentRem !== 1 ? 's' : ''} than you)`)
             .setStyle(ButtonStyle.Secondary)
         ));
       }
@@ -1372,7 +1398,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
     if (selfPos) {
       const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
-        .filter(([fk, fp]) => fk !== selfFk && fp && _countGameSpaces(game, selfPos, fp) <= 3);
+        .filter(([fk, fp]) => fp && _countGameSpaces(game, selfPos, fp) <= 3);
       if (friendlyFigs.length > 0) {
         const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
           const label = dcNameFromFigureKey(fk);
@@ -1425,7 +1451,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
       const _awrRange = cardNameIncludes(_awrAtts, 'Advanced Com Systems') ? 3 : 2;
       const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
-        .filter(([fk, fp]) => fk !== selfFk && fp && _countGameSpaces(game, selfPos, fp) <= _awrRange);
+        .filter(([fk, fp]) => fp && _countGameSpaces(game, selfPos, fp) <= _awrRange);
       if (friendlyFigs.length > 0) {
         const btns = friendlyFigs.slice(0, 3).map(([fk]) => {
           const label = dcNameFromFigureKey(fk);
@@ -1434,7 +1460,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         const awrRow = new ActionRowBuilder().addComponents(btns);
         game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
-        await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within ${_awrRange} spaces to grant a **Hit Token** or **Surge Token**:`, components: [awrRow] }).catch(discordCatch);
+        await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within ${_awrRange} spaces to grant a **Damage Token** or **Surge Token**:`, components: [awrRow] }).catch(discordCatch);
       } else {
         await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within ${_awrRange} spaces.` }).catch(discordCatch);
       }
@@ -1538,7 +1564,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     const _dkDioPos = _dkDioFk ? game.figurePositions[meta.playerNum][_dkDioFk] : null;
     if (_dkSelfPos && _dkDioPos && String(_dkSelfPos).toLowerCase() === String(_dkDioPos).toLowerCase()) {
       const dkRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_hit`).setLabel('Hit Token').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_damage`).setLabel('Damage Token').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_surge`).setLabel('Surge Token').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_block`).setLabel('Block Token').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_evade`).setLabel('Evade Token').setStyle(ButtonStyle.Secondary),
@@ -1600,7 +1626,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     const _llpFriendlies = _llpSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
       .filter(([fk, fp]) => fp && _countGameSpaces(game, _llpSelfPos, fp) <= 3) : [];
     if (_llpFriendlies.length > 0 && roundNum > 0) {
-      game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: roundNum, ability: 'longlaid', tokenTypes: ['Hit', 'Block', 'Surge', 'Evade'] };
+      game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: roundNum, ability: 'longlaid', tokenTypes: ['Damage', 'Block', 'Surge', 'Evade'] };
       const btns = _llpFriendlies.map(([fk]) =>
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
       );
@@ -1705,7 +1731,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     const _adFriendlies = _adSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
       .filter(([fk, fp]) => fp && _countGameSpaces(game, _adSelfPos, fp) <= 3) : [];
     if (_adFriendlies.length > 0) {
-      game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: 2, ability: 'armsdist', tokenTypes: ['Hit', 'Block'] };
+      game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: 2, ability: 'armsdist', tokenTypes: ['Damage', 'Block'] };
       const btns = _adFriendlies.slice(0, 4).map(([fk]) =>
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
       );
@@ -1715,21 +1741,24 @@ export async function handleConfirmActivate(interaction, ctx) {
       await thread.send({ content: `🎯 **Arms Distribution** — No friendly figures within 3 spaces.` }).catch(discordCatch);
     }
   }
-  // Trust Goes Both Ways (Jyn Erso): choose a friendly within 3 to gain 1 MP
+  // Trust Goes Both Ways (Jyn Erso): choose adjacent friendly; you and that figure Recover 1 Damage and gain 1 Surge Token. Limit once per round.
   if (_mountedIds.includes('trust_goes_both_ways_jyn')) {
-    const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const _tgbwSelfFk = `${meta.dcName}-${_tgbwDgIndex}-0`;
-    const _tgbwSelfPos = game.figurePositions?.[meta.playerNum]?.[_tgbwSelfFk];
-    const _tgbwFriendlies = _tgbwSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
-      .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && _countGameSpaces(game, _tgbwSelfPos, fp) <= 3) : [];
-    if (_tgbwFriendlies.length > 0) {
-      const btns = _tgbwFriendlies.slice(0, 4).map(([fk]) =>
-        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
-      );
-      btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🤝 **Trust Goes Both Ways** — Choose a friendly figure within 3 spaces to gain **1 MP**:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
-    } else {
-      await thread.send({ content: `🤝 **Trust Goes Both Ways** — No friendly figures within 3 spaces.` }).catch(discordCatch);
+    const _tgbwRoundKey = `trustBothWays_${msgId}`;
+    if (!game.roundFigureAbilityUsed?.[_tgbwRoundKey]) {
+      const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _tgbwSelfFk = `${meta.dcName}-${_tgbwDgIndex}-0`;
+      const _tgbwSelfPos = game.figurePositions?.[meta.playerNum]?.[_tgbwSelfFk];
+      const _tgbwFriendlies = _tgbwSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
+        .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && _countGameSpaces(game, _tgbwSelfPos, fp) <= 1) : [];
+      if (_tgbwFriendlies.length > 0) {
+        const btns = _tgbwFriendlies.slice(0, 4).map(([fk]) =>
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+        );
+        btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        await thread.send({ content: `🤝 **Trust Goes Both Ways** — Choose an adjacent friendly figure. You and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+      } else {
+        await thread.send({ content: `🤝 **Trust Goes Both Ways** — No adjacent friendly figures.` }).catch(discordCatch);
+      }
     }
   }
   // Dead Precise (Ko-Tun): +2 Accuracy if didn't move this activation
@@ -2475,7 +2504,7 @@ export async function handleActPassive(interaction, ctx) {
       game.pendingAwr.targetFk = choice;
       const targetDcName = dcNameFromFigureKey(choice);
       const tokenRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_hit`).setLabel('Hit Token').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_damage`).setLabel('Damage Token').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_surge`).setLabel('Surge Token').setStyle(ButtonStyle.Primary),
       );
       await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}**: Choose token type:`, components: [tokenRow] }).catch(discordCatch);
@@ -2484,7 +2513,7 @@ export async function handleActPassive(interaction, ctx) {
     const targetFk = game.pendingAwr?.targetFk;
     if (!targetFk) return;
     const targetDcName = dcNameFromFigureKey(targetFk);
-    const tokenType = choice === 'hit' ? 'Hit' : 'Surge';
+    const tokenType = choice === 'damage' ? 'Damage' : 'Surge';
     grantPowerTokens(game, targetFk, tokenType, 1);
     delete game.pendingAwr;
     await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
@@ -2506,7 +2535,7 @@ export async function handleActPassive(interaction, ctx) {
       game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
       game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: meta.dcName, count: 1 }], channelId: interaction.channelId, playerNum: meta.playerNum };
       const { ActionRowBuilder: AR, ButtonBuilder: BB, ButtonStyle: BS } = await import('discord.js');
-      const tokenBtns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+      const tokenBtns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
         new BB().setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(BS.Secondary)
       );
       await interaction.message.edit({ content: `🧠 **Open-Minded** — **${displayName}**: Choose Power Token type:`, components: [new AR().addComponents(tokenBtns)] }).catch(discordCatch);
@@ -2681,6 +2710,8 @@ export async function handleActPassive(interaction, ctx) {
     } else {
       const targetFk = choice;
       const targetDcName = dcNameFromFigureKey(targetFk);
+      const { figureIndex: targetFigIdx } = parseFigureKey(targetFk);
+      // Find target's msgId for health state
       let targetMsgId = null;
       for (const [mId, mMeta] of dcMessageMeta) {
         if (mMeta.gameId !== gameId) continue;
@@ -2689,14 +2720,30 @@ export async function handleActPassive(interaction, ctx) {
           break;
         }
       }
+      // Self (Jyn) figure key
+      const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const selfFk = `${meta.dcName}-${_tgbwDgIndex}-0`;
+      // Recover 1 Damage from Jyn
+      const selfHeal = healHp(dcHealthState, game, msgId, 0, 1, meta.playerNum);
+      // Recover 1 Damage from target
+      let targetHeal = { healed: 0 };
       if (targetMsgId) {
-        game.movementBank = game.movementBank || {};
-        game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
-        game.movementBank[targetMsgId].total += 1;
-        game.movementBank[targetMsgId].remaining += 1;
+        targetHeal = healHp(dcHealthState, game, targetMsgId, targetFigIdx, 1, meta.playerNum);
       }
-      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — **${targetDcName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
-      await logGameAction?.(game, client, `**Trust Goes Both Ways** (Jyn Erso) — ${targetDcName} gained 1 MP.`, { phase: 'ACTIVATION', icon: 'activate' });
+      // Grant 1 Surge Token to both
+      grantPowerTokens(game, selfFk, 'Surge', 1);
+      grantPowerTokens(game, targetFk, 'Surge', 1);
+      // Mark once-per-round
+      const _tgbwRoundKey = `trustBothWays_${msgId}`;
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[_tgbwRoundKey] = true;
+      const selfName = meta.displayName || meta.dcName;
+      const parts = [];
+      if (selfHeal.healed > 0) parts.push(`**${selfName}** recovered 1 Damage`);
+      if (targetHeal.healed > 0) parts.push(`**${targetDcName}** recovered 1 Damage`);
+      parts.push(`both gained **1 Surge Token**`);
+      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — ${parts.join('; ')}.`, components: [] }).catch(discordCatch);
+      await logGameAction?.(game, client, `**Trust Goes Both Ways** (Jyn Erso) — ${parts.join('; ')}.`, { phase: 'ACTIVATION', icon: 'activate' });
     }
   // --- Token Distribution: used by Arms Distribution and Long-Laid Plans ---
   } else if (ability === 'tokendist') {
@@ -3187,7 +3234,7 @@ export async function handleActPassive(interaction, ctx) {
     if (choice === 'skip') {
       await interaction.message.edit({ content: `🤖 **Droid Kit** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
-      const tokenMap = { hit: 'Hit', surge: 'Surge', block: 'Block', evade: 'Evade' };
+      const tokenMap = { damage: 'Damage', surge: 'Surge', block: 'Block', evade: 'Evade' };
       const tokenType = tokenMap[choice];
       if (tokenType) {
         const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -3216,9 +3263,9 @@ export async function handleActPassive(interaction, ctx) {
       game.figurePowerTokens[targetFk] = game.figurePowerTokens[targetFk] || [];
       const cap = getMaxPowerTokens(targetFk);
       if (game.figurePowerTokens[targetFk].length < cap) {
-        game.figurePowerTokens[targetFk].push('Hit');
-        await interaction.message.edit({ content: `🗣️ **Conspire** — **${targetDcName}** gained **1 Focus (Hit) Token**.`, components: [] }).catch(discordCatch);
-        await logGameAction?.(game, client, `🗣️ **Conspire** — **${targetDcName}** gained 1 Focus (Hit) Token.`, { phase: 'ACTIVATION', icon: 'activate' });
+        game.figurePowerTokens[targetFk].push('Damage');
+        await interaction.message.edit({ content: `🗣️ **Conspire** — **${targetDcName}** gained **1 Focus (Damage) Token**.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `🗣️ **Conspire** — **${targetDcName}** gained 1 Focus (Damage) Token.`, { phase: 'ACTIVATION', icon: 'activate' });
       } else {
         await interaction.message.edit({ content: `🗣️ **Conspire** — **${targetDcName}** is at max tokens (${cap}). No token gained.`, components: [] }).catch(discordCatch);
       }

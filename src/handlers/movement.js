@@ -805,7 +805,7 @@ export async function handleMovePick(interaction, ctx) {
       }
     }
   }
-  // Cassian Said I Had To (K-2S0): when a friendly LEADER enters an adjacent space, gain up to 1 Hit Token (once per round)
+  // Cassian Said I Had To (K-2S0): when a friendly LEADER enters an adjacent space, gain up to 1 Damage Token (once per round)
   {
     const csMapId = game.selectedMap?.id;
     const csEffects = getDcEffects();
@@ -829,9 +829,9 @@ export async function handleMovePick(interaction, ctx) {
         game.figurePowerTokens = game.figurePowerTokens || {};
         game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
         if (game.figurePowerTokens[fk].length < getMaxPowerTokens(fk)) {
-          game.figurePowerTokens[fk].push('Hit');
+          game.figurePowerTokens[fk].push('Damage');
           if (logGameAction) {
-            await logGameAction(game, client, `**Cassian Said I Had To** — **${csDcName}** gained a Hit token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'attack' });
+            await logGameAction(game, client, `**Cassian Said I Had To** — **${csDcName}** gained a Damage Token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'attack' });
           }
         }
       }

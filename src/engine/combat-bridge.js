@@ -589,7 +589,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const _llGain = Math.min(2, 3 - _llCurrent);
             if (_llGain > 0) {
               game.pendingPowerTokenGrant = { grants: [{ figureKey: _llFk, figName: combat.attackerDcName, count: _llGain }], channelId: combat.combatThreadId, playerNum: attackerPlayerNum };
-              const _llBtns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+              const _llBtns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
                 new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
               );
               await thread.send({
@@ -1721,15 +1721,15 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
   }
 
-  // Stalk Prey: attacker gains +2 MP and +1 Hit Token after attack resolves
+  // Stalk Prey: attacker gains +2 MP and +1 Damage Token after attack resolves
   if (hit && combat.surgeStalkPrey && combat.attackerMsgId) {
     game.movementBank = game.movementBank || {};
     const spBank = game.movementBank[combat.attackerMsgId] || { total: 0, remaining: 0 };
     spBank.total = (spBank.total ?? 0) + 2;
     spBank.remaining = (spBank.remaining ?? 0) + 2;
     game.movementBank[combat.attackerMsgId] = spBank;
-    grantPowerTokens(game, combat.attackerFigureKey, 'Hit', 1);
-    await logGameAction(game, client, `**Stalk Prey** — **${combat.attackerDcName}** gained +2 MP and +1 Hit Token`, { phase: 'ROUND', icon: 'card' });
+    grantPowerTokens(game, combat.attackerFigureKey, 'Damage', 1);
+    await logGameAction(game, client, `**Stalk Prey** — **${combat.attackerDcName}** gained +2 MP and +1 Damage Token`, { phase: 'ROUND', icon: 'card' });
     await deps.ensureMovementBankMessage(game, combat.attackerMsgId, client);
     embedRefreshMsgIds.add(combat.attackerMsgId);
     delete combat.surgeStalkPrey;

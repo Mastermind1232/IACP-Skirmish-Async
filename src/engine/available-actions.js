@@ -1033,6 +1033,20 @@ function getCombatActions(game, playerNum, deps) {
     return [];
   }
 
+  // Combat sub-phase gate — both players must confirm between combat steps
+  if (combat.combatGate) {
+    const gate = combat.combatGate;
+    const isReady = playerNum === 1 ? gate.p1Ready : gate.p2Ready;
+    if (!isReady) {
+      actions.push({
+        type: ACTION_TYPES.COMBAT_GATE,
+        customId: buildCustomId(ACTION_TYPES.COMBAT_GATE, { gameId }),
+        description: `Combat gate: ${gate.phase}`,
+      });
+    }
+    return actions;
+  }
+
   // Combat ready check — both players must confirm
   if (!combat.p1Ready || !combat.p2Ready) {
     const isReady = playerNum === 1 ? combat.p1Ready : combat.p2Ready;

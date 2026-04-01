@@ -605,7 +605,7 @@ export function resolveAbility(abilityId, context) {
     // Helper: add Hit tokens to a figure key — overflow handled by grantPowerTokens
     function addHitToken(fk, n) {
       if (n <= 0) return;
-      grantPowerTokens(game, fk, 'Hit', n);
+      grantPowerTokens(game, fk, 'Damage', n);
     }
     // Second call: apply effects to self + chosen target
     if (choiceIndex != null && targetFigureKey) {
@@ -639,8 +639,8 @@ export function resolveAbility(abilityId, context) {
         parts.push(`${dcNameFromFigureKey(targetFigureKey)} recovered ${recoverTarget} Damage`);
       }
       // Hit tokens
-      if (hitTokenSelf > 0) { const sfk = activatingKeys[0]; if (sfk) { addHitToken(sfk, hitTokenSelf); parts.push(`you gained ${hitTokenSelf} Hit Token`); } }
-      if (hitTokenTarget > 0) { addHitToken(targetFigureKey, hitTokenTarget); parts.push(`${dcNameFromFigureKey(targetFigureKey)} gained ${hitTokenTarget} Hit Token`); }
+      if (hitTokenSelf > 0) { const sfk = activatingKeys[0]; if (sfk) { addHitToken(sfk, hitTokenSelf); parts.push(`you gained ${hitTokenSelf} Damage Token`); } }
+      if (hitTokenTarget > 0) { addHitToken(targetFigureKey, hitTokenTarget); parts.push(`${dcNameFromFigureKey(targetFigureKey)} gained ${hitTokenTarget} Damage Token`); }
       // Power Token grant (player chooses type via pendingPowerTokenGrant)
       if (powerTokenTarget > 0) {
         const tName = dcNameFromFigureKey(targetFigureKey);
@@ -846,7 +846,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // tempt (Emperor Palpatine): choose any figure within 4 spaces; 1 damage + 1 Hit Token
+  // tempt (Emperor Palpatine): choose any figure within 4 spaces; 1 damage + 1 Damage Token
   if (abilityId === 'tempt') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Tempt** manually.' };
@@ -854,9 +854,9 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       // Apply 1 damage to target (direct damage — reduce HP)
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      // Grant 1 Hit Token to target
-      grantPowerTokens(game, targetFigureKey, 'Hit', 1);
-      return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage and gains 1 Hit Token. *(Apply 1 damage manually via HP buttons.)*`, refreshDcEmbed: true };
+      // Grant 1 Damage Token to target
+      grantPowerTokens(game, targetFigureKey, 'Damage', 1);
+      return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage and gains 1 Damage Token. *(Apply 1 damage manually via HP buttons.)*`, refreshDcEmbed: true };
     }
     // Enumerate all figures (friendly + hostile) within 4 spaces except self
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -1453,17 +1453,17 @@ export function resolveAbility(abilityId, context) {
     const fk = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     if (!fk) return { applied: false, manualMessage: '**Continually Unexpected** — No figure found.' };
     const tokens = game.figurePowerTokens?.[fk] || [];
-    const hitCount = tokens.filter(t => t === 'Hit').length;
+    const hitCount = tokens.filter(t => t === 'Damage' || t === 'Hit').length;
     const surgeCount = tokens.filter(t => t === 'Surge').length;
     if (hitCount + surgeCount < 2) {
-      return { applied: false, manualMessage: `**Continually Unexpected** — Need 2 Hit/Surge Tokens (have ${hitCount} Hit + ${surgeCount} Surge).` };
+      return { applied: false, manualMessage: `**Continually Unexpected** — Need 2 Damage/Surge Tokens (have ${hitCount} Damage + ${surgeCount} Surge).` };
     }
     // Grant free Ranged attack using own attack pool
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
     game.pendingOverrideAttackDice[msgId] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
-    return { applied: true, logMessage: `**Continually Unexpected** — K-2S0 has ${hitCount} Hit + ${surgeCount} Surge Tokens. Your next attack costs no action and is **Ranged** (uses your normal dice pool). *(Token requirement met — no tokens consumed.)*` };
+    return { applied: true, logMessage: `**Continually Unexpected** — K-2S0 has ${hitCount} Damage + ${surgeCount} Surge Tokens. Your next attack costs no action and is **Ranged** (uses your normal dice pool). *(Token requirement met — no tokens consumed.)*` };
   }
 
   // false_orders (Murne Rin): choose a hostile figure (cost ≤ 4, within 4 spaces); perform move or attack with it
@@ -2227,7 +2227,7 @@ export function resolveAbility(abilityId, context) {
         if (!pos) continue;
         const dist = _countGameSpaces(game, activatingPos, pos);
         if (dist > maxRange) continue;
-        if (requiresLos && typeof losCheck === 'function' && !losCheck(activatingPos, pos, mapId)) continue;
+        if (requiresLos && typeof losCheck === 'function' && !losCheck(activatingPos, pos, getMapSpaces(mapId))) continue;
         validTargets.push({ figureKey: fk, dist });
       }
       if (validTargets.length === 0) return { applied: false, manualMessage: `No hostile figures within ${maxRange} spaces${requiresLos ? ' and LOS' : ''}. **${entry.label}** has no valid targets.` };
@@ -2879,11 +2879,11 @@ export function resolveAbility(abilityId, context) {
         requiresChoice: true,
         choiceOptions: [
           'Discard condition + gain MP (no tokens)',
-          'Damage self — Surge + Hit tokens',
-          'Damage self — Hit + Block tokens',
+          'Damage self — Surge + Damage tokens',
+          'Damage self — Damage + Block tokens',
           'Damage self — Block + Evade tokens',
         ],
-        choiceValues: ['skip', 'Surge+Hit', 'Hit+Block', 'Block+Evade'],
+        choiceValues: ['skip', 'Surge+Damage', 'Damage+Block', 'Block+Evade'],
       };
     }
     const HARMFUL = HARMFUL_CONDITIONS;
@@ -3239,25 +3239,25 @@ export function resolveAbility(abilityId, context) {
     // Phase 2+: sequential allocation — player picks one figure at a time to receive a Hit token
     const pending = game.pendingCombatResupply?.[msgId];
     if (pending && choiceIndex != null && targetFigureKey) {
-      grantPowerTokens(game, targetFigureKey, 'Hit', 1);
+      grantPowerTokens(game, targetFigureKey, 'Damage', 1);
       pending.remaining -= 1;
       const tName = dcNameFromFigureKey(targetFigureKey);
       if (pending.remaining <= 0) {
         delete game.pendingCombatResupply[msgId];
-        return { applied: true, logMessage: `**Combat Resupply** — **${tName}** gained 1 Hit Token. Distribution complete.`, refreshDcEmbed: true };
+        return { applied: true, logMessage: `**Combat Resupply** — **${tName}** gained 1 Damage Token. Distribution complete.`, refreshDcEmbed: true };
       }
       // Still more to distribute — re-check eligible (some may now be full)
       const stillEligible = eligible.filter((efk) => (game.figurePowerTokens[efk] || []).length < getMaxPowerTokens(efk));
       if (stillEligible.length === 0) {
         delete game.pendingCombatResupply[msgId];
-        return { applied: true, logMessage: `**Combat Resupply** — **${tName}** gained 1 Hit Token. No more eligible figures (all at max tokens).`, refreshDcEmbed: true };
+        return { applied: true, logMessage: `**Combat Resupply** — **${tName}** gained 1 Damage Token. No more eligible figures (all at max tokens).`, refreshDcEmbed: true };
       }
       return {
         applied: false,
         requiresChoice: true,
         choiceOptions: stillEligible.map((efk) => dcNameFromFigureKey(efk)),
         targetFigureKeys: stillEligible,
-        logMessage: `**${tName}** gained 1 Hit Token. ${pending.remaining} more to assign.`,
+        logMessage: `**${tName}** gained 1 Damage Token. ${pending.remaining} more to assign.`,
       };
     }
 
@@ -3278,9 +3278,9 @@ export function resolveAbility(abilityId, context) {
     // Auto-distribute if only 1 eligible figure
     if (eligible.length === 1) {
       const tokensToAdd = roundNum; // grantPowerTokens handles overflow
-      grantPowerTokens(game, eligible[0], 'Hit', tokensToAdd);
+      grantPowerTokens(game, eligible[0], 'Damage', tokensToAdd);
       const eName = dcNameFromFigureKey(eligible[0]);
-      return { applied: true, requiresPowerTokenChoice: ptToAdd > 0, logMessage: `Gained ${ptToAdd} Power Token(s). **${eName}** gained ${tokensToAdd} Hit Token(s) (round ${roundNum}).`, refreshDcEmbed: true };
+      return { applied: true, requiresPowerTokenChoice: ptToAdd > 0, logMessage: `Gained ${ptToAdd} Power Token(s). **${eName}** gained ${tokensToAdd} Damage Token(s) (round ${roundNum}).`, refreshDcEmbed: true };
     }
 
     // Multiple eligible — start sequential picker
@@ -3292,7 +3292,7 @@ export function resolveAbility(abilityId, context) {
       requiresPowerTokenChoice: ptToAdd > 0,
       choiceOptions: eligible.map((efk) => dcNameFromFigureKey(efk)),
       targetFigureKeys: eligible,
-      logMessage: `Gained ${ptToAdd} Power Token(s). Distribute ${roundNum} Hit Token(s) among friendly figures within 3 spaces (round ${roundNum}). Pick a figure:`,
+      logMessage: `Gained ${ptToAdd} Power Token(s). Distribute ${roundNum} Damage Token(s) among friendly figures within 3 spaces (round ${roundNum}). Pick a figure:`,
     };
   }
 
@@ -4958,7 +4958,7 @@ export function resolveAbility(abilityId, context) {
       const hostilePos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
       if (!hostilePos) return { applied: false, manualMessage: 'Hostile figure has no position.' };
       // Grant +2 Hit power tokens to the hostile figure
-      grantPowerTokens(game, chosenFigureKey, 'Hit', 2);
+      grantPowerTokens(game, chosenFigureKey, 'Damage', 2);
       // Set up Lure attack (analogous to False Orders)
       game.pendingLure = {
         controllerPlayerNum: playerNum,        // force user's player
@@ -4970,7 +4970,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: true,
         lureActionPick: true,
-        logMessage: `**Lure of the Dark Side** — **${dcNameFromFigureKey(chosenFigureKey)}** gains 2 Hit Tokens. ${dcNameFromFigureKey(activatingFk || '')} will perform an attack with that figure.`,
+        logMessage: `**Lure of the Dark Side** — **${dcNameFromFigureKey(chosenFigureKey)}** gains 2 Damage Tokens. ${dcNameFromFigureKey(activatingFk || '')} will perform an attack with that figure.`,
       };
     }
 
@@ -6525,7 +6525,7 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**${entry.label}** —${freeNote}${rangeNote}${dieNote} Use the Attack button.` };
   }
 
-  // ccEffect: deployGarrisonEffect (Deploy the Garrison) — each friendly Trooper/Guardian within 4 gains 2 MP or 1 Hit Token (choice)
+  // ccEffect: deployGarrisonEffect (Deploy the Garrison) — each friendly Trooper/Guardian within 4 gains 2 MP or 1 Damage Token (choice)
   if (entry.type === 'ccEffect' && entry.deployGarrisonEffect) {
     const { game, playerNum, dcMessageMeta, choiceIndex } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
@@ -6567,10 +6567,10 @@ export function resolveAbility(abilityId, context) {
     }
 
     if (choiceIndex === undefined || choiceIndex === null) {
-      // Phase 1: ask player to choose MP or Hit Token
+      // Phase 1: ask player to choose MP or Damage Token
       return {
         requiresChoice: true,
-        choiceOptions: [`2 Movement Points to each (${qualifyingNames.join(', ')})`, `1 Hit Token to each (${qualifyingNames.join(', ')})`],
+        choiceOptions: [`2 Movement Points to each (${qualifyingNames.join(', ')})`, `1 Damage Token to each (${qualifyingNames.join(', ')})`],
       };
     }
 
@@ -6592,13 +6592,13 @@ export function resolveAbility(abilityId, context) {
           const figIdx = actD?.selectedFigure ?? 0;
           const fkForMid = Object.keys(game.figurePositions?.[playerNum] || {}).find(fk => fk.startsWith(`${metaForMid.dcName}-`) && fk.endsWith(`-${figIdx}`));
           if (fkForMid) {
-            grantPowerTokens(game, fkForMid, 'Hit', 1);
-            results.push(`**${nm}** +Hit Token`);
+            grantPowerTokens(game, fkForMid, 'Damage', 1);
+            results.push(`**${nm}** +Damage Token`);
           }
         }
       }
     }
-    const effectLabel = grantMp ? '2 MP each' : '1 Hit Token each';
+    const effectLabel = grantMp ? '2 MP each' : '1 Damage Token each';
     return {
       applied: true,
       logMessage: `**Deploy the Garrison** — Granted ${effectLabel}: ${results.join(', ')}.`,
@@ -6606,7 +6606,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: grantHitTokensToActivating (Transmit the Plans) — grant N Hit Tokens to activating figure
+  // ccEffect: grantHitTokensToActivating (Transmit the Plans) — grant N Damage Tokens to activating figure
   if (entry.type === 'ccEffect' && typeof entry.grantHitTokensToActivating === 'number') {
     const { game, playerNum, dcMessageMeta } = context;
     const msgId = playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
@@ -6617,9 +6617,9 @@ export function resolveAbility(abilityId, context) {
     if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const fk = figureKeys[0];
     const count = entry.grantHitTokensToActivating;
-    grantPowerTokens(game, fk, 'Hit', count);
+    grantPowerTokens(game, fk, 'Damage', count);
     const vpNote = entry.vpNoteIfAdjacentTerminal ? ` If adjacent to a terminal, use \`/editvp +${entry.vpNoteIfAdjacentTerminal}\` to gain ${entry.vpNoteIfAdjacentTerminal} VP.` : '';
-    return { applied: true, logMessage: `**${entry.label}** — Granted **${count} Hit Token${count !== 1 ? 's' : ''}** to ${meta.dcName}.${vpNote}` };
+    return { applied: true, logMessage: `**${entry.label}** — Granted **${count} Damage Token${count !== 1 ? 's' : ''}** to ${meta.dcName}.${vpNote}` };
   }
 
   // ccEffect: protectOldWaysBonus (Protect the Old Ways) — +X Block this round (X = 1 + FORCE USER CCs in discard)
@@ -6927,7 +6927,7 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: friendlyLabels.map((n) => `Defeat ${n}`), choiceValues: friendlyFigureKeys };
   }
 
-  // ccEffect: induceRageEffect (Induce Rage) — chosen figures discard all conditions, gain 1 Hit Token per condition
+  // ccEffect: induceRageEffect (Induce Rage) — chosen figures discard all conditions, gain 1 Damage Token per condition
   if (entry.type === 'ccEffect' && entry.induceRageEffect) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
@@ -6941,9 +6941,9 @@ export function resolveAbility(abilityId, context) {
         for (const c of conds) filterCondition(game, fk, c);
         const remaining = (game.figureConditions?.[fk] || []).length;
         const count = conds.length - remaining;
-        if (count > 0) grantPowerTokens(game, fk, 'Hit', count);
+        if (count > 0) grantPowerTokens(game, fk, 'Damage', count);
         const dcName = dcNameFromFigureKey(fk);
-        results.push(`**${dcName}** lost [${conds.filter(c => !(game.figureConditions?.[fk] || []).includes(c)).join(', ')}] → +${count} Hit Token${count !== 1 ? 's' : ''}`);
+        results.push(`**${dcName}** lost [${conds.filter(c => !(game.figureConditions?.[fk] || []).includes(c)).join(', ')}] → +${count} Damage Token${count !== 1 ? 's' : ''}`);
         figuresProcessed++;
       }
     }
@@ -7068,15 +7068,15 @@ export function resolveAbility(abilityId, context) {
     return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Hidden Trap** — Choose the terminal space:' };
   }
 
-  // ccEffect: fieldSupplyEffect (Field Supply) — up to 2 friendly figures within 3 each gain 1 Hit Token
+  // ccEffect: fieldSupplyEffect (Field Supply) — up to 2 friendly figures within 3 each gain 1 Damage Token
   if (entry.type === 'ccEffect' && entry.fieldSupplyEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 2: grant Hit Token to chosen figure
+    // Phase 2: grant Damage Token to chosen figure
     if (chosenFigureKey) {
-      grantPowerTokens(game, chosenFigureKey, 'Hit', 1);
+      grantPowerTokens(game, chosenFigureKey, 'Damage', 1);
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Field Supply** — **${dcName}** gained 1 Hit Token. (Surge Token also allowed; for a 2nd figure, apply manually.)` };
+      return { applied: true, logMessage: `**Field Supply** — **${dcName}** gained 1 Damage Token. (Surge Token also allowed; for a 2nd figure, apply manually.)` };
     }
     // Phase 1: find friendly figures within 3
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -7088,8 +7088,8 @@ export function resolveAbility(abilityId, context) {
       const fks = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => !actKeys.includes(fk));
       if (!fks.length) return { applied: false, manualMessage: 'No friendly figures to grant tokens to.' };
       const targets = fks.slice(0, 2);
-      const names = targets.map((fk) => { grantPowerTokens(game, fk, 'Hit', 1); return dcNameFromFigureKey(fk); });
-      return { applied: true, logMessage: `**Field Supply** — Hit Token granted to: ${names.join(', ')}.` };
+      const names = targets.map((fk) => { grantPowerTokens(game, fk, 'Damage', 1); return dcNameFromFigureKey(fk); });
+      return { applied: true, logMessage: `**Field Supply** — Damage Token granted to: ${names.join(', ')}.` };
     }
     const nearbyKeys = [];
     const nearbyLabels = [];
@@ -7100,7 +7100,7 @@ export function resolveAbility(abilityId, context) {
       nearbyLabels.push(dcNameFromFigureKey(fk));
     }
     if (!nearbyKeys.length) return { applied: false, manualMessage: 'No friendly figures within 3 spaces.' };
-    return { requiresChoice: true, choiceOptions: nearbyLabels.map((n) => `Hit Token → ${n}`), choiceValues: nearbyKeys };
+    return { requiresChoice: true, choiceOptions: nearbyLabels.map((n) => `Damage Token → ${n}`), choiceValues: nearbyKeys };
   }
 
   // ccEffect: feralSwipesEffect (Feral Swipes) — 1 Melee attack per die in pool, each using 1 red die

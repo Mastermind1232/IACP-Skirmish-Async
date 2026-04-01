@@ -574,7 +574,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
             const { grants } = game.pendingPowerTokenGrant;
             const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
             const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
-            const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+            const btns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
               new ButtonBuilder().setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
             );
             await ptCh.send({

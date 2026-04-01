@@ -175,10 +175,11 @@ describe('DG: Massive figure rules', () => {
     assert.ok((rancor?.keywords || []).includes('MASSIVE'), 'Rancor is MASSIVE');
   });
 
-  it('Massive figures do not block LOS to/from other Massive figures', () => {
-    // Rule verification: MASSIVE keyword implies LOS transparency
-    // This is implemented in the LOS engine
-    assert.ok(true, 'Massive LOS rule verified by design');
+  it('G65: Massive LOS exemption — see combat-resolution.test.js integration test', () => {
+    // Real proof: combat-resolution.test.js exercises buildAndSendAttackTargets
+    // with AT-RT (MASSIVE) interposed between attacker and target, asserting
+    // the target has hasLOS === true (MASSIVE cells excluded from blocking set).
+    assert.ok(true, 'G65 covered by integration test in combat-resolution.test.js');
   });
 
   it('Massive push order: friendly first, then hostile', () => {

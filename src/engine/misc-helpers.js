@@ -437,7 +437,7 @@ export async function sendRoundActivationPhaseMessage(game, client, deps) {
     components.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`pass_activation_turn_${gameId}`)
-        .setLabel('Pass turn to opponent')
+        .setLabel(`Pass (opponent has ${otherRem - initRem} more activation${otherRem - initRem !== 1 ? 's' : ''} than you)`)
         .setStyle(ButtonStyle.Secondary)
     ));
   }

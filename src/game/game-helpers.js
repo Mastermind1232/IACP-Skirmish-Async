@@ -27,7 +27,7 @@ export function grantMovementBank(game, msgId, amount) {
  *
  * @param {object} game
  * @param {string} figureKey
- * @param {string} tokenType - e.g. 'Block', 'Evade', 'Hit', 'Surge'
+ * @param {string} tokenType - e.g. 'Block', 'Evade', 'Damage', 'Surge'
  * @param {number} count - tokens to grant
  * @param {number} [max] - optional maximum total tokens allowed (overrides per-figure default)
  * @returns {number} tokens actually added (always === count when count > 0)

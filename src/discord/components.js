@@ -1096,7 +1096,7 @@ export function getActivateDcButtons(game, playerNum, helpers = {}) {
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`pass_activation_turn_${gameId}`)
-        .setLabel('Pass turn to opponent')
+        .setLabel(`Pass (opponent has ${otherRemaining - myRemaining} more activation${otherRemaining - myRemaining !== 1 ? 's' : ''} than you)`)
         .setStyle(ButtonStyle.Secondary)
     ));
   }

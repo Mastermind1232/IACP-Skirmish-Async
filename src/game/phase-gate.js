@@ -100,6 +100,15 @@ export function clearPhaseGate(game) {
  * @returns {{ waitType: string, description: string, playerNums: number[] }}
  */
 function computeRoundActiveWaiting(game) {
+  // pendingCombat — combat sub-phase gate (both must confirm)
+  if (game.pendingCombat?.combatGate) {
+    const gate = game.pendingCombat.combatGate;
+    const waiting = [];
+    if (!gate.p1Ready) waiting.push(1);
+    if (!gate.p2Ready) waiting.push(2);
+    return { waitType: 'combatGate', description: `Combat gate: ${gate.phase}`, playerNums: waiting };
+  }
+
   // pendingCombat — not both ready
   if (game.pendingCombat && (!game.pendingCombat.p1Ready || !game.pendingCombat.p2Ready)) {
     const waiting = [];
@@ -180,6 +189,14 @@ function computeRoundActiveWaiting(game) {
  * @returns {{ waitType: string, description: string, playerNums: number[] }}
  */
 function getWaitingPlayersLegacy(game) {
+  // pendingCombat — combat sub-phase gate
+  if (game.pendingCombat?.combatGate) {
+    const gate = game.pendingCombat.combatGate;
+    const waiting = [];
+    if (!gate.p1Ready) waiting.push(1);
+    if (!gate.p2Ready) waiting.push(2);
+    return { waitType: 'combatGate', description: `Combat gate: ${gate.phase}`, playerNums: waiting };
+  }
   // pendingCombat — not both ready
   if (game.pendingCombat && (!game.pendingCombat.p1Ready || !game.pendingCombat.p2Ready)) {
     const waiting = [];

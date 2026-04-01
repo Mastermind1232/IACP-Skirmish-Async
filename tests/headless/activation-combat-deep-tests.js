@@ -910,6 +910,22 @@ describe('push-pull: collectOverlappingFigures', () => {
     const enemyIdx = overlaps.findIndex(o => o.figureKey === 'Enemy-0-0');
     assert.ok(friendlyIdx < enemyIdx, 'friendly before enemy');
   });
+  it('G71: companion in Massive footprint appears in overlaps', () => {
+    // G71 rule: when a Massive figure moves into a space occupied by a companion,
+    // the companion must be pushed. collectOverlappingFigures must detect companions
+    // in the footprint even though companions don't block LOS.
+    const game = {
+      figurePositions: {
+        1: { 'AT-ST-1-0': 'c3' },
+        2: { 'Salacious B. Crumb-1-0': 'c3' },
+      },
+    };
+    const footprint = new Set(['c3', 'c4']);
+    const overlaps = collectOverlappingFigures(game, 1, 'AT-ST-1-0', footprint);
+    assert.strictEqual(overlaps.length, 1, 'companion in footprint detected');
+    assert.strictEqual(overlaps[0].figureKey, 'Salacious B. Crumb-1-0',
+      'G71: companion figure key returned for Massive push resolution');
+  });
 });
 
 describe('push-pull: massiveMovementLocked', () => {
@@ -1146,6 +1162,56 @@ describe('parseSurgeEffect: surge key parsing', () => {
   it('parses hide as self-hide', () => {
     const e = parseSurgeEffect('hide');
     assert.strictEqual(e.surgeSelfHide, true);
+  });
+});
+
+// ── LOS regression tests (LOS-19, LOS-20) ──────────────────────────────────
+describe('LOS: hasLineOfSight wall and blocking checks', () => {
+  // Minimal mapSpaces with a wall between a2 and a3
+  const wallMs = {
+    impassableEdges: [['a2', 'a3']],
+    blocking: [],
+  };
+
+  it('LOS-20 regression: wall between source and target blocks LOS', () => {
+    // a1 → a4 with wall between a2/a3 — should be blocked
+    assert.strictEqual(hasLineOfSight('a1', 'a4', wallMs, null), false,
+      'LOS should be blocked by wall between a2 and a3');
+  });
+
+  it('LOS-20 regression: same wall does not block adjacent LOS on same side', () => {
+    // a1 → a2 — wall is on far edge of a2, LOS to a2 itself should pass
+    assert.strictEqual(hasLineOfSight('a1', 'a2', wallMs, null), true,
+      'LOS to a2 should not be blocked by wall on a2/a3 boundary');
+  });
+
+  it('LOS-19 regression: closed door edge blocks LOS', () => {
+    // Simulate a closed door between c3 and c4 by adding it as an impassable edge
+    const doorMs = {
+      impassableEdges: [['c3', 'c4']],
+      blocking: [],
+    };
+    assert.strictEqual(hasLineOfSight('c2', 'c5', doorMs, null), false,
+      'LOS should be blocked by closed door between c3 and c4');
+  });
+
+  it('LOS-19 regression: energy shield space blocks LOS through it', () => {
+    // Energy shield on b3 — LOS from b1 to b5 should be blocked
+    const shieldMs = {
+      impassableEdges: [],
+      blocking: ['b3'],
+    };
+    assert.strictEqual(hasLineOfSight('b1', 'b5', shieldMs, null), false,
+      'LOS should be blocked by energy shield on b3');
+  });
+
+  it('LOS-19 regression: smoke space blocks LOS through it', () => {
+    const smokeMs = {
+      impassableEdges: [],
+      blocking: ['d3'],
+    };
+    assert.strictEqual(hasLineOfSight('d1', 'd5', smokeMs, null), false,
+      'LOS should be blocked by smoke on d3');
   });
 });
 
