@@ -27,7 +27,7 @@ function _cleanupMoveState(game, moveKey, msgId) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, dcMessageMeta, getBoardStateForMovement, getMovementProfile, ensureMovementCache, getSpacesAtCost, clearMoveGridMessages, getMoveSpaceGridRows, getMovementMinimapAttachment, client
+ * @param {object} ctx - getGame, dcMessageMeta, getBoardStateForMovement, getMovementProfile, ensureMovementCache, getSpacesAtCost, clearMoveGridMessages, getMovementMinimapAttachment, client
  */
 export async function handleMoveMp(interaction, ctx) {
   const {
@@ -402,7 +402,6 @@ export async function handleMovePick(interaction, ctx) {
     pushUndo,
     logGameAction,
     countTerminalsControlledByPlayer,
-    buildLetterRows,
     getMovementMinimapAttachment,
     buildBoardMapPayload,
     getDcStats,

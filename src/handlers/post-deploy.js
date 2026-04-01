@@ -1059,7 +1059,7 @@ export function cleanupCompanionEmbedDeps(gameId) {
  * @param {object} game
  * @param {string} gameId
  * @param {object} client - Discord client
- * @param {object} ctx - { logGameAction, saveGames, dcMessageMeta, getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementMinimapAttachment, getMoveSpaceGridRows, buildBoardMapPayload }
+ * @param {object} ctx - { logGameAction, saveGames, dcMessageMeta, getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementMinimapAttachment, buildBoardMapPayload }
  * @param {function} onComplete - called when all post-deploy effects are done
  * @returns {boolean} true if a queue was created (async flow), false if all resolved immediately
  */

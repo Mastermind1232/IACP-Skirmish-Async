@@ -37,7 +37,7 @@ const CONTEXT_GROUPS = {
     'updateAttachmentMessageForDc', 'getPlayableCcFromHand', 'resolveAbility',
     'updateDcActionsMessage', 'buildDcEmbedAndFiles', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',
     'getDcPlayAreaComponents', 'buildBoardMapPayload', 'getBoardStateForMovement',
-    'getSpaceChoiceRows', 'buildSpaceSelectMenu', 'getMapAttachmentForSpaces',
+    'getMapAttachmentForSpaces',
     'ensureMovementBankMessage', 'updateMovementBankMessage', 'getConditionCardPath',
     'getCommandCardImagePath', 'getDeploymentZones', 'updateDeployPromptMessages',
   ],
@@ -58,19 +58,19 @@ const CONTEXT_GROUPS = {
     'getRange', 'hasLineOfSight', 'isDcUnique', 'getCelebrationButtons',
     'applyDamageAndFinishCombat', 'getEffectiveSpeed', 'ensureMovementBankMessage',
     'getBoardStateForMovement', 'getMovementProfile', 'computeMovementCache',
-    'buildLetterRows', 'getMovementMinimapAttachment', 'clearMoveGridMessages',
+    'getMovementMinimapAttachment', 'clearMoveGridMessages',
     'getLegalInteractOptions', 'FIGURE_LETTERS', 'resolveAbility',
     'getNegationResponseButtons', 'sendBleedingPrompt', 'updateMovementBankMessage',
     'getCommandCardImagePath', 'getConditionCardPath', 'buildBoardMapPayload',
     'findDcMessageIdForFigure', 'isGroupDefeated', 'checkWinConditions',
-    'getSpaceChoiceRows', 'buildSpaceSelectMenu', 'getMapAttachmentForSpaces',
+    'getMapAttachmentForSpaces',
     'getMapTokensData', 'getDeploymentZones',
   ],
 
   move: [
     'getGame', 'dcMessageMeta', 'getBoardStateForMovement', 'getMovementProfile',
     'ensureMovementCache', 'getSpacesAtCost', 'clearMoveGridMessages',
-    'getMoveSpaceGridRows', 'getMovementMinimapAttachment', 'client',
+    'getMovementMinimapAttachment', 'client',
   ],
 
   moveAdjust: [
@@ -92,9 +92,9 @@ const CONTEXT_GROUPS = {
     'normalizeCoord', 'getMovementTarget', 'getFigureSize', 'getNormalizedFootprint',
     'resolveMassivePush', 'updateMovementBankMessage', 'getMovementPath',
     'pushUndo', 'logGameAction', 'countTerminalsControlledByPlayer',
-    'buildLetterRows', 'getMovementMinimapAttachment', 'buildBoardMapPayload',
+    'getMovementMinimapAttachment', 'buildBoardMapPayload',
     'updateDcActionsMessage', 'sendBleedingPrompt', 'getDcStats', 'dcHealthState',
-    'saveGames', 'client', 'getMoveSpaceGridRows',
+    'saveGames', 'client',
   ],
 
   combat: COMBAT_DEPS,
@@ -273,7 +273,7 @@ const CONTEXT_GROUPS = {
     'getGame', 'saveGames', 'client', 'canActAsPlayer', 'logGameAction',
     'dcMessageMeta', 'getBoardStateForMovement', 'getMovementProfile',
     'computeMovementCache', 'getMovementMinimapAttachment',
-    'getMoveSpaceGridRows', 'buildBoardMapPayload',
+    'buildBoardMapPayload',
   ],
 
   recover: [

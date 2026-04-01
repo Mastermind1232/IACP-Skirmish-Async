@@ -749,37 +749,6 @@ export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces, maxRo
   return { rows: sliced, available, overflowed: rows.length > maxRows };
 }
 
-/**
- * Build a StringSelectMenu dropdown for space selection when buttons overflow (>25 spaces).
- * The select menu customId is `${selectPrefix}${contextSuffix}` and each option value is the space coordinate.
- * @param {string} selectPrefix - e.g. 'overwatch_space_sel_'
- * @param {string} contextSuffix - e.g. `${gameId}_${msgId}`
- * @param {string[]} available - normalized space coordinates
- * @param {Record<string, string>} [labelMap] - optional display label overrides
- * @returns {ActionRowBuilder}
- */
-export function buildSpaceSelectMenu(selectPrefix, contextSuffix, available, labelMap = {}) {
-  const options = available.slice(0, 25).map((space) => ({
-    label: (labelMap[space] || space).toUpperCase(),
-    value: space,
-  }));
-  if (options.length === 0) {
-    // Defensive: return a disabled button instead of an empty select menu (Discord API rejects 0 options)
-    return new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${selectPrefix}${contextSuffix}_none`)
-        .setLabel('No valid spaces')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(true)
-    );
-  }
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(`${selectPrefix}${contextSuffix}`)
-    .setPlaceholder('Pick a space…')
-    .addOptions(options);
-  return new ActionRowBuilder().addComponents(select);
-}
-
 /** Per-figure deploy labels; helpers = { resolveDcName, isFigurelessDc, getDcStats, getNickname }. */
 export function getDeployFigureLabels(dcList, helpers = {}) {
   const { resolveDcName = (d) => (typeof d === 'object' ? d?.dcName || d?.displayName : d), isFigurelessDc = () => false, getDcStats = () => ({ figures: 1 }), getNickname = () => null } = helpers;
