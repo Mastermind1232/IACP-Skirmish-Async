@@ -4,7 +4,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
-import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows } from '../discord/components.js';
+import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { bottomLeftCoord, edgeKey } from '../game/coords.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
@@ -1281,7 +1281,6 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     logGameErrorToBotLogs,
     extractGameIdFromInteraction,
     resolveAbility,
-    getSpaceChoiceRows,
     getMapAttachmentForSpaces,
     pushUndo,
   } = ctx;
@@ -1980,13 +1979,19 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       // Store pending state and show space picker
       game.pendingOverwatchPlacement = game.pendingOverwatchPlacement || {};
       game.pendingOverwatchPlacement[msgId] = { playerNum: meta.playerNum, figureKey: figKey };
-      const spaceRows = getSpaceChoiceRows(`overwatch_space_${game.gameId}_${msgId}_`, losValid, ms);
-      const owComponents = spaceRows.overflowed
-        ? [ctx.buildSpaceSelectMenu('overwatch_space_sel_', `${game.gameId}_${msgId}`, spaceRows.available)]
-        : spaceRows.rows.slice(0, 5);
+      const owContextKey = `${game.gameId}_${msgId}`;
+      const owHeader = `**Overwatch** — Choose a space within LOS to place your Overwatch token`;
+      game.pendingSpacePick = game.pendingSpacePick || {};
+      game.pendingSpacePick[owContextKey] = {
+        validSpaces: losValid,
+        cellPrefix: `overwatch_space_${game.gameId}_${msgId}_`,
+        mapSpaces: ms,
+        headerText: owHeader,
+      };
+      const { rows: owRowBtns } = buildRowPickerButtons(losValid, `space_row_${owContextKey}_`);
       await thread.send({
-        content: `**Overwatch** — Choose a space within LOS to place your Overwatch token:`,
-        components: owComponents,
+        content: `${owHeader}:\nChoose a row:`,
+        components: owRowBtns.slice(0, 5),
       }).catch(discordCatch);
       saveGames();
       return;
@@ -2039,13 +2044,19 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     }
     game.pendingBombDrop = game.pendingBombDrop || {};
     game.pendingBombDrop[msgId] = { playerNum: meta.playerNum, figureKey: figKey };
-    const spaceRows = getSpaceChoiceRows(`bomb_drop_space_${game.gameId}_${msgId}_`, validSpaces, ms);
-    const bdComponents = spaceRows.overflowed
-      ? [ctx.buildSpaceSelectMenu('bomb_drop_space_sel_', `${game.gameId}_${msgId}`, spaceRows.available)]
-      : spaceRows.rows.slice(0, 5);
+    const bdContextKey = `${game.gameId}_${msgId}`;
+    const bdHeader = `**Bomb Drop** — Choose a space within 3 to detonate (2 Damage to all figures on/adjacent)`;
+    game.pendingSpacePick = game.pendingSpacePick || {};
+    game.pendingSpacePick[bdContextKey] = {
+      validSpaces,
+      cellPrefix: `bomb_drop_space_${game.gameId}_${msgId}_`,
+      mapSpaces: ms,
+      headerText: bdHeader,
+    };
+    const { rows: bdRowBtns } = buildRowPickerButtons(validSpaces, `space_row_${bdContextKey}_`);
     await thread.send({
-      content: `**Bomb Drop** — Choose a space within 3 to detonate (2 Damage to all figures on/adjacent):`,
-      components: bdComponents,
+      content: `${bdHeader}:\nChoose a row:`,
+      components: bdRowBtns.slice(0, 5),
     }).catch(discordCatch);
     saveGames();
     return;
@@ -2094,18 +2105,23 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   }
   // Handle space-choice abilities (e.g. Pounce teleport destination)
   if (resolveResult.requiresSpaceChoice && Array.isArray(resolveResult.validSpaces) && resolveResult.validSpaces.length > 0) {
-    if (getSpaceChoiceRows && getMapAttachmentForSpaces) {
+    if (getMapAttachmentForSpaces) {
       const boardState = ctx.getBoardStateForMovement ? ctx.getBoardStateForMovement(game, null) : null;
-      const mapSpaces = boardState?.mapSpaces || { spaces: resolveResult.validSpaces };
-      const { rows, available, overflowed } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
+      const pounceMapSpaces = boardState?.mapSpaces || { spaces: resolveResult.validSpaces };
       const mapAttachment = await getMapAttachmentForSpaces(game, resolveResult.validSpaces);
       game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
       game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum: meta.playerNum, figureIndex, msgId, abilityId, specialIdx, validSpaces: resolveResult.validSpaces, targetFigureKey: resolveResult.targetFigureKey || null };
       const spacePickLabel = resolveResult.spaceChoiceLabel || `**Pounce** — Pick a space to place your figure:`;
-      const pounceComponents = overflowed
-        ? [ctx.buildSpaceSelectMenu('pounce_space_sel_', `${game.gameId}_${msgId}_${figureIndex}`, available)]
-        : rows.slice(0, 5);
-      const payload = { content: spacePickLabel, components: pounceComponents, ephemeral: false, fetchReply: true };
+      const pounceContextKey = `${game.gameId}_${msgId}_${figureIndex}`;
+      game.pendingSpacePick = game.pendingSpacePick || {};
+      game.pendingSpacePick[pounceContextKey] = {
+        validSpaces: resolveResult.validSpaces,
+        cellPrefix: `pounce_space_${game.gameId}_${msgId}_${figureIndex}_`,
+        mapSpaces: pounceMapSpaces,
+        headerText: spacePickLabel,
+      };
+      const { rows: pounceRowBtns } = buildRowPickerButtons(resolveResult.validSpaces, `space_row_${pounceContextKey}_`);
+      const payload = { content: `${spacePickLabel}\nChoose a row:`, components: pounceRowBtns.slice(0, 5), ephemeral: false, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await interaction.followUp(payload).catch(discordCatch);
       saveGames();
@@ -2247,7 +2263,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   const [, gameId, msgId, specialIdxStr, choiceIndexStr] = match;
   const specialIdx = parseInt(specialIdxStr, 10);
   const choiceIndex = parseInt(choiceIndexStr, 10);
-  const { getGame, dcMessageMeta, dcHealthState, resolveAbility, updateDcActionsMessage, saveGames, client, getSpaceChoiceRows, getMapAttachmentForSpaces, getBoardStateForMovement } = ctx;
+  const { getGame, dcMessageMeta, dcHealthState, resolveAbility, updateDcActionsMessage, saveGames, client, getMapAttachmentForSpaces, getBoardStateForMovement } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingDcAbilityChoice?.[`${msgId}_${specialIdx}`];
@@ -2346,18 +2362,23 @@ export async function handleDcAbilityChoice(interaction, ctx) {
 
   // Push ability Phase 2: figure chosen, now pick landing space
   if (!resolveResult.applied && resolveResult.requiresSpaceChoice && Array.isArray(resolveResult.validSpaces) && resolveResult.validSpaces.length > 0) {
-    if (getSpaceChoiceRows && getMapAttachmentForSpaces) {
+    if (getMapAttachmentForSpaces) {
       const boardState = getBoardStateForMovement ? getBoardStateForMovement(game, null) : null;
-      const mapSpaces = boardState?.mapSpaces || {};
-      const { rows, available, overflowed } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
+      const p2MapSpaces = boardState?.mapSpaces || {};
       const mapAttachment = await getMapAttachmentForSpaces(game, resolveResult.validSpaces);
       game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
       game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces, targetFigureKey: resolveResult.targetFigureKey || null };
       const spacePickLabel = resolveResult.spaceChoiceLabel || `Pick a landing space:`;
-      const pounce2Components = overflowed
-        ? [ctx.buildSpaceSelectMenu('pounce_space_sel_', `${game.gameId}_${msgId}_${figureIndex}`, available)]
-        : rows.slice(0, 5);
-      const payload = { content: spacePickLabel, components: pounce2Components, ephemeral: false };
+      const p2ContextKey = `${game.gameId}_${msgId}_${figureIndex}`;
+      game.pendingSpacePick = game.pendingSpacePick || {};
+      game.pendingSpacePick[p2ContextKey] = {
+        validSpaces: resolveResult.validSpaces,
+        cellPrefix: `pounce_space_${game.gameId}_${msgId}_${figureIndex}_`,
+        mapSpaces: p2MapSpaces,
+        headerText: spacePickLabel,
+      };
+      const { rows: p2RowBtns } = buildRowPickerButtons(resolveResult.validSpaces, `space_row_${p2ContextKey}_`);
+      const payload = { content: `${spacePickLabel}\nChoose a row:`, components: p2RowBtns.slice(0, 5), ephemeral: false };
       if (mapAttachment) payload.files = [mapAttachment];
       await interaction.followUp(payload).catch(discordCatch);
       saveGames();
@@ -2431,6 +2452,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
   const { getGame, dcMessageMeta, resolveAbility, logGameAction, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  cleanupSpacePick(game, `${gameId}_${msgId}_${figureIndexStr}`);
   const pending = game.pendingPounceSpaceChoice?.[msgId];
   if (!pending || pending.gameId !== gameId) {
     await interaction.followUp({ content: 'No pending pounce space choice.', ephemeral: true }).catch(discordCatch);
@@ -2710,7 +2732,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     getGame, replyIfGameEnded, getDcStats, getDcEffects, getMapSpaces,
     getFigureSize, getFootprintCells, getRange, hasLineOfSight,
     getBoardStateForMovement, getMovementProfile, computeMovementCache,
-    getSpaceChoiceRows, getMapAttachmentForSpaces,
+    getMapAttachmentForSpaces,
     saveGames, FIGURE_LETTERS,
   } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
@@ -2770,21 +2792,21 @@ export async function handleFalseOrdersAction(interaction, ctx) {
       await interaction.followUp({ content: `${controlledName} cannot move (no valid spaces).`, ephemeral: false }).catch(discordCatch);
       return;
     }
-    const prefix = `false_orders_space_${gameId}_${msgId}_`;
-    let rows = [];
-    let foOverflowed = false;
-    let foAvailable = [];
-    if (getSpaceChoiceRows) {
-      const mapSpaces = boardState?.mapSpaces || {};
-      ({ rows, available: foAvailable, overflowed: foOverflowed } = getSpaceChoiceRows(prefix, reachableSpaces, mapSpaces));
-    }
+    const foMapSpaces = boardState?.mapSpaces || {};
+    const foContextKey = `${gameId}_${msgId}`;
+    const foHeader = `**False Orders** — Choose a space for **${controlledName}** to move to`;
+    game.pendingSpacePick = game.pendingSpacePick || {};
+    game.pendingSpacePick[foContextKey] = {
+      validSpaces: reachableSpaces,
+      cellPrefix: `false_orders_space_${gameId}_${msgId}_`,
+      mapSpaces: foMapSpaces,
+      headerText: foHeader,
+    };
+    const { rows: foRowBtns } = buildRowPickerButtons(reachableSpaces, `space_row_${foContextKey}_`);
     const mapAttachment = getMapAttachmentForSpaces ? await getMapAttachmentForSpaces(game, reachableSpaces) : null;
-    const foComponents = foOverflowed
-      ? [ctx.buildSpaceSelectMenu('false_orders_space_sel_', `${gameId}_${msgId}`, foAvailable)]
-      : rows.slice(0, 5);
     const payload = {
-      content: `**False Orders** — Choose a space for **${controlledName}** to move to:`,
-      components: foComponents,
+      content: `${foHeader}:\nChoose a row:`,
+      components: foRowBtns.slice(0, 5),
       ephemeral: false,
     };
     if (mapAttachment) payload.files = [mapAttachment];
@@ -2867,6 +2889,7 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   const { getGame, replyIfGameEnded, logGameAction, buildBoardMapPayload, saveGames, client } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  cleanupSpacePick(game, `${gameId}_${msgId}`);
   if (await replyIfGameEnded(game, interaction)) return;
   const fo = game.pendingFalseOrders;
   if (!fo || fo.murneRinMsgId !== msgId) {
@@ -2933,7 +2956,7 @@ export async function handleRushPushFig(interaction, ctx) {
   const [, gameId, msgId, choiceIdxStr] = m;
   const choiceIndex = parseInt(choiceIdxStr, 10);
   const { getGame, dcMessageMeta, dcHealthState, getMapSpaces, logGameAction, buildBoardMapPayload,
-    updateDcActionsMessage, getSpaceChoiceRows, getMapAttachmentForSpaces, saveGames, client } = ctx;
+    updateDcActionsMessage, getMapAttachmentForSpaces, saveGames, client } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingRushPush;
@@ -2978,18 +3001,24 @@ export async function handleRushPushFig(interaction, ctx) {
     saveGames();
     return;
   }
-  // Show space picker
+  // Show 2-step row→cell space picker via generic space_row_ handler
   pending.chosenTarget = targetFk;
   const boardState = ctx.getBoardStateForMovement ? ctx.getBoardStateForMovement(game, null) : null;
   const bMapSpaces = boardState?.mapSpaces || {};
-  const { rows, available: rushAvail, overflowed: rushOverflowed } = getSpaceChoiceRows(`rush_push_space_${gameId}_${msgId}_`, validSpaces, bMapSpaces);
+  const contextKey = `${gameId}_${msgId}`;
+  const headerText = `**Rush** — Pick landing space for **${dcNameFromFigureKey(targetFk)}** (or stay at **${targetPos.toUpperCase()}**)`;
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[contextKey] = {
+    validSpaces,
+    cellPrefix: `rush_push_space_${gameId}_${msgId}_`,
+    mapSpaces: bMapSpaces,
+    headerText,
+  };
+  const { rows: rowBtns } = buildRowPickerButtons(validSpaces, `space_row_${contextKey}_`);
   const mapAttachment = await getMapAttachmentForSpaces(game, validSpaces);
-  const rushComponents = rushOverflowed
-    ? [ctx.buildSpaceSelectMenu('rush_push_space_sel_', `${gameId}_${msgId}`, rushAvail)]
-    : rows.slice(0, 5);
   const payload = {
-    content: `**Rush** — Pick landing space for **${dcNameFromFigureKey(targetFk)}** (or stay at **${targetPos.toUpperCase()}**):`,
-    components: rushComponents,
+    content: `${headerText}:\nChoose a row:`,
+    components: rowBtns.slice(0, 5),
   };
   if (mapAttachment) payload.files = [mapAttachment];
   await interaction.message.edit({ content: '**Rush** — Choosing push destination...', components: [] }).catch(discordCatch);
@@ -3009,6 +3038,7 @@ export async function handleRushPushSpace(interaction, ctx) {
     updateDcActionsMessage, saveGames, client } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  cleanupSpacePick(game, `${gameId}_${msgId}`);
   const pending = game.pendingRushPush;
   if (!pending || pending.msgId !== msgId) {
     await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(discordCatch);
@@ -3056,6 +3086,7 @@ export async function handleRushPushSkip(interaction, ctx) {
   const { getGame, saveGames } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  cleanupSpacePick(game, `${gameId}_${msgId}`);
   delete game.pendingRushPush;
   await interaction.message.edit({ content: '**Rush** — Push skipped.', components: [] }).catch(discordCatch);
   saveGames();
@@ -3070,7 +3101,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
   const [, gameId, msgId, choiceIdxStr] = m;
   const choiceIndex = parseInt(choiceIdxStr, 10);
   const { getGame, dcMessageMeta, dcHealthState, getMapSpaces, logGameAction, buildBoardMapPayload,
-    updateDcActionsMessage, getSpaceChoiceRows, getMapAttachmentForSpaces, saveGames, client } = ctx;
+    updateDcActionsMessage, getMapAttachmentForSpaces, saveGames, client } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingShoulderRush;
@@ -3136,17 +3167,23 @@ export async function handleShoulderRushFig(interaction, ctx) {
     saveGames();
     return;
   }
-  // Show space picker
+  // Show 2-step row→cell space picker via generic space_row_ handler
   const boardState = ctx.getBoardStateForMovement ? ctx.getBoardStateForMovement(game, null) : null;
   const bMapSpaces = boardState?.mapSpaces || {};
-  const { rows, available: srAvail, overflowed: srOverflowed } = getSpaceChoiceRows(`shoulder_rush_space_${gameId}_${msgId}_`, validSpaces, bMapSpaces);
+  const srContextKey = `${gameId}_${msgId}`;
+  const srHeader = `**Shoulder Rush** — **${targetName}** is SMALL. Push to which space? (You will enter the vacated space.)`;
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[srContextKey] = {
+    validSpaces,
+    cellPrefix: `shoulder_rush_space_${gameId}_${msgId}_`,
+    mapSpaces: bMapSpaces,
+    headerText: srHeader,
+  };
+  const { rows: srRowBtns } = buildRowPickerButtons(validSpaces, `space_row_${srContextKey}_`);
   const mapAttachment = await getMapAttachmentForSpaces(game, validSpaces);
-  const srComponents = srOverflowed
-    ? [ctx.buildSpaceSelectMenu('shoulder_rush_space_sel_', `${gameId}_${msgId}`, srAvail)]
-    : rows.slice(0, 5);
   const payload = {
-    content: `**Shoulder Rush** — **${targetName}** is SMALL. Push to which space? (You will enter the vacated space.)`,
-    components: srComponents,
+    content: `${srHeader}\nChoose a row:`,
+    components: srRowBtns.slice(0, 5),
   };
   if (mapAttachment) payload.files = [mapAttachment];
   await interaction.message.edit({ content: '**Shoulder Rush** — Choosing push destination...', components: [] }).catch(discordCatch);
@@ -3166,6 +3203,7 @@ export async function handleShoulderRushSpace(interaction, ctx) {
     updateDcActionsMessage, saveGames, client } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  cleanupSpacePick(game, `${gameId}_${msgId}`);
   const pending = game.pendingShoulderRush;
   if (!pending || pending.msgId !== msgId) {
     await interaction.followUp({ content: 'No pending Shoulder Rush.', ephemeral: true }).catch(discordCatch);
@@ -3215,6 +3253,7 @@ export async function handleShoulderRushSkip(interaction, ctx) {
   const { getGame, saveGames } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  cleanupSpacePick(game, `${gameId}_${msgId}`);
   delete game.pendingShoulderRush;
   await interaction.message.edit({ content: '**Shoulder Rush** — No target chosen.', components: [] }).catch(discordCatch);
   saveGames();
@@ -3228,6 +3267,7 @@ export async function handleOverwatchSpacePick(interaction, ctx) {
   const { getGame, saveGames, logGameAction, dcMessageMeta } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  cleanupSpacePick(game, `${gameId}_${msgId}`);
   const chosenSpace = String(space).toLowerCase();
   game.overwatchTokenPosition = game.overwatchTokenPosition || {};
   game.overwatchTokenPosition[msgId] = chosenSpace;
@@ -3244,7 +3284,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   const m = interaction.customId.match(/^ob_deplete_([^_]+)_([^_]+)$/);
   if (!m) return;
   const [, gameId, msgId] = m;
-  const { getGame, saveGames, logGameAction, dcMessageMeta, getMapSpaces, getSpaceChoiceRows } = ctx;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, getMapSpaces } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const tokenCount = game.orbitalBombardmentTokens?.[msgId] || 0;
@@ -3271,10 +3311,19 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
     saveGames();
     return;
   }
-  const spaceRows = getSpaceChoiceRows?.(`ob_space_${gameId}_${msgId}_`, allSpaces, ms) || { rows: [] };
+  const obContextKey = `${gameId}_${msgId}`;
+  const obHeader = `**Orbital Bombardment** — Choose space **1 of ${tokenCount}** for bombardment (each figure on a chosen space suffers 2 Damage)`;
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[obContextKey] = {
+    validSpaces: allSpaces,
+    cellPrefix: `ob_space_${gameId}_${msgId}_`,
+    mapSpaces: ms,
+    headerText: obHeader,
+  };
+  const { rows: obRowBtns } = buildRowPickerButtons(allSpaces, `space_row_${obContextKey}_`);
   await interaction.message.edit({
-    content: `**Orbital Bombardment** — Choose space **1 of ${tokenCount}** for bombardment (each figure on a chosen space suffers 2 Damage):`,
-    components: spaceRows.rows.slice(0, 5),
+    content: `${obHeader}:\nChoose a row:`,
+    components: obRowBtns.slice(0, 5),
   }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — **${meta?.displayName || 'DC'}** depleted. Choosing ${tokenCount} spaces for bombardment.`, { phase: 'ROUND', icon: 'card' });
   saveGames();
@@ -3296,7 +3345,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   const m = interaction.customId.match(/^ob_space_([^_]+)_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, msgId, space] = m;
-  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapSpaces, getSpaceChoiceRows, findDcMessageIdForFigure } = ctx;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapSpaces, findDcMessageIdForFigure } = ctx;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game?.pendingOrbitalBombardment) return;
   const pending = game.pendingOrbitalBombardment;
@@ -3304,14 +3353,23 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   pending.spacesChosen.push(chosenSpace);
 
   if (pending.spacesChosen.length < pending.spacesRemaining) {
-    // More spaces to pick — show picker again
+    // More spaces to pick — re-store pendingSpacePick and show row picker again
     const mapId = game.selectedMap?.id;
     const ms = getMapSpaces?.(mapId);
     const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
-    const spaceRows = getSpaceChoiceRows?.(`ob_space_${gameId}_${msgId}_`, allSpaces, ms) || { rows: [] };
+    const obSeqContextKey = `${gameId}_${msgId}`;
+    const obSeqHeader = `**Orbital Bombardment** — Chosen: ${pending.spacesChosen.map(s => s.toUpperCase()).join(', ')}. Choose space **${pending.spacesChosen.length + 1} of ${pending.spacesRemaining}**`;
+    game.pendingSpacePick = game.pendingSpacePick || {};
+    game.pendingSpacePick[obSeqContextKey] = {
+      validSpaces: allSpaces,
+      cellPrefix: `ob_space_${gameId}_${msgId}_`,
+      mapSpaces: ms,
+      headerText: obSeqHeader,
+    };
+    const { rows: obSeqRowBtns } = buildRowPickerButtons(allSpaces, `space_row_${obSeqContextKey}_`);
     await interaction.message.edit({
-      content: `**Orbital Bombardment** — Chosen: ${pending.spacesChosen.map(s => s.toUpperCase()).join(', ')}. Choose space **${pending.spacesChosen.length + 1} of ${pending.spacesRemaining}**:`,
-      components: spaceRows.rows.slice(0, 5),
+      content: `${obSeqHeader}:\nChoose a row:`,
+      components: obSeqRowBtns.slice(0, 5),
     }).catch(discordCatch);
     saveGames();
     return;
@@ -3356,6 +3414,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
     components: [],
   }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — Bombarded spaces: ${spacesStr}. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
+  cleanupSpacePick(game, `${gameId}_${msgId}`);
   delete game.pendingOrbitalBombardment;
   saveGames();
 }
@@ -3368,6 +3427,7 @@ export async function handleBombDropSpacePick(interaction, ctx) {
   const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapSpaces, findDcMessageIdForFigure } = ctx;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game?.pendingBombDrop?.[msgId]) return;
+  cleanupSpacePick(game, `${gameId}_${msgId}`);
   const pending = game.pendingBombDrop[msgId];
   const chosenSpace = String(space).toLowerCase();
 
