@@ -540,6 +540,36 @@ export function getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displ
   });
 }
 
+/**
+ * Get reaction cards from hand that match timing triggers AND pass full legality checks.
+ * Replaces the local timing-only filter in combat.js with canonical pipeline:
+ * timing trigger match + isCcPlayableNow (game-state blocks) + isCcPlayLegalByRestriction (playableBy).
+ * @param {object} game - Game state
+ * @param {number} playerNum - 1 or 2
+ * @param {string[]} timingTriggers - Mixed-case timing values (e.g. ['whenAttackDeclaredOnYou'])
+ * @returns {{ cardName: string, timing: string, playableBy: string, cost: number }[]}
+ */
+export function getPlayableReactionCardsForTiming(game, playerNum, timingTriggers) {
+  const hand = getCcHand(game, playerNum) || [];
+  if (!hand.length) return [];
+  const triggerSet = new Set(timingTriggers.map(t => String(t).toLowerCase().trim()));
+  const results = [];
+  const seen = new Set();
+  for (const cardName of hand) {
+    if (seen.has(cardName)) continue;
+    seen.add(cardName);
+    const effect = getCcEffect(cardName);
+    if (!effect || !effect.timing) continue;
+    const timingLower = String(effect.timing).toLowerCase().trim();
+    if (!triggerSet.has(timingLower)) continue;
+    if (!isCcPlayableNow(game, playerNum, cardName)) continue;
+    const { legal } = isCcPlayLegalByRestriction(game, playerNum, cardName);
+    if (!legal) continue;
+    results.push({ cardName, timing: effect.timing, playableBy: effect.playableBy || 'Any Figure', cost: effect.cost ?? 0 });
+  }
+  return results;
+}
+
 /** Get extra keywords from Programming Override for a DC (4-LOM). */
 function _getProgrammingOverrideKeywords(game, playerNum, dcName) {
   const trait = game?.roundProgrammingOverrideTrait?.[playerNum];
