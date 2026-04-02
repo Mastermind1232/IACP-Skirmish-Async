@@ -1,0 +1,12 @@
+tests/headless/*.json
+tests/headless/*.test.js
+tests/certification/
+tests/domain/
+iacp_extracted/
+tmp-s12-new/
+tmp-s12/
+*.vmod
+*.docx
+test-map-output.png
+mos-eisley-extracted/
+parse_errors.txt
