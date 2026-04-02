@@ -17,18 +17,26 @@ import {
   getFigureSize,
 } from '../data-loader.js';
 
-function _countGameSpaces(game, coordA, coordB) {
-  const mapId = game.selectedMap?.id;
-  const ms = mapId ? getMapSpaces(mapId) : null;
-  if (!ms) return Infinity;
+/** Compute the set of edge keys for closed (not-yet-opened) doors on the current map. */
+export function getClosedDoorEdges(game) {
+  const mapId = game?.selectedMap?.id;
+  if (!mapId) return new Set();
   const allDoors = getMapTokensData()?.[mapId]?.doors || [];
+  if (!allDoors.length) return new Set();
   const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
-  const closedDoorEdges = new Set(
+  return new Set(
     allDoors
       .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`); })
       .map(e => edgeKey(e[0], e[1]))
   );
-  return countSpaces(ms, coordA, coordB, closedDoorEdges);
+}
+
+/** Graph-distance between two spaces, respecting closed doors. */
+export function countGameSpaces(game, coordA, coordB) {
+  const mapId = game?.selectedMap?.id;
+  const ms = mapId ? getMapSpaces(mapId) : null;
+  if (!ms) return Infinity;
+  return countSpaces(ms, coordA, coordB, getClosedDoorEdges(game));
 }
 
 /** Get a figure's effective size, preferring stored orientation over base size. */
@@ -195,7 +203,7 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
         const oppDcName = dcNameFromFigureKey(oppFk);
         const oppEff = getDcEffects()?.[oppDcName];
         if ((oppEff?.specialAbilityIds || []).includes('alter_mind_obiwan')) {
-          if (_countGameSpaces(game, figPos, oppCoord) <= 3) return options; // blocked — return empty
+          if (countGameSpaces(game, figPos, oppCoord) <= 3) return options; // blocked — return empty
         }
       }
     }
@@ -213,7 +221,7 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
         const apiEff = allEff[apiDcName];
         const apiKw = (apiEff?.keywords || []).map(k => String(k).toUpperCase());
         if (!apiKw.includes('FORCE USER')) continue;
-        if (_countGameSpaces(game, figPos, apiCoord) <= 3) return options; // blocked — return empty
+        if (countGameSpaces(game, figPos, apiCoord) <= 3) return options; // blocked — return empty
       }
     }
   }
@@ -283,7 +291,7 @@ function _getAlterMindExcludedCells(game) {
         const tDcName = dcNameFromFigureKey(tFk);
         const tEff = allEff[tDcName];
         if ((tEff?.cost ?? 99) > 9) continue;
-        if (_countGameSpaces(game, pos, tPos) > 3) continue;
+        if (countGameSpaces(game, pos, tPos) > 3) continue;
         const size = getEffectiveFigureSize(game, tFk, tDcName);
         for (const c of getFootprintCells(tPos, size)) excluded[pn].add(normalizeCoord(c));
       }
@@ -310,7 +318,7 @@ function _getPowerfulInfluenceExcludedCells(game) {
     if (!excluded[oppPn]) excluded[oppPn] = new Set();
     for (const [tFk, tPos] of Object.entries(game.figurePositions?.[oppPn] || {})) {
       if (!tPos) continue;
-      if (_countGameSpaces(game, pos, tPos) > 3) continue;
+      if (countGameSpaces(game, pos, tPos) > 3) continue;
       const tDcName = dcNameFromFigureKey(tFk);
       const size = getEffectiveFigureSize(game, tFk, tDcName);
       for (const c of getFootprintCells(tPos, size)) excluded[oppPn].add(normalizeCoord(c));
