@@ -558,6 +558,344 @@ describe('headless combat resolution', () => {
       'LOS-PARITY: MASSIVE AT-RT at e3 must NOT block LOS — target at e5 appears via computeAttackTargets');
   });
 
+  it('LOS-19b: non-MASSIVE figure blocks LOS in False Orders attack targeting', async () => {
+    // Layout: P1 controls P2's ranged Stormtrooper (Elite) via False Orders.
+    //   P2 Stormtrooper (Elite) at e2 (controlled ranged attacker)
+    //   P1 Han Solo at e3 (intervening figure — should block LOS to e5)
+    //   P1 Luke Skywalker at e5 (target behind blocker)
+    //
+    // Before fix: null passed for figure blocking, so Luke at e5 was targetable through Han.
+    // After fix: Han at e3 blocks LOS from e2 to e5.
+    const fh = createFlowHarness({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Han Solo' }, { dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Stormtrooper (Elite)' }],
+    });
+    const game = fh.getGame();
+    game.p1PlayAreaId = 'p1-play-area';
+    game.p2PlayAreaId = 'p2-play-area';
+    game.generalId = 'general-channel';
+
+    // Discover P1's DC msgId (controller of False Orders)
+    const dcMeta = fh.getDcMessageMeta();
+    let p1MsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.playerNum === 1) { p1MsgId = msgId; break; }
+    }
+    assert.ok(p1MsgId, 'P1 DC msgId found');
+
+    // Pin figures
+    const hanFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Han Solo'));
+    const lukeFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Luke Skywalker'));
+    game.figurePositions[1][hanFigKey] = 'e3';
+    game.figurePositions[1][lukeFigKey] = 'e5';
+    const p2Figs = Object.keys(game.figurePositions[2]);
+    const controlledFigKey = p2Figs.find(fk => fk.startsWith('Stormtrooper (Elite)'));
+    game.figurePositions[2][controlledFigKey] = 'e2';
+    for (const fk of p2Figs) {
+      if (fk !== controlledFigKey) game.figurePositions[2][fk] = 't17';
+    }
+
+    // Set up pendingFalseOrders: P1 controls P2's Stormtrooper via False Orders
+    game.pendingFalseOrders = {
+      controlledFigureKey: controlledFigKey,
+      controlledPlayerNum: 2,
+      controllerPlayerNum: 1,
+      murneRinMsgId: p1MsgId,
+    };
+
+    // Trigger the False Orders attack action
+    await fh.act(`false_orders_action_${game.gameId}_${p1MsgId}_attack`, 'player1');
+
+    // Check: falseOrdersAttackTargets should mark Luke at e5 as hasLOS: false
+    const targets = game.falseOrdersAttackTargets?.[p1MsgId] || [];
+    const lukeTarget = targets.find(t => t.figureKey === lukeFigKey);
+    if (lukeTarget) {
+      assert.strictEqual(lukeTarget.hasLOS, false,
+        'LOS-19b: Han at e3 blocks LOS from e2 to e5 — Luke target should have hasLOS=false');
+    }
+    // Either Luke doesn't appear (filtered by range) or appears with hasLOS=false — both are correct
+    // The key assertion: Luke should NOT appear with hasLOS=true
+    const lukeWithLOS = targets.find(t => t.figureKey === lukeFigKey && t.hasLOS === true);
+    assert.strictEqual(lukeWithLOS, undefined,
+      'LOS-19b: Luke at e5 must NOT have hasLOS=true when Han blocks at e3');
+  });
+
+  it('LOS-19b: MASSIVE figure does NOT block LOS in False Orders attack targeting', async () => {
+    // Same layout but with MASSIVE AT-RT at e3 instead of Han.
+    //   P2 Stormtrooper (Elite) at e2 (controlled ranged attacker)
+    //   P1 AT-RT at e3 (MASSIVE — should NOT block LOS)
+    //   P1 Stormtrooper (Regular) at e5 (target)
+    const fh = createFlowHarness({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'AT-RT' }, { dcName: 'Stormtrooper (Regular)' }],
+      p2Army: [{ dcName: 'Stormtrooper (Elite)' }],
+    });
+    const game = fh.getGame();
+    game.p1PlayAreaId = 'p1-play-area';
+    game.p2PlayAreaId = 'p2-play-area';
+    game.generalId = 'general-channel';
+
+    const dcMeta = fh.getDcMessageMeta();
+    let p1MsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.playerNum === 1) { p1MsgId = msgId; break; }
+    }
+    assert.ok(p1MsgId, 'P1 DC msgId found');
+
+    // Pin figures
+    const atrtFig = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('AT-RT'));
+    const regularFigs = Object.keys(game.figurePositions[1]).filter(fk => fk.startsWith('Stormtrooper (Regular)'));
+    game.figurePositions[1][atrtFig] = 'e3';
+    game.figureOrientations = game.figureOrientations || {};
+    game.figureOrientations[atrtFig] = '2x2';
+    game.figurePositions[1][regularFigs[0]] = 'e5';
+    for (let i = 1; i < regularFigs.length; i++) game.figurePositions[1][regularFigs[i]] = `s${15 + i}`;
+    // Park remaining P1 figures far away
+    for (const fk of Object.keys(game.figurePositions[1])) {
+      if (fk !== atrtFig && !regularFigs.includes(fk)) game.figurePositions[1][fk] = 't18';
+    }
+
+    const p2Figs = Object.keys(game.figurePositions[2]);
+    const controlledFigKey = p2Figs.find(fk => fk.startsWith('Stormtrooper (Elite)'));
+    game.figurePositions[2][controlledFigKey] = 'e2';
+    for (const fk of p2Figs) {
+      if (fk !== controlledFigKey) game.figurePositions[2][fk] = 't17';
+    }
+
+    game.pendingFalseOrders = {
+      controlledFigureKey: controlledFigKey,
+      controlledPlayerNum: 2,
+      controllerPlayerNum: 1,
+      murneRinMsgId: p1MsgId,
+    };
+
+    await fh.act(`false_orders_action_${game.gameId}_${p1MsgId}_attack`, 'player1');
+
+    // Check: Stormtrooper (Regular) at e5 should have hasLOS=true (MASSIVE AT-RT doesn't block)
+    const targets = game.falseOrdersAttackTargets?.[p1MsgId] || [];
+    const regularTarget = targets.find(t => t.figureKey === regularFigs[0]);
+    assert.ok(regularTarget, 'LOS-19b: Stormtrooper target at e5 appears in False Orders targets');
+    assert.strictEqual(regularTarget.hasLOS, true,
+      'LOS-19b: MASSIVE AT-RT at e3 must NOT block LOS — target at e5 has hasLOS=true');
+  });
+
+  it('Fulcrum: accept — both players draw 1 CC', async () => {
+    const fh = createFlowHarness({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Agent Kallus' }],
+      p2Army: [{ dcName: 'Stormtrooper (Elite)' }],
+      p1CcHand: ['Take Initiative'],
+      p2CcHand: ['Negation'],
+      p1CcDeck: ['Element of Surprise'],
+      p2CcDeck: ['Celebration'],
+    });
+    const game = fh.getGame();
+
+    // Record initial hand sizes
+    const p1HandBefore = game.player1CcHand.length;
+    const p2HandBefore = game.player2CcHand.length;
+    assert.strictEqual(p1HandBefore, 1, 'P1 starts with 1 CC in hand');
+    assert.strictEqual(p2HandBefore, 1, 'P2 starts with 1 CC in hand');
+
+    // Activate Agent Kallus → triggers Fulcrum prompt (does NOT auto-draw)
+    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
+    assert.ok(activateAction, 'P1 has activate action for Kallus');
+    await fh.act(activateAction.customId, 'player1');
+
+    // Hands should be unchanged — prompt shown but not yet resolved
+    assert.strictEqual(game.player1CcHand.length, p1HandBefore, 'P1 hand unchanged before Fulcrum choice');
+    assert.strictEqual(game.player2CcHand.length, p2HandBefore, 'P2 hand unchanged before Fulcrum choice');
+
+    // Discover Kallus msgId
+    const dcMeta = fh.getDcMessageMeta();
+    let kallusMsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.dcName === 'Agent Kallus') { kallusMsgId = msgId; break; }
+    }
+    assert.ok(kallusMsgId, 'Kallus msgId found');
+
+    // Click "Use Fulcrum"
+    await fh.act(`act_passive_${game.gameId}_${kallusMsgId}_fulcrum_use`, 'player1');
+
+    // Both hands should have grown by 1
+    assert.strictEqual(game.player1CcHand.length, p1HandBefore + 1, 'P1 drew 1 CC from Fulcrum');
+    assert.strictEqual(game.player2CcHand.length, p2HandBefore + 1, 'P2 drew 1 CC from Fulcrum');
+    assert.ok(game.player1CcHand.includes('Element of Surprise'), 'P1 drew Element of Surprise');
+    assert.ok(game.player2CcHand.includes('Celebration'), 'P2 drew Celebration');
+  });
+
+  it('Fulcrum: decline — hand sizes unchanged', async () => {
+    const fh = createFlowHarness({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Agent Kallus' }],
+      p2Army: [{ dcName: 'Stormtrooper (Elite)' }],
+      p1CcHand: ['Take Initiative'],
+      p2CcHand: ['Negation'],
+      p1CcDeck: ['Element of Surprise'],
+      p2CcDeck: ['Celebration'],
+    });
+    const game = fh.getGame();
+
+    const p1HandBefore = game.player1CcHand.length;
+    const p2HandBefore = game.player2CcHand.length;
+
+    // Activate Agent Kallus
+    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
+    assert.ok(activateAction, 'P1 has activate action for Kallus');
+    await fh.act(activateAction.customId, 'player1');
+
+    // Discover Kallus msgId
+    const dcMeta = fh.getDcMessageMeta();
+    let kallusMsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.dcName === 'Agent Kallus') { kallusMsgId = msgId; break; }
+    }
+    assert.ok(kallusMsgId, 'Kallus msgId found');
+
+    // Click "Skip"
+    await fh.act(`act_passive_${game.gameId}_${kallusMsgId}_fulcrum_skip`, 'player1');
+
+    // Hands must be unchanged
+    assert.strictEqual(game.player1CcHand.length, p1HandBefore, 'P1 hand unchanged after declining Fulcrum');
+    assert.strictEqual(game.player2CcHand.length, p2HandBefore, 'P2 hand unchanged after declining Fulcrum');
+    // Decks must be unchanged too
+    assert.strictEqual(game.player1CcDeck.length, 1, 'P1 deck unchanged');
+    assert.strictEqual(game.player2CcDeck.length, 1, 'P2 deck unchanged');
+  });
+
+  it('Useful Hide: range filter — only friendly within 3 spaces gets Evade', async () => {
+    // P1 Stormtrooper (Elite) at e2 attacks P2 Tauntaun Rider at e3 (1 HP).
+    // P2 also has: Rebel Saboteur at e5 (within 3 of e3), Luke Skywalker at e10 (beyond 3).
+    // On defeat, Useful Hide should give Evade only to the Saboteur (within 3), not Luke (beyond 3).
+    const fh = createFlowHarness({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Stormtrooper (Elite)' }],
+      p2Army: [{ dcName: 'Tauntaun Rider' }, { dcName: 'Rebel Saboteur (Elite)' }, { dcName: 'Luke Skywalker' }],
+      diceOverrides: {
+        attackRolls: [{ acc: 5, dmg: 3, surge: 0, dice: [{ color: 'blue', acc: 5, dmg: 0, surge: 0 }, { color: 'green', acc: 0, dmg: 3, surge: 0 }] }],
+        defenseRolls: [{ block: 0, evade: 0, dodge: false, color: 'black' }],
+      },
+    });
+    const game = fh.getGame();
+    game.p1PlayAreaId = 'p1-play-area';
+    game.p2PlayAreaId = 'p2-play-area';
+    game.generalId = 'general-channel';
+
+    // Pin P1 attacker
+    const p1Figs = Object.keys(game.figurePositions[1]);
+    const attackerFigKey = p1Figs.find(fk => fk.startsWith('Stormtrooper (Elite)'));
+    game.figurePositions[1][attackerFigKey] = 'e2';
+    for (const fk of p1Figs) {
+      if (fk !== attackerFigKey) game.figurePositions[1][fk] = 't17';
+    }
+
+    // Pin P2 figures
+    const p2Figs = Object.keys(game.figurePositions[2]);
+    const tauntaunFig = p2Figs.find(fk => fk.startsWith('Tauntaun Rider'));
+    const saboteurFig = p2Figs.find(fk => fk.startsWith('Rebel Saboteur'));
+    const lukeFig = p2Figs.find(fk => fk.startsWith('Luke Skywalker'));
+    game.figurePositions[2][tauntaunFig] = 'e3';
+    game.figurePositions[2][saboteurFig] = 'e5';   // within 3 of e3
+    game.figurePositions[2][lukeFig] = 'e10';       // beyond 3 of e3
+    for (const fk of p2Figs) {
+      if (![tauntaunFig, saboteurFig, lukeFig].includes(fk)) game.figurePositions[2][fk] = 't18';
+    }
+
+    // Set Tauntaun HP to 1 so attack kills it
+    const dcMeta = fh.getDcMessageMeta();
+    let tauntaunMsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.dcName === 'Tauntaun Rider') { tauntaunMsgId = msgId; break; }
+    }
+    const tauntaunHs = fh.getDeps().dcHealthState.get(tauntaunMsgId);
+    if (tauntaunHs?.[0]) tauntaunHs[0] = [1, tauntaunHs[0][1]];
+
+    // Snapshot tokens before combat
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    const sabEvadeBefore = (game.figurePowerTokens[saboteurFig] || []).filter(t => t === 'Evade').length;
+    const lukeEvadeBefore = (game.figurePowerTokens[lukeFig] || []).filter(t => t === 'Evade').length;
+
+    // Activate P1 attacker
+    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
+    assert.ok(activateAction, 'P1 has activate action');
+    await fh.act(activateAction.customId, 'player1');
+
+    // Select Tauntaun Rider as attack target
+    const attackAction = fh.getActions(1).find(a =>
+      a.type === 'attack_target' && a.params?.targetFigureKey === tauntaunFig
+    );
+    assert.ok(attackAction, 'Tauntaun Rider is a valid attack target');
+    await fh.act(attackAction.customId, 'player1');
+
+    // Both players ready
+    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_ready');
+    if (readyP1) await fh.act(readyP1.customId, 'player1');
+    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_ready');
+    if (readyP2) await fh.act(readyP2.customId, 'player2');
+
+    // Attack roll
+    const atkRoll = fh.getActions(1).find(a => a.type === 'combat_roll');
+    assert.ok(atkRoll, 'Attacker has combat_roll');
+    await fh.act(atkRoll.customId, 'player1');
+
+    // Defense roll
+    const defRoll = fh.getActions(2).find(a => a.type === 'combat_roll');
+    assert.ok(defRoll, 'Defender has combat_roll');
+    await fh.act(defRoll.customId, 'player2');
+
+    // Advance through reroll/token/surge phases until resolve
+    for (let step = 0; step < 20; step++) {
+      const p1Actions = fh.getActions(1);
+      const p2Actions = fh.getActions(2);
+      const resolve = p1Actions.find(a => a.type === 'combat_resolve')
+        || p2Actions.find(a => a.type === 'combat_resolve');
+      if (resolve) {
+        await fh.act(resolve.customId, resolve === p1Actions.find(a => a.type === 'combat_resolve') ? 'player1' : 'player2');
+        break;
+      }
+      const skipSurges = p1Actions.find(a => a.type === 'combat_skip_surges');
+      if (skipSurges) { await fh.act(skipSurges.customId, 'player1'); continue; }
+      const reroll = p1Actions.find(a => a.type === 'combat_reroll')
+        || p2Actions.find(a => a.type === 'combat_reroll');
+      if (reroll) {
+        await fh.act(reroll.customId, reroll === p1Actions.find(a => a.type === 'combat_reroll') ? 'player1' : 'player2');
+        continue;
+      }
+      const token = p1Actions.find(a => a.type === 'combat_token')
+        || p2Actions.find(a => a.type === 'combat_token');
+      if (token) {
+        await fh.act(token.customId, token === p1Actions.find(a => a.type === 'combat_token') ? 'player1' : 'player2');
+        continue;
+      }
+      const passive = p1Actions.find(a => a.type === 'combat_passive')
+        || p2Actions.find(a => a.type === 'combat_passive');
+      if (passive) {
+        await fh.act(passive.customId, passive === p1Actions.find(a => a.type === 'combat_passive') ? 'player1' : 'player2');
+        continue;
+      }
+      // Fallback: try any remaining combat action
+      const any = [...p1Actions, ...p2Actions].find(a => a.type.startsWith('combat_'));
+      if (any) {
+        const userId = p1Actions.includes(any) ? 'player1' : 'player2';
+        await fh.act(any.customId, userId);
+        continue;
+      }
+      break;
+    }
+
+    // Assert: Tauntaun Rider is defeated (position removed)
+    assert.ok(!game.figurePositions[2][tauntaunFig], 'Tauntaun Rider position removed (defeated)');
+
+    // Assert: Saboteur (within 3) got Evade token
+    const sabEvadeAfter = (game.figurePowerTokens[saboteurFig] || []).filter(t => t === 'Evade').length;
+    assert.ok(sabEvadeAfter > sabEvadeBefore, `Saboteur within 3 spaces gained Evade token (${sabEvadeBefore} → ${sabEvadeAfter})`);
+
+    // Assert: Luke (beyond 3) did NOT get Evade token
+    const lukeEvadeAfter = (game.figurePowerTokens[lukeFig] || []).filter(t => t === 'Evade').length;
+    assert.strictEqual(lukeEvadeAfter, lukeEvadeBefore, 'Luke beyond 3 spaces did NOT gain Evade token');
+  });
+
   it('VP award triggers game end at 40', async () => {
     const { game, deps } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])

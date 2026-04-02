@@ -152,4 +152,57 @@ describe('flag list completeness', () => {
     const unique = new Set(all);
     assert.strictEqual(all.length, unique.size, 'Duplicate flags in round lists');
   });
+
+  it('all game-state.js round-scoped container keys appear in round cleanup lists', () => {
+    // These 10 keys are the "Round-scoped containers" from ensureGameShape (game-state.js:166-170).
+    // If a key is added there, it MUST also appear in a ROUND_*_FLAGS list or it will leak across rounds.
+    const ROUND_SCOPED_CONTAINERS = [
+      'roundFigureAbilityUsed', 'roundAttackRerollDice', 'roundAttackSurgeBonus',
+      'roundDefenseBonusBlock', 'roundDefenseBonusEvade', 'roundDefenderBonusBlockPerEvade',
+      'roundEfficientTravel', 'roundProgrammingOverrideTrait',
+      'roundTrooperAttackHitBonus', 'roundVehicleSpeedBonus',
+    ];
+    const allRoundFlags = new Set([
+      ...ROUND_OBJECT_FLAGS, ...ROUND_NULL_FLAGS, ...ROUND_ARRAY_FLAGS,
+      ...ROUND_FALSE_FLAGS, ...ROUND_DELETE_FLAGS,
+    ]);
+    const missing = ROUND_SCOPED_CONTAINERS.filter(k => !allRoundFlags.has(k));
+    assert.deepStrictEqual(missing, [],
+      `Round-scoped containers missing from cleanup lists: ${missing.join(', ')}`);
+  });
+
+  it('cleanupRoundStart resets every round-list key to its default', () => {
+    const game = {};
+    // Pollute every round-list key with a non-default value
+    for (const key of ROUND_OBJECT_FLAGS) game[key] = { leaked: true };
+    for (const key of ROUND_NULL_FLAGS) game[key] = 'leaked';
+    for (const key of ROUND_ARRAY_FLAGS) game[key] = ['leaked'];
+    for (const key of ROUND_FALSE_FLAGS) game[key] = true;
+    for (const key of ROUND_DELETE_FLAGS) game[key] = 'leaked';
+    // Also add a non-round key to verify it's preserved
+    game.currentRound = 5;
+    game.player1Id = 'test-player';
+
+    cleanupRoundStart(game);
+
+    // Verify every round key is reset
+    for (const key of ROUND_OBJECT_FLAGS) {
+      assert.deepStrictEqual(game[key], {}, `${key} should be {} after cleanup`);
+    }
+    for (const key of ROUND_NULL_FLAGS) {
+      assert.strictEqual(game[key], null, `${key} should be null after cleanup`);
+    }
+    for (const key of ROUND_ARRAY_FLAGS) {
+      assert.deepStrictEqual(game[key], [], `${key} should be [] after cleanup`);
+    }
+    for (const key of ROUND_FALSE_FLAGS) {
+      assert.strictEqual(game[key], false, `${key} should be false after cleanup`);
+    }
+    for (const key of ROUND_DELETE_FLAGS) {
+      assert.ok(!(key in game), `${key} should be deleted after cleanup`);
+    }
+    // Non-round state preserved
+    assert.strictEqual(game.currentRound, 5);
+    assert.strictEqual(game.player1Id, 'test-player');
+  });
 });

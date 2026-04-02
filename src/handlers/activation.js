@@ -1337,22 +1337,13 @@ export async function handleConfirmActivate(interaction, ctx) {
     );
     await thread.send({ content: `🏃 **Responsive** — **${displayName}**: Choose one:`, components: [respRow] }).catch(discordCatch);
   }
-  // Fulcrum (Agent Kallus): at start of activation, each player draws 1 CC
+  // Fulcrum (Agent Kallus): at start of activation, you MAY have each player draw 1 CC
   if (meta.dcName === 'Agent Kallus') {
-    const _fParts = [];
-    for (const pn of [1, 2]) {
-      const deckKey = ccDeckKey(pn);
-      const handKey = ccHandKey(pn);
-      const deck = game[deckKey] || [];
-      if (deck.length > 0) {
-        const card = deck.shift();
-        game[handKey] = [...(game[handKey] || []), card];
-        _fParts.push(`P${pn} drew 1 CC`);
-      } else {
-        _fParts.push(`P${pn} deck empty`);
-      }
-    }
-    await thread.send({ content: `🕵️ **Fulcrum** — Each player draws 1 Command card. (${_fParts.join(', ')})` }).catch(discordCatch);
+    const fulcrumRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_fulcrum_use`).setLabel('Use Fulcrum').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_fulcrum_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({ content: `🕵️ **Fulcrum** — **${displayName}**: Each player may draw 1 Command card. Use Fulcrum?`, components: [fulcrumRow] }).catch(discordCatch);
   }
   // Hunger (Wampa Regular/Elite): position-aware hostile proximity check
   {
@@ -2456,6 +2447,25 @@ export async function handleActPassive(interaction, ctx) {
         hs[fkIdx] = [Math.min(max, (cur ?? max) + 1), max];
       }
       await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** recovered **1 Damage**.`, components: [] }).catch(discordCatch);
+    }
+  } else if (ability === 'fulcrum') {
+    if (choice === 'use') {
+      const _fParts = [];
+      for (const pn of [1, 2]) {
+        const deckKey = ccDeckKey(pn);
+        const handKey = ccHandKey(pn);
+        const deck = game[deckKey] || [];
+        if (deck.length > 0) {
+          const card = deck.shift();
+          game[handKey] = [...(game[handKey] || []), card];
+          _fParts.push(`P${pn} drew 1 CC`);
+        } else {
+          _fParts.push(`P${pn} deck empty`);
+        }
+      }
+      await interaction.message.edit({ content: `🕵️ **Fulcrum** — Each player draws 1 Command card. (${_fParts.join(', ')})`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.message.edit({ content: `🕵️ **Fulcrum** — Skipped.`, components: [] }).catch(discordCatch);
     }
   } else if (ability === 'hunger') {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';

@@ -1114,10 +1114,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             }
           }
         }
-        // Useful Hide (Tauntaun Rider): when defeated, distribute up to 2 Evade Tokens among friendly figures
+        // Useful Hide (Tauntaun Rider): when defeated, distribute up to 2 Evade Tokens among friendly figures within 3 spaces
         if (_lsDcName === 'Tauntaun Rider') {
-          const _uhFriendly = Object.keys(game.figurePositions?.[defenderPlayerNum] || {})
-            .filter(k => k !== (combat.target.figureKey || ''));
+          const _uhDefeatPos = combat._savedTargetPos;
+          const _uhFriendly = Object.entries(game.figurePositions?.[defenderPlayerNum] || {})
+            .filter(([k, pos]) => k !== (combat.target.figureKey || '') && pos && _uhDefeatPos && _countGameSpaces(game, _uhDefeatPos, pos) <= 3)
+            .map(([k]) => k);
           if (_uhFriendly.length > 0) {
             let _uhGranted = 0;
             const _uhRecipients = [];

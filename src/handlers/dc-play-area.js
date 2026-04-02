@@ -961,6 +961,41 @@ function buildArsenalSelectOptions(diceCount) {
   return options;
 }
 
+/**
+ * Build the Set of figure-blocking coordinates for LOS checks.
+ * Shared by buildAndSendAttackTargets and False Orders attack targeting.
+ *
+ * @param {object} game - game state
+ * @param {number} playerNum - attacker's player number
+ * @param {string} attackerPos - attacker coordinate
+ * @param {string} attackerSize - attacker size (e.g. '1x1', '2x1')
+ * @param {object} ctx - handler context with getDcEffects, getFigureSize, getFootprintCells
+ * @param {object} [opts]
+ * @param {boolean} [opts.marksmanActive] - if true, return null (figures don't block)
+ * @param {boolean} [opts.ignoreBlocking] - if true, return null (attacker ignores blocking)
+ * @returns {Set<string>|null}
+ */
+function buildFigureBlockingCoords(game, playerNum, attackerPos, attackerSize, ctx, opts) {
+  if (opts?.marksmanActive || opts?.ignoreBlocking) return null;
+  const { getDcEffects, getFigureSize, getFootprintCells } = ctx;
+  const enemyPlayerNum = playerNum === 1 ? 2 : 1;
+  const attackerFpCells = getFootprintCells(attackerPos, attackerSize);
+  const attackerFpSet = new Set(attackerFpCells.map(c => String(c).toLowerCase()));
+  const blocking = new Set();
+  for (const poses of [game.figurePositions?.[playerNum] || {}, game.figurePositions?.[enemyPlayerNum] || {}]) {
+    for (const [fk, pos] of Object.entries(poses)) {
+      if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
+      const fkDcName = dcNameFromFigureKey(fk);
+      const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
+      if (fkEff?.companion === true) continue;
+      if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
+      const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
+      for (const cell of getFootprintCells(pos, fkSize)) blocking.add(String(cell).toLowerCase());
+    }
+  }
+  return blocking;
+}
+
 /** Build and display the attack target selector buttons. */
 async function buildAndSendAttackTargets(
   interaction, ctx, game, meta, msgId, figureKey, figureIndex,
@@ -1019,27 +1054,13 @@ async function buildAndSendAttackTargets(
   // attackerSize needed both for figureBlockingCoords exclusion and for multi-cell LOS.
   const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
   const attackerFpCells = getFootprintCells(attackerPos, attackerSize);
-  let allFigureBlockingCoords = null;
   // Marksman CC card: figures do not block LOS for this attack
   const marksmanActive = game.nextAttackIgnoreFigureLOS?.[msgId];
-  if (marksmanActive) {
-    delete game.nextAttackIgnoreFigureLOS[msgId];
-    // allFigureBlockingCoords stays null — figures don't block LOS
-  } else if (!attackerIgnoresFigureBlocking) {
-    allFigureBlockingCoords = new Set();
-    const attackerFpSet = new Set(attackerFpCells.map(c => String(c).toLowerCase()));
-    for (const poses_ of [game.figurePositions?.[playerNum] || {}, game.figurePositions?.[enemyPlayerNum] || {}]) {
-      for (const [fk, pos] of Object.entries(poses_)) {
-        if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
-        const fkDcName = dcNameFromFigureKey(fk);
-        const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
-        if (fkEff?.companion === true) continue; // companions don't block LOS (rules: "non-companion figure")
-        if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
-        const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
-        for (const cell of getFootprintCells(pos, fkSize)) allFigureBlockingCoords.add(String(cell).toLowerCase());
-      }
-    }
-  }
+  if (marksmanActive) delete game.nextAttackIgnoreFigureLOS[msgId];
+  const allFigureBlockingCoords = buildFigureBlockingCoords(game, playerNum, attackerPos, attackerSize, ctx, {
+    marksmanActive,
+    ignoreBlocking: attackerIgnoresFigureBlocking,
+  });
   const targets = [];
   const poses = game.figurePositions?.[enemyPlayerNum] || {};
   const dcList = getSquad(game, enemyPlayerNum)?.dcList || [];
@@ -2884,11 +2905,29 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   for (const [figKey, pos] of Object.entries(game.figurePositions?.[2] || {})) {
     if (figKey !== controlledFigureKey) allOtherPositions[figKey] = pos;
   }
+  // Build figure-blocking coords for the controlled attacker (LOS-19b fix)
+  const controlledSize = game.figureOrientations?.[controlledFigureKey] || getFigureSize(controlledName);
+  const foBlockingCoords = buildFigureBlockingCoords(game, controlledPlayerNum, controlledPos, controlledSize, ctx);
   const foTargets = [];
   for (const [figKey, targetPos] of Object.entries(allOtherPositions)) {
     const dist = countSpaces(ms, controlledPos, targetPos, foClosedDoorEdges);
     if (dist < foMinRange || dist > foEffectiveMaxRange) continue;
-    const los = hasLineOfSight ? hasLineOfSight(controlledPos, targetPos, losMs, null) : true;
+    // Refine blocking set per target: remove target's own footprint, skip blocking for MASSIVE targets
+    let losBlockingCoords = foBlockingCoords;
+    if (foBlockingCoords) {
+      const tDcName = dcNameFromFigureKey(figKey);
+      const tEff = getDcEffects()[tDcName] || getDcEffects()[tDcName.replace(/\s*\[.*\]\s*$/, '')];
+      if ((tEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {
+        losBlockingCoords = null;
+      } else {
+        const tSize = game.figureOrientations?.[figKey] || getFigureSize(tDcName);
+        const tFp = getFootprintCells(targetPos, tSize).map(c => String(c).toLowerCase());
+        if (tFp.some(c => foBlockingCoords.has(c))) {
+          losBlockingCoords = new Set([...foBlockingCoords].filter(c => !tFp.includes(c)));
+        }
+      }
+    }
+    const los = hasLineOfSight ? hasLineOfSight(controlledPos, targetPos, losMs, losBlockingCoords) : true;
     const fkMatch = figKey.match(/^(.+)-(\d+)-(\d+)$/);
     const targetDcName = fkMatch ? dcNameFromFigureKey(figKey) : figKey;
     const dg = fkMatch ? fkMatch[2] : '1';
