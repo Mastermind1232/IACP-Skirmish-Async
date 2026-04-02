@@ -46,6 +46,7 @@ export {
   getReachableSpaces,
   getPathCost,
   getFiguresAdjacentToTarget,
+  getFiguresAdjacentToCoord,
   collectOverlappingFigures,
   pushFigureToNearestValid,
   resolveMassivePush,

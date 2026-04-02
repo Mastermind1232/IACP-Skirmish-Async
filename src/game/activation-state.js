@@ -109,6 +109,7 @@ const ACTIVATION_SCALAR_FLAGS = [
   'onTheLamActive',
   'arcingShotActiveScalar',
   'pendingWookSlamPush',
+  'pendingSurgeOverflow',
 ];
 
 /**
@@ -225,6 +226,7 @@ const ROUND_OBJECT_FLAGS = [
   'imperialRetrofittingMultiAttack',
   'urgencyMustSpendAll',
   'arcingShotActive',
+  'pendingSpacePick',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -314,6 +316,7 @@ const ROUND_NULL_FLAGS = [
   'pendingCcChoice',
   'pendingCcSpaceChoice',
   'pendingIKnowEverything',
+  'pendingSurgeOverflow',
 ];
 
 const ROUND_ARRAY_FLAGS = [

@@ -433,16 +433,8 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.saberOrbitAttacksRemaining?.[msgId]) delete game.saberOrbitAttacksRemaining[msgId];
   if (game.pendingMissileSalvo?.[msgId]) delete game.pendingMissileSalvo[msgId];
   if (game.pendingEe3Carbine?.[msgId]) delete game.pendingEe3Carbine[msgId];
-  // Stun: discarded at the end of the figure's activation
-  if (game.figureConditions) {
-    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-    const stats = ctx.getDcStats ? ctx.getDcStats(meta.dcName) : {};
-    const figures = stats.figures ?? 1;
-    for (let f = 0; f < figures; f++) {
-      const fk = `${meta.dcName}-${dgIndex}-${f}`;
-      filterCondition(game, fk, 'Stun');
-    }
-  }
+  // Wave 4: Stun is NOT auto-cleared at end of activation.
+  // Stunned figures must spend 1 action (dc_remove_stun_) to discard Stun (rules: STUNNED L2759-2762).
   if (game.dcActivationLogMessageIds?.[msgId]) {
     try {
       const logCh = await fetchGameChannel(client, game.generalId);
@@ -460,6 +452,66 @@ export async function handleDcUnactivate(interaction, ctx) {
     files,
     components: getDcPlayAreaComponents(msgId, false, game, meta.dcName),
   });
+  saveGames();
+}
+
+/**
+ * Remove Stun: costs 1 action (rules: STUNNED L2759-2762).
+ * customId format: dc_remove_stun_{msgId}_f{figureIndex}
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleDcRemoveStun(interaction, ctx) {
+  const {
+    getGame,
+    replyIfGameEnded,
+    dcMessageMeta,
+    DC_ACTIONS_PER_ACTIVATION,
+    updateDcActionsMessage,
+    logGameAction,
+    saveGames,
+    client,
+  } = ctx;
+  const m = interaction.customId.match(/^dc_remove_stun_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid remove-stun button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const msgId = m[1];
+  const figureIndex = parseInt(m[2], 10);
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can use these actions.')) return;
+
+  const actionsData = game.dcActionsData?.[msgId];
+  const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
+  if (actionsRemaining <= 0) {
+    await interaction.followUp({ content: 'No actions remaining this activation.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const conds = game.figureConditions?.[figureKey] || [];
+  if (!conds.includes('Stun')) {
+    await interaction.followUp({ content: 'This figure is not Stunned.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Remove Stun and spend 1 action
+  filterCondition(game, figureKey, 'Stun');
+  actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+
+  const displayName = meta.displayName || meta.dcName;
+  await logGameAction(game, client, `⚡ **${displayName}** spent 1 action to remove **Stunned**.`, { phase: 'ACTIVATION', icon: 'condition' });
+
+  await updateDcActionsMessage(interaction, game, msgId, meta);
   saveGames();
 }
 

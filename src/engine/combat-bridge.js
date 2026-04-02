@@ -259,7 +259,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     getDcList, getDcMessageIds, getDcStats, getDcEffects, getDcEffect, getDcKeywords,
     getPlayerId, getMapSpaces, getEffectiveMapSpaces,
     isWithinN, hasLineOfSight,
-    getFiguresAdjacentToTarget, getFiguresOnOrAdjacentToSpace,
+    getFiguresAdjacentToTarget, getFiguresAdjacentToCoord, getFiguresOnOrAdjacentToSpace,
     getEffectiveFigureSize, getFootprintCells, getFigureSize,
     findDcMessageIdForFigure, lookupFigureDcIndex, getFigureLabel,
     getCcHand, getCcEffectsData, getCcEffect,
@@ -319,6 +319,29 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
+      // Wave 3: Blast from crate-target attack — apply to adjacent figures/objects
+      const _crateBlastAmt = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
+      if (_crateBlastAmt > 0 && hit && damage > 0 && game.selectedMap?.id) {
+        const _crateBlastCoord = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
+        const _crateBlastAdj = getFiguresAdjacentToCoord(game, _crateBlastCoord, game.selectedMap.id, null);
+        for (const { figureKey: _cbFk, playerNum: _cbPn } of _crateBlastAdj) {
+          const _cbMsgId = findDcMessageIdForFigure(game.gameId, _cbPn, _cbFk);
+          if (!_cbMsgId) continue;
+          const { figureIndex: _cbFigIdx } = parseFigureKey(_cbFk);
+          const { newHp: _cbNewHp, wasDefeated: _cbDied } = reduceHp(dcHealthState, game, _cbMsgId, _cbFigIdx, _crateBlastAmt, _cbPn);
+          const _cbName = dcNameFromFigureKey(_cbFk);
+          await logGameAction(game, client, `\u{1F4A5} **Blast ${_crateBlastAmt}** \u2014 **${_cbName}** suffers ${_crateBlastAmt} damage.`, { phase: 'ROUND', icon: 'attack' });
+          if (_cbDied) {
+            const { idx: _cbIdx } = lookupFigureDcIndex(game, _cbPn, _cbFk);
+            const _cbDcName = dcNameFromFigureKey(_cbFk);
+            await processFigureDefeat(game, {
+              defeatedPlayerNum: _cbPn, figureKey: _cbFk,
+              attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+              msgId: _cbMsgId, dcIdx: _cbIdx, dcName: _cbDcName, displayName: _cbName, source: 'Blast',
+            }, { ...deps, client });
+          }
+        }
+      }
       await thread.send({ content: resultText || '(No effect)', components: [] });
       saveGames();
       return;
@@ -368,6 +391,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     const _ctDef = combat.defenseRoll || {};
     console.log(`[COMBAT-TRACE] ${combat.attackerDcName} → ${targetDcName} | hit=${hit} dmg=${damage} | atk=[${_ctRoll.dmg}d,${_ctRoll.acc}a,${_ctRoll.surge}s] def=[${_ctDef.block}b,${_ctDef.evade}e,${_ctDef.dodge ? 'D' : '-'}] | surge_dmg=${combat.surgeDamage || 0} pierce=${(combat.surgePierce || 0) + (combat.bonusPierce || 0)} | hp=${_ctPrevHp}/${_ctMaxHp}→${hit ? Math.max(0, _ctPrevHp - damage) : _ctPrevHp} | defeated=${hit && _ctPrevHp > 0 && (_ctPrevHp - damage) <= 0 ? 'YES' : 'no'}`);
   }
+
+  // Wave 3: Save target position before potential defeat (Blast needs coord after target removed from figurePositions)
+  const _targetCoordBeforeDefeat = game.figurePositions?.[defenderPlayerNum]?.[combat.target?.figureKey];
 
   let _fdNeedsEmbedRefresh = false;
   if (damage > 0 && targetMsgId) {
@@ -1205,7 +1231,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     // Flame Trooper attachment upgrades (for Blast Fireproof check below; also computed at function level for Incinerate)
     const _ftAtkUpgradesBlast = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
     if (effectiveBlast > 0 && hit && damage > 0 && game.selectedMap?.id) {
-      const adjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
+      // Wave 3: Use saved target coord (target may be defeated/removed from figurePositions by now)
+      const adjacent = _targetCoordBeforeDefeat
+        ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey)
+        : [];
       for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
         // Flame Trooper Fireproof: own Blast does not affect friendly figures
         if (blastPlayerNum === attackerPlayerNum && _ftAtkUpgradesBlast.includes('Flame Trooper')) continue;
@@ -1259,6 +1288,28 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
               components: [getCelebrationButtons(game.gameId)],
               allowedMentions: { users: [ownerId] },
             })).catch(discordCatch);
+          }
+        }
+      }
+      // Wave 3: Blast also damages adjacent crates (objects)
+      if (_targetCoordBeforeDefeat && game.cratePositions) {
+        const _blastMapId = game.selectedMap.id;
+        const rawMapSpaces = getMapSpaces(_blastMapId);
+        const adjacency = rawMapSpaces?.adjacency || {};
+        const _blastTargetNorm = String(_targetCoordBeforeDefeat).toLowerCase();
+        const _blastTargetAdj = new Set((adjacency[_blastTargetNorm] || []).map(c => String(c).toLowerCase()));
+        _blastTargetAdj.add(_blastTargetNorm);
+        for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
+          const crateNorm = String(curCoord).toLowerCase();
+          if (!_blastTargetAdj.has(crateNorm)) continue;
+          game.crateHealth = game.crateHealth || {};
+          if (typeof game.crateHealth[origCoord] !== 'number') game.crateHealth[origCoord] = 5;
+          game.crateHealth[origCoord] = Math.max(0, game.crateHealth[origCoord] - effectiveBlast);
+          await logGameAction(game, client, `\u{1F4A5} **Blast ${effectiveBlast}** \u2014 Crate @ ${String(curCoord).toUpperCase()} suffers ${effectiveBlast} damage (${game.crateHealth[origCoord]}/5 HP).`, { phase: 'ROUND', icon: 'attack' });
+          if (game.crateHealth[origCoord] <= 0) {
+            delete game.cratePositions[origCoord];
+            await logGameAction(game, client, `\u{1F4A5} Crate at **${String(curCoord).toUpperCase()}** destroyed by Blast!`, { phase: 'ROUND', icon: 'attack' });
+            await checkWinConditions(game, client);
           }
         }
       }
@@ -1567,7 +1618,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
     // Blast damage also triggers Incinerate Strain on adjacent damaged figures — auto-apply
     if (effectiveBlast > 0 && game.selectedMap?.id) {
-      const _ftBlastAdj = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
+      const _ftBlastAdj = _targetCoordBeforeDefeat
+        ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey)
+        : [];
       for (const { figureKey: _ftBlastFk, playerNum: _ftBlastPn } of _ftBlastAdj) {
         // Fireproof: skip friendly figures with Flame Trooper attachment
         if (_ftBlastPn === attackerPlayerNum && cardNameIncludes(_ftAtkUpgrades, 'Flame Trooper')) continue;
@@ -1760,7 +1813,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   }
   // Embed refresh for Blast damage already applied earlier in this function
   if (totalBlast > 0 && hit && game.selectedMap?.id) {
-    const blastAdjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
+    const blastAdjacent = _targetCoordBeforeDefeat
+      ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey)
+      : [];
     for (const { figureKey: bk, playerNum: bp } of blastAdjacent) {
       const mid = findDcMessageIdForFigure(game.gameId, bp, bk);
       if (mid) embedRefreshMsgIds.add(mid);
@@ -1824,39 +1879,83 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
   }
 
-  // F6 Cleave: attacker may choose one figure adjacent to the TARGET (not attacker) to apply cleave damage
-  // Works for both melee and ranged attacks (G34: ranged cleave for Grand Inquisitor, etc.)
+  // Wave 3: Cleave — eligible targets are those the attacker COULD target for this attack (not adjacent to target).
+  // Melee: adjacent to attacker. Ranged: within LOS + Accuracy of attacker. Includes objects (crates).
+  // Rules: RULES_REFERENCE.md Lines 859-873.
   const effectiveCleave = (combat.surgeCleave || 0) + (combat.passiveCleave || 0);
   if (hit && damage > 0 && effectiveCleave > 0 && game.selectedMap?.id) {
-    if (combat.target?.figureKey) {
-      const adjacentToTarget = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
-      const cleaveTargets = adjacentToTarget.filter(
-        (c) => c.playerNum === defenderPlayerNum && c.figureKey !== combat.target.figureKey
-      );
-      if (cleaveTargets.length > 0) {
-        const targetsWithLabels = cleaveTargets.map((c) => {
-          const { msgId, label } = getFigureLabel(game, c.playerNum, c.figureKey, c.figureKey);
-          return { figureKey: c.figureKey, playerNum: c.playerNum, label };
-        });
-        game.pendingCleave = {
-          gameId: game.gameId,
-          combatThreadId: combat.combatThreadId,
-          surgeCleave: effectiveCleave,
-          attackerPlayerNum,
-          ownerId,
-          targets: targetsWithLabels,
-          resultText,
-          combat,
-          initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-        };
-        const cleaveRows = getCleaveTargetButtons(game.gameId, targetsWithLabels);
-        await thread.send(sanitizeMentions({
-          content: `**Cleave (${effectiveCleave} damage):** <@${ownerId}> — Choose one figure adjacent to the target to apply cleave damage:`,
-          allowedMentions: { users: [ownerId] },
-          components: cleaveRows,
-        }));
-        return;
+    const _clvMapId = game.selectedMap.id;
+    const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
+    const cleaveTargets = [];
+    if (attackerPos) {
+      if (!combat.isRanged) {
+        // Melee: adjacent to attacker
+        const adjToAttacker = getFiguresAdjacentToCoord(game, attackerPos, _clvMapId, combat.attackerFigureKey);
+        for (const c of adjToAttacker) {
+          if (c.playerNum !== defenderPlayerNum) continue;
+          if (c.figureKey === combat.target?.figureKey) continue;
+          cleaveTargets.push(c);
+        }
+        // Melee crates: adjacent to attacker
+        if (game.cratePositions) {
+          const rawMs = getMapSpaces(_clvMapId);
+          const adj = rawMs?.adjacency || {};
+          const atkNorm = String(attackerPos).toLowerCase();
+          const atkAdj = new Set((adj[atkNorm] || []).map(c => String(c).toLowerCase()));
+          atkAdj.add(atkNorm);
+          for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
+            if (atkAdj.has(String(curCoord).toLowerCase())) {
+              const hp = game.crateHealth?.[origCoord] ?? 5;
+              cleaveTargets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
+            }
+          }
+        }
+      } else {
+        // Ranged: within Accuracy + LOS of attacker
+        const totalAcc = (combat.attackRoll?.acc || 0) + (combat.surgeAccuracy || 0) + (combat.bonusAccuracy || 0);
+        const _clvMapSpaces = getEffectiveMapSpaces(game, _clvMapId);
+        for (const pn of [defenderPlayerNum]) {
+          for (const [fk, fCoord] of Object.entries(game.figurePositions?.[pn] || {})) {
+            if (fk === combat.target?.figureKey) continue;
+            if (!isWithinN(attackerPos, fCoord, totalAcc, _clvMapId) || !hasLineOfSight(attackerPos, fCoord, _clvMapSpaces, null)) continue;
+            cleaveTargets.push({ figureKey: fk, playerNum: pn });
+          }
+        }
+        // Ranged crates: within Accuracy of attacker
+        if (game.cratePositions) {
+          for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
+            if (isWithinN(attackerPos, String(curCoord).toLowerCase(), totalAcc, _clvMapId)) {
+              const hp = game.crateHealth?.[origCoord] ?? 5;
+              cleaveTargets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
+            }
+          }
+        }
       }
+    }
+    if (cleaveTargets.length > 0) {
+      const targetsWithLabels = cleaveTargets.map((c) => {
+        if (c.isCrate) return c;
+        const { msgId, label } = getFigureLabel(game, c.playerNum, c.figureKey, c.figureKey);
+        return { figureKey: c.figureKey, playerNum: c.playerNum, label };
+      });
+      game.pendingCleave = {
+        gameId: game.gameId,
+        combatThreadId: combat.combatThreadId,
+        surgeCleave: effectiveCleave,
+        attackerPlayerNum,
+        ownerId,
+        targets: targetsWithLabels,
+        resultText,
+        combat,
+        initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
+      };
+      const cleaveRows = getCleaveTargetButtons(game.gameId, targetsWithLabels);
+      await thread.send(sanitizeMentions({
+        content: `**Cleave (${effectiveCleave} damage):** <@${ownerId}> \u2014 Choose one eligible target to apply cleave damage:`,
+        allowedMentions: { users: [ownerId] },
+        components: cleaveRows,
+      }));
+      return;
     }
   }
   const fkTriggered = await _checkPostCombatSurges(game, combat, resultText, embedRefreshMsgIds, thread, ownerId, defenderPlayerNum);

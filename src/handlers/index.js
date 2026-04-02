@@ -60,6 +60,7 @@ import {
   handleDcToggle,
   handleDcDeplete,
   handleDcRename,
+  handleDcRemoveStun,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,
@@ -308,6 +309,7 @@ register('dc_unactivate_', handleDcUnactivate, 'dcPlayArea');
 register('dc_toggle_', handleDcToggle, 'dcPlayArea');
 register('dc_deplete_', handleDcDeplete, 'dcPlayArea');
 register('dc_rename_', handleDcRename, 'dcPlayArea');
+register('dc_remove_stun_', handleDcRemoveStun, 'dcPlayArea');
 register('dc_cc_special_', handleDcCcSpecial, 'dcPlayArea');
 register('dc_cc_eoa_', handleDcCcEndOfActivation, 'dcPlayArea');
 register('dc_cc_double_', handleDcCcDoubleAction, 'dcPlayArea');
@@ -593,6 +595,7 @@ export {
   handleDcToggle,
   handleDcDeplete,
   handleDcRename,
+  handleDcRemoveStun,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,

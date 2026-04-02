@@ -202,6 +202,36 @@ export function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = nul
   return hostile;
 }
 
+/**
+ * Get all figures on or adjacent to a given coordinate (1x1 space).
+ * Used by Blast when the target's position may already be removed (defeat),
+ * and by Cleave for attacker-based eligibility.
+ */
+export function getFiguresAdjacentToCoord(game, coord, mapId, excludeFigureKey) {
+  if (!coord || !mapId) return [];
+  const rawMapSpaces = getMapSpaces(mapId);
+  if (!rawMapSpaces?.adjacency) return [];
+  const mapDef = getMapRegistry().find((m) => m.id === mapId);
+  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const adjacency = mapSpaces.adjacency || {};
+  const normCoord = normalizeCoord(coord);
+  const adjacentSet = new Set();
+  for (const n of adjacency[normCoord] || []) adjacentSet.add(normalizeCoord(n));
+  adjacentSet.add(normCoord);
+  const poses = game?.figurePositions || { 1: {}, 2: {} };
+  const out = [];
+  for (const p of [1, 2]) {
+    for (const [figureKey, fCoord] of Object.entries(poses[p] || {})) {
+      if (figureKey === excludeFigureKey) continue;
+      const dcName = dcNameFromFigureKey(figureKey);
+      const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
+      const cells = getFootprintCells(fCoord, size).map((c) => normalizeCoord(c));
+      if (cells.some((cell) => adjacentSet.has(cell))) out.push({ figureKey, playerNum: p });
+    }
+  }
+  return out;
+}
+
 /** F6 Blast: Figures with at least one space adjacent to the target figure. Returns [{ figureKey, playerNum }, ...]. */
 export function getFiguresAdjacentToTarget(game, targetFigureKey, mapId) {
   const poses = game?.figurePositions || { 1: {}, 2: {} };

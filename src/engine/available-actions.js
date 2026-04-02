@@ -696,6 +696,16 @@ function getActivationActions(game, playerNum, deps) {
       const isStunned = figConditions.includes('Stun');
       const hasPosition = !!game.figurePositions?.[playerNum]?.[figureKey];
 
+      // Wave 4: Stunned figure can spend 1 action to remove Stun (rules: STUNNED L2759-2761)
+      if (isStunned && data.remaining >= 1) {
+        actions.push({
+          type: 'remove_stun',
+          customId: `dc_remove_stun_${msgId}_f${figureIndex}`,
+          description: `Remove Stun from ${displayName}`,
+          params: { msgId, dcName: meta.dcName },
+        });
+      }
+
       // Stunned/no-position/massive-locked/To-the-Limit figures cannot Move
       if (!isStunned && hasPosition
           && !game.massiveMovementLocked?.[figureKey]

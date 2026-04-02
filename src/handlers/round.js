@@ -174,29 +174,179 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       delete game.exhaustedSkirmishUpgrades[msgId];
     }
   }
-  // Stun: cleared at end of round as safety net (primary removal is at end of activation).
+  // Stun is NOT cleared at end of round — figure must spend 1 action to remove it (rules: STUNNED L2759-2762).
   // Weakened is NOT cleared here — rules say "discarded at the end of a figure's activation" only.
-  // If a figure never activates, Weakened persists into the next round.
   // Disarm permanent Weakened lock: clear at end of round (Disarm card leaves play at end of round).
   game.disarmPermanentWeakened = {};
-  const clearedConditions = []; // collect {figureKey, cleared[]} for announcement
-  if (game.figureConditions) {
-    for (const fk of Object.keys(game.figureConditions)) {
-      const before = game.figureConditions[fk];
-      const toRemove = before.filter((c) => c === 'Stun');
-      filterCondition(game, fk, 'Stun');
-      if (toRemove.length > 0) clearedConditions.push({ figureKey: fk, cleared: toRemove });
+
+  // ══ STEP 1: Ready Cards (rules: STATUS PHASE IN A SKIRMISH L2714-2715) ══
+  // SU ready already done above (L170-176). Now ready all DCs (un-exhaust).
+  for (const [msgId, meta] of dcMessageMeta) {
+    if (meta.gameId !== gameId) continue;
+    if (isDepletedRemovedFromGame(game, msgId)) continue;
+    dcExhaustedState.set(msgId, false);
+    if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+    if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
+    if (game.exhaustedSkirmishUpgrades?.[msgId]) delete game.exhaustedSkirmishUpgrades[msgId];
+    try {
+      const chId = getPlayAreaId(game, meta.playerNum);
+      const ch = await fetchGameChannel(client, chId);
+      const msg = await ch.messages.fetch(msgId);
+      const healthState = dcHealthState.get(msgId) || [];
+      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
+      const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
+      await msg.edit({ embeds: [embed], files, components }).catch(discordCatch);
+    } catch (err) {
+      console.error('Failed to ready DC embed:', err);
     }
   }
-  if (clearedConditions.length > 0) {
-    const condSummary = clearedConditions.map(({ figureKey, cleared }) => {
-      const dcName = dcNameFromFigureKey(figureKey);
-      return `**${dcName}**: ${cleared.join(', ')} removed`;
-    }).join('; ');
-    await logGameAction(game, client, `🔄 **End of Round** — Conditions cleared: ${condSummary}.`, { phase: 'ROUND', icon: 'round' });
+  // Regenerate the board map so condition icons and updated health are reflected
+  if (buildBoardMapPayload && game.boardId && game.selectedMap) {
+    try {
+      const boardChannel = await fetchGameChannel(client, game.boardId);
+      const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
+      await withDiscordRetry(() => boardChannel.send(payload));
+    } catch (err) {
+      console.error('Failed to refresh board at end of round:', err);
+    }
   }
-  // Regenerate (Bossk): recover 2 HP and discard Bleed at end of round
+  for (const pn of [1, 2]) {
+    let total = getActivationsTotal(game, pn) ?? 0;
+    // Subtract activations for fully defeated deployment groups
+    const dcList = getDcList(game, pn) || [];
+    const figs = game.figurePositions?.[pn] || {};
+    const figKeys = Object.keys(figs);
+    for (const dc of dcList) {
+      const dcName = dc.dcName || dc;
+      // Skip figureless DCs (upgrades like [Extra Armor]) — they never have figures
+      if (/^\[.+\]$/.test(dcName)) continue;
+      if (!figKeys.some(fk => fk.startsWith(dcName + '-'))) {
+        total = Math.max(0, total - 1);
+      }
+    }
+    setActivationsRemaining(game, pn, total);
+    setActivatedDcIndices(game, pn, []);
+  }
+
+  // ══ STEP 2: Draw Command Cards (rules: STATUS PHASE IN A SKIRMISH L2716-2717) ══
+  const mapId = game.selectedMap?.id;
+  const p1Terminals = mapId ? countTerminalsControlledByPlayer(game, 1, mapId) : 0;
+  const p2Terminals = mapId ? countTerminalsControlledByPlayer(game, 2, mapId) : 0;
+  // Rebel High Command: draw 1 additional CC at end of each round
+  const p1HasRHC = (getDcList(game, 1) || []).some(dc => (dc.dcName || dc) === '[Rebel High Command]');
+  const p2HasRHC = (getDcList(game, 2) || []).some(dc => (dc.dcName || dc) === '[Rebel High Command]');
+  let p1DrawCount = 1 + p1Terminals + (p1HasRHC ? 1 : 0);
+  let p2DrawCount = 1 + p2Terminals + (p2HasRHC ? 1 : 0);
+  // Channel the Force: draw 1 fewer, then search deck for FORCE USER CC
+  const p1HasCtF = (getDcList(game, 1) || []).some(dc => (dc.dcName || dc) === '[Channel the Force]');
+  const p2HasCtF = (getDcList(game, 2) || []).some(dc => (dc.dcName || dc) === '[Channel the Force]');
+  // Check if not already exhausted
+  const _ctfExhCheck = (pn) => {
+    const dcList = getDcList(game, pn) || [];
+    const dcMsgIds = getDcMessageIds(game, pn) || [];
+    for (let i = 0; i < dcList.length; i++) {
+      if ((dcList[i]?.dcName || dcList[i]) === '[Channel the Force]') {
+        const mid = dcMsgIds[i];
+        if (mid && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[mid], 'Channel the Force')) return mid;
+      }
+    }
+    return null;
+  };
+  const p1CtFMsgId = p1HasCtF ? _ctfExhCheck(1) : null;
+  const p2CtFMsgId = p2HasCtF ? _ctfExhCheck(2) : null;
+  if (p1CtFMsgId && p1DrawCount > 0) p1DrawCount = Math.max(0, p1DrawCount - 1);
+  if (p2CtFMsgId && p2DrawCount > 0) p2DrawCount = Math.max(0, p2DrawCount - 1);
+  const hadCutLines = !!game.noCommandDrawThisRound;
+  if (game.noCommandDrawThisRound) {
+    p1DrawCount = 0;
+    p2DrawCount = 0;
+    game.noCommandDrawThisRound = false;
+  }
+
+  // Data Theft: return stolen card to opponent's discard if still in hand at end of round
+  if (game.dataTheftStolenCard) {
+    const dt = game.dataTheftStolenCard;
+    const dtHandKey = ccHandKey(dt.playerNum);
+    const dtOppNum = opponentPlayerNum(dt.playerNum);
+    const dtOppDiscardKey = ccDiscardKey(dtOppNum);
+    const dtHand = game[dtHandKey] || [];
+    const dtIdx = dtHand.indexOf(dt.cardName);
+    if (dtIdx >= 0) {
+      dtHand.splice(dtIdx, 1);
+      game[dtHandKey] = dtHand;
+      game[dtOppDiscardKey] = (game[dtOppDiscardKey] || []).concat([dt.cardName]);
+      await logGameAction(game, client, `📋 **Data Theft** — **${dt.cardName}** returned to opponent's discard (unplayed).`, { phase: 'ROUND' });
+    }
+    game.dataTheftStolenCard = null;
+  }
+
+  const p1Deck = game.player1CcDeck || [];
+  const p2Deck = game.player2CcDeck || [];
+  const p1Drawn = [];
+  const p2Drawn = [];
+  for (let i = 0; i < p1DrawCount && p1Deck.length > 0; i++) {
+    const drawn = p1Deck.shift();
+    p1Drawn.push(drawn);
+  }
+  game.player1CcHand = [...(game.player1CcHand || []), ...p1Drawn];
+  game.player1CcDeck = p1Deck;
+  for (let i = 0; i < p2DrawCount && p2Deck.length > 0; i++) {
+    const drawn = p2Deck.shift();
+    p2Drawn.push(drawn);
+  }
+  game.player2CcHand = [...(game.player2CcHand || []), ...p2Drawn];
+  game.player2CcDeck = p2Deck;
+
+  // Channel the Force: search deck for FORCE USER CC, add to hand, shuffle, suffer Strain
+  for (const _ctfPn of [1, 2]) {
+    const _ctfMid = _ctfPn === 1 ? p1CtFMsgId : p2CtFMsgId;
+    if (!_ctfMid || hadCutLines) continue;
+    // Exhaust the card
+    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+    game.exhaustedSkirmishUpgrades[_ctfMid] = [...(game.exhaustedSkirmishUpgrades[_ctfMid] || []), 'Channel the Force'];
+    // Find FORCE USER cards in deck
+    const _ctfDeckKey = _ctfPn === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const _ctfDeck = game[_ctfDeckKey] || [];
+    const _ctfCcEffData = getCcEffectsData?.()?.cards || {};
+    const _ctfForceCards = [];
+    for (let ci = 0; ci < _ctfDeck.length; ci++) {
+      const ccName = _ctfDeck[ci];
+      const ccEff = _ctfCcEffData[ccName];
+      const playableBy = String(ccEff?.playableBy || '').toUpperCase();
+      if (playableBy.includes('FORCE USER')) _ctfForceCards.push({ name: ccName, deckIdx: ci });
+    }
+    if (_ctfForceCards.length === 0) {
+      await logGameAction(game, client, `**Channel the Force** — P${_ctfPn} searched deck but found no FORCE USER Command cards.`, { phase: 'ROUND', icon: 'card' });
+      continue;
+    }
+    // Dedupe by card name for button display
+    const _ctfUnique = [...new Map(_ctfForceCards.map(c => [c.name, c])).values()];
+    const handChId = getHandChannelId(game, _ctfPn);
+    if (handChId) {
+      try {
+        const handCh = await fetchGameChannel(client, handChId);
+        const btns = _ctfUnique.slice(0, 20).map((c, i) =>
+          new ButtonBuilder()
+            .setCustomId(`ctf_pick_${gameId}_${_ctfPn}_${i}`)
+            .setLabel(String(c.name).length > 80 ? String(c.name).slice(0, 77) + '...' : String(c.name))
+            .setStyle(ButtonStyle.Primary)
+        );
+        const rows = chunkButtonsToRows(btns);
+        game[`pendingChannelTheForce_p${_ctfPn}`] = { cards: _ctfUnique };
+        await handCh.send({
+          content: `**Channel the Force** — Choose a FORCE USER Command card from your deck to add to your hand:`,
+          components: rows.slice(0, 5),
+        });
+      } catch (err) {
+        console.error('Channel the Force pick error:', err);
+      }
+    }
+  }
+
+  // ══ STEP 3: End of Round Effects (rules: STATUS PHASE IN A SKIRMISH L2718) ══
+  // DC ability EoR effects
   const dcEffects = getDcEffects();
+  // Regenerate (Bossk): recover 2 HP and discard Bleed at end of round
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId) continue;
     if (isDepletedRemovedFromGame(game, msgId)) continue;
@@ -206,7 +356,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     if (totalRecovered > 0) {
       await logGameAction(game, client, `♻️ **Regenerate** — **${meta.dcName}** recovered ${totalRecovered} HP.`, { phase: 'ROUND', icon: 'round' });
     }
-    // Discard Bleed (Stun/Weaken already cleared above)
+    // Discard Bleed
     for (const fk of Object.keys(game.figureConditions || {})) {
       if (!fk.startsWith(meta.dcName + '-')) continue;
       filterCondition(game, fk, 'Bleed');
@@ -588,166 +738,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       });
     }
   }
-  for (const [msgId, meta] of dcMessageMeta) {
-    if (meta.gameId !== gameId) continue;
-    if (isDepletedRemovedFromGame(game, msgId)) continue;
-    dcExhaustedState.set(msgId, false);
-    if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
-    if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
-    if (game.exhaustedSkirmishUpgrades?.[msgId]) delete game.exhaustedSkirmishUpgrades[msgId];
-    try {
-      const chId = getPlayAreaId(game, meta.playerNum);
-      const ch = await fetchGameChannel(client, chId);
-      const msg = await ch.messages.fetch(msgId);
-      const healthState = dcHealthState.get(msgId) || [];
-      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
-      const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
-      await msg.edit({ embeds: [embed], files, components }).catch(discordCatch);
-    } catch (err) {
-      console.error('Failed to ready DC embed:', err);
-    }
-  }
-  // Regenerate the board map so condition icons and updated health are reflected
-  if (buildBoardMapPayload && game.boardId && game.selectedMap) {
-    try {
-      const boardChannel = await fetchGameChannel(client, game.boardId);
-      const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
-      await withDiscordRetry(() => boardChannel.send(payload));
-    } catch (err) {
-      console.error('Failed to refresh board at end of round:', err);
-    }
-  }
-  for (const pn of [1, 2]) {
-    let total = getActivationsTotal(game, pn) ?? 0;
-    // Subtract activations for fully defeated deployment groups
-    const dcList = getDcList(game, pn) || [];
-    const figs = game.figurePositions?.[pn] || {};
-    const figKeys = Object.keys(figs);
-    for (const dc of dcList) {
-      const dcName = dc.dcName || dc;
-      // Skip figureless DCs (upgrades like [Extra Armor]) — they never have figures
-      if (/^\[.+\]$/.test(dcName)) continue;
-      if (!figKeys.some(fk => fk.startsWith(dcName + '-'))) {
-        total = Math.max(0, total - 1);
-      }
-    }
-    setActivationsRemaining(game, pn, total);
-    setActivatedDcIndices(game, pn, []);
-  }
-  const mapId = game.selectedMap?.id;
-  const p1Terminals = mapId ? countTerminalsControlledByPlayer(game, 1, mapId) : 0;
-  const p2Terminals = mapId ? countTerminalsControlledByPlayer(game, 2, mapId) : 0;
-  // Rebel High Command: draw 1 additional CC at end of each round
-  const p1HasRHC = (getDcList(game, 1) || []).some(dc => (dc.dcName || dc) === '[Rebel High Command]');
-  const p2HasRHC = (getDcList(game, 2) || []).some(dc => (dc.dcName || dc) === '[Rebel High Command]');
-  let p1DrawCount = 1 + p1Terminals + (p1HasRHC ? 1 : 0);
-  let p2DrawCount = 1 + p2Terminals + (p2HasRHC ? 1 : 0);
-  // Channel the Force: draw 1 fewer, then search deck for FORCE USER CC
-  const p1HasCtF = (getDcList(game, 1) || []).some(dc => (dc.dcName || dc) === '[Channel the Force]');
-  const p2HasCtF = (getDcList(game, 2) || []).some(dc => (dc.dcName || dc) === '[Channel the Force]');
-  // Check if not already exhausted
-  const _ctfExhCheck = (pn) => {
-    const dcList = getDcList(game, pn) || [];
-    const dcMsgIds = getDcMessageIds(game, pn) || [];
-    for (let i = 0; i < dcList.length; i++) {
-      if ((dcList[i]?.dcName || dcList[i]) === '[Channel the Force]') {
-        const mid = dcMsgIds[i];
-        if (mid && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[mid], 'Channel the Force')) return mid;
-      }
-    }
-    return null;
-  };
-  const p1CtFMsgId = p1HasCtF ? _ctfExhCheck(1) : null;
-  const p2CtFMsgId = p2HasCtF ? _ctfExhCheck(2) : null;
-  if (p1CtFMsgId && p1DrawCount > 0) p1DrawCount = Math.max(0, p1DrawCount - 1);
-  if (p2CtFMsgId && p2DrawCount > 0) p2DrawCount = Math.max(0, p2DrawCount - 1);
-  const hadCutLines = !!game.noCommandDrawThisRound;
-  if (game.noCommandDrawThisRound) {
-    p1DrawCount = 0;
-    p2DrawCount = 0;
-    game.noCommandDrawThisRound = false;
-  }
-
-  // Data Theft: return stolen card to opponent's discard if still in hand at end of round
-  if (game.dataTheftStolenCard) {
-    const dt = game.dataTheftStolenCard;
-    const dtHandKey = ccHandKey(dt.playerNum);
-    const dtOppNum = opponentPlayerNum(dt.playerNum);
-    const dtOppDiscardKey = ccDiscardKey(dtOppNum);
-    const dtHand = game[dtHandKey] || [];
-    const dtIdx = dtHand.indexOf(dt.cardName);
-    if (dtIdx >= 0) {
-      dtHand.splice(dtIdx, 1);
-      game[dtHandKey] = dtHand;
-      game[dtOppDiscardKey] = (game[dtOppDiscardKey] || []).concat([dt.cardName]);
-      await logGameAction(game, client, `📋 **Data Theft** — **${dt.cardName}** returned to opponent's discard (unplayed).`, { phase: 'ROUND' });
-    }
-    game.dataTheftStolenCard = null;
-  }
-
-  const p1Deck = game.player1CcDeck || [];
-  const p2Deck = game.player2CcDeck || [];
-  const p1Drawn = [];
-  const p2Drawn = [];
-  for (let i = 0; i < p1DrawCount && p1Deck.length > 0; i++) {
-    const drawn = p1Deck.shift();
-    p1Drawn.push(drawn);
-  }
-  game.player1CcHand = [...(game.player1CcHand || []), ...p1Drawn];
-  game.player1CcDeck = p1Deck;
-  for (let i = 0; i < p2DrawCount && p2Deck.length > 0; i++) {
-    const drawn = p2Deck.shift();
-    p2Drawn.push(drawn);
-  }
-  game.player2CcHand = [...(game.player2CcHand || []), ...p2Drawn];
-  game.player2CcDeck = p2Deck;
-
-  // Channel the Force: search deck for FORCE USER CC, add to hand, shuffle, suffer Strain
-  for (const _ctfPn of [1, 2]) {
-    const _ctfMid = _ctfPn === 1 ? p1CtFMsgId : p2CtFMsgId;
-    if (!_ctfMid || hadCutLines) continue;
-    // Exhaust the card
-    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-    game.exhaustedSkirmishUpgrades[_ctfMid] = [...(game.exhaustedSkirmishUpgrades[_ctfMid] || []), 'Channel the Force'];
-    // Find FORCE USER cards in deck
-    const _ctfDeckKey = _ctfPn === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const _ctfDeck = game[_ctfDeckKey] || [];
-    const _ctfCcEffData = getCcEffectsData?.()?.cards || {};
-    const _ctfForceCards = [];
-    for (let ci = 0; ci < _ctfDeck.length; ci++) {
-      const ccName = _ctfDeck[ci];
-      const ccEff = _ctfCcEffData[ccName];
-      const playableBy = String(ccEff?.playableBy || '').toUpperCase();
-      if (playableBy.includes('FORCE USER')) _ctfForceCards.push({ name: ccName, deckIdx: ci });
-    }
-    if (_ctfForceCards.length === 0) {
-      await logGameAction(game, client, `**Channel the Force** — P${_ctfPn} searched deck but found no FORCE USER Command cards.`, { phase: 'ROUND', icon: 'card' });
-      continue;
-    }
-    // Dedupe by card name for button display
-    const _ctfUnique = [...new Map(_ctfForceCards.map(c => [c.name, c])).values()];
-    const handChId = getHandChannelId(game, _ctfPn);
-    if (handChId) {
-      try {
-        const handCh = await fetchGameChannel(client, handChId);
-        const btns = _ctfUnique.slice(0, 20).map((c, i) =>
-          new ButtonBuilder()
-            .setCustomId(`ctf_pick_${gameId}_${_ctfPn}_${i}`)
-            .setLabel(String(c.name).length > 80 ? String(c.name).slice(0, 77) + '...' : String(c.name))
-            .setStyle(ButtonStyle.Primary)
-        );
-        const rows = chunkButtonsToRows(btns);
-        game[`pendingChannelTheForce_p${_ctfPn}`] = { cards: _ctfUnique };
-        await handCh.send({
-          content: `**Channel the Force** — Choose a FORCE USER Command card from your deck to add to your hand:`,
-          components: rows.slice(0, 5),
-        });
-      } catch (err) {
-        console.error('Channel the Force pick error:', err);
-      }
-    }
-  }
-
+  // Mission end-of-round rules (also Step 3 — grouped with DC ability EoR effects)
   const variant = game.selectedMission?.variant;
   const missionRules = getMissionRules?.(mapId, variant) ?? {};
   const endOfRoundRules = missionRules.endOfRound;
