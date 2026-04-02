@@ -10,11 +10,11 @@ import { ACTION_TYPES, buildCustomId } from './action-types.js';
 import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum, getCcHand, getDcList, getActivatedDcIndices } from '../game/player-helpers.js';
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
 import { hasLineOfSight, countSpaces } from '../game/spatial.js';
-import { edgeKey } from '../game/coords.js';
+import { edgeKey, getFootprintCells } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 import { getLegalInteractOptions } from '../game/board-helpers.js';
-import { isDcCompanion, getDcEffects, getMapTokensData } from '../data-loader.js';
+import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize } from '../data-loader.js';
 
 /**
  * Get all available actions for a player in the current game state.
@@ -2097,33 +2097,69 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
 
   const enemyPn = opponentPlayerNum(playerNum);
   const enemyPositions = game.figurePositions?.[enemyPn] || {};
+
+  // Build figure-blocking coords (parity with dc-play-area.js:1022-1042)
+  const attackerPosLc = String(attackerPos).toLowerCase();
+  const attackerFpSet = new Set([attackerPosLc]);
+  // Expand attacker footprint for multi-cell figures
+  const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
+  if (attackerSize && attackerSize !== '1x1') {
+    for (const cell of getFootprintCells(attackerPos, attackerSize)) attackerFpSet.add(String(cell).toLowerCase());
+  }
+
+  const figureBlockingCoords = new Set();
+  for (const poses of [game.figurePositions?.[playerNum] || {}, enemyPositions]) {
+    for (const [fk, pos] of Object.entries(poses)) {
+      if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
+      const fkDcName = dcNameFromFigureKey(fk);
+      const fkEff = getDcEffects()?.[fkDcName] || getDcEffects()?.[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
+      if (fkEff?.companion === true) continue;
+      if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
+      const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
+      for (const cell of getFootprintCells(pos, fkSize)) figureBlockingCoords.add(String(cell).toLowerCase());
+    }
+  }
+
   const targets = [];
 
   for (const [fk, coord] of Object.entries(enemyPositions)) {
     if (!coord) continue;
-    const dist = countSpaces(ms, String(attackerPos).toLowerCase(), String(coord).toLowerCase(), _aaClosedDoorEdges);
+    const coordLc = String(coord).toLowerCase();
+    const dist = countSpaces(ms, attackerPosLc, coordLc, _aaClosedDoorEdges);
     if (dist < minRange || dist > maxRange) continue;
 
-    // LOS check (skip figure blocking for simplicity — full version is in dc-play-area)
-    const los = hasLineOfSight(
-      String(attackerPos).toLowerCase(),
-      String(coord).toLowerCase(),
-      ms,
-      null,
-    );
+    // LOS check with figure blocking (parity with dc-play-area.js)
+    // Remove target's own footprint from blocking set (target doesn't block LOS to itself)
+    const targetDcName = dcNameFromFigureKey(fk);
+    const targetSize = game.figureOrientations?.[fk] || getFigureSize(targetDcName);
+    let losBlockingCoords = figureBlockingCoords;
+    const targetEff = getDcEffects()?.[targetDcName] || getDcEffects()?.[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
+    if ((targetEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {
+      losBlockingCoords = null; // MASSIVE targets: no figure blocking
+    } else if (targetSize && targetSize !== '1x1') {
+      const targetFp = new Set(getFootprintCells(coord, targetSize).map(c => String(c).toLowerCase()));
+      losBlockingCoords = new Set([...figureBlockingCoords].filter(c => !targetFp.has(c)));
+    } else {
+      // Single-cell target: remove its own coord from blocking
+      if (figureBlockingCoords.has(coordLc)) {
+        losBlockingCoords = new Set(figureBlockingCoords);
+        losBlockingCoords.delete(coordLc);
+      }
+    }
+
+    const los = hasLineOfSight(attackerPosLc, coordLc, ms, losBlockingCoords);
     if (!los) continue;
 
-    const targetDcName = dcNameFromFigureKey(fk);
     // Insignificant (Dio): can't be targeted if in same space as a friendly figure
-    const _insigEff = getDcEffects()?.[targetDcName];
+    const _insigEff = targetEff;
     if ((_insigEff?.specialAbilityIds || []).includes('insignificant_dio')) {
       const friendlyPositions = game.figurePositions?.[enemyPn] || {};
       const hasFriendlyInSpace = Object.entries(friendlyPositions).some(([ffk, fpos]) =>
-        ffk !== fk && fpos && String(fpos).toLowerCase() === String(coord).toLowerCase()
+        ffk !== fk && fpos && String(fpos).toLowerCase() === coordLc
       );
       if (hasFriendlyInSpace) continue;
     }
-    targets.push({ figureKey: fk, coord: String(coord).toLowerCase(), label: targetDcName, hasLOS: los, dist });
+    targets.push({ figureKey: fk, coord: coordLc, label: targetDcName, hasLOS: los, dist });
   }
 
   return targets;
