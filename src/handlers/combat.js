@@ -4,7 +4,7 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getMapSpaces, getMapTokensData, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
+import { getMapSpaces, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
@@ -12,54 +12,19 @@ import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyConditi
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
-  getCcHand, getActivatedDcIndices,
+  getCcHand, getCcDeck, getActivatedDcIndices,
   getActivationsRemaining, setActivationsRemaining,
-  ccDiscardKey, ccHandKey, ccAttachmentsKey, vpKey,
+  ccDiscardKey, ccHandKey, ccDeckKey, ccAttachmentsKey, vpKey,
   opponentPlayerNum, getInitiativePlayerNum,
   removeFigurePosition,
 } from '../game/player-helpers.js';
-import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
+import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
+import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
-
-/**
- * Check a player's hand for CC cards that match a timing trigger.
- * Returns an array of { cardName, timing, playableBy, cost } for cards that are playable.
- * @param {object} game - Game state
- * @param {number} playerNum - 1 or 2
- * @param {string[]} timingTriggers - Timing values to match (e.g. ['whenAttackDeclaredOnYou'])
- * @returns {{ cardName: string, timing: string, playableBy: string, cost: number }[]}
- */
-function getPlayableReactionCards(game, playerNum, timingTriggers) {
-  const hand = getCcHand(game, playerNum) || [];
-  if (!hand.length) return [];
-  const ccData = getCcEffectsData()?.cards || {};
-  const triggerSet = new Set(timingTriggers);
-  const results = [];
-  const seen = new Set();
-  for (const cardName of hand) {
-    if (seen.has(cardName)) continue;
-    seen.add(cardName);
-    const card = ccData[cardName];
-    if (!card || !card.timing) continue;
-    if (!triggerSet.has(card.timing)) continue;
-    results.push({ cardName, timing: card.timing, playableBy: card.playableBy || 'Any Figure', cost: card.cost ?? 0 });
-  }
-  return results;
-}
-
-/**
- * Build a formatted notification for playable reaction cards.
- * @returns {string|null} - Message text or null if no cards are playable
- */
-function buildReactionPrompt(cards, playerLabel) {
-  if (!cards.length) return null;
-  const cardList = cards.map(c => `**${c.cardName}** (cost ${c.cost})`).join(', ');
-  return `${playerLabel} — you have reaction card(s) in hand: ${cardList}. Play from your Hand channel if desired.`;
-}
 
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after.
  * Now uses the combat gate system so both players must confirm. */
@@ -420,13 +385,14 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     break;
   }
 
-  // ── Strain choice: player may discard CCs from hand instead of taking HP damage ──
+  // ── Strain choice: player may discard CCs from deck top instead of taking HP damage ──
+  // Rules: "discard one Command card from the top of their deck for each damage prevented"
   // Headhunter damage is always HP damage (not strain), so only `amount` can be allocated to CC discards.
-  const ownerHand = getCcHand(game, playerNum) || [];
+  const ownerDeck = getCcDeck(game, playerNum) || [];
   // Under Duress passive: each CC discard costs 2 CCs instead of 1
   const ccCostPerStrain = _udActive ? 2 : 1;
-  const maxDiscards = amount > 0 ? Math.min(amount, Math.floor(ownerHand.length / ccCostPerStrain)) : 0;
-  if (amount > 0 && ownerHand.length > 0 && maxDiscards > 0) {
+  const maxDiscards = amount > 0 ? Math.min(amount, Math.floor(ownerDeck.length / ccCostPerStrain)) : 0;
+  if (amount > 0 && ownerDeck.length > 0 && maxDiscards > 0) {
     // Player has CCs — offer the choice
     const ownerId = getPlayerId(game, playerNum);
     // Save pending state so the button handler can finish resolution
@@ -491,8 +457,8 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     const rows = chunkButtonsToRows(btns);
     await withDiscordRetry(() => thread.send(sanitizeMentions({
       content: `**Strain** — <@${ownerId}>, **${dcName}** (${cur}/${max} HP) suffers ${amount} Strain from **${abilityLabel}** (${sourceLabel}).`
-        + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
-        + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.${udNote}`,
+        + ` You have ${ownerDeck.length} CC${ownerDeck.length > 1 ? 's' : ''} in deck.`
+        + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from deck top.${udNote}`,
       components: rows,
       allowedMentions: { users: [ownerId] },
     })));
@@ -702,139 +668,58 @@ export async function handleStrainChoice(interaction, ctx) {
     return;
   }
 
-  // Player wants to discard N CCs — show CC pick buttons
-  const hand = getCcHand(game, pending.playerNum) || [];
-  if (hand.length === 0) {
-    // Fall back to all damage (headhunterDmg already applied when pending was created)
+  // Player wants to discard N CCs — blind discard from deck top (rules: "from the top of their deck")
+  const deckKey = ccDeckKey(pending.playerNum);
+  const deck = game[deckKey] || [];
+  const ccCostPerStrain = pending.ccCostPerStrain || 1;
+  const totalCcToDiscard = discardCount * ccCostPerStrain;
+  const actualDiscard = Math.min(totalCcToDiscard, deck.length);
+  const actualStrainPrevented = Math.floor(actualDiscard / ccCostPerStrain);
+
+  if (actualDiscard === 0) {
+    // No deck cards available — fall back to all damage
     delete game.pendingStrainChoice;
     await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
     saveGames();
     return;
   }
 
-  pending.discardTarget = discardCount;
-  pending.discardedCount = 0;
-  // Show CC pick buttons for the first discard
-  await sendStrainCcPickButtons(game, pending, thread);
-  saveGames();
-}
-
-/**
- * Send buttons for the player to pick which CC to discard for strain.
- */
-async function sendStrainCcPickButtons(game, pending, thread) {
-  const hand = getCcHand(game, pending.playerNum) || [];
-  const ccCostPerStrain = pending.ccCostPerStrain || 1;
-  const remaining = pending.discardTarget - pending.discardedCount;
-  // Under Duress deplete: if UD owner controls, address them instead
-  const _controlPn = pending.underDuressControllerPlayerNum || pending.playerNum;
-  const ownerId = getPlayerId(game, _controlPn);
-  // Deduplicate hand for button labels but track indices
-  const uniqueCards = [...new Set(hand)];
-  const btns = uniqueCards.slice(0, 25).map((cardName) =>
-    new ButtonBuilder()
-      .setCustomId(`strain_cc_pick_${game.gameId}_${encodeURIComponent(cardName)}`)
-      .setLabel(cardName.length > 75 ? cardName.slice(0, 72) + '...' : cardName)
-      .setStyle(ButtonStyle.Primary),
-  );
-  const rows = chunkButtonsToRows(btns);
-  await withDiscordRetry(() => thread.send(sanitizeMentions({
-    content: `**Strain** — <@${ownerId}>, pick a CC to discard (${remaining} strain point${remaining > 1 ? 's' : ''} remaining, ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} each). Hand: ${hand.length} card${hand.length > 1 ? 's' : ''}.`,
-    components: rows,
-    allowedMentions: { users: [ownerId] },
-  })));
-}
-
-/**
- * Handle strain_cc_pick_ button — player picked a CC to discard for strain.
- */
-export async function handleStrainCcPick(interaction, ctx) {
-  await interaction.deferUpdate().catch(discordCatch);
-  const { getGame, saveGames, client } = ctx;
-  const suffix = parseCustomId(interaction.customId, 'strain_cc_pick_');
-  const firstUnderscore = suffix.indexOf('_');
-  const gameId = suffix.slice(0, firstUnderscore);
-  const cardName = decodeURIComponent(suffix.slice(firstUnderscore + 1));
-
-  const game = await requireGame(interaction, getGame, gameId, { silent: true });
-  if (!game) return;
-  const pending = game.pendingStrainChoice;
-  if (!pending) {
-    await interaction.followUp({ content: 'No pending strain choice found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  // Under Duress deplete: if active, the UD owner controls the choice
-  const _udCtrl = pending.underDuressControllerPlayerNum || pending.playerNum;
-  if (!await requirePlayer(interaction, game, interaction.user.id, _udCtrl, canActAsPlayer, _udCtrl !== pending.playerNum ? 'Only the Under Duress owner may choose.' : 'Only the figure owner may choose.')) return;
-
-  await interaction.message.edit({ components: [] }).catch(discordCatch);
-
-  const thread = await fetchCombatThread(client, pending.threadId);
-  if (!thread) {
-    delete game.pendingStrainChoice;
-    saveGames();
-    return;
-  }
-
-  // Discard CCs from hand (Under Duress: 2 per strain point, otherwise 1)
-  const ccCost = pending.ccCostPerStrain || 1;
-  const handKey = ccHandKey(pending.playerNum);
-  const hand = game[handKey] || [];
-  const cardIdx = hand.indexOf(cardName);
-  if (cardIdx < 0) {
-    await thread.send(`**Strain** — Could not find **${cardName}** in hand. Taking remaining Strain as damage.`).catch(discordCatch);
-    const hpDmg = pending.amount - pending.discardedCount;
-    const pendingCopy = { ...pending };
-    delete game.pendingStrainChoice;
-    await resolveStrainDamage(game, hpDmg, pendingCopy, ctx, thread);
-    saveGames();
-    return;
-  }
-  // Discard the chosen CC first
-  hand.splice(cardIdx, 1);
+  // Discard from deck top
   const discKey = ccDiscardKey(pending.playerNum);
   game[discKey] = game[discKey] || [];
-  game[discKey].push(cardName);
-  const extraDiscards = [];
-  // Under Duress: discard additional CCs (ccCost - 1 more) from hand
-  for (let _udPick = 1; _udPick < ccCost; _udPick++) {
-    if (hand.length === 0) break;
-    // Discard from top of hand (first available)
-    const extraCard = hand.shift();
-    game[discKey].push(extraCard);
-    extraDiscards.push(extraCard);
+  const discardedCards = deck.splice(0, actualDiscard);
+  game[deckKey] = deck;
+  for (const card of discardedCards) {
+    game[discKey].push(card);
   }
-  pending.discardedCount += 1;
 
-  const extraMsg = extraDiscards.length > 0 ? ` (+ ${extraDiscards.map(c => '**' + c + '**').join(', ')} from Under Duress)` : '';
-  await thread.send(`**Strain** — **${pending.dcName}** discards **${cardName}**${extraMsg} instead of 1 HP damage.`).catch(discordCatch);
+  // Log each discarded card
+  const cardList = discardedCards.map(c => `**${c}**`).join(', ');
+  const udNote = ccCostPerStrain > 1 ? ' (Under Duress: 2 CCs per strain point)' : '';
+  await thread.send(`**Strain** — **${pending.dcName}** discards ${discardedCards.length} CC${discardedCards.length > 1 ? 's' : ''} from deck top: ${cardList}${udNote} — prevents ${actualStrainPrevented} Strain damage.`).catch(discordCatch);
   if (ctx.logGameAction) {
-    const _logExtra = extraDiscards.length > 0 ? ` (+ ${extraDiscards.join(', ')} from Under Duress)` : '';
-    await ctx.logGameAction(game, client, `**Strain Choice** — **${pending.dcName}** discards **${cardName}**${_logExtra} instead of 1 Strain damage.`, { phase: 'ROUND', icon: 'card' });
+    await ctx.logGameAction(game, client, `⚡ **Strain Choice** — **${pending.dcName}** discards ${discardedCards.length} CC${discardedCards.length > 1 ? 's' : ''} from deck top (prevents ${actualStrainPrevented} Strain).`, { phase: 'ROUND', icon: 'card' });
   }
 
-  if (pending.discardedCount < pending.discardTarget) {
-    // More CCs to discard — show next pick
-    const remainingHand = getCcHand(game, pending.playerNum) || [];
-    if (remainingHand.length < ccCost) {
-      // Ran out of CCs — apply rest as damage
-      const hpDmg = pending.amount - pending.discardedCount;
-      const pendingCopy = { ...pending };
-      delete game.pendingStrainChoice;
-      if (hpDmg > 0) await resolveStrainDamage(game, hpDmg, pendingCopy, ctx, thread);
-    } else {
-      await sendStrainCcPickButtons(game, pending, thread);
+  // CC Passive Redraw: deck-discard trigger (Built on Hope) — check each discarded card
+  for (const card of discardedCards) {
+    const _bprResult = checkDeckDiscardPassiveRedraws(game, pending.playerNum, card);
+    for (const _bprCard of _bprResult.redrawn) {
+      if (ctx.logGameAction) await ctx.logGameAction(game, client, `**Passive Redraw** — **${_bprCard}** re-drawn from discard (discarded from deck).`, { phase: 'ROUND', icon: 'card' });
     }
+  }
+  // Update discard pile + hand visuals (discard changed, hand may change from passive redraws)
+  if (ctx.updateDiscardPileMessage) await ctx.updateDiscardPileMessage(game, pending.playerNum, client).catch(discordCatch);
+  if (ctx.updateHandVisualMessage) await ctx.updateHandVisualMessage(game, pending.playerNum, client).catch(discordCatch);
+
+  // Apply remaining strain as HP damage
+  const hpDmg = pending.amount - actualStrainPrevented;
+  const pendingCopy = { ...pending };
+  delete game.pendingStrainChoice;
+  if (hpDmg > 0) {
+    await resolveStrainDamage(game, hpDmg, pendingCopy, ctx, thread);
   } else {
-    // All CC discards done — apply remaining strain as HP damage
-    const hpDmg = pending.amount - pending.discardedCount;
-    const pendingCopy = { ...pending };
-    delete game.pendingStrainChoice;
-    if (hpDmg > 0) {
-      await resolveStrainDamage(game, hpDmg, pendingCopy, ctx, thread);
-    } else {
-      await thread.send(`**Strain** — All ${pending.amount} Strain resolved via CC discard${pending.amount > 1 ? 's' : ''}.`).catch(discordCatch);
-    }
+    await thread.send(`**Strain** — All ${pending.amount} Strain resolved via CC discard${pending.amount > 1 ? 's' : ''}.`).catch(discordCatch);
   }
   saveGames();
 }
@@ -892,11 +777,11 @@ export async function handleUnderDuress(interaction, ctx) {
       await ctx.logGameAction(game, client, `**[Under Duress]** — Depleted by P${udOwnerNum}. Controlling strain choice for **${pending.dcName}**.`, { phase: 'ROUND', icon: 'card' });
     }
 
-    // Show strain choice buttons to the UD owner
+    // Show strain choice buttons to the UD owner (discards come from figure owner's deck top)
     const controllerId = getPlayerId(game, udOwnerNum);
-    const ownerHand = getCcHand(game, pending.playerNum) || [];
+    const ownerDeck = getCcDeck(game, pending.playerNum) || [];
     const ccCostPerStrain = pending.ccCostPerStrain || 1;
-    const maxDiscards = Math.min(pending.amount, Math.floor(ownerHand.length / ccCostPerStrain));
+    const maxDiscards = Math.min(pending.amount, Math.floor(ownerDeck.length / ccCostPerStrain));
 
     if (maxDiscards <= 0) {
       // No CC discards possible — all damage
@@ -925,7 +810,7 @@ export async function handleUnderDuress(interaction, ctx) {
     const rows = chunkButtonsToRows(btns);
     await withDiscordRetry(() => thread.send(sanitizeMentions({
       content: `**[Under Duress]** — <@${controllerId}>, choose how **${pending.dcName}** allocates ${pending.amount} Strain:`
-        + ` take HP damage or discard from opponent's hand (${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''}, costs ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} per strain).`,
+        + ` take HP damage or discard from opponent's deck top (${ownerDeck.length} CC${ownerDeck.length > 1 ? 's' : ''}, costs ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} per strain).`,
       components: rows,
       allowedMentions: { users: [controllerId] },
     })));
@@ -937,9 +822,9 @@ export async function handleUnderDuress(interaction, ctx) {
     await thread.send(`**[Under Duress]** — Skipped deplete.`).catch(discordCatch);
 
     const ownerId = getPlayerId(game, pending.playerNum);
-    const ownerHand = getCcHand(game, pending.playerNum) || [];
+    const ownerDeck = getCcDeck(game, pending.playerNum) || [];
     const ccCostPerStrain = pending.ccCostPerStrain || 1;
-    const maxDiscards = Math.min(pending.amount, Math.floor(ownerHand.length / ccCostPerStrain));
+    const maxDiscards = Math.min(pending.amount, Math.floor(ownerDeck.length / ccCostPerStrain));
 
     if (maxDiscards <= 0) {
       // No CC discards possible — all damage
@@ -969,8 +854,8 @@ export async function handleUnderDuress(interaction, ctx) {
     const rows = chunkButtonsToRows(btns);
     await withDiscordRetry(() => thread.send(sanitizeMentions({
       content: `**Strain** — <@${ownerId}>, **${pending.dcName}** suffers ${pending.amount} Strain from **${pending.abilityLabel}** (${pending.sourceLabel}).`
-        + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
-        + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.${udNote}`,
+        + ` You have ${ownerDeck.length} CC${ownerDeck.length > 1 ? 's' : ''} in deck.`
+        + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from deck top.${udNote}`,
       components: rows,
       allowedMentions: { users: [ownerId] },
     })));
@@ -2543,7 +2428,7 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // Auto-prompt defender for playable reaction cards (whenAttackDeclaredOnYou, etc.)
   try {
-    const defReactions = getPlayableReactionCards(game, defenderPlayerNum, [
+    const defReactions = getPlayableReactionCardsForTiming(game, defenderPlayerNum, [
       'whenAttackDeclaredOnYou',
       'whenAttackDeclaredOnAdjacentFriendly',
       'whenAttackDeclaredTargetingFriendlySmallFigureCost10OrLessWithin3Spaces',
@@ -2556,7 +2441,7 @@ export async function handleAttackTarget(interaction, ctx) {
       await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> — You have ${defReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defOwnerId] } })).catch(discordCatch);
     }
     // Auto-prompt attacker for whenYouDeclareAttack cards
-    const atkReactions = getPlayableReactionCards(game, attackerPlayerNum, [
+    const atkReactions = getPlayableReactionCardsForTiming(game, attackerPlayerNum, [
       'whenYouDeclareAttack',
       'whenYouDeclareAttackTargetingHostileWithHighestFigureCost',
       'beforeYouDeclareAttack',

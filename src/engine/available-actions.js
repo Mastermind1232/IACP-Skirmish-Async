@@ -1676,10 +1676,11 @@ function getStrainChoiceActions(game, playerNum) {
     params: { amount: pending.amount },
   });
 
-  // Offer CC discard options (1..maxDiscards)
-  const hand = getCcHand(game, pending.playerNum) || [];
+  // Offer CC discard options (1..maxDiscards) — rules: discard from deck top, not hand
+  const deckKey = `player${pending.playerNum}CcDeck`;
+  const deck = game[deckKey] || [];
   const ccCostPerStrain = pending.ccCostPerStrain || 1;
-  const maxDiscards = pending.amount > 0 ? Math.min(pending.amount, Math.floor(hand.length / ccCostPerStrain)) : 0;
+  const maxDiscards = pending.amount > 0 ? Math.min(pending.amount, Math.floor(deck.length / ccCostPerStrain)) : 0;
   for (let i = 1; i <= maxDiscards; i++) {
     const hpRemaining = pending.amount - i;
     const ccCost = i * ccCostPerStrain;
@@ -2064,6 +2065,13 @@ function getDcListForPlayer(game, playerNum) {
  * Compute valid attack targets for a given figure.
  * Simplified version of dc-play-area.js target computation for headless use.
  * Returns array of { figureKey, coord, label, hasLOS, dist }.
+ *
+ * Known gaps vs Discord's buildAndSendAttackTargets (dc-play-area.js:1000):
+ * - Priority Target (abilityText-driven forced targeting)
+ * - Fire Mission (remote attack delegation)
+ * - Droid Arm (Migs Mayfeld melee override)
+ * - Vanish immunity bypass
+ * These are intentionally deferred from headless backfill.
  */
 function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   const getDcStats = deps.getDcStats;

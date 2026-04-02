@@ -7,24 +7,7 @@ import { processFigureDefeat } from './defeat-handler.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
-import { countSpaces } from '../game/spatial.js';
-import { getMapSpaces as _getMapSpaces, getMapTokensData } from '../data-loader.js';
-import { edgeKey } from '../game/coords.js';
-
-/** Graph-distance helper: countSpaces with automatic mapSpaces + closed-door resolution from game state. */
-function _countGameSpaces(game, coordA, coordB) {
-  const mapId = game.selectedMap?.id;
-  const ms = mapId ? _getMapSpaces(mapId) : null;
-  if (!ms) return Infinity;
-  const allDoors = getMapTokensData()?.[mapId]?.doors || [];
-  const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
-  const closedDoorEdges = new Set(
-    allDoors
-      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`); })
-      .map(e => edgeKey(e[0], e[1]))
-  );
-  return countSpaces(ms, coordA, coordB, closedDoorEdges);
-}
+import { countGameSpaces } from '../game/board-helpers.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -1100,7 +1083,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
               let _btWeakened = 0;
               for (const [fk, pos] of Object.entries(_btEnemyPos)) {
                 if (!pos || fk === (combat.target.figureKey || '')) continue;
-                const dist = _countGameSpaces(game, _btDefPos, pos);
+                const dist = countGameSpaces(game, _btDefPos, pos);
                 if (dist <= 3) {
                   if (isConditionImmune(game, fk)) continue; // Condition Immunity: skip Weaken
                   if (_applyCondition(game, fk, 'Weaken')) {
@@ -1118,7 +1101,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         if (_lsDcName === 'Tauntaun Rider') {
           const _uhDefeatPos = combat._savedTargetPos;
           const _uhFriendly = Object.entries(game.figurePositions?.[defenderPlayerNum] || {})
-            .filter(([k, pos]) => k !== (combat.target.figureKey || '') && pos && _uhDefeatPos && _countGameSpaces(game, _uhDefeatPos, pos) <= 3)
+            .filter(([k, pos]) => k !== (combat.target.figureKey || '') && pos && _uhDefeatPos && countGameSpaces(game, _uhDefeatPos, pos) <= 3)
             .map(([k]) => k);
           if (_uhFriendly.length > 0) {
             let _uhGranted = 0;
@@ -1207,11 +1190,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
     }
-    // Sustained by Rage: block recovery for figures with this passive
-    const _sbrBlockRecover = getDcEffects()?.[combat.attackerDcName]?.specialAbilityIds?.includes('sustained_by_rage');
-    if (combat.surgeRecover > 0 && combat.attackerMsgId != null && !_sbrBlockRecover) {
-      healHp(dcHealthState, game, combat.attackerMsgId, combat.attackerFigureIndex ?? 0, combat.surgeRecover || 0, combat.attackerPlayerNum);
-    }
     if (combat.superchargeStrainAfterAttackCount > 0 && combat.attackerMsgId != null) {
       reduceHp(dcHealthState, game, combat.attackerMsgId, combat.attackerFigureIndex ?? 0, combat.superchargeStrainAfterAttackCount || 0, combat.attackerPlayerNum);
     }
@@ -1291,6 +1269,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     await logGameAction(game, client, `<@${ownerId}> attacked **${combat.target.label}** — miss`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
   } else if (damage > 0) {
     await logGameAction(game, client, `<@${ownerId}> dealt **${damage}** damage to **${combat.target.label}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+  }
+  // Recover keyword: heal attacker even if attack dealt 0 damage (rules: RECOVER)
+  const _sbrBlockRecover = getDcEffects()?.[combat.attackerDcName]?.specialAbilityIds?.includes('sustained_by_rage');
+  if (combat.surgeRecover > 0 && combat.attackerMsgId != null && !_sbrBlockRecover) {
+    healHp(dcHealthState, game, combat.attackerMsgId, combat.attackerFigureIndex ?? 0, combat.surgeRecover || 0, combat.attackerPlayerNum);
   }
   // Discard consumed conditions post-combat
   if (combat.attackerFigureKey) {
@@ -1405,7 +1388,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         for (const [pNum, poses] of [[1, game.figurePositions?.[1] || {}], [2, game.figurePositions?.[2] || {}]]) {
           for (const [fk, pos] of Object.entries(poses)) {
             if (fk === combat.target.figureKey) continue;
-            if (_countGameSpaces(game, pos, _epTargetPos) !== 1) continue;
+            if (countGameSpaces(game, pos, _epTargetPos) !== 1) continue;
             const _epFkDcName = dcNameFromFigureKey(fk);
             const _epMid = getDcMessageIds(game, pNum) || [];
             const _epDcL = getDcList(game, pNum);
@@ -1452,7 +1435,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const _abAdjacentHostiles = [];
       for (const [_abFk, _abPos] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
         if (!_abPos) continue;
-        if (_countGameSpaces(game, _abAttackerPos, _abPos) === 1) _abAdjacentHostiles.push({ fk: _abFk, pos: _abPos });
+        if (countGameSpaces(game, _abAttackerPos, _abPos) === 1) _abAdjacentHostiles.push({ fk: _abFk, pos: _abPos });
       }
       if (_abAdjacentHostiles.length === 0) {
         await thread.send(`\u{1F5E1}\uFE0F **Assassin's Blade** — No adjacent hostile figures.`).catch(discordCatch);
@@ -1514,7 +1497,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const _sfEffects = getDcEffects();
       for (const [_sfFk, _sfPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
         if (!_sfPos || _sfFk === combat.attackerFigureKey) continue;
-        if (_countGameSpaces(game, _sfAttackerPos, _sfPos) > 3) continue;
+        if (countGameSpaces(game, _sfAttackerPos, _sfPos) > 3) continue;
         // SMALL check: skip LARGE and MASSIVE figures
         const _sfDcName = dcNameFromFigureKey(_sfFk);
         const _sfKwds = (_sfEffects[_sfDcName]?.keywords || []).map(k => String(k).toUpperCase());
@@ -1797,7 +1780,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const _cfFriendlies = [];
       for (const [fk, pos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
         if (!pos) continue;
-        if (_countGameSpaces(game, _cfAttPos, pos) <= 3) _cfFriendlies.push({ fk, pos });
+        if (countGameSpaces(game, _cfAttPos, pos) <= 3) _cfFriendlies.push({ fk, pos });
       }
       if (_cfFriendlies.length === 1) {
         // Auto-grant to the only option
@@ -2741,7 +2724,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       const aoeParts = [];
       for (const [fk, coord] of Object.entries(game.figurePositions?.[defPn] || {})) {
         if (!coord || fk === combat.defenderFigureKey) continue;
-        const dist = _countGameSpaces(game, atkPos, coord);
+        const dist = countGameSpaces(game, atkPos, coord);
         if (dist > aoeRange) continue;
         const fMsgId = findDcMessageIdForFigure(game.gameId, defPn, fk);
         if (!fMsgId) continue;

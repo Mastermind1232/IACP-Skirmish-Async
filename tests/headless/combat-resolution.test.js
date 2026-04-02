@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../fixtures/game-builder.js';
 import { createFlowHarness } from './flow-harness.js';
+import { applyCondition } from '../../src/game/conditions.js';
 
 describe('headless combat resolution', () => {
   it('reduces target HP when damage is applied', () => {
@@ -909,5 +910,508 @@ describe('headless combat resolution', () => {
     const result = await deps.checkWinConditions(game, deps.client);
     assert.ok(result.ended, 'game ended at 40 VP');
     assert.equal(result.winnerId, game.player1Id, 'P1 wins by VP');
+  });
+
+  // ── Strain CC Discard: deck top, not hand ───────────────────────────────────
+
+  it('strain discard comes from deck top, not hand', async () => {
+    // Rules: "discard one Command card from the top of their deck"
+    // Set up: P1 has a known deck [A, B, C] and hand [X, Y].
+    // Strain 2, choose to discard 2 CCs → deck loses A and B from front, hand unchanged.
+    const fh = createFlowHarness({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Stormtrooper (Regular)' }],
+      p1CcDeck: ['CardA', 'CardB', 'CardC'],
+      p1CcHand: ['CardX', 'CardY'],
+    });
+    const game = fh.getGame();
+    const dcMeta = fh.getDcMessageMeta();
+
+    // Find P1's DC msgId and figure key
+    let p1MsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.playerNum === 1) { p1MsgId = msgId; break; }
+    }
+    assert.ok(p1MsgId, 'found P1 DC msgId');
+    const p1FigKey = Object.keys(game.figurePositions[1])[0];
+    assert.ok(p1FigKey, 'P1 has a figure');
+
+    // Manually set pendingStrainChoice (normally created by applyStrainToFigure)
+    game.pendingStrainChoice = {
+      figureKey: p1FigKey,
+      playerNum: 1,
+      amount: 2,
+      headhunterDmg: 0,
+      abilityLabel: 'Test Strain',
+      sourceLabel: 'test',
+      dcName: 'Luke Skywalker',
+      msgId: p1MsgId,
+      figureIndex: 0,
+      threadId: 'test-combat-thread',
+      discardedCount: 0,
+      underDuressActive: false,
+      ccCostPerStrain: 1,
+    };
+
+    // Snapshot before
+    const deckBefore = [...game.player1CcDeck];
+    const handBefore = [...game.player1CcHand];
+    const discardBefore = [...(game.player1CcDiscard || [])];
+
+    // Act: choose to discard 2 CCs for strain
+    await fh.act(`strain_choice_discard_${game.gameId}_2`, 'player1');
+
+    // Assert: deck lost 2 cards from front
+    assert.deepEqual(game.player1CcDeck, ['CardC'],
+      'deck should have only CardC remaining (A and B discarded from top)');
+
+    // Assert: hand unchanged
+    assert.deepEqual(game.player1CcHand, handBefore,
+      'hand must be unchanged — strain discards come from deck, not hand');
+
+    // Assert: discard pile gained the 2 deck-top cards
+    assert.ok(game.player1CcDiscard.includes('CardA'), 'CardA in discard pile');
+    assert.ok(game.player1CcDiscard.includes('CardB'), 'CardB in discard pile');
+
+    // Assert: pendingStrainChoice cleared
+    assert.strictEqual(game.pendingStrainChoice, undefined,
+      'pendingStrainChoice should be cleared after resolution');
+  });
+
+  // ── Attachment VP on Group Defeat ────────────────────────────────────────────
+
+  it('attachment VP awarded when last figure in group defeated', async () => {
+    // Rules: "When the last figure of a group with an 'Attachment' card is defeated,
+    //  the opposing player scores VPs equal to the deployment cost of the 'Attachment' card."
+    // Feeding Frenzy costs 1 VP. IG-88 costs 12 VP. Total should be 13.
+    const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
+      .withPlayer1Army([{ dcName: 'IG-88' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper (Regular)' }])
+      .inRound(1)
+      .build();
+
+    // Find P1's IG-88 msgId
+    let p1MsgId = null;
+    for (const [msgId, meta] of dcMessageMeta) {
+      if (meta.playerNum === 1) { p1MsgId = msgId; break; }
+    }
+    assert.ok(p1MsgId, 'found P1 DC msgId');
+
+    // Attach [Feeding Frenzy] (cost 1) to IG-88
+    game.p1DcAttachments = game.p1DcAttachments || {};
+    game.p1DcAttachments[p1MsgId] = ['[Feeding Frenzy]'];
+
+    // Record VP before
+    const vpBefore = game.player2VP.total;
+
+    // Defeat IG-88 with lethal NPC damage
+    const p1FigKey = Object.keys(game.figurePositions[1])[0];
+    await deps.applyNpcDamageToFigure(game, 1, p1FigKey, 100, 'Test');
+
+    // Assert: P2 gets IG-88 cost (12) + Feeding Frenzy cost (1) = 13 VP
+    const vpGained = game.player2VP.total - vpBefore;
+    assert.equal(vpGained, 13,
+      'VP should include base figure cost (12) + attachment cost (1) = 13');
+  });
+
+  it('attachment VP not awarded when non-last figure defeated', async () => {
+    // Multi-figure group: defeating one figure should NOT award attachment VP.
+    // Stormtrooper (Regular) has 2 figures. Only when BOTH are dead should attachment VP apply.
+    const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
+      .withPlayer1Army([{ dcName: 'Stormtrooper (Regular)' }])
+      .withPlayer2Army([{ dcName: 'Luke Skywalker' }])
+      .inRound(1)
+      .build();
+
+    // Find P1's Stormtrooper msgId
+    let p1MsgId = null;
+    for (const [msgId, meta] of dcMessageMeta) {
+      if (meta.playerNum === 1) { p1MsgId = msgId; break; }
+    }
+    assert.ok(p1MsgId, 'found P1 DC msgId');
+
+    // Attach [Feeding Frenzy] (cost 1)
+    game.p1DcAttachments = game.p1DcAttachments || {};
+    game.p1DcAttachments[p1MsgId] = ['[Feeding Frenzy]'];
+
+    // Verify Stormtrooper (Regular) is multi-figure
+    const figKeys = Object.keys(game.figurePositions[1]).filter(fk =>
+      fk.startsWith('Stormtrooper (Regular)-')
+    );
+    assert.ok(figKeys.length >= 2, `Stormtrooper (Regular) has ${figKeys.length} figures (multi-figure)`);
+
+    // Record VP before
+    const vpBefore = game.player2VP.total;
+
+    // Defeat only the first figure
+    await deps.applyNpcDamageToFigure(game, 1, figKeys[0], 100, 'Test');
+
+    // Assert: VP should include only per-figure reinforcement cost, no attachment VP
+    const vpGained = game.player2VP.total - vpBefore;
+    // Stormtrooper (Regular) reinforcement cost is subCost (typically 3)
+    // Should NOT include Feeding Frenzy's 1 VP
+    assert.ok(vpGained < 6,
+      `VP (${vpGained}) should be only reinforcement cost, not including attachment VP`);
+    assert.ok(!game.player2VP.total.toString().includes('attachment'),
+      'no attachment VP awarded for non-last figure');
+  });
+
+  it('negative-cost attachment reduces VP on group defeat', async () => {
+    // Rules: "When a group with an attachment with a negative deployment cost is defeated,
+    //  the VPs scored are modified by that card's negative cost."
+    // Driven by Hatred costs -5. IG-88 costs 12. Total should be 12 + (-5) = 7.
+    const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
+      .withPlayer1Army([{ dcName: 'IG-88' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper (Regular)' }])
+      .inRound(1)
+      .build();
+
+    let p1MsgId = null;
+    for (const [msgId, meta] of dcMessageMeta) {
+      if (meta.playerNum === 1) { p1MsgId = msgId; break; }
+    }
+
+    // Attach [Driven by Hatred] (cost -5)
+    game.p1DcAttachments = game.p1DcAttachments || {};
+    game.p1DcAttachments[p1MsgId] = ['[Driven by Hatred]'];
+
+    const vpBefore = game.player2VP.total;
+
+    // Defeat IG-88
+    const p1FigKey = Object.keys(game.figurePositions[1])[0];
+    await deps.applyNpcDamageToFigure(game, 1, p1FigKey, 100, 'Test');
+
+    // Assert: P2 gets 12 + (-5) = 7 VP
+    const vpGained = game.player2VP.total - vpBefore;
+    assert.equal(vpGained, 7,
+      'VP should be base (12) + negative attachment (-5) = 7');
+  });
+
+  it('strain discard with empty deck offers only all-damage option', async () => {
+    // Rules: discards come from deck top. If deck is empty, no discard is possible.
+    // getStrainChoiceActions should offer only "take all as damage" — no discard buttons.
+    const { getAvailableActions } = await import('../../src/engine/available-actions.js');
+
+    const fh = createFlowHarness({
+      mapId: 'mos-eisley-outskirts',
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Stormtrooper (Regular)' }],
+      p1CcDeck: [],   // empty deck
+      p1CcHand: ['CardX', 'CardY'],  // hand has cards, but strain uses deck
+    });
+    const game = fh.getGame();
+    const dcMeta = fh.getDcMessageMeta();
+
+    let p1MsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.playerNum === 1) { p1MsgId = msgId; break; }
+    }
+    const p1FigKey = Object.keys(game.figurePositions[1])[0];
+
+    // Set pending strain
+    game.pendingStrainChoice = {
+      figureKey: p1FigKey,
+      playerNum: 1,
+      amount: 2,
+      headhunterDmg: 0,
+      abilityLabel: 'Test Strain',
+      sourceLabel: 'test',
+      dcName: 'Luke Skywalker',
+      msgId: p1MsgId,
+      figureIndex: 0,
+      threadId: 'test-combat-thread',
+      discardedCount: 0,
+      underDuressActive: false,
+      ccCostPerStrain: 1,
+    };
+
+    // Get available actions for P1
+    const actions = fh.getActions(1);
+    const strainActions = actions.filter(a =>
+      a.type === 'strain_choice_alldmg' || a.type === 'strain_choice_discard'
+    );
+
+    // Only "all damage" should be available — no discard options despite hand having cards
+    assert.equal(strainActions.length, 1, 'only one strain action available');
+    assert.equal(strainActions[0].type, 'strain_choice_alldmg',
+      'only action is take-all-as-damage when deck is empty');
+  });
+});
+
+// ── Weakened removal timing (rules: WEAKENED) ─────────────────────────────────
+
+describe('Weakened removal at end of activation', () => {
+  it('Weakened removed at end of figure\'s activation', async () => {
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Darth Vader' }],
+    });
+    const game = fh.getGame();
+    game.p1PlayAreaId = 'p1-play-area';
+    game.p2PlayAreaId = 'p2-play-area';
+    game.generalId = 'general-channel';
+
+    // Find P1's figure key
+    const p1FigKey = Object.keys(game.figurePositions[1])[0];
+    assert.ok(p1FigKey, 'P1 has a figure');
+
+    // Apply Weakened
+    applyCondition(game, p1FigKey, 'Weaken');
+    assert.ok(game.figureConditions[p1FigKey].includes('Weaken'), 'Weakened applied');
+
+    // Activate P1's DC
+    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
+    assert.ok(activateAction, 'activate action available');
+    await fh.act(activateAction.customId, 'player1');
+
+    // End activation (triggers end-of-activation cleanup)
+    const endAction = fh.getActions(1).find(a => a.type === 'dc_end_activation');
+    assert.ok(endAction, 'end activation action available');
+    await fh.act(endAction.customId, 'player1');
+
+    // Weakened should be removed
+    const conds = game.figureConditions[p1FigKey] || [];
+    assert.ok(!conds.includes('Weaken'), 'Weakened removed at end of activation');
+  });
+
+  it('Weakened with Disarm permanent lock persists through activation', async () => {
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Darth Vader' }],
+    });
+    const game = fh.getGame();
+    game.p1PlayAreaId = 'p1-play-area';
+    game.p2PlayAreaId = 'p2-play-area';
+    game.generalId = 'general-channel';
+
+    // Find P1's figure key
+    const p1FigKey = Object.keys(game.figurePositions[1])[0];
+    assert.ok(p1FigKey, 'P1 has a figure');
+
+    // Apply Weakened + set disarmPermanentWeakened lock
+    applyCondition(game, p1FigKey, 'Weaken');
+    game.disarmPermanentWeakened = game.disarmPermanentWeakened || {};
+    game.disarmPermanentWeakened[p1FigKey] = true;
+
+    // Activate P1's DC
+    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
+    assert.ok(activateAction, 'activate action available');
+    await fh.act(activateAction.customId, 'player1');
+
+    // End activation
+    const endAction = fh.getActions(1).find(a => a.type === 'dc_end_activation');
+    assert.ok(endAction, 'end activation action available');
+    await fh.act(endAction.customId, 'player1');
+
+    // Weakened should persist due to Disarm lock
+    const conds = game.figureConditions[p1FigKey] || [];
+    assert.ok(conds.includes('Weaken'), 'Weakened persists with disarmPermanentWeakened lock');
+  });
+});
+
+// ── Recover keyword on 0-damage attacks (rules: RECOVER) ─────────────────────
+
+/**
+ * Drive combat to completion, spending a specific surge ability by index.
+ * All other phases (reroll, token, passive) are auto-advanced.
+ */
+async function driveCombatWithSurge(fh, surgeIndex) {
+  // Both players ready
+  const readyP1 = fh.getActions(1).find(a => a.type === 'combat_ready');
+  if (readyP1) await fh.act(readyP1.customId, 'player1');
+  const readyP2 = fh.getActions(2).find(a => a.type === 'combat_ready');
+  if (readyP2) await fh.act(readyP2.customId, 'player2');
+
+  // Attack roll
+  const atkRoll = fh.getActions(1).find(a => a.type === 'combat_roll');
+  assert.ok(atkRoll, 'Attacker has combat_roll');
+  await fh.act(atkRoll.customId, 'player1');
+
+  // Defense roll
+  const defRoll = fh.getActions(2).find(a => a.type === 'combat_roll');
+  assert.ok(defRoll, 'Defender has combat_roll');
+  await fh.act(defRoll.customId, 'player2');
+
+  // Advance through phases, spending the requested surge
+  let surgeSpent = false;
+  for (let step = 0; step < 30; step++) {
+    const p1Actions = fh.getActions(1);
+    const p2Actions = fh.getActions(2);
+
+    const resolve = p1Actions.find(a => a.type === 'combat_resolve')
+      || p2Actions.find(a => a.type === 'combat_resolve');
+    if (resolve) {
+      const uid = p1Actions.includes(resolve) ? 'player1' : 'player2';
+      await fh.act(resolve.customId, uid);
+      break;
+    }
+
+    // Spend the target surge if available
+    if (!surgeSpent) {
+      const surgeAction = p1Actions.find(a =>
+        a.type === 'combat_surge' && a.params?.surgeIndex === surgeIndex
+      );
+      if (surgeAction) {
+        await fh.act(surgeAction.customId, 'player1');
+        surgeSpent = true;
+        continue;
+      }
+    }
+
+    // Skip remaining surges
+    const skipSurges = p1Actions.find(a => a.type === 'combat_skip_surges');
+    if (skipSurges) { await fh.act(skipSurges.customId, 'player1'); continue; }
+
+    // Auto-advance other phases
+    const reroll = p1Actions.find(a => a.type === 'combat_reroll')
+      || p2Actions.find(a => a.type === 'combat_reroll');
+    if (reroll) {
+      await fh.act(reroll.customId, p1Actions.includes(reroll) ? 'player1' : 'player2');
+      continue;
+    }
+    const token = p1Actions.find(a => a.type === 'combat_token')
+      || p2Actions.find(a => a.type === 'combat_token');
+    if (token) {
+      await fh.act(token.customId, p1Actions.includes(token) ? 'player1' : 'player2');
+      continue;
+    }
+    const passive = p1Actions.find(a => a.type === 'combat_passive')
+      || p2Actions.find(a => a.type === 'combat_passive');
+    if (passive) {
+      await fh.act(passive.customId, p1Actions.includes(passive) ? 'player1' : 'player2');
+      continue;
+    }
+    const any = [...p1Actions, ...p2Actions].find(a => a.type.startsWith('combat_'));
+    if (any) {
+      await fh.act(any.customId, p1Actions.includes(any) ? 'player1' : 'player2');
+      continue;
+    }
+    break;
+  }
+  return { surgeSpent };
+}
+
+describe('Recover heals attacker regardless of damage dealt', () => {
+  it('Recover heals attacker when attack deals 0 damage (fully blocked)', async () => {
+    // Luke (P1, attacker) has surge ability index 1 = "recover 2"
+    // Darth Vader (P2, defender) with black die
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Darth Vader' }],
+      diceOverrides: {
+        // Attack: 1 damage, 1 surge (enough to spend Recover)
+        attackRolls: [{ acc: 5, dmg: 1, surge: 1, dice: [
+          { color: 'blue', acc: 5, dmg: 0, surge: 0 },
+          { color: 'green', acc: 0, dmg: 0, surge: 1 },
+          { color: 'yellow', acc: 0, dmg: 1, surge: 0 },
+        ] }],
+        // Defense: 3 block — more than enough to absorb 1 damage → 0 net damage
+        defenseRolls: [{ block: 3, evade: 0, dodge: false, color: 'black' }],
+      },
+    });
+    const game = fh.getGame();
+    game.p1PlayAreaId = 'p1-play-area';
+    game.p2PlayAreaId = 'p2-play-area';
+    game.generalId = 'general-channel';
+    const dcMeta = fh.getDcMessageMeta();
+    const dcHealthState = fh.getDeps().dcHealthState;
+
+    // Find Luke's msgId
+    let lukeMsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.dcName === 'Luke Skywalker' && meta.playerNum === 1) { lukeMsgId = msgId; break; }
+    }
+    assert.ok(lukeMsgId, 'Found Luke msgId');
+
+    // Damage Luke by 4 so Recover has room to heal
+    const lukeHs = dcHealthState.get(lukeMsgId);
+    lukeHs[0] = [lukeHs[0][1] - 4, lukeHs[0][1]]; // HP = max - 4
+    const hpBefore = lukeHs[0][0];
+
+    // Pin positions: Luke near Vader (Luke is ranged — acc 5 covers distance)
+    const p1Figs = Object.keys(game.figurePositions[1]);
+    const lukeFig = p1Figs.find(fk => fk.startsWith('Luke Skywalker'));
+    game.figurePositions[1][lukeFig] = 'e2';
+    const p2Figs = Object.keys(game.figurePositions[2]);
+    const vaderFig = p2Figs.find(fk => fk.startsWith('Darth Vader'));
+    game.figurePositions[2][vaderFig] = 'e3';
+
+    // Activate Luke
+    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
+    await fh.act(activateAction.customId, 'player1');
+
+    // Select Vader as attack target
+    const attackAction = fh.getActions(1).find(a =>
+      a.type === 'attack_target' && a.params?.targetFigureKey === vaderFig
+    );
+    assert.ok(attackAction, 'Vader is a valid attack target');
+    await fh.act(attackAction.customId, 'player1');
+
+    // Drive combat, spending surge index 1 (recover 2)
+    const { surgeSpent } = await driveCombatWithSurge(fh, 1);
+    assert.ok(surgeSpent, 'Recover surge was spent');
+
+    // Verify: Luke should have healed by 2 despite 0 damage dealt
+    const hpAfter = dcHealthState.get(lukeMsgId)[0][0];
+    assert.equal(hpAfter, hpBefore + 2, `Recover healed Luke from ${hpBefore} to ${hpBefore + 2} (got ${hpAfter})`);
+  });
+
+  it('Recover heals attacker on normal attack (control, damage > 0)', async () => {
+    const fh = createFlowHarness({
+      p1Army: [{ dcName: 'Luke Skywalker' }],
+      p2Army: [{ dcName: 'Darth Vader' }],
+      diceOverrides: {
+        // Attack: 3 damage, 1 surge
+        attackRolls: [{ acc: 5, dmg: 3, surge: 1, dice: [
+          { color: 'blue', acc: 5, dmg: 0, surge: 0 },
+          { color: 'green', acc: 0, dmg: 2, surge: 1 },
+          { color: 'yellow', acc: 0, dmg: 1, surge: 0 },
+        ] }],
+        // Defense: 0 block — damage goes through
+        defenseRolls: [{ block: 0, evade: 0, dodge: false, color: 'black' }],
+      },
+    });
+    const game = fh.getGame();
+    game.p1PlayAreaId = 'p1-play-area';
+    game.p2PlayAreaId = 'p2-play-area';
+    game.generalId = 'general-channel';
+    const dcMeta = fh.getDcMessageMeta();
+    const dcHealthState = fh.getDeps().dcHealthState;
+
+    let lukeMsgId = null;
+    for (const [msgId, meta] of dcMeta) {
+      if (meta.dcName === 'Luke Skywalker' && meta.playerNum === 1) { lukeMsgId = msgId; break; }
+    }
+
+    // Damage Luke by 4
+    const lukeHs = dcHealthState.get(lukeMsgId);
+    lukeHs[0] = [lukeHs[0][1] - 4, lukeHs[0][1]];
+    const hpBefore = lukeHs[0][0];
+
+    // Pin positions
+    const p1Figs = Object.keys(game.figurePositions[1]);
+    const lukeFig = p1Figs.find(fk => fk.startsWith('Luke Skywalker'));
+    game.figurePositions[1][lukeFig] = 'e2';
+    const p2Figs = Object.keys(game.figurePositions[2]);
+    const vaderFig = p2Figs.find(fk => fk.startsWith('Darth Vader'));
+    game.figurePositions[2][vaderFig] = 'e3';
+
+    // Activate and attack
+    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
+    await fh.act(activateAction.customId, 'player1');
+    const attackAction = fh.getActions(1).find(a =>
+      a.type === 'attack_target' && a.params?.targetFigureKey === vaderFig
+    );
+    assert.ok(attackAction, 'Vader is a valid attack target');
+    await fh.act(attackAction.customId, 'player1');
+
+    // Drive combat, spending surge index 1 (recover 2)
+    const { surgeSpent } = await driveCombatWithSurge(fh, 1);
+    assert.ok(surgeSpent, 'Recover surge was spent');
+
+    // Verify: Luke healed by 2 (control: Recover works when damage > 0)
+    const hpAfter = dcHealthState.get(lukeMsgId)[0][0];
+    assert.equal(hpAfter, hpBefore + 2, `Recover healed Luke from ${hpBefore} to ${hpBefore + 2} (got ${hpAfter})`);
   });
 });

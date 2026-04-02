@@ -174,19 +174,17 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       delete game.exhaustedSkirmishUpgrades[msgId];
     }
   }
-  // Clear per-activation conditions (Stun, Weaken) from all figures at end of round.
-  // Rules: Stun/Weaken removed at end of that figure's activation; each figure activates once per round,
-  // so clearing at end of round is equivalent.
-  // Disarm permanent Weakened: clear the lock now so the Weaken can be removed normally at end of round.
-  // The Disarm card leaves play at end of round, so the permanent lock expires here.
+  // Stun: cleared at end of round as safety net (primary removal is at end of activation).
+  // Weakened is NOT cleared here — rules say "discarded at the end of a figure's activation" only.
+  // If a figure never activates, Weakened persists into the next round.
+  // Disarm permanent Weakened lock: clear at end of round (Disarm card leaves play at end of round).
   game.disarmPermanentWeakened = {};
   const clearedConditions = []; // collect {figureKey, cleared[]} for announcement
   if (game.figureConditions) {
     for (const fk of Object.keys(game.figureConditions)) {
       const before = game.figureConditions[fk];
-      const toRemove = before.filter((c) => c === 'Stun' || c === 'Weaken');
+      const toRemove = before.filter((c) => c === 'Stun');
       filterCondition(game, fk, 'Stun');
-      filterCondition(game, fk, 'Weaken');
       if (toRemove.length > 0) clearedConditions.push({ figureKey: fk, cleared: toRemove });
     }
   }

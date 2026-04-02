@@ -39,7 +39,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
  * @param {object} deps - required dependencies (see destructuring below)
  * @returns {{ vp: number, dcName: string }}
  */
-import { getDcEffects } from '../data-loader.js';
+import { getDcEffects, getDcStats } from '../data-loader.js';
 import { getDcList, getDcMessageIds, ccHandKey, ccDeckKey, getHandChannelId, dcAttachmentsKey } from '../game/player-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
 
@@ -97,16 +97,42 @@ export async function processFigureDefeat(game, opts, deps) {
 
   // 2. Calculate and award VP
   let vp = 0;
+  let attachmentVp = 0;
   if (awardVp) {
     vp = calculateKillVp(dcName);
     if (vp > 0) awardKillVp(game, attackerPlayerNum, vp);
+
+    // 2b. Attachment VP: when last figure in group defeated, award attachment deployment cost
+    // Rules: "When the last figure of a group with an 'Attachment' card is defeated,
+    //  the opposing player scores VPs equal to the deployment cost of the 'Attachment' card."
+    // Negative deployment cost attachments reduce total VP (rules: NEGATIVE DEPLOYMENT COST).
+    if (msgId) {
+      const figPos = game.figurePositions?.[defeatedPlayerNum] || {};
+      const groupAlive = Object.keys(figPos).some(fk => fk.startsWith(dcName + '-') && figPos[fk]);
+      if (!groupAlive) {
+        const attKey = dcAttachmentsKey(defeatedPlayerNum);
+        const attachments = game[attKey]?.[msgId] || [];
+        for (const attName of attachments) {
+          const attStats = getDcStats(attName);
+          const attCost = attStats?.cost ?? 0;
+          if (attCost !== 0) {
+            attachmentVp += attCost;
+          }
+        }
+        if (attachmentVp !== 0) {
+          awardKillVp(game, attackerPlayerNum, attachmentVp);
+        }
+      }
+    }
   }
 
   // 3. Log defeat
-  const vpText = vp > 0 ? ` (+${vp} VP to P${attackerPlayerNum})` : '';
+  const totalVp = vp + attachmentVp;
+  const vpText = totalVp > 0 ? ` (+${totalVp} VP to P${attackerPlayerNum})` : totalVp < 0 ? ` (${totalVp} VP to P${attackerPlayerNum})` : '';
+  const attachNote = attachmentVp !== 0 ? ` [includes ${attachmentVp > 0 ? '+' : ''}${attachmentVp} attachment VP]` : '';
   const prefix = source ? `${source}: ` : '';
   await logGameAction(game, client,
-    `${prefix}**${displayName}** was defeated!${vpText}`,
+    `${prefix}**${displayName}** was defeated!${vpText}${attachNote}`,
     { phase: 'ROUND', icon: 'attack' });
 
   // 4. Decrement activation if group fully defeated
