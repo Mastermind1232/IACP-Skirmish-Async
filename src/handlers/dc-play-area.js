@@ -1339,7 +1339,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     dcMessageMeta,
     getDcStats,
     getDcEffects,
-    getMapSpaces,
+    getMapData,
     getFigureSize,
     getFootprintCells,
     getRange,
@@ -1677,7 +1677,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const _loadoutCard = getLoadoutCards()[getConfig(game, figureKey)?.loadout];
     const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[playerNum] || _loadoutCard?.passive === 'Reach' || _hasFuryReach(game, playerNum, attackerKws);
     const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
-    const ms = getMapSpaces(game.selectedMap?.id);
+    const ms = getMapData(game.selectedMap?.id);
     if (!ms) {
       await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
       return;
@@ -2074,7 +2074,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
       const mapId = game.selectedMap?.id;
-      const ms = getEffectiveMapSpaces(game, getMapSpaces(mapId));
+      const ms = getEffectiveMapSpaces(game, getMapData(mapId));
       if (!ms?.adjacency) {
         await thread.send('**Overwatch** — Map data not available.').catch(discordCatch);
         saveGames();
@@ -2132,7 +2132,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       return;
     }
     const mapId = game.selectedMap?.id;
-    const ms = getEffectiveMapSpaces(game, getMapSpaces(mapId));
+    const ms = getEffectiveMapSpaces(game, getMapData(mapId));
     if (!ms?.adjacency) {
       await thread.send('**Bomb Drop** — Map data not available.').catch(discordCatch);
       saveGames();
@@ -2188,7 +2188,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   }
   const resolveResult = resolveAbility ? resolveAbility(abilityId, {
     game, msgId, meta, playerNum: meta.playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, specialLabel: action,
-    hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces,
+    hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapData: ctx.getMapData,
     findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects,
   }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
   // Handle choice-required abilities (e.g. Dual-Bladed Fury: Focus or Reach+Cleave)
@@ -2394,7 +2394,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
 
   // Wreak Vengeance: when dual_bladed_fury is used and wreakVengeanceActive is set, resolve BOTH chooseOne options
   if (abilityId === 'dual_bladed_fury' && game.wreakVengeanceActive?.playerNum === playerNum && resolveAbility) {
-    const commonCtx = { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces, findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects: ctx.getDcEffects };
+    const commonCtx = { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapData: ctx.getMapData, findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects: ctx.getDcEffects };
     const r0 = resolveAbility(abilityId, { ...commonCtx, choiceIndex: 0 });
     const r1 = resolveAbility(abilityId, { ...commonCtx, choiceIndex: 1 });
     delete game.wreakVengeanceActive;
@@ -2409,7 +2409,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   const resolveResult = resolveAbility ? resolveAbility(abilityId, {
     game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, choiceIndex,
     targetFigureKey: targetFigureKeys?.[choiceIndex] || null,
-    hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces,
+    hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapData: ctx.getMapData,
     findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects: ctx.getDcEffects,
   }) : { applied: false, manualMessage: 'Resolve manually.' };
 
@@ -2670,7 +2670,7 @@ export async function handleArsenalPick(interaction, ctx) {
 
   await interaction.deferUpdate().catch(discordCatch);
 
-  const { getGame, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames, replyIfGameEnded } = ctx;
+  const { getGame, dcMessageMeta, getDcStats, getDcEffects, getMapData, saveGames, replyIfGameEnded } = ctx;
   const meta = dcMessageMeta.get(msgId);
   if (!meta) { await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch); return; }
   const game = await requireGame(interaction, getGame, gameId);
@@ -2689,7 +2689,7 @@ export async function handleArsenalPick(interaction, ctx) {
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _hasFuryReach(game, meta.playerNum, attackerKws);
   const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
-  const ms = getMapSpaces(game.selectedMap?.id);
+  const ms = getMapData(game.selectedMap?.id);
   if (!ms) {
     await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
@@ -2715,7 +2715,7 @@ export async function handleArsenalPick(interaction, ctx) {
  * customId: ee3_pick_die_{color|skip}_{gameId}_{msgId}_{figureIndex}
  */
 export async function handleEe3DiePick(interaction, ctx) {
-  const { getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames } = ctx;
+  const { getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, getMapData, saveGames } = ctx;
   const withoutPrefix = parseCustomId(interaction.customId, 'ee3_pick_die_');
   const parts = withoutPrefix.split('_');
   const color = parts[0]; // 'blue', 'green', 'yellow', or 'skip'
@@ -2753,7 +2753,7 @@ export async function handleEe3DiePick(interaction, ctx) {
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _hasFuryReach(game, meta.playerNum, attackerKws);
   const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
-  const ms = getMapSpaces(game.selectedMap?.id);
+  const ms = getMapData(game.selectedMap?.id);
   if (!ms) {
     await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
@@ -2779,7 +2779,7 @@ export async function handleEe3DiePick(interaction, ctx) {
  * customId: bo_rifle_pick_{use|skip}_{gameId}_{msgId}_{figureIndex}
  */
 export async function handleBoRiflePick(interaction, ctx) {
-  const { getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames } = ctx;
+  const { getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, getMapData, saveGames } = ctx;
   const withoutPrefix = parseCustomId(interaction.customId, 'bo_rifle_pick_');
   const parts = withoutPrefix.split('_');
   const choice = parts[0]; // 'use' or 'skip'
@@ -2816,7 +2816,7 @@ export async function handleBoRiflePick(interaction, ctx) {
   const brOverride = game.pendingOverrideAttackDice?.[msgId];
   const effectiveMinRange = brOverride?.type === 'melee' ? 1 : minRange;
   const effectiveMaxRange_ = brOverride?.type === 'melee' ? (hasReach ? 2 : 1) : (hasReach && maxRange < 2 ? 2 : maxRange);
-  const ms = getMapSpaces(game.selectedMap?.id);
+  const ms = getMapData(game.selectedMap?.id);
   if (!ms) {
     await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
@@ -2845,7 +2845,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   if (!m) return;
   const [, gameId, msgId, choice] = m;
   const {
-    getGame, replyIfGameEnded, getDcStats, getDcEffects, getMapSpaces,
+    getGame, replyIfGameEnded, getDcStats, getDcEffects, getMapData,
     getFigureSize, getFootprintCells, getRange, hasLineOfSight,
     getBoardStateForMovement, getMovementProfile, computeMovementCache,
     getMapAttachmentForSpaces,
@@ -2944,7 +2944,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   let foEffectiveMaxRange = foHasReach && foMaxRange < 2 ? 2 : foMaxRange;
   // Lure of the Dark Side: cap range at 4 (or whatever maxRange is set)
   if (fo.isLure && fo.maxRange) foEffectiveMaxRange = Math.min(foEffectiveMaxRange, fo.maxRange);
-  const ms = getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap?.id));
+  const ms = getEffectiveMapSpaces(game, getMapData(game.selectedMap?.id));
   if (!ms) {
     await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
@@ -3115,7 +3115,7 @@ export async function handleRushPushFig(interaction, ctx) {
   if (!m) return;
   const [, gameId, msgId, choiceIdxStr] = m;
   const choiceIndex = parseInt(choiceIdxStr, 10);
-  const { getGame, dcMessageMeta, dcHealthState, getMapSpaces, logGameAction, buildBoardMapPayload,
+  const { getGame, dcMessageMeta, dcHealthState, getMapData, logGameAction, buildBoardMapPayload,
     updateDcActionsMessage, getMapAttachmentForSpaces, saveGames, client } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
@@ -3138,7 +3138,7 @@ export async function handleRushPushFig(interaction, ctx) {
   }
   // Find valid landing spaces: target's current space + adjacent unoccupied
   const mapId = game.selectedMap?.id;
-  const mapSpaces = mapId ? getMapSpaces(mapId) : null;
+  const mapSpaces = mapId ? getMapData(mapId) : null;
   const adjToTarget = mapSpaces?.adjacency?.[targetPos] || [];
   const occupied = new Set([
     ...Object.values(game.figurePositions?.[1] || {}),
@@ -3260,7 +3260,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
   if (!m) return;
   const [, gameId, msgId, choiceIdxStr] = m;
   const choiceIndex = parseInt(choiceIdxStr, 10);
-  const { getGame, dcMessageMeta, dcHealthState, getMapSpaces, logGameAction, buildBoardMapPayload,
+  const { getGame, dcMessageMeta, dcHealthState, getMapData, logGameAction, buildBoardMapPayload,
     updateDcActionsMessage, getMapAttachmentForSpaces, saveGames, client } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
@@ -3304,7 +3304,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
   // Target is SMALL: show push space picker (adjacent to target, unoccupied)
   pending.chosenTarget = targetFk;
   const mapId = game.selectedMap?.id;
-  const mapSpaces = mapId ? getMapSpaces(mapId) : null;
+  const mapSpaces = mapId ? getMapData(mapId) : null;
   const adjToTarget = mapSpaces?.adjacency?.[targetPos] || [];
   const occupied = new Set([
     ...Object.values(game.figurePositions?.[1] || {}),
@@ -3444,7 +3444,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   const m = interaction.customId.match(/^ob_deplete_([^_]+)_([^_]+)$/);
   if (!m) return;
   const [, gameId, msgId] = m;
-  const { getGame, saveGames, logGameAction, dcMessageMeta, getMapSpaces } = ctx;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, getMapData } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const tokenCount = game.orbitalBombardmentTokens?.[msgId] || 0;
@@ -3464,7 +3464,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   game.pendingOrbitalBombardment = { msgId, playerNum, spacesRemaining: tokenCount, spacesChosen: [], gameId };
   // Show space picker (all occupied spaces)
   const mapId = game.selectedMap?.id;
-  const ms = getMapSpaces?.(mapId);
+  const ms = getMapData?.(mapId);
   const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
   if (allSpaces.length === 0) {
     await interaction.message.edit({ content: '**Orbital Bombardment** — Map data unavailable. Choose spaces manually.', components: [] }).catch(discordCatch);
@@ -3505,7 +3505,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   const m = interaction.customId.match(/^ob_space_([^_]+)_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, msgId, space] = m;
-  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapSpaces, findDcMessageIdForFigure } = ctx;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapData, findDcMessageIdForFigure } = ctx;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game?.pendingOrbitalBombardment) return;
   const pending = game.pendingOrbitalBombardment;
@@ -3515,7 +3515,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   if (pending.spacesChosen.length < pending.spacesRemaining) {
     // More spaces to pick — re-store pendingSpacePick and show row picker again
     const mapId = game.selectedMap?.id;
-    const ms = getMapSpaces?.(mapId);
+    const ms = getMapData?.(mapId);
     const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
     const obSeqContextKey = `${gameId}_${msgId}`;
     const obSeqHeader = `**Orbital Bombardment** — Chosen: ${pending.spacesChosen.map(s => s.toUpperCase()).join(', ')}. Choose space **${pending.spacesChosen.length + 1} of ${pending.spacesRemaining}**`;
@@ -3584,7 +3584,7 @@ export async function handleBombDropSpacePick(interaction, ctx) {
   const m = interaction.customId.match(/^bomb_drop_space_([^_]+)_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, msgId, space] = m;
-  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapSpaces, findDcMessageIdForFigure } = ctx;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapData, findDcMessageIdForFigure } = ctx;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game?.pendingBombDrop?.[msgId]) return;
   cleanupSpacePick(game, `${gameId}_${msgId}`);
@@ -3598,7 +3598,7 @@ export async function handleBombDropSpacePick(interaction, ctx) {
 
   // Find all spaces on/adjacent to chosen space
   const mapId = game.selectedMap?.id;
-  const ms = getMapSpaces?.(mapId);
+  const ms = getMapData?.(mapId);
   const adjSpaces = ms?.adjacency?.[chosenSpace] || [];
   const affectedSpaces = new Set([chosenSpace, ...adjSpaces.map(s => String(s).toLowerCase())]);
 

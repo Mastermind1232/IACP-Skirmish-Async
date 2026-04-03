@@ -122,7 +122,7 @@ export async function sendBleedingPrompt(game, channel, figureKey, playerNum, di
 export async function resolveCombatAfterRolls(game, combat, client, deps) {
   const {
     logGameAction, dcNameFromFigureKey, parseFigureKey, opponentPlayerNum,
-    getDcEffects, getDcEffect, getMapSpaces, computeCombatResult,
+    getDcEffects, getDcEffect, getMapData, computeCombatResult,
     getBoardStateForMovement, getEffectiveFigureSize, getFootprintCells, normalizeCoord,
     getPlayerId, findDcMessageIdForFigure, findFigureheadFigure,
     ButtonBuilder, ButtonStyle, ActionRowBuilder,
@@ -166,7 +166,7 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   // Harsh Environment: exterior spaces -1 Evade; interior spaces +1 Block (applied once per combat resolution)
   if (game.harshEnvironmentActive && !combat.harshEnvApplied) {
     const _heMapId = game.selectedMap?.id;
-    const _heMsData = _heMapId ? getMapSpaces(_heMapId) : null;
+    const _heMsData = _heMapId ? getMapData(_heMapId) : null;
     const _heFigKey = combat.target?.figureKey;
     const _hePos = _heFigKey ? (game.figurePositions?.[defenderPlayerNum]?.[_heFigKey]) : null;
     if (_heMsData && _hePos) {
@@ -257,7 +257,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     reduceHp, healHp, removeFigurePosition,
     calculateKillVp, awardKillVp, awardObjectiveVp, vpKey,
     getDcList, getDcMessageIds, getDcStats, getDcEffects, getDcEffect, getDcKeywords,
-    getPlayerId, getMapSpaces, getEffectiveMapSpaces,
+    getPlayerId, getMapData, getEffectiveMapSpaces,
     isWithinN, hasLineOfSight,
     getFiguresAdjacentToTarget, getFiguresAdjacentToCoord, getFiguresOnOrAdjacentToSpace,
     getEffectiveFigureSize, getFootprintCells, getFigureSize,
@@ -744,7 +744,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       {
         const _dfAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
         if (_dfAtkPos && combat.attackerMsgId && game.selectedMap?.id) {
-          const _dfMapSp = getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id));
+          const _dfMapSp = getEffectiveMapSpaces(game, getMapData(game.selectedMap.id));
           // Scan the defender's side for alive Rebel Pathfinder figures
           const _dfFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
           for (const [_dfFk, _dfPos] of Object.entries(_dfFriendlyFigs)) {
@@ -1058,7 +1058,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const _defKws = (_defDcEff?.keywords || []).map(k => k.toUpperCase());
             const _defIsGuardian = _defKws.includes('GUARDIAN');
             if (!_defIsGuardian) {
-              const _ms = getMapSpaces(game.selectedMap?.id);
+              const _ms = getMapData(game.selectedMap?.id);
               const _defAdj = (_ms?.adjacency?.[String(_defPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
               for (const [rgFk, rgPos] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
                 if (!rgPos || rgFk === combat.target.figureKey) continue;
@@ -1294,7 +1294,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // Wave 3: Blast also damages adjacent crates (objects)
       if (_targetCoordBeforeDefeat && game.cratePositions) {
         const _blastMapId = game.selectedMap.id;
-        const rawMapSpaces = getMapSpaces(_blastMapId);
+        const rawMapSpaces = getMapData(_blastMapId);
         const adjacency = rawMapSpaces?.adjacency || {};
         const _blastTargetNorm = String(_targetCoordBeforeDefeat).toLowerCase();
         const _blastTargetAdj = new Set((adjacency[_blastTargetNorm] || []).map(c => String(c).toLowerCase()));
@@ -1346,7 +1346,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     delete game.burstFirePendingMsgId[combat.attackerMsgId];
     if (damage > 0 && combat.target?.figureKey) {
       const _bfMapId = game.selectedMap?.id;
-      const _bfMs = _bfMapId ? getMapSpaces(_bfMapId) : null;
+      const _bfMs = _bfMapId ? getMapData(_bfMapId) : null;
       const _bfTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
       if (_bfMs && _bfTargetPos) {
         // Collect all spaces adjacent to the target's footprint (handles multi-space figures)
@@ -1898,7 +1898,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
         // Melee crates: adjacent to attacker
         if (game.cratePositions) {
-          const rawMs = getMapSpaces(_clvMapId);
+          const rawMs = getMapData(_clvMapId);
           const adj = rawMs?.adjacency || {};
           const atkNorm = String(attackerPos).toLowerCase();
           const atkAdj = new Set((adj[atkNorm] || []).map(c => String(c).toLowerCase()));
@@ -1970,7 +1970,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
 export async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgIds, thread, ownerId, defenderPlayerNum, deps) {
   const {
     logGameAction, dcNameFromFigureKey, getFigureLabel, getFigureSize,
-    getMapSpaces, getPlayerId, getCcHand, getCcEffect, getCcEffectsData,
+    getMapData, getPlayerId, getCcHand, getCcEffect, getCcEffectsData,
     getDcEffects, getFiguresAdjacentToTarget,
     _applyCondition, HARMFUL_CONDITIONS, isConditionImmune,
     ccHandKey, ccDiscardKey, ccDeckKey,
@@ -2016,7 +2016,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     const targetSize = getFigureSize(targetDcName);
     if (targetSize === '1x1') {
       const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
-      const ms = getMapSpaces(game.selectedMap.id);
+      const ms = getMapData(game.selectedMap.id);
       const adjSpaces = (ms?.adjacency?.[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase());
       if (adjSpaces.length > 0) {
         const { msgId: targetMsgId, label: targetLabel } = getFigureLabel(game, defenderPlayerNum, combat.target.figureKey, targetDcName);
@@ -2052,7 +2052,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     const conditions = [...combat.spreadThePainConditions];
     const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
     if (targetPos) {
-      const ms = getMapSpaces(game.selectedMap.id);
+      const ms = getMapData(game.selectedMap.id);
       const adjacency = ms?.adjacency || {};
       const candSpaces = new Set([String(targetPos).toLowerCase(), ...(adjacency[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase())]);
       const figuresAtSpaces = [];
@@ -2259,7 +2259,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     dcNameFromFigureKey, parseFigureKey, opponentPlayerNum, discordCatch,
     reduceHp, healHp,
     getDcList, getDcMessageIds, getDcStats, getDcEffect, getDcEffects, getDcKeywords,
-    getPlayerId, getPlayAreaId, getMapSpaces,
+    getPlayerId, getPlayAreaId, getMapData,
     isWithinN, hasLineOfSight,
     findDcMessageIdForFigure, getFigureLabel,
     getCcHand, getCcEffectsData,
@@ -2452,7 +2452,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _hsTargetPos = game.figurePositions?.[combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum)]?.[combat.target.figureKey] || combat._savedTargetPos;
     const _hsAtkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
     if (_hsTargetPos && _hsAtkPos) {
-      const _hsMapSpaces = getMapSpaces(game.selectedMap.id);
+      const _hsMapSpaces = getMapData(game.selectedMap.id);
       const _hsAllFigCoords = [];
       for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _hsAllFigCoords.push(String(fp).toLowerCase());
       for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _hsAllFigCoords.push(String(fp).toLowerCase());
@@ -2496,7 +2496,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _dflDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
     const _dflAtkPN = combat.attackerPlayerNum;
     // Check defender and adjacent friendlies for deflect
-    const _dflMapSpaces = getMapSpaces(game.selectedMap.id);
+    const _dflMapSpaces = getMapData(game.selectedMap.id);
     const _dflAllFigCoords = [];
     for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _dflAllFigCoords.push(String(fp).toLowerCase());
     for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _dflAllFigCoords.push(String(fp).toLowerCase());

@@ -515,7 +515,7 @@ export async function runStartOfRoundRules(game, mapId, variant, rules, ctx = {}
  * @returns { logs, damageEvents }
  */
 export function runNpcKryknaActivation(game, mapId, ctx = {}) {
-  const { getMapTokensData, getMapSpaces, getMapRegistry, filterMapSpacesByBounds } = ctx;
+  const { getMapTokensData, getMapData, getMapRegistry, filterMapSpacesByBounds } = ctx;
 
   // Lazy-init from missionA token positions
   if (!game.npcKrykna) {
@@ -528,7 +528,7 @@ export function runNpcKryknaActivation(game, mapId, ctx = {}) {
   const activeKrykna = game.npcKrykna.filter((k) => !k.defeated);
   if (activeKrykna.length === 0) return { logs: [`All Krykna defeated.`], damageEvents: [] };
 
-  const rawMapSpaces = getMapSpaces?.(mapId);
+  const rawMapSpaces = getMapData?.(mapId);
   if (!rawMapSpaces?.adjacency) return { logs: ['No adjacency data — Krykna damage skipped'], damageEvents: [] };
   const mapDef = getMapRegistry?.()?.find?.((m) => m.id === mapId);
   const mapSpaces = filterMapSpacesByBounds?.(rawMapSpaces, mapDef?.gridBounds) || rawMapSpaces;
@@ -567,10 +567,10 @@ export function runNpcKryknaActivation(game, mapId, ctx = {}) {
  * Lazily initializes game.npcThugs from map-tokens if not already set.
  * @param {object} game
  * @param {string} mapId
- * @param {object} ctx - { getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getMapTokensData }
+ * @param {object} ctx - { getMapData, getMapRegistry, filterMapSpacesByBounds, getMapTokensData }
  */
 export function runNpcThugActivation(game, mapId, ctx = {}) {
-  const { getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getMapTokensData } = ctx;
+  const { getMapData, getMapRegistry, filterMapSpacesByBounds, getMapTokensData } = ctx;
 
   // Lazy-init: create npcThugs from missionA token positions if not yet set
   if (!game.npcThugs) {
@@ -583,7 +583,7 @@ export function runNpcThugActivation(game, mapId, ctx = {}) {
   const activeThugs = game.npcThugs.filter((t) => !t.defeated);
   if (activeThugs.length === 0) return { logs: [], damageEvents: [] };
 
-  const rawMapSpaces = getMapSpaces?.(mapId);
+  const rawMapSpaces = getMapData?.(mapId);
   if (!rawMapSpaces?.adjacency) return { logs: ['No map adjacency — thug movement skipped'], damageEvents: [] };
   const mapDef = getMapRegistry?.()?.find?.((m) => m.id === mapId);
   const mapSpaces = filterMapSpacesByBounds?.(rawMapSpaces, mapDef?.gridBounds) || rawMapSpaces;

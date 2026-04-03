@@ -275,7 +275,7 @@ export async function runDraftRandom(game, client, deps, options = {}) {
       const size = baseSize === '2x3' ? (Math.random() < 0.5 ? '2x3' : '3x2') : baseSize;
       const zoneSpaces = (zones?.[zone] || []).map((s) => String(s).toLowerCase());
       // Get blocking terrain and check if figure ignores blocking (Massive/Mobile)
-      const ms = deps.getMapSpaces?.(mapId);
+      const ms = deps.getMapData?.(mapId);
       const blocking = ms?.blocking || [];
       const keywords = deps.getDcKeywords?.(game)?.[meta.dcName] || [];
       const kwUpper = keywords.map(k => String(k).toUpperCase());

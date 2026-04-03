@@ -2,7 +2,7 @@
  * Round handlers: end_end_of_round_, end_start_of_round_
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDcEffects, getMapSpaces, getFormCards, getCcEffectsData, getMapTokensData as _getMapTokensData } from '../data-loader.js';
+import { getDcEffects, getMapData, getFormCards, getCcEffectsData, getMapTokensData as _getMapTokensData } from '../data-loader.js';
 import { getConfig, getFormsChosenByTeamClawdites } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, buildFigureButtonLabel, getMaxPowerTokens } from '../game/index.js';
@@ -32,7 +32,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getFiguresOnOrAdjacentToSpace, runNpcThugActivation, applyNpcDamageToFigure, getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, client
+ * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getFiguresOnOrAdjacentToSpace, runNpcThugActivation, applyNpcDamageToFigure, getMapData, getMapRegistry, filterMapSpacesByBounds, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, client
  */
 export async function handleEndEndOfRound(interaction, ctx) {
   const {
@@ -62,7 +62,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     runNpcThugActivation,
     runNpcKryknaActivation,
     applyNpcDamageToFigure,
-    getMapSpaces,
+    getMapData,
     getMapRegistry,
     filterMapSpacesByBounds,
     getInitiativePlayerZoneLabel,
@@ -151,7 +151,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     runNpcThugActivation,
     runNpcKryknaActivation,
     applyNpcDamageToFigure,
-    getMapSpaces: getMapSpacesFn,
+    getMapData: getMapDataFn,
     getMapRegistry,
     filterMapSpacesByBounds,
     getInitiativePlayerZoneLabel,
@@ -596,7 +596,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
   }
   // Survivalist (Skirmish Upgrade): end of round, if in exterior space, recover 1 Damage
-  const _svMapSpaces = game.selectedMap?.id ? getMapSpaces?.(game.selectedMap.id) : null;
+  const _svMapSpaces = game.selectedMap?.id ? getMapData?.(game.selectedMap.id) : null;
   if (_svMapSpaces?.exterior) {
     const _svExterior = new Set((Array.isArray(_svMapSpaces.exterior) ? _svMapSpaces.exterior : []).map(s => String(s).toLowerCase()));
     for (const pn of [1, 2]) {
@@ -764,7 +764,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
 
   // NPC thug activation (Corellian Underground A)
   if (runNpcThugActivation && mapId === 'corellian-underground' && variant === 'a') {
-    const { logs: thugLogs, damageEvents } = runNpcThugActivation(game, mapId, { getMapTokensData, getMapSpaces, getMapRegistry, filterMapSpacesByBounds });
+    const { logs: thugLogs, damageEvents } = runNpcThugActivation(game, mapId, { getMapTokensData, getMapData, getMapRegistry, filterMapSpacesByBounds });
     for (const line of thugLogs) {
       await logGameAction(game, client, `🔫 **Thug:** ${line}`, { phase: 'ROUND', icon: 'attack' });
     }
@@ -1291,7 +1291,7 @@ async function _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, 
   }
   // Find hostile figures within 3 spaces (graph distance)
   const _fsMapId = game.selectedMap?.id;
-  const _fsMs = _fsMapId ? getMapSpaces(_fsMapId) : null;
+  const _fsMs = _fsMapId ? getMapData(_fsMapId) : null;
   const _fsAllDoors = _fsMapId ? (_getMapTokensData()?.[_fsMapId]?.doors || []) : [];
   const _fsOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
   const _fsClosedDoorEdges = new Set(

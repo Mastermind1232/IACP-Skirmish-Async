@@ -743,7 +743,7 @@ function getActivationActions(game, playerNum, deps) {
           if (!hasAssault) attackBlocked = true;
         }
       }
-      const canComputeTargets = deps.getDcStats && deps.getMapSpaces && game.selectedMap?.id;
+      const canComputeTargets = deps.getDcStats && deps.getMapData && game.selectedMap?.id;
       const targets = (isStunned || attackBlocked) ? [] : computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps);
       if (targets.length > 0) {
         game.attackTargets = game.attackTargets || {};
@@ -1998,7 +1998,7 @@ function getOverwatchPlacementActions(game, playerNum, deps) {
   const pending = game.pendingOverwatchPlacement;
   if (!pending) return [];
   // Find msgId entries for this player
-  const getMapSpacesFn = deps.getMapSpaces;
+  const getMapDataFn = deps.getMapData;
   const dcMeta = deps.dcMessageMeta;
   for (const [msgId, val] of Object.entries(pending)) {
     if (!val) continue;
@@ -2006,7 +2006,7 @@ function getOverwatchPlacementActions(game, playerNum, deps) {
     if (meta && meta.playerNum !== playerNum) continue;
     // Return space options from map
     const mapId = game.selectedMap?.id;
-    const ms = getMapSpacesFn?.(mapId);
+    const ms = getMapDataFn?.(mapId);
     const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
     if (allSpaces.length === 0) continue;
     const gameId = game.gameId;
@@ -2025,9 +2025,9 @@ function getOverwatchPlacementActions(game, playerNum, deps) {
 function getOrbitalBombardmentActions(game, playerNum, deps) {
   const pending = game.pendingOrbitalBombardment;
   if (!pending || pending.playerNum !== playerNum) return [];
-  const getMapSpacesFn = deps.getMapSpaces;
+  const getMapDataFn = deps.getMapData;
   const mapId = game.selectedMap?.id;
-  const ms = getMapSpacesFn?.(mapId);
+  const ms = getMapDataFn?.(mapId);
   const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
   if (allSpaces.length === 0) return [];
   const gameId = game.gameId;
@@ -2050,9 +2050,9 @@ function getBombDropActions(game, playerNum, deps) {
     if (!val) continue;
     const meta = dcMeta?.get(msgId);
     if (meta && meta.playerNum !== playerNum) continue;
-    const getMapSpacesFn = deps.getMapSpaces;
+    const getMapDataFn = deps.getMapData;
     const mapId = game.selectedMap?.id;
-    const ms = getMapSpacesFn?.(mapId);
+    const ms = getMapDataFn?.(mapId);
     const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
     if (allSpaces.length === 0) continue;
     const gameId = game.gameId;
@@ -2087,8 +2087,8 @@ function getDcListForPlayer(game, playerNum) {
  */
 function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   const getDcStats = deps.getDcStats;
-  const getMapSpaces = deps.getMapSpaces;
-  if (!getDcStats || !getMapSpaces || !game.selectedMap?.id) return [];
+  const getMapData = deps.getMapData;
+  if (!getDcStats || !getMapData || !game.selectedMap?.id) return [];
 
   const stats = getDcStats(meta.dcName);
   const attackInfo = stats?.attack;
@@ -2104,7 +2104,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   // Range: melee = 1, ranged = accuracy-based (use generous max since accuracy is checked after roll)
   const isRanged = attackInfo.type === 'range';
   const [minRange, maxRange] = attackInfo.range || (isRanged ? [1, 20] : [1, 1]);
-  const ms = getMapSpaces(game.selectedMap.id);
+  const ms = getMapData(game.selectedMap.id);
   if (!ms) return [];
   const _aaMapId = game.selectedMap.id;
   const _aaAllDoors = getMapTokensData()?.[_aaMapId]?.doors || [];

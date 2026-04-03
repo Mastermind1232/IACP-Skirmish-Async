@@ -90,7 +90,7 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
 /** Show next Spread the Pain figure-pick prompt, or finish if all conditions applied. */
 async function advanceSpreadThePain(game, pending, ctx) {
   const {
-    client, saveGames, finishCombatResolution, getMapSpaces, getFigureLabel,
+    client, saveGames, finishCombatResolution, getMapData, getFigureLabel,
   } = ctx;
   const thread = await fetchCombatThread(client, pending.combatThreadId);
   if (!thread) { await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client); saveGames(); return; }
@@ -104,7 +104,7 @@ async function advanceSpreadThePain(game, pending, ctx) {
   const targetPos = game.figurePositions?.[pending.defenderPlayerNum]?.[pending.combat.target?.figureKey];
   const figuresAtSpaces = [];
   if (targetPos && game.selectedMap?.id) {
-    const ms = getMapSpaces(game.selectedMap.id);
+    const ms = getMapData(game.selectedMap.id);
     const adjacency = ms?.adjacency || {};
     const candSpaces = new Set([String(targetPos).toLowerCase(), ...(adjacency[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase())]);
     for (const p of [1, 2]) {

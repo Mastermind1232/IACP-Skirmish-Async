@@ -655,7 +655,7 @@ export async function handleEndTurn(interaction, ctx) {
   // Hold the Line (Baze Malbus): at end of activation, gain 1 Block Token per hostile with LOS
   if (meta.dcName === 'Baze Malbus') {
     const _htlHasLos = ctx.hasLineOfSight;
-    const _htlMapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
+    const _htlMapSpaces = ctx.getMapData?.(game.selectedMap?.id);
     const _htlDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _htlFk = `Baze Malbus-${_htlDgIndex}-0`;
     const _htlPos = game.figurePositions?.[meta.playerNum]?.[_htlFk];
@@ -1406,7 +1406,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     game.movementBank[msgId].remaining += 1;
     // Count hostiles with LOS
     const _hasLos = ctx.hasLineOfSight;
-    const _mapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
+    const _mapSpaces = ctx.getMapData?.(game.selectedMap?.id);
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const selfFk = `Baze Malbus-${dgIndex}-0`;
     const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
@@ -1494,7 +1494,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   // Unstable Devices (Saska Teft): free once-per-activation — a friendly in LOS gains 1 Device token
   if (_mountedIds.includes('unstable_devices_saska') && !game.unstableDevicesUsedThisActivation?.[msgId]) {
     const _udHasLos = ctx.hasLineOfSight;
-    const _udMapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
+    const _udMapSpaces = ctx.getMapData?.(game.selectedMap?.id);
     const _udDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _udSelfFk = `${meta.dcName}-${_udDgIndex}-0`;
     const _udSelfPos = game.figurePositions?.[meta.playerNum]?.[_udSelfFk];
@@ -1926,7 +1926,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     // Motivation (UNIQUE): exhaust during activation — friendly with lower cost + LOS discards harmful or recovers 1, gains 1 MP
     if (cardNameIncludes(_suActivationUpgrades, 'Motivation') && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[msgId], 'Motivation')) {
       const _motHasLos = ctx.hasLineOfSight;
-      const _motMapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
+      const _motMapSpaces = ctx.getMapData?.(game.selectedMap?.id);
       const _motDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _motSelfFk = `${meta.dcName}-${_motDgIndex}-0`;
       const _motSelfPos = game.figurePositions?.[meta.playerNum]?.[_motSelfFk];

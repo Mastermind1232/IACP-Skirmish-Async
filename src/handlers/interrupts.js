@@ -176,7 +176,7 @@ export async function handleOverdrive(interaction, ctx) {
 
 // ── 4. Self-Destruct Probe ──────────────────────────────────────────────────
 export async function handleSelfDestructProbe(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapSpaces } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData } = ctx;
   const buttonKey = interaction.customId.startsWith('self_destruct_probe_use_') ? 'self_destruct_probe_use_' : 'self_destruct_probe_skip_';
 
   const _sdpSuffix = parseCustomId(interaction.customId, buttonKey);
@@ -200,7 +200,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
   const _sdpPos = (() => { for (const [, pos] of Object.entries(_sdpGame.figurePositions?.[_sdpMeta.playerNum] || {})) { const fk = `${_sdpMeta.dcName}-1-0`; return _sdpGame.figurePositions?.[_sdpMeta.playerNum]?.[fk] || null; } return null; })();
   let _sdpResultLog = `Rolled red die: **${_sdpFaceLabel}** — `;
   if (_sdpHits > 0 && _sdpPos) {
-    const _sdpMs = getMapSpaces ? getMapSpaces(_sdpGame.selectedMap?.id) : null;
+    const _sdpMs = getMapData ? getMapData(_sdpGame.selectedMap?.id) : null;
     const _sdpAdj = _sdpMs?.adjacency?.[String(_sdpPos).toLowerCase()] || [];
     const _sdpAllAdjSpaces = new Set([String(_sdpPos).toLowerCase(), ..._sdpAdj.map(s => String(s).toLowerCase())]);
     const _sdpHostileNum = opponentPlayerNum(_sdpMeta.playerNum);
@@ -231,7 +231,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
 
 // ── 5. Self-Destruct Protocol ───────────────────────────────────────────────
 export async function handleSelfDestructProtocol(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapSpaces, applyDamageAndFinishCombat } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, applyDamageAndFinishCombat } = ctx;
   const buttonKey = interaction.customId.startsWith('self_destruct_protocol_use_') ? 'self_destruct_protocol_use_' : 'self_destruct_protocol_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
@@ -258,7 +258,7 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
     const _sdcpPos = _sdcpFigKey ? _sdcpGame.figurePositions?.[_sdcpPending.defenderPlayerNum]?.[_sdcpFigKey] : null;
     let _sdcpResultLog = `Rolled red die: **${_sdcpFaceLabel}** — `;
     if (_sdcpHits > 0 && _sdcpPos && _sdcpGame.selectedMap?.id) {
-      const _sdcpMs = getMapSpaces ? getMapSpaces(_sdcpGame.selectedMap.id) : null;
+      const _sdcpMs = getMapData ? getMapData(_sdcpGame.selectedMap.id) : null;
       const _sdcpAdj = _sdcpMs?.adjacency?.[String(_sdcpPos).toLowerCase()] || [];
       const _sdcpAllAdj = new Set([String(_sdcpPos).toLowerCase(), ..._sdcpAdj.map(s => String(s).toLowerCase())]);
       const _sdcpHostileNum = opponentPlayerNum(_sdcpPending.defenderPlayerNum);
@@ -355,7 +355,7 @@ export async function handleYHSIW(interaction, ctx) {
 
 // ── 6. Last Resort ──────────────────────────────────────────────────────────
 export async function handleLastResort(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapSpaces, applyDamageAndFinishCombat } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, applyDamageAndFinishCombat } = ctx;
   const buttonKey = interaction.customId.startsWith('last_resort_use_') ? 'last_resort_use_' : 'last_resort_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
@@ -388,7 +388,7 @@ export async function handleLastResort(interaction, ctx) {
     const _lrPos = _lrFigKey ? _lrGame.figurePositions?.[_lrPending.defenderPlayerNum]?.[_lrFigKey] : null;
     let _lrResultLog = `Rolled red die: **${_lrFaceLabel}** — `;
     if (_lrHits > 0 && _lrPos && _lrGame.selectedMap?.id) {
-      const _lrMs = getMapSpaces ? getMapSpaces(_lrGame.selectedMap.id) : null;
+      const _lrMs = getMapData ? getMapData(_lrGame.selectedMap.id) : null;
       const _lrAdj = _lrMs?.adjacency?.[String(_lrPos).toLowerCase()] || [];
       const _lrDamaged = [];
       for (const pn of [1, 2]) {

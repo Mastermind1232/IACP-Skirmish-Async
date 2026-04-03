@@ -4,24 +4,7 @@
  */
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { cleanupAllSpacePicks } from '../discord/components.js';
-import { countSpaces } from '../game/spatial.js';
-import { getMapData, getMapTokensData } from '../data-loader.js';
-import { edgeKey } from '../game/coords.js';
-
-/** Graph-distance helper: countSpaces with automatic mapSpaces + closed-door resolution from game state. */
-function _countGameSpaces(game, coordA, coordB) {
-  const mapId = game.selectedMap?.id;
-  const ms = mapId ? getMapData(mapId) : null;
-  if (!ms) return Infinity;
-  const allDoors = getMapTokensData()?.[mapId]?.doors || [];
-  const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
-  const closedDoorEdges = new Set(
-    allDoors
-      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`); })
-      .map(e => edgeKey(e[0], e[1]))
-  );
-  return countSpaces(ms, coordA, coordB, closedDoorEdges);
-}
+import { countGameSpaces } from '../game/board-helpers.js';
 
 /**
  * Check if either player has reached 40 VP or been eliminated.
@@ -269,7 +252,7 @@ export async function checkHuntDissent(game, attackerPlayerNum, attackerFigureKe
       const kallusPos = game.figurePositions?.[attackerPlayerNum]?.[kallusFk];
       const atkPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
       if (kallusPos && atkPos) {
-        const dist = _countGameSpaces(game, kallusPos, atkPos);
+        const dist = countGameSpaces(game, kallusPos, atkPos);
         if (dist <= 3) {
           const granted = deps.grantPowerTokens(game, kallusFk, 'Block', 1);
           if (granted > 0) {

@@ -36,8 +36,8 @@ export function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, getFo
   });
 }
 
-export function isWithinN(posA, posB, maxDist, mapId, getMapSpaces) {
-  const ms = getMapSpaces(mapId);
+export function isWithinN(posA, posB, maxDist, mapId, getMapData) {
+  const ms = getMapData(mapId);
   if (!ms?.adjacency || !posA || !posB) return false;
   const a = String(posA).toLowerCase(), b = String(posB).toLowerCase();
   if (a === b) return true;

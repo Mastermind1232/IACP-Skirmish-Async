@@ -11,7 +11,7 @@ export function getPlayReadyMaps(deps) {
   const dz = deps.getDeploymentZones();
   return deps.getMapRegistry().filter((m) => {
     if (!dz[m.id]?.red?.length || !dz[m.id]?.blue?.length) return false;
-    const ms = deps.getMapSpaces(m.id);
+    const ms = deps.getMapData(m.id);
     if (!ms || ms.playReady === false) return false;
     return (Array.isArray(ms.spaces) && ms.spaces.length > 0) || (ms.adjacency && typeof ms.adjacency === 'object' && Object.keys(ms.adjacency).length > 0);
   });

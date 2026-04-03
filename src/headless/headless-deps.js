@@ -55,7 +55,7 @@ import {
 
 import {
   getDcEffects, getDiceData, getCcEffect, isCcAttachment, isDcAttachment,
-  isDcUnique, getMapSpaces, getMapRegistry, getMapTokensData,
+  isDcUnique, getMapData, getMapRegistry, getMapTokensData,
   getTournamentRotation, getMissionCardsData, getMissionRules,
   getDeploymentZones, getDcStats, getFigureSize,
   getDcKeywords, getCcEffectsData,
@@ -297,7 +297,7 @@ export function buildHeadlessDeps(options = {}) {
   const _getFigureLabel = (game, playerNum, figureKey, fallback, maxLen) => _getFigureLabelRaw(game, playerNum, figureKey, fallback, maxLen, { dcMessageMeta, dcNameFromFigureKey, getDcList, getDcMessageIds });
   const _findFigureheadFigure = (game, defenderPlayerNum, targetFigureKey) => _findFigureheadFigureRaw(game, defenderPlayerNum, targetFigureKey, {
     getDcList, getDcEffect, dcNameFromFigureKey,
-    isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapSpaces),
+    isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapData),
     findDcMessageIdForFigure: _findDcMessageIdForFigure, parseFigureKey,
   });
   // Wrap DC UI helpers that need deps.getDcStats bound
@@ -311,8 +311,8 @@ export function buildHeadlessDeps(options = {}) {
     reduceHp, healHp, removeFigurePosition,
     calculateKillVp, awardKillVp, awardObjectiveVp, vpKey,
     getDcList, getDcMessageIds, getDcStats, getDcEffects, getDcEffect, getDcKeywords,
-    getPlayerId, getMapSpaces, getEffectiveMapSpaces,
-    isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapSpaces),
+    getPlayerId, getMapData, getEffectiveMapSpaces,
+    isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapData),
     hasLineOfSight, getRange,
     getFiguresAdjacentToTarget, getFiguresAdjacentToCoord, getFiguresOnOrAdjacentToSpace,
     getEffectiveFigureSize, getFootprintCells, getFigureSize,
@@ -496,7 +496,7 @@ export function buildHeadlessDeps(options = {}) {
 
     // Data loaders (real implementations)
     getDcEffects, getDiceData, getCcEffect, isCcAttachment, isDcAttachment,
-    isDcUnique, getMapSpaces, getMapRegistry, getMapTokensData,
+    isDcUnique, getMapData, getMapRegistry, getMapTokensData,
     getTournamentRotation, getMissionCardsData, getMissionRules,
     resolveDcName, isFigurelessDc, getFigureSize,
     getDcKeywords, getCcEffectsData,

@@ -447,8 +447,8 @@ import {
   getFigureSize,
   getMapRegistry,
   getDeploymentZones,
-  getMapSpacesData,
-  getMapSpaces,
+  getMapDataData,
+  getMapData,
   getDcEffects,
   getDcKeywords,
   getDiceData,
@@ -720,7 +720,7 @@ function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, arg4, arg5, 
 
 /** Maps that are play-ready: have deployment zones, map-spaces (spaces/adjacency), and Play ready? checked so the bot can draw from the pool. */
 function getPlayReadyMaps() {
-  return _getPlayReadyMapsPure({ getDeploymentZones, getMapRegistry, getMapSpaces });
+  return _getPlayReadyMapsPure({ getDeploymentZones, getMapRegistry, getMapData });
 }
 
 /** Lazy-cached destruct test decks (for seed validation autocomplete + game creation). */
@@ -1246,7 +1246,7 @@ async function runDraftRandom(game, client, options = {}) {
     DEFAULT_DECK_REBELS, DEFAULT_DECK_SCUM, retoolDecksForScenario, applySquadSubmission,
     getInitiativePlayerNum, getPlayerDeploymentZones, opponentPlayerNum, logGameAction,
     getDeploymentZones, getSquad, getDeployFigureLabels, parseCoord, dcNameFromFigureKey,
-    getEffectiveFigureSize, getFootprintCells, getFigureSize, filterValidTopLeftSpaces, getMapSpaces, getDcKeywords,
+    getEffectiveFigureSize, getFootprintCells, getFigureSize, filterValidTopLeftSpaces, getMapData, getDcKeywords,
     shuffleArray, getScenarioPrimaryCard, ccDeckKey, ccHandKey, ccDrawnKey, getPlayerId,
     getHandChannelId, getHandTooltipEmbed, buildHandDisplayPayload, updateHandVisualMessage,
     updatePlayAreaDcButtons, runStartOfRoundDcEffects, runPostDeployPhase, setRoundPhase,
@@ -1388,7 +1388,7 @@ function findFigureheadFigure(game, defenderPlayerNum, targetFigureKey) {
 async function resolveCombatAfterRolls(game, combat, client) {
   return _resolveCombatAfterRollsPure(game, combat, client, {
     logGameAction, dcNameFromFigureKey, parseFigureKey, opponentPlayerNum,
-    getDcEffects, getDcEffect, getMapSpaces, computeCombatResult,
+    getDcEffects, getDcEffect, getMapData, computeCombatResult,
     getBoardStateForMovement, getEffectiveFigureSize, getFootprintCells, normalizeCoord,
     getPlayerId, findDcMessageIdForFigure, findFigureheadFigure,
     ButtonBuilder, ButtonStyle, ActionRowBuilder,
@@ -1405,7 +1405,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     reduceHp, healHp, removeFigurePosition,
     calculateKillVp, awardKillVp, awardObjectiveVp, vpKey,
     getDcList, getDcMessageIds, getDcStats, getDcEffects, getDcEffect, getDcKeywords,
-    getPlayerId, getMapSpaces, getEffectiveMapSpaces,
+    getPlayerId, getMapData, getEffectiveMapSpaces,
     isWithinN, hasLineOfSight, getRange,
     getFiguresAdjacentToTarget, getFiguresOnOrAdjacentToSpace,
     getEffectiveFigureSize, getFootprintCells, getFigureSize,
@@ -1431,7 +1431,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
 
 /** BFS distance check on mapSpaces adjacency (used for Boltslinger, etc.). */
 function isWithinN(posA, posB, maxDist, mapId) {
-  return _isWithinNPure(posA, posB, maxDist, mapId, getMapSpaces);
+  return _isWithinNPure(posA, posB, maxDist, mapId, getMapData);
 }
 
 /**
@@ -1442,7 +1442,7 @@ function isWithinN(posA, posB, maxDist, mapId) {
 async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgIds, thread, ownerId, defenderPlayerNum) {
   return _checkPostCombatSurgesPure(game, combat, resultText, embedRefreshMsgIds, thread, ownerId, defenderPlayerNum, {
     logGameAction, dcNameFromFigureKey, getFigureLabel, getFigureSize,
-    getMapSpaces, getPlayerId, getCcHand, getCcEffect, getCcEffectsData,
+    getMapData, getPlayerId, getCcHand, getCcEffect, getCcEffectsData,
     getDcEffects, getFiguresAdjacentToTarget,
     _applyCondition, HARMFUL_CONDITIONS, isConditionImmune,
     ccHandKey, ccDiscardKey, ccDeckKey,
@@ -1461,7 +1461,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     dcNameFromFigureKey, parseFigureKey, opponentPlayerNum, discordCatch,
     reduceHp, healHp,
     getDcList, getDcMessageIds, getDcStats, getDcEffect, getDcEffects, getDcKeywords,
-    getPlayerId, getPlayAreaId, getMapSpaces,
+    getPlayerId, getPlayAreaId, getMapData,
     isWithinN, getRange,
     findDcMessageIdForFigure, getFigureLabel,
     getCcHand, getCcEffectsData,
@@ -2119,7 +2119,7 @@ client.once('ready', async () => {
           buildAllDeps,
           getGame,
           atomicOpts,
-          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
+          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapData, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
           createTestGame,
           deleteGameChannelsAndGame,
           cleanupCtx: {
@@ -2508,7 +2508,7 @@ client.on('messageCreate', async (message) => {
           buildAllDeps,
           getGame,
           atomicOpts,
-          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
+          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapData, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
           scenario: `seed:${p1Deck.name}_vs_${p2Deck.name}@${mapId}`,
           guildId: message.guild.id,
           delayMs: 200,
@@ -2605,7 +2605,7 @@ client.on('messageCreate', async (message) => {
         buildAllDeps,
         getGame,
         atomicOpts,
-        actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
+        actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapData, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
         createTestGame,
         deleteGameChannelsAndGame,
         cleanupCtx: {
@@ -3111,7 +3111,7 @@ function buildAllDeps() {
 
     // Data loader (imported)
     getDcEffects, getDiceData, getCcEffect, isCcAttachment, isDcAttachment,
-    isDcUnique, getMapSpaces, getMapRegistry, getMapTokensData,
+    isDcUnique, getMapData, getMapRegistry, getMapTokensData,
     getTournamentRotation, getMissionCardsData, getMissionRules, resolveDcName, isFigurelessDc,
 
     // Discord UI (imported)
@@ -3641,7 +3641,7 @@ client.on('interactionCreate', async (interaction) => {
             buildAllDeps,
             getGame,
             atomicOpts,
-            actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
+            actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapData, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
             scenario: `seed:${p1DeckName}_vs_${p2DeckName}@${mapId}`,
             guildId: interaction.guild.id,
             delayMs: 200,
@@ -3717,7 +3717,7 @@ client.on('interactionCreate', async (interaction) => {
           buildAllDeps,
           getGame,
           atomicOpts,
-          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
+          actionDeps: { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapData, computeMovementCache, getBoardStateForMovement, getMovementProfile, getPlayableCcFromHand },
           createTestGame,
           deleteGameChannelsAndGame,
           cleanupCtx: {
@@ -4022,7 +4022,7 @@ client.on('interactionCreate', async (interaction) => {
         // All pushes done — run damage phase
         game2.kryknaPushedIds = null;
         const mapId2 = game2.selectedMap?.id;
-        const { logs: kryknaLogs2, damageEvents: kryknaEvt2 } = runNpcKryknaActivation(game2, mapId2, { getMapTokensData, getMapSpaces, getMapRegistry, filterMapSpacesByBounds });
+        const { logs: kryknaLogs2, damageEvents: kryknaEvt2 } = runNpcKryknaActivation(game2, mapId2, { getMapTokensData, getMapData, getMapRegistry, filterMapSpacesByBounds });
         for (const line of kryknaLogs2) {
           if (generalCh2) await logGameAction(game2, client, `🕷️ **Krykna:** ${line}`, { phase: 'ROUND', icon: 'attack' });
         }
