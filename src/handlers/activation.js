@@ -577,6 +577,11 @@ export async function handleEndTurn(interaction, ctx) {
     await interaction.followUp({ content: 'This turn was already ended.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Gate: activation thread must be ended first (End Activation button in thread)
+  if (game.dcActionsData?.[dcMsgId]) {
+    await interaction.followUp({ content: 'Press **End Activation** in the activation thread first.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const otherPlayerNum = opponentPlayerNum(meta.playerNum);
   const otherPlayerId = getPlayerId(game, otherPlayerNum);
   game.dcFinishedPinged = game.dcFinishedPinged || {};
@@ -1023,11 +1028,11 @@ export async function handleDcEndActivation(interaction, ctx) {
     const hand = getCcHand(game, meta.playerNum) || [];
     const reactCards = [...new Set(hand)].filter(c => ccCards[c]?.timing && _endActTimings.has(ccCards[c].timing));
     if (reactCards.length) {
-      await logGameAction(game, client, `<@${ownerId}> — Activation ended! You have ${reactCards.length} reaction card(s) playable now. Check your Hand channel.`, {
-        allowedMentions: { users: [ownerId] },
-        phase: 'ROUND',
-        icon: 'card',
-      });
+      const handId = getHandChannelId(game, meta.playerNum);
+      if (handId) {
+        const handCh = await fetchGameChannel(client, handId);
+        if (handCh) await handCh.send({ content: `<@${ownerId}> — Activation ended! You have ${reactCards.length} reaction card(s) playable now.`, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+      }
     }
   } catch (_endActErr) {
     console.error('End-activation reaction prompt error:', _endActErr?.message ?? _endActErr);
