@@ -168,8 +168,10 @@ export async function logGameAction(game, client, content, options = {}) {
     // Track this message if it pings users, so the next action can clear it
     if (options.allowedMentions?.users?.length > 0) {
       game._lastPingLogMsgId = sentMsg.id;
+      game._lastPingHasComponents = !!(options.components?.length);
     } else {
       delete game._lastPingLogMsgId;
+      delete game._lastPingHasComponents;
     }
 
     return sentMsg;
@@ -182,11 +184,14 @@ export async function logGameAction(game, client, content, options = {}) {
 /**
  * Edit the previous ping message in the game log to strip @mentions.
  * Replaces <@userId> with bold "P1"/"P2" so the mention highlight disappears.
+ * Skips clearing if the previous message has active components (buttons needing action).
  */
 function _clearPreviousPing(game, client) {
   const msgId = game._lastPingLogMsgId;
+  const hasComponents = game._lastPingHasComponents;
   delete game._lastPingLogMsgId;
-  if (!msgId || !game.generalId) return;
+  delete game._lastPingHasComponents;
+  if (!msgId || !game.generalId || hasComponents) return;
   fetchGameChannel(client, game.generalId).then(ch =>
     ch?.messages.fetch(msgId).then(msg => {
       let text = msg.content;

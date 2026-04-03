@@ -255,9 +255,9 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
 
     case 'cc_drawn': {
       setPhase(game, PHASES.ROUND_ACTIVE, ROUND_PHASES.START_OF_ROUND);
-      const { runStartOfRoundDcEffects, sendPhaseGateMessages: sendGate } = ctx;
+      const { runStartOfRoundDcEffects, sendPhaseGateMessages: sendGate, updateHandChannelMessages } = ctx;
       const hasPendingSor = runStartOfRoundDcEffects
-        ? await runStartOfRoundDcEffects(game, gameId, client, { logGameAction })
+        ? await runStartOfRoundDcEffects(game, gameId, client, { logGameAction, updateHandChannelMessages })
         : false;
       if (!hasPendingSor) {
         const gateFn = sendGate || sendPhaseGateMessages;
@@ -353,13 +353,17 @@ async function advanceFromDeployment(game, ctx) {
       const p1HandChannel = await fetchGameChannel(client, game.p1HandId);
       const p2HandChannel = await fetchGameChannel(client, game.p2HandId);
       const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
+      const p1Id = getPlayerId(game, 1);
+      const p2Id = getPlayerId(game, 2);
       await p1HandChannel.send({
-        content: `**Your Command Card deck** (${p1DeckList.length} cards):\n${ccDeckText(p1DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        content: `${p1Id ? `<@${p1Id}> ` : ''}**Your Command Card deck** (${p1DeckList.length} cards):\n${ccDeckText(p1DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
         components: [getCcShuffleDrawButton(gameId)],
+        ...(p1Id && { allowedMentions: { users: [p1Id] } }),
       });
       await p2HandChannel.send({
-        content: `**Your Command Card deck** (${p2DeckList.length} cards):\n${ccDeckText(p2DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        content: `${p2Id ? `<@${p2Id}> ` : ''}**Your Command Card deck** (${p2DeckList.length} cards):\n${ccDeckText(p2DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
         components: [getCcShuffleDrawButton(gameId)],
+        ...(p2Id && { allowedMentions: { users: [p2Id] } }),
       });
     } catch (err) {
       console.error('Failed to send CC deck prompt:', err);

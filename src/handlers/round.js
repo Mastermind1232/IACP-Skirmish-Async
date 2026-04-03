@@ -802,7 +802,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
   }
   // Run start-of-round DC effects (post-deploy for R1, DC abilities every round)
-  const hasPendingSor = await runStartOfRoundDcEffects(game, gameId, client, { logGameAction });
+  const hasPendingSor = await runStartOfRoundDcEffects(game, gameId, client, { logGameAction, updateHandChannelMessages });
   await updateHandVisualMessage(game, 1, client);
   await updateHandVisualMessage(game, 2, client);
   for (const pn of [1, 2]) {
@@ -889,7 +889,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
  * @param {object} ctx - { logGameAction, dcHealthState?, dcMessageMeta? }
  */
 export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
-  const { logGameAction } = ctx;
+  const { logGameAction, updateHandChannelMessages } = ctx;
 
   // Post-deploy effects now handled by runPostDeployPhase() in post-deploy.js
   // (called from the appropriate trigger points: cc-hand.js, index.js Draft Random, etc.)
@@ -1012,9 +1012,10 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           game[deckKey] = deck;
           game[handKey] = hand;
           const drewText = drew.length ? drew.map(c => `**${c}**`).join(', ') : 'none (deck empty)';
-          await logGameAction(game, client, `📜 **Rule by Fear** — <@${ownerId}> drew ${drew.length} CC${drew.length !== 1 ? 's' : ''}: ${drewText}. Now choose 1 card to discard.`, {
+          await logGameAction(game, client, `📜 **Rule by Fear** — <@${ownerId}> drew ${drew.length} CC${drew.length !== 1 ? 's' : ''}. Choose 1 to discard in your hand channel.`, {
             allowedMentions: { users: [ownerId] },
           });
+          if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
           // Post discard picker in hand channel
           if (hand.length > 0) {
             game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
@@ -1027,7 +1028,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
                 .setStyle(ButtonStyle.Danger)
               );
               const discardRows = chunkButtonsToRows(discardBtns);
-              await withDiscordRetry(() => handCh.send({ content: '**Rule by Fear** — Choose 1 card from your hand to discard:', components: discardRows }));
+              await withDiscordRetry(() => handCh.send({ content: `<@${ownerId}> **Rule by Fear** — You drew: ${drewText}. Choose 1 card from your hand to discard:`, components: discardRows, allowedMentions: { users: [ownerId] } }));
             } catch (err) {
               console.error('Rule by Fear discard picker failed:', err);
             }
@@ -1049,9 +1050,10 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           game[deckKey] = deck;
           game[handKey] = hand;
           const drewText = drew.length ? drew.map(c => `**${c}**`).join(', ') : 'none (deck empty)';
-          await logGameAction(game, client, `🎯 **Rogue One** — <@${ownerId}> drew ${drew.length} CC${drew.length !== 1 ? 's' : ''}: ${drewText}. Now place 2 cards from your hand on top of your deck.`, {
+          await logGameAction(game, client, `🎯 **Rogue One** — <@${ownerId}> drew ${drew.length} CC${drew.length !== 1 ? 's' : ''}. Place 2 back on top of your deck in your hand channel.`, {
             allowedMentions: { users: [ownerId] },
           });
+          if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
           // Post picker in hand channel
           if (hand.length > 0) {
             game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
@@ -1065,7 +1067,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
                 .setStyle(ButtonStyle.Primary)
               );
               const pickRows = chunkButtonsToRows(pickBtns);
-              await withDiscordRetry(() => handCh.send({ content: '**Rogue One** — Choose a card to place on top of your deck (1 of 2):', components: pickRows }));
+              await withDiscordRetry(() => handCh.send({ content: `<@${ownerId}> **Rogue One** — You drew: ${drewText}. Choose a card to place on top of your deck (1 of 2):`, components: pickRows, allowedMentions: { users: [ownerId] } }));
             } catch (err) {
               console.error('Rogue One return picker failed:', err);
             }
@@ -1536,7 +1538,7 @@ export async function handleExtraArmorCancel(interaction, ctx) {
  * Rule by Fear: player picks 1 card from hand to discard.
  */
 export async function handleRbfDiscard(interaction, ctx) {
-  const { getGame, saveGames, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, client } = ctx;
+  const { getGame, saveGames, updateHandVisualMessage, updateDiscardPileMessage, updateHandChannelMessages, logGameAction, client } = ctx;
   const parts = splitCustomId(interaction.customId, 'rbf_discard_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -1554,10 +1556,11 @@ export async function handleRbfDiscard(interaction, ctx) {
   game[discKey] = game[discKey] || [];
   game[discKey].push(card);
   game[handKey] = hand;
-  await logGameAction(game, client, `📜 **Rule by Fear** — discarded **${card}**.`);
+  await logGameAction(game, client, `📜 **Rule by Fear** — **P${playerNum}** discarded 1 CC.`);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
   if (updateDiscardPileMessage) await updateDiscardPileMessage(game, playerNum, client).catch(discordCatch);
+  if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
   saveGames();
   await interaction.followUp({ content: `Discarded **${card}**.`, ephemeral: true }).catch(discordCatch);
   // Resolve start-of-round blocking effect
@@ -1570,7 +1573,7 @@ export async function handleRbfDiscard(interaction, ctx) {
  * Rogue One: player picks cards to put on top of deck (2 picks).
  */
 export async function handleRogueOneReturn(interaction, ctx) {
-  const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
+  const { getGame, saveGames, updateHandVisualMessage, updateHandChannelMessages, logGameAction, client } = ctx;
   const parts = splitCustomId(interaction.customId, 'rogue_one_return_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -1594,7 +1597,7 @@ export async function handleRogueOneReturn(interaction, ctx) {
   game[deckKey].unshift(card);
   game[handKey] = hand;
   pending.remaining -= 1;
-  await logGameAction(game, client, `🎯 **Rogue One** — placed **${card}** on top of deck (${pending.remaining} remaining).`);
+  await logGameAction(game, client, `🎯 **Rogue One** — **P${playerNum}** placed a card on top of deck (${pending.remaining} remaining).`);
   if (pending.remaining <= 0) {
     delete game[`pendingRogueOne_p${playerNum}`];
     await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -1615,6 +1618,7 @@ export async function handleRogueOneReturn(interaction, ctx) {
     await interaction.followUp({ content: `Placed **${card}** on deck. Pick 1 more card to return.`, ephemeral: true }).catch(discordCatch);
   }
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
+  if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
   saveGames();
 }
 
