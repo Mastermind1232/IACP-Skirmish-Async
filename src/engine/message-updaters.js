@@ -159,34 +159,24 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
     }
   }
 
-  // Defer End Turn prompt while combat is resolving — it will re-trigger after finishCombatResolution
+  // Defer End Activation prompt while combat is resolving — it will re-trigger after finishCombatResolution
   if (data?.remaining === 0 && meta && !game.pendingCombat) {
     game.dcFinishedPinged = game.dcFinishedPinged || {};
-    game.pendingEndTurn = game.pendingEndTurn || {};
-    if (!game.dcFinishedPinged[msgId] && !game.pendingEndTurn[msgId]) {
+    if (!game.dcFinishedPinged[msgId] && !game.pendingEndTurn?.[msgId]) {
       const ownerId = deps.getPlayerId(game, meta.playerNum);
       const initPlayerNum = meta.playerNum;
       try {
         const ch = await fetchGameChannel(client, game.generalId);
         const icon = deps.ACTION_ICONS.activate || '\u26A1';
         const timestamp = `<t:${Math.floor(Date.now() / 1000)}:t>`;
-        const endTurnBtn = new deps.ActionRowBuilder().addComponents(
-          new deps.ButtonBuilder()
-            .setCustomId(`end_turn_${game.gameId}_${msgId}`)
-            .setLabel('End Turn')
-            .setStyle(deps.ButtonStyle.Primary)
-        );
-        const endTurnMsg = await ch.send(sanitizeMentions({
-          content: `${icon} ${timestamp} — <@${ownerId}> (**Player ${initPlayerNum}**) **${displayName}** finished all actions. Press **End Turn** when ready to pass the turn.`,
-          components: [endTurnBtn],
+        await ch.send(sanitizeMentions({
+          content: `${icon} ${timestamp} — <@${ownerId}> (**Player ${initPlayerNum}**) **${displayName}** finished all actions. Press **End Activation** in the activation thread when ready.`,
           allowedMentions: { users: [ownerId] },
         }));
-        game.pendingEndTurn[msgId] = { playerNum: meta.playerNum, displayName, messageId: endTurnMsg.id };
       } catch (err) {
-        console.error('Failed to send End Turn prompt:', err);
+        console.error('Failed to send End Activation prompt:', err);
       }
     }
-    await maybeShowEndActivationPhaseButton(game, client, deps);
   }
 }
 

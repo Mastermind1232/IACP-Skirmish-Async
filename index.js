@@ -100,7 +100,6 @@ import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from './src/game/phase.
 import { SCENARIO_MUTATORS } from './src/engine/scenario-mutators.js';
 import { deleteGameChannelsAndGame } from './src/handlers/botmenu.js';
 import { cleanupRoundStart } from './src/game/activation-state.js';
-import { runRecovery } from './src/handlers/recover.js';
 import { getRecoveryReason } from './src/engine/recovery.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
@@ -1889,27 +1888,10 @@ client.once('ready', async () => {
       }
     }
     console.log('Auto-refresh complete.');
-
-    // Auto-recovery: re-send any missing UI prompts for stuck games
-    console.log(`Running auto-recovery for ${activeGames.length} active game(s)...`);
-    const allDeps = buildAllDeps();
-    const recoverCtx = buildContext('recover', allDeps);
-    for (const game of activeGames) {
-      try {
-        const recovered = await runRecovery(game, game.gameId, recoverCtx);
-        if (recovered.length > 0) {
-          console.log(`  Recovered ${recovered.length} prompt(s) for game ${game.gameId}: ${recovered.join(', ')}`);
-        }
-      } catch (err) {
-        console.error(`  Recovery failed for game ${game.gameId}:`, err.message);
-      }
-    }
-    saveGames();
-    console.log('Auto-recovery complete.');
   }
 
   // Auto-recovery is available on-demand via the Recover button in /botmenu.
-  // Periodic auto-recovery was removed — async games idle for hours normally.
+  // Both startup and periodic auto-recovery have been removed — async games idle for hours normally.
 
   // Local HTTP endpoint to create a test game from Cursor/terminal (no need to type in #lfg)
   const guildId = process.env.DISCORD_GUILD_ID;

@@ -856,18 +856,6 @@ export async function handleDcEndActivation(interaction, ctx) {
   const displayName = meta.displayName || meta.dcName;
   const gameId = game.gameId;
 
-  // Clean up the End Turn button in game log (if it exists)
-  const pendingEnd = game.pendingEndTurn?.[msgId];
-  if (pendingEnd) {
-    if (pendingEnd.messageId && game.generalId) {
-      try {
-        const ch = await fetchGameChannel(client, game.generalId);
-        const endTurnMsg = await ch.messages.fetch(pendingEnd.messageId);
-        await endTurnMsg.edit({ components: [] }).catch(discordCatch);
-      } catch { /* already gone */ }
-    }
-    delete game.pendingEndTurn[msgId];
-  }
   game.dcFinishedPinged = game.dcFinishedPinged || {};
   game.dcFinishedPinged[msgId] = true;
 
@@ -903,10 +891,6 @@ export async function handleDcEndActivation(interaction, ctx) {
     }
   }
 
-  game.lastActivationMsgIdByPlayer = game.lastActivationMsgIdByPlayer || {};
-  game.lastActivationMsgIdByPlayer[meta.playerNum] = msgId;
-  game.currentActivationTurnPlayerId = otherPlayerId;
-
   // Update DC card (stays exhausted)
   try {
     const playAreaId = getPlayAreaId(game, meta.playerNum);
@@ -940,40 +924,29 @@ export async function handleDcEndActivation(interaction, ctx) {
     }
   }
 
-  // Ping opponent
-  await logGameAction(game, client, `<@${otherPlayerId}> (**Player ${otherPlayerNum}'s turn**) **${displayName}** ended activation — your turn to activate a figure!`, {
-    allowedMentions: { users: [otherPlayerId] },
-    phase: 'ROUND',
-    icon: 'activate',
-  });
-
-  // Update round activation message
-  if (game.roundActivationMessageId && game.generalId && !game.roundActivationButtonShown) {
+  // Send End Turn button to game log (turn switch happens when player presses it)
+  game.pendingEndTurn = game.pendingEndTurn || {};
+  if (!game.pendingEndTurn[msgId]) {
     try {
       const ch = await fetchGameChannel(client, game.generalId);
-      const msg = await ch.messages.fetch(game.roundActivationMessageId);
-      const round = game.currentRound || 1;
-      const newCurrentRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
-      const justActedRem = getActivationsRemaining(game, meta.playerNum) ?? 0;
-      const passRows = [];
-      if (justActedRem > newCurrentRem && newCurrentRem > 0) {
-        passRows.push(new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`pass_activation_turn_${gameId}`)
-            .setLabel(`Pass (opponent has ${justActedRem - newCurrentRem} more activation${justActedRem - newCurrentRem !== 1 ? 's' : ''} than you)`)
-            .setStyle(ButtonStyle.Secondary)
-        ));
-      }
-      await msg.edit({
-        content: `<@${otherPlayerId}> (**Player ${otherPlayerNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back (opponent has more activations).' : ''}`,
-        components: passRows,
-        allowedMentions: { users: [otherPlayerId] },
-      }).catch(discordCatch);
+      const icon = '\u26A1';
+      const timestamp = `<t:${Math.floor(Date.now() / 1000)}:t>`;
+      const endTurnBtn = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`end_turn_${gameId}_${msgId}`)
+          .setLabel('End Turn')
+          .setStyle(ButtonStyle.Primary)
+      );
+      const endTurnMsg = await ch.send(sanitizeMentions({
+        content: `${icon} ${timestamp} — <@${ownerId}> (**Player ${meta.playerNum}**) **${displayName}** activation resolved. Press **End Turn** when ready to pass.`,
+        components: [endTurnBtn],
+        allowedMentions: { users: [ownerId] },
+      }));
+      game.pendingEndTurn[msgId] = { playerNum: meta.playerNum, displayName, messageId: endTurnMsg.id };
     } catch (err) {
-      console.error('Failed to update round message after End Activation:', err);
+      console.error('Failed to send End Turn prompt after End Activation:', err);
     }
   }
-  await maybeShowEndActivationPhaseButton(game, client);
 
   // On a Diplomatic Mission (Skirmish Upgrade, LEADER): exhaust at end of activation if no attack → choice
   {
