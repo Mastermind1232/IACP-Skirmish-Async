@@ -570,9 +570,8 @@ export function canResolveCcHeadless(game, playerNum, cardName, deps) {
     if (oppFigures.length === 0) return false;
     // Check if any opponent figure has a beneficial condition (Focus or Hidden)
     const hasBeneficial = oppFigures.some(fk => {
-      const conds = game.figureConditions?.[oppNum]?.[fk]
-        || game.conditions?.[oppNum]?.[fk] || {};
-      return conds.focused || conds.hidden;
+      const conds = game.figureConditions?.[fk] || [];
+      return conds.includes('Focus') || conds.includes('Hide');
     });
     if (!hasBeneficial) return false;
   }

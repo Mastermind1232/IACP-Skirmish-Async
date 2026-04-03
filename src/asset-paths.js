@@ -138,9 +138,11 @@ export function getDcImagePath(dcName) {
 }
 
 /** Return absolute path to condition card image, or null if not found. */
+// Game state stores short verbs (Focus, Stun, etc.); card files use participles (Focused, Stunned, etc.)
+const COND_CARD_NAME = { Focus: 'Focused', Stun: 'Stunned', Bleed: 'Bleeding', Weaken: 'Weakened', Hide: 'Hidden' };
 export function getConditionCardPath(conditionName) {
   if (!conditionName) return null;
-  const fname = `Condition card--${conditionName}.jpg`;
+  const fname = `Condition card--${COND_CARD_NAME[conditionName] || conditionName}.jpg`;
   const p = join(rootDir, 'vassal_extracted', 'images', 'conditions', fname);
   return existsSync(p) ? p : null;
 }
