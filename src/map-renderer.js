@@ -43,7 +43,8 @@ let registryCache = null;
 let tokenImagesConfig = null;
 let mapSpacesCache = null;
 
-function getMapSpaces(mapId) {
+/** Returns a lowercase Set of on-map coordinates for grid label filtering. */
+function getOnMapCoordSet(mapId) {
   if (!mapSpacesCache) {
     try {
       mapSpacesCache = JSON.parse(readFileSync(join(rootDir, 'data', 'map-spaces.json'), 'utf8'));
@@ -152,7 +153,7 @@ export async function renderMap(mapId, options = {}) {
 
   if (showGrid) {
     const useBlackGrid = gridStyle === 'black';
-    const onMapCoords = getMapSpaces(mapId);
+    const onMapCoords = getOnMapCoordSet(mapId);
     const coordFilter = showGridOnlyOnCoords
       ? new Set((Array.isArray(showGridOnlyOnCoords) ? showGridOnlyOnCoords : []).map((c) => String(c).toLowerCase()))
       : null;
@@ -644,12 +645,9 @@ export async function renderMap(mapId, options = {}) {
     // Pre-load condition icon images in parallel, then draw sequentially (stacking leftward)
     const conditionIcons = (fig.conditions || []).slice(0, 5);
     if (conditionIcons.length > 0) {
-      const COND_SLOT = { Bleeding: 1, Stunned: 2, Weakened: 3, Focused: 4, Hidden: 5 };
-      const condSizeStr = (fig.baseSize || fig.figureSize || '1x1');
       const iconSize = Math.max(14, Math.min(clipW, clipH) * 0.4875);
       const condImgPromises = conditionIcons.map((cond) => {
-        const slot = COND_SLOT[cond] || 1;
-        const condIconFile = `Icon-${slot}-${cond} ${condSizeStr}.png`;
+        const condIconFile = `Condition Marker--${cond}.gif`;
         const condIconPath = join(rootDir, 'vassal_extracted', 'images', 'conditions', condIconFile);
         if (existsSync(condIconPath)) {
           return loadImage(condIconPath).catch(() => null);
