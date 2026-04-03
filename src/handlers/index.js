@@ -325,6 +325,7 @@ register('ob_deplete_', handleOrbitalBombardmentDeplete, 'dcPlayArea');
 register('ob_skip_', handleOrbitalBombardmentSkip, 'dcPlayArea');
 register('ob_space_', handleOrbitalBombardmentSpacePick, 'dcPlayArea');
 register('bomb_drop_space_', handleBombDropSpacePick, 'dcPlayArea');
+register('dc_spend_mp_', (i, ctx) => handleDcAction(i, ctx, 'dc_spend_mp_'), 'dcPlayArea');
 register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'), 'dcPlayArea');
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'), 'dcPlayArea');
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'), 'dcPlayArea');

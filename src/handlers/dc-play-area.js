@@ -1366,7 +1366,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   } = ctx;
 
   let msgId, action, figureIndex = 0, specialIdx = -1;
-  if (buttonKey === 'dc_move_') {
+  if (buttonKey === 'dc_spend_mp_') {
+    const m = interaction.customId.match(/^dc_spend_mp_(.+)_f(\d+)$/);
+    msgId = m ? m[1] : parseCustomId(interaction.customId, 'dc_spend_mp_');
+    figureIndex = m ? parseInt(m[2], 10) : 0;
+    action = 'SpendMp';
+  } else if (buttonKey === 'dc_move_') {
     const m = interaction.customId.match(/^dc_move_(.+)_f(\d+)$/);
     msgId = m ? m[1] : parseCustomId(interaction.customId, 'dc_move_');
     figureIndex = m ? parseInt(m[2], 10) : 0;
@@ -1421,7 +1426,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
   const hasFellSwoopFreeAttack = action === 'Attack' && !!game.fellSwoopFreeAttack?.[msgId];
   const hasPummelFreeAttack = action === 'Attack' && !!(game.pummelTwoAttacksThisActivation?.[msgId]);
-  if (actionsRemaining <= 0 && !hasFellSwoopFreeAttack && !hasPummelFreeAttack) {
+  if (actionsRemaining <= 0 && action !== 'SpendMp' && !hasFellSwoopFreeAttack && !hasPummelFreeAttack) {
     await interaction.followUp({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -1454,9 +1459,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     actionsData.specialsUsed.push(specialIdx);
   }
 
-  if (action === 'Move') {
+  if (action === 'Move' || action === 'SpendMp') {
+    const isSpendMp = action === 'SpendMp';
     // G36: Parting Blow / Parting Shot — reset once-per-move flag at the start of each new Move action
-    if (game.partingShotTriggered) game.partingShotTriggered = {};
+    if (!isSpendMp && game.partingShotTriggered) game.partingShotTriggered = {};
     try {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
       const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
@@ -1478,37 +1484,49 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
       const stats = getDcStats(meta.dcName);
-      const speed = getEffectiveSpeed(meta.dcName, figureKey, game, playerNum);
       const bank = game.movementBank?.[msgId];
       const currentMp = bank?.remaining ?? 0;
-      let mpRemaining = currentMp + speed;
+      let mpRemaining;
       const displayName = meta.displayName || meta.dcName;
       const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
       game.movementBank = game.movementBank || {};
-      // Vanish: grant bonus MP at the start of next activation (first Move click), then clear immunity
-      // Check regardless of whether a bank already exists (CC free-move grants can pre-create a bank)
-      const vanishBonus = game.vanishImmunityUntilNextActivation?.[playerNum];
-      if (vanishBonus?.msgId === msgId) {
-        if (vanishBonus.nextMp > 0) mpRemaining += vanishBonus.nextMp;
-        delete game.vanishImmunityUntilNextActivation[playerNum];
-      }
-      // The General's Ranks: +2 MP when performing a non-activation move
-      const _tgrMoveUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-      if (_tgrMoveUpgrades.includes("The General's Ranks") && !game.dcActionsData?.[msgId]?.threadId) {
-        mpRemaining += 2;
-      }
-      if (!game.movementBank[msgId]) {
-        game.movementBank[msgId] = {
-          total: speed,
-          remaining: mpRemaining,
-          threadId: bank?.threadId ?? null,
-          messageId: bank?.messageId ?? null,
-          displayName: figLabel,
-        };
+      if (isSpendMp) {
+        // Spending remaining MP from a previous Move action — no speed added, no action cost
+        mpRemaining = currentMp;
+        if (mpRemaining <= 0) {
+          await interaction.followUp({ content: 'No remaining movement points to spend.', ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        // Update bank display name in case it wasn't set
+        if (game.movementBank[msgId]) game.movementBank[msgId].displayName = game.movementBank[msgId].displayName || figLabel;
       } else {
-        game.movementBank[msgId].displayName = game.movementBank[msgId].displayName || figLabel;
-        game.movementBank[msgId].remaining = mpRemaining;
-        game.movementBank[msgId].total = (game.movementBank[msgId].total ?? 0) + speed;
+        const speed = getEffectiveSpeed(meta.dcName, figureKey, game, playerNum);
+        mpRemaining = currentMp + speed;
+        // Vanish: grant bonus MP at the start of next activation (first Move click), then clear immunity
+        // Check regardless of whether a bank already exists (CC free-move grants can pre-create a bank)
+        const vanishBonus = game.vanishImmunityUntilNextActivation?.[playerNum];
+        if (vanishBonus?.msgId === msgId) {
+          if (vanishBonus.nextMp > 0) mpRemaining += vanishBonus.nextMp;
+          delete game.vanishImmunityUntilNextActivation[playerNum];
+        }
+        // The General's Ranks: +2 MP when performing a non-activation move
+        const _tgrMoveUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+        if (_tgrMoveUpgrades.includes("The General's Ranks") && !game.dcActionsData?.[msgId]?.threadId) {
+          mpRemaining += 2;
+        }
+        if (!game.movementBank[msgId]) {
+          game.movementBank[msgId] = {
+            total: speed,
+            remaining: mpRemaining,
+            threadId: bank?.threadId ?? null,
+            messageId: bank?.messageId ?? null,
+            displayName: figLabel,
+          };
+        } else {
+          game.movementBank[msgId].displayName = game.movementBank[msgId].displayName || figLabel;
+          game.movementBank[msgId].remaining = mpRemaining;
+          game.movementBank[msgId].total = (game.movementBank[msgId].total ?? 0) + speed;
+        }
       }
       await ensureMovementBankMessage(game, msgId, client);
       const boardState = getBoardStateForMovement(game, figureKey);
@@ -1522,13 +1540,16 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         await interaction.followUp({ content: 'No valid movement spaces.', ephemeral: true }).catch(discordCatch);
         return;
       }
-      const actData = game.dcActionsData?.[msgId];
-      const isExecOrderFreeMove = game.pendingExecutiveOrder?.forMsgId === msgId;
-      if (isExecOrderFreeMove) {
-        delete game.pendingExecutiveOrder;
-      } else if (actData) {
-        actData.remaining = Math.max(0, actData.remaining - 1);
-        await updateDcActionsMessage(game, msgId, client);
+      // SpendMp is free — no action cost. Move costs 1 action (unless Executive Order).
+      if (!isSpendMp) {
+        const actData = game.dcActionsData?.[msgId];
+        const isExecOrderFreeMove = game.pendingExecutiveOrder?.forMsgId === msgId;
+        if (isExecOrderFreeMove) {
+          delete game.pendingExecutiveOrder;
+        } else if (actData) {
+          actData.remaining = Math.max(0, actData.remaining - 1);
+          await updateDcActionsMessage(game, msgId, client);
+        }
       }
       game.moveInProgress = game.moveInProgress || {};
       const moveKey = `${msgId}_${figureIndex}`;
@@ -1572,7 +1593,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       ];
       if (mpRemaining > 0 && !game.urgencyMustSpendAll?.[msgId]) {
         moveActionBtns.push(
-          { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'End Movement', style: ButtonStyle.Danger }
+          { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'Pause Movement', style: ButtonStyle.Secondary }
         );
       }
       game.pendingSpacePick = game.pendingSpacePick || {};

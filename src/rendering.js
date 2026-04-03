@@ -258,6 +258,7 @@ export function getMapTokensForRender(mapId, missionVariant, openedDoors = [], a
     energyShield: anc.energyShield || [],
     device: anc.device || [],
     napalm: anc.napalm || [],
+    namedAreas: (mapData.namedAreas || []).filter(a => a.name && a.cells?.length),
   };
 }
 

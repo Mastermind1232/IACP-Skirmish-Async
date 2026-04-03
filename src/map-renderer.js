@@ -177,6 +177,41 @@ export async function renderMap(mapId, options = {}) {
     }
   }
 
+  // Draw named area labels (room names like "Command Center")
+  for (const area of tokens.namedAreas || []) {
+    if (!area.name || !area.cells?.length) continue;
+    const parsed = area.cells.map(parseCoord).filter(p => p.col >= 0 && p.row >= 0);
+    if (parsed.length === 0) continue;
+    // Compute centroid of all area cell centers
+    let acx = 0;
+    let acy = 0;
+    for (const p of parsed) {
+      acx += sx0 + p.col * sdx + sdx / 2;
+      acy += sy0 + p.row * sdy + sdy / 2;
+    }
+    acx /= parsed.length;
+    acy /= parsed.length;
+    const areaFontSize = Math.round(Math.min(sdx, sdy) * 0.42);
+    const areaLabel = area.name.length > 20 ? area.name.slice(0, 19) + '\u2026' : area.name;
+    ctx.font = `bold ${areaFontSize}px "${FONT_FAMILY}"`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const areaMetrics = ctx.measureText(areaLabel);
+    const aPadH = Math.max(5, Math.round(areaFontSize * 0.3));
+    const aPadV = Math.max(3, Math.round(areaFontSize * 0.2));
+    const aBoxW = areaMetrics.width + aPadH * 2;
+    const aBoxH = areaFontSize + aPadV * 2;
+    const aBoxX = acx - aBoxW / 2;
+    const aBoxY = acy - aBoxH / 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(aBoxX, aBoxY, aBoxW, aBoxH);
+    ctx.lineWidth = Math.max(2, Math.round(areaFontSize * 0.1));
+    ctx.strokeStyle = '#000000';
+    ctx.strokeText(areaLabel, acx, acy);
+    ctx.fillStyle = '#CE93D8'; // Light purple
+    ctx.fillText(areaLabel, acx, acy);
+  }
+
   // Draw map tokens using game box images from vassal_extracted/images/tokens
   const tokenSize = Math.min(sdx, sdy) * 0.9;
   const tc = getTokenImagesConfig();

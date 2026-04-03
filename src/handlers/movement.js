@@ -21,8 +21,6 @@ function _cleanupMoveState(game, moveKey, msgId) {
   delete game.moveInProgress[moveKey];
   if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
   if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
-  // Reset remaining MP so forfeited points don't carry over to the next Move action
-  if (game.movementBank?.[msgId]) game.movementBank[msgId].remaining = 0;
 }
 
 /**
@@ -132,7 +130,7 @@ export async function handleMoveMp(interaction, ctx) {
   ];
   if (mpRemaining > 0 && !game.urgencyMustSpendAll?.[msgId]) {
     moveActionBtns.push(
-      { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'End Movement', style: ButtonStyle.Danger }
+      { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'Pause Movement', style: ButtonStyle.Secondary }
     );
   }
   game.pendingSpacePick = game.pendingSpacePick || {};
@@ -284,7 +282,7 @@ export async function handleMovePick(interaction, ctx) {
     await clearMoveGridMessages(game, moveKey, interaction.channel);
     try { await interaction.message.delete(); } catch { /* already gone */ }
     _cleanupMoveState(game, moveKey, msgId);
-    await interaction.followUp({ content: `**${displayName}** finished moving (${mpRemaining} MP forfeited).`, ephemeral: false }).catch(discordCatch);
+    await interaction.followUp({ content: `**${displayName}** paused movement (**${mpRemaining}** MP remaining).`, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -1127,3 +1125,4 @@ export async function handleDioStay(interaction, ctx) {
   await logGameAction(game, client, `**Attached** — Dio chose to stay (did not follow Iden).`, { phase: 'ROUND', icon: 'skip' });
   saveGames();
 }
+

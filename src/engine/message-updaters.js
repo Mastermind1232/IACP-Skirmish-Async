@@ -159,7 +159,8 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
     }
   }
 
-  if (data?.remaining === 0 && meta) {
+  // Defer End Turn prompt while combat is resolving — it will re-trigger after finishCombatResolution
+  if (data?.remaining === 0 && meta && !game.pendingCombat) {
     game.dcFinishedPinged = game.dcFinishedPinged || {};
     game.pendingEndTurn = game.pendingEndTurn || {};
     if (!game.dcFinishedPinged[msgId] && !game.pendingEndTurn[msgId]) {

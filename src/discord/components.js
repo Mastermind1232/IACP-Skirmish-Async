@@ -998,6 +998,22 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   }
 
+  // Spend remaining MP: available when movement bank has unspent points from a previous Move action
+  // This is free — does not cost an action (IA rules: MP persist for the entire activation)
+  {
+    const bankMp = game?.movementBank?.[msgId]?.remaining ?? 0;
+    const spendFigIdx = figures > 1 ? (selectedFigure ?? 0) : 0;
+    const moveKey = `${msgId}_${spendFigIdx}`;
+    const hasActiveMoveSession = !!game?.moveInProgress?.[moveKey];
+    if (bankMp > 0 && !hasActiveMoveSession && rows.length < 5) {
+      rows.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`dc_spend_mp_${msgId}_f${spendFigIdx}`)
+          .setLabel(`Spend Remaining MP (${bankMp})`)
+          .setStyle(ButtonStyle.Success)
+      ));
+    }
+  }
   if (specials.length > 0 && rows.length < 5) {
     const specialBtns = specials.slice(0, 5).map((name, idx) => {
       const alreadyUsed = specialsUsed.includes(idx);
