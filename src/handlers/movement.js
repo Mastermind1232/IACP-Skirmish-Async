@@ -4,7 +4,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getDcEffects, getMapSpaces } from '../data-loader.js';
+import { getDcEffects, getMapData } from '../data-loader.js';
 import { bottomLeftCoord, getFootprintCells, normalizeCoord } from '../game/coords.js';
 import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens } from '../game/index.js';
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
@@ -680,7 +680,7 @@ export async function handleMovePick(interaction, ctx) {
   if (newMp <= 0 && game.rushPending?.[msgId]) {
     delete game.rushPending[msgId];
     const rushMapId = game.selectedMap?.id;
-    const rushAdjSpaces = rushMapId ? (getMapSpaces(rushMapId)?.adjacency?.[newTopLeft] || []) : [];
+    const rushAdjSpaces = rushMapId ? (getMapData(rushMapId)?.adjacency?.[newTopLeft] || []) : [];
     const rushEffects = getDcEffects();
     const rushOppNum = opponentPlayerNum(playerNum);
     const rushOppPos = game.figurePositions?.[rushOppNum] || {};
@@ -730,7 +730,7 @@ export async function handleMovePick(interaction, ctx) {
     const srData = game.shoulderRushPending[msgId];
     delete game.shoulderRushPending[msgId];
     const srMapId = game.selectedMap?.id;
-    const srAdjSpaces = srMapId ? (getMapSpaces(srMapId)?.adjacency?.[newTopLeft] || []) : [];
+    const srAdjSpaces = srMapId ? (getMapData(srMapId)?.adjacency?.[newTopLeft] || []) : [];
     const srEffects = getDcEffects();
     const srOppNum = opponentPlayerNum(playerNum);
     const srOppPos = game.figurePositions?.[srOppNum] || {};
@@ -784,7 +784,7 @@ export async function handleMovePick(interaction, ctx) {
         const dpEff = dpEffects?.[dpDcName];
         if (!(dpEff?.specialAbilityIds || []).includes('deference_protocol')) continue;
         // Check adjacency
-        const adjSpaces = dpMapId ? (getMapSpaces(dpMapId)?.adjacency?.[pos] || []) : [];
+        const adjSpaces = dpMapId ? (getMapData(dpMapId)?.adjacency?.[pos] || []) : [];
         if (!adjSpaces.includes(newTopLeft)) continue;
         // Once per round check
         game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
@@ -818,7 +818,7 @@ export async function handleMovePick(interaction, ctx) {
         const csDcName = dcNameFromFigureKey(fk);
         const csEff = csEffects?.[csDcName];
         if (!(csEff?.specialAbilityIds || []).includes('cassian_said_i_had_to')) continue;
-        const csAdjSpaces = csMapId ? (getMapSpaces(csMapId)?.adjacency?.[pos] || []) : [];
+        const csAdjSpaces = csMapId ? (getMapData(csMapId)?.adjacency?.[pos] || []) : [];
         if (!csAdjSpaces.includes(newTopLeft)) continue;
         game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
         const csKey = `cassian_said_i_had_to_${fk}`;
@@ -881,7 +881,7 @@ export async function handleMovePick(interaction, ctx) {
       // Iden was on Dio's space and has now moved away — trigger Attached
       const _dioMapId = game.selectedMap?.id;
       if (!_dioMapId) continue;
-      const _dioAdj = getMapSpaces(_dioMapId)?.adjacency?.[_dioPos] || [];
+      const _dioAdj = getMapData(_dioMapId)?.adjacency?.[_dioPos] || [];
       if (_dioAdj.length === 0) continue;
       // Best follow space is path[1] (first step on Iden's path)
       const _dioDefaultSpace = (path && path.length >= 2) ? String(path[1]).toLowerCase() : _dioAdj[0];

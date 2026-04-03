@@ -6,7 +6,7 @@ import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ModalB
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getLoadoutCards, getFormCards, getDcEffects, getDcStats, getMapSpaces, getDcKeywords, getRootDir } from '../data-loader.js';
+import { getLoadoutCards, getFormCards, getDcEffects, getDcStats, getMapData, getDcKeywords, getRootDir } from '../data-loader.js';
 import { getDcImagePath } from '../asset-paths.js';
 import { setPhase, PHASES } from '../game/phase.js';
 
@@ -34,7 +34,7 @@ import { _matchesKeywordPhrase } from '../game/validation.js';
  * blocking terrain but geographically inside the deployment zone.
  */
 function getDeployBlockingInfo(game, dcName) {
-  const ms = getMapSpaces(game.selectedMap?.id);
+  const ms = getMapData(game.selectedMap?.id);
   const blocking = ms?.blocking || [];
   const keywords = getDcKeywords(game)?.[dcName] || [];
   const kwUpper = keywords.map(k => String(k).toUpperCase());

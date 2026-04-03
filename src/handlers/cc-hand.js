@@ -20,7 +20,7 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { normalizeSquadInput } from '../game/validation.js';
-import { getDcEffects, getDcKeywords, getMapSpaces, getFigureSize } from '../data-loader.js';
+import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
 import { checkHandDiscardPassiveReshuffle } from '../game/cc-passive-redraw.js';
 import { awardObjectiveVp } from '../game/index.js';
@@ -158,7 +158,7 @@ export async function handleDeployModal(interaction, ctx) {
   }
   const figureKey = `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}`;
   // Block non-MOBILE/non-MASSIVE figures from deploying on blocking terrain
-  const ms = getMapSpaces(game.selectedMap?.id);
+  const ms = getMapData(game.selectedMap?.id);
   const blockingArr = ms?.blocking || [];
   if (blockingArr.length > 0) {
     const dcKws = getDcKeywords(game)?.[figMeta.dcName] || [];

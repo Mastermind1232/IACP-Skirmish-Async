@@ -9,7 +9,7 @@
  * notifications/buttons.
  */
 import { normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
-import { getMapSpaces, getMapTokensData, getDcEffects } from '../data-loader.js';
+import { getMapData, getMapTokensData, getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { getCcHand, getPlayerId, opponentPlayerNum, getDcMessageIds, getDcList } from './player-helpers.js';
 import { countSpaces } from './spatial.js';
@@ -54,7 +54,7 @@ export function detectPostMoveInterrupts(game, movingPlayerNum, movingFigureKey,
   if (!path || path.length < 2) return [];
 
   const mapId = game.selectedMap?.id;
-  const rawMapSpaces = mapId ? getMapSpaces(mapId) : null;
+  const rawMapSpaces = mapId ? getMapData(mapId) : null;
   const adjacency = rawMapSpaces?.adjacency || {};
   const _miAllDoors = (mapId && getMapTokensData) ? (getMapTokensData()[mapId]?.doors || []) : [];
   const _miOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));

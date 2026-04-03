@@ -190,8 +190,21 @@ export function getDeploymentZones() {
 export function getMapSpacesData() {
   return mapSpacesData;
 }
+/** @deprecated Use getMapData() instead — this name is ambiguous about the return shape (object, not array). */
 export function getMapSpaces(mapId) {
   return mapSpacesData[mapId] || null;
+}
+/** Returns the full map-data record (spaces, adjacency, terrain, blocking, edges, exterior). */
+export function getMapData(mapId) {
+  return mapSpacesData[mapId] || null;
+}
+/** Returns the raw array of coordinate strings for a map (e.g. ['a1','b2',...]). */
+export function getMapSpaceList(mapId) {
+  return getMapData(mapId)?.spaces || [];
+}
+/** Returns a lowercase Set of coordinate strings — ready for membership checks. */
+export function getMapSpaceSet(mapId) {
+  return new Set(getMapSpaceList(mapId).map(s => s.toLowerCase()));
 }
 
 /** F9: True if the space is marked exterior in map data (for abilities/CC that care about exterior vs interior). */

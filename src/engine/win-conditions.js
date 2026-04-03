@@ -5,13 +5,13 @@
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { cleanupAllSpacePicks } from '../discord/components.js';
 import { countSpaces } from '../game/spatial.js';
-import { getMapSpaces, getMapTokensData } from '../data-loader.js';
+import { getMapData, getMapTokensData } from '../data-loader.js';
 import { edgeKey } from '../game/coords.js';
 
 /** Graph-distance helper: countSpaces with automatic mapSpaces + closed-door resolution from game state. */
 function _countGameSpaces(game, coordA, coordB) {
   const mapId = game.selectedMap?.id;
-  const ms = mapId ? getMapSpaces(mapId) : null;
+  const ms = mapId ? getMapData(mapId) : null;
   if (!ms) return Infinity;
   const allDoors = getMapTokensData()?.[mapId]?.doors || [];
   const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));

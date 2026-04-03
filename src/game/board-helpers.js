@@ -9,7 +9,7 @@ import { dcNameFromFigureKey, getDcEffect } from './dc-helpers.js';
 import { opponentPlayerNum, getInitiativePlayerNum } from './player-helpers.js';
 import {
   getMapTokensData,
-  getMapSpaces,
+  getMapData,
   getDeploymentZones,
   getDcStats,
   getDcEffects,
@@ -34,7 +34,7 @@ export function getClosedDoorEdges(game) {
 /** Graph-distance between two spaces, respecting closed doors. */
 export function countGameSpaces(game, coordA, coordB) {
   const mapId = game?.selectedMap?.id;
-  const ms = mapId ? getMapSpaces(mapId) : null;
+  const ms = mapId ? getMapData(mapId) : null;
   if (!ms) return Infinity;
   return countSpaces(ms, coordA, coordB, getClosedDoorEdges(game));
 }

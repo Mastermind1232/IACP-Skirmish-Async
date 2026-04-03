@@ -31,7 +31,8 @@ import {
   getDcStats,
   getMapTokensData,
   getDeploymentZones,
-  getMapSpaces,
+  getMapData,
+  getMapSpaceSet,
   getFigureSize,
 } from './data-loader.js';
 import { dcMessageMeta } from './game-state.js';
@@ -302,9 +303,8 @@ export async function getActivationMinimapAttachment(game, msgId) {
   }
   if (cropCoords.length === 0) return null;
   // Only label valid map spaces within the crop zone (not off-map/wall cells)
-  const mapSpaces = getMapSpaces(map.id);
-  const mapSpaceSet = mapSpaces ? new Set(mapSpaces.map(s => String(s).toLowerCase())) : null;
-  const labelCoords = mapSpaceSet
+  const mapSpaceSet = getMapSpaceSet(map.id);
+  const labelCoords = mapSpaceSet.size
     ? cropCoords.filter(c => mapSpaceSet.has(c.toLowerCase())).map(c => c.toLowerCase())
     : [];
   try {
@@ -388,7 +388,7 @@ export async function getDeploymentMapAttachment(game, zone, opts = {}) {
     let zoneSpaces = zone && getDeploymentZones()[map.id]?.[zone] ? [...getDeploymentZones()[map.id][zone]] : null;
     // For Massive/Mobile figures, include blocking cells in the zone so they appear numbered
     if (opts.includeBlocking && zoneSpaces) {
-      const ms = getMapSpaces(map.id);
+      const ms = getMapData(map.id);
       const blockingCells = (ms?.blocking || []).map(s => String(s).toLowerCase());
       zoneSpaces = [...new Set([...zoneSpaces, ...blockingCells])];
     }

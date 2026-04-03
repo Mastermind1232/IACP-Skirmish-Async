@@ -14,7 +14,7 @@ import {
   rotateSizeString,
 } from './coords.js';
 import {
-  getMapSpaces,
+  getMapData,
   getMapRegistry,
   getMapTokensData,
   getDcKeywords,
@@ -164,7 +164,7 @@ export function filterMapSpacesByBounds(rawMapSpaces, gridBounds) {
  * @returns {object} Filtered map spaces with adjacency, terrain, etc.
  */
 export function getBoundedMapSpaces(mapId) {
-  const rawMapSpaces = getMapSpaces(mapId);
+  const rawMapSpaces = getMapData(mapId);
   if (!rawMapSpaces) return rawMapSpaces;
   const mapDef = getMapRegistry().find((m) => m.id === mapId);
   return filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
@@ -209,7 +209,7 @@ export function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = nul
  */
 export function getFiguresAdjacentToCoord(game, coord, mapId, excludeFigureKey) {
   if (!coord || !mapId) return [];
-  const rawMapSpaces = getMapSpaces(mapId);
+  const rawMapSpaces = getMapData(mapId);
   if (!rawMapSpaces?.adjacency) return [];
   const mapDef = getMapRegistry().find((m) => m.id === mapId);
   const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
@@ -245,7 +245,7 @@ export function getFiguresAdjacentToTarget(game, targetFigureKey, mapId) {
     }
   }
   if (!targetCoord || !mapId) return [];
-  const rawMapSpaces = getMapSpaces(mapId);
+  const rawMapSpaces = getMapData(mapId);
   if (!rawMapSpaces?.adjacency) return [];
   const mapDef = getMapRegistry().find((m) => m.id === mapId);
   const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
@@ -277,7 +277,7 @@ export function getMovementKeywords(dcName, game) {
 
 export function getBoardStateForMovement(game, excludeFigureKey = null) {
   if (!game?.selectedMap?.id) return null;
-  const rawMapSpaces = getMapSpaces(game.selectedMap.id);
+  const rawMapSpaces = getMapData(game.selectedMap.id);
   if (!rawMapSpaces) return null;
   const mapDef = getMapRegistry().find((m) => m.id === game.selectedMap.id);
   const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);

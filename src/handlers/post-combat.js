@@ -8,7 +8,7 @@
  *   interrogate_pick_ / interrogate_discard_ / interrogate_skip_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getMapSpaces, getCcEffect } from '../data-loader.js';
+import { getMapData, getCcEffect } from '../data-loader.js';
 import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
@@ -87,7 +87,7 @@ export async function handleReactionUse(interaction, ctx) {
     // Dangerous Prey: attacker suffers 1 Damage (3 if adjacent to Bossk)
     const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigKey];
     const bosskPos = game.figurePositions?.[defenderPlayerNum]?.[targetFigKey];
-    const ms = getMapSpaces(game.selectedMap?.id);
+    const ms = getMapData(game.selectedMap?.id);
     const adjSet = new Set((ms?.adjacency?.[String(bosskPos).toLowerCase()] || []).map((s) => String(s).toLowerCase()));
     const isAdj = attackerPos && bosskPos && adjSet.has(String(attackerPos).toLowerCase());
     const dmg = isAdj ? 3 : 1;

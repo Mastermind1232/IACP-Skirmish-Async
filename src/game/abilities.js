@@ -2,7 +2,7 @@
  * F1 Ability library: lookup by id, resolve surge (code-per-ability). No Discord.
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
-import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapSpaces, getMapTokensData } from '../data-loader.js';
+import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapData, getMapTokensData } from '../data-loader.js';
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
@@ -54,7 +54,7 @@ import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
 /** Graph-distance helper: countSpaces with automatic mapSpaces + closed-door resolution from game state. */
 function _countGameSpaces(game, coordA, coordB) {
   const mapId = game.selectedMap?.id;
-  const ms = mapId ? getMapSpaces(mapId) : null;
+  const ms = mapId ? getMapData(mapId) : null;
   if (!ms) return Infinity;
   const allDoors = getMapTokensData()?.[mapId]?.doors || [];
   const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
@@ -81,7 +81,7 @@ function _countGameSpaces(game, coordA, coordB) {
 function computePushPathAndWarnings(game, fromPos, toPos, pushedFigurePlayerNum) {
   const result = { pathStr: '', warnings: [] };
   const mapId = game.selectedMap?.id;
-  const rawMapSpaces = mapId ? getMapSpaces(mapId) : null;
+  const rawMapSpaces = mapId ? getMapData(mapId) : null;
   if (!fromPos || !rawMapSpaces) return result;
   const adjacency = rawMapSpaces.adjacency || {};
   const startNorm = normalizeCoord(fromPos);
@@ -2090,7 +2090,7 @@ export function resolveAbility(abilityId, context) {
               const activFk = `${meta.dcName}-${_dgI}-${_selFig}`;
               const activPos = game.figurePositions?.[playerNum]?.[activFk];
               if (activPos) {
-                const mapSpaces = getMapSpaces(mapId);
+                const mapSpaces = getMapData(mapId);
                 const adjSpaces = mapSpaces?.adjacency?.[activPos] || [];
                 const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
                 const targetCurPos = game.figurePositions?.[enemyPlayerNum]?.[targetFigureKey];
@@ -2227,7 +2227,7 @@ export function resolveAbility(abilityId, context) {
         if (!pos) continue;
         const dist = _countGameSpaces(game, activatingPos, pos);
         if (dist > maxRange) continue;
-        if (requiresLos && typeof losCheck === 'function' && !losCheck(activatingPos, pos, getMapSpaces(mapId))) continue;
+        if (requiresLos && typeof losCheck === 'function' && !losCheck(activatingPos, pos, getMapData(mapId))) continue;
         validTargets.push({ figureKey: fk, dist });
       }
       if (validTargets.length === 0) return { applied: false, manualMessage: `No hostile figures within ${maxRange} spaces${requiresLos ? ' and LOS' : ''}. **${entry.label}** has no valid targets.` };
@@ -3040,7 +3040,7 @@ export function resolveAbility(abilityId, context) {
     }
     const originalTargetCoord = combat.target?.coord ? String(combat.target.coord).toLowerCase() : null;
     const mapId = game.selectedMap?.id;
-    const mapSpaces = mapId ? getMapSpaces(mapId) : null;
+    const mapSpaces = mapId ? getMapData(mapId) : null;
     const adjToTarget = (mapSpaces && originalTargetCoord) ? new Set((mapSpaces.adjacency?.[originalTargetCoord] || []).map(s => String(s).toLowerCase())) : null;
 
     // Find the activating figure — it's the currently selected figure for the active DC
@@ -3342,7 +3342,7 @@ export function resolveAbility(abilityId, context) {
     let conditionalPtBonus = 0;
     let conditionalPtNote = '';
     if (typeof entry.conditionalExteriorPowerToken === 'number' && entry.conditionalExteriorPowerToken > 0 && game.selectedMap?.id) {
-      const _mapExt = getMapSpaces(game.selectedMap.id)?.exterior || {};
+      const _mapExt = getMapData(game.selectedMap.id)?.exterior || {};
       const _figPos = game.figurePositions?.[playerNum]?.[fk];
       if (_figPos && (_mapExt[String(_figPos).toLowerCase()] || _mapExt[String(_figPos).toUpperCase()])) {
         conditionalPtBonus += entry.conditionalExteriorPowerToken;
@@ -4645,7 +4645,7 @@ export function resolveAbility(abilityId, context) {
     if (entry.requireNoLosAtActivationStart) {
       const atkStartPos = game.activationStartPositions?.[cbt.attackerFigureKey];
       const defCoord = cbt.target?.coord;
-      const mapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
+      const mapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
       if (atkStartPos && defCoord && mapSp) {
         const targetHadLos = hasLineOfSight(String(defCoord).toLowerCase(), String(atkStartPos).toLowerCase(), mapSp);
         if (targetHadLos) {
@@ -5061,7 +5061,7 @@ export function resolveAbility(abilityId, context) {
     if (!activatorPos) return { applied: false, manualMessage: 'Resolve manually: position unknown.' };
     const losCheck = context.hasLineOfSight ?? null;
     const mapId = game.selectedMap?.id;
-    const mapSpaces = mapId ? getMapSpaces(mapId) : null;
+    const mapSpaces = mapId ? getMapData(mapId) : null;
     const hostiles = [];
     for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
       if (!coord) continue;
@@ -5429,7 +5429,7 @@ export function resolveAbility(abilityId, context) {
     const cahLos = cah.requiresLos ?? false;
     const cahAll = cah.targetAll ?? false;
     const losCheck = context.hasLineOfSight ?? null;
-    const mapSpacesForLos = cahLos ? getMapSpaces(mapId) : null;
+    const mapSpacesForLos = cahLos ? getMapData(mapId) : null;
     // Activator position for range/LOS checks
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
@@ -7301,7 +7301,7 @@ export function resolveAbility(abilityId, context) {
         const nm = dcNameFromFigureKey(chosenFigureKey);
         return { applied: true, logMessage: `**Face Me!** — Move **${nm}** adjacent manually. Then use Melee Attack button for 1 free attack.` };
       }
-      const mapSpaces = getMapSpaces(mapId);
+      const mapSpaces = getMapData(mapId);
       const adjacentSpaces = mapSpaces?.adjacency?.[activatorPos] || [];
       const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
       const targetCurrentPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
@@ -7453,7 +7453,7 @@ export function resolveAbility(abilityId, context) {
     if (chosenFigureKey && !chosenSpace) {
       const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
       if (!targetPos || !mapId) return { applied: false, manualMessage: 'Resolve Dark Energy push manually.' };
-      const mapSpaces = getMapSpaces(mapId);
+      const mapSpaces = getMapData(mapId);
       const adjacentSpaces = mapSpaces?.adjacency?.[targetPos] || [];
       const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
       occupiedSet.delete(targetPos); // target's current space is available (they're moving)
@@ -7490,7 +7490,7 @@ export function resolveAbility(abilityId, context) {
       // Auto-select single target, go to Phase 2 immediately
       const fk = validTargets[0];
       const targetPos = game.figurePositions?.[oppNum]?.[fk];
-      const mapSpaces = getMapSpaces(mapId);
+      const mapSpaces = getMapData(mapId);
       const adjacentSpaces = mapSpaces?.adjacency?.[targetPos] || [];
       const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
       occupiedSet.delete(targetPos);
@@ -7543,7 +7543,7 @@ export function resolveAbility(abilityId, context) {
       const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
       const mapId = game.selectedMap?.id;
       if (!targetPos || !mapId) return { applied: false, manualMessage: 'Resolve push manually.' };
-      const mapSpaces = getMapSpaces(mapId);
+      const mapSpaces = getMapData(mapId);
       const adjacentSpaces = mapSpaces?.adjacency?.[targetPos] || [];
       const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
       occupiedSet.delete(targetPos);
@@ -9354,7 +9354,7 @@ export function resolveAbility(abilityId, context) {
     if (!chosenSpace) {
       // Phase 1: build valid deployment spaces (Cal's space + adjacent)
       if (!calPos) return { applied: false, manualMessage: "**Cal's Buddy** — Cal Kestis has no position on the board. Resolve manually." };
-      const ms = getMapSpaces(game.selectedMap?.id);
+      const ms = getMapData(game.selectedMap?.id);
       const adjacent = ms?.adjacency?.[calPos] || [];
       const validSpaces = [calPos, ...adjacent];
       return {

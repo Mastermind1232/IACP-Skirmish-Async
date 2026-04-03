@@ -4,7 +4,7 @@
  * Initiative player resolves first, then the other player.
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDcEffects, getDcStats, getMapSpaces, getDeploymentZones, getFigureSize } from '../data-loader.js';
+import { getDcEffects, getDcStats, getMapData, getDeploymentZones, getFigureSize } from '../data-loader.js';
 import { dcNameFromFigureKey, applyCondition, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
@@ -69,7 +69,7 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
     if (passives.includes('Smooth Landing')) {
       // Bodhi + each adjacent friendly gains 1 MP — all need to move immediately
       // Use multi-cell adjacency: check ALL cells of both trigger and candidate figures
-      const ms = getMapSpaces(game.selectedMap?.id);
+      const ms = getMapData(game.selectedMap?.id);
       const adjacency = ms?.adjacency || {};
       // Build set of all cells adjacent to any cell of the triggering figure's footprint
       const triggerSize = game.figureOrientations?.[fk] || getFigureSize(dcName) || '1x1';
@@ -671,7 +671,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
 
       // Find adjacent friendlies
       const pos = game.figurePositions?.[ability.playerNum]?.[ability.figureKey];
-      const ms = getMapSpaces(game.selectedMap?.id);
+      const ms = getMapData(game.selectedMap?.id);
       const adj = pos ? (ms?.adjacency?.[String(pos).toLowerCase()] || []).map(a => String(a).toLowerCase()) : [];
       const adjFriendlies = [];
       for (const [afk, apos] of Object.entries(game.figurePositions?.[ability.playerNum] || {})) {
@@ -796,7 +796,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       // Find all friendly figures within 3 spaces of Ko-Tun (graph distance)
       const kotunPos = game.figurePositions?.[ability.playerNum]?.[ability.figureKey];
       const _adMapId = game.selectedMap?.id;
-      const _adMs = _adMapId ? getMapSpaces(_adMapId) : null;
+      const _adMs = _adMapId ? getMapData(_adMapId) : null;
       const _adAllDoors = _adMapId ? (getMapTokensData()?.[_adMapId]?.doors || []) : [];
       const _adOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
       const _adClosedDoorEdges = new Set(
@@ -846,7 +846,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       const hostNorm = normalizeCoord(hostPos);
 
       // Get all cells adjacent to the host figure (multi-cell aware)
-      const ms = getMapSpaces(game.selectedMap?.id);
+      const ms = getMapData(game.selectedMap?.id);
       const adjacency = ms?.adjacency || {};
       const hostSize = game.figureOrientations?.[ability.figureKey] || getFigureSize(ability.dcName) || '1x1';
       const hostCells = getFootprintCells(hostPos, hostSize).map(c => normalizeCoord(c));

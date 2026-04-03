@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getCcEffectsData, getDcEffects, getMapSpaces, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
+import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
@@ -482,7 +482,7 @@ export async function handleLiaDeployZone(interaction, ctx) {
 
   const dcName = dcNameFromFigureKey(setAsideKeys[0]);
   const figureSize = getFigureSize(dcName);
-  const ms = getMapSpaces(mapId);
+  const ms = getMapData(mapId);
   const blocking = ms?.blocking || [];
 
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
@@ -629,7 +629,7 @@ export async function handleEndTurn(interaction, ctx) {
     const prefix = `${meta.dcName}-${dgIndex}-`;
     const figureKeys000 = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
     const enemyNum = opponentPlayerNum(meta.playerNum);
-    const ms = getMapSpaces(game.selectedMap?.id);
+    const ms = getMapData(game.selectedMap?.id);
     const weakened = [];
     for (const fk of figureKeys000) {
       const pos = game.figurePositions?.[meta.playerNum]?.[fk];
@@ -1462,7 +1462,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     const _dfSelfPos = game.figurePositions?.[meta.playerNum]?.[_dfSelfFk];
     if (_dfSelfPos) {
       const _dfMapId = game.selectedMap?.id;
-      const _dfMs = getMapSpaces(_dfMapId);
+      const _dfMs = getMapData(_dfMapId);
       const _dfAdj = (_dfMs?.adjacency?.[String(_dfSelfPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
       const _dfTargets = [];
       for (const pn of [1, 2]) {
@@ -1814,7 +1814,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         const _conFk = fks[0];
         const _conPos = game.figurePositions?.[meta.playerNum]?.[_conFk];
         if (_conPos) {
-          const { getMapSpaces: _gms } = await import('../data-loader.js');
+          const { getMapData: _gms } = await import('../data-loader.js');
           const _conMs = _gms(game.selectedMap?.id);
           const _conAdj = (_conMs?.adjacency?.[String(_conPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
           // Count printed attack dice for token distribution
@@ -1839,7 +1839,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         const _suFk = fks[0];
         const _suPos = game.figurePositions?.[meta.playerNum]?.[_suFk];
         if (_suPos) {
-          const { getMapSpaces: _gms2 } = await import('../data-loader.js');
+          const { getMapData: _gms2 } = await import('../data-loader.js');
           const _suMs = _gms2(game.selectedMap?.id);
           const _suAdj = (_suMs?.adjacency?.[String(_suPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
           // Filter out occupied spaces
@@ -1903,7 +1903,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     // Wookiee Avenger (Chewbacca): free Slam once during activation (choose adjacent hostile, roll 1 red, push if SMALL)
     if (cardNameIncludes(_suActivationUpgrades, 'Wookiee Avenger') && !game.wookieeAvengerSlamUsed?.[msgId]) {
       const _waMapId = game.selectedMap?.id;
-      const _waMs = _waMapId ? getMapSpaces(_waMapId) : null;
+      const _waMs = _waMapId ? getMapData(_waMapId) : null;
       const _waDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _waSelfFk = `${meta.dcName}-${_waDgIndex}-0`;
       const _waSelfPos = game.figurePositions?.[meta.playerNum]?.[_waSelfFk];
@@ -1956,7 +1956,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     // Trusted Ally (DROID): exhaust during activation — adjacent friendly recovers 1 or discards 1 harmful
     if (cardNameIncludes(_suActivationUpgrades, 'Trusted Ally') && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[msgId], 'Trusted Ally')) {
       const _taMapId = game.selectedMap?.id;
-      const _taMs = getMapSpaces(_taMapId);
+      const _taMs = getMapData(_taMapId);
       const _taDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _taSelfFk = `${meta.dcName}-${_taDgIndex}-0`;
       const _taSelfPos = game.figurePositions?.[meta.playerNum]?.[_taSelfFk];
@@ -2907,7 +2907,7 @@ export async function handleActPassive(interaction, ctx) {
         const isSmall = !targetKws.some(k => /large|massive/i.test(String(k)));
         if (isSmall && hits > 0) {
           const _waMapId = game.selectedMap?.id;
-          const _waMs = _waMapId ? getMapSpaces(_waMapId) : null;
+          const _waMs = _waMapId ? getMapData(_waMapId) : null;
           const _waDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
           const _waSelfFk = `${meta.dcName}-${_waDgIndex}-0`;
           const _waSelfPos = game.figurePositions?.[meta.playerNum]?.[_waSelfFk];
@@ -3282,7 +3282,7 @@ export async function handleActPassive(interaction, ctx) {
           const _conFk = game.pendingConspire.senderFk;
           const _conPos = game.figurePositions?.[meta.playerNum]?.[_conFk];
           if (_conPos) {
-            const { getMapSpaces: _gms } = await import('../data-loader.js');
+            const { getMapData: _gms } = await import('../data-loader.js');
             const _conMs = _gms(game.selectedMap?.id);
             const _conAdj = (_conMs?.adjacency?.[String(_conPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
             const _conFriendlies = Object.entries(game.figurePositions?.[meta.playerNum] || {})

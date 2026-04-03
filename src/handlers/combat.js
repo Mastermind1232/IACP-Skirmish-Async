@@ -4,7 +4,7 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getMapSpaces, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
+import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
@@ -913,7 +913,7 @@ export async function handleAttackTarget(interaction, ctx) {
   const { hasLineOfSight } = ctx;
   // Compute graph-distance dependencies for countSpaces calls
   const _csMapId = game.selectedMap?.id;
-  const _csRawMs = _csMapId ? getMapSpaces(_csMapId) : null;
+  const _csRawMs = _csMapId ? getMapData(_csMapId) : null;
   const _csAllDoors = (_csMapId && getMapTokensData) ? (getMapTokensData()[_csMapId]?.doors || []) : [];
   const _csOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
   const _csClosedDoorEdges = new Set(
@@ -1063,7 +1063,7 @@ export async function handleAttackTarget(interaction, ctx) {
       const cqAttackerFk = `${meta.dcName}-${cqDgIdx}-${cqSelFig}`;
       const cqAttackerPos = game.figurePositions?.[meta.playerNum]?.[cqAttackerFk];
       if (cqAttackerPos) {
-        const cqMapSpaces = getMapSpaces(cqMapId);
+        const cqMapSpaces = getMapData(cqMapId);
         const cqAdjSpaces = new Set(cqMapSpaces?.adjacency?.[cqAttackerPos] || []);
         const cqOppNum = opponentPlayerNum(meta.playerNum);
         const cqOppPositions = game.figurePositions?.[cqOppNum] || {};
@@ -1721,7 +1721,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Distracting (Han Solo, C-3PO): if this figure is adjacent to the targeted space, +1 Evade for defender
   // "Friendly figure defending" — check if any friendly figure with distracting is adjacent to target.coord
   const distractingIds = ['distracting_han', 'distracting_c3po'];
-  const mapSpaces = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
+  const mapSpaces = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
   const targetCoord = target.coord ? String(target.coord).toLowerCase() : null;
   if (mapSpaces && targetCoord) {
     const adjToTarget = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
@@ -2554,7 +2554,7 @@ export async function handleCombatRoll(interaction, ctx) {
   if (game.onTheLamActive && !combat.attackRoll) {
     delete game.onTheLamActive;
     const _otlMapId = game.selectedMap?.id;
-    const _otlMapSpaces = _otlMapId ? getMapSpaces(_otlMapId) : null;
+    const _otlMapSpaces = _otlMapId ? getMapData(_otlMapId) : null;
     const _otlAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
     const _otlDefPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target?.figureKey];
     if (_otlMapSpaces && _otlAtkPos && _otlDefPos && ctx.hasLineOfSight) {
@@ -2729,7 +2729,7 @@ export async function handleCombatRoll(interaction, ctx) {
     // Inspiring (Luke Skywalker on attacker's team): +1 atk reroll for another friendly within 3 spaces
     {
       const atkFigs = game.figurePositions?.[attackerPlayerNum] || {};
-      const mapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const mapSp = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
       const atkPos = atkFigs[combat.attackerFigureKey];
       for (const [fk, pos] of Object.entries(atkFigs)) {
         if (fk === combat.attackerFigureKey) continue;
@@ -2746,7 +2746,7 @@ export async function handleCombatRoll(interaction, ctx) {
     // Soresu Form (Kanan Jarrus on defender's team): +1 def reroll for a friendly within 3 spaces
     {
       const defFigs = game.figurePositions?.[defenderPlayerNum] || {};
-      const mapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const mapSp = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
       const defPos = combat.target?.coord;
       for (const [fk, pos] of Object.entries(defFigs)) {
         const fn = dcNameFromFigureKey(fk);
@@ -2764,7 +2764,7 @@ export async function handleCombatRoll(interaction, ctx) {
     const cowerIds = ['cower_c3po', 'cower_imperial_officer_reg'];
     if (defSIds.some(id => cowerIds.includes(id))) {
       const defFigsC = game.figurePositions?.[defenderPlayerNum] || {};
-      const mapSpC = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const mapSpC = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
       const defPosC = combat.target?.coord;
       if (defPosC && mapSpC) {
         const adjToDefC = new Set((mapSpC.adjacency?.[String(defPosC).toLowerCase()] || []).map(s => String(s).toLowerCase()));
@@ -2782,7 +2782,7 @@ export async function handleCombatRoll(interaction, ctx) {
     const squadTrainingIds = ['squad_training_shoretrooper_elite', 'squad_training_shoretrooper_reg', 'squad_training_stormtrooper_elite', 'squad_training_stormtrooper_reg'];
     if (atkSIds.some(id => squadTrainingIds.includes(id))) {
       const stFigs = game.figurePositions?.[attackerPlayerNum] || {};
-      const stMap = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const stMap = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
       const stPos = stFigs[combat.attackerFigureKey];
       if (stPos && stMap) {
         const stAdj = new Set((stMap.adjacency?.[String(stPos).toLowerCase()] || []).map(s => String(s).toLowerCase()));
@@ -2807,7 +2807,7 @@ export async function handleCombatRoll(interaction, ctx) {
         const atkKwsCH = (atkEffR?.keywords || []).map(k => String(k).toUpperCase());
         if (atkKwsCH.includes('HUNTER')) {
           const chFigs = game.figurePositions?.[attackerPlayerNum] || {};
-          const chMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
+          const chMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
           const chAtkPos = chFigs[combat.attackerFigureKey];
           if (chAtkPos && chMapSp && ctx.hasLineOfSight) {
             for (const [fk, pos] of Object.entries(chFigs)) {
@@ -2826,7 +2826,7 @@ export async function handleCombatRoll(interaction, ctx) {
     // Light It Up (Rebel Pathfinder Elite): +1 atk reroll if target had no LOS to attacker at activation start
     if (atkSIds.includes('light_it_up_rebel_pathfinder')) {
       const liuStartPos = game.activationStartPositions?.[combat.attackerFigureKey];
-      const liuMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
+      const liuMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
       if (liuStartPos && combat.target?.coord && liuMapSp && ctx.hasLineOfSight) {
         const targetHadLos = ctx.hasLineOfSight(String(combat.target.coord).toLowerCase(), String(liuStartPos).toLowerCase(), liuMapSp);
         if (!targetHadLos) atkSpecialReroll += 1;
@@ -2842,7 +2842,7 @@ export async function handleCombatRoll(interaction, ctx) {
     // Shared Calculations (Zuckuss): attacker forces 1 def die reroll if friendly DROID within 3 + LOS to target
     if (atkSIds.includes('shared_calculations_zuckuss') && combat.target?.coord) {
       const scFigs = game.figurePositions?.[attackerPlayerNum] || {};
-      const scMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
+      const scMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
       if (scMapSp) {
         for (const [fk, pos] of Object.entries(scFigs)) {
           if (fk === combat.attackerFigureKey) continue;
@@ -2865,7 +2865,7 @@ export async function handleCombatRoll(interaction, ctx) {
     }
     // Precision (Grand Inquisitor): if attacking/defending against adjacent, choose any 1 die to force reroll
     if (atkSIds.includes('precision_grand_inquisitor') || defSIds.includes('precision_grand_inquisitor')) {
-      const precMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const precMapSp = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
       const precAtkPos = (game.figurePositions?.[attackerPlayerNum] || {})[combat.attackerFigureKey];
       const precDefPos = combat.target?.coord;
       if (precAtkPos && precDefPos && precMapSp) {
@@ -2893,7 +2893,7 @@ export async function handleCombatRoll(interaction, ctx) {
     // Trusted Ally (Skirmish Upgrade): if a friendly DROID within 3 has this attachment (not exhausted), +1 atk reroll
     {
       const _taFigs = game.figurePositions?.[attackerPlayerNum] || {};
-      const _taMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const _taMapSp = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
       const _taAtkPos = _taFigs[combat.attackerFigureKey];
       if (_taAtkPos && _taMapSp) {
         for (const [fk, pos] of Object.entries(_taFigs)) {
@@ -3645,7 +3645,7 @@ function getSquadCohesionTokens(game, combat, role) {
   // The combat figure must be a REBEL
   if (String(combatEff?.affiliation || '').toLowerCase() !== 'rebel') return null;
 
-  const mapSp = getMapSpaces(game.selectedMap?.id);
+  const mapSp = getMapData(game.selectedMap?.id);
   if (!mapSp) return null;
   const combatPosLc = String(combatPos).toLowerCase();
 
@@ -4107,7 +4107,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       const defPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
       const friendlyFigs = game.figurePositions?.[defPlayerNum] || {};
       const defCoord = friendlyFigs[combat.target.figureKey];
-      const mapSp = getMapSpaces(game.selectedMap?.id);
+      const mapSp = getMapData(game.selectedMap?.id);
       let _gdOnarFk = null;
       if (defCoord && mapSp) {
         for (const [fk, pos] of Object.entries(friendlyFigs)) {
@@ -4147,7 +4147,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     const atkPlayerNum = combat.attackerPlayerNum;
     const friendlyFigs = game.figurePositions?.[atkPlayerNum] || {};
     const atkCoord = friendlyFigs[combat.attackerFigureKey];
-    const mapSp = getMapSpaces(game.selectedMap?.id);
+    const mapSp = getMapData(game.selectedMap?.id);
     let _ctsHeraFk = null;
     if (atkCoord && mapSp) {
       for (const [fk, pos] of Object.entries(friendlyFigs)) {
@@ -4363,7 +4363,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     const defPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
     const friendlyFigs = game.figurePositions?.[defPlayerNum] || {};
     const defCoord = friendlyFigs[combat.target.figureKey];
-    const mapSp = getMapSpaces(game.selectedMap?.id);
+    const mapSp = getMapData(game.selectedMap?.id);
     let _sisArmorerFk = null;
     if (defCoord && mapSp) {
       for (const [fk, pos] of Object.entries(friendlyFigs)) {
