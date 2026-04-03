@@ -770,7 +770,6 @@ await loadGames();
 
 const CATEGORIES = {
   general: '📢 General',
-  lfg: '🎮 Looking for Game',
   games: '⚔️ Games',
   archived: '📁 Archived Games',
   admin: '🛠️ Bot / Admin',
@@ -842,9 +841,9 @@ const CHANNELS = {
   announcements: { name: 'announcements', parent: 'general', type: ChannelType.GuildText },
   rulesAndFaq: { name: 'rules-and-faq', parent: 'general', type: ChannelType.GuildText },
   general: { name: 'general', parent: 'general', type: ChannelType.GuildText },
-  lfg: { name: 'lfg', parent: 'lfg', type: ChannelType.GuildText },
-  newGamesPosts: { name: 'new-games', parent: 'lfg', type: ChannelType.GuildForum },
-  activeGames: { name: 'active-games', parent: 'lfg', type: ChannelType.GuildText },
+  lfg: { name: 'lfg', parent: 'general', type: ChannelType.GuildText },
+  newGamesPosts: { name: 'new-games', parent: 'general', type: ChannelType.GuildForum },
+  activeGames: { name: 'active-games', parent: 'general', type: ChannelType.GuildText },
   botLogs: { name: 'bot-logs', parent: 'admin', type: ChannelType.GuildText },
   suggestions: { name: 'suggestions', parent: 'admin', type: ChannelType.GuildText },
   requestsAndSuggestions: { name: 'bot-requests-and-suggestions', parent: 'general', type: ChannelType.GuildForum },

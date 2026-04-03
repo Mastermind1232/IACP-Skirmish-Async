@@ -578,5 +578,5 @@ export async function setupServer(guild, deps) {
     await forumChannel.setAvailableTags(GAME_TAGS);
   }
 
-  return 'Server structure created: General, LFG (with #lfg chat + #new-games Forum with tags: Slow, Fast, Hyperspeed, Ranked), Games, Archived Games, Bot/Admin.';
+  return 'Server structure created: General (with #lfg chat + #new-games Forum with tags: Slow, Fast, Hyperspeed, Ranked), Games, Archived Games, Bot/Admin.';
 }
