@@ -1095,6 +1095,11 @@ export async function handleDeploymentFig(interaction, ctx) {
     await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Block while a loadout selection is pending for this player
+  if (game.pendingLoadoutSelection?.playerNum === playerNum) {
+    await interaction.followUp({ content: 'Please select a **Loadout card** first before deploying more figures.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const labels = game[_deployLabelsKey(playerNum)];
   const label = labels?.[flatIndex];
   if (!label) {
@@ -1480,6 +1485,11 @@ export async function handleDeployPick(interaction, ctx) {
     await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Block while a loadout selection is pending for this player
+  if (game.pendingLoadoutSelection?.playerNum === playerNum) {
+    await interaction.followUp({ content: 'Please select a **Loadout card** first before deploying more figures.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const deployMeta = game[_deployMetadataKey(playerNum)];
   const deployLabels = game[_deployLabelsKey(playerNum)];
   const figMeta = deployMeta?.[flatIndex];
@@ -1564,12 +1574,14 @@ export async function handleDeployPick(interaction, ctx) {
     attachments: [],
   }).catch(discordCatch);
 
-  // Imperial Loadout: if Purge Trooper (Elite) was just deployed, show loadout picker
+  // Imperial Loadout: if Purge Trooper (Elite) was just deployed, gate further deployment until loadout chosen
   const dcEff = getDcEffects()?.[figMeta.dcName];
   if (dcEff?.specialAbilityIds?.includes('imperial_loadout_purge_trooper')) {
     const loadoutCards = getLoadoutCards();
     const names = Object.keys(loadoutCards);
     if (names.length > 0) {
+      game.pendingLoadoutSelection = { figureKey, playerNum };
+      saveGames();
       const defaultName = names[0];
       const selectionRow = _getLoadoutSelectionRow(game.gameId, figureKey, names, defaultName);
       const confirmRow = _getLoadoutConfirmRow(game.gameId, figureKey);
@@ -1578,7 +1590,7 @@ export async function handleDeployPick(interaction, ctx) {
         const handId = getHandChannelId(game, playerNum);
         const handChannel = await fetchGameChannel(client, handId);
         await handChannel.send({
-          content: `⚔️ **Imperial Loadout** — Choose a Loadout card for **${figMeta.dcName}**:`,
+          content: `⚔️ **Imperial Loadout** — Choose a Loadout card for **${figMeta.dcName}** before continuing deployment:`,
           components: [selectionRow, confirmRow],
           files,
         });
@@ -1717,6 +1729,10 @@ export async function handleLoadoutConfirm(interaction, ctx) {
   if (!card) return;
 
   setConfig(game, figureKey, 'loadout', loadoutName);
+
+  // Clear the deployment gate
+  const wasPending = game.pendingLoadoutSelection?.playerNum;
+  delete game.pendingLoadoutSelection;
   saveGames();
 
   const files = _getLoadoutImageAttachment(card);
@@ -1727,6 +1743,11 @@ export async function handleLoadoutConfirm(interaction, ctx) {
     attachments: [],
   }).catch(discordCatch);
   await logGameAction?.(game, client, `**Imperial Loadout** — **${dcNameFromFigureKey(figureKey)}** chose **${loadoutName}**.`, { phase: 'DEPLOYMENT', icon: 'deploy' });
+
+  // Resume deployment flow if it was gated
+  if (wasPending && ctx.updateDeployPromptMessages) {
+    await ctx.updateDeployPromptMessages(game, wasPending, client);
+  }
 }
 
 /**

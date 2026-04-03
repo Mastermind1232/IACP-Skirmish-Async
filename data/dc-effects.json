@@ -391,7 +391,7 @@
     "[Punishing Strike]": {
       "abilityText": "Exhaust this card when one of your figures applies a HARMFUL condition to a figure. Discard that condition and apply a different HARMFUL condition of your choice.",
       "keywords": [],
-      "cost": 2,
+      "cost": 1,
       "attachment": false,
       "unique": true,
       "affiliation": "Scum"
