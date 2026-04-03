@@ -14,7 +14,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards } from '../data-loader.js';
-import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getActivationsRemaining, getActivationsTotal, getActivatedDcIndices,
@@ -160,6 +160,11 @@ export async function handleDcActivate(interaction, ctx) {
         return;
       }
     }
+  }
+  // Companion host defeated: companion cannot activate if its host group has left play (rules: COMPANIONS L919-920)
+  if (isCompanionHostDefeated(game, dcName, playerNum)) {
+    await interaction.followUp({ content: `**${displayName}** cannot activate — its associated group has left play.`, ephemeral: true }).catch(discordCatch);
+    return;
   }
   // Strength in Numbers: enforce combined deployment cost <= 12
   const sinData = game.strengthInNumbersData;

@@ -108,6 +108,30 @@ export function getMaxPowerTokens(figureKey) {
   return 2;
 }
 
+/**
+ * True if this DC is a companion whose associated host group has left play
+ * (all host figures defeated). Rules: COMPANIONS L919-920.
+ * @param {object} game
+ * @param {string} dcName - the companion's DC name (e.g. "J4X-7")
+ * @param {number} playerNum - 1 or 2
+ * @returns {boolean}
+ */
+export function isCompanionHostDefeated(game, dcName, playerNum) {
+  const eff = getDcEffects()?.[dcName];
+  if (eff?.companion !== true) return false;
+  const hostMap = game.companionHostMap;
+  if (!hostMap) return false;
+  for (const [companionKey, entry] of Object.entries(hostMap)) {
+    if (entry.playerNum !== playerNum) continue;
+    if (!companionKey.startsWith(dcName + '-')) continue;
+    const hostDcName = dcNameFromFigureKey(entry.hostFigureKey);
+    const figs = game.figurePositions?.[playerNum] || {};
+    const hostAlive = Object.keys(figs).some(fk => fk.startsWith(hostDcName + '-') && figs[fk]);
+    if (!hostAlive) return true;
+  }
+  return false;
+}
+
 const FIGURE_LETTERS = 'abcdefghij';
 
 /**

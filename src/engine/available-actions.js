@@ -11,7 +11,7 @@ import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum, getCcHand, getD
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
 import { hasLineOfSight, countSpaces } from '../game/spatial.js';
 import { edgeKey, getFootprintCells } from '../game/coords.js';
-import { dcNameFromFigureKey } from '../game/dc-helpers.js';
+import { dcNameFromFigureKey, isCompanionHostDefeated } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 import { getLegalInteractOptions } from '../game/board-helpers.js';
 import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize } from '../data-loader.js';
@@ -629,6 +629,8 @@ function getActivationActions(game, playerNum, deps) {
         // Skip DCs with no surviving figures on the board
         const figs = game.figurePositions?.[playerNum] || {};
         if (!Object.keys(figs).some(fk => fk.startsWith(meta.dcName + '-'))) continue;
+        // Companions cannot activate if their host group has left play (rules: COMPANIONS L919-920)
+        if (isCompanionHostDefeated(game, meta.dcName, playerNum)) continue;
 
         hasActivatableDc = true;
         const dcIndex = dcMsgIds ? dcMsgIds.indexOf(msgId) : 0;
