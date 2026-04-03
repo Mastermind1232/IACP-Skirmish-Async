@@ -447,7 +447,6 @@ import {
   getFigureSize,
   getMapRegistry,
   getDeploymentZones,
-  getMapDataData,
   getMapData,
   getDcEffects,
   getDcKeywords,
