@@ -167,7 +167,7 @@ export async function renderMap(mapId, options = {}) {
       for (let col = 0; col < numCols; col++) {
         const label = colToLetter(col) + (row + 1);
         const coordKey = label.toLowerCase();
-        if (onMapCoords.size > 0 && !onMapCoords.has(coordKey)) continue;
+        if (!onMapCoords.has(coordKey)) continue;
         if (coordFilter && !coordFilter.has(coordKey)) continue;
         const cx = sx0 + col * sdx + sdx / 2;
         const cy = sy0 + row * sdy + sdy / 2;
