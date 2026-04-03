@@ -15,11 +15,11 @@
     "deWannaWanga": "Token--De Wanna Wanga.gif"
   },
   "powerTokens": {
-    "Hit": "Power Token--Hit.gif",
-    "Surge": "Power Token--Surge.gif",
-    "Block": "Power Token--Block.gif",
-    "Evade": "Power Token--Evade.gif",
-    "Wild": "Power Token--Surge.gif"
+    "Hit": "Power Token--Hit.jpg",
+    "Surge": "Power Token--Surge.jpg",
+    "Block": "Power Token--Block.jpg",
+    "Evade": "Power Token--Evade.jpg",
+    "Wild": "Power Token--Surge.jpg"
   },
   "missionTokenOptions": [
     {"value": "Mission Token--Neutral GRAY.gif", "label": "Mission Token (Gray)"},
