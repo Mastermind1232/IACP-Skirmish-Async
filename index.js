@@ -101,7 +101,7 @@ import { SCENARIO_MUTATORS } from './src/engine/scenario-mutators.js';
 import { deleteGameChannelsAndGame } from './src/handlers/botmenu.js';
 import { cleanupRoundStart } from './src/game/activation-state.js';
 import { runRecovery } from './src/handlers/recover.js';
-import { needsRecovery, getRecoveryReason } from './src/engine/recovery.js';
+import { getRecoveryReason } from './src/engine/recovery.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
@@ -995,8 +995,6 @@ const atomicOpts = {
   onRollback: (gid) => repopulateDcMapsForGame(gid),
 };
 
-/** Per-game last-activity timestamp for auto-recovery idle detection. */
-const gameLastActivity = new Map();
 
 function extractGameIdFromMessage(message) {
   return _extractGameIdFromMessagePure(message, { findGameByChannel, getGamesMap });
@@ -1910,60 +1908,8 @@ client.once('ready', async () => {
     console.log('Auto-recovery complete.');
   }
 
-  // Initialize last-activity timestamps for all active games
-  for (const game of [...getGamesMap().values()]) {
-    if (game.selectedMap && !game.archived && !game.killed && !game.ended) {
-      gameLastActivity.set(game.gameId, Date.now());
-    }
-  }
-
-  // ── Auto-recovery timer: periodically scan for stuck games ──────────────
-  const RECOVERY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-  const IDLE_THRESHOLD_MS = 5 * 60 * 1000;     // 5 minutes of no interaction
-  setInterval(async () => {
-    const allDeps = buildAllDeps();
-    const recoverCtx = buildContext('recover', allDeps);
-    let totalRecovered = 0;
-    let gamesScanned = 0;
-    let gamesAttempted = 0;
-    for (const [gameId, game] of getGamesMap()) {
-      if (game.ended || game.archived || game.killed) continue;
-      if (!game.selectedMap) continue;
-      gamesScanned++;
-
-      // Skip games with recent interaction
-      const lastActive = gameLastActivity.get(gameId) || 0;
-      if (Date.now() - lastActive < IDLE_THRESHOLD_MS) continue;
-
-      // Skip games that don't appear stuck
-      if (!needsRecovery(game)) continue;
-
-      const reason = getRecoveryReason(game) || 'unknown';
-      const idleMin = Math.round((Date.now() - lastActive) / 60000);
-      gamesAttempted++;
-      console.log(`[auto-recover] Attempting game ${gameId}: reason=${reason}, idle=${idleMin}m`);
-
-      try {
-        const recovered = await runRecovery(game, gameId, recoverCtx);
-        if (recovered.length > 0) {
-          console.log(`[auto-recover] Game ${gameId}: ${recovered.join(', ')}`);
-          totalRecovered += recovered.length;
-          // Mark as recently active so we don't re-recover immediately
-          gameLastActivity.set(gameId, Date.now());
-        } else {
-          console.log(`[auto-recover] Game ${gameId}: no prompts recovered (reason=${reason})`);
-        }
-      } catch (err) {
-        console.error(`[auto-recover] Error for game ${gameId}:`, err.message);
-      }
-    }
-    const didSave = totalRecovered > 0;
-    if (didSave) saveGames();
-    if (gamesAttempted > 0) {
-      console.log(`[auto-recover] Sweep done: scanned=${gamesScanned}, attempted=${gamesAttempted}, recovered=${totalRecovered}, saved=${didSave}`);
-    }
-  }, RECOVERY_INTERVAL_MS);
-  console.log(`Auto-recovery timer started (every ${RECOVERY_INTERVAL_MS / 1000}s, idle threshold ${IDLE_THRESHOLD_MS / 1000}s).`);
+  // Auto-recovery is available on-demand via the Recover button in /botmenu.
+  // Periodic auto-recovery was removed — async games idle for hours normally.
 
   // Local HTTP endpoint to create a test game from Cursor/terminal (no need to type in #lfg)
   const guildId = process.env.DISCORD_GUILD_ID;
@@ -4079,7 +4025,6 @@ client.on('interactionCreate', async (interaction) => {
       else await handleFavListRenameModal(interaction, favCtx);
     }
     }); // end withAtomicGameLock (modal)
-    if (_modalLockId) gameLastActivity.set(_modalLockId, Date.now());
     return;
   }
 
@@ -4226,7 +4171,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     }); // end withAtomicGameLock (select)
-    if (_selectLockId) gameLastActivity.set(_selectLockId, Date.now());
     return;
   }
 
@@ -4654,7 +4598,6 @@ client.on('interactionCreate', async (interaction) => {
 
 
   }); // end withAtomicGameLock (button)
-  if (_buttonLockId) gameLastActivity.set(_buttonLockId, Date.now());
 
   } catch (err) {
     console.error('Interaction error:', err);
