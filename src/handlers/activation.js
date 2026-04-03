@@ -707,9 +707,9 @@ export async function handleEndTurn(interaction, ctx) {
   if (actionsData?.threadId) {
     try {
       const thread = await fetchGameChannel(client, actionsData.threadId);
-      await thread.delete();
+      await thread.setArchived(true);
     } catch (err) {
-      console.error('Failed to delete DC activation thread:', err);
+      console.error('Failed to archive DC activation thread:', err);
     }
     if (game.dcActionsData?.[dcMsgId]) delete game.dcActionsData[dcMsgId];
     if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
@@ -723,7 +723,7 @@ export async function handleEndTurn(interaction, ctx) {
     const playChannel = await fetchGameChannel(client, playAreaId);
     const dcMsg = await playChannel.messages.fetch(dcMsgId);
     const healthState = dcHealthState.get(dcMsgId) ?? [[null, null]];
-    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[dcMsgId] || game?.p2DcAttachments?.[dcMsgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[dcMsgId] || game?.p2DcAttachments?.[dcMsgId] || []), null, null, getNicknamesForDcMessage?.(game, meta), { game, playerNum: meta.playerNum });
     const components = getDcPlayAreaComponents(dcMsgId, true, game, meta.dcName);
     await dcMsg.edit({
       embeds: [embed],
@@ -856,9 +856,9 @@ export async function handleDcEndActivation(interaction, ctx) {
   if (actionsData?.threadId) {
     try {
       const thread = await fetchGameChannel(client, actionsData.threadId);
-      await thread.delete();
+      await thread.setArchived(true);
     } catch (err) {
-      console.error('Failed to delete DC activation thread on End Activation:', err);
+      console.error('Failed to archive DC activation thread on End Activation:', err);
     }
   }
   // Build figure keys for only the activated deployment group (not all DGs)
@@ -893,7 +893,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     const playChannel = await fetchGameChannel(client, playAreaId);
     const dcMsg = await playChannel.messages.fetch(msgId);
     const healthState = dcHealthState.get(msgId) ?? [[null, null]];
-    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta), { game, playerNum: meta.playerNum });
     await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) }).catch(discordCatch);
   } catch (err) {
     console.error('Failed to update DC card after End Activation:', err);
@@ -1141,7 +1141,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   const playAreaId = getPlayAreaId(game, meta.playerNum);
   const playChannel = await fetchGameChannel(client, playAreaId);
   const dcMsg = await playChannel.messages.fetch(msgId);
-  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, dcHealthState.get(msgId) ?? [[null, null]], getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
+  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, dcHealthState.get(msgId) ?? [[null, null]], getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta), { game, playerNum: meta.playerNum });
   await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) });
   const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
   const thread = await dcMsg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
@@ -1437,9 +1437,10 @@ export async function handleConfirmActivate(interaction, ctx) {
       const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
       const _awrRange = cardNameIncludes(_awrAtts, 'Advanced Com Systems') ? 3 : 2;
       const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
-        .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= _awrRange);
+        .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= _awrRange)
+        .sort(([a], [b]) => (a === selfFk ? -1 : b === selfFk ? 1 : 0)); // self first
       if (friendlyFigs.length > 0) {
-        const btns = friendlyFigs.slice(0, 3).map(([fk]) => {
+        const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
           const label = dcNameFromFigureKey(fk);
           return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
         });

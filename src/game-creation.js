@@ -393,7 +393,29 @@ export async function applySquadSubmission(game, isP1, squad, client, deps) {
     const fav = await getFavoriteDeckByHash(playerId, hash);
     if (fav?.saved_name) displayName = fav.saved_name;
   } catch {}
-  await logGameAction(game, client, `<@${playerId}> submitted squad **${displayName}** (${squad.dcCount ?? 0} DCs, ${squad.ccCount ?? 0} CCs)`, { allowedMentions: { users: snowflakeUsers([playerId]) }, phase: 'SETUP', icon: 'squad' });
+  // Defer squad submission log until both players have submitted to avoid leaking squad info
+  const bothReady = game.player1Squad && game.player2Squad && !game.bothReadyPosted;
+  if (bothReady) {
+    // Log both submissions together now that both are in — resolve favorite names for each
+    let p1Name = game.player1Squad.name || 'Unnamed';
+    let p2Name = game.player2Squad.name || 'Unnamed';
+    try {
+      const p1Fav = await getFavoriteDeckByHash(game.player1Id, computeDeckHash(game.player1Squad));
+      if (p1Fav?.saved_name) p1Name = p1Fav.saved_name;
+    } catch {}
+    try {
+      const p2Fav = await getFavoriteDeckByHash(game.player2Id, computeDeckHash(game.player2Squad));
+      if (p2Fav?.saved_name) p2Name = p2Fav.saved_name;
+    } catch {}
+    await logGameAction(game, client, `<@${game.player1Id}> submitted squad **${p1Name}** (${game.player1Squad.dcCount ?? 0} DCs, ${game.player1Squad.ccCount ?? 0} CCs)`, { allowedMentions: { users: snowflakeUsers([game.player1Id]) }, phase: 'SETUP', icon: 'squad' });
+    await logGameAction(game, client, `<@${game.player2Id}> submitted squad **${p2Name}** (${game.player2Squad.dcCount ?? 0} DCs, ${game.player2Squad.ccCount ?? 0} CCs)`, { allowedMentions: { users: snowflakeUsers([game.player2Id]) }, phase: 'SETUP', icon: 'squad' });
+  } else {
+    // First submitter: log privately to their hand thread only
+    const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
+    const handChannel = await fetchGameChannel(client, handChannelId);
+    await handChannel.send({ content: `Squad **${displayName}** submitted. Waiting for opponent...` }).catch(discordCatch);
+  }
+  // Update hand thread tooltip (private to each player)
   const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
   const handChannel = await fetchGameChannel(client, handChannelId);
   const handMessages = await handChannel.messages.fetch({ limit: 10 });
@@ -404,7 +426,6 @@ export async function applySquadSubmission(game, isP1, squad, client, deps) {
       components: [],
     });
   }
-  const bothReady = game.player1Squad && game.player2Squad && !game.bothReadyPosted;
   if (bothReady) {
     await postBothSquadsReady(game, client, {
       createPlayAreaChannels: createPlayAreaChannelsFn,

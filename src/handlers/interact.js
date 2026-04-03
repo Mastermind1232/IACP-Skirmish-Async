@@ -125,10 +125,13 @@ export async function handleInteractChoice(interaction, ctx) {
   } else if (optionId === 'use_terminal') {
     logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId.startsWith('open_door_')) {
-    const edgeKey = optionId.replace('open_door_', '');
+    // Door ID may contain multiple comma-separated edge keys for multi-space doors
+    const edgeKeys = optionId.replace('open_door_', '').split(',');
     game.openedDoors = game.openedDoors || [];
-    if (!game.openedDoors.includes(edgeKey)) game.openedDoors.push(edgeKey);
-    const doorLabel = edgeKey.split('|').map((s) => s.toUpperCase()).join('–');
+    for (const ek of edgeKeys) {
+      if (!game.openedDoors.includes(ek)) game.openedDoors.push(ek);
+    }
+    const doorLabel = edgeKeys[0].split('|').map((s) => s.toUpperCase()).join('–');
     logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** opened door (${doorLabel}).`, { phase: 'ROUND', icon: 'deploy' });
   } else {
     logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** — ${opt.label}.`, { phase: 'ROUND', icon: 'deploy' });

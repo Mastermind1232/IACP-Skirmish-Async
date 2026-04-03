@@ -2,7 +2,7 @@
  * Pure board-state helper functions — NO Discord dependency.
  * Extracted from index.js for modularity.
  */
-import { normalizeCoord, edgeKey, toLowerSet, getFootprintCells } from './coords.js';
+import { normalizeCoord, parseCoord, edgeKey, toLowerSet, getFootprintCells } from './coords.js';
 import { getBoundedMapSpaces } from './movement.js';
 import { countSpaces } from './spatial.js';
 import { dcNameFromFigureKey, getDcEffect } from './dc-helpers.js';
@@ -184,6 +184,49 @@ export function getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId
   return [...result];
 }
 
+/**
+ * Group adjacent parallel door edges into logical doors.
+ * E.g., [["o15","o16"], ["p15","p16"]] → one group (same horizontal wall, adjacent columns).
+ */
+function groupDoorEdges(doors) {
+  if (!doors?.length) return [];
+  // Parse each edge: determine wall orientation and position
+  const parsed = doors.map(edge => {
+    const a = parseCoord(edge[0]), b = parseCoord(edge[1]);
+    // Same column, different row → wall runs horizontally; perp axis = col
+    // Same row, different column → wall runs vertically; perp axis = row
+    const sameCol = a.col === b.col;
+    return {
+      edge,
+      wallKey: sameCol ? `h_${Math.min(a.row, b.row)}` : `v_${Math.min(a.col, b.col)}`,
+      perpPos: sameCol ? a.col : a.row,
+    };
+  });
+  const used = new Set();
+  const groups = [];
+  for (let i = 0; i < parsed.length; i++) {
+    if (used.has(i)) continue;
+    used.add(i);
+    const group = [parsed[i]];
+    // Flood-fill: find all adjacent edges on the same wall
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let j = 0; j < parsed.length; j++) {
+        if (used.has(j)) continue;
+        if (parsed[j].wallKey !== parsed[i].wallKey) continue;
+        if (group.some(g => Math.abs(g.perpPos - parsed[j].perpPos) === 1)) {
+          group.push(parsed[j]);
+          used.add(j);
+          changed = true;
+        }
+      }
+    }
+    groups.push(group.map(g => g.edge));
+  }
+  return groups;
+}
+
 /** Returns legal interact options for a figure. Mission-specific first (blue), standard (grey). */
 export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
   const options = [];
@@ -258,14 +301,16 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
   }
 
   const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
-  for (const edge of mapData.doors || []) {
-    if (edge?.length < 2) continue;
-    const ek = edgeKey(edge[0], edge[1]);
-    if (openedSet.has(ek)) continue;
-    const coordSet = toLowerSet(edge);
-    if (isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, coordSet)) {
-      const label = `Open Door (${String(edge[0]).toUpperCase()}–${String(edge[1]).toUpperCase()})`;
-      options.push({ id: `open_door_${ek}`, label, missionSpecific: false });
+  // Group adjacent parallel door edges into logical doors
+  const doorGroups = groupDoorEdges(mapData.doors || []);
+  for (const group of doorGroups) {
+    const allOpened = group.every(edge => openedSet.has(edgeKey(edge[0], edge[1])));
+    if (allOpened) continue;
+    const allCoords = toLowerSet(group.flat());
+    if (isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, allCoords)) {
+      const edgeKeys = group.map(edge => edgeKey(edge[0], edge[1]));
+      const label = `Open Door (${String(group[0][0]).toUpperCase()}–${String(group[0][1]).toUpperCase()})`;
+      options.push({ id: `open_door_${edgeKeys.join(',')}`, label, missionSpecific: false });
     }
   }
 

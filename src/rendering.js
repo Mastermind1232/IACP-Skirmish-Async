@@ -49,10 +49,27 @@ import {
   isFigurelessDc as _isFigurelessDc,
   hasDepleteEffect as _hasDepleteEffect,
   hasExhaustEffect as _hasExhaustEffect,
+  getConfig,
 } from './game/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
+
+/**
+ * Extract the loadout name for a DC embed, if a loadout card is configured for the first figure.
+ * @param {object} game
+ * @param {string} dcName
+ * @param {number} playerNum
+ * @param {string} displayName - for DG index extraction
+ * @returns {string|null}
+ */
+export function getLoadoutNameForEmbed(game, dcName, playerNum, displayName) {
+  if (!game || !dcName) return null;
+  const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const fks = Object.keys(game.figurePositions?.[playerNum] || {}).filter(fk => fk.startsWith(`${dcName}-${dgIndex}-`));
+  if (fks.length === 0) return null;
+  return getConfig(game, fks[0])?.loadout || null;
+}
 
 const isFigurelessDc = _isFigurelessDc;
 const hasDepleteEffect = _hasDepleteEffect;
@@ -283,6 +300,12 @@ export async function getActivationMinimapAttachment(game, msgId) {
     }
   }
   if (cropCoords.length === 0) return null;
+  // Only label valid map spaces within the crop zone (not off-map/wall cells)
+  const mapSpaces = getMapSpaces(map.id);
+  const mapSpaceSet = mapSpaces ? new Set(mapSpaces.map(s => String(s).toLowerCase())) : null;
+  const labelCoords = mapSpaceSet
+    ? cropCoords.filter(c => mapSpaceSet.has(c.toLowerCase())).map(c => c.toLowerCase())
+    : [];
   try {
     const figures = getFiguresForRender(game);
     const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
@@ -293,6 +316,7 @@ export async function getActivationMinimapAttachment(game, msgId) {
       maxWidth: 800,
       cropToZone: cropCoords,
       gridStyle: 'black',
+      showGridOnlyOnCoords: labelCoords,
     });
     return new AttachmentBuilder(buffer, { name: 'activation-minimap.png' });
   } catch (err) {
@@ -475,7 +499,8 @@ export async function buildBoardMapPayload(gameId, map, game, client, { getMissi
 // buildDcEmbedAndFiles
 // ---------------------------------------------------------------------------
 
-export async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = [], tokensByFigure = null, actionsData = null, nicknamesByFigure = null) {
+export async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = [], tokensByFigure = null, actionsData = null, nicknamesByFigure = null, options = {}) {
+  const loadoutName = options.loadoutName || (options.game && options.playerNum ? getLoadoutNameForEmbed(options.game, dcName, options.playerNum, displayName) : null);
   const figureless = isFigurelessDc(dcName);
   const canExhaust = figureless && (hasExhaustEffect(dcName) || hasDepleteEffect(dcName));
   const showStatus = !figureless || canExhaust;
@@ -487,12 +512,14 @@ export async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healt
   const variant = dcName?.includes('(Elite)') ? 'Elite' : dcName?.includes('(Regular)') ? 'Regular' : null;
   const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState, conditionsByFigure, tokensByFigure, nicknamesByFigure);
   const actionsLine = (actionsData != null && exhausted) ? getActionsCounterContent(actionsData.remaining, actionsData.total) : null;
+  const loadoutLine = loadoutName ? `**Loadout:** ${loadoutName}` : null;
   const lines = figureless
     ? [actionsLine, variant ? `**Variant:** ${variant}` : null].filter(Boolean)
     : [
         actionsLine,
         `**Figures:** ${figures}`,
         variant ? `**Variant:** ${variant}` : null,
+        loadoutLine,
         '',
         healthSection,
       ].filter(Boolean);

@@ -99,7 +99,8 @@ export function getDiscardPileButtons(gameId, playerNum, hasOpenThread) {
 /** Exhaust/Ready row for a DC message in Play Area. */
 export function getDcToggleButton(msgId, exhausted, game = null) {
   if (exhausted) {
-    return new ActionRowBuilder().addComponents(
+    const hasActiveActivation = !!game?.dcActionsData?.[msgId];
+    const btns = [
       new ButtonBuilder()
         .setCustomId(`dc_unactivate_${msgId}`)
         .setLabel('Un-activate')
@@ -108,11 +109,15 @@ export function getDcToggleButton(msgId, exhausted, game = null) {
         .setCustomId(`dc_toggle_${msgId}`)
         .setLabel('Ready')
         .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
+    ];
+    if (hasActiveActivation) {
+      btns.push(new ButtonBuilder()
         .setCustomId(`dc_end_activation_${msgId}`)
         .setLabel('End Activation')
         .setStyle(ButtonStyle.Danger)
-    );
+      );
+    }
+    return new ActionRowBuilder().addComponents(...btns);
   }
   const bothDrawn = game && game.player1CcDrawn && game.player2CcDrawn;
   if (!bothDrawn) return null;
@@ -1072,6 +1077,15 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         ));
       }
     }
+  }
+  // End Activation button in thread (mirrors dc_end_activation_ on DC card in play area)
+  if (rows.length < 5) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`dc_end_activation_${msgId}`)
+        .setLabel('End Activation')
+        .setStyle(ButtonStyle.Danger)
+    ));
   }
   return rows;
 }

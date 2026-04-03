@@ -150,6 +150,7 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
         deps.getTokensForDcMessage(game, meta),
         data,
         deps.getNicknamesForDcMessage(game, meta),
+        { game, playerNum: meta.playerNum },
       );
       const _comps = deps.getDcPlayAreaComponents(msgId, true, game, meta.dcName);
       await _dcMsg.edit({ embeds: [_emb], files: _files, components: _comps }).catch(deps.discordCatch);
@@ -356,7 +357,7 @@ export async function refreshAllGameComponents(game, client, deps) {
       const channelId = deps.getPlayAreaId(game, meta.playerNum);
       const channel = await fetchGameChannel(client, channelId);
       const msg = await channel.messages.fetch(msgId);
-      const { embed, files } = await deps.buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState, deps.getConditionsForDcMessage(game, meta), deps.getDcUpgradeAttachments(game, msgId), null, null, deps.getNicknamesForDcMessage(game, meta));
+      const { embed, files } = await deps.buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState, deps.getConditionsForDcMessage(game, meta), deps.getDcUpgradeAttachments(game, msgId), null, null, deps.getNicknamesForDcMessage(game, meta), { game, playerNum: meta.playerNum });
       const components = deps.getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
       await msg.edit({ embeds: [embed], files: files?.length ? files : [], components });
     } catch (err) {
