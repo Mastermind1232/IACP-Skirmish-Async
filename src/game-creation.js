@@ -155,7 +155,10 @@ export async function createGameChannels(guild, player1Id, player2Id, deps) {
   const gamesCategory = guild.channels.cache.find(
     (c) => c.type === ChannelType.GuildCategory && c.name === CATEGORIES.games
   );
-  const position = gamesCategory ? gamesCategory.position + 1 : 0;
+  // Place new game category right after ⚔️ Games, or at the bottom of the server if that category doesn't exist
+  // Discord positions: 0 = top, higher numbers = further down
+  const bottomPosition = Math.max(0, ...guild.channels.cache.filter(c => c.type === ChannelType.GuildCategory).map(c => c.position)) + 1;
+  const position = gamesCategory ? gamesCategory.position + 1 : bottomPosition;
 
   const gameCategory = await guild.channels.create({
     name: `IA Game #${gameId}`,

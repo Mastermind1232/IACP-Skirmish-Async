@@ -1777,6 +1777,9 @@ client.once('ready', async () => {
       .addStringOption((o) => o.setName('p1_deck').setDescription('P1 deck name from destruct-test-decks.json (for seed)').setRequired(false).setAutocomplete(true))
       .addStringOption((o) => o.setName('p2_deck').setDescription('P2 deck name from destruct-test-decks.json (for seed)').setRequired(false).setAutocomplete(true))
       .addStringOption((o) => o.setName('map_id').setDescription('Map ID (for seed)').setRequired(false).setAutocomplete(true));
+    const gamestate = new SlashCommandBuilder()
+      .setName('gamestate')
+      .setDescription('Show diagnostic game state snapshot. Use in a game channel.');
     const commandBody = [
       botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
       events.toJSON(), playai.toJSON(), addai.toJSON(),
@@ -1784,6 +1787,7 @@ client.once('ready', async () => {
       affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
       dcwinrateglobaltopten.toJSON(), dcwinratepersonaltopten.toJSON(),
       leaderboard.toJSON(), achievements.toJSON(), favorites.toJSON(), selfplay.toJSON(),
+      gamestate.toJSON(),
     ];
     // Register as guild commands (instant propagation) for each guild
     for (const g of client.guilds.cache.values()) {
@@ -3400,6 +3404,43 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: `**Recent events for ${gameId}** (last ${recent.length}):\n${lines.join('\n')}`, ephemeral: true }).catch(discordCatch);
       return;
     }
+    if (cmd === 'gamestate') {
+      const match = findGameByCommonChannel(getGamesMap(), interaction.channelId)
+                 || findGameByChannel(getGamesMap(), interaction.channelId);
+      if (!match) {
+        await interaction.reply({ content: 'Use /gamestate in a game channel.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const game = match.game || match;
+      const gid = game.gameId || match.gameId;
+      const p1Figs = Object.keys(game.figurePositions?.[1] || {}).length;
+      const p2Figs = Object.keys(game.figurePositions?.[2] || {}).length;
+      const p1Conditions = Object.entries(game.figureConditions?.[1] || {}).filter(([, v]) => v?.length).length;
+      const p2Conditions = Object.entries(game.figureConditions?.[2] || {}).filter(([, v]) => v?.length).length;
+      const pendingReason = getRecoveryReason(game) || 'none';
+      const p1Hand = game.player1CcHand?.length ?? '?';
+      const p2Hand = game.player2CcHand?.length ?? '?';
+      const p1Deck = game.player1CcDeck?.length ?? '?';
+      const p2Deck = game.player2CcDeck?.length ?? '?';
+      const lines = [
+        `**Game #${gid}** — Diagnostic Snapshot`,
+        `**Phase:** ${game.phase || '?'} | **Round phase:** ${game.roundPhase || '?'}`,
+        `**Round:** ${game.currentRound ?? '?'} | **Ended:** ${game.ended || false}`,
+        `**Map:** ${game.selectedMap?.name || 'none'}`,
+        `**P1 squad:** ${game.player1Squad?.name || 'null'} | **P2 squad:** ${game.player2Squad?.name || 'null'}`,
+        `**Initiative:** ${game.initiativePlayerId ? `<@${game.initiativePlayerId}>` : 'undetermined'}`,
+        `**Current turn:** ${game.currentActivationTurnPlayerId ? `<@${game.currentActivationTurnPlayerId}>` : 'none'}`,
+        `**Figures alive:** P1=${p1Figs}, P2=${p2Figs}`,
+        `**Conditions:** P1=${p1Conditions} figs, P2=${p2Conditions} figs`,
+        `**VP:** P1=${game.player1VP?.total ?? 0} (${game.player1VP?.kills ?? 0}k/${game.player1VP?.objectives ?? 0}o) | P2=${game.player2VP?.total ?? 0} (${game.player2VP?.kills ?? 0}k/${game.player2VP?.objectives ?? 0}o)`,
+        `**CC hand/deck:** P1=${p1Hand}/${p1Deck}, P2=${p2Hand}/${p2Deck}`,
+        `**Pending state:** ${pendingReason}`,
+        `**AI player:** ${game.aiPlayerNum || 'none'} | **Self-play:** ${game.selfPlay || false}`,
+        `**DC msg IDs:** P1=${(game.p1DcMessageIds || []).filter(Boolean).length}, P2=${(game.p2DcMessageIds || []).filter(Boolean).length}`,
+      ];
+      await interaction.reply({ content: lines.join('\n'), ephemeral: true }).catch(discordCatch);
+      return;
+    }
     if (cmd === 'play-ai') {
       const channelName = (interaction.channel?.name || '').toLowerCase();
       if (channelName !== 'lfg') {
@@ -3410,7 +3451,15 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply({ ephemeral: false }).catch(discordCatch);
       try {
         const aiUserId = `${AI_USER_PREFIX}2`;
-        const { gameId } = await createTestGame(client, interaction.guild, interaction.user.id, scenarioId, interaction.channel, { player2Id: aiUserId });
+        // Auto-setup: when no scenario, use seedConfig so createTestGame calls runDraftRandom
+        let aiSeedConfig;
+        if (!scenarioId) {
+          const maps = getPlayReadyMaps();
+          if (maps.length === 0) throw new Error('No play-ready maps available.');
+          const map = maps[Math.floor(Math.random() * maps.length)];
+          aiSeedConfig = { mapId: map.id, p1Deck: DEFAULT_DECK_REBELS, p2Deck: DEFAULT_DECK_IMPERIAL };
+        }
+        const { gameId } = await createTestGame(client, interaction.guild, interaction.user.id, scenarioId, interaction.channel, { player2Id: aiUserId, seedConfig: aiSeedConfig });
         const game = getGame(gameId);
         if (game) {
           game.aiPlayerNum = 2;
@@ -4616,7 +4665,24 @@ client.on('interactionCreate', async (interaction) => {
     const messageLink = guild?.id && interaction?.channelId && interaction?.message?.id
       ? { guildId: guild.id, channelId: interaction.channelId, messageId: interaction.message.id }
       : undefined;
-    await logGameErrorToBotLogs(interaction.client, guild, gameId, err, 'interactionCreate', { messageLink });
+    // Enrich error log with game state snapshot for faster diagnosis
+    let errorMetadata;
+    if (gameId) {
+      const _errGame = getGame(gameId);
+      if (_errGame) {
+        errorMetadata = {
+          phase: _errGame.phase,
+          roundPhase: _errGame.roundPhase,
+          round: _errGame.currentRound,
+          pendingState: getRecoveryReason(_errGame) || 'none',
+          p1Figs: Object.keys(_errGame.figurePositions?.[1] || {}).length,
+          p2Figs: Object.keys(_errGame.figurePositions?.[2] || {}).length,
+          aiPlayer: _errGame.aiPlayerNum || null,
+          customId: interaction?.customId || null,
+        };
+      }
+    }
+    await logGameErrorToBotLogs(interaction.client, guild, gameId, err, 'interactionCreate', { messageLink, metadata: errorMetadata });
     await replyOrFollowUpWithRetry(interaction, {
       content: 'An error occurred. It has been logged to bot-logs.',
       ephemeral: true,
