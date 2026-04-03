@@ -2,7 +2,7 @@
  * Setup handlers: map_selection_, map_type_, draft_random_, determine_initiative_, deployment_zone_red_/blue_, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_
  * F17: map_type_ buttons (Competitive/Random/Select Draw/Selection), map_selection_draw_, map_selection_pick_
  */
-import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -14,7 +14,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..', '..');
 import { getConfig, setConfig, getFormsChosenByTeamClawdites } from '../game/figure-config.js';
 import {
-  getPlayerId, getSquad, getDcList, getDcMessageIds, getHandChannelId,
+  getPlayerId, getSquad, getDcList, getDcMessageIds, getHandChannelId, getPlayAreaId,
   dcAttachmentsKey, ccDeckKey, ccHandKey,
   deployLabelsKey as _deployLabelsKey, deployMetadataKey as _deployMetadataKey,
   getInitiativePlayerNum, opponentPlayerNum,
@@ -1651,10 +1651,11 @@ function _getLoadoutConfirmRow(gameId, figureKey) {
   );
 }
 
-function _getLoadoutImageAttachment(card) {
+function _getLoadoutImageAttachment(card, name) {
   if (!card?.imagePath) return [];
   try {
-    return [new AttachmentBuilder(join(getRootDir(), card.imagePath))];
+    const fileName = name ? `${name.replace(/[^a-zA-Z0-9]/g, '_')}.png` : undefined;
+    return [new AttachmentBuilder(join(getRootDir(), card.imagePath), fileName ? { name: fileName } : undefined)];
   } catch { return []; }
 }
 
@@ -1735,14 +1736,29 @@ export async function handleLoadoutConfirm(interaction, ctx) {
   delete game.pendingLoadoutSelection;
   saveGames();
 
-  const files = _getLoadoutImageAttachment(card);
-  await interaction.message.edit({
-    content: `✓ **Imperial Loadout** — **${dcNameFromFigureKey(figureKey)}** equipped **${loadoutName}**.\n${card.abilityText}`,
-    components: [],
-    files,
-    attachments: [],
-  }).catch(discordCatch);
-  await logGameAction?.(game, client, `**Imperial Loadout** — **${dcNameFromFigureKey(figureKey)}** chose **${loadoutName}**.`, { phase: 'DEPLOYMENT', icon: 'deploy' });
+  // Remove the loadout picker from the hand channel
+  await interaction.message.delete().catch(discordCatch);
+
+  // Post the equipped loadout card in the play area under the Purge Trooper DC
+  const dcName = dcNameFromFigureKey(figureKey);
+  if (wasPending) {
+    try {
+      const playAreaId = getPlayAreaId(game, wasPending);
+      const playAreaChannel = await fetchGameChannel(client, playAreaId);
+      const files = _getLoadoutImageAttachment(card, loadoutName);
+      const embed = new EmbedBuilder()
+        .setTitle(`Imperial Loadout: ${loadoutName}`)
+        .setDescription(`**${dcName}** — ${card.abilityText}`);
+      if (files.length > 0) {
+        embed.setImage(`attachment://${files[0].name}`);
+      }
+      await playAreaChannel.send({ embeds: [embed], files }).catch(discordCatch);
+    } catch (err) {
+      console.error('Failed to post loadout card to play area:', err);
+    }
+  }
+
+  await logGameAction?.(game, client, `**Imperial Loadout** — **${dcName}** chose **${loadoutName}**.`, { phase: 'DEPLOYMENT', icon: 'deploy' });
 
   // Resume deployment flow if it was gated
   if (wasPending && ctx.updateDeployPromptMessages) {
