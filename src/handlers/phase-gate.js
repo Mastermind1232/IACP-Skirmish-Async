@@ -14,6 +14,8 @@ import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from '../game/phase.js'
 import { discordCatch } from '../error-handling.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
+import { getDcEffects } from '../data-loader.js';
+import { getConfig } from '../game/figure-config.js';
 
 // ── Message builders ────────────────────────────────────────────────────────
 
@@ -176,6 +178,22 @@ export async function handlePhaseGateReady(interaction, ctx) {
     return;
   }
 
+  // Block deploy_done if this player has incomplete loadout/form selections
+  if (game.phaseGate?.phase === 'deploy_done') {
+    const pn = clickerPn || (game.isTestGame ? 1 : 0);
+    if (pn > 0) {
+      const missing = getIncompleteDeploySelections(game, pn);
+      if (missing.length > 0) {
+        const list = missing.map(m => `• **${m.dcName}**: ${m.what}`).join('\n');
+        await interaction.followUp({
+          content: `Cannot mark ready — incomplete setup:\n${list}\n\nPlease complete these selections in your Hand channel first.`,
+          ephemeral: true,
+        }).catch(discordCatch);
+        return;
+      }
+    }
+  }
+
   const { alreadyReady, bothReady, playerNum } = recordPhaseGateReady(game, userId);
   if (alreadyReady) {
     await interaction.followUp({ content: "You're already marked as ready.", ephemeral: true }).catch(discordCatch);
@@ -309,6 +327,35 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
     default:
       console.warn(`[phase-gate] Unknown phase for dispatch: ${phase}`);
   }
+}
+
+// ── Deploy-time selection validation ────────────────────────────────────────
+
+const LOADOUT_ABILITY_IDS = ['imperial_loadout_purge_trooper'];
+const FORM_ABILITY_IDS = ['shape_clawdite_elite', 'shape_clawdite_reg'];
+
+/**
+ * Check if a player has any deployed figures missing required selections (loadout, form).
+ * @returns {Array<{ dcName: string, what: string }>} List of missing selections
+ */
+function getIncompleteDeploySelections(game, playerNum) {
+  const missing = [];
+  const allEffects = getDcEffects() || {};
+  const positions = game.figurePositions?.[playerNum] || {};
+  for (const [fk, pos] of Object.entries(positions)) {
+    if (!pos) continue;
+    const dcName = fk.replace(/-\d+-\d+$/, '');
+    const eff = allEffects[dcName];
+    if (!eff?.specialAbilityIds) continue;
+    const cfg = getConfig(game, fk);
+    if (eff.specialAbilityIds.some(id => LOADOUT_ABILITY_IDS.includes(id)) && !cfg.loadout) {
+      missing.push({ dcName: dcName.replace(/_/g, ' '), what: 'select a Loadout card' });
+    }
+    if (eff.specialAbilityIds.some(id => FORM_ABILITY_IDS.includes(id)) && !cfg.form) {
+      missing.push({ dcName: dcName.replace(/_/g, ' '), what: 'select a Form card' });
+    }
+  }
+  return missing;
 }
 
 // ── advanceFromDeployment (extracted from setup.js) ─────────────────────────
