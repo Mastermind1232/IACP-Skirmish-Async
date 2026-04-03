@@ -106,25 +106,35 @@ export function resolveDcImagePath(relPath, dcName) {
   return relPath;
 }
 
+/** Shared fuzzy image lookup: exact → lowercase → strip Elite/Regular → prefix match. */
+function _lookupImageByName(registry, dcName, resolve) {
+  if (!dcName || typeof dcName !== 'string') return null;
+  const exact = registry[dcName];
+  if (exact) return resolve(exact, dcName);
+  const lower = dcName.toLowerCase();
+  let key = Object.keys(registry).find((k) => k.toLowerCase() === lower);
+  if (key) return resolve(registry[key], key);
+  const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  if (base !== dcName) {
+    key = Object.keys(registry).find((k) => k.toLowerCase() === base.toLowerCase());
+    if (key) return resolve(registry[key], key);
+    key = Object.keys(registry).find((k) => k.toLowerCase().startsWith(base.toLowerCase()));
+    if (key) return resolve(registry[key], key);
+  }
+  key = Object.keys(registry).find((k) => k.toLowerCase().startsWith(lower) || lower.startsWith(k.toLowerCase()));
+  return key ? resolve(registry[key], key) : null;
+}
+
 /** Resolve DC name to DC card image path (for deployment card embeds). */
 export function getDcImagePath(dcName) {
   if (!dcName || typeof dcName !== 'string') return null;
-  const exact = getDcImages()[dcName];
-  if (exact) return resolveDcImagePath(exact, dcName);
+  const registry = getDcImages();
+  // Bracket-wrapped DC names (e.g. "[Skirmish Upgrade]")
   const trimmed = dcName.trim();
-  if (!/^\[.+\]$/.test(trimmed) && getDcImages()[`[${trimmed}]`]) return resolveDcImagePath(getDcImages()[`[${trimmed}]`], `[${trimmed}]`);
-  const lower = dcName.toLowerCase();
-  let key = Object.keys(getDcImages()).find((k) => k.toLowerCase() === lower);
-  if (key) return resolveDcImagePath(getDcImages()[key], key);
-  const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  if (base !== dcName) {
-    key = Object.keys(getDcImages()).find((k) => k.toLowerCase() === base.toLowerCase());
-    if (key) return resolveDcImagePath(getDcImages()[key], key);
-    key = Object.keys(getDcImages()).find((k) => k.toLowerCase().startsWith(base.toLowerCase()));
-    if (key) return resolveDcImagePath(getDcImages()[key], key);
+  if (!/^\[.+\]$/.test(trimmed) && registry[`[${trimmed}]`]) {
+    return resolveDcImagePath(registry[`[${trimmed}]`], `[${trimmed}]`);
   }
-  key = Object.keys(getDcImages()).find((k) => k.toLowerCase().startsWith(lower) || lower.startsWith(k.toLowerCase()));
-  return key ? resolveDcImagePath(getDcImages()[key], key) : null;
+  return _lookupImageByName(registry, dcName, resolveDcImagePath);
 }
 
 /** Return absolute path to condition card image, or null if not found. */
@@ -137,21 +147,7 @@ export function getConditionCardPath(conditionName) {
 
 /** Resolve DC name to circular figure image (for map tokens). */
 export function getFigureImagePath(dcName) {
-  if (!dcName || typeof dcName !== 'string') return null;
-  const exact = getFigureImages()[dcName];
-  if (exact) return resolveAssetPath(exact, 'figures');
-  const lower = dcName.toLowerCase();
-  let key = Object.keys(getFigureImages()).find((k) => k.toLowerCase() === lower);
-  if (key) return resolveAssetPath(getFigureImages()[key], 'figures');
-  const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  if (base !== dcName) {
-    key = Object.keys(getFigureImages()).find((k) => k.toLowerCase() === base.toLowerCase());
-    if (key) return resolveAssetPath(getFigureImages()[key], 'figures');
-    key = Object.keys(getFigureImages()).find((k) => k.toLowerCase().startsWith(base.toLowerCase()));
-    if (key) return resolveAssetPath(getFigureImages()[key], 'figures');
-  }
-  key = Object.keys(getFigureImages()).find((k) => k.toLowerCase().startsWith(lower) || lower.startsWith(k.toLowerCase()));
-  return key ? resolveAssetPath(getFigureImages()[key], 'figures') : null;
+  return _lookupImageByName(getFigureImages(), dcName, (path) => resolveAssetPath(path, 'figures'));
 }
 
 /** Resolve mission card image path; tries .png, .jpg, .jpeg so data can say .png while files are .jpg. */

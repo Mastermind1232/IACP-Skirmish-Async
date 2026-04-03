@@ -24,7 +24,7 @@ import {
   removeFigurePosition,
 } from '../game/player-helpers.js';
 import { checkStartOfRoundPassiveRedraws } from '../game/cc-passive-redraw.js';
-import { FIGURE_LETTERS, chunkButtonsToRows } from '../discord/components.js';
+import { FIGURE_LETTERS, chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
@@ -328,7 +328,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
         const btns = _ctfUnique.slice(0, 20).map((c, i) =>
           new ButtonBuilder()
             .setCustomId(`ctf_pick_${gameId}_${_ctfPn}_${i}`)
-            .setLabel(String(c.name).length > 80 ? String(c.name).slice(0, 77) + '...' : String(c.name))
+            .setLabel(truncateLabel(c.name))
             .setStyle(ButtonStyle.Primary)
         );
         const rows = chunkButtonsToRows(btns);
@@ -727,7 +727,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
         const label = `${dn}: ${info}`;
         return new ButtonBuilder()
           .setCustomId(`doubt_fig_${gameId}_${pn}_${fk}`)
-          .setLabel(label.length > 80 ? label.slice(0, 77) + '...' : label)
+          .setLabel(truncateLabel(label))
           .setStyle(ButtonStyle.Danger);
       });
       _dbtBtns.push(new ButtonBuilder().setCustomId(`doubt_fig_${gameId}_${pn}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
@@ -1024,7 +1024,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
               const handCh = await fetchGameChannel(client, handChannelId);
               const discardBtns = hand.slice(0, 25).map((card, idx) => new ButtonBuilder()
                 .setCustomId(`rbf_discard_${gameId}_${playerNum}_${idx}`)
-                .setLabel(card.length > 80 ? card.slice(0, 77) + '...' : card)
+                .setLabel(truncateLabel(card))
                 .setStyle(ButtonStyle.Danger)
               );
               const discardRows = chunkButtonsToRows(discardBtns);
@@ -1063,7 +1063,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
               const handCh = await fetchGameChannel(client, handChannelId);
               const pickBtns = hand.slice(0, 25).map((card, idx) => new ButtonBuilder()
                 .setCustomId(`rogue_one_return_${gameId}_${playerNum}_${idx}`)
-                .setLabel(card.length > 80 ? card.slice(0, 77) + '...' : card)
+                .setLabel(truncateLabel(card))
                 .setStyle(ButtonStyle.Primary)
               );
               const pickRows = chunkButtonsToRows(pickBtns);
@@ -1610,7 +1610,7 @@ export async function handleRogueOneReturn(interaction, ctx) {
     // Rebuild buttons with updated hand
     const pickBtns = hand.slice(0, 25).map((c, idx) => new ButtonBuilder()
       .setCustomId(`rogue_one_return_${gameId}_${playerNum}_${idx}`)
-      .setLabel(c.length > 80 ? c.slice(0, 77) + '...' : c)
+      .setLabel(truncateLabel(c))
       .setStyle(ButtonStyle.Primary)
     );
     const pickRows = chunkButtonsToRows(pickBtns);
@@ -1875,7 +1875,7 @@ export async function handleDoubtFigPick(interaction, ctx) {
       const label = type === 'condition' ? `Discard ${value}` : `Discard ${value} Token`;
       return new ButtonBuilder()
         .setCustomId(`doubt_remove_${gameId}_${pn}_${targetFk}_${type}_${i}`)
-        .setLabel(label.length > 80 ? label.slice(0, 77) + '...' : label)
+        .setLabel(truncateLabel(label))
         .setStyle(ButtonStyle.Danger);
     });
     const rows = chunkButtonsToRows(btns);

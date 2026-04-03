@@ -15,7 +15,7 @@ import { discordCatch } from '../error-handling.js';
 import { fetchGameChannel, fetchCombatThread } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
-import { chunkButtonsToRows } from '../discord/components.js';
+import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { getRecoveryPrompts, needsRecovery } from '../engine/recovery.js';
 
 /**
@@ -439,7 +439,7 @@ async function recoverForceVisionPending(game, gameId, ctx) {
     btns.push(
       new ButtonBuilder()
         .setCustomId(`fv_pick_${gameId}_${fvPn}_${rg.index}`)
-        .setLabel(rg.displayName.length > 80 ? rg.displayName.slice(0, 77) + '...' : rg.displayName)
+        .setLabel(truncateLabel(rg.displayName))
         .setStyle(ButtonStyle.Primary)
     );
     if (btns.length === 5) {
@@ -476,7 +476,7 @@ async function recoverPendingStartOfRound(game, gameId, ctx) {
         const handCh = await fetchGameChannel(client, handId);
         const pickBtns = hand.slice(0, 25).map((card, idx) => new ButtonBuilder()
           .setCustomId(`rogue_one_return_${gameId}_${pn}_${idx}`)
-          .setLabel(card.length > 80 ? card.slice(0, 77) + '...' : card)
+          .setLabel(truncateLabel(card))
           .setStyle(ButtonStyle.Primary)
         );
         const pickRows = chunkButtonsToRows(pickBtns);

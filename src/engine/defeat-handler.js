@@ -1,4 +1,4 @@
-import { chunkButtonsToRows } from '../discord/components.js';
+import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
@@ -199,7 +199,7 @@ export async function processFigureDefeat(game, opts, deps) {
               const btns = hand.slice(0, 25).map((card, idx) =>
                 new ButtonBuilder()
                   .setCustomId(`heroic_effort_return_${game.gameId}_${defeatedPlayerNum}_${idx}`)
-                  .setLabel(String(card).length > 80 ? String(card).slice(0, 77) + '...' : String(card))
+                  .setLabel(truncateLabel(card))
                   .setStyle(ButtonStyle.Primary)
               );
               const rows = chunkButtonsToRows(btns);
@@ -266,7 +266,7 @@ export async function processFigureDefeat(game, opts, deps) {
                 const btns = eligible.slice(0, 10).map((e, i) =>
                   new ButtonBuilder()
                     .setCustomId(`scav_weapon_transfer_${game.gameId}_${defeatedPlayerNum}_${i}`)
-                    .setLabel(e.displayName.length > 80 ? e.displayName.slice(0, 77) + '...' : e.displayName)
+                    .setLabel(truncateLabel(e.displayName))
                     .setStyle(ButtonStyle.Primary)
                 );
                 const rows = chunkButtonsToRows(btns);

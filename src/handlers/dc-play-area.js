@@ -296,7 +296,7 @@ export async function handleDcActivate(interaction, ctx) {
             _fvBtns.push(
               new ButtonBuilder()
                 .setCustomId(`fv_pick_${gameId}_${_fvOppNum}_${rg.index}`)
-                .setLabel(rg.displayName.length > 80 ? rg.displayName.slice(0, 77) + '...' : rg.displayName)
+                .setLabel(truncateLabel(rg.displayName))
                 .setStyle(ButtonStyle.Primary)
             );
             if (_fvBtns.length === 5) {

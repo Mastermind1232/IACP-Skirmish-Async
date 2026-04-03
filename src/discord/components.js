@@ -745,7 +745,7 @@ export function getDeployFigureLabels(dcList, helpers = {}) {
         const nick = getNickname(dcName, dgIndex, f);
         const nickSuffix = nick ? ` (${nick})` : '';
         const rawLabel = `Deploy ${baseName} ${dgIndex}${FIGURE_LETTERS[f]}${nickSuffix}`;
-        labels.push(rawLabel.length > 80 ? rawLabel.slice(0, 77) + '...' : rawLabel);
+        labels.push(truncateLabel(rawLabel));
         metadata.push({ dcName, dgIndex, figureIndex: f });
       }
     }
@@ -1125,7 +1125,7 @@ export function getActivateDcButtons(game, playerNum, helpers = {}) {
     if (isGroupDefeated(game, playerNum, i)) continue;
     const displayName = dc?.displayName || dcName;
     const fullLabel = `Activate ${displayName}`;
-    const label = fullLabel.length > 80 ? fullLabel.slice(0, 77) + '…' : fullLabel;
+    const label = truncateLabel(fullLabel);
     btns.push(new ButtonBuilder()
       .setCustomId(`dc_activate_${gameId}_${playerNum}_${i}`)
       .setLabel(label)

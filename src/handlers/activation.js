@@ -37,7 +37,7 @@ import {
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
-import { chunkButtonsToRows } from '../discord/components.js';
+import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 
@@ -1688,7 +1688,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         _fvBtns.push(
           new ButtonBuilder()
             .setCustomId(`fv_pick_${game.gameId}_${_fvOppNum}_${rg.index}`)
-            .setLabel(rg.displayName.length > 80 ? rg.displayName.slice(0, 77) + '...' : rg.displayName)
+            .setLabel(truncateLabel(rg.displayName))
             .setStyle(ButtonStyle.Primary)
         );
         if (_fvBtns.length === 5) {
@@ -2177,7 +2177,7 @@ export async function handleConfirmActivate(interaction, ctx) {
             const label = `${dName}: ${harmful.join(', ')}`;
             return new ButtonBuilder()
               .setCustomId(`act_passive_${game.gameId}_${msgId}_unshakable_${fk}`)
-              .setLabel(label.length > 80 ? label.slice(0, 77) + '...' : label)
+              .setLabel(truncateLabel(label))
               .setStyle(ButtonStyle.Primary);
           });
           btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_unshakable_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
@@ -2657,7 +2657,7 @@ export async function handleActPassive(interaction, ctx) {
         const btns = targets.slice(0, 24).map(({ fk, dcName: dn }) =>
           new ButtonBuilder()
             .setCustomId(`sc_fig_pick_${game.gameId}_${msgId}_${fk}`)
-            .setLabel(dn.length > 80 ? dn.slice(0, 77) + '...' : dn)
+            .setLabel(truncateLabel(dn))
             .setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`sc_fig_pick_${game.gameId}_${msgId}_cancel`).setLabel('Cancel').setStyle(ButtonStyle.Secondary));

@@ -3,6 +3,7 @@
  * No Discord dependency.
  */
 import { getDcEffects, getDcImages } from '../data-loader.js';
+import { truncateLabel } from '../discord/components.js';
 
 /**
  * Extract the base DC name from a figure key like "Darth Vader-1-0" → "Darth Vader".
@@ -153,6 +154,5 @@ export function buildFigureButtonLabel(figureKey, game) {
       label += ` [${tokens.length}/${max}]`;
     }
   }
-  // Discord button labels max 80 chars
-  return label.length > 80 ? label.slice(0, 77) + '...' : label;
+  return truncateLabel(label);
 }
