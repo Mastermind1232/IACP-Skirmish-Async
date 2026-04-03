@@ -1356,7 +1356,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // neurostim_hemlock (Hemlock Droid): choose adjacent friendly, roll 1 yellow die → Hit: Block Token, Surge: Focus
+  // neurostim_hemlock (Hemlock): choose adjacent friendly, roll 1 yellow die → Hit: Block Token, Surge: Surge Token
   if (abilityId === 'neurostim_hemlock') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: 'Resolve **Neurostim** manually.' };
@@ -1379,8 +1379,8 @@ export function resolveAbility(abilityId, context) {
         effectParts.push(`**${tName}** gained 1 **Block Token**`);
       }
       if (surges > 0) {
-        applyCondition(game, targetFigureKey, 'Focus');
-        effectParts.push(`**${tName}** became **Focused**`);
+        grantPowerTokens(game, targetFigureKey, 'Surge', 1);
+        effectParts.push(`**${tName}** gained 1 **Surge Token**`);
       }
       if (effectParts.length === 0) effectParts.push('no effect');
       return { applied: true, logMessage: `**Neurostim** — Targeting **${tName}**. Rolled 1 yellow die: **${diceResult}**. ${effectParts.join('; ')}.`, refreshDcEmbed: true };
@@ -1417,8 +1417,8 @@ export function resolveAbility(abilityId, context) {
         effectParts.push(`**${tName}** gained 1 **Block Token**`);
       }
       if (surges > 0) {
-        applyCondition(game, tFk, 'Focus');
-        effectParts.push(`**${tName}** became **Focused**`);
+        grantPowerTokens(game, tFk, 'Surge', 1);
+        effectParts.push(`**${tName}** gained 1 **Surge Token**`);
       }
       if (effectParts.length === 0) effectParts.push('no effect');
       return { applied: true, logMessage: `**Neurostim** — Targeting **${tName}**. Rolled 1 yellow die: **${diceResult}**. ${effectParts.join('; ')}.`, refreshDcEmbed: true };

@@ -3235,7 +3235,7 @@
     "neurostim_hemlock": {
       "type": "dcSpecial",
       "label": "Neurostim",
-      "description": "Choose an adjacent friendly figure and roll 1 yellow die. If Block: Block Token. If Surge: Focus.",
+      "description": "Choose an adjacent friendly figure and roll 1 yellow die. If Damage: Block Token. If Surge: Surge Token.",
       "wiredStatus": "wired"
     },
     "neurotoxin_hemlock": {
