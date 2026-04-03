@@ -9,7 +9,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../fixtures/game-builder.js';
-import { getDcEffects, getDiceData, getMapSpaces } from '../../src/data-loader.js';
+import { getDcEffects, getDiceData, getMapData } from '../../src/data-loader.js';
 import {
   applyCondition, filterCondition, resetCondition,
   grantPowerTokens, dcNameFromFigureKey,

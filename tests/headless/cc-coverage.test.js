@@ -13,7 +13,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createTestGame } from '../fixtures/game-builder.js';
-import { getDcStats, getMapSpaces, getCcEffect, isCcAttachment, getDcEffects, getDcKeywords } from '../../src/data-loader.js';
+import { getDcStats, getMapData, getCcEffect, isCcAttachment, getDcEffects, getDcKeywords } from '../../src/data-loader.js';
 import { getAbility, resolveAbility } from '../../src/game/abilities.js';
 import { isCcPlayableNow, isCcPlayLegalByRestriction } from '../../src/game/cc-timing.js';
 import { ccHandKey, ccDiscardKey, ccAttachmentsKey, opponentPlayerNum, getDcList, getDcMessageIds } from '../../src/game/player-helpers.js';
@@ -318,7 +318,7 @@ describe('CC Coverage: context-dependent CCs', () => {
 
     // Lure handler derives activating figure from dcActionsData entry with threadId.
     // Its fallback dgIndex ('0') doesn't match game-builder's '1', so it can't find
-    // the position. Provide hasLineOfSight and getMapSpaces in context so it can try
+    // the position. Provide hasLineOfSight and getMapData in context so it can try
     // the LOS check. This is a specialAction CC — excluded from play_cc, so this test
     // validates the handler is wired, not full E2E resolution.
     const effectData = getCcEffect('Lure of the Dark Side');
@@ -702,7 +702,7 @@ describe('CC Coverage: context-dependent CCs', () => {
     // Verify available-actions returns negation actions for P2
     const { getPlayableCcFromHand } = hDeps;
     const p2Actions = getAvailableActions(game, 2, {
-      dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces: hDeps.getMapSpaces,
+      dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapData: hDeps.getMapData,
       getPlayableCcFromHand,
     });
     const negationActions = p2Actions.filter(a => a.type === 'negation_play' || a.type === 'negation_let_resolve');

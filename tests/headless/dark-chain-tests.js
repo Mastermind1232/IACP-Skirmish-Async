@@ -12,7 +12,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
-import { getDcStats, getMapSpaces } from '../../src/data-loader.js';
+import { getDcStats, getMapData } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 
@@ -22,7 +22,7 @@ function buildActionDeps(meta) {
     dcExhaustedState: meta.dcExhaustedState,
     dcHealthState: meta.dcHealthState,
     getDcStats,
-    getMapSpaces,
+    getMapData,
     computeMovementCache,
     getBoardStateForMovement,
     getMovementProfile,

@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
-import { getDcStats, getMapSpaces } from '../../src/data-loader.js';
+import { getDcStats, getMapData } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 
@@ -104,7 +104,7 @@ describe('random game (AI training skeleton)', () => {
       .build();
 
     const actionDeps = {
-      dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
+      dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapData,
       computeMovementCache, getBoardStateForMovement, getMovementProfile,
       getPlayableCcFromHand,
     };
@@ -191,7 +191,7 @@ describe('random game (AI training skeleton)', () => {
       dcMessageMeta,
       dcExhaustedState,
       getDcStats,
-      getMapSpaces,
+      getMapData,
     });
 
     const attackActions = actions.filter(a => a.type === 'attack_target');

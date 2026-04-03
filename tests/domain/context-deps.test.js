@@ -32,7 +32,7 @@ describe('context-factory dep coverage', () => {
       'runNpcThugActivation',
       'runNpcKryknaActivation',
       'applyNpcDamageToFigure',
-      'getMapSpaces',
+      'getMapData',
       'getMapRegistry',
       'filterMapSpacesByBounds',
       'getInitiativePlayerZoneLabel',

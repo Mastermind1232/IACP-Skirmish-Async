@@ -187,13 +187,6 @@ export function getMapRegistry() {
 export function getDeploymentZones() {
   return deploymentZones;
 }
-export function getMapSpacesData() {
-  return mapSpacesData;
-}
-/** @deprecated Use getMapData() instead — this name is ambiguous about the return shape (object, not array). */
-export function getMapSpaces(mapId) {
-  return mapSpacesData[mapId] || null;
-}
 /** Returns the full map-data record (spaces, adjacency, terrain, blocking, edges, exterior). */
 export function getMapData(mapId) {
   return mapSpacesData[mapId] || null;

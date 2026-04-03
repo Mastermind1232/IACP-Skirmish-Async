@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { createFlowHarness } from './flow-harness.js';
 import { CoverageMap, computeTransitionKey, buildContextTags, recordEpisode } from './explorer-coverage.js';
 import { pickExploratoryAction } from './explorer-policy.js';
-import { getMapRegistry, getMapSpaces, getDeploymentZones } from '../../src/data-loader.js';
+import { getMapRegistry, getMapData, getDeploymentZones } from '../../src/data-loader.js';
 import { isDbConfigured, initDb } from '../../src/db.js';
 
 const __explorerDirname = dirname(fileURLToPath(import.meta.url));
@@ -55,7 +55,7 @@ function getUsableMaps() {
   const usable = [];
   for (const m of maps) {
     try {
-      const spaces = getMapSpaces(m.id);
+      const spaces = getMapData(m.id);
       if (!spaces || Object.keys(spaces).length === 0) continue;
       const z = zones[m.id];
       if (!z?.red?.length || !z?.blue?.length) continue;

@@ -6,7 +6,7 @@
  */
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
-import { getDcStats, getMapSpaces, getDcEffects } from '../../src/data-loader.js';
+import { getDcStats, getMapData, getDcEffects } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
@@ -64,7 +64,7 @@ async function diagnoseOneGame(learnings, gameNum) {
 
   const hDeps = harness.getDeps();
   const actionDeps = {
-    dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
+    dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapData,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
     getPlayableCcFromHand,
     getPlayableCcSpecialsForDc: hDeps.getPlayableCcSpecialsForDc,

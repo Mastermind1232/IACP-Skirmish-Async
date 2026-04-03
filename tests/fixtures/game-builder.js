@@ -14,7 +14,7 @@
 import { createHarness } from '../../src/headless/game-harness.js';
 import { buildHeadlessDeps } from '../../src/headless/headless-deps.js';
 import { initializeDcState, initializeFigurePositions } from '../../src/headless/init-dc-state.js';
-import { getDcStats, getDeploymentZones, getMapSpaces, getMissionCardsData } from '../../src/data-loader.js';
+import { getDcStats, getDeploymentZones, getMapData, getMissionCardsData } from '../../src/data-loader.js';
 import { PHASES, ROUND_PHASES } from '../../src/game/phase.js';
 import { isFigurelessDc } from '../../src/game/dc-helpers.js';
 
@@ -80,7 +80,7 @@ class GameBuilder {
     // If deployed, initialize figure positions
     if (this._deployed) {
       const deploymentZones = getDeploymentZones();
-      const mapSpaces = getMapSpaces(this._mapId);
+      const mapSpaces = getMapData(this._mapId);
       initializeFigurePositions(game, dcMessageMeta, { deploymentZones, mapSpaces });
     }
 

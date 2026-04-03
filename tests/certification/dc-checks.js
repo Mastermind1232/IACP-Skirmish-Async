@@ -15,7 +15,7 @@ import { createTestGame } from '../fixtures/game-builder.js';
 import { snapshotGameState, diffGameState } from './state-diff.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { parseSurgeEffect } from '../../src/game/combat.js';
-import { isDcCompanion, getDcStats, getMapSpaces } from '../../src/data-loader.js';
+import { isDcCompanion, getDcStats, getMapData } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 
@@ -295,7 +295,7 @@ async function checkL4Figure(dcName, card, result) {
   const depsForActions = {
     dcMessageMeta, dcExhaustedState, dcHealthState,
     getDcStats: deps.getDcStats || getDcStats,
-    getMapSpaces: deps.getMapSpaces || getMapSpaces,
+    getMapData: deps.getMapData || getMapData,
     getPlayableCcFromHand: deps.getPlayableCcFromHand || getPlayableCcFromHand,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
   };

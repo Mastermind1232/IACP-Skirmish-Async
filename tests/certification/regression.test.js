@@ -13,7 +13,7 @@ import { certifyAllCcs } from './cc-checks.js';
 import { certifyAllDcs } from './dc-checks.js';
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
-import { getDcStats, getMapSpaces } from '../../src/data-loader.js';
+import { getDcStats, getMapData } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 
@@ -135,7 +135,7 @@ describe('Random Game Stability (diverse armies)', () => {
         .build();
 
       const actionDeps = {
-        dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
+        dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapData,
         computeMovementCache, getBoardStateForMovement, getMovementProfile,
         getPlayableCcFromHand,
       };

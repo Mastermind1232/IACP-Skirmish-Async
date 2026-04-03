@@ -8,7 +8,7 @@
 import {
   getMapRegistry,
   getDeploymentZones,
-  getMapSpaces,
+  getMapData,
   getDcEffects,
   getDiceData,
   getMissionCardsData,

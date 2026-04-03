@@ -17,7 +17,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../fixtures/game-builder.js';
-import { getDcStats, getDcEffects, getMapSpaces, getDeploymentZones } from '../../src/data-loader.js';
+import { getDcStats, getDcEffects, getMapData, getDeploymentZones } from '../../src/data-loader.js';
 import { dcNameFromFigureKey, applyCondition, grantPowerTokens } from '../../src/game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,

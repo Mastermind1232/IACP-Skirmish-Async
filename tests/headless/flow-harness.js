@@ -16,7 +16,7 @@
 
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
-import { getDcStats, getMapSpaces, getDcEffects } from '../../src/data-loader.js';
+import { getDcStats, getMapData, getDcEffects } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { createFakeChannel } from '../../src/headless/fake-interaction.js';
@@ -437,7 +437,7 @@ export function createFlowHarness(opts = {}) {
   // ── Action deps for getAvailableActions ────────────────────────────────────
   const actionDeps = {
     dcMessageMeta, dcExhaustedState, dcHealthState,
-    getDcStats, getMapSpaces,
+    getDcStats, getMapData,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
     getPlayableCcFromHand,
     getPlayableCcSpecialsForDc: deps.getPlayableCcSpecialsForDc,

@@ -19,7 +19,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createFlowHarness } from './flow-harness.js';
 import { runSetupSim } from './setup-harness.js';
-import { getDcEffects, getDcStats, getMapRegistry, getMapSpaces, getCcEffectsData, getDeploymentZones } from '../../src/data-loader.js';
+import { getDcEffects, getDcStats, getMapRegistry, getMapData, getCcEffectsData, getDeploymentZones } from '../../src/data-loader.js';
 
 // ── Telemetry helpers ────────────────────────────────────────────────────────
 
@@ -152,7 +152,7 @@ function buildDataPools() {
   const usableMaps = [];
   for (const m of maps) {
     try {
-      const spaces = getMapSpaces(m.id);
+      const spaces = getMapData(m.id);
       if (!spaces || Object.keys(spaces).length === 0) continue;
       // For setup sims, require both red and blue deployment zones
       const z = zones[m.id];
