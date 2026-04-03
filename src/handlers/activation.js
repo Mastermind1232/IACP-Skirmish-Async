@@ -1041,7 +1041,7 @@ export async function handleDcEndActivation(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, dcMessageMeta, dcExhaustedState, dcHealthState, buildDcEmbedAndFiles, getDcPlayAreaComponents, updateActivationsMessage, getActionsCounterContent, getDcActionButtons, getActivationMinimapAttachment, getActivateDcButtons, DC_ACTIONS_PER_ACTIVATION, ThreadAutoArchiveDuration, ACTION_ICONS, client, saveGames
+ * @param {object} ctx - getGame, dcMessageMeta, dcExhaustedState, dcHealthState, buildDcEmbedAndFiles, getDcPlayAreaComponents, updateActivationsMessage, getActionsCounterContent, getDcActionButtons, getActivationMinimapAttachment, getActivateDcButtons, DC_ACTIONS_PER_ACTIVATION, ThreadAutoArchiveDuration, ACTION_ICONS, pushUndo, client, saveGames
  */
 export async function handleConfirmActivate(interaction, ctx) {
   const {
@@ -1062,6 +1062,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     ThreadAutoArchiveDuration,
     ACTION_ICONS,
     logGameAction,
+    pushUndo,
     client,
     saveGames,
   } = ctx;
@@ -1121,6 +1122,14 @@ export async function handleConfirmActivate(interaction, ctx) {
       return;
     }
   }
+  const displayName = meta.displayName || meta.dcName;
+  pushUndo(game, {
+    type: 'activation',
+    label: `Activate ${displayName}`,
+    msgId,
+    playerNum: meta.playerNum,
+    gameId,
+  });
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   dcExhaustedState.set(msgId, true);
   setActivationsRemaining(game, meta.playerNum, (getActivationsRemaining(game, meta.playerNum) || 0) - 1);
@@ -1137,7 +1146,6 @@ export async function handleConfirmActivate(interaction, ctx) {
     game.strengthInNumbersData = null;
     game.strengthInNumbersPlayerNum = null;
   }
-  const displayName = meta.displayName || meta.dcName;
   const playAreaId = getPlayAreaId(game, meta.playerNum);
   const playChannel = await fetchGameChannel(client, playAreaId);
   const dcMsg = await playChannel.messages.fetch(msgId);
@@ -1145,6 +1153,13 @@ export async function handleConfirmActivate(interaction, ctx) {
   await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) });
   const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
   const thread = await dcMsg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
+  // Store thread ID on the undo entry so activation undo can archive it
+  if (game.undoStack?.length > 0) {
+    const lastUndo = game.undoStack[game.undoStack.length - 1];
+    if (lastUndo.type === 'activation' && lastUndo.msgId === msgId) {
+      lastUndo.activationThreadId = thread.id;
+    }
+  }
   game.movementBank = game.movementBank || {};
   game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
   // Deploy bonus MP (legacy backward-compat — post-deploy MP is now spent immediately via movement engine)
@@ -1430,27 +1445,33 @@ export async function handleConfirmActivate(interaction, ctx) {
   // Advanced Weapons Research (Director Krennic): friendly within range gains 1 Hit or Surge Token
   // Range is 2 (or 3 with Advanced Com Systems attachment)
   if (meta.dcName === 'Director Krennic') {
-    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const selfFk = `Director Krennic-${dgIndex}-0`;
-    const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
-    if (selfPos) {
-      const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-      const _awrRange = cardNameIncludes(_awrAtts, 'Advanced Com Systems') ? 3 : 2;
-      const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
-        .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= _awrRange)
-        .sort(([a], [b]) => (a === selfFk ? -1 : b === selfFk ? 1 : 0)); // self first
-      if (friendlyFigs.length > 0) {
-        const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
-          const label = dcNameFromFigureKey(fk);
-          return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
-        });
-        btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        const awrRow = new ActionRowBuilder().addComponents(btns);
-        game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
-        await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within ${_awrRange} spaces to grant a **Damage Token** or **Surge Token**:`, components: [awrRow] }).catch(discordCatch);
+    try {
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const selfFk = `Director Krennic-${dgIndex}-0`;
+      const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
+      if (selfPos) {
+        const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+        const _awrRange = cardNameIncludes(_awrAtts, 'Advanced Com Systems') ? 3 : 2;
+        const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
+          .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= _awrRange)
+          .sort(([a], [b]) => (a === selfFk ? -1 : b === selfFk ? 1 : 0)); // self first
+        if (friendlyFigs.length > 0) {
+          const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
+            const label = dcNameFromFigureKey(fk);
+            return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
+          });
+          btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+          const awrRow = new ActionRowBuilder().addComponents(btns);
+          game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
+          await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within ${_awrRange} spaces to grant a **Damage Token** or **Surge Token**:`, components: [awrRow] });
+        } else {
+          await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within ${_awrRange} spaces.` });
+        }
       } else {
-        await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within ${_awrRange} spaces.` }).catch(discordCatch);
+        console.error(`[AWR] Krennic selfPos is null — figurePositions[${meta.playerNum}] keys:`, Object.keys(game.figurePositions?.[meta.playerNum] || {}));
       }
+    } catch (err) {
+      console.error('[AWR] Failed to send Advanced Weapons Research prompt:', err);
     }
   }
   // Durasteel Fist (Dark Trooper Mk III): once during activation, choose adjacent figure, roll 1 green die

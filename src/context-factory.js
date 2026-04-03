@@ -190,6 +190,9 @@ const CONTEXT_GROUPS = {
     'updateHandVisualMessage', 'updateDiscardPileMessage',
     'updateAttachmentMessageForDc', 'getDeploymentZoneButtons', 'client',
     'sendPhaseGateMessages',
+    'dcExhaustedState', 'dcMessageMeta', 'dcHealthState',
+    'buildDcEmbedAndFiles', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',
+    'getDcPlayAreaComponents', 'updateActivationsMessage',
   ],
 
   botmenu: [

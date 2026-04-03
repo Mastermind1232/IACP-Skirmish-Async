@@ -589,7 +589,7 @@ export async function renderMap(mapId, options = {}) {
       ctx.font = `bold ${fontSize}px "${FONT_FAMILY}"`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const labelY = cy - clipH * 0.6;
+      const labelY = cy + clipH * 0.6;
       ctx.strokeStyle = 'rgba(0,0,0,0.9)';
       ctx.lineWidth = 3;
       ctx.strokeText(fig.label, cx, labelY);

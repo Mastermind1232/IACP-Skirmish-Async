@@ -7,7 +7,7 @@ import { deleteGameChannelsAndGame } from './botmenu.js';
 import { discordCatch } from '../error-handling.js';
 import { logGameAction } from '../discord/messages.js';
 import { requireGame } from '../utils/guards.js';
-import { getInitiativePlayerNum, getPlayerId } from '../game/player-helpers.js';
+import { getInitiativePlayerNum, getPlayAreaId, getPlayerId } from '../game/player-helpers.js';
 import { PHASES } from '../game/phase.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
@@ -149,6 +149,14 @@ export async function handleUndo(interaction, ctx) {
     updateDiscardPileMessage,
     updateAttachmentMessageForDc,
     getDeploymentZoneButtons,
+    dcExhaustedState,
+    dcMessageMeta,
+    dcHealthState,
+    buildDcEmbedAndFiles,
+    getConditionsForDcMessage,
+    getNicknamesForDcMessage,
+    getDcPlayAreaComponents,
+    updateActivationsMessage,
     client,
   } = ctx;
   const gameId = parseCustomId(interaction.customId, 'undo_');
@@ -252,6 +260,52 @@ export async function handleUndo(interaction, ctx) {
     }
     saveGames();
     await interaction.followUp({ content: 'Pass turn undone.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (last.type === 'activation') {
+    // Archive the activation thread
+    if (last.activationThreadId) {
+      try {
+        const activationThread = await fetchGameChannel(client, last.activationThreadId);
+        if (activationThread) {
+          await activationThread.send('Activation cancelled (undo).').catch(discordCatch);
+          await activationThread.setArchived(true).catch(discordCatch);
+        }
+      } catch { /* thread already gone or inaccessible */ }
+    }
+    // Un-exhaust the DC and refresh its play area embed
+    if (last.msgId && dcExhaustedState && dcMessageMeta) {
+      dcExhaustedState.set(last.msgId, false);
+      const meta = dcMessageMeta.get(last.msgId);
+      if (meta && buildDcEmbedAndFiles && getDcPlayAreaComponents) {
+        try {
+          const playAreaId = getPlayAreaId(game, last.playerNum);
+          const playChannel = await fetchGameChannel(client, playAreaId);
+          const dcMsg = await playChannel.messages.fetch(last.msgId).catch(() => null);
+          if (dcMsg) {
+            const dName = meta.displayName || meta.dcName;
+            const { embed, files } = await buildDcEmbedAndFiles(
+              meta.dcName, false, dName,
+              dcHealthState?.get(last.msgId) ?? [[null, null]],
+              getConditionsForDcMessage?.(game, meta),
+              (game?.p1DcAttachments?.[last.msgId] || game?.p2DcAttachments?.[last.msgId] || []),
+              null, null,
+              getNicknamesForDcMessage?.(game, meta),
+              { game, playerNum: last.playerNum }
+            );
+            await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(last.msgId, false, game, meta.dcName) });
+          }
+        } catch (err) {
+          console.error('Failed to refresh DC embed after activation undo:', err);
+        }
+      }
+    }
+    // Refresh activations message
+    if (updateActivationsMessage) {
+      try { await updateActivationsMessage(game, last.playerNum, client); } catch { /* ignore */ }
+    }
+    saveGames();
+    await interaction.followUp({ content: 'Activation undone.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (last.type === 'move') {
