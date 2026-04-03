@@ -856,6 +856,21 @@ export async function handleDcEndActivation(interaction, ctx) {
   const displayName = meta.displayName || meta.dcName;
   const gameId = game.gameId;
 
+  // Clean up the End Turn button in game log (if it exists)
+  const pendingEnd = game.pendingEndTurn?.[msgId];
+  if (pendingEnd) {
+    if (pendingEnd.messageId && game.generalId) {
+      try {
+        const ch = await fetchGameChannel(client, game.generalId);
+        const endTurnMsg = await ch.messages.fetch(pendingEnd.messageId);
+        await endTurnMsg.edit({ components: [] }).catch(discordCatch);
+      } catch { /* already gone */ }
+    }
+    delete game.pendingEndTurn[msgId];
+  }
+  game.dcFinishedPinged = game.dcFinishedPinged || {};
+  game.dcFinishedPinged[msgId] = true;
+
   // Clean up activation state
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData?.threadId) {
