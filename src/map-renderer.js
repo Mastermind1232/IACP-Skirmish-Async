@@ -646,8 +646,10 @@ export async function renderMap(mapId, options = {}) {
     const conditionIcons = (fig.conditions || []).slice(0, 5);
     if (conditionIcons.length > 0) {
       const iconSize = Math.max(14, Math.min(clipW, clipH) * 0.4875);
+      // Game state stores short verbs (Focus, Stun, etc.); GIF files use participles (Focused, Stunned, etc.)
+      const COND_FILE_NAME = { Focus: 'Focused', Stun: 'Stunned', Bleed: 'Bleeding', Weaken: 'Weakened', Hide: 'Hidden' };
       const condImgPromises = conditionIcons.map((cond) => {
-        const condIconFile = `Condition Marker--${cond}.gif`;
+        const condIconFile = `Condition Marker--${COND_FILE_NAME[cond] || cond}.gif`;
         const condIconPath = join(rootDir, 'vassal_extracted', 'images', 'conditions', condIconFile);
         if (existsSync(condIconPath)) {
           return loadImage(condIconPath).catch(() => null);
