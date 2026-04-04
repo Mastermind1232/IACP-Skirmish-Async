@@ -23,6 +23,85 @@ function _cleanupMoveState(game, moveKey, msgId) {
   if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
 }
 
+/** Show space picker buttons for the next massive-push displaced figure. */
+async function _showMassivePushPicker(game, interaction, client, logGameAction, buildBoardMapPayload, saveGames) {
+  const pending = game.pendingMassivePush;
+  if (!pending || pending.currentIndex >= pending.queue.length) {
+    delete game.pendingMassivePush;
+    return;
+  }
+  const entry = pending.queue[pending.currentIndex];
+  const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+  const btns = entry.validSpaces.map((space) =>
+    new ButtonBuilder()
+      .setCustomId(`massive_push_space_${pending.gameId}_${space}`)
+      .setLabel(space.toUpperCase())
+      .setStyle(ButtonStyle.Primary)
+  );
+  const rows = [];
+  while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
+  const from = prevPos ? String(prevPos).toUpperCase() : '?';
+  const threadId = game.dcActionsData ? Object.values(game.dcActionsData).find(d => d.threadId)?.threadId : null;
+  const channel = threadId ? await fetchGameChannel(client, threadId) : interaction.channel;
+  if (channel) {
+    await channel.send({
+      content: `**Massive Displacement** — Place **${entry.dcName}** (currently at **${from}**) to which space?`,
+      components: rows.slice(0, 5),
+    }).catch(discordCatch);
+  }
+  saveGames();
+}
+
+/**
+ * Handle massive push space pick button (massive_push_space_).
+ * Places the displaced figure, advances to next, or finishes.
+ */
+export async function handleMassivePushSpace(interaction, ctx) {
+  const { getGame, logGameAction, buildBoardMapPayload, saveGames, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const match = interaction.customId.match(/^massive_push_space_([^_]+)_(.+)$/);
+  if (!match) { await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch); return; }
+  const [, gameId, chosenSpace] = match;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingMassivePush;
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending displacement.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const pNum = pending.playerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pNum, canActAsPlayer, 'Only the massive figure\'s controller can place displaced figures.')) return;
+  const entry = pending.queue[pending.currentIndex];
+  if (!entry) { delete game.pendingMassivePush; saveGames(); return; }
+  const valid = entry.validSpaces.map(s => s.toLowerCase());
+  if (!valid.includes(chosenSpace.toLowerCase())) {
+    await interaction.followUp({ content: 'Invalid space.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+  game.figurePositions[entry.playerNum][entry.figureKey] = chosenSpace.toLowerCase();
+  const from = prevPos ? String(prevPos).toUpperCase() : '?';
+  await logGameAction(game, client, `**${entry.dcName}** displaced **${from}** → **${chosenSpace.toUpperCase()}** by massive figure (controller choice).`, { icon: 'move', phase: 'ROUND' });
+  try { await interaction.message.edit({ content: `Placed **${entry.dcName}** at **${chosenSpace.toUpperCase()}**.`, components: [] }).catch(discordCatch); } catch {}
+  pending.currentIndex++;
+  if (pending.currentIndex >= pending.queue.length) {
+    delete game.pendingMassivePush;
+    // Final board refresh
+    if (game.boardId && game.selectedMap && buildBoardMapPayload) {
+      try {
+        const boardChannel = await fetchGameChannel(client, game.boardId);
+        if (boardChannel) {
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        }
+      } catch (err) { console.error('Massive push: board refresh failed', err); }
+    }
+  } else {
+    await _showMassivePushPicker(game, interaction, client, logGameAction, buildBoardMapPayload, saveGames);
+  }
+  saveGames();
+}
+
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, dcMessageMeta, getBoardStateForMovement, getMovementProfile, ensureMovementCache, getSpacesAtCost, clearMoveGridMessages, getMovementMinimapAttachment, client
@@ -507,7 +586,47 @@ export async function handleMovePick(interaction, ctx) {
   }
   const footprintSet = new Set(getNormalizedFootprint(newTopLeft, newSize));
   const updatedProfile = getMovementProfile(meta.dcName, figureKey, game);
-  await resolveMassivePush(game, updatedProfile, figureKey, playerNum, footprintSet, client, logGameAction);
+  // Interactive massive displacement: controller chooses destination for each displaced figure
+  if (updatedProfile.canEndOnOccupied) {
+    const { collectOverlappingFigures, getValidDisplacementSpaces, pushFigureToNearestValid } = await import('../game/movement.js');
+    const overlaps = collectOverlappingFigures(game, playerNum, figureKey, footprintSet);
+    if (overlaps.length > 0) {
+      const pendingQueue = [];
+      for (const entry of overlaps) {
+        const validSpaces = getValidDisplacementSpaces(game, entry.figureKey, entry.playerNum, footprintSet);
+        if (validSpaces.length === 1) {
+          // Only 1 option → auto-place
+          const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+          game.figurePositions[entry.playerNum][entry.figureKey] = validSpaces[0];
+          const from = prevPos ? String(prevPos).toUpperCase() : '?';
+          await logGameAction(game, client, `**${entry.dcName}** displaced **${from}** → **${validSpaces[0].toUpperCase()}** by massive figure.`, { icon: 'move', phase: 'ROUND' });
+        } else if (validSpaces.length === 0) {
+          // No adjacent spaces → BFS fallback
+          const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+          pushFigureToNearestValid(game, entry.playerNum, entry.figureKey, footprintSet);
+          const newPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+          const from = prevPos ? String(prevPos).toUpperCase() : '?';
+          const to = newPos ? String(newPos).toUpperCase() : '?';
+          await logGameAction(game, client, `**${entry.dcName}** displaced **${from}** → **${to}** by massive figure (no adjacent spaces).`, { icon: 'move', phase: 'ROUND' });
+        } else {
+          // Multiple choices → controller picks
+          pendingQueue.push({ ...entry, validSpaces });
+        }
+      }
+      game.massiveMovementLocked = game.massiveMovementLocked || {};
+      game.massiveMovementLocked[figureKey] = true;
+      await logGameAction(game, client, `Massive figure displaced ${overlaps.length} figure(s). Movement locked for this phase.`, { icon: 'move', phase: 'ROUND' });
+      if (pendingQueue.length > 0) {
+        game.pendingMassivePush = {
+          gameId: game.gameId,
+          playerNum,
+          queue: pendingQueue,
+          currentIndex: 0,
+          footprint: [...footprintSet],
+        };
+      }
+    }
+  }
   // Massive figure that pushed someone: movement ends immediately (cannot continue moving)
   const massivePushHappened = game.massiveMovementLocked?.[figureKey];
   const newMp = massivePushHappened ? 0 : (mpRemaining - cost);
@@ -668,6 +787,10 @@ export async function handleMovePick(interaction, ctx) {
     } catch (err) {
       console.error('Failed to update activation minimap after move:', err);
     }
+  }
+  // Interactive massive push: show first picker if any figures need placement
+  if (game.pendingMassivePush?.queue?.length > 0 && game.pendingMassivePush.currentIndex === 0) {
+    await _showMassivePushPicker(game, interaction, client, logGameAction, buildBoardMapPayload, saveGames);
   }
   // Bleeding: trigger once after first space moved (pendingBleed set when Move action declared)
   if (moveState.pendingBleed && ctx.sendBleedingPrompt) {

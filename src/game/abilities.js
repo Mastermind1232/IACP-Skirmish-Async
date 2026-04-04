@@ -7733,12 +7733,22 @@ export function resolveAbility(abilityId, context) {
         const _lffWarnList = _lffWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         _lffLogMsg += `\n⚠️ Exits adjacency to: ${_lffWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
-      return { applied: true, logMessage: _lffLogMsg, refreshBoard: true };
+      const lffTokenFk = game._lffPendingTokenFigureKey;
+      delete game._lffPendingTokenFigureKey;
+      if (lffTokenFk) {
+        game.pendingPowerTokenGrant = { grants: [{ figureKey: lffTokenFk, figName: dcNameFromFigureKey(lffTokenFk), count: 1 }], channelId: null, playerNum };
+      }
+      return { applied: true, logMessage: _lffLogMsg, refreshBoard: true, requiresPowerTokenChoice: !!lffTokenFk };
     }
     // Phase 2a: Move 2 spaces
     if (chosenFigureKey === 'move2') {
       addMovementPoints(game, msgId, 2);
-      return { applied: true, logMessage: `**Looking for a Fight** — Chose to move 2 spaces.`, refreshMovementBank: true, activeMsgId: msgId };
+      const lffTokenFk = game._lffPendingTokenFigureKey;
+      delete game._lffPendingTokenFigureKey;
+      if (lffTokenFk) {
+        game.pendingPowerTokenGrant = { grants: [{ figureKey: lffTokenFk, figName: dcNameFromFigureKey(lffTokenFk), count: 1 }], channelId: null, playerNum };
+      }
+      return { applied: true, logMessage: `**Looking for a Fight** — Chose to move 2 spaces.`, refreshMovementBank: true, activeMsgId: msgId, requiresPowerTokenChoice: !!lffTokenFk };
     }
     // Phase 2b: Push hostile — find spaces adjacent to the chosen hostile
     if (chosenFigureKey && chosenFigureKey !== 'move2' && !chosenSpace) {
@@ -7754,8 +7764,8 @@ export function resolveAbility(abilityId, context) {
       const nm = dcNameFromFigureKey(chosenFigureKey);
       return { requiresSpaceChoice: true, validSpaces, chosenFigureKey, spaceChoiceLabel: `**Looking for a Fight** — Push **${nm}** to which space?` };
     }
-    // Phase 1: grant Wild Power Token + present Move/Push choice
-    grantPowerTokens(game, activatorFk, 'Wild', 1);
+    // Phase 1: defer power token choice + present Move/Push choice
+    game._lffPendingTokenFigureKey = activatorFk;
     const mapId = game.selectedMap?.id;
     const adjHostileFks = [];
     if (mapId) {

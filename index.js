@@ -1728,7 +1728,6 @@ client.once('ready', async () => {
               { name: 'Surge', value: 'Surge' },
               { name: 'Block', value: 'Block' },
               { name: 'Evade', value: 'Evade' },
-              { name: 'Wild', value: 'Wild' },
             )
           )
       )
@@ -1743,6 +1742,44 @@ client.once('ready', async () => {
         s
           .setName('list')
           .setDescription('List figures with Power Tokens')
+      );
+    const condition = new SlashCommandBuilder()
+      .setName('condition')
+      .setDescription('Add or remove a condition on a figure. Use in Game Log / Map Updates channel.')
+      .addSubcommand((s) =>
+        s
+          .setName('add')
+          .setDescription('Apply a condition to a figure')
+          .addStringOption((o) => o.setName('figure').setDescription('Figure key, e.g. Stormtrooper (Regular)-1-0').setRequired(true).setAutocomplete(true))
+          .addStringOption((o) =>
+            o.setName('type').setDescription('Condition').setRequired(true).addChoices(
+              { name: 'Focus', value: 'Focus' },
+              { name: 'Stun', value: 'Stun' },
+              { name: 'Bleed', value: 'Bleed' },
+              { name: 'Weaken', value: 'Weaken' },
+              { name: 'Hide', value: 'Hide' },
+            )
+          )
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('remove')
+          .setDescription('Remove a condition from a figure')
+          .addStringOption((o) => o.setName('figure').setDescription('Figure key').setRequired(true).setAutocomplete(true))
+          .addStringOption((o) =>
+            o.setName('type').setDescription('Condition to remove').setRequired(true).addChoices(
+              { name: 'Focus', value: 'Focus' },
+              { name: 'Stun', value: 'Stun' },
+              { name: 'Bleed', value: 'Bleed' },
+              { name: 'Weaken', value: 'Weaken' },
+              { name: 'Hide', value: 'Hide' },
+            )
+          )
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('list')
+          .setDescription('List figures with conditions')
       );
     const movefigure = new SlashCommandBuilder()
       .setName('move-figure')
@@ -1776,7 +1813,7 @@ client.once('ready', async () => {
       .setName('gamestate')
       .setDescription('Show diagnostic game state snapshot. Use in a game channel.');
     const commandBody = [
-      botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
+      botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), condition.toJSON(), movefigure.toJSON(),
       events.toJSON(), playai.toJSON(), addai.toJSON(),
       affiliationwinrateglobal.toJSON(), affiliationwinratepersonal.toJSON(),
       affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
@@ -3130,7 +3167,7 @@ client.on('interactionCreate', async (interaction) => {
   try {
   if (interaction.isAutocomplete()) {
     const cmd = interaction.commandName;
-    if (cmd === 'move-figure' || cmd === 'power-token') {
+    if (cmd === 'move-figure' || cmd === 'power-token' || cmd === 'condition') {
       const focused = interaction.options.getFocused(true);
       if (focused.name === 'figure') {
         const result = findGameByChannel(getGamesMap(), interaction.channelId);
@@ -3267,6 +3304,73 @@ client.on('interactionCreate', async (interaction) => {
           await boardChannel.send(payload);
         } catch (e) {
           console.error('Power token: refresh map failed', e);
+        }
+      }
+      return;
+    }
+    if (cmd === 'condition') {
+      const game = findGameByCommonChannel(getGamesMap(), interaction.channelId);
+      if (!game) {
+        await interaction.reply({
+          content: 'Use /condition in the **Game Log** or **Board** channel of an active game.',
+          ephemeral: true,
+        }).catch(discordCatch);
+        return;
+      }
+      if (await replyIfGameEnded(game, interaction)) return;
+      const sub = interaction.options.getSubcommand();
+      if (sub === 'list') {
+        const conds = game.figureConditions || {};
+        const entries = Object.entries(conds).filter(([, arr]) => arr?.length > 0);
+        const lines = entries.length
+          ? entries.map(([fk, arr]) => `**${fk}**: ${arr.join(', ')}`).join('\n')
+          : 'No conditions on any figure.';
+        await interaction.reply({
+          content: `**Conditions**\n${lines}`,
+          ephemeral: true,
+        }).catch(discordCatch);
+        return;
+      }
+      const figureKey = interaction.options.getString('figure');
+      const poses = game.figurePositions || { 1: {}, 2: {} };
+      const allFigureKeys = [...Object.keys(poses[1] || {}), ...Object.keys(poses[2] || {})];
+      const match = allFigureKeys.find((k) => k.toLowerCase() === figureKey.toLowerCase());
+      const fk = match || (allFigureKeys.includes(figureKey) ? figureKey : null);
+      if (!fk) {
+        await interaction.reply({
+          content: `Figure **${figureKey}** not found. Valid keys: ${allFigureKeys.slice(0, 8).join(', ')}${allFigureKeys.length > 8 ? '...' : ''}`,
+          ephemeral: true,
+        }).catch(discordCatch);
+        return;
+      }
+      const condType = interaction.options.getString('type');
+      if (sub === 'add') {
+        const applied = _applyCondition(game, fk, condType);
+        saveGames();
+        await interaction.reply({
+          content: applied
+            ? `Applied **${condType}** to **${fk}**.`
+            : `**${fk}** already has **${condType}**.`,
+          ephemeral: false,
+        }).catch(discordCatch);
+      } else {
+        const had = game.figureConditions?.[fk]?.includes(condType);
+        filterCondition(game, fk, condType);
+        saveGames();
+        await interaction.reply({
+          content: had
+            ? `Removed **${condType}** from **${fk}**.`
+            : `**${fk}** does not have **${condType}**.`,
+          ephemeral: false,
+        }).catch(discordCatch);
+      }
+      if (game.boardId && game.selectedMap) {
+        try {
+          const boardChannel = await interaction.client.channels.fetch(game.boardId);
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        } catch (e) {
+          console.error('Condition: refresh map failed', e);
         }
       }
       return;

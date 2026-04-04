@@ -136,6 +136,29 @@ export function isCompanionHostDefeated(game, dcName, playerNum) {
 const FIGURE_LETTERS = 'abcdefghij';
 
 /**
+ * Build choice labels for a list of figure keys, adding (1a)/(1b) designators
+ * only when multiple figures from the same DC appear in the list.
+ * @param {string[]} figureKeys
+ * @returns {string[]}
+ */
+export function figureChoiceLabels(figureKeys) {
+  const dcCounts = {};
+  for (const fk of figureKeys) {
+    const dc = dcNameFromFigureKey(fk);
+    dcCounts[dc] = (dcCounts[dc] || 0) + 1;
+  }
+  return figureKeys.map((fk) => {
+    const dc = dcNameFromFigureKey(fk);
+    if (dcCounts[dc] > 1) {
+      const { dgIndex, figureIndex } = parseFigureKey(fk);
+      const letter = FIGURE_LETTERS[figureIndex] || 'a';
+      return `${dc} (${dgIndex}${letter})`;
+    }
+    return dc;
+  });
+}
+
+/**
  * Build a display label for a figure button, including group label (e.g. "1a")
  * and current token count when relevant.
  * @param {string} figureKey - e.g. "Stormtrooper-1-2"

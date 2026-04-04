@@ -258,6 +258,7 @@ const ROUND_NULL_FLAGS = [
   'squadSwarmCumulativeCost',
   'whenDefeatHostileWithin3GainBlockTokens',
   'pendingRushPush',
+  'pendingMassivePush',
   'pendingEmperorInterrupt',
   'pendingExecutiveOrder',
   'pendingBombardmentSorin',

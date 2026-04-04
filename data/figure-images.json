@@ -1,7 +1,7 @@
 {
   "source": "Vassal buildFile.xml - circular figure tokens",
   "extractedAt": "2026-02-02T21:24:05.681Z",
-  "count": 178,
+  "count": 188,
   "figureImages": {
     "0-0-0": "vassal_extracted/images/figure-tokens/Figure-Imperial--0-0-0.gif",
     "Agent Blaise": "vassal_extracted/images/figure-tokens/Figure-Imperial--Agent Blaise.gif",
@@ -177,6 +177,16 @@
     "Z-6 Trooper": "vassal_extracted/images/figure-tokens/Figure-Rebel--Z-6 Trooper.gif",
     "Zeb Orrelios": "vassal_extracted/images/figure-tokens/Figure-Rebel--Zeb Orrelios.gif",
     "Tauntaun Rider (Elite)": "vassal_extracted/images/figure-tokens/Figure-Rebel--Tauntaun Rider.gif",
-    "Mara Jade": "vassal_extracted/images/figure-tokens/Figure-Neut--Mara Jade.gif"
+    "Mara Jade": "vassal_extracted/images/figure-tokens/Figure-Neut--Mara Jade.gif",
+    "The Child": "vassal_extracted/images/companions/The Child Token.jpg",
+    "Salacious B. Crumb": "vassal_extracted/images/companions/Companion Token--Salacious B. Crumb.png",
+    "Dio": "vassal_extracted/images/companions/Dio Token.jpg",
+    "J4X-7": "vassal_extracted/images/companions/Companion Token--J4X-7.gif",
+    "Junk Droid": "vassal_extracted/images/companions/Companion Token--Junk Droid.gif",
+    "88-Z": "vassal_extracted/images/companions/Companion Token--88-Z.gif",
+    "BD-1": "vassal_extracted/images/companions/Companion Token--BD-1.gif",
+    "Cam Droid": "vassal_extracted/images/companions/Companion Token--Cam Droid.gif",
+    "Pit Droid": "vassal_extracted/images/companions/Companion Token--Pit Droid.png",
+    "R5 Astromech": "vassal_extracted/images/companions/Companion Token--R5 Astromech.gif"
   }
 }

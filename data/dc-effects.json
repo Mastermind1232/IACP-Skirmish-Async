@@ -1486,6 +1486,7 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
+        "inform",
         "distracting_c3po",
         "non_combatant_c3po",
         "cower_c3po"

@@ -863,6 +863,26 @@ export async function handleCcSpacePick(interaction, ctx) {
   });
   delete game.pendingCcSpaceChoice;
   await applyAbilityResult(result, { game, playerNum, client, ctx });
+  // Power token type-choice prompt (e.g. Looking for a Fight push phase)
+  if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
+    const handChannelId2 = getHandChannelId(game, playerNum);
+    if (handChannelId2) {
+      game.pendingPowerTokenGrant.channelId = handChannelId2;
+      const ptCh = await fetchGameChannel(client, handChannelId2);
+      if (ptCh) {
+        const { grants } = game.pendingPowerTokenGrant;
+        const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
+        const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
+        const btns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
+          new ButtonBuilder().setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
+        );
+        await ptCh.send({
+          content: `**Choose power token type** for **${figNames}** (${totalCount > 1 ? `${totalCount} tokens` : '1 token'}):`,
+          components: [new ActionRowBuilder().addComponents(btns)],
+        }).catch(discordCatch);
+      }
+    }
+  }
   try {
     await interaction.message.edit({ content: 'Space chosen.', components: [] }).catch(discordCatch);
   } catch {}
@@ -950,6 +970,26 @@ export async function handleCcChoice(interaction, ctx) {
     } catch {}
     saveGames();
     return;
+  }
+  // Power token type-choice prompt (e.g. Looking for a Fight grants 1 token after Move/Push choice)
+  if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
+    const handChannelId2 = getHandChannelId(game, playerNum);
+    if (handChannelId2) {
+      game.pendingPowerTokenGrant.channelId = handChannelId2;
+      const ptCh = await fetchGameChannel(client, handChannelId2);
+      if (ptCh) {
+        const { grants } = game.pendingPowerTokenGrant;
+        const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
+        const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
+        const btns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
+          new ButtonBuilder().setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
+        );
+        await ptCh.send({
+          content: `**Choose power token type** for **${figNames}** (${totalCount > 1 ? `${totalCount} tokens` : '1 token'}):`,
+          components: [new ActionRowBuilder().addComponents(btns)],
+        }).catch(discordCatch);
+      }
+    }
   }
   try {
     await interaction.message.edit({ content: 'Choice resolved.', components: [] }).catch(discordCatch);

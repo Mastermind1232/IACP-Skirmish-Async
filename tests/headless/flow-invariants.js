@@ -430,8 +430,9 @@ export function assertSurfaceInvariants(game, surface, step) {
     // we expect cleanup.
     // Note: pendingCombat excluded — combat reactions (strike_me_down, slow_on_draw)
     // cancel combat without followUp, and combat_resolve cleanup varies by handler.
+    // Note: pendingNegation excluded — cleanup is via interaction.message.edit({ components: [] })
+    // which the surface tracker doesn't observe (it only tracks interaction response methods).
     const requiresExplicitCleanup = [
-      'pendingNegation',
       'moveInProgress', 'pendingDcAbilityChoice',
     ];
 

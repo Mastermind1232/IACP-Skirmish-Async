@@ -832,3 +832,29 @@ export async function resolveMassivePush(game, profile, figureKey, playerNum, ne
   game.massiveMovementLocked[figureKey] = true;
   await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside. Movement locked for this phase.`, { icon: 'move', phase: 'ROUND' });
 }
+
+/**
+ * Get valid adjacent spaces where a displaced figure can be placed.
+ * Returns only empty, non-blocked spaces adjacent to the figure's current position.
+ * @param {object} game
+ * @param {string} figureKey
+ * @param {number} playerNum
+ * @param {Set<string>} forbiddenSet - massive figure's footprint cells
+ * @returns {string[]} array of valid coord strings
+ */
+export function getValidDisplacementSpaces(game, figureKey, playerNum, forbiddenSet) {
+  const coord = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!coord) return [];
+  const mapId = game.selectedMap?.id;
+  if (!mapId) return [];
+  const mapData = getMapData(mapId);
+  if (!mapData?.adjacency) return [];
+  const adjacent = mapData.adjacency[coord] || [];
+  const occupiedSet = new Set();
+  for (const p of [1, 2]) {
+    for (const c of Object.values(game.figurePositions?.[p] || {})) {
+      if (c) occupiedSet.add(c);
+    }
+  }
+  return adjacent.filter((s) => !occupiedSet.has(s) && !forbiddenSet.has(s));
+}
