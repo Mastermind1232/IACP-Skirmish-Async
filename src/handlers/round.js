@@ -791,9 +791,59 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   setRoundPhase(game, ROUND_PHASES.START_OF_ROUND);
   game.startOfRoundWhoseTurn = game.initiativePlayerId;
   cleanupRoundStart(game);
+
+  // Status Phase summary log (posted before mission SOR may pause for player prompt)
+  const generalChannel = await fetchGameChannel(client, game.generalId);
+  const p1DrawDetail = `${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}${p1HasRHC ? ' + Rebel High Command' : ''}`;
+  const p2DrawDetail = `${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}${p2HasRHC ? ' + Rebel High Command' : ''}`;
+  const drawDesc = hadCutLines
+    ? 'No Command card draw this round (Cut Lines).'
+    : `P1 drew ${p1DrawCount} card${p1DrawCount !== 1 ? 's' : ''} (${p1DrawDetail}). P2 drew ${p2DrawCount} card${p2DrawCount !== 1 ? 's' : ''} (${p2DrawDetail}). ✓`;
+  const initZone = getInitiativePlayerZoneLabel(game);
+  const initNum = getInitiativePlayerNum(game);
+  await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
+
+  // Mission SOR: if randomRevealAndPlaceStrain, prompt players before auto-reveal
+  if (missionRules?.startOfRound?.randomRevealAndPlaceStrain) {
+    const missionName = game.selectedMission?.name || 'Mission Effect';
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`sor_mission_reveal_${gameId}`)
+        .setLabel('Reveal Mission Tokens')
+        .setStyle(ButtonStyle.Primary)
+    );
+    await generalChannel.send({
+      content: `⚡ **Round ${game.currentRound} — ${missionName}** — Each player randomly reveals 1 set-aside mission token. Either player: press to reveal.`,
+      components: [row],
+    });
+    game.pendingMissionSorReveal = true;
+    if (interaction?.message) {
+      await interaction.message.edit({ components: [] }).catch(discordCatch);
+    }
+    saveGames();
+    return;
+  }
+
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
   }
+  await _continueAfterMissionSor(game, gameId, interaction, ctx);
+}
+
+/**
+ * Continuation after mission SOR rules have fired (or been skipped).
+ * Runs CC passive redraws, DC SOR effects, hand updates, phase gate, mission-specific prompts.
+ */
+async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
+  const {
+    logGameAction, client, updateHandChannelMessages, updateHandVisualMessage,
+    buildHandDisplayPayload, sendPhaseGateMessages, countTerminalsControlledByPlayer,
+    getMapTokensData, postDevaronDoorButtons, postDevaronCratePushPrompts,
+    postKryknaPushButtons, saveGames,
+  } = ctx;
+  const mapId = game.selectedMap?.id;
+  const variant = game.selectedMission?.variant;
+
   // CC Passive Redraw: start-of-round trigger (Rebel Graffiti — Sabine in army)
   for (const _sorPn of [1, 2]) {
     const _sorPrResult = checkStartOfRoundPassiveRedraws(game, _sorPn);
@@ -822,23 +872,14 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       console.error('Failed to update hand message:', err);
     }
   }
-  const generalChannel = await fetchGameChannel(client, game.generalId);
-  const p1DrawDetail = `${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}${p1HasRHC ? ' + Rebel High Command' : ''}`;
-  const p2DrawDetail = `${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}${p2HasRHC ? ' + Rebel High Command' : ''}`;
-  const drawDesc = hadCutLines
-    ? 'No Command card draw this round (Cut Lines).'
-    : `P1 drew ${p1DrawCount} card${p1DrawCount !== 1 ? 's' : ''} (${p1DrawDetail}). P2 drew ${p2DrawCount} card${p2DrawCount !== 1 ? 's' : ''} (${p2DrawDetail}). ✓`;
-  const initZone = getInitiativePlayerZoneLabel(game);
-  const initNum = getInitiativePlayerNum(game);
-  await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
   if (!hasPendingSor) {
-    const { sendPhaseGateMessages } = ctx;
     if (sendPhaseGateMessages) {
       await sendPhaseGateMessages(game, 'pre_activation', ctx);
     }
   }
 
   // Devaron Garrison B: terminal→door selection + crate push prompts (posted after round starts)
+  const generalChannel = await fetchGameChannel(client, game.generalId);
   if (mapId === 'devaron-garrison' && variant === 'b') {
     if (!game.cratePositions) {
       const dMap = getMapTokensData()['devaron-garrison'];
@@ -864,10 +905,10 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   if (mapId === 'chopper-base-atollon' && variant === 'a' && postKryknaPushButtons) {
     const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated);
     if (activeKrykna.length > 0) {
-      const initNum = getInitiativePlayerNum(game);
-      const otherNum = opponentPlayerNum(initNum);
+      const _initNum = getInitiativePlayerNum(game);
+      const _otherNum = opponentPlayerNum(_initNum);
       const queue = [];
-      for (let i = 0; i < activeKrykna.length; i++) queue.push(i % 2 === 0 ? initNum : otherNum);
+      for (let i = 0; i < activeKrykna.length; i++) queue.push(i % 2 === 0 ? _initNum : _otherNum);
       game.pendingKryknaPushQueue = queue;
       game.kryknaPushedIds = [];
       await postKryknaPushButtons(game, generalChannel, gameId);
@@ -878,6 +919,38 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     await interaction.message.edit({ components: [] }).catch(discordCatch);
   }
   saveGames();
+}
+
+/**
+ * Shared button handler: either player presses to trigger mission SOR token reveal.
+ * Used by Powered Perimeter (Chopper Base Atollon B) randomRevealAndPlaceStrain.
+ */
+export async function handleSorMissionReveal(interaction, ctx) {
+  const {
+    getGame, logGameAction, client, getMissionRules, getMapTokensData,
+    runStartOfRoundRules, saveGames,
+  } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'sor_mission_reveal_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
+    await interaction.followUp({ content: 'Only players in this game can press this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!game.pendingMissionSorReveal) {
+    await interaction.followUp({ content: 'Mission token reveal already completed.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  game.pendingMissionSorReveal = false;
+  const mapId = game.selectedMap?.id;
+  const variant = game.selectedMission?.variant;
+  const missionRules = getMissionRules?.(mapId, variant) ?? {};
+  if (runStartOfRoundRules && missionRules?.startOfRound) {
+    await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
+  }
+  // Disable the reveal button
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  await _continueAfterMissionSor(game, gameId, interaction, ctx);
 }
 
 /**
@@ -894,10 +967,12 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
   // Post-deploy effects now handled by runPostDeployPhase() in post-deploy.js
   // (called from the appropriate trigger points: cc-hand.js, index.js Draft Random, etc.)
 
-  // Start-of-round DC passive hooks
+  // Start-of-round DC passive hooks (initiative player first per IA rules)
   {
     const _sorEff = getDcEffects() || {};
-    for (const playerNum of [1, 2]) {
+    const _initPn = getInitiativePlayerNum(game);
+    const _sorPlayerOrder = _initPn === 1 ? [1, 2] : [2, 1];
+    for (const playerNum of _sorPlayerOrder) {
       const dcList = getDcList(game, playerNum) || [];
       const msgIds = getDcMessageIds(game, playerNum) || [];
       for (let i = 0; i < dcList.length; i++) {
@@ -1161,10 +1236,12 @@ export async function handleEndStartOfRound(interaction, ctx) {
 
   // Post-deploy effects now handled by runPostDeployPhase() in post-deploy.js
 
-  // Start-of-round DC passive hooks
+  // Start-of-round DC passive hooks (initiative player first per IA rules)
   {
     const _sorEff = getDcEffects() || {};
-    for (const playerNum of [1, 2]) {
+    const _initPn = getInitiativePlayerNum(game);
+    const _sorPlayerOrder = _initPn === 1 ? [1, 2] : [2, 1];
+    for (const playerNum of _sorPlayerOrder) {
       const dcList = getDcList(game, playerNum) || [];
       const msgIds = getDcMessageIds(game, playerNum) || [];
       for (let i = 0; i < dcList.length; i++) {
@@ -1259,10 +1336,9 @@ export async function handleEndStartOfRound(interaction, ctx) {
     ));
   }
   const initPlayerNum = getInitiativePlayerNum(game);
-  const passHint = otherRem > initRem && initRem > 0 ? ' You may pass back (opponent has more activations).' : '';
-  const content = showBtn
-    ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
-    : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.${passHint}`;
+  const initPlayAreaId = getPlayAreaId(game, initPlayerNum);
+  const passHint = otherRem > initRem && initRem > 0 ? ' You may pass (opponent has more activations).' : '';
+  const content = `<@${game.initiativePlayerId}> **Round ${game.currentRound}** — Your turn! Activate DCs in <#${initPlayAreaId}>.${passHint}`;
   const sent = await withDiscordRetry(() => generalChannel.send({
     content,
     embeds: [roundEmbed],

@@ -13,7 +13,7 @@ import {
 } from './game-tools.js';
 import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
-import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove } from './round.js';
+import { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove } from './round.js';
 import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   cleanupCompanionEmbedDeps,
@@ -185,6 +185,7 @@ register('interact_choice_', handleInteractChoice, 'interact');
 // --- Round ---
 register('end_end_of_round_', handleEndEndOfRound, 'round');
 register('end_start_of_round_', handleEndStartOfRound, 'startOfRound');
+register('sor_mission_reveal_', handleSorMissionReveal, 'round');
 register('extra_armor_pick_', handleExtraArmorPick, 'round');
 register('extra_armor_confirm_', handleExtraArmorConfirm, 'round');
 register('extra_armor_cancel_', handleExtraArmorCancel, 'round');
@@ -549,7 +550,7 @@ export {
 } from './game-tools.js';
 export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
-export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove } from './round.js';
+export { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove } from './round.js';
 export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   cleanupCompanionEmbedDeps,
