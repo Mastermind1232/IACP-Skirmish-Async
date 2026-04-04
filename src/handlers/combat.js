@@ -1292,6 +1292,21 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
   }
+  // Covering Fire: round-scoped TROOPER Surge: Stun (if already Stunned, +2 Damage instead)
+  if (game.roundTrooperSurgeStun?.[attackerPlayerNum]) {
+    const _cfKws = (_atkEff?.keywords || []).map(k => String(k).toUpperCase());
+    if (_cfKws.includes('TROOPER')) {
+      // Check if target is already Stunned — if so, grant +2 Damage surge instead of Stun
+      const _defConds = game.figureConditions?.[target.figureKey] || [];
+      if (_defConds.includes('Stun')) {
+        game.pendingCombat.bonusSurgeAbilities.push('damage 2');
+        await thread.send('🔫 **Covering Fire** — Target already Stunned: Surge: +2 Damage added.').catch(discordCatch);
+      } else {
+        game.pendingCombat.bonusSurgeAbilities.push('stun');
+        await thread.send('🔫 **Covering Fire** — Surge: Stun added to attack pool.').catch(discordCatch);
+      }
+    }
+  }
   // Clean up temp flags after transferring to combat object
   if (game._pendingBlockSurgeAbilities) delete game._pendingBlockSurgeAbilities;
   if (game._closeQuartersBonusAcc) delete game._closeQuartersBonusAcc;

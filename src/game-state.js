@@ -167,7 +167,7 @@ function ensureGameShape(game) {
     'roundFigureAbilityUsed', 'roundAttackRerollDice', 'roundAttackSurgeBonus',
     'roundDefenseBonusBlock', 'roundDefenseBonusEvade', 'roundDefenseAccuracyPenalty', 'roundDefenderBonusBlockPerEvade',
     'roundEfficientTravel', 'roundProgrammingOverrideTrait',
-    'roundTrooperAttackHitBonus', 'roundVehicleSpeedBonus',
+    'roundTrooperAttackHitBonus', 'roundVehicleSpeedBonus', 'roundTrooperSurgeStun',
     // Combat targeting (keyed by msgId)
     'attackTargets', 'falseOrdersAttackTargets', 'falseOrdersUpgrade',
     'nextAttackBonusSurgeAbilities', 'nextAttackBonusAccuracy', 'nextAttackBonusPierce',

@@ -4295,6 +4295,36 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: coveringFireEffect — start of round: up to 3 friendly TROOPERs become Hidden;
+  // this round, each of your TROOPERs gains Surge: Stun (+2 Damage if target already Stunned).
+  if (entry.type === 'ccEffect' && entry.coveringFireEffect) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const dcEffectsMap = getDcEffects() || {};
+    // Find all friendly TROOPER figure keys
+    const trooperFks = [];
+    const friendlyPositions = game.figurePositions?.[playerNum] || {};
+    for (const fk of Object.keys(friendlyPositions)) {
+      const fkDcName = dcNameFromFigureKey(fk);
+      const fkStats = dcEffectsMap[fkDcName];
+      if ((fkStats?.keywords || []).some(kw => String(kw).toUpperCase() === 'TROOPER')) {
+        trooperFks.push(fk);
+      }
+    }
+    // Apply Hide to up to 3 friendly TROOPERs
+    const toHide = trooperFks.slice(0, 3);
+    const hiddenNames = [];
+    for (const fk of toHide) {
+      applyCondition(game, fk, 'Hide');
+      hiddenNames.push(dcNameFromFigureKey(fk));
+    }
+    // Set round-scoped flag: friendly TROOPERs gain Surge: Stun (+2 Damage if already Stunned)
+    game.roundTrooperSurgeStun = game.roundTrooperSurgeStun || {};
+    game.roundTrooperSurgeStun[playerNum] = true;
+    const hideMsg = toHide.length > 0 ? `${hiddenNames.join(', ')} became Hidden. ` : '';
+    return { applied: true, logMessage: `**Covering Fire** — ${hideMsg}This round, your TROOPERs gain Surge: Stun (if already Stunned, +2 Damage instead).`, refreshDcEmbed: true };
+  }
+
   // ccEffect: applyHide only (Hide in Plain Sight, Guerilla Warfare) — apply Hide to activating figures during activation
   if (entry.type === 'ccEffect' && entry.applyHide && !entry.applyFocus) {
     const { game, playerNum, dcMessageMeta } = context;
@@ -5280,6 +5310,119 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Self-Augmentation** — Attached. Gained DROID trait + may reroll 1 attack die while attacking.` };
   }
 
+  // ccEffect: wookieeRageEffect — Special Action: choose up to 3 adjacent hostiles; each suffers 1 Damage per
+  // Damage you've suffered (max 3). Multi-target with scaling damage based on activating figure's health loss.
+  // Uses multi-choice flow: first call enumerates adjacent hostiles; subsequent calls accumulate chosen targets
+  // until 3 are chosen or player clicks "Done"; then applies damage to all chosen targets at once.
+  if (entry.type === 'ccEffect' && entry.wookieeRageEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = opponentPlayerNum(playerNum);
+    const selfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!selfMsgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Calculate damage suffered by activating figure (max - current, summed across group figures)
+    const selfHs = dcHealthState?.get(selfMsgId) || [];
+    const selectedFig = game.dcActionsData?.[selfMsgId]?.selectedFigure ?? 0;
+    const selfEntry = selfHs[selectedFig];
+    const damageSuffered = selfEntry ? Math.max(0, (selfEntry[1] ?? 0) - (selfEntry[0] ?? selfEntry[1] ?? 0)) : 0;
+    const damagePerTarget = Math.min(3, damageSuffered);
+    // "Done" signal: apply accumulated targets
+    if (chosenFigureKey === 'wookiee_rage_done') {
+      const targets = game._wookieeRageTargets || [];
+      if (targets.length === 0) return { applied: true, logMessage: '**Wookiee Rage** — No targets chosen.' };
+      const refreshIds = [];
+      const hitParts = [];
+      for (const fk of targets) {
+        if (damagePerTarget > 0 && dcHealthState) {
+          const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
+          if (tMsgId) {
+            const tHs = dcHealthState.get(tMsgId) || [];
+            const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+            const tEntry = tHs[figIdx];
+            if (tEntry) {
+              const [cur, max] = tEntry;
+              const newCur = Math.max(0, (cur ?? max) - damagePerTarget);
+              tHs[figIdx] = [newCur, max];
+              dcHealthState.set(tMsgId, tHs);
+              syncHealthStateToList(game, oppNum, tMsgId, tHs);
+              hitParts.push(`**${dcNameFromFigureKey(fk)}** ${cur ?? max} → ${newCur}`);
+              if (!refreshIds.includes(tMsgId)) refreshIds.push(tMsgId);
+            }
+          }
+        }
+      }
+      delete game._wookieeRageTargets;
+      return { applied: true, logMessage: `**Wookiee Rage** — ${damagePerTarget} Damage to each: ${hitParts.join(', ')}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
+    }
+    // Accumulate a chosen target
+    if (chosenFigureKey) {
+      game._wookieeRageTargets = game._wookieeRageTargets || [];
+      if (!game._wookieeRageTargets.includes(chosenFigureKey)) {
+        game._wookieeRageTargets.push(chosenFigureKey);
+      }
+      // If 3 targets chosen, auto-finalize
+      if (game._wookieeRageTargets.length >= 3) {
+        return resolveAbility(abilityId, { ...context, chosenFigureKey: 'wookiee_rage_done' });
+      }
+      // Otherwise, show remaining choices (re-enumerate minus already chosen)
+      const alreadyChosen = new Set(game._wookieeRageTargets);
+      const selfMeta = dcMessageMeta.get(selfMsgId);
+      const selfKeys = selfMeta ? getFigureKeysForDcMsg(game, playerNum, selfMeta) : [];
+      const selfFk = selfKeys[selectedFig] || selfKeys[0];
+      const selfPos = selfFk ? game.figurePositions?.[playerNum]?.[selfFk] : null;
+      const choiceOptions = [];
+      const choiceValues = [];
+      if (selfPos) {
+        const oppPositions = game.figurePositions?.[oppNum] || {};
+        for (const [fk, coord] of Object.entries(oppPositions)) {
+          if (!coord || alreadyChosen.has(fk)) continue;
+          const dist = countGameSpaces(game, selfPos, coord);
+          if (dist <= 1) {
+            choiceOptions.push(dcNameFromFigureKey(fk));
+            choiceValues.push(fk);
+          }
+        }
+      }
+      if (choiceOptions.length === 0) {
+        // No more adjacent hostiles — finalize
+        return resolveAbility(abilityId, { ...context, chosenFigureKey: 'wookiee_rage_done' });
+      }
+      choiceOptions.push(`Done (${game._wookieeRageTargets.length} target${game._wookieeRageTargets.length > 1 ? 's' : ''} chosen)`);
+      choiceValues.push('wookiee_rage_done');
+      return { applied: true, requiresChoice: true, choiceOptions, choiceValues, logMessage: `**Wookiee Rage** — ${damagePerTarget} Damage per target (${damageSuffered} Damage suffered). Choose another target or Done.` };
+    }
+    // First call: enumerate adjacent hostiles
+    if (damagePerTarget === 0) return { applied: true, logMessage: '**Wookiee Rage** — 0 Damage suffered; no damage dealt.' };
+    game._wookieeRageTargets = [];
+    const selfMeta = dcMessageMeta.get(selfMsgId);
+    const selfKeys = selfMeta ? getFigureKeysForDcMsg(game, playerNum, selfMeta) : [];
+    const selfFk = selfKeys[selectedFig] || selfKeys[0];
+    const selfPos = selfFk ? game.figurePositions?.[playerNum]?.[selfFk] : null;
+    const choiceOptions = [];
+    const choiceValues = [];
+    if (selfPos) {
+      const oppPositions = game.figurePositions?.[oppNum] || {};
+      for (const [fk, coord] of Object.entries(oppPositions)) {
+        if (!coord) continue;
+        const dist = countGameSpaces(game, selfPos, coord);
+        if (dist <= 1) {
+          choiceOptions.push(dcNameFromFigureKey(fk));
+          choiceValues.push(fk);
+        }
+      }
+    }
+    if (choiceOptions.length === 0) return { applied: false, manualMessage: '**Wookiee Rage** — No adjacent hostile figures.' };
+    if (choiceOptions.length === 1) {
+      // Only 1 adjacent hostile — auto-choose and finalize
+      game._wookieeRageTargets.push(choiceValues[0]);
+      return resolveAbility(abilityId, { ...context, chosenFigureKey: 'wookiee_rage_done' });
+    }
+    choiceOptions.push('Done (0 targets chosen)');
+    choiceValues.push('wookiee_rage_done');
+    return { applied: true, requiresChoice: true, choiceOptions, choiceValues, logMessage: `**Wookiee Rage** — ${damagePerTarget} Damage per target (${damageSuffered} Damage suffered). Choose up to 3 adjacent hostiles.` };
+  }
+
   // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain.
   // Supports: damage, strain, scaleStrainToRound, weaken/stun/bleed (conditions on target), selfStrain (cost),
   //           healSelfIfTrait: {trait, amount} — recover N damage if activating DC has the named trait.
@@ -5562,6 +5705,35 @@ export function resolveAbility(abilityId, context) {
       game.pendingPowerTokenGrant = { grants, channelId: null, playerNum };
     }
     return { applied: true, requiresPowerTokenChoice: grants.length > 0, logMessage: `Distributed ${totalToAdd} Power Token(s) among figures in your group — choose type.` };
+  }
+
+  // ccEffect: damageTokenGainToGroup (Ready Weapons) — distribute N Damage tokens among figures in activating group (auto-assign, no type choice)
+  if (entry.type === 'ccEffect' && typeof entry.damageTokenGainToGroup === 'number' && entry.damageTokenGainToGroup > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress (play as Special Action during your activation).' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures in group.' };
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    let remaining = entry.damageTokenGainToGroup;
+    let totalAdded = 0;
+    const parts = [];
+    for (const fk of figureKeys) {
+      if (remaining <= 0) break;
+      const current = (game.figurePowerTokens[fk] || []).filter(t => t === 'Damage').length;
+      const cap = getMaxPowerTokens(fk) - (game.figurePowerTokens[fk] || []).length;
+      const toAdd = Math.min(remaining, Math.max(0, cap));
+      if (toAdd > 0) {
+        grantPowerTokens(game, fk, 'Damage', toAdd);
+        totalAdded += toAdd;
+        parts.push(`${dcNameFromFigureKey(fk)} +${toAdd}`);
+      }
+      remaining -= toAdd;
+    }
+    return { applied: true, logMessage: `Distributed ${totalAdded} Damage Token(s): ${parts.join(', ')}.`, refreshDcEmbed: true };
   }
 
   // ccEffect: claimInitiative only (I Make My Own Luck) — optional firstActivationFigureName

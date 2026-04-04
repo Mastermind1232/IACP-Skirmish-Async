@@ -160,7 +160,7 @@ describe('flag list completeness', () => {
       'roundFigureAbilityUsed', 'roundAttackRerollDice', 'roundAttackSurgeBonus',
       'roundDefenseBonusBlock', 'roundDefenseBonusEvade', 'roundDefenderBonusBlockPerEvade',
       'roundEfficientTravel', 'roundProgrammingOverrideTrait',
-      'roundTrooperAttackHitBonus', 'roundVehicleSpeedBonus',
+      'roundTrooperAttackHitBonus', 'roundVehicleSpeedBonus', 'roundTrooperSurgeStun',
     ];
     const allRoundFlags = new Set([
       ...ROUND_OBJECT_FLAGS, ...ROUND_NULL_FLAGS, ...ROUND_ARRAY_FLAGS,

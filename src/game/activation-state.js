@@ -228,6 +228,7 @@ const ROUND_OBJECT_FLAGS = [
   'urgencyMustSpendAll',
   'arcingShotActive',
   'pendingSpacePick',
+  'roundTrooperSurgeStun',
 ];
 
 const ROUND_NULL_FLAGS = [

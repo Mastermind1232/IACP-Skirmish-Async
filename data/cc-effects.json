@@ -86,7 +86,7 @@
     },
     "Battle Scars": {
       "cost": 0,
-      "playableBy": "WOOKIE",
+      "playableBy": "WOOKIEE",
       "timing": "duringActivation",
       "effect": "Use during your activation to get 1 Power Token. If you have suffered 3 or more Damage, gain 2 Power Tokens instead.",
       "abilityId": "Battle Scars"
@@ -1143,7 +1143,7 @@
     },
     "Wookiee Rage": {
       "cost": 2,
-      "playableBy": "WOOKIE",
+      "playableBy": "WOOKIEE",
       "timing": "specialAction",
       "effect": "Special Action: Choose up to 3 hostile figures adjacent to you. Each chosen figure suffers 1 Damage for each Damage you have suffered, to a maximum of 3 Damage."
     },
