@@ -1226,9 +1226,10 @@
     },
     "Deflection": {
       "type": "ccEffect",
-      "label": "Until end of round: -2 Accuracy when defending; if you take no Damage, attacker suffers 2 Damage (auto-applied)",
+      "label": "Until end of round: -2 Accuracy when defending; after attack resolves, attacker suffers 1 Damage",
       "roundDefenseAccuracyPenalty": 2,
-      "deflectionCounterDamage": 2,
+      "deflectionCounterDamage": 1,
+      "deflectionCounterUnconditional": true,
       "wiredStatus": "wired"
     },
     "demolish": {
