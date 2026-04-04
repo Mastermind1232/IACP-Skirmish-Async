@@ -412,14 +412,6 @@ export function getDeploymentDoneButton(gameId, playerNum) {
       .setLabel('Deployment Completed')
       .setStyle(ButtonStyle.Success),
   );
-  if (playerNum != null) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`auto_deploy_${gameId}_${playerNum}`)
-        .setLabel('Auto-Deploy')
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
   return row;
 }
 

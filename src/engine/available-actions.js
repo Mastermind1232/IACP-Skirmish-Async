@@ -195,13 +195,6 @@ function getDeployActionsForPlayer(game, playerNum, deps) {
   const actions = [];
   const gameId = game.gameId;
 
-  // Auto-deploy is always available during deployment
-  actions.push({
-    type: ACTION_TYPES.AUTO_DEPLOY,
-    customId: buildCustomId(ACTION_TYPES.AUTO_DEPLOY, { gameId }),
-    description: 'Auto-deploy all figures',
-  });
-
   // Deployment done (if all required figures are placed)
   actions.push({
     type: ACTION_TYPES.DEPLOY_DONE,

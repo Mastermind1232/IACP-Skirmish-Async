@@ -1040,7 +1040,7 @@ async function _sendInitiativeDeployButtons(game, gameId, ctx) {
         const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
         const components = isLastChunk ? [...chunk, doneRow] : chunk;
         const payload = {
-          content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*` : null,
+          content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.` : null,
           components,
           allowedMentions: { users: [game.initiativePlayerId] },
         };
@@ -1924,7 +1924,7 @@ export async function handleDeploymentDone(interaction, ctx) {
           const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
           const components = isLastChunk ? [...chunk, doneRow] : chunk;
           const payload = {
-            content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*` : null,
+            content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.` : null,
             components,
             allowedMentions: { users: [nonInitiativePlayerId] },
           };
