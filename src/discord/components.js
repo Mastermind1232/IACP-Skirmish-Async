@@ -937,12 +937,14 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
           new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(true),
         ];
         if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(true));
+        comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(true));
         rows.push(new ActionRowBuilder().addComponents(...comps));
       } else {
         const comps = [
           new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
         ];
         if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noAct));
+        comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct));
         rows.push(new ActionRowBuilder().addComponents(...comps));
       }
     } else {
@@ -969,12 +971,14 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel('Move').setStyle(ButtonStyle.Success).setDisabled(true),
       ];
       if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(true));
+      comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(true));
       rows.push(new ActionRowBuilder().addComponents(...comps));
     } else {
       const comps = [
         new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
       ];
       if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noAct));
+      comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct));
       rows.push(new ActionRowBuilder().addComponents(...comps));
     }
   }
@@ -1002,7 +1006,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       const needsDoubleAction = cost >= 2;
       // VF: Focus — limit once per round per group
       const isVfFocusUsed = name === 'VF: Focus' && !!game?.vadersFocusUsedThisRound?.[msgId];
-      const label = needsDoubleAction ? `${name} (2 Actions)`.slice(0, 80) : name.slice(0, 80);
+      const label = needsDoubleAction ? `Special Action: ${name} (2 Actions)`.slice(0, 80) : `Special Action: ${name}`.slice(0, 80);
       return new ButtonBuilder()
         .setCustomId(`dc_special_${idx}_${msgId}`)
         .setLabel(label)
