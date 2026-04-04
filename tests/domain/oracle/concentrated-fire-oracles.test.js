@@ -143,6 +143,31 @@ describe('ORACLE-CFIRE-004: Mixed squad with Ranged and Melee non-attackers', ()
   });
 });
 
+// ── ORACLE-CFIRE-005b: Ranged non-TROOPER does NOT qualify for die bonus ──────
+describe('ORACLE-CFIRE-005b: Ranged non-TROOPER does not unlock die bonus', () => {
+  it('005b: die blocked when only non-attacker Ranged figure is non-TROOPER', () => {
+    const combat = {
+      attackerPlayerNum: 1,
+      attackerFigureKey: 'Stormtrooper (Elite)-1-0',
+      attackerMsgId: 'msg_storm',
+    };
+    const game = {
+      figurePositions: {
+        1: {
+          'Stormtrooper (Elite)-1-0': 'D4',  // attacker (Ranged TROOPER, excluded)
+          'Boba Fett-1-0': 'D5',              // non-attacker, Ranged but NOT TROOPER
+        },
+      },
+    };
+
+    const result = resolveAbility('Concentrated Fire', { game, playerNum: 1, combat });
+
+    assert.equal(result.applied, true, 'CC still resolves (stun applies)');
+    assert.equal(combat.attackBonusDice, undefined, 'No die — Boba is not a TROOPER');
+    assert.ok(result.logMessage.includes('skipped'), 'Log should say die was skipped');
+  });
+});
+
 // ── ORACLE-CFIRE-005: playableBy is TROOPER (not "Any Figure") ────────────────
 describe('ORACLE-CFIRE-005: playableBy restriction is TROOPER', () => {
   it('005a: legal when player has a TROOPER DC', () => {

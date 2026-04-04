@@ -7,6 +7,7 @@
  *   node tests/headless/train.js 100        # Train 100 games
  *   node tests/headless/train.js 50 --reset   # Wipe learnings and train 50
  *   node tests/headless/train.js 50 --encoder=graph  # Train with graph encoder
+ *   node tests/headless/train.js 5 --training --reset  # Locked whitelist matchups only
  */
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
@@ -29,6 +30,7 @@ import {
 } from './learnings.js';
 import { buildGraph, graphForwardPass, setAttentionPool, setRichEdges, setMoveQualitySignal } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
+import { TRAINING_MATCHUPS, TRAINING_WHITELIST_DCS, TRAINING_WHITELIST_CCS } from '../../src/ai/training-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -42,16 +44,61 @@ const MAX_ROUNDS = 10;
 const TEST_DECKS_PATH = join(__dirname, '../../data/destruct-test-decks.json');
 const TEST_DECKS = JSON.parse(readFileSync(TEST_DECKS_PATH, 'utf8'));
 
+// Global flag: when true, use locked training matchups + whitelist validation
+let useTrainingMatchups = false;
+
 /**
  * Pick a random matchup: two different decks from the test deck pool.
  * Returns { p1Deck, p2Deck } each with { name, dcList, ccList }.
  */
 function pickMatchup(gameNum) {
+  if (useTrainingMatchups) {
+    const matchup = TRAINING_MATCHUPS[gameNum % TRAINING_MATCHUPS.length];
+    return { p1Deck: matchup.p1Deck, p2Deck: matchup.p2Deck };
+  }
   const i = gameNum % TEST_DECKS.length;
   // Offset by roughly half the pool + prime step to avoid repeated pairings
   let j = (gameNum + 17) % TEST_DECKS.length;
   if (j === i) j = (j + 1) % TEST_DECKS.length;
   return { p1Deck: TEST_DECKS[i], p2Deck: TEST_DECKS[j] };
+}
+
+/**
+ * Validate all DCs + CCs in a game against the training whitelist.
+ * Returns { valid, violations } where violations lists offending cards.
+ */
+function validateWhitelist(game) {
+  const violations = [];
+  for (const pn of [1, 2]) {
+    const dcList = game[`p${pn}DcList`] || [];
+    for (const dc of dcList) {
+      if (!TRAINING_WHITELIST_DCS.has(dc.dcName)) {
+        violations.push({ zone: `p${pn}DcList`, card: dc.dcName });
+      }
+    }
+    for (const zone of ['CcHand', 'CcDeck', 'CcDiscard']) {
+      const arr = game[`player${pn}${zone}`] || [];
+      for (const cc of arr) {
+        if (!TRAINING_WHITELIST_CCS.has(cc)) {
+          violations.push({ zone: `player${pn}${zone}`, card: cc });
+        }
+      }
+    }
+    const attachments = game[`p${pn}CcAttachments`] || {};
+    for (const ccs of Object.values(attachments)) {
+      for (const cc of ccs) {
+        if (!TRAINING_WHITELIST_CCS.has(cc)) {
+          violations.push({ zone: `p${pn}CcAttachments`, card: cc });
+        }
+      }
+    }
+  }
+  for (const cc of (game.gameBox || [])) {
+    if (!TRAINING_WHITELIST_CCS.has(cc)) {
+      violations.push({ zone: 'gameBox', card: cc });
+    }
+  }
+  return { valid: violations.length === 0, violations };
 }
 
 function coordDistance(a, b) {
@@ -90,6 +137,15 @@ async function runOneGame(learnings, gameNum) {
   const { game, harness, deps, dcMessageMeta, dcExhaustedState, dcHealthState } = builder
     .inRound(1)
     .build();
+
+  // Training mode: validate whitelist before first action
+  if (useTrainingMatchups) {
+    const wl = validateWhitelist(game);
+    if (!wl.valid) {
+      console.error(`❌ WHITELIST VIOLATION in game ${gameNum}:`, wl.violations);
+      return { ended: false, stopReason: 'whitelist_violation', p1VP: 0, p2VP: 0 };
+    }
+  }
 
   const hDeps = harness.getDeps();
 
@@ -647,6 +703,10 @@ async function main() {
     setBoundaryFix(false);
     console.log(`  Boundary fix: DISABLED (A/B control arm)`);
   }
+  if (args.includes('--training')) {
+    useTrainingMatchups = true;
+    console.log(`  Training mode: LOCKED matchups (${TRAINING_MATCHUPS.length} matchups, ${TRAINING_WHITELIST_DCS.size} DCs, ${TRAINING_WHITELIST_CCS.size} CCs)`);
+  }
 
   // A/B experiment: custom checkpoint load / save paths
   const checkpointArg = args.find(a => a.startsWith('--checkpoint='));
@@ -667,9 +727,13 @@ async function main() {
   }
 
   const uniqueDcs = new Set();
-  TEST_DECKS.forEach(d => d.dcList.forEach(dc => uniqueDcs.add(dc)));
+  if (useTrainingMatchups) {
+    TRAINING_MATCHUPS.forEach(m => { m.p1Deck.dcList.forEach(dc => uniqueDcs.add(dc)); m.p2Deck.dcList.forEach(dc => uniqueDcs.add(dc)); });
+  } else {
+    TEST_DECKS.forEach(d => d.dcList.forEach(dc => uniqueDcs.add(dc)));
+  }
   console.log(`Training ${numGames} games (starting from ${learnings.meta.totalGames} prior games)`);
-  console.log(`  Deck pool: ${TEST_DECKS.length} decks, ${uniqueDcs.size} unique DCs`);
+  console.log(`  Deck pool: ${useTrainingMatchups ? TRAINING_MATCHUPS.length + ' locked matchups' : TEST_DECKS.length + ' decks'}, ${uniqueDcs.size} unique DCs`);
   if (checkpointArg) console.log(`  Load checkpoint: ${loadPath}`);
   if (outputArg) console.log(`  Save output: ${savePath}`);
   if (reset) console.log('  (learnings reset)');

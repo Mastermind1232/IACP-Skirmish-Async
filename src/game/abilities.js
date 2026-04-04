@@ -6,6 +6,7 @@ import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffects
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
+import { reduceHp } from './damage-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 
@@ -841,26 +842,24 @@ export function resolveAbility(abilityId, context) {
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       // Determine which player owns the target figure (Tempt can target friendly or hostile)
       const targetOwnerNum = game.figurePositions?.[playerNum]?.[targetFigureKey] ? playerNum : enemyNum;
-      // Apply 1 HP damage via dcHealthState (canonical path — same pattern as targetHostileFigure)
+      // Apply 1 HP damage via reduceHp (canonical damage path — handles syncDcList + totalDamageReceived)
       let hpNote = '';
+      let defeated = false;
       const targetMsgId = findMsgIdForFigureKey(game, targetOwnerNum, targetFigureKey, dcMessageMeta);
       if (dcHealthState && targetMsgId) {
-        const healthState = dcHealthState.get(targetMsgId) || [];
-        const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
-        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const entryHp = healthState[figIdx];
-        if (entryHp) {
-          const [cur, max] = entryHp;
-          const newCur = Math.max(0, (cur ?? max) - 1);
-          healthState[figIdx] = [newCur, max ?? newCur];
-          dcHealthState.set(targetMsgId, healthState);
-          syncHealthStateToList(game, targetOwnerNum, targetMsgId, healthState);
-          hpNote = ` (HP: ${cur ?? max} → ${newCur})`;
+        const { figureIndex: figIdx } = parseFigureKey(targetFigureKey);
+        const { prevHp, newHp, wasDefeated } = reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, targetOwnerNum);
+        hpNote = ` (HP: ${prevHp} → ${newHp})`;
+        if (wasDefeated) {
+          defeated = true;
+          delete game.figurePositions?.[targetOwnerNum]?.[targetFigureKey];
+          hpNote += ' — **DEFEATED**';
         }
       }
-      // Grant 1 Damage Token to target
-      grantPowerTokens(game, targetFigureKey, 'Damage', 1);
-      return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage${hpNote} and gains 1 Damage Token.`, refreshDcEmbed: true };
+      // Grant 1 Damage Token to target (skip if defeated)
+      if (!defeated) grantPowerTokens(game, targetFigureKey, 'Damage', 1);
+      const tokenNote = defeated ? '' : ' and gains 1 Damage Token';
+      return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage${hpNote}${tokenNote}.`, refreshDcEmbed: true, refreshBoard: defeated };
     }
     // Enumerate all figures (friendly + hostile) within 4 spaces except self
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -4727,20 +4726,21 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
     }
     // requireRangedAttackType gate (Concentrated Fire): die bonus only if a non-attacker
-    // friendly figure has Ranged attack type (rational-play assumption — the Ranged figure
-    // is the one "playing" the CC per card text "If you have the Ranged attack type").
+    // friendly TROOPER has Ranged attack type. Card text: "If you have the Ranged attack
+    // type" — "you" is the supporting TROOPER playing the CC, so must be both TROOPER and Ranged.
     let dieBlocked = false;
     if (entry.requireRangedAttackType) {
       const dcEffectsMap = getDcEffects() || {};
       const friendlyPositions = game.figurePositions?.[playerNum] || {};
       const attackerKey = cbt.attackerFigureKey;
-      const hasRangedNonAttacker = Object.keys(friendlyPositions).some(fk => {
+      const hasRangedTrooperNonAttacker = Object.keys(friendlyPositions).some(fk => {
         if (fk === attackerKey) return false;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkStats = dcEffectsMap[fkDcName];
-        return fkStats?.attack?.type === 'range';
+        const fkKws = (fkStats?.keywords || []).map(k => String(k).toUpperCase());
+        return fkStats?.attack?.type === 'range' && fkKws.includes('TROOPER');
       });
-      if (!hasRangedNonAttacker) dieBlocked = true;
+      if (!hasRangedTrooperNonAttacker) dieBlocked = true;
     }
     if (!dieBlocked) {
       cbt.attackBonusDice = (cbt.attackBonusDice || 0) + entry.attackBonusDice;

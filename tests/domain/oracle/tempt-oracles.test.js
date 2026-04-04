@@ -170,3 +170,48 @@ describe('ORACLE-TEMPT-004: Tempt HP floors at 0', () => {
     assert.deepStrictEqual(targetHp, [[0, 12]], 'HP should floor at 0');
   });
 });
+
+// ── ORACLE-TEMPT-005: Tempt defeats figure at 1 HP (canonical path) ─────────
+describe('ORACLE-TEMPT-005: Tempt defeats figure and removes from board', () => {
+  it('005a: figure at 1 HP is defeated and removed from figurePositions', () => {
+    const { game, dcMessageMeta, dcHealthState, palpatineMsgId, targetMsgId, activatingPlayerNum, targetPlayerNum } = buildTemptGame();
+
+    dcHealthState.set(targetMsgId, [[1, 12]]);
+
+    const result = resolveAbility('tempt', {
+      game, playerNum: activatingPlayerNum,
+      meta: dcMessageMeta.get(palpatineMsgId),
+      msgId: palpatineMsgId,
+      dcMessageMeta, dcHealthState,
+      choiceIndex: 0,
+      targetFigureKey: 'Luke Skywalker-1-0',
+    });
+
+    assert.equal(result.applied, true);
+    assert.ok(result.logMessage.includes('DEFEATED'), 'Log should mention defeat');
+    assert.equal(
+      game.figurePositions[targetPlayerNum]['Luke Skywalker-1-0'],
+      undefined,
+      'Defeated figure must be removed from figurePositions'
+    );
+    assert.equal(result.refreshBoard, true, 'Board should refresh after defeat');
+  });
+
+  it('005b: defeated figure does not receive Damage token', () => {
+    const { game, dcMessageMeta, dcHealthState, palpatineMsgId, activatingPlayerNum } = buildTemptGame();
+
+    dcHealthState.set('msg_target', [[1, 12]]);
+
+    resolveAbility('tempt', {
+      game, playerNum: activatingPlayerNum,
+      meta: dcMessageMeta.get(palpatineMsgId),
+      msgId: palpatineMsgId,
+      dcMessageMeta, dcHealthState,
+      choiceIndex: 0,
+      targetFigureKey: 'Luke Skywalker-1-0',
+    });
+
+    const tokens = game.figurePowerTokens?.['Luke Skywalker-1-0'] || [];
+    assert.equal(tokens.length, 0, 'Defeated figure should not receive power tokens');
+  });
+});
