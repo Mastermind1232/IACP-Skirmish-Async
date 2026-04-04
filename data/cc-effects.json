@@ -451,7 +451,7 @@
       "cost": 1,
       "playableBy": "FORCE USER",
       "timing": "whenAttackDeclaredOnYou",
-      "effect": "Use when a Ranged attack targeting you is declared. Apply -2 Accuracy to the attack results. After the attack is resolved, if you did not suffer any Damage, the attacker suffers 2 Damage.",
+      "effect": "Use when a Ranged attack targeting you is declared. Apply -2 Accuracy to the attack results. After the attack is resolved, the attacker suffers 1 Damage.",
       "abilityId": "Deflection"
     },
     "Demoralizing Monologue": {
@@ -1080,7 +1080,7 @@
     },
     "Lure of the Dark Side": {
       "cost": 3,
-      "playableBy": "FORCE USER",
+      "playableBy": "IMPERIAL FORCE USER",
       "timing": "specialAction",
       "effect": "Special Action: Choose a hostile figure in your line of sight. That figure gains +2 Hit Tokens, then perform an attack with that figure against a target within 4 spaces of the attacker. Then, the chosen figure suffers 2 Strain.",
       "abilityId": "Lure of the Dark Side"

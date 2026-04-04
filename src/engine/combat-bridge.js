@@ -1798,10 +1798,13 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     const bleedThread = await fetchCombatThread(client, combat.combatThreadId);
     await deps.sendBleedingPrompt(game, bleedThread, combat.attackerFigureKey, combat.attackerPlayerNum, combat.attackerDisplayName);
   }
-  // Deflection: if defender took 0 damage (attack hit but was fully blocked), attacker suffers N damage
+  // Deflection: after attack resolves, attacker suffers N damage
+  // unconditional = always fires after attack; conditional (legacy) = only if defender took 0 damage
   const deflectDmg = game.deflectionPending?.[defenderPlayerNum];
-  if (deflectDmg && deflectDmg > 0 && hit && damage === 0) {
+  const deflectUnconditional = game.deflectionUnconditional?.[defenderPlayerNum];
+  if (deflectDmg && deflectDmg > 0 && hit && (deflectUnconditional || damage === 0)) {
     delete game.deflectionPending[defenderPlayerNum];
+    delete game.deflectionUnconditional?.[defenderPlayerNum];
     const attMsgId = combat.attackerMsgId;
     const attFigIdx = combat.attackerFigureIndex ?? 0;
     if (attMsgId) {
@@ -1809,7 +1812,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       if (deflectMax > 0) {
         embedRefreshMsgIds.add(attMsgId);
         const defOwnerId = getPlayerId(game, defenderPlayerNum);
-        await logGameAction(game, client, `<@${defOwnerId}> **Deflection** — Attacker suffers **${deflectDmg} Damage** (you took no damage).`, { allowedMentions: { users: [defOwnerId] }, phase: 'ROUND', icon: 'card' });
+        await logGameAction(game, client, `<@${defOwnerId}> **Deflection** — Attacker suffers **${deflectDmg} Damage**.`, { allowedMentions: { users: [defOwnerId] }, phase: 'ROUND', icon: 'card' });
       }
     }
   }

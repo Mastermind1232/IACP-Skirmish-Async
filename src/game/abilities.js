@@ -4854,10 +4854,14 @@ export function resolveAbility(abilityId, context) {
       game.roundVehicleSpeedBonus[playerNum] = (game.roundVehicleSpeedBonus[playerNum] || 0) + entry.vehicleSpeedBonusRound;
       parts.push(`+${entry.vehicleSpeedBonusRound} Speed for friendly VEHICLEs`);
     }
-    // Deflection: if defender takes 0 damage this round, attacker suffers N damage after combat
+    // Deflection: after attack resolves, attacker suffers N damage
     if (entry.deflectionCounterDamage) {
       game.deflectionPending = game.deflectionPending || {};
       game.deflectionPending[playerNum] = (game.deflectionPending[playerNum] || 0) + entry.deflectionCounterDamage;
+      if (entry.deflectionCounterUnconditional) {
+        game.deflectionUnconditional = game.deflectionUnconditional || {};
+        game.deflectionUnconditional[playerNum] = true;
+      }
     }
     return {
       applied: true,

@@ -8,7 +8,7 @@
  *
  * Confirmed-safe core:
  *   - Take Cover: +1 Block, −2 Accuracy (not +2 Evade)
- *   - Deflection: −2 Accuracy (not +2 Evade), plus counter-damage if 0 damage dealt
+ *   - Deflection: −2 Accuracy (not +2 Evade), plus unconditional 1 counter-damage after attack
  *   - Penalties accumulate additively across multiple CCs in the same round
  *   - Accuracy penalty feeds into totalAccuracy formula (combat.js) — can cause ranged miss
  *   - Melee attacks have no distance check — accuracy penalty is cosmetic only
@@ -55,7 +55,7 @@ describe('ORACLE-ACCPEN-001: Take Cover Applies −2 Accuracy (Not Evade)', () =
 // ── ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy (Not Evade) ──────────
 //
 // Rule: Deflection — "Until end of round, apply −2 Accuracy when defending.
-//        If you take no Damage, attacker suffers 2 Damage."
+//        After the attack is resolved, the attacker suffers 1 Damage."
 // Verifies: resolveAbility sets game.roundDefenseAccuracyPenalty (not roundDefenseBonusEvade)
 //           AND sets deflectionPending for the counter-damage mechanic.
 
@@ -81,8 +81,14 @@ describe('ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy (Not Evade)', () =
 
     // Must set deflection counter-damage
     assert.equal(
-      game.deflectionPending?.[playerNum], 2,
-      'Deflection should set deflectionPending[2] = 2'
+      game.deflectionPending?.[playerNum], 1,
+      'Deflection should set deflectionPending[2] = 1'
+    );
+
+    // Must set unconditional flag
+    assert.equal(
+      game.deflectionUnconditional?.[playerNum], true,
+      'Deflection should set deflectionUnconditional[2] = true'
     );
   });
 });
