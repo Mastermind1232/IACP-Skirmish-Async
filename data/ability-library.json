@@ -851,6 +851,7 @@
       "label": "Add 1 red die to attack pool (Stun applied automatically after attack)",
       "attackBonusDice": 1,
       "attackBonusDiceColor": "red",
+      "requireRangedAttackType": true,
       "wiredStatus": "wired",
       "applySelfStunAfterAttack": true,
       "logMessage": "Added 1 red die to this attack pool. You become Stunned after the attack resolves."
@@ -1329,11 +1330,12 @@
     },
     "Disorient": {
       "type": "ccEffect",
-      "label": "Choose adjacent hostile with Focus/Hidden: discard 1 beneficial condition, suffer 2 Strain",
+      "label": "Hostile with Focus/Hidden that suffered Damage: discard 1 beneficial condition, suffer 2 Strain",
       "chooseAdjacentHostileThen": {
         "strain": 2,
         "requireBeneficialCondition": true,
-        "discardBeneficialCondition": true
+        "discardBeneficialCondition": true,
+        "range": 999
       },
       "wiredStatus": "wired"
     },

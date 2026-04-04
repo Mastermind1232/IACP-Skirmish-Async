@@ -834,15 +834,33 @@ export function resolveAbility(abilityId, context) {
 
   // tempt (Emperor Palpatine): choose any figure within 4 spaces; 1 damage + 1 Damage Token
   if (abilityId === 'tempt') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, dcMessageMeta, dcHealthState, getRange: getRng } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Tempt** manually.' };
     const enemyNum = opponentPlayerNum(playerNum);
     if (choiceIndex != null && targetFigureKey) {
-      // Apply 1 damage to target (direct damage — reduce HP)
       const chosenName = dcNameFromFigureKey(targetFigureKey);
+      // Determine which player owns the target figure (Tempt can target friendly or hostile)
+      const targetOwnerNum = game.figurePositions?.[playerNum]?.[targetFigureKey] ? playerNum : enemyNum;
+      // Apply 1 HP damage via dcHealthState (canonical path — same pattern as targetHostileFigure)
+      let hpNote = '';
+      const targetMsgId = findMsgIdForFigureKey(game, targetOwnerNum, targetFigureKey, dcMessageMeta);
+      if (dcHealthState && targetMsgId) {
+        const healthState = dcHealthState.get(targetMsgId) || [];
+        const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const entryHp = healthState[figIdx];
+        if (entryHp) {
+          const [cur, max] = entryHp;
+          const newCur = Math.max(0, (cur ?? max) - 1);
+          healthState[figIdx] = [newCur, max ?? newCur];
+          dcHealthState.set(targetMsgId, healthState);
+          syncHealthStateToList(game, targetOwnerNum, targetMsgId, healthState);
+          hpNote = ` (HP: ${cur ?? max} → ${newCur})`;
+        }
+      }
       // Grant 1 Damage Token to target
       grantPowerTokens(game, targetFigureKey, 'Damage', 1);
-      return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage and gains 1 Damage Token. *(Apply 1 damage manually via HP buttons.)*`, refreshDcEmbed: true };
+      return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage${hpNote} and gains 1 Damage Token.`, refreshDcEmbed: true };
     }
     // Enumerate all figures (friendly + hostile) within 4 spaces except self
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -4671,27 +4689,48 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: msgs.join('; ') + '.' };
   }
 
-  // ccEffect: attackBonusDice (Tools for the Job) — add N dice to attack pool when declaring attack; attacker only
+  // ccEffect: attackBonusDice (Tools for the Job, Concentrated Fire) — add N dice to attack pool when declaring attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackBonusDice === 'number' && entry.attackBonusDice > 0) {
     const { game, playerNum, combat } = context;
     const cbt = combat || game?.pendingCombat || game?.combat;
     if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
       return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
     }
-    cbt.attackBonusDice = (cbt.attackBonusDice || 0) + entry.attackBonusDice;
-    if (entry.attackBonusDiceColor) {
-      cbt.attackBonusDiceColors = cbt.attackBonusDiceColors || [];
-      const color = String(entry.attackBonusDiceColor).toLowerCase();
-      for (let i = 0; i < entry.attackBonusDice; i++) cbt.attackBonusDiceColors.push(color);
+    // requireRangedAttackType gate (Concentrated Fire): die bonus only if a non-attacker
+    // friendly figure has Ranged attack type (rational-play assumption — the Ranged figure
+    // is the one "playing" the CC per card text "If you have the Ranged attack type").
+    let dieBlocked = false;
+    if (entry.requireRangedAttackType) {
+      const dcEffectsMap = getDcEffects() || {};
+      const friendlyPositions = game.figurePositions?.[playerNum] || {};
+      const attackerKey = cbt.attackerFigureKey;
+      const hasRangedNonAttacker = Object.keys(friendlyPositions).some(fk => {
+        if (fk === attackerKey) return false;
+        const fkDcName = dcNameFromFigureKey(fk);
+        const fkStats = dcEffectsMap[fkDcName];
+        return fkStats?.attack?.type === 'range';
+      });
+      if (!hasRangedNonAttacker) dieBlocked = true;
     }
-    // applySelfStunAfterAttack (Concentrated Fire): flag to stun attacker when this attack resolves
+    if (!dieBlocked) {
+      cbt.attackBonusDice = (cbt.attackBonusDice || 0) + entry.attackBonusDice;
+      if (entry.attackBonusDiceColor) {
+        cbt.attackBonusDiceColors = cbt.attackBonusDiceColors || [];
+        const color = String(entry.attackBonusDiceColor).toLowerCase();
+        for (let i = 0; i < entry.attackBonusDice; i++) cbt.attackBonusDiceColors.push(color);
+      }
+    }
+    // applySelfStunAfterAttack (Concentrated Fire): unconditional — stun applies regardless of die gate
     if (entry.applySelfStunAfterAttack) {
       game.applySelfStunAfterAttackPlayerNum = game.applySelfStunAfterAttackPlayerNum || {};
       game.applySelfStunAfterAttackPlayerNum[playerNum] = combat.attackerMsgId || true;
     }
+    const dieMsg = dieBlocked
+      ? 'No Ranged non-attacker available — die bonus skipped.'
+      : `Added ${entry.attackBonusDice} attack die to the attack pool.`;
     return {
       applied: true,
-      logMessage: `Added ${entry.attackBonusDice} attack die to the attack pool.` + (entry.applySelfStunAfterAttack ? ' You become Stunned after this attack resolves.' : ''),
+      logMessage: dieMsg + (entry.applySelfStunAfterAttack ? ' You become Stunned after this attack resolves.' : ''),
     };
   }
 

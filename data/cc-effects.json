@@ -317,7 +317,7 @@
     },
     "Concentrated Fire": {
       "cost": 1,
-      "playableBy": "Any Figure",
+      "playableBy": "TROOPER",
       "timing": "whenAnotherFriendlyTrooperDeclaresAttackTargetingInYourLineOfSight",
       "effect": "Use when another friendly TROOPER declares an attack targeting a target in your line of sight. If you have the Ranged attack type, add 1 red die to the attack pool. You become Stunned.",
       "abilityId": "Concentrated Fire"
