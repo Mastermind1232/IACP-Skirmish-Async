@@ -2354,6 +2354,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     components: [doneRow],
     ephemeral: !!_revealedPrivateInfo,
   }).catch(discordCatch);
+  // Log resolved special outcome to game-logs channel
+  if (resolveResult.applied && resolveResult.logMessage && logGameAction) {
+    await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
+  }
   // Bleeding: trigger after DC Special action resolves
   if (buttonKey === 'dc_special_' && ctx.sendBleedingPrompt) {
     const selectedFigure = actionsData?.selectedFigure ?? 0;
@@ -2379,7 +2383,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   const [, gameId, msgId, specialIdxStr, choiceIndexStr] = match;
   const specialIdx = parseInt(specialIdxStr, 10);
   const choiceIndex = parseInt(choiceIndexStr, 10);
-  const { getGame, dcMessageMeta, dcHealthState, resolveAbility, updateDcActionsMessage, saveGames, client, getMapAttachmentForSpaces, getBoardStateForMovement } = ctx;
+  const { getGame, dcMessageMeta, dcHealthState, resolveAbility, updateDcActionsMessage, saveGames, client, getMapAttachmentForSpaces, getBoardStateForMovement, logGameAction } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingDcAbilityChoice?.[`${msgId}_${specialIdx}`];
@@ -2548,6 +2552,10 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     components: [doneRow],
     ephemeral: false,
   }).catch(discordCatch);
+  // Log resolved choice outcome to game-logs channel
+  if (resolveResult.applied && resolveResult.logMessage && logGameAction) {
+    await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
+  }
   saveGames();
 }
 

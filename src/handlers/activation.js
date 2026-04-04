@@ -938,7 +938,7 @@ export async function handleDcEndActivation(interaction, ctx) {
           .setStyle(ButtonStyle.Primary)
       );
       const endTurnMsg = await ch.send(sanitizeMentions({
-        content: `${icon} ${timestamp} — <@${ownerId}> (**Player ${meta.playerNum}**) **${displayName}** activation resolved. Press **End Turn** when ready to pass.`,
+        content: `${icon} ${timestamp} — <@${ownerId}> (**Player ${meta.playerNum}**) **${displayName}** activation resolved. Press **End Turn** to pass your turn.`,
         components: [endTurnBtn],
         allowedMentions: { users: [ownerId] },
       }));

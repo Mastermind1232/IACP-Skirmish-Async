@@ -173,6 +173,7 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
           content: `${icon} ${timestamp} — <@${ownerId}> (**Player ${initPlayerNum}**) **${displayName}** finished all actions. Press **End Activation** in the activation thread when ready.`,
           allowedMentions: { users: [ownerId] },
         }));
+        game.dcFinishedPinged[msgId] = true;
       } catch (err) {
         console.error('Failed to send End Activation prompt:', err);
       }

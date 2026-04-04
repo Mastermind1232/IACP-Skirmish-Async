@@ -4,7 +4,7 @@
  */
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapData, getMapTokensData } from '../data-loader.js';
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
-import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens } from './dc-helpers.js';
+import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { reduceHp } from './damage-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
@@ -429,7 +429,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
       refreshDcEmbed: strainApplied,
     };
@@ -721,7 +721,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -752,7 +752,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -878,7 +878,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -899,7 +899,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -923,7 +923,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -959,7 +959,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -990,7 +990,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1024,7 +1024,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1070,7 +1070,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: ['(Done — no second Trooper)', ...moreTargets.map((fk) => dcNameFromFigureKey(fk))],
+        choiceOptions: ['(Done — no second Trooper)', ...figureChoiceLabels(moreTargets)],
         targetFigureKeys: [null, ...moreTargets],
       };
     }
@@ -1095,7 +1095,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1136,7 +1136,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1171,7 +1171,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1208,7 +1208,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1240,7 +1240,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: otherGroupFigures.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(otherGroupFigures),
       targetFigureKeys: otherGroupFigures,
     };
   }
@@ -1273,7 +1273,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1327,7 +1327,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map(fk => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1368,12 +1368,12 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map(fk => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
 
-  // neurostim_hemlock (Hemlock): choose adjacent friendly, roll 1 yellow die → Hit: Block Token, Surge: Surge Token
+  // neurostim_hemlock (Hemlock): choose adjacent friendly, roll 1 yellow die → Hit: Damage Token, Surge: Surge Token
   if (abilityId === 'neurostim_hemlock') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: 'Resolve **Neurostim** manually.' };
@@ -1392,8 +1392,8 @@ export function resolveAbility(abilityId, context) {
       const diceResult = parts.length ? parts.join(', ') : 'blank';
       const effectParts = [];
       if (hits > 0) {
-        grantPowerTokens(game, targetFigureKey, 'Block', 1);
-        effectParts.push(`**${tName}** gained 1 **Block Token**`);
+        grantPowerTokens(game, targetFigureKey, 'Damage', 1);
+        effectParts.push(`**${tName}** gained 1 **Damage Token**`);
       }
       if (surges > 0) {
         grantPowerTokens(game, targetFigureKey, 'Surge', 1);
@@ -1430,8 +1430,8 @@ export function resolveAbility(abilityId, context) {
       const diceResult = parts.length ? parts.join(', ') : 'blank';
       const effectParts = [];
       if (hits > 0) {
-        grantPowerTokens(game, tFk, 'Block', 1);
-        effectParts.push(`**${tName}** gained 1 **Block Token**`);
+        grantPowerTokens(game, tFk, 'Damage', 1);
+        effectParts.push(`**${tName}** gained 1 **Damage Token**`);
       }
       if (surges > 0) {
         grantPowerTokens(game, tFk, 'Surge', 1);
@@ -1443,7 +1443,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map(fk => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1506,7 +1506,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map((fk) => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -1582,7 +1582,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: validTargets.map(fk => dcNameFromFigureKey(fk)),
+      choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
     };
   }
@@ -2143,7 +2143,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: validTargets.map((t) => dcNameFromFigureKey(t.figureKey)),
+        choiceOptions: figureChoiceLabels(validTargets.map((t) => t.figureKey)),
         targetFigureKeys: validTargets.map((t) => t.figureKey),
       };
     }
@@ -2237,7 +2237,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: validTargets.map((t) => `${dcNameFromFigureKey(t.figureKey)} (${t.dist} sp)`),
+        choiceOptions: figureChoiceLabels(validTargets.map((t) => t.figureKey)).map((lbl, i) => `${lbl} (${validTargets[i].dist} sp)`),
         targetFigureKeys: validTargets.map((t) => t.figureKey),
       };
     }
@@ -3258,7 +3258,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: stillEligible.map((efk) => dcNameFromFigureKey(efk)),
+        choiceOptions: figureChoiceLabels(stillEligible),
         targetFigureKeys: stillEligible,
         logMessage: `**${tName}** gained 1 Damage Token. ${pending.remaining} more to assign.`,
       };
@@ -3293,7 +3293,7 @@ export function resolveAbility(abilityId, context) {
       applied: false,
       requiresChoice: true,
       requiresPowerTokenChoice: ptToAdd > 0,
-      choiceOptions: eligible.map((efk) => dcNameFromFigureKey(efk)),
+      choiceOptions: figureChoiceLabels(eligible),
       targetFigureKeys: eligible,
       logMessage: `Gained ${ptToAdd} Power Token(s). Distribute ${roundNum} Damage Token(s) among friendly figures within 3 spaces (round ${roundNum}). Pick a figure:`,
     };
@@ -3332,7 +3332,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: figureKeys.map(fk => dcNameFromFigureKey(fk)),
+        choiceOptions: figureChoiceLabels(figureKeys),
         targetFigureKeys: figureKeys,
         logMessage: `Choose which figure gains ${n} Power Token(s):`,
       };
@@ -3549,7 +3549,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: adjacent.map((fk) => dcNameFromFigureKey(fk)),
+        choiceOptions: figureChoiceLabels(adjacent),
         choiceValues: adjacent,
         targetFigureKeys: adjacent,
         logMessage: `Choose which of ${adjacent.length} adjacent figures recovers ${nPreview} Damage:`,
@@ -5137,7 +5137,7 @@ export function resolveAbility(abilityId, context) {
     }
     if (hostiles.length === 0) return { applied: true, logMessage: 'No hostile within 3 spaces with LOS.' };
     if (hostiles.length === 1) return resolveAbility(entry, { ...context, chosenFigureKey: hostiles[0] });
-    return { applied: false, requiresChoice: true, choiceOptions: hostiles.map(fk => dcNameFromFigureKey(fk)), choiceValues: hostiles };
+    return { applied: false, requiresChoice: true, choiceOptions: figureChoiceLabels(hostiles), choiceValues: hostiles };
   }
 
   // ccEffect: Chaotic Force — roll 1 green die, all figures on both sides suffer Strain = Accuracy
@@ -5375,23 +5375,20 @@ export function resolveAbility(abilityId, context) {
       const selfKeys = selfMeta ? getFigureKeysForDcMsg(game, playerNum, selfMeta) : [];
       const selfFk = selfKeys[selectedFig] || selfKeys[0];
       const selfPos = selfFk ? game.figurePositions?.[playerNum]?.[selfFk] : null;
-      const choiceOptions = [];
       const choiceValues = [];
       if (selfPos) {
         const oppPositions = game.figurePositions?.[oppNum] || {};
         for (const [fk, coord] of Object.entries(oppPositions)) {
           if (!coord || alreadyChosen.has(fk)) continue;
           const dist = countGameSpaces(game, selfPos, coord);
-          if (dist <= 1) {
-            choiceOptions.push(dcNameFromFigureKey(fk));
-            choiceValues.push(fk);
-          }
+          if (dist <= 1) choiceValues.push(fk);
         }
       }
-      if (choiceOptions.length === 0) {
+      if (choiceValues.length === 0) {
         // No more adjacent hostiles — finalize
         return resolveAbility(abilityId, { ...context, chosenFigureKey: 'wookiee_rage_done' });
       }
+      const choiceOptions = [...figureChoiceLabels(choiceValues)];
       choiceOptions.push(`Done (${game._wookieeRageTargets.length} target${game._wookieeRageTargets.length > 1 ? 's' : ''} chosen)`);
       choiceValues.push('wookiee_rage_done');
       return { applied: true, requiresChoice: true, choiceOptions, choiceValues, logMessage: `**Wookiee Rage** — ${damagePerTarget} Damage per target (${damageSuffered} Damage suffered). Choose another target or Done.` };
@@ -5403,25 +5400,22 @@ export function resolveAbility(abilityId, context) {
     const selfKeys = selfMeta ? getFigureKeysForDcMsg(game, playerNum, selfMeta) : [];
     const selfFk = selfKeys[selectedFig] || selfKeys[0];
     const selfPos = selfFk ? game.figurePositions?.[playerNum]?.[selfFk] : null;
-    const choiceOptions = [];
     const choiceValues = [];
     if (selfPos) {
       const oppPositions = game.figurePositions?.[oppNum] || {};
       for (const [fk, coord] of Object.entries(oppPositions)) {
         if (!coord) continue;
         const dist = countGameSpaces(game, selfPos, coord);
-        if (dist <= 1) {
-          choiceOptions.push(dcNameFromFigureKey(fk));
-          choiceValues.push(fk);
-        }
+        if (dist <= 1) choiceValues.push(fk);
       }
     }
-    if (choiceOptions.length === 0) return { applied: false, manualMessage: '**Wookiee Rage** — No adjacent hostile figures.' };
-    if (choiceOptions.length === 1) {
+    if (choiceValues.length === 0) return { applied: false, manualMessage: '**Wookiee Rage** — No adjacent hostile figures.' };
+    if (choiceValues.length === 1) {
       // Only 1 adjacent hostile — auto-choose and finalize
       game._wookieeRageTargets.push(choiceValues[0]);
       return resolveAbility(abilityId, { ...context, chosenFigureKey: 'wookiee_rage_done' });
     }
+    const choiceOptions = [...figureChoiceLabels(choiceValues)];
     choiceOptions.push('Done (0 targets chosen)');
     choiceValues.push('wookiee_rage_done');
     return { applied: true, requiresChoice: true, choiceOptions, choiceValues, logMessage: `**Wookiee Rage** — ${damagePerTarget} Damage per target (${damageSuffered} Damage suffered). Choose up to 3 adjacent hostiles.` };
@@ -6332,7 +6326,7 @@ export function resolveAbility(abilityId, context) {
       validTargets.push(fk);
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: 'No SMALL friendly figures to push.' };
-    const choiceOptions = validTargets.map((fk) => dcNameFromFigureKey(fk));
+    const choiceOptions = figureChoiceLabels(validTargets);
     return { applied: false, requiresChoice: true, choiceOptions, choiceValues: validTargets };
   }
 
@@ -8919,7 +8913,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: validTargets.map(t => dcNameFromFigureKey(t.figureKey)),
+        choiceOptions: figureChoiceLabels(validTargets.map(t => t.figureKey)),
         targetFigureKeys: validTargets.map(t => t.figureKey),
         choicePrompt: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. Choose an adjacent hostile figure:`,
         refreshBoard: true,
