@@ -125,7 +125,7 @@ import { lookupFigureDcIndex as _lookupFigureDcIndex } from '../engine/game-read
 import { findFigureheadFigure as _findFigureheadFigureRaw } from '../engine/misc-helpers.js';
 import { getCleaveTargetButtons, getFightingKnifeTargetButtons } from '../discord/components.js';
 import { PHASES } from '../game/phase.js';
-import { setPhase } from '../game/phase.js';
+import { setPhase, enableStrictPhaseTransitions } from '../game/phase.js';
 
 // ── Extracted engine modules ────────────────────────────────────────────────
 
@@ -184,6 +184,10 @@ import { sendPhaseGateMessages } from '../handlers/phase-gate.js';
  * @returns {object} allDeps — satisfies every key in getAllRequiredDepKeys()
  */
 export function buildHeadlessDeps(options = {}) {
+  // Strict phase transitions: any invalid transition throws instead of warning.
+  // Safe for Discord too (valid transitions unaffected), but primarily for headless integrity.
+  enableStrictPhaseTransitions();
+
   const lightweight = !!options.lightweight;
   const gamesMap = options.gamesMap || new Map();
   const client = options.client || createFakeClient();

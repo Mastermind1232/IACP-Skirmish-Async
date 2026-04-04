@@ -220,7 +220,8 @@ export function computeCombatResult(combat) {
   // Hidden on defender: -2 accuracy for the attacker
   const defenderHidden = !!combat.defenderConds?.includes('Hide');
   const hiddenAccPenalty = defenderHidden ? 2 : 0;
-  const totalAccuracy = roll.acc + surgeA + bonusAcc - hiddenAccPenalty;
+  const defenderAccPenalty = combat.defenderAccuracyPenalty || 0;
+  const totalAccuracy = roll.acc + surgeA + bonusAcc - hiddenAccPenalty - defenderAccPenalty;
   let hit = true;
   let missReason = '';
   // C4: On the Lam — forced miss when defender moved out of LOS
@@ -303,6 +304,7 @@ export function computeCombatResult(combat) {
   if (attackerWeakened) resultText += ` | **Weakened** (attacker -1 dmg)`;
   if (defenderWeakened) resultText += ` | **Weakened** (defender -1 block)`;
   if (defenderHidden) resultText += ` | **Hidden** (defender -2 accuracy)`;
+  if (defenderAccPenalty) resultText += ` | **CC** (defender -${defenderAccPenalty} accuracy)`;
   if (defRoll.dodge && combat.surgeCancelDodge) resultText += ` | **Deadly Spin**: Dodge cancelled`;
   if (!hit) resultText += missReason ? ` → **Miss** (${missReason})` : ' → **Miss**';
   else resultText += ` → **${damage} damage**${conditionsText}`;

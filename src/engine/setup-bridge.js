@@ -205,7 +205,7 @@ export async function runDraftRandom(game, client, deps, options = {}) {
   } else {
     p1Deck = { ...deps.DEFAULT_DECK_REBELS, dcList: [...(deps.DEFAULT_DECK_REBELS.dcList || [])], ccList: [...(deps.DEFAULT_DECK_REBELS.ccList || [])] };
     p2Deck = { ...deps.DEFAULT_DECK_SCUM, dcList: [...(deps.DEFAULT_DECK_SCUM.dcList || [])], ccList: [...(deps.DEFAULT_DECK_SCUM.ccList || [])] };
-    if (scenarioId) {
+    if (scenarioId && !game.trainingMode) {
       ({ p1Deck, p2Deck } = deps.retoolDecksForScenario(p1Deck, p2Deck, scenarioId));
     }
   }

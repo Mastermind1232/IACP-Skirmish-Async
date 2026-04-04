@@ -50,6 +50,14 @@ export const VALID_ROUND_PHASE_TRANSITIONS = {
   [ROUND_PHASES.END_OF_ROUND]:   [ROUND_PHASES.START_OF_ROUND],
 };
 
+// ── Global strict mode ──────────────────────────────────────────────────────
+// When enabled, all phase transitions throw on invalid (no opts.strict needed).
+// Activated by headless-deps for self-play; harmless for Discord (valid transitions unaffected).
+let globalStrictMode = false;
+
+/** Enable strict phase transitions globally. */
+export function enableStrictPhaseTransitions() { globalStrictMode = true; }
+
 /**
  * Validate a phase transition. Returns true if valid.
  * @param {string|null|undefined} from - Current phase
@@ -79,7 +87,7 @@ export function setPhase(game, phase, roundPhase = null, opts = {}) {
   const from = game.phase;
   if (!isValidTransition(from, phase, VALID_PHASE_TRANSITIONS)) {
     const msg = `Invalid phase transition: ${from} → ${phase}`;
-    if (opts.strict) throw new Error(msg);
+    if (opts.strict || globalStrictMode) throw new Error(msg);
     console.warn(`[Phase] ${msg}`);
   }
   game.phase = phase;
@@ -97,7 +105,7 @@ export function setRoundPhase(game, roundPhase, opts = {}) {
   const from = game.roundPhase;
   if (!isValidTransition(from, roundPhase, VALID_ROUND_PHASE_TRANSITIONS)) {
     const msg = `Invalid round phase transition: ${from} → ${roundPhase}`;
-    if (opts.strict) throw new Error(msg);
+    if (opts.strict || globalStrictMode) throw new Error(msg);
     console.warn(`[Phase] ${msg}`);
   }
   game.roundPhase = roundPhase;

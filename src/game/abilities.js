@@ -4753,8 +4753,8 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Became Hidden.' };
   }
 
-  // ccEffect: roundDefenseBonusBlock / roundDefenseBonusEvade (Take Position, Survival Instincts, Cavalry Charge) — until end of round
-  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0)) && !entry.roundDefenderBonusBlockPerEvade) {
+  // ccEffect: roundDefenseBonusBlock / roundDefenseBonusEvade / roundDefenseAccuracyPenalty (Take Position, Survival Instincts, Cavalry Charge, Take Cover, Deflection) — until end of round
+  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0) || (typeof entry.roundDefenseAccuracyPenalty === 'number' && entry.roundDefenseAccuracyPenalty > 0)) && !entry.roundDefenderBonusBlockPerEvade) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
@@ -4763,9 +4763,16 @@ export function resolveAbility(abilityId, context) {
     const evade = entry.roundDefenseBonusEvade || 0;
     if (block) game.roundDefenseBonusBlock[playerNum] = (game.roundDefenseBonusBlock[playerNum] || 0) + block;
     if (evade) game.roundDefenseBonusEvade[playerNum] = (game.roundDefenseBonusEvade[playerNum] || 0) + evade;
+    // Accuracy penalty (Take Cover, Deflection) — accumulates additively
+    const accPenalty = entry.roundDefenseAccuracyPenalty || 0;
+    if (accPenalty) {
+      game.roundDefenseAccuracyPenalty = game.roundDefenseAccuracyPenalty || {};
+      game.roundDefenseAccuracyPenalty[playerNum] = (game.roundDefenseAccuracyPenalty[playerNum] || 0) + accPenalty;
+    }
     const parts = [];
     if (block) parts.push(`+${block} Block`);
     if (evade) parts.push(`+${evade} Evade`);
+    if (accPenalty) parts.push(`-${accPenalty} Accuracy`);
     // Cavalry Charge: friendly TROOPERs get +N Hit when attacking this round
     if (entry.trooperRoundAttackHitBonus) {
       game.roundTrooperAttackHitBonus = game.roundTrooperAttackHitBonus || {};

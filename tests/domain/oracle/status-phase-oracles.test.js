@@ -26,6 +26,9 @@ describe('ORACLE-SP-001: Black Market Reveals Post-Draw Deck Top Card', () => {
       .inRound(1)
       .build();
 
+    // Set round phase to end_of_round (runStatusPhaseAfterEndOfRound expects this)
+    game.roundPhase = 'end_of_round';
+
     // Override CC state after build to get deterministic deck ordering
     // (builder auto-draws 3 when inRound(1), so set directly)
     game.player1CcDeck = ['Adrenaline', 'Advance Warning', 'Against the Odds'];

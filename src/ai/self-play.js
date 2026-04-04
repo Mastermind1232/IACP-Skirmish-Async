@@ -18,6 +18,8 @@ import { withAtomicGameLock } from '../game/action-queue.js';
 import { getRecoveryReason } from '../engine/recovery.js';
 import { insertSelfPlayRun, batchIncrementCoverageDiscord, batchSetCoverageVerified } from '../db.js';
 import { computeTransitionKey } from '../exploration/transition-key.js';
+import { setPhase, PHASES, enableStrictPhaseTransitions } from '../game/phase.js';
+import { TRAINING_WHITELIST_DCS, TRAINING_WHITELIST_CCS } from './training-config.js';
 
 // ── Concurrency guard ─────────────────────────────────────────────────────────
 
@@ -213,19 +215,79 @@ function capturePendingStates(game) {
 
 // ── Figure count snapshot (for defeat detection) ─────────────────────────────
 
-function countAliveFigures(game) {
+function countAliveFigures(game, dcHealthState) {
   let count = 0;
   for (const pn of [1, 2]) {
     const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
     if (!dcList) continue;
     for (const dc of dcList) {
-      if (!dc?.healthState) continue;
-      for (const figHp of dc.healthState) {
+      const msgId = dc?.msgId;
+      if (!msgId) continue;
+      const healthArr = dcHealthState?.get(msgId);
+      if (!healthArr) continue;
+      for (const figHp of healthArr) {
         if (Array.isArray(figHp) && figHp[0] > 0) count++;
       }
     }
   }
   return count;
+}
+
+// ── Training whitelist validation ────────────────────────────────────────────
+
+/**
+ * Validate that the entire reachable card pool is within the training whitelist.
+ * Checks all DC and CC zones for both players plus the shared gameBox.
+ * Returns { valid: true } or { valid: false, violations: [...] }.
+ */
+export function validateTrainingWhitelist(game) {
+  const violations = [];
+
+  // Check DCs for both players
+  for (const pn of [1, 2]) {
+    const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+    if (dcList) {
+      for (const dc of dcList) {
+        if (dc?.dcName && !TRAINING_WHITELIST_DCS.has(dc.dcName)) {
+          violations.push({ zone: `p${pn}DcList`, card: dc.dcName });
+        }
+      }
+    }
+  }
+
+  // Check all CC zones for both players
+  for (const pn of [1, 2]) {
+    const hand = pn === 1 ? game.player1CcHand : game.player2CcHand;
+    const deck = pn === 1 ? game.player1CcDeck : game.player2CcDeck;
+    const discard = pn === 1 ? game.player1CcDiscard : game.player2CcDiscard;
+    const attachments = pn === 1 ? game.p1CcAttachments : game.p2CcAttachments;
+
+    for (const cc of (hand || [])) {
+      if (!TRAINING_WHITELIST_CCS.has(cc)) violations.push({ zone: `player${pn}CcHand`, card: cc });
+    }
+    for (const cc of (deck || [])) {
+      if (!TRAINING_WHITELIST_CCS.has(cc)) violations.push({ zone: `player${pn}CcDeck`, card: cc });
+    }
+    for (const cc of (discard || [])) {
+      if (!TRAINING_WHITELIST_CCS.has(cc)) violations.push({ zone: `player${pn}CcDiscard`, card: cc });
+    }
+    if (attachments && typeof attachments === 'object') {
+      for (const ccs of Object.values(attachments)) {
+        for (const cc of (ccs || [])) {
+          if (!TRAINING_WHITELIST_CCS.has(cc)) violations.push({ zone: `p${pn}CcAttachments`, card: cc });
+        }
+      }
+    }
+  }
+
+  // Shared gameBox (cards permanently removed from game)
+  for (const cc of (game.gameBox || [])) {
+    if (!TRAINING_WHITELIST_CCS.has(cc)) violations.push({ zone: 'gameBox', card: cc });
+  }
+
+  return violations.length === 0
+    ? { valid: true }
+    : { valid: false, violations };
 }
 
 // ── Stop reason classification ────────────────────────────────────────────────
@@ -593,8 +655,9 @@ export async function runSelfPlayLoop(game, client, opts) {
   const {
     buildAllDeps, getGame, atomicOpts, actionDeps = {},
     scenario, guildId, delayMs = 200,
-    persistCompleted = false, explorationMode,
+    persistCompleted = false, explorationMode, trainingMode = false,
   } = opts;
+  const { dcHealthState } = actionDeps;
 
   // Concurrency guard
   if (activeSelfPlayGameId) {
@@ -647,6 +710,27 @@ export async function runSelfPlayLoop(game, client, opts) {
   game.selfPlay = true;
   game.player1Id = `${AI_USER_PREFIX}1`;
   game.player2Id = `${AI_USER_PREFIX}2`;
+
+  // Training mode: enable strict phase transitions for the entire process.
+  // Only rejects genuinely invalid transitions (which are bugs), so safe even if
+  // Discord games share the process — they make valid transitions.
+  if (trainingMode) {
+    enableStrictPhaseTransitions();
+  }
+
+  // Training mode whitelist validation: abort before generating any training data
+  // if the card pool contains anything outside the verified whitelist.
+  if (trainingMode) {
+    const wlResult = validateTrainingWhitelist(game);
+    if (!wlResult.valid) {
+      const violationSummary = wlResult.violations.map(v => `${v.zone}: "${v.card}"`).join(', ');
+      console.error(`[self-play] WHITELIST VIOLATION — aborting training game: ${violationSummary}`);
+      activeSelfPlayGameId = null;
+      const artifact = buildRunArtifact(game, { scenario, guildId, startedAt, ringBuffer, stopReason: 'whitelist_violation', surfaceCtx: { violationSummary }, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
+      await insertSelfPlayRun(artifact);
+      return { result: 'blocked', artifact };
+    }
+  }
 
   // Test flag: route overflow through PvP prompt path (set via selfplaymcp seed --test-overflow)
   let testOverflowInjected = false;
@@ -897,7 +981,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       }
 
       // Snapshot alive figures before dispatch (for defeat detection)
-      const figuresBefore = countAliveFigures(g);
+      const figuresBefore = countAliveFigures(g, dcHealthState);
 
       // Route to handler
       const handlerKey = getHandlerKey(chosen.customId, 'button');
@@ -1033,7 +1117,7 @@ export async function runSelfPlayLoop(game, client, opts) {
       // Detect figure defeats via pre/post diff
       const gPostDispatch = getGame(game.gameId);
       if (gPostDispatch) {
-        const figuresAfter = countAliveFigures(gPostDispatch);
+        const figuresAfter = countAliveFigures(gPostDispatch, dcHealthState);
         if (figuresAfter < figuresBefore) figureDefeats += (figuresBefore - figuresAfter);
       }
 
@@ -1177,6 +1261,7 @@ export function stopSelfPlay(getGame) {
   const gid = activeSelfPlayGameId;
   const game = getGame(gid);
   if (game) {
+    setPhase(game, PHASES.ENDED);
     game.ended = true;
     game.selfPlayManualStop = true;
   }

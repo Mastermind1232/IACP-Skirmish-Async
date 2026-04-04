@@ -2345,7 +2345,8 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // Illicit Arms (Bib Fortuna): while a friendly figure is attacking, if army affiliation is SCUM,
   // may discard 1 CC from hand to apply +1 Hit. Limit once per attack.
-  {
+  // Guard: skip if already prompted this attack (prevents double-fire).
+  if (!game.pendingIllicitArms) {
     const friendlyPosIA = game.figurePositions?.[attackerPlayerNum] || {};
     let bibFound = false;
     for (const [fk, pos] of Object.entries(friendlyPosIA)) {
@@ -2378,7 +2379,7 @@ export async function handleAttackTarget(interaction, ctx) {
       await thread.send(sanitizeMentions({ content: `<@${atkOwnerId}> **Illicit Arms** (${fkDcName}) — You may discard 1 Command card from your hand to apply **+1 Hit** to this attack. Use this ability?`, components: [iaRow], allowedMentions: { users: [atkOwnerId] } }));
       bibFound = true;
     }
-  }
+  } // end pendingIllicitArms guard
 
   // Force Exhaustion (The Child / Clan of Two): when attack targets The Child or a figure with Clan of Two,
   // The Child's owner may choose to incapacitate The Child to remove 1 attack die and Weaken the attacker.

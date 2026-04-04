@@ -1225,8 +1225,8 @@
     },
     "Deflection": {
       "type": "ccEffect",
-      "label": "Until end of round: +2 Evade when defending; if you take no Damage, attacker suffers 2 Damage (auto-applied)",
-      "roundDefenseBonusEvade": 2,
+      "label": "Until end of round: -2 Accuracy when defending; if you take no Damage, attacker suffers 2 Damage (auto-applied)",
+      "roundDefenseAccuracyPenalty": 2,
       "deflectionCounterDamage": 2,
       "wiredStatus": "wired"
     },
@@ -4839,7 +4839,7 @@
       "type": "ccEffect",
       "label": "Until end of round, +1 Block and -2 Accuracy when defending",
       "roundDefenseBonusBlock": 1,
-      "roundDefenseBonusEvade": 2,
+      "roundDefenseAccuracyPenalty": 2,
       "wiredStatus": "wired"
     },
     "Take Initiative": {

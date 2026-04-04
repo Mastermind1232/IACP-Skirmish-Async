@@ -8,6 +8,7 @@
  */
 
 import { runSelfPlayLoop, getActiveSelfPlayGameId, formatCoverageSummary } from './self-play.js';
+import { TRAINING_MATCHUPS } from './training-config.js';
 
 // ── Queue state (in-memory only) ─────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ export function getQueueStatus() {
     pauseReason,
     totalScenarios: queueOpts?.scenarios?.length ?? 0,
     seedMode: queueOpts?.seedMode ?? false,
+    trainingMode: queueOpts?.trainingMode ?? false,
   };
 }
 
@@ -96,6 +98,7 @@ async function _runQueueLoop() {
     feedbackChannel, logChannel, saveGames,
     botLogsPost,
     seedMode = false, getNextSeed, onSeedRunComplete,
+    trainingMode = false,
   } = opts;
 
   const AI_USER_PREFIX = opts.AI_USER_PREFIX || 'ai_user_';
@@ -109,9 +112,17 @@ async function _runQueueLoop() {
       }
       if (queueState === 'draining') break;
 
-      // ── Seed mode: auto-select from ranked headless exploration data ──
+      // ── Mode selection: training (fixed matchups) vs seed vs scenario ──
       let scenarioId, scenarioIdx, seedConfig;
-      if (seedMode && getNextSeed) {
+      if (trainingMode) {
+        // Training mode: cycle through the 2 fixed matchups
+        const matchupIdx = rotationIndex % TRAINING_MATCHUPS.length;
+        const matchup = TRAINING_MATCHUPS[matchupIdx];
+        scenarioId = `training:${matchup.label}`;
+        seedConfig = { p1Deck: matchup.p1Deck, p2Deck: matchup.p2Deck };
+        scenarioIdx = null;
+        currentRunScenario = matchup.label;
+      } else if (seedMode && getNextSeed) {
         const seed = await getNextSeed();
         if (!seed) {
           console.log('[self-play-queue] No more seeds available. Stopping.');
@@ -130,7 +141,7 @@ async function _runQueueLoop() {
 
       const runNum = runCount + 1;
       const scenarioLabel = seedConfig
-        ? `seed: ${currentRunScenario}`
+        ? (trainingMode ? `training: ${currentRunScenario}` : `seed: ${currentRunScenario}`)
         : `scenario ${scenarioId} (${scenarioIdx + 1}/${scenarios.length})`;
       console.log(`[self-play-queue] Run #${runNum}: ${scenarioLabel}`);
 
@@ -151,6 +162,7 @@ async function _runQueueLoop() {
         if (!game) throw new Error('Game creation returned no game state');
         game.selfPlay = true;
         game.guildId = guildId;
+        if (trainingMode) game.trainingMode = true;
         saveGames();
 
         // 2. Run self-play loop
@@ -163,7 +175,8 @@ async function _runQueueLoop() {
           guildId,
           delayMs,
           persistCompleted: true,
-          explorationMode: seedConfig ? 'seed_validation' : 'queue',
+          explorationMode: trainingMode ? 'training' : (seedConfig ? 'seed_validation' : 'queue'),
+          trainingMode,
         });
         result = loopResult.result;
         artifact = loopResult.artifact;

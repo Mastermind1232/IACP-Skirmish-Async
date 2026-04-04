@@ -154,6 +154,8 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   const roundEvade = game.roundDefenseBonusEvade?.[defenderPlayerNum] || 0;
   if (roundBlock) combat.bonusBlock = (combat.bonusBlock || 0) + roundBlock;
   if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
+  const roundAccPenalty = game.roundDefenseAccuracyPenalty?.[defenderPlayerNum] || 0;
+  if (roundAccPenalty) combat.defenderAccuracyPenalty = (combat.defenderAccuracyPenalty || 0) + roundAccPenalty;
   // Choose a Side (SCUM): +1 Block only for defenders with MOBILE keyword
   const mobileBlock = game.roundMobileDefenseBonusBlock?.[defenderPlayerNum] || 0;
   if (mobileBlock && combat.target?.figureKey) {
