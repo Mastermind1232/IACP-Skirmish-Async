@@ -32,10 +32,7 @@ export async function applyAbilityResult(result, opts) {
     dcMessageMeta,
     dcExhaustedState,
     dcHealthState,
-    buildDcEmbedAndFiles,
-    getConditionsForDcMessage,
-    getTokensForDcMessage,
-    getNicknamesForDcMessage,
+    renderDcEmbed,
     getDcPlayAreaComponents,
     buildBoardMapPayload,
     getConditionCardPath,
@@ -54,16 +51,13 @@ export async function applyAbilityResult(result, opts) {
     for (const id of result.readyDcMsgIds) {
       dcExhaustedState.set(id, false);
       const meta = dcMessageMeta?.get(id);
-      if (meta && buildDcEmbedAndFiles && getDcPlayAreaComponents) {
+      if (meta && renderDcEmbed && getDcPlayAreaComponents) {
         try {
           const chId = getPlayAreaId(game, meta.playerNum);
           const ch = await fetchGameChannel(client, chId);
           if (!ch) continue;
           const msg = await ch.messages.fetch(id);
-          const healthState = dcHealthState?.get(id) || [];
-          const { embed, files } = await buildDcEmbedAndFiles(
-            meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), null, getTokensForDcMessage?.(game, meta), null, getNicknamesForDcMessage?.(game, meta)
-          );
+          const { embed, files } = await renderDcEmbed(game, id, ctx, { exhausted: false });
           const components = getDcPlayAreaComponents(id, false, game, meta.dcName);
           await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
         } catch (err) {
@@ -130,17 +124,14 @@ export async function applyAbilityResult(result, opts) {
     for (const id of idsToRefresh) {
       if (readySet.has(id)) continue; // already handled by readyDcMsgIds section above
       const meta = dcMessageMeta?.get(id);
-      if (!meta || !buildDcEmbedAndFiles || !getDcPlayAreaComponents) continue;
+      if (!meta || !renderDcEmbed || !getDcPlayAreaComponents) continue;
       try {
         const chId = getPlayAreaId(game, meta.playerNum);
         const ch = await fetchGameChannel(client, chId);
         if (!ch) continue;
         const msg = await ch.messages.fetch(id);
-        const healthState = dcHealthState?.get(id) || [];
         const exhausted = dcExhaustedState?.get(id) || false;
-        const { embed, files } = await buildDcEmbedAndFiles(
-          meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), null, getTokensForDcMessage?.(game, meta), null, getNicknamesForDcMessage?.(game, meta)
-        );
+        const { embed, files } = await renderDcEmbed(game, id, ctx);
         const components = getDcPlayAreaComponents(id, exhausted, game, meta.dcName);
         await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
       } catch (err) {

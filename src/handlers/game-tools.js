@@ -151,10 +151,7 @@ export async function handleUndo(interaction, ctx) {
     getDeploymentZoneButtons,
     dcExhaustedState,
     dcMessageMeta,
-    dcHealthState,
-    buildDcEmbedAndFiles,
-    getConditionsForDcMessage,
-    getNicknamesForDcMessage,
+    renderDcEmbed,
     getDcPlayAreaComponents,
     updateActivationsMessage,
     client,
@@ -277,22 +274,13 @@ export async function handleUndo(interaction, ctx) {
     if (last.msgId && dcExhaustedState && dcMessageMeta) {
       dcExhaustedState.set(last.msgId, false);
       const meta = dcMessageMeta.get(last.msgId);
-      if (meta && buildDcEmbedAndFiles && getDcPlayAreaComponents) {
+      if (meta && renderDcEmbed && getDcPlayAreaComponents) {
         try {
           const playAreaId = getPlayAreaId(game, last.playerNum);
           const playChannel = await fetchGameChannel(client, playAreaId);
           const dcMsg = await playChannel.messages.fetch(last.msgId).catch(() => null);
           if (dcMsg) {
-            const dName = meta.displayName || meta.dcName;
-            const { embed, files } = await buildDcEmbedAndFiles(
-              meta.dcName, false, dName,
-              dcHealthState?.get(last.msgId) ?? [[null, null]],
-              getConditionsForDcMessage?.(game, meta),
-              (game?.p1DcAttachments?.[last.msgId] || game?.p2DcAttachments?.[last.msgId] || []),
-              null, null,
-              getNicknamesForDcMessage?.(game, meta),
-              { game, playerNum: last.playerNum }
-            );
+            const { embed, files } = await renderDcEmbed(game, last.msgId, ctx, { exhausted: false });
             await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(last.msgId, false, game, meta.dcName) });
           }
         } catch (err) {

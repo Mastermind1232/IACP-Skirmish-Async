@@ -136,7 +136,7 @@
         "setup": "",
         "persistent": "",
         "startOfRound": "",
-        "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Hit Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round.",
+        "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Damage Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round.",
         "rules": {
           "endOfRound": {
             "vpPerControlledFluctuation": {
@@ -155,7 +155,7 @@
         "imagePath": "vassal_extracted/images/mission-cards/Devaron Garrison-A-Arms Salvage.png",
         "setup": "",
         "persistent": "",
-        "startOfRound": "Place 1 Power Token on each crate, according to that crate's color: (Red: Hit Token), (Yellow: Surge Token), (Blue: Block Token)",
+        "startOfRound": "Place 1 Power Token on each crate, according to that crate's color: (Red: Damage Token), (Yellow: Surge Token), (Blue: Block Token)",
         "endOfRound": "For each crate a player controls, that player may distribute the Power Tokens on that crate among friendly figures on or adjacent to that crate. Then, that player gains 2 VPs.",
         "rules": {
           "startOfRound": {

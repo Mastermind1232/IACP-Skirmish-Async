@@ -20,8 +20,7 @@ import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discor
 export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThreadId, die, splashTargets, thread, ctx) {
   const {
     client, saveGames, dcMessageMeta, dcHealthState, dcExhaustedState,
-    findDcMessageIdForFigure, buildDcEmbedAndFiles, getConditionsForDcMessage,
-    getNicknamesForDcMessage, getDcUpgradeAttachments, getDcEffects, logGameAction,
+    findDcMessageIdForFigure, renderDcEmbed, getDcEffects, logGameAction,
   } = ctx;
   const totalDmg = die.dmg || 0;
   const totalStrain = die.surge || 0;
@@ -76,7 +75,7 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
       if (tMeta) {
         const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(mid);
-        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, mid), null, null, getNicknamesForDcMessage?.(game, tMeta));
+        const { embed, files } = await renderDcEmbed(game, mid, ctx);
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch {}
@@ -143,8 +142,7 @@ async function advanceSpreadThePain(game, pending, ctx) {
 export async function handleBleedResolve(interaction, ctx) {
   const {
     getGame, saveGames, client, dcMessageMeta, dcHealthState, dcExhaustedState,
-    findDcMessageIdForFigure, buildDcEmbedAndFiles, getConditionsForDcMessage,
-    getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction, calculateKillVp,
+    findDcMessageIdForFigure, renderDcEmbed, logGameAction, calculateKillVp,
     decrementActivationIfGroupDefeated, checkWinConditions, canActAsPlayer,
     filterCondition,
     updateHandVisualMessage, updateDiscardPileMessage,
@@ -224,9 +222,7 @@ export async function handleBleedResolve(interaction, ctx) {
             const channelId = getPlayAreaId(game, playerNum);
             const ch = await fetchGameChannel(interaction.client, channelId);
             const dcMsg = await ch.messages.fetch(msgId);
-            const exhausted = dcExhaustedState.get(msgId) ?? false;
-            const health = dcHealthState.get(msgId) || [];
-            const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, health, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId), null, null, getNicknamesForDcMessage?.(game, meta));
+            const { embed, files } = await renderDcEmbed(game, msgId, ctx);
             await dcMsg.edit({ embeds: [embed], files }).catch(discordCatch);
           }
         } catch (err) {
@@ -268,8 +264,7 @@ export async function handleBleedResolve(interaction, ctx) {
 export async function handleSidewinderApply(interaction, ctx) {
   const {
     getGame, saveGames, client, canActAsPlayer, dcMessageMeta, dcHealthState,
-    dcExhaustedState, buildDcEmbedAndFiles, getConditionsForDcMessage,
-    getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction, ensureMovementBankMessage,
+    dcExhaustedState, renderDcEmbed, logGameAction, ensureMovementBankMessage,
   } = ctx;
   const m = interaction.customId.match(/^sidewinder_apply_([^_]+)_([^_]+)_(\d+)$/);
   if (!m) return;
@@ -306,7 +301,7 @@ export async function handleSidewinderApply(interaction, ctx) {
   try {
     const ch = await fetchGameChannel(client, getPlayAreaId(game, meta.playerNum));
     const msg = await ch.messages.fetch(attackerMsgId);
-    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, dcExhaustedState.get(attackerMsgId) ?? false, meta.displayName, dcHealthState.get(attackerMsgId) || [], getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, attackerMsgId), null, null, getNicknamesForDcMessage?.(game, meta));
+    const { embed, files } = await renderDcEmbed(game, attackerMsgId, ctx);
     await msg.edit({ embeds: [embed], files }).catch(discordCatch);
   } catch (e) { console.error('Failed to refresh Sidewinder DC embed:', e); }
   saveGames();
@@ -323,8 +318,7 @@ export async function handleSidewinderSkip(interaction, ctx) {
 export async function handleBoltslingerTarget(interaction, ctx) {
   const {
     getGame, saveGames, client, canActAsPlayer, dcMessageMeta, dcHealthState,
-    dcExhaustedState, buildDcEmbedAndFiles, getConditionsForDcMessage,
-    getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction, findDcMessageIdForFigure,
+    dcExhaustedState, renderDcEmbed, logGameAction, findDcMessageIdForFigure,
   } = ctx;
   const m = interaction.customId.match(/^boltslinger_target_([^_]+)_(\d+)$/);
   if (!m) return;
@@ -345,7 +339,7 @@ export async function handleBoltslingerTarget(interaction, ctx) {
       if (tMeta) {
         const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
-        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
+        const { embed, files } = await renderDcEmbed(game, targetMsgId, ctx);
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch (e) { console.error('Failed to refresh Boltslinger target embed:', e); }
@@ -405,8 +399,7 @@ export async function handleIndiscriminateFireSkip(interaction, ctx) {
 export async function handleFightingKnifeTarget(interaction, ctx) {
   const {
     getGame, saveGames, client, canActAsPlayer, dcMessageMeta, dcHealthState,
-    dcExhaustedState, buildDcEmbedAndFiles, getConditionsForDcMessage,
-    getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction, findDcMessageIdForFigure,
+    dcExhaustedState, renderDcEmbed, logGameAction, findDcMessageIdForFigure,
     calculateKillVp, decrementActivationIfGroupDefeated, checkWinConditions,
     finishCombatResolution, rollSingleAttackDie,
   } = ctx;
@@ -679,8 +672,7 @@ async function advanceHeavyFirePick(game, pending, ctx) {
 async function startHeavyFireConditions(game, pending, ctx) {
   const {
     client, saveGames, dcMessageMeta, dcHealthState, dcExhaustedState,
-    findDcMessageIdForFigure, buildDcEmbedAndFiles, getConditionsForDcMessage,
-    getNicknamesForDcMessage, getDcUpgradeAttachments, getDcEffects, logGameAction, calculateKillVp,
+    findDcMessageIdForFigure, renderDcEmbed, getDcEffects, logGameAction, calculateKillVp,
     decrementActivationIfGroupDefeated, checkWinConditions,
   } = ctx;
   const thread = await fetchCombatThread(client, pending.combatThreadId);
@@ -725,7 +717,7 @@ async function startHeavyFireConditions(game, pending, ctx) {
       if (tMeta) {
         const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(mid);
-        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, mid), null, null, getNicknamesForDcMessage?.(game, tMeta));
+        const { embed, files } = await renderDcEmbed(game, mid, ctx);
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch {}
@@ -785,8 +777,7 @@ async function advanceHeavyFireConditionPick(game, pending, ctx) {
 /** Heavy Fire "Use" button: heavy_fire_use_{gameId} */
 export async function handleHeavyFireUse(interaction, ctx) {
   const { getGame, saveGames, client, canActAsPlayer, dcExhaustedState,
-    dcMessageMeta, buildDcEmbedAndFiles, getConditionsForDcMessage,
-    getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+    dcMessageMeta, renderDcEmbed, logGameAction } = ctx;
   const m = interaction.customId.match(/^heavy_fire_use_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
@@ -805,7 +796,7 @@ export async function handleHeavyFireUse(interaction, ctx) {
       if (hfMeta) {
         const ch = await fetchGameChannel(client, getPlayAreaId(game, hfMeta.playerNum));
         const msg = await ch.messages.fetch(pending.hfMsgId);
-        const { embed, files } = await buildDcEmbedAndFiles(hfMeta.dcName, true, hfMeta.displayName, [], getConditionsForDcMessage(game, hfMeta), getDcUpgradeAttachments(game, pending.hfMsgId), null, null, getNicknamesForDcMessage?.(game, hfMeta));
+        const { embed, files } = await renderDcEmbed(game, pending.hfMsgId, ctx);
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch {}
@@ -905,8 +896,7 @@ export async function handleHeavyFireCondition(interaction, ctx) {
 // ── Havoc Shot (Fenn Signis) ─────────────────────────────────────────────
 export async function handleHavocShotUse(interaction, ctx) {
   const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
-    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
-    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+    dcExhaustedState, findDcMessageIdForFigure, renderDcEmbed, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^havoc_shot_use_([^_]+)$/);
   if (!m) return;
@@ -924,7 +914,7 @@ export async function handleHavocShotUse(interaction, ctx) {
       if (atkMeta) {
         const ch = await fetchGameChannel(client, getPlayAreaId(game, atkMeta.playerNum));
         const msg = await ch.messages.fetch(atkMsgId);
-        const { embed, files } = await buildDcEmbedAndFiles(atkMeta.dcName, dcExhaustedState.get(atkMsgId) ?? false, atkMeta.displayName, dcHealthState.get(atkMsgId) || [], getConditionsForDcMessage(game, atkMeta), getDcUpgradeAttachments(game, atkMsgId), null, null, getNicknamesForDcMessage?.(game, atkMeta));
+        const { embed, files } = await renderDcEmbed(game, atkMsgId, ctx);
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch {}
@@ -956,8 +946,7 @@ export async function handleHavocShotSkip(interaction, ctx) {
 
 export async function handleHavocShotPick(interaction, ctx) {
   const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
-    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
-    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+    dcExhaustedState, findDcMessageIdForFigure, renderDcEmbed, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^havoc_shot_pick_([^_]+)_(\d+)$/);
   if (!m) return;
@@ -978,7 +967,7 @@ export async function handleHavocShotPick(interaction, ctx) {
       if (tMeta) {
         const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
-        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
+        const { embed, files } = await renderDcEmbed(game, targetMsgId, ctx);
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch {}
@@ -1020,8 +1009,7 @@ export async function handleHavocShotDone(interaction, ctx) {
 // ── Deflect (Luke Skywalker JK) ──────────────────────────────────────────
 export async function handleDeflectPick(interaction, ctx) {
   const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
-    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
-    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+    dcExhaustedState, findDcMessageIdForFigure, renderDcEmbed, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^deflect_pick_([^_]+)_(\d+)$/);
   if (!m) return;
@@ -1041,7 +1029,7 @@ export async function handleDeflectPick(interaction, ctx) {
       if (tMeta) {
         const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
-        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
+        const { embed, files } = await renderDcEmbed(game, targetMsgId, ctx);
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch {}
@@ -1099,8 +1087,7 @@ export async function handleWantonUse(interaction, ctx) {
 
 export async function handleWantonCcPick(interaction, ctx) {
   const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
-    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
-    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+    dcExhaustedState, findDcMessageIdForFigure, renderDcEmbed, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // wanton_cc_{gameId}_{index}_{cardNameSlug}
   const m = interaction.customId.match(/^wanton_cc_([^_]+)_(\d+)_(.+)$/);
@@ -1139,8 +1126,7 @@ export async function handleWantonCcPick(interaction, ctx) {
 
 export async function handleWantonPick(interaction, ctx) {
   const { getGame, saveGames, client, canActAsPlayer, dcHealthState, dcMessageMeta,
-    dcExhaustedState, findDcMessageIdForFigure, buildDcEmbedAndFiles,
-    getConditionsForDcMessage, getNicknamesForDcMessage, getDcUpgradeAttachments, logGameAction } = ctx;
+    dcExhaustedState, findDcMessageIdForFigure, renderDcEmbed, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^wanton_pick_([^_]+)_(\d+)$/);
   if (!m) return;
@@ -1160,7 +1146,7 @@ export async function handleWantonPick(interaction, ctx) {
       if (tMeta) {
         const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
-        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId), null, null, getNicknamesForDcMessage?.(game, tMeta));
+        const { embed, files } = await renderDcEmbed(game, targetMsgId, ctx);
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch {}

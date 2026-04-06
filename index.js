@@ -148,6 +148,7 @@ import {
   getConditionsForDcMessage as _getConditionsForDcMessagePure,
   getTokensForDcMessage as _getTokensForDcMessagePure,
   getNicknamesForDcMessage as _getNicknamesForDcMessagePure,
+  buildDcDisplayState, renderDcEmbed,
 } from './src/engine/dc-ui-helpers.js';
 import {
   getPlayReadyMaps as _getPlayReadyMapsPure,
@@ -1160,9 +1161,9 @@ async function refreshAllGameComponents(game, client) {
   return _refreshAllGameComponentsPure(game, client, {
     reloadGameData, buildBoardMapPayload, dcMessageMeta, isDepletedRemovedFromGame,
     dcExhaustedState, dcHealthState, getDcStats, isFigurelessDc, getPlayAreaId,
-    buildDcEmbedAndFiles, getConditionsForDcMessage, getDcUpgradeAttachments,
+    buildDcEmbedAndFiles, renderDcEmbed,
     getDcPlayAreaComponents, getCompanionDescriptionForDc, EmbedBuilder, COLORS,
-    getNicknamesForDcMessage, getCcHand, getCcDeck, getHandChannelId,
+    getCcHand, getCcDeck, getHandChannelId,
     buildHandDisplayPayload, discordCatch, getHandVisualEmbed, getCcDiscard,
     getDiscardThreadId, getDiscardPileEmbed, getDiscardPileButtons,
     getDcMessageIds, dcAttachmentMessageIdsKey, ccAttachmentsKey, dcAttachmentsKey,
@@ -1560,12 +1561,11 @@ async function updateDcActionsMessage(game, msgId, client) {
   return _updateDcActionsMessagePure(game, msgId, client, {
     dcMessageMeta, getActionsCounterContent, getDcActionButtons,
     getActivationMinimapAttachment, discordCatch, getPlayAreaId,
-    dcHealthState, buildDcEmbedAndFiles, getConditionsForDcMessage,
-    getDcUpgradeAttachments, getTokensForDcMessage, getDcPlayAreaComponents,
+    dcHealthState, dcExhaustedState, buildDcEmbedAndFiles, renderDcEmbed, getDcStats,
+    getDcPlayAreaComponents,
     getPlayerId, ACTION_ICONS, ActionRowBuilder, ButtonBuilder, ButtonStyle,
     shouldShowEndActivationPhaseButton, EmbedBuilder, GAME_PHASES, PHASE_COLOR,
     getInitiativePlayerNum, getInitiativePlayerZoneLabel, saveGames,
-    getNicknamesForDcMessage,
   });
 }
 
@@ -1731,7 +1731,7 @@ client.once('ready', async () => {
           .addStringOption((o) => o.setName('figure').setDescription('Figure key, e.g. Stormtrooper (Regular)-1-0').setRequired(true).setAutocomplete(true))
           .addStringOption((o) =>
             o.setName('type').setDescription('Token type').setRequired(true).addChoices(
-              { name: 'Hit (Damage)', value: 'Hit' },
+              { name: 'Damage', value: 'Damage' },
               { name: 'Surge', value: 'Surge' },
               { name: 'Block', value: 'Block' },
               { name: 'Evade', value: 'Evade' },
@@ -3024,13 +3024,9 @@ async function refreshGameVisuals(game) {
           if (!meta || meta.gameId !== game.gameId) continue;
           try {
             const msg = await ch.messages.fetch(id);
-            const healthState = dcHealthState.get(id) || [];
             const exhausted = dcExhaustedState.get(id) || false;
-            const { embed, files } = await buildDcEmbedAndFiles(
-              meta.dcName, exhausted, meta.displayName, healthState,
-              getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, id),
-              null, null, getNicknamesForDcMessage(game, meta)
-            );
+            const _rdeps = { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, buildDcEmbedAndFiles };
+            const { embed, files } = await renderDcEmbed(game, id, _rdeps);
             const components = getDcPlayAreaComponents(id, exhausted, game, meta.dcName);
             await msg.edit({ embeds: [embed], files, components }).catch(err => console.error('[refresh:dc-embed]', id, err?.message ?? err));
           } catch (err) { console.error('[refresh:dc-embed] fetch failed', id, err?.message ?? err); }
@@ -3140,7 +3136,8 @@ function buildAllDeps() {
     calculateKillVp, decrementActivationIfGroupDefeated,
     checkHuntDissent, checkFriendlyDefeatedPassiveRedraws, checkNefariousGains,
     ccAttachmentsKey,
-    getDcUpgradeAttachments, getFigureLabel,
+    getDcUpgradeAttachments, getTokensForDcMessage, getFigureLabel,
+    renderDcEmbed, buildDcDisplayState,
     filterCondition, isConditionImmune,
     applyCondition: _applyCondition, HARMFUL_CONDITIONS,
 
@@ -4094,15 +4091,8 @@ client.on('interactionCreate', async (interaction) => {
         const renameCh = await client.channels.fetch(renameChId);
         const renameMsg = await renameCh.messages.fetch(renameMsgId);
         const renameExhausted = dcExhaustedState.get(renameMsgId) ?? false;
-        const renameHs = dcHealthState.get(renameMsgId) || [];
-        const { embed: renameEmbed, files: renameFiles } = await buildDcEmbedAndFiles(
-          renameMeta.dcName, renameExhausted, renameMeta.displayName, renameHs,
-          getConditionsForDcMessage(renameGame, renameMeta),
-          getDcUpgradeAttachments(renameGame, renameMsgId),
-          getTokensForDcMessage(renameGame, renameMeta),
-          null,
-          getNicknamesForDcMessage(renameGame, renameMeta),
-        );
+        const _rdeps = { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, buildDcEmbedAndFiles };
+        const { embed: renameEmbed, files: renameFiles } = await renderDcEmbed(renameGame, renameMsgId, _rdeps);
         const renameComponents = getDcPlayAreaComponents(renameMsgId, renameExhausted, renameGame, renameMeta.dcName);
         await renameMsg.edit({ embeds: [renameEmbed], files: renameFiles, components: renameComponents });
       } catch (err) {

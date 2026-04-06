@@ -2270,7 +2270,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     getCcHand, getCcEffectsData,
     _applyCondition,
     grantMovementBank, grantPowerTokens,
-    buildDcEmbedAndFiles, getConditionsForDcMessage, getDcUpgradeAttachments, getNicknamesForDcMessage,
+    renderDcEmbed,
     buildBoardMapPayload,
     updateDcActionsMessage, ensureMovementBankMessage, updateMovementBankMessage,
     sendPowerTokenOverflowUI,
@@ -2369,11 +2369,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         }
       }
       if (nonRedDice.length === 1) {
-        await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, {
-          client, saveGames, dcMessageMeta, dcHealthState, dcExhaustedState,
-          findDcMessageIdForFigure, buildDcEmbedAndFiles, getConditionsForDcMessage,
-          getDcUpgradeAttachments, getDcEffects, logGameAction,
-        });
+        await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, deps);
       } else {
         game.pendingIndiscriminateFire = { attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: splashTargets, availableDice: nonRedDice };
         const ifBtns = nonRedDice.slice(0, 5).map((d, i) =>
@@ -2864,9 +2860,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         const channel = await fetchGameChannel(client, channelId);
         if (!channel) continue;
         const dcMsg = await channel.messages.fetch(msgId);
-        const exhausted = dcExhaustedState.get(msgId) ?? false;
-        const healthState = dcHealthState.get(msgId) || [];
-        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId), null, null, getNicknamesForDcMessage(game, meta));
+        const { embed, files } = await renderDcEmbed(game, msgId, deps);
         await dcMsg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch (err) {

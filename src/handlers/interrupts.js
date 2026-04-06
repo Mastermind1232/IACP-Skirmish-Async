@@ -142,7 +142,7 @@ export async function handleSquadSwarm(interaction, ctx) {
 
 // ── 3. Overdrive ────────────────────────────────────────────────────────────
 export async function handleOverdrive(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, dcHealthState, DC_ACTIONS_PER_ACTIVATION, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getNicknamesForDcMessage, getDcPlayAreaComponents } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, dcHealthState, DC_ACTIONS_PER_ACTIVATION, updateDcActionsMessage, renderDcEmbed, getDcPlayAreaComponents } = ctx;
 
   const _odMsgId = parseCustomId(interaction.customId, 'overdrive_use_');
   const _odMeta = dcMessageMeta.get(_odMsgId);
@@ -164,8 +164,7 @@ export async function handleOverdrive(interaction, ctx) {
   _odGame.overdriveUsedThisActivation[`${_odMeta.dcName}-${_odDgIdx}-0`] = true;
   await logGameAction(_odGame, client, `**Overdrive** — **${_odMeta.displayName || _odMeta.dcName}** took 1 Damage${_odHpNote}; +1 Action granted.`, { phase: 'ROUND', icon: 'activate' });
   await updateDcActionsMessage(_odGame, _odMsgId, client);
-  const _odDisplayName = _odMeta.displayName || _odMeta.dcName;
-  const { embed: _odEmbed, files: _odFiles } = await buildDcEmbedAndFiles(_odMeta.dcName, true, _odDisplayName, _odHS, getConditionsForDcMessage?.(_odGame, _odMeta), (_odGame?.p1DcAttachments?.[_odMsgId] || _odGame?.p2DcAttachments?.[_odMsgId] || []), null, null, getNicknamesForDcMessage?.(_odGame, _odMeta));
+  const { embed: _odEmbed, files: _odFiles } = await renderDcEmbed(_odGame, _odMsgId, ctx, { exhausted: true });
   try {
     const _odCh = await fetchGameChannel(client, _odMeta.playerNum === 1 ? _odGame.p1PlayAreaId : _odGame.p2PlayAreaId);
     const _odMsg = await _odCh.messages.fetch(_odMsgId);

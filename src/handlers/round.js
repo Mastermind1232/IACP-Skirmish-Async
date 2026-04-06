@@ -46,9 +46,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     dcExhaustedState,
     dcHealthState,
     isDepletedRemovedFromGame,
-    buildDcEmbedAndFiles,
-    getConditionsForDcMessage,
-    getNicknamesForDcMessage,
+    renderDcEmbed,
     getDcPlayAreaComponents,
     countTerminalsControlledByPlayer,
     isFigureInDeploymentZone,
@@ -135,9 +133,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     dcExhaustedState,
     dcHealthState,
     isDepletedRemovedFromGame,
-    buildDcEmbedAndFiles,
-    getConditionsForDcMessage,
-    getNicknamesForDcMessage,
+    renderDcEmbed,
     getDcPlayAreaComponents,
     countTerminalsControlledByPlayer,
     isFigureInDeploymentZone,
@@ -193,8 +189,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       const chId = getPlayAreaId(game, meta.playerNum);
       const ch = await fetchGameChannel(client, chId);
       const msg = await ch.messages.fetch(msgId);
-      const healthState = dcHealthState.get(msgId) || [];
-      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
+      const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted: false });
       const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
       await msg.edit({ embeds: [embed], files, components }).catch(discordCatch);
     } catch (err) {
@@ -1936,18 +1931,8 @@ export async function handleImpCitadel(interaction, ctx) {
       const chId = getPlayAreaId(game, playerNum);
       const ch = await fetchGameChannel(client, chId);
       const msg = await ch.messages.fetch(icMsgId);
-      const meta = ctx.dcMessageMeta?.get(icMsgId);
       const exhausted = ctx.dcExhaustedState?.get(icMsgId) || false;
-      const hs = ctx.dcHealthState?.get(icMsgId) || [];
-      const displayName = meta?.displayName || dcList[idx]?.displayName || '[Imperial Citadel]';
-      const { embed, files } = await ctx.buildDcEmbedAndFiles(
-        '[Imperial Citadel]', exhausted, displayName, hs,
-        ctx.getConditionsForDcMessage(game, meta || {}),
-        [],
-        null, null,
-        ctx.getNicknamesForDcMessage(game, meta || {}),
-        { game, playerNum },
-      );
+      const { embed, files } = await ctx.renderDcEmbed(game, icMsgId, ctx);
       const comps = ctx.getDcPlayAreaComponents(icMsgId, exhausted, game, '[Imperial Citadel]');
       await msg.edit({ embeds: [embed], files: files?.length ? files : [], components: comps }).catch(discordCatch);
     }

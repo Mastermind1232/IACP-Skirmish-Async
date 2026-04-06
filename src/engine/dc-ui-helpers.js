@@ -59,3 +59,38 @@ export function getNicknamesForDcMessage(game, meta, deps) {
   }
   return hasAny ? out : undefined;
 }
+
+/**
+ * Canonical DC display-state builder.
+ * Assembles the complete argument set for buildDcEmbedAndFiles from game state.
+ * deps must include: dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats.
+ */
+export function buildDcDisplayState(game, msgId, deps) {
+  const meta = deps.dcMessageMeta.get(msgId);
+  if (!meta) return null;
+  return {
+    dcName:             meta.dcName,
+    exhausted:          deps.dcExhaustedState?.get(msgId) ?? false,
+    displayName:        meta.displayName,
+    healthState:        deps.dcHealthState?.get(msgId) ?? [[null, null]],
+    conditionsByFigure: getConditionsForDcMessage(game, meta, deps),
+    dcAttachments:      getDcUpgradeAttachments(game, msgId),
+    tokensByFigure:     getTokensForDcMessage(game, meta, deps),
+    actionsData:        game.dcActionsData?.[msgId] ?? null,
+    nicknamesByFigure:  getNicknamesForDcMessage(game, meta, deps),
+    options:            { game, playerNum: meta.playerNum },
+  };
+}
+
+/**
+ * Convenience wrapper: builds canonical display state, applies overrides, renders.
+ * deps must also include buildDcEmbedAndFiles.
+ */
+export async function renderDcEmbed(game, msgId, deps, overrides = {}) {
+  const ds = { ...buildDcDisplayState(game, msgId, deps), ...overrides };
+  return deps.buildDcEmbedAndFiles(
+    ds.dcName, ds.exhausted, ds.displayName, ds.healthState,
+    ds.conditionsByFigure, ds.dcAttachments, ds.tokensByFigure,
+    ds.actionsData, ds.nicknamesByFigure, ds.options,
+  );
+}
