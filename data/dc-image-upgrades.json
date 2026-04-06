@@ -12,7 +12,11 @@
     "Wookiee Warrior (Regular)",
     "Yoda"
   ],
-  "dc_upgrades": [],
+  "dc_upgrades": [
+    "[Cross Training]",
+    "[Imperial Citadel]",
+    "[Imperial Retrofitting]"
+  ],
   "cc": [],
   "companions": []
 }
