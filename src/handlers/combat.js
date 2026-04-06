@@ -1361,10 +1361,10 @@ export async function handleAttackTarget(interaction, ctx) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
     }
-    // Heir to the Jedi (Luke): reroll 1 atk die; +1 Hit on Melee; Saber Strike Focus handled at declaration
+    // Heir to the Jedi (Luke): reroll 1 atk die; +1 Hit on Ranged; Saber Strike Focus handled at declaration
     if (cardNameIncludes(_atkUpgrades, 'Heir to the Jedi')) {
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
-      if (!isRanged) _pc.bonusHits = (_pc.bonusHits || 0) + 1;
+      if (isRanged) _pc.bonusHits = (_pc.bonusHits || 0) + 1;
     }
     // Rogue Smuggler (Han Solo): reroll 1 atk die (Distracting loss handled separately)
     if (cardNameIncludes(_atkUpgrades, 'Rogue Smuggler')) {
@@ -3948,7 +3948,7 @@ function buildRogueOneSurgeButton(game, combat) {
   return [
     new ButtonBuilder()
       .setCustomId(`combat_surge_${game.gameId}_rogue_one`)
-      .setLabel('Rogue One: +1 Surge (discard ally token)')
+      .setLabel('Rogue One: +1 Hit (discard ally token)')
       .setStyle(ButtonStyle.Success)
   ];
 }
@@ -4655,7 +4655,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
           .setStyle(ButtonStyle.Secondary)
       );
     }
-    // Rogue One: discard a power token from a friendly figure for +1 Surge
+    // Rogue One: discard a power token from a friendly figure for +1 Hit
     surgeRows.push(..._rogueOneBtns);
     surgeRows.push(
       new ButtonBuilder()
@@ -4765,7 +4765,7 @@ export async function handleCombatSurge(interaction, ctx) {
       );
       const rows = chunkButtonsToRows(btns);
       await thread.send({
-        content: '**Rogue One** — Choose a power token to discard from a friendly figure for **+1 Surge**:',
+        content: '**Rogue One** — Choose a power token to discard from a friendly figure for **+1 Hit**:',
         components: rows,
       }).catch(discordCatch);
       saveGames();
@@ -5018,7 +5018,7 @@ export async function handleCombatSurge(interaction, ctx) {
           .setStyle(ButtonStyle.Secondary)
       );
     }
-    // Rogue One: discard a power token from a friendly figure for +1 Surge
+    // Rogue One: discard a power token from a friendly figure for +1 Hit
     surgeRows.push(...buildRogueOneSurgeButton(game, combat));
     surgeRows.push(
       new ButtonBuilder()
@@ -5481,10 +5481,10 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
   const donorDcName = dcNameFromFigureKey(figureKey);
   removeSpentToken(game, figureKey, tokenIndex);
 
-  // Add +1 surge to the attack
-  combat.surgeRemaining = (combat.surgeRemaining || 0) + 1;
-  combat.rogueOneSurgeGained = (combat.rogueOneSurgeGained || 0) + 1;
-  await thread.send(`**Rogue One** — Discarded **${tokenType}** token from **${donorDcName}** → **+1 Surge** (now ${combat.surgeRemaining} surge remaining).`).catch(discordCatch);
+  // Add +1 Hit to the attack
+  combat.bonusHits = (combat.bonusHits || 0) + 1;
+  combat.rogueOneHitsGained = (combat.rogueOneHitsGained || 0) + 1;
+  await thread.send(`**Rogue One** — Discarded **${tokenType}** token from **${donorDcName}** → **+1 Hit**.`).catch(discordCatch);
 
   // Re-show surge UI
   await _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx);

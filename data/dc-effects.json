@@ -95,7 +95,6 @@
       ],
       "cost": 1,
       "attachment": true,
-      "companion": "The Child",
       "unique": true,
       "affiliation": "Scum"
     },
@@ -251,7 +250,7 @@
       "affiliation": "Any"
     },
     "[Heir to the Jedi]": {
-      "abilityText": "LUKE SKYWALKER ONLY\n\nWhile attacking, you may reroll 1 attack die.\n\nWhen you declare a Melee attack, apply +1 Hit to the attack results.\n\nBefore you declare an attack using \"Saber Strike\" you become Focused.",
+      "abilityText": "LUKE SKYWALKER ONLY\n\nWhile attacking, you may reroll 1 attack die.\n\nWhen you declare a Ranged attack, apply +1 Hit to the attack results.\n\nBefore you declare an attack using \"Saber Strike\" you become Focused.",
       "keywords": [
         "LUKE SKYWALKER"
       ],
@@ -367,7 +366,7 @@
     "[Orbital Bombardment]": {
       "abilityText": "UNIQUE FIGURE WITH FIGURE COST 4 OR MORE ONLY\n\nYou gain: \n\nSpecial Action: Place Bombardment tokens on this card equal to the current round number. Then, you may perform an attack.\n\nYou may deplete this card at the start of your activation to choose a number of spaces equal to the number of Bombardment tokens that were on this card. Each figure on a chose space suffers 2 Damage.",
       "keywords": [],
-      "cost": 0,
+      "cost": 2,
       "attachment": true,
       "unique": true,
       "affiliation": "Any"
@@ -405,7 +404,7 @@
       "affiliation": "Rebel"
     },
     "[Rogue One]": {
-      "abilityText": "Your army must include Baze Malbus, Bodhi Rook, Cassian Andor, Chirrut Imwe, Jyn Erso, and K-2SO, and cannot include other unique figures that cost 3 or less.\n\nWhile a friendly figure listed above is attacking, it may discard 1 Power Token of any type from another friendly figure to add +1 Surge to the attack results.\n\nAt the start of the first game round, draw 3 Command cards, then place 2 Command cards from your hand on top of your deck.",
+      "abilityText": "Your army must include Baze Malbus, Bodhi Rook, Cassian Andor, Chirrut Imwe, Jyn Erso, and K-2SO, and cannot include other unique figures that cost 3 or less.\n\nWhile a friendly figure listed above is attacking, it may discard 1 Power Token of any type from another friendly figure to add +1 Hit to the attack results.\n\nAt the start of the first game round, draw 3 Command cards, then place 2 Command cards from your hand on top of your deck.",
       "keywords": [],
       "cost": 0,
       "attachment": false,
@@ -4964,10 +4963,6 @@
       "health": 3,
       "speed": 4,
       "figures": 1,
-      "attack": {
-        "dice": [],
-        "type": "none"
-      },
       "defense": [
         "white"
       ],
@@ -6257,11 +6252,7 @@
       "attachment": false,
       "companion": true,
       "unique": true,
-      "affiliation": "Any",
-      "specialAbilityIds": [
-        "force_heal",
-        "force_exhaustion_child"
-      ]
+      "affiliation": "Any"
     },
     "The Grand Inquisitor": {
       "abilityText": "Precision: While attacking or defending against an adjacent figure, you may choose 1 die. The player that rolled that die must reroll it.\n\nSpecial Action (Lightsaber Throw): Perform a Ranged attack targeting a non-adjacent figure using your attack pool. Apply +2 Accuracy to the attack results.\n\nSurge (Deadly Spin): Apply -1 Dodge to the defense results. This attack gains Cleave 3.",
@@ -7076,7 +7067,12 @@
     },
     "Paz Vizsla": {
       "abilityText": "Heavy Repeater: While performing a Ranged attack, you may suffer 1 Strain to apply +1 Hit, Blast 2, or +3 Accuracy to the attack results.\n\nSubmit or Fight: When you would suffer Damage from Strain, you may return any number of Command cards from your discard pile to the game box to prevent that much Damage.",
-      "keywords": ["Mobile", "Vehicle", "Heavy Weapon", "Brawler"],
+      "keywords": [
+        "Mobile",
+        "Vehicle",
+        "Heavy Weapon",
+        "Brawler"
+      ],
       "cost": 7,
       "subCost": 0,
       "health": 13,

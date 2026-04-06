@@ -240,10 +240,10 @@ describe('headless combat resolution', () => {
       'G65: MASSIVE AT-RT at e3 must NOT block LOS from e2 to e5 — figure excluded from blocking set');
   });
 
-  it('R43: Heir to the Jedi on melee attacker grants rerollOneAttackDie + bonusHits', async () => {
+  it('R43: Heir to the Jedi on melee attacker grants rerollOneAttackDie but not bonusHits', async () => {
     // Darth Vader (melee) with Heir to the Jedi attachment.
     // Card text: "While attacking, you may reroll 1 attack die.
-    //   While performing a melee attack, apply +1 Damage to the attack results."
+    //   When you declare a Ranged attack, apply +1 Hit to the attack results."
     // Vader has no innate attack rerolls (foresight = defense only). Clean witness.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
@@ -290,13 +290,13 @@ describe('headless combat resolution', () => {
     assert.strictEqual(game.pendingCombat.isRanged, false, 'Vader is melee');
     assert.strictEqual(game.pendingCombat.rerollOneAttackDie, 1,
       'R43: Heir to the Jedi grants +1 rerollOneAttackDie');
-    assert.strictEqual(game.pendingCombat.bonusHits, 1,
-      'R43: Heir to the Jedi grants +1 bonusHits on melee attack');
+    assert.strictEqual(game.pendingCombat.bonusHits || 0, 0,
+      'R43: Heir to the Jedi does NOT grant bonusHits on melee attack');
   });
 
-  it('R43: Heir to the Jedi on ranged attacker grants rerollOneAttackDie but not bonusHits', async () => {
+  it('R43: Heir to the Jedi on ranged attacker grants rerollOneAttackDie + bonusHits', async () => {
     // Han Solo (ranged) with Heir to the Jedi attachment.
-    // Ranged attacks get the reroll but NOT the +1 Damage (melee-only clause).
+    // Ranged attacks get the reroll AND the +1 Hit (ranged-only clause).
     // Han has no innate attack rerolls. Clean witness.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
@@ -341,8 +341,8 @@ describe('headless combat resolution', () => {
     assert.strictEqual(game.pendingCombat.isRanged, true, 'Han Solo is ranged');
     assert.strictEqual(game.pendingCombat.rerollOneAttackDie, 1,
       'R43: Heir to the Jedi grants +1 rerollOneAttackDie even on ranged');
-    assert.strictEqual(game.pendingCombat.bonusHits || 0, 0,
-      'R43: Heir to the Jedi does NOT grant bonusHits on ranged attack');
+    assert.strictEqual(game.pendingCombat.bonusHits, 1,
+      'R43: Heir to the Jedi grants +1 bonusHits on ranged attack');
   });
 
   it('R45: Inspiring — friendly Luke within 3 spaces grants +1 attackerRerollsRemaining', async () => {
