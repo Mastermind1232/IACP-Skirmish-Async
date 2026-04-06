@@ -1213,11 +1213,11 @@ export async function handleConfirmActivate(interaction, ctx) {
         new ButtonBuilder().setCustomId(`hair_trigger_use_${game.gameId}_${_htMsgId}_${_htFk}`).setLabel(`Use Hair Trigger (${_htDcName})`).setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`hair_trigger_skip_${game.gameId}_${_htFk}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await thread.send({
-        content: `<@${_htOwnerId}> **Hair Trigger** — **${_htDcName}** may interrupt to perform an attack targeting **${displayName}**. (Once per round)`,
+      await logGameAction(game, client, `<@${_htOwnerId}> **Hair Trigger** — **${_htDcName}** may interrupt to perform an attack targeting **${displayName}**. (Once per round)`, {
+        phase: 'ACTIVATION', icon: 'card',
         allowedMentions: { users: [_htOwnerId] },
         components: [_htRow],
-      }).catch(discordCatch);
+      });
       break; // Only one Hair Trigger prompt per activation
     }
   }
@@ -1599,7 +1599,10 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (_mountedIds.includes('consider_it_my_payment_asajj')) {
     const oppNum = opponentPlayerNum(meta.playerNum);
     const oppOwnerId = game[`player${oppNum}Id`];
-    await thread.send(sanitizeMentions({ content: `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand.`, allowedMentions: { users: [oppOwnerId] } })).catch(discordCatch);
+    await logGameAction(game, client, `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand.`, {
+      phase: 'ACTIVATION', icon: 'card',
+      allowedMentions: { users: [oppOwnerId] },
+    });
   }
   // General's Orders (General Weiss): choose up to 2 friendlies; each gains 2 MP
   if (_mountedIds.includes('generals_orders_weiss')) {
