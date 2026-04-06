@@ -404,6 +404,11 @@ export async function handleDcUnactivate(interaction, ctx) {
     await interaction.followUp({ content: 'DC is not activated.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  const actionsData = game.dcActionsData?.[msgId];
+  if (actionsData && actionsData.remaining < actionsData.total) {
+    await interaction.followUp({ content: 'Cannot un-activate — actions have already been performed.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const displayName = meta.displayName || meta.dcName;
   dcExhaustedState.set(msgId, false);
   const total = getActivationsTotal(game, meta.playerNum);

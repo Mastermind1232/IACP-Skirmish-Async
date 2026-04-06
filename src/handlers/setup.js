@@ -1739,22 +1739,23 @@ export async function handleLoadoutConfirm(interaction, ctx) {
   // Remove the loadout picker from the hand channel
   await interaction.message.delete().catch(discordCatch);
 
-  // Post the equipped loadout card in the play area under the Purge Trooper DC
+  // Store loadout as a DC attachment and reorder play area so it appears under the DC
   const dcName = dcNameFromFigureKey(figureKey);
   if (wasPending) {
     try {
-      const playAreaId = getPlayAreaId(game, wasPending);
-      const playAreaChannel = await fetchGameChannel(client, playAreaId);
-      const files = _getLoadoutImageAttachment(card, loadoutName);
-      const embed = new EmbedBuilder()
-        .setTitle(`Imperial Loadout: ${loadoutName}`)
-        .setDescription(`**${dcName}** — ${card.abilityText}`);
-      if (files.length > 0) {
-        embed.setImage(`attachment://${files[0].name}`);
+      const dcMsgIds = getDcMessageIds(game, wasPending) || [];
+      const dcMsgId = dcMsgIds.find(id => ctx.dcMessageMeta.get(id)?.dcName === dcName);
+      if (dcMsgId) {
+        const attachKey = dcAttachmentsKey(wasPending);
+        game[attachKey] = game[attachKey] || {};
+        game[attachKey][dcMsgId] = game[attachKey][dcMsgId] || [];
+        game[attachKey][dcMsgId].push(loadoutName);
+        if (ctx.reorderPlayAreaAfterAttachments) {
+          await ctx.reorderPlayAreaAfterAttachments(game, wasPending, client);
+        }
       }
-      await playAreaChannel.send({ embeds: [embed], files }).catch(discordCatch);
     } catch (err) {
-      console.error('Failed to post loadout card to play area:', err);
+      console.error('Failed to add loadout attachment to play area:', err);
     }
   }
 

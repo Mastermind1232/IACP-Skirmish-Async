@@ -15,6 +15,7 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { computeDeckHash } from '../game/deck-hash.js';
 import { getFavoriteDeckByHash, isFavoritesAvailable } from '../db.js';
 import { buildFavoriteConfirmButtons, buildFavoriteConfirmContent } from '../handlers/favorites.js';
+import { getLoadoutCards, getRootDir } from '../data-loader.js';
 
 /**
  * Build embeds and files for the "Attachments" message under a DC.
@@ -28,22 +29,42 @@ import { buildFavoriteConfirmButtons, buildFavoriteConfirmContent } from '../han
 export async function buildAttachmentEmbedsAndFiles(ccNames, dcNames, attachedToDcName, deps) {
   const embeds = [];
   const files = [];
+  const loadoutCards = getLoadoutCards();
+  const rootDir = getRootDir();
   const items = [
     ...(ccNames || []).map((name, i) => ({ name, prefix: 'cc-attach', fallbackLabel: `Attachment ${i + 1}`, resolvePath: deps.getCommandCardImagePath })),
-    ...(dcNames || []).map((name, i) => ({ name, prefix: 'dc-attach', fallbackLabel: `Skirmish Upgrade ${i + 1}`, resolvePath: (n) => { const rel = deps.getDcImagePath(n); return rel ? deps.join(deps.rootDir, rel) : null; } })),
+    ...(dcNames || []).map((name, i) => {
+      const loadout = loadoutCards[name];
+      if (loadout) {
+        return {
+          name, prefix: 'loadout', fallbackLabel: 'Loadout',
+          resolvePath: () => loadout.imagePath ? deps.join(rootDir, loadout.imagePath) : null,
+          isLoadout: true, abilityText: loadout.abilityText,
+        };
+      }
+      return { name, prefix: 'dc-attach', fallbackLabel: `Skirmish Upgrade ${i + 1}`, resolvePath: (n) => { const rel = deps.getDcImagePath(n); return rel ? deps.join(deps.rootDir, rel) : null; } };
+    }),
   ];
   for (let i = 0; i < items.length; i++) {
-    const { name, prefix, fallbackLabel, resolvePath } = items[i];
+    const { name, prefix, fallbackLabel, resolvePath, isLoadout, abilityText } = items[i];
     const path = resolvePath(name);
     const ext = path ? (path.toLowerCase().endsWith('.png') ? 'png' : 'jpg') : 'jpg';
     const fileName = `${prefix}-${i}-${(name || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
     const embed = new EmbedBuilder()
-      .setTitle(`\uD83D\uDCCE ${name || fallbackLabel}`)
+      .setTitle(isLoadout ? `\u2694\uFE0F Imperial Loadout: ${name}` : `\uD83D\uDCCE ${name || fallbackLabel}`)
       .setColor(deps.COLORS.BLURPLE);
-    if (attachedToDcName) embed.setDescription(`Attached to: **${attachedToDcName}**`);
+    if (attachedToDcName) {
+      embed.setDescription(isLoadout
+        ? `**${attachedToDcName}** \u2014 ${abilityText}`
+        : `Attached to: **${attachedToDcName}**`);
+    }
     if (path && deps.existsSync(path)) {
       files.push(new AttachmentBuilder(path, { name: fileName }));
-      embed.setThumbnail(`attachment://${fileName}`);
+      if (isLoadout) {
+        embed.setImage(`attachment://${fileName}`);
+      } else {
+        embed.setThumbnail(`attachment://${fileName}`);
+      }
     }
     embeds.push(embed);
   }

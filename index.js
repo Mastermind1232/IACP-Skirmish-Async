@@ -3130,7 +3130,7 @@ function buildAllDeps() {
     postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState,
     clearPreGameSetup, getDeployFigureLabels, getDeployButtonRows,
     getDeploymentMapAttachment, filterValidTopLeftSpaces,
-    updateDeployPromptMessages, finishSetupAttachments,
+    updateDeployPromptMessages, finishSetupAttachments, reorderPlayAreaAfterAttachments,
     createPlayAreaChannels, createBoardChannel, createHandThreads,
     refreshAllGameComponents, applyDirectDamageToFigure,
     getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert, sendSquadConfirmation, buildSquadConfirmText,

@@ -105,13 +105,15 @@ export async function createHandThreads(client, game, deps) {
     invitable: false,
   });
   if (isDiscordSnowflake(game.player2Id)) await p2Thread.members.add(game.player2Id).catch(discordCatch);
-  // Add Admin role members to hand threads for testing/moderation visibility
-  const adminRole = p1PlayArea.guild.roles.cache.find(r => r.name === 'Admin');
-  if (adminRole) {
-    const adminMembers = adminRole.members;
-    for (const [memberId] of adminMembers) {
-      await p1Thread.members.add(memberId).catch(discordCatch);
-      await p2Thread.members.add(memberId).catch(discordCatch);
+  // Add Admin role members to hand threads only for test games (competitive games must stay private)
+  if (game.isTestGame) {
+    const adminRole = p1PlayArea.guild.roles.cache.find(r => r.name === 'Admin');
+    if (adminRole) {
+      const adminMembers = adminRole.members;
+      for (const [memberId] of adminMembers) {
+        await p1Thread.members.add(memberId).catch(discordCatch);
+        await p2Thread.members.add(memberId).catch(discordCatch);
+      }
     }
   }
   game.p1HandId = p1Thread.id;

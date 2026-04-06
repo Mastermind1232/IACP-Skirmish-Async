@@ -20,9 +20,13 @@ export async function reorderPlayAreaAfterAttachments(game, playerNum, client, d
   const dcAttachKey = deps.dcAttachmentsKey(playerNum);
   const channelId = deps.getPlayAreaId(game, playerNum);
 
-  // Only reorder if there are attachment messages to interleave
-  const hasAttachments = attachMsgIds.some((id) => id != null);
-  if (!hasAttachments) return;
+  // Only reorder if there are attachments (existing messages or pending data) to interleave
+  const hasAttachmentMsgs = attachMsgIds.some((id) => id != null);
+  const hasAttachmentData = dcMsgIds.some((id) => id && (
+    ((game[ccAttachKey] || {})[id] || []).length > 0 ||
+    ((game[dcAttachKey] || {})[id] || []).length > 0
+  ));
+  if (!hasAttachmentMsgs && !hasAttachmentData) return;
 
   const channel = await fetchGameChannel(client, channelId);
   const oldDcMsgIds = [...dcMsgIds];
