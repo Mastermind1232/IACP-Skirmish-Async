@@ -1428,6 +1428,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Advanced Weapons Research (Director Krennic): friendly within range gains 1 Hit or Surge Token
   // Range is 2 (or 3 with Advanced Com Systems attachment)
+  await thread.send({ content: `[AWR-debug] dcName="${meta.dcName}" match=${meta.dcName === 'Director Krennic'}` }).catch(discordCatch);
   if (meta.dcName === 'Director Krennic') {
     try {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
