@@ -1926,6 +1926,34 @@ export async function handleImpCitadel(interaction, ctx) {
   const total = game.imperialCitadelTokens;
   await logGameAction(game, client, `🏰 **Imperial Citadel** — placed **1 ${label}** token (now: ${total.damage} Damage, ${total.block} Block).`);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  // Refresh Imperial Citadel embed in play area to show updated token counts
+  try {
+    const dcList = getDcList(game, playerNum) || [];
+    const msgIds = getDcMessageIds(game, playerNum) || [];
+    const idx = dcList.findIndex(dc => dc?.dcName === '[Imperial Citadel]');
+    if (idx >= 0 && msgIds[idx]) {
+      const icMsgId = msgIds[idx];
+      const chId = getPlayAreaId(game, playerNum);
+      const ch = await fetchGameChannel(client, chId);
+      const msg = await ch.messages.fetch(icMsgId);
+      const meta = ctx.dcMessageMeta?.get(icMsgId);
+      const exhausted = ctx.dcExhaustedState?.get(icMsgId) || false;
+      const hs = ctx.dcHealthState?.get(icMsgId) || [];
+      const displayName = meta?.displayName || dcList[idx]?.displayName || '[Imperial Citadel]';
+      const { embed, files } = await ctx.buildDcEmbedAndFiles(
+        '[Imperial Citadel]', exhausted, displayName, hs,
+        ctx.getConditionsForDcMessage(game, meta || {}),
+        [],
+        null, null,
+        ctx.getNicknamesForDcMessage(game, meta || {}),
+        { game, playerNum },
+      );
+      const comps = ctx.getDcPlayAreaComponents(icMsgId, exhausted, game, '[Imperial Citadel]');
+      await msg.edit({ embeds: [embed], files: files?.length ? files : [], components: comps }).catch(discordCatch);
+    }
+  } catch (err) {
+    console.error('Failed to refresh Imperial Citadel embed:', err);
+  }
   saveGames();
   await interaction.followUp({ content: `Placed ${label} token on Imperial Citadel.`, ephemeral: true }).catch(discordCatch);
 }

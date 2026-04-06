@@ -532,8 +532,15 @@ export async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healt
   const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState, conditionsByFigure, tokensByFigure, nicknamesByFigure);
   const actionsLine = (actionsData != null && exhausted) ? getActionsCounterContent(actionsData.remaining, actionsData.total) : null;
   const loadoutLine = loadoutName ? `**Loadout:** ${loadoutName}` : null;
+  // Imperial Citadel: show token inventory on the card
+  let citadelTokenLine = null;
+  if (figureless && dcName?.includes('Imperial Citadel') && options.game?.imperialCitadelTokens) {
+    const ct = options.game.imperialCitadelTokens;
+    const parts = Object.entries(ct).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k.charAt(0).toUpperCase() + k.slice(1)}`);
+    citadelTokenLine = parts.length > 0 ? `**Tokens:** ${parts.join(', ')}` : '**Tokens:** none';
+  }
   const lines = figureless
-    ? [actionsLine, variant ? `**Variant:** ${variant}` : null].filter(Boolean)
+    ? [actionsLine, variant ? `**Variant:** ${variant}` : null, citadelTokenLine].filter(Boolean)
     : [
         actionsLine,
         `**Figures:** ${figures}`,

@@ -2075,7 +2075,12 @@ export async function handleConfirmActivate(interaction, ctx) {
               .setStyle(ButtonStyle.Primary);
           });
           _icBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_citadel_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-          await thread.send({ content: `**Imperial Citadel** — **${displayName}** may gain 1 Power Token from the Citadel:`, components: [new ActionRowBuilder().addComponents(_icBtns)] }).catch(discordCatch);
+          const _icOwnerId = getPlayerId(game, meta.playerNum);
+          await logGameAction(game, client, `🏰 **Imperial Citadel** — <@${_icOwnerId}>, **${displayName}** may gain 1 Power Token from the Citadel:`, {
+            phase: 'ACTIVATION', icon: 'card',
+            components: [new ActionRowBuilder().addComponents(_icBtns)],
+            allowedMentions: { users: [_icOwnerId] },
+          });
         }
       }
     }
@@ -2408,7 +2413,7 @@ export async function handleCancelActivate(interaction, _ctx) {
  */
 export async function handleActPassive(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
-  const { getGame, dcMessageMeta, dcHealthState, saveGames, logGameAction, client, buildDcEmbedAndFiles, getDcPlayAreaComponents } = ctx;
+  const { getGame, dcMessageMeta, dcHealthState, dcExhaustedState, saveGames, logGameAction, client, buildDcEmbedAndFiles, getDcPlayAreaComponents, getConditionsForDcMessage, getNicknamesForDcMessage } = ctx;
   // Parse: act_passive_{gameId}_{msgId}_{ability}_{choice}
   const parts = splitCustomId(interaction.customId, 'act_passive_');
   if (parts.length < 3) return;
@@ -3229,6 +3234,32 @@ export async function handleActPassive(interaction, ctx) {
         grantPowerTokens(game, fk, _icType.charAt(0).toUpperCase() + _icType.slice(1), 1);
         await interaction.message.edit({ content: `**Imperial Citadel** — **${displayName}** gained 1 **${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token** from the Citadel.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Imperial Citadel** — **${displayName}** gained 1 ${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token from the Citadel.`, { phase: 'ACTIVATION', icon: 'card' });
+        // Refresh Citadel play area embed to show updated token counts
+        try {
+          const _icDcListRefresh = getDcList(game, meta.playerNum) || [];
+          const _icMsgIdsRefresh = getDcMessageIds(game, meta.playerNum) || [];
+          const _icIdx = _icDcListRefresh.findIndex(dc => dc?.dcName === '[Imperial Citadel]');
+          if (_icIdx >= 0 && _icMsgIdsRefresh[_icIdx]) {
+            const _icMsgId = _icMsgIdsRefresh[_icIdx];
+            const _icChId = getPlayAreaId(game, meta.playerNum);
+            const _icCh = await fetchGameChannel(client, _icChId);
+            const _icMsg = await _icCh.messages.fetch(_icMsgId);
+            const _icMeta = dcMessageMeta?.get(_icMsgId);
+            const _icExh = dcExhaustedState?.get(_icMsgId) || false;
+            const _icHs = dcHealthState?.get(_icMsgId) || [];
+            const _icDn = _icMeta?.displayName || _icDcListRefresh[_icIdx]?.displayName || '[Imperial Citadel]';
+            const { embed: _icEmb, files: _icFiles } = await buildDcEmbedAndFiles(
+              '[Imperial Citadel]', _icExh, _icDn, _icHs,
+              getConditionsForDcMessage(game, _icMeta || {}), [], null, null,
+              getNicknamesForDcMessage(game, _icMeta || {}),
+              { game, playerNum: meta.playerNum },
+            );
+            const _icComps = getDcPlayAreaComponents(_icMsgId, _icExh, game, '[Imperial Citadel]');
+            await _icMsg.edit({ embeds: [_icEmb], files: _icFiles?.length ? _icFiles : [], components: _icComps }).catch(discordCatch);
+          }
+        } catch (_icErr) {
+          console.error('Failed to refresh Imperial Citadel embed:', _icErr);
+        }
         if (game.pendingPowerTokenOverflow?.length > 0) {
           await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
         }
