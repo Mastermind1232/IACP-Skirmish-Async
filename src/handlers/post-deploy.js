@@ -181,6 +181,23 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
         abilities.push({ abilityId: 'scavenged_walker_move', label: 'Scavenged Walker', dcName: dc.dcName, figureKey: fk, msgId: mid, playerNum, interactive: true, type: 'movement', optional: true });
       }
     }
+    // Cross Training (attachment): after deployment, this group becomes Hidden
+    if (atts.some(a => a.toLowerCase() === 'cross training')) {
+      const dc = dcList[i];
+      if (dc && !dc.defeated) {
+        // Find all deployed figures in the same deployment group
+        const dgMatch = Object.keys(figPositions).find(k => k.startsWith(dc.dcName + '-'));
+        if (dgMatch) {
+          const dgPrefix = dgMatch.match(/^(.+-\d+)-/)?.[1]; // e.g. "Snowtrooper (Elite)-1"
+          if (dgPrefix) {
+            const groupFigures = Object.keys(figPositions).filter(k => k.startsWith(dgPrefix + '-') && figPositions[k]);
+            for (const gfk of groupFigures) {
+              abilities.push({ abilityId: 'cross_training_hidden', label: 'Cross Training', dcName: dc.dcName, figureKey: gfk, playerNum, interactive: false, type: 'condition' });
+            }
+          }
+        }
+      }
+    }
     // Companion deployment via attachment (e.g., [Clan of Two] → The Child)
     for (const attName of atts) {
       const attData = dcEffects[attName] || dcEffects[`[${attName}]`];
@@ -255,6 +272,11 @@ async function resolveAutoAbility(game, ability, client, logGameAction) {
     case 'in_the_shadows': {
       applyCondition(game, figureKey, 'Hide');
       await logGameAction(game, client, `🥷 **In The Shadows** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+      break;
+    }
+    case 'cross_training_hidden': {
+      applyCondition(game, figureKey, 'Hide');
+      await logGameAction(game, client, `🥷 **Cross Training** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
       break;
     }
     case 'security_detail': {

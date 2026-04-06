@@ -221,7 +221,7 @@ const ROUND_OBJECT_FLAGS = [
   'activationKills',
   'activationDamagedFigures',
   'pendingBombDrop',
-  'crossTrainingExhausted',
+  // crossTrainingExhausted — removed: Cross Training now uses exhaustedSkirmishUpgrades
   'massiveMovementLocked',
   'disarmPermanentWeakened',
   'adrenalineBonuses',

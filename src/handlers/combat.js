@@ -1374,15 +1374,7 @@ export async function handleAttackTarget(interaction, ctx) {
     if (cardNameIncludes(_atkUpgrades, 'Wookiee Avenger')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
     }
-    // Cross Training (attacking): replace 1 attack die with a different color (exhaust — once per round)
-    if (cardNameIncludes(_atkUpgrades, 'Cross Training')) {
-      const _ctAtkExh = game.crossTrainingExhausted?.[msgId];
-      if (!_ctAtkExh) {
-        _pc.crossTrainingAttack = true;
-        game.crossTrainingExhausted = game.crossTrainingExhausted || {};
-        game.crossTrainingExhausted[msgId] = true;
-      }
-    }
+    // Cross Training: defend-only ability (no attack effect)
     // Guidance Systems (Mortar Trooper): optional -1 Hit, +2 Accuracy per use (multiple times per attack)
     if (cardNameIncludes(_atkUpgrades, 'Mortar Trooper')) {
       _pc.guidanceSystemsAvailable = true;
@@ -1434,13 +1426,12 @@ export async function handleAttackTarget(interaction, ctx) {
     if (cardNameIncludes(_defUpgrades, 'Wookiee Avenger')) {
       _pc.wookieeAvengerDefend = true;
     }
-    // Cross Training (defending): replace 1 defense die with white die (exhaust — once per round)
+    // Cross Training (defending): exhaust to reroll 1 defense die with color swap (flagged for reroll window)
     if (cardNameIncludes(_defUpgrades, 'Cross Training')) {
-      const _ctExh = game.crossTrainingExhausted?.[_defMsgId];
-      if (!_ctExh) {
-        _pc.crossTrainingDefend = true;
-        game.crossTrainingExhausted = game.crossTrainingExhausted || {};
-        game.crossTrainingExhausted[_defMsgId] = true;
+      const _ctExh = game.exhaustedSkirmishUpgrades?.[_defMsgId] || [];
+      if (!cardNameIncludes(_ctExh, 'Cross Training')) {
+        _pc.crossTrainingAvailable = true;
+        _pc.crossTrainingDefMsgId = _defMsgId;
       }
     }
     // Rogue Smuggler (defender): lose Distracting — negate the passive if present
@@ -2607,11 +2598,6 @@ export async function handleCombatRoll(interaction, ctx) {
     if (removeMax > 0) dice = dice.slice(0, Math.max(0, dice.length - removeMax));
     const keepMax = combat.attackPoolKeepMax;
     if (typeof keepMax === 'number' && keepMax > 0 && dice.length > keepMax) dice = dice.slice(0, keepMax);
-    // Cross Training (Skirmish Upgrade): replace 1 non-white attack die with white
-    if (combat.crossTrainingAttack) {
-      const _ctAtkIdx = dice.findIndex(c => c !== 'white');
-      if (_ctAtkIdx !== -1) dice[_ctAtkIdx] = 'white';
-    }
     const addYellowUntil = combat.attackPoolAddYellowUntilTotal;
     if (typeof addYellowUntil === 'number' && addYellowUntil > 0 && dice.length < addYellowUntil) {
       const toAdd = addYellowUntil - dice.length;
@@ -2655,11 +2641,6 @@ export async function handleCombatRoll(interaction, ctx) {
     const baseDice = Array.isArray(baseDef) ? baseDef : [baseDef];
     const bonusDice = combat.defenseBonusDice || [];
     const pool = [...baseDice, ...bonusDice];
-    // Cross Training (Skirmish Upgrade): replace 1 non-white defense die with white
-    if (combat.crossTrainingDefend) {
-      const _ctIdx = pool.findIndex(c => c !== 'white');
-      if (_ctIdx !== -1) pool[_ctIdx] = 'white';
-    }
     // Autofire: defender adds 1 white die
     if (game.autofireActive?.[combat.attackerMsgId]) {
       pool.push('white');
@@ -3193,7 +3174,8 @@ export async function sendRerollUI(thread, game, combat, phase) {
     });
   } else {
     const remaining = combat.defenderRerollsRemaining || 0;
-    if (remaining <= 0) {
+    const ctAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
+    if (remaining <= 0 && !ctAvailable) {
       combat.rerollPhase = null;
       return;
     }
@@ -3202,11 +3184,22 @@ export async function sendRerollUI(thread, game, combat, phase) {
     const buttons = [];
     for (let i = 0; i < dice.length; i++) {
       if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
+      if (remaining > 0) {
+        buttons.push(
+          new ButtonBuilder()
+            .setCustomId(`combat_reroll_${gameId}_def_${i}`)
+            .setLabel(`Reroll ${formatDefenseDie(dice[i], i)}`)
+            .setStyle(ButtonStyle.Secondary)
+        );
+      }
+    }
+    // Cross Training: separate exhaust-to-reroll with color swap
+    if (ctAvailable) {
       buttons.push(
         new ButtonBuilder()
-          .setCustomId(`combat_reroll_${gameId}_def_${i}`)
-          .setLabel(`Reroll ${formatDefenseDie(dice[i], i)}`)
-          .setStyle(ButtonStyle.Secondary)
+          .setCustomId(`ct_reroll_${gameId}_pick`)
+          .setLabel('⚔️ Cross Training (Exhaust)')
+          .setStyle(ButtonStyle.Primary)
       );
     }
     buttons.push(
@@ -3216,8 +3209,11 @@ export async function sendRerollUI(thread, game, combat, phase) {
         .setStyle(ButtonStyle.Primary)
     );
     const actionRows = buildActionRows(buttons);
+    const parts = [];
+    if (remaining > 0) parts.push(`${remaining} reroll${remaining > 1 ? 's' : ''}`);
+    if (ctAvailable) parts.push('Cross Training');
     await thread.send({
-      content: `**Reroll Window (Defender)** — ${remaining} reroll${remaining > 1 ? 's' : ''} available. Choose a defense die to reroll, or Done.`,
+      content: `**Reroll Window (Defender)** — ${parts.join(' + ')} available. Choose a defense die to reroll, or Done.`,
       components: actionRows,
     });
   }
@@ -3441,7 +3437,7 @@ export async function handleCombatReroll(interaction, ctx) {
     saveGames();
     return;
   }
-  if (side === 'def' && (choice === 'done' || combat.defenderRerollsRemaining <= 0)) {
+  if (side === 'def' && (choice === 'done' || (combat.defenderRerollsRemaining <= 0 && !(combat.crossTrainingAvailable && !combat.crossTrainingUsed)))) {
     // Combat gate: both players review defender rerolls before modifications
     await sendCombatGate(thread, game, combat, 'post_defender_reroll', ctx);
     saveGames();
@@ -3451,6 +3447,135 @@ export async function handleCombatReroll(interaction, ctx) {
   // Still has rerolls — show updated UI
   await sendRerollUI(thread, game, combat, combat.rerollPhase);
   saveGames();
+}
+
+/**
+ * Handle Cross Training reroll flow:
+ *   ct_reroll_{gameId}_pick         → show die picker
+ *   ct_reroll_{gameId}_die_{index}  → show color picker
+ *   ct_reroll_{gameId}_color_{index}_{color} → swap color, reroll, exhaust
+ */
+export async function handleCrossTrainingReroll(interaction, ctx) {
+  const { getGame, replyIfGameEnded, rollSingleDefenseDie, recalcDefenseTotals, saveGames } = ctx;
+  const match = interaction.customId.match(/^ct_reroll_([^_]+)_(pick|die_(\d+)|color_(\d+)_(\w+))$/);
+  if (!match) return;
+  const [, gameId] = match;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId || combat.rerollPhase !== 'defender') {
+    await interaction.followUp({ content: 'No defender reroll phase active.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
+  if (!await requirePlayer(interaction, game, interaction.user.id, defenderPlayerNum, canActAsPlayer, `Only the defender (P${defenderPlayerNum}) may use Cross Training.`)) return;
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+
+  const action = interaction.customId.replace(`ct_reroll_${gameId}_`, '');
+
+  if (action === 'pick') {
+    // Step 1: Show die picker — which die to swap & reroll
+    const dice = combat.defenseDiceResults || [];
+    const alreadyRerolled = combat.defenderRerolledIndices || [];
+    const buttons = [];
+    for (let i = 0; i < dice.length; i++) {
+      if (alreadyRerolled.includes(i)) continue; // G12: each die max once
+      buttons.push(
+        new ButtonBuilder()
+          .setCustomId(`ct_reroll_${gameId}_die_${i}`)
+          .setLabel(`${formatDefenseDie(dice[i], i)}`)
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`combat_reroll_${gameId}_def_done`)
+        .setLabel('Cancel')
+        .setStyle(ButtonStyle.Danger)
+    );
+    await thread.send({
+      content: '**Cross Training** — Pick a defense die to replace & reroll:',
+      components: buildActionRows(buttons),
+    });
+    saveGames();
+    return;
+  }
+
+  const dieMatch = action.match(/^die_(\d+)$/);
+  if (dieMatch) {
+    // Step 2: Player picked a die — show color picker
+    const dieIdx = parseInt(dieMatch[1], 10);
+    const dice = combat.defenseDiceResults || [];
+    if (dieIdx < 0 || dieIdx >= dice.length) return;
+    const currentColor = dice[dieIdx].color;
+    const availableColors = ['white', 'black'].filter(c => c !== currentColor);
+    const buttons = availableColors.map(color =>
+      new ButtonBuilder()
+        .setCustomId(`ct_reroll_${gameId}_color_${dieIdx}_${color}`)
+        .setLabel(`Swap to ${color}`)
+        .setStyle(ButtonStyle.Primary)
+    );
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`ct_reroll_${gameId}_pick`)
+        .setLabel('Back')
+        .setStyle(ButtonStyle.Secondary)
+    );
+    await thread.send({
+      content: `**Cross Training** — Replace ${currentColor} die #${dieIdx + 1} with:`,
+      components: buildActionRows(buttons),
+    });
+    saveGames();
+    return;
+  }
+
+  const colorMatch = action.match(/^color_(\d+)_(\w+)$/);
+  if (colorMatch) {
+    // Step 3: Swap color, reroll, exhaust
+    const dieIdx = parseInt(colorMatch[1], 10);
+    const newColor = colorMatch[2];
+    const dice = combat.defenseDiceResults || [];
+    if (dieIdx < 0 || dieIdx >= dice.length) return;
+    const alreadyRerolled = combat.defenderRerolledIndices || [];
+    if (alreadyRerolled.includes(dieIdx)) {
+      await interaction.followUp({ content: 'That die has already been rerolled.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const oldDie = dice[dieIdx];
+    const oldColor = oldDie.color;
+    // Swap color and reroll
+    const newDie = rollSingleDefenseDie(newColor);
+    dice[dieIdx] = newDie;
+    combat.defenseDiceResults = dice;
+    const totals = recalcDefenseTotals(dice);
+    combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
+    // Mark die as rerolled (G12)
+    combat.defenderRerolledIndices = [...alreadyRerolled, dieIdx];
+    combat.defenderRerolledOrModified = true;
+    // Mark Cross Training as used
+    combat.crossTrainingUsed = true;
+    // Exhaust the upgrade
+    const ctMsgId = combat.crossTrainingDefMsgId;
+    if (ctMsgId) {
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[ctMsgId] = [...(game.exhaustedSkirmishUpgrades[ctMsgId] || []), 'Cross Training'];
+    }
+    const dodgeTag = newDie.dodge ? '/DODGE' : '';
+    await thread.send(`**Cross Training** — Exhausted. Swapped ${oldColor} → ${newColor} die #${dieIdx + 1}, rerolled: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
+
+    // Check if defender still has rerolls or should finish
+    const ctStillAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
+    if (combat.defenderRerollsRemaining <= 0 && !ctStillAvailable) {
+      await sendCombatGate(thread, game, combat, 'post_defender_reroll', ctx);
+      saveGames();
+      return;
+    }
+    // Still has rerolls — show updated UI
+    await sendRerollUI(thread, game, combat, 'defender');
+    saveGames();
+    return;
+  }
 }
 
 /**

@@ -111,7 +111,7 @@
       "affiliation": "Rebel"
     },
     "[Cross Training]": {
-      "abilityText": "This group gains the SPY trait. When an attack targeting you is declared, you may replace 1 die in your defense pool with a white die.",
+      "abilityText": "This group gains the SPY trait.\n\nAfter deployment, this group becomes Hidden.\n\nExhaust this card while a figure in this group is defending to reroll 1 Defense Die. Before rerolling, replace that die with another defense die of a different color. That new die is considered rerolled.",
       "keywords": [
         "TROOPER"
       ],
