@@ -12,6 +12,29 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// ── Movement Strategy Configuration ─────────────────────────────────────────
+// 'greedy'  — always use legacy "walk toward nearest enemy" heuristic
+// 'learned' — always use WG move scorer from training (skip greedy heuristic)
+// 'auto'    — use WG scorer if weights are strong enough, else fall back to greedy
+const MOVEMENT_STRATEGY = 'auto';
+const MOVEMENT_TRUST_THRESHOLD = 0.05; // min max|weight| to trust WG move scorer
+
+/**
+ * Decide whether the greedy movement heuristic should run.
+ * In 'auto' mode, trusts the learned scorer only when WG move weights have
+ * grown past MOVEMENT_TRUST_THRESHOLD — indicating the model has learned
+ * something beyond noise.
+ */
+function shouldUseGreedyMovement(learnings) {
+  if (MOVEMENT_STRATEGY === 'greedy') return true;
+  if (MOVEMENT_STRATEGY === 'learned') return false;
+  // 'auto': trust learned scorer only if weights are strong enough
+  const moveWeights = learnings?.withinGroupWeights?.move;
+  if (!moveWeights) return true; // no weights → fall back to greedy
+  const maxMag = Math.max(...moveWeights.map(Math.abs));
+  return maxMag < MOVEMENT_TRUST_THRESHOLD;
+}
+
 // Lazy-loaded singleton — initialized on first use
 let _learnings = null;
 let _learningsFile = null;
@@ -135,6 +158,10 @@ let _idleSupGraphWouldOther = 0;        // shadow: graph preferred interact/cc/e
 let _idleSupGraphWouldDcSpecial = 0;
 let _idleSupGraphWouldInteract = 0;
 let _idleSupGraphWouldPlayCc = 0;
+// Movement strategy tracking
+let _moveGreedyUsed = 0;          // greedy heuristic picked the space
+let _moveLearnedUsed = 0;         // WG scorer picked the space (fell through to pickSmartAction)
+let _moveGreedyMaxWgMag = 0;      // snapshot of max|wgWeight.move| at decision time
 
 export function resetRuntimeStats() {
   _graphDecisions = 0;
@@ -164,6 +191,9 @@ export function resetRuntimeStats() {
   _idleSupGraphWouldDcSpecial = 0;
   _idleSupGraphWouldInteract = 0;
   _idleSupGraphWouldPlayCc = 0;
+  _moveGreedyUsed = 0;
+  _moveLearnedUsed = 0;
+  _moveGreedyMaxWgMag = 0;
 }
 
 export function getRuntimeStats() {
@@ -196,6 +226,10 @@ export function getRuntimeStats() {
     idleSupGraphWouldInteract: _idleSupGraphWouldInteract,
     idleSupGraphWouldPlayCc: _idleSupGraphWouldPlayCc,
     encoder: _learnings ? getEncoderType() : 'not_loaded',
+    moveStrategy: MOVEMENT_STRATEGY,
+    moveGreedyUsed: _moveGreedyUsed,
+    moveLearnedUsed: _moveLearnedUsed,
+    moveGreedyMaxWgMag: _moveGreedyMaxWgMag,
   };
 }
 
@@ -259,60 +293,74 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
 
   // Move-toward-enemies heuristic: when picking movement spaces, suppress "done"
   // and pick the space that minimizes distance to the nearest enemy figure.
-  // The DQN's within-group scorer produces random walks on the Discord map.
+  // Gated by MOVEMENT_STRATEGY — in 'auto' mode, falls through to learned WG
+  // scorer once WG move weights exceed MOVEMENT_TRUST_THRESHOLD.
   const moveDone = viable.filter(a => a.type === 'move_pick_space' && a.params?.done);
   const moveSpaces = viable.filter(a => a.type === 'move_pick_space' && !a.params?.done && a.params?.coord);
   if (moveSpaces.length > 0) {
-    const game = engine.getState();
-    const actingPn = moveSpaces[0].actingPlayer || moveSpaces[0]._playerNum;
-    const enemyPn = actingPn === 1 ? 2 : 1;
-    const enemyPositions = Object.values(game.figurePositions?.[enemyPn] || {}).filter(Boolean);
-    if (enemyPositions.length > 0) {
-      // Compute current distance from figure's position to nearest enemy
-      const moveEntry = Object.values(game.moveInProgress || {})[0];
-      const curPos = moveEntry?.currentPosition || moveEntry?.startCoord;
-      let currentDist = Infinity;
-      if (curPos) {
-        const cp = String(curPos).toLowerCase();
-        for (const ePos of enemyPositions) {
-          const d = getRange(cp, String(ePos).toLowerCase());
-          if (d < currentDist) currentDist = d;
-        }
-      }
+    // Snapshot WG weight magnitude for instrumentation
+    const _wgMoveW = getLearnings()?.withinGroupWeights?.move;
+    if (_wgMoveW) _moveGreedyMaxWgMag = Math.max(..._wgMoveW.map(Math.abs));
 
-      // Pick spaces that STRICTLY improve distance to nearest enemy
-      const bestSpaces = [];
-      let bestDist = Infinity;
-      for (const a of moveSpaces) {
-        const coord = String(a.params.coord).toLowerCase();
-        let minEnemyDist = Infinity;
-        for (const ePos of enemyPositions) {
-          const d = getRange(coord, String(ePos).toLowerCase());
-          if (d < minEnemyDist) minEnemyDist = d;
+    const useGreedy = shouldUseGreedyMovement(getLearnings());
+    if (useGreedy) {
+      const game = engine.getState();
+      const actingPn = moveSpaces[0].actingPlayer || moveSpaces[0]._playerNum;
+      const enemyPn = actingPn === 1 ? 2 : 1;
+      const enemyPositions = Object.values(game.figurePositions?.[enemyPn] || {}).filter(Boolean);
+      if (enemyPositions.length > 0) {
+        // Compute current distance from figure's position to nearest enemy
+        const moveEntry = Object.values(game.moveInProgress || {})[0];
+        const curPos = moveEntry?.currentPosition || moveEntry?.startCoord;
+        let currentDist = Infinity;
+        if (curPos) {
+          const cp = String(curPos).toLowerCase();
+          for (const ePos of enemyPositions) {
+            const d = getRange(cp, String(ePos).toLowerCase());
+            if (d < currentDist) currentDist = d;
+          }
         }
-        if (minEnemyDist < bestDist) {
-          bestDist = minEnemyDist;
-          bestSpaces.length = 0;
-          bestSpaces.push(a);
-        } else if (minEnemyDist === bestDist) {
-          bestSpaces.push(a);
-        }
-      }
 
-      // Only move if it strictly improves distance; otherwise stop to save MP
-      if (bestDist < currentDist) {
-        const bestAction = bestSpaces[Math.floor(Math.random() * bestSpaces.length)];
-        return { action: bestAction, score: 0 };
+        // Pick spaces that STRICTLY improve distance to nearest enemy
+        const bestSpaces = [];
+        let bestDist = Infinity;
+        for (const a of moveSpaces) {
+          const coord = String(a.params.coord).toLowerCase();
+          let minEnemyDist = Infinity;
+          for (const ePos of enemyPositions) {
+            const d = getRange(coord, String(ePos).toLowerCase());
+            if (d < minEnemyDist) minEnemyDist = d;
+          }
+          if (minEnemyDist < bestDist) {
+            bestDist = minEnemyDist;
+            bestSpaces.length = 0;
+            bestSpaces.push(a);
+          } else if (minEnemyDist === bestDist) {
+            bestSpaces.push(a);
+          }
+        }
+
+        // Only move if it strictly improves distance; otherwise stop to save MP
+        if (bestDist < currentDist) {
+          _moveGreedyUsed++;
+          const bestAction = bestSpaces[Math.floor(Math.random() * bestSpaces.length)];
+          return { action: bestAction, score: 0 };
+        }
+        // No improvement possible — pick "done" if available, else pick randomly
+        if (moveDone.length > 0) {
+          _moveGreedyUsed++;
+          return { action: moveDone[0], score: 0 };
+        }
+        _moveGreedyUsed++;
+        return { action: bestSpaces[Math.floor(Math.random() * bestSpaces.length)], score: 0 };
       }
-      // No improvement possible — pick "done" if available, else pick randomly
+      // No enemy positions found — just suppress done and let DQN pick
       if (moveDone.length > 0) {
-        return { action: moveDone[0], score: 0 };
+        viable = viable.filter(a => !(a.type === 'move_pick_space' && a.params?.done));
       }
-      return { action: bestSpaces[Math.floor(Math.random() * bestSpaces.length)], score: 0 };
-    }
-    // No enemy positions found — just suppress done and let DQN pick
-    if (moveDone.length > 0) {
-      viable = viable.filter(a => !(a.type === 'move_pick_space' && a.params?.done));
+    } else {
+      // Learned movement: fall through to pickSmartAction / WG move scorer
+      _moveLearnedUsed++;
     }
   }
 
