@@ -958,6 +958,14 @@
           }
         }
       }
+      // Recompute offMap against the full image grid — covers cells beyond the
+      // data-derived grid (e.g. rows 21-28 / cols Y-Z on Chopper Base) that
+      // initGridFromSpaces() couldn't see because they were never in spaces.
+      const loadedSet = new Set((state.spaces || []).map(s => String(s).toLowerCase()));
+      const existingOff = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
+      const fullGrid = [];
+      for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) fullGrid.push(coordKey(c, r));
+      state.offMap = fullGrid.filter(k => existingOff.has(k) || !loadedSet.has(k));
       document.getElementById('status').textContent = 'Map loaded. Click cells (terrain) or edges (walls).';
       draw();
     }
