@@ -307,10 +307,16 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
     const allOpened = group.every(edge => openedSet.has(edgeKey(edge[0], edge[1])));
     if (allOpened) continue;
     const allCoords = toLowerSet(group.flat());
-    if (isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, allCoords)) {
-      const edgeKeys = group.map(edge => edgeKey(edge[0], edge[1]));
-      const label = `Open Door (${String(group[0][0]).toUpperCase()}–${String(group[0][1]).toUpperCase()})`;
-      options.push({ id: `open_door_${edgeKeys.join(',')}`, label, missionSpecific: false });
+    // Door adjacency: only the spaces sharing an edge with the door count (RRG p.23)
+    // — no diagonal adjacency. The door's own cells ARE those spaces.
+    if (figPos) {
+      const doorDcName = dcNameFromFigureKey(figureKey);
+      const doorFootprint = getFootprintCells(figPos, getEffectiveFigureSize(game, figureKey, doorDcName));
+      if (doorFootprint.some(c => allCoords.has(normalizeCoord(c)))) {
+        const edgeKeys = group.map(edge => edgeKey(edge[0], edge[1]));
+        const label = `Open Door (${String(group[0][0]).toUpperCase()}–${String(group[0][1]).toUpperCase()})`;
+        options.push({ id: `open_door_${edgeKeys.join(',')}`, label, missionSpecific: false });
+      }
     }
   }
 
