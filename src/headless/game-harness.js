@@ -21,6 +21,83 @@ import { createFakeInteraction } from './fake-interaction.js';
 import { createFakeClient } from './fake-client.js';
 import { captureSnapshot, computeDiff } from '../event-log.js';
 import { translateDiffToEvents } from '../domain/diff-translator.js';
+import { getDcList, getDcMessageIds, getActivationsRemaining, setActivationsRemaining, getActivatedDcIndices } from '../game/player-helpers.js';
+import { DC_ACTIONS_PER_ACTIVATION } from '../discord/messages.js';
+import { isCompanionHostDefeated } from '../game/dc-helpers.js';
+
+/**
+ * Headless-only DC activation: performs the 4 critical game-state mutations
+ * that the Discord handler does, without touching Discord APIs.
+ *
+ * Bypasses: fetchGameChannel, message.edit, startThread, thread.send,
+ *           updateActivationsMessage — all Discord-only side effects.
+ *
+ * @param {object} game - The game state object
+ * @param {string} customId - The dc_activate_ customId
+ * @param {Map} dcExhaustedState - DC exhausted state map
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function headlessActivateDc(game, customId, dcExhaustedState) {
+  // customId format: dc_activate_{gameId}_{playerNum}_{dcIndex}_{ownerId}
+  const suffix = customId.replace(/^dc_activate_/, '');
+  const parts = suffix.split('_');
+  // parts: [gameId, playerNum, dcIndex, ownerId]
+  const playerNum = parseInt(parts[1], 10);
+  const dcIndex = parseInt(parts[2], 10);
+
+  const dcList = getDcList(game, playerNum) || [];
+  const dc = dcList[dcIndex];
+  if (!dc) return { ok: false, error: `DC not found at index ${dcIndex} for player ${playerNum}` };
+
+  const { dcName, displayName } = dc;
+  const remaining = getActivationsRemaining(game, playerNum);
+  if (remaining <= 0) return { ok: false, error: 'No activations remaining this round' };
+
+  // Companion host defeated: companion cannot activate if host group left play
+  if (isCompanionHostDefeated(game, dcName, playerNum)) {
+    return { ok: false, rejected: true };
+  }
+
+  const dcMessageIds = getDcMessageIds(game, playerNum) || [];
+  const msgId = dcMessageIds[dcIndex];
+  if (!msgId) return { ok: false, error: `DC message ID not found at index ${dcIndex}` };
+
+  // 1. Mark DC exhausted
+  dcExhaustedState.set(msgId, true);
+
+  // 2. Initialize movement bank (consume any pending MP bonus)
+  game.movementBank = game.movementBank || {};
+  const pendingMp = game.pendingMpBonus?.[msgId] ?? 0;
+  if (pendingMp && game.pendingMpBonus) delete game.pendingMpBonus[msgId];
+  game.movementBank[msgId] = {
+    total: pendingMp, remaining: pendingMp,
+    threadId: null, messageId: null, displayName,
+  };
+
+  // 3. Populate dcActionsData — gates move/attack action availability
+  game.dcActionsData = game.dcActionsData || {};
+  game.dcActionsData[msgId] = {
+    remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION,
+    messageId: null, threadId: null, specialsUsed: [],
+  };
+
+  // 4. Update activation counters
+  setActivationsRemaining(game, playerNum, remaining - 1);
+  getActivatedDcIndices(game, playerNum).push(dcIndex);
+
+  // Strength in Numbers: clear after extra activation committed
+  if (game.strengthInNumbersData && game.strengthInNumbersData.playerNum === playerNum) {
+    game.strengthInNumbersData = null;
+    game.strengthInNumbersPlayerNum = null;
+  }
+
+  // Agitate: clear restriction once the correct (or any) group activates
+  if (game.agitateNextActivation && game.agitateNextActivation.playerNum === playerNum) {
+    game.agitateNextActivation = null;
+  }
+
+  return { ok: true };
+}
 
 /**
  * Create a headless game harness for testing.
@@ -98,6 +175,21 @@ export function createHarness(initialGame, options = {}) {
       }
 
       const gameId = initialGame?.gameId;
+
+      // Headless intercept: dc_activate_ bypasses Discord handler entirely
+      if (customId.startsWith('dc_activate_')) {
+        const game = gamesMap.get(gameId);
+        if (!game) return { game: null, messages: [], error: 'Game not found', events: [] };
+        const beforeSnap = lightweight ? null : captureSnapshot(game);
+        const result = headlessActivateDc(game, customId, deps.dcExhaustedState);
+        if (!result.ok) {
+          // Graceful rejection (validation gate) vs hard error
+          return { game, messages: [], error: result.rejected ? undefined : result.error, events: [] };
+        }
+        const events = lightweight ? [] : _translateEvents(gameId, handlerKey, userId, beforeSnap, gamesMap);
+        return { game, messages: [], events };
+      }
+
       const beforeSnap = lightweight ? null : (gameId ? captureSnapshot(gamesMap.get(gameId)) : null);
 
       const group = getHandlerGroup(handlerKey);
