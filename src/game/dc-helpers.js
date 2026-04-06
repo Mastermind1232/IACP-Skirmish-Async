@@ -137,7 +137,8 @@ const FIGURE_LETTERS = 'abcdefghij';
 
 /**
  * Build choice labels for a list of figure keys, adding (1a)/(1b) designators
- * only when multiple figures from the same DC appear in the list.
+ * when multiple figures from the same DC appear in the list OR the DC itself
+ * is a multi-figure deployment card.
  * @param {string[]} figureKeys
  * @returns {string[]}
  */
@@ -149,7 +150,8 @@ export function figureChoiceLabels(figureKeys) {
   }
   return figureKeys.map((fk) => {
     const dc = dcNameFromFigureKey(fk);
-    if (dcCounts[dc] > 1) {
+    const dcEffect = getDcEffect(dc);
+    if (dcCounts[dc] > 1 || (dcEffect && dcEffect.figures > 1)) {
       const { dgIndex, figureIndex } = parseFigureKey(fk);
       const letter = FIGURE_LETTERS[figureIndex] || 'a';
       return `${dc} (${dgIndex}${letter})`;
