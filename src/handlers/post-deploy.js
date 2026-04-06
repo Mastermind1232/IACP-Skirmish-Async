@@ -1029,29 +1029,33 @@ async function postAbilityPicker(game, gameId, client, logGameAction, saveGames)
     return;
   }
 
-  // If only one auto ability remaining, auto-select it
-  if (abilities.length === 1 && !abilities[0].interactive) {
-    const [ability] = abilities.splice(0, 1);
-    q.awaitingOrder = false;
-    await resolveAutoAbility(game, ability, client, logGameAction);
+  // Auto-resolve all non-interactive abilities before showing buttons
+  const autoAbilities = abilities.filter(a => !a.interactive);
+  const interactiveAbilities = abilities.filter(a => a.interactive);
+  for (const ab of autoAbilities) {
+    await resolveAutoAbility(game, ab, client, logGameAction);
     if (game.pendingPowerTokenOverflow?.length > 0) {
       const _ovCh = await fetchGameChannel(client, game.generalId);
-      if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ability.playerNum, saveGames);
+      if (_ovCh) await sendPowerTokenOverflowUI(game, gameId, _ovCh, ab.playerNum, saveGames);
     }
+  }
+  q.abilities = interactiveAbilities;
+
+  if (interactiveAbilities.length === 0) {
+    q.abilities = [];
     await advanceToNextPlayer(game, gameId, client, logGameAction);
     return;
   }
 
   q.awaitingOrder = true;
-  const btns = abilities.map((ab, idx) => {
-    const autoLabel = ab.interactive ? '' : ' (auto)';
+  const btns = interactiveAbilities.map((ab, idx) => {
     return new ButtonBuilder()
       .setCustomId(`pd_pick_${gameId}_${q.currentPlayerNum}_${idx}`)
-      .setLabel(`${ab.label} — ${ab.dcName}${autoLabel}`)
-      .setStyle(ab.interactive ? ButtonStyle.Primary : ButtonStyle.Secondary);
+      .setLabel(`${ab.label} — ${ab.dcName}`)
+      .setStyle(ButtonStyle.Primary);
   });
   const rows = chunkButtonsToRows(btns);
-  await logGameAction(game, client, `📋 **After Deployment** — <@${ownerId}> (${playerLabel}), choose which ability to resolve next (${abilities.length} remaining):`, {
+  await logGameAction(game, client, `📋 **After Deployment** — <@${ownerId}> (${playerLabel}), choose which ability to resolve next (${interactiveAbilities.length} remaining):`, {
     components: rows,
     allowedMentions: { users: [ownerId] },
   });
