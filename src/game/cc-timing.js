@@ -13,12 +13,18 @@ import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand } 
  */
 export function getCcPlayContext(game, playerNum) {
   const playerId = getPlayerId(game, playerNum);
+  // Start of Round: use the authoritative startOfRoundWhoseTurn flag (set when SoR
+  // window opens, cleared when both players finish). The old heuristic using
+  // roundActivationButtonShown was unreliable — it stayed false during early activation.
+  const inSorWindow = !!game.startOfRoundWhoseTurn;
   const startOfRound = !!(
     game.currentRound &&
-    game.roundActivationMessageId &&
-    !game.roundActivationButtonShown
+    inSorWindow
   );
+  // duringActivation/duringRound must exclude the SoR window — currentActivationTurnPlayerId
+  // is set before SoR ends, so without this guard activation-timing cards leak into SoR.
   const duringActivation =
+    !inSorWindow &&
     game.currentActivationTurnPlayerId === playerId &&
     !game.endOfRoundWhoseTurn;
   const endOfRound = game.endOfRoundWhoseTurn === playerId;
@@ -31,6 +37,7 @@ export function getCcPlayContext(game, playerNum) {
   // duringRound: true whenever a round is active (activation phase, not SoR/EoR)
   // Allows reaction cards like Opportunistic to be played outside the owner's activation
   const duringRound = !!(
+    !inSorWindow &&
     game.currentRound &&
     game.currentActivationTurnPlayerId &&
     !game.endOfRoundWhoseTurn
@@ -226,10 +233,10 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // Windfall: playable during your activation (play when a CC is discarded)
       return ctx.duringActivation;
     case 'whencommandcardplayed':
-      // Comm Disruption: playable when opponent plays a CC — during activation OR
-      // reactively via the Comm Disruption prompt (C14). Also allow during duringRound
-      // so the opponent can respond outside their own activation turn.
-      return ctx.duringActivation || ctx.duringRound || !!(game?.pendingCommDisruptionPrompt?.targetPlayerNum === playerNum);
+      // Negation & Comm Disruption: purely reactive — never show in the proactive "Play CC"
+      // dropdown. Both cards have dedicated prompt flows (negation_play_ / comm_disruption_play_)
+      // that fire when the trigger occurs. Returning false here keeps them out of the hand dropdown.
+      return false;
     case 'whenenemyfigureactivates':
       // Overcharged Weapons: playable during your activation (play when hostile activates)
       return ctx.duringActivation;

@@ -8,17 +8,32 @@ import { getCcPlayContext, isCcPlayableNow, getPlayableCcFromHand, isCcPlayLegal
 // --- getCcPlayContext ---
 
 describe('getCcPlayContext', () => {
-  it('returns startOfRound when round is active and activation button not shown', () => {
+  it('returns startOfRound when SoR window is active (startOfRoundWhoseTurn set)', () => {
     const game = {
       player1Id: 'u1', player2Id: 'u2',
       currentRound: 1,
-      roundActivationMessageId: 'msg1',
-      roundActivationButtonShown: false,
+      startOfRoundWhoseTurn: 'u1',
+      currentActivationTurnPlayerId: 'u1', // set before SoR ends
     };
     const ctx = getCcPlayContext(game, 1);
     assert.strictEqual(ctx.startOfRound, true);
+    // duringActivation must be false during SoR even though currentActivationTurnPlayerId is set
     assert.strictEqual(ctx.duringActivation, false);
     assert.strictEqual(ctx.endOfRound, false);
+  });
+
+  it('startOfRound is false when SoR window is closed (startOfRoundWhoseTurn null)', () => {
+    const game = {
+      player1Id: 'u1', player2Id: 'u2',
+      currentRound: 1,
+      startOfRoundWhoseTurn: null,
+      roundActivationMessageId: 'msg1',
+      roundActivationButtonShown: false,
+      currentActivationTurnPlayerId: 'u1',
+    };
+    const ctx = getCcPlayContext(game, 1);
+    assert.strictEqual(ctx.startOfRound, false);
+    assert.strictEqual(ctx.duringActivation, true);
   });
 
   it('returns duringActivation when player is active and not in end-of-round', () => {
@@ -86,8 +101,7 @@ describe('isCcPlayableNow', () => {
   const startOfRoundGame = {
     player1Id: 'u1', player2Id: 'u2',
     currentRound: 1,
-    roundActivationMessageId: 'msg1',
-    roundActivationButtonShown: false,
+    startOfRoundWhoseTurn: 'u1',
   };
   const attackGame = {
     player1Id: 'u1', player2Id: 'u2',
