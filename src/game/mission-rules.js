@@ -11,6 +11,27 @@ import { getPlayerOccupiedCellsForControl } from './board-helpers.js';
 import { snowflakeUsers } from '../discord/channel-helpers.js';
 import { normalizeCoord } from './coords.js';
 
+/**
+ * Canonical accessor for current fluctuation positions.
+ * Lazily deep-copies static JSON positions into game.fluctuationPositions on first access.
+ * All consumers (VP scoring, power token grant, map rendering, swap UI) use this single function.
+ * @param {object} game
+ * @param {string} mapId
+ * @param {Function} getMapTokensDataFn
+ * @returns {object} { "0": ["j10", "p10"], "2": ["h21", "t21"], ... } — string keys, string arrays
+ */
+export function getCurrentFluctuationPositions(game, mapId, getMapTokensDataFn) {
+  if (game.fluctuationPositions) return game.fluctuationPositions;
+  const allTokens = typeof getMapTokensDataFn === 'function' ? getMapTokensDataFn() : {};
+  const missionData = allTokens[mapId]?.missionB;
+  const positions = missionData?.positions || {};
+  game.fluctuationPositions = {};
+  for (const [id, coords] of Object.entries(positions)) {
+    game.fluctuationPositions[id] = (coords || []).map(c => normalizeCoord(c));
+  }
+  return game.fluctuationPositions;
+}
+
 /** Extract flat coordinate array from a missionA/missionB token data block (generic). */
 function extractTokenCoords(missionTokenData) {
   if (!missionTokenData) return [];
@@ -217,10 +238,9 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
   if (rules.vpPerControlledFluctuation && mapId) {
     const { vp, grantPowerToken, vpMessage } = rules.vpPerControlledFluctuation;
     if (typeof vp === 'number') {
-      const missionSide = variant === 'a' ? 'missionA' : 'missionB';
-      const missionData = getMapTokensData()[mapId]?.[missionSide];
+      const missionData = getMapTokensData()[mapId]?.missionB;
       const tokenTypes = missionData?.tokenTypes || [];
-      const positions = missionData?.positions || {};
+      const positions = getCurrentFluctuationPositions(game, mapId, getMapTokensData);
       const colorToPowerToken = { yellow: 'Surge', blue: 'Evade', green: 'Block', red: 'Damage' };
       const vpByPlayer = { 1: 0, 2: 0 };
       const tokensGranted = [];

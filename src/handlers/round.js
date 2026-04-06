@@ -162,6 +162,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     postDevaronDoorButtons,
     postDevaronCratePushPrompts,
     postKryknaPushButtons,
+    postFluctuationSwapButtons,
     client,
   } = ctx;
 
@@ -785,6 +786,42 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
 
   // NOTE: Hardy + Regenerate already processed above (lines 103-154). Duplicate block removed.
 
+  // Fluctuation swap gate (Lothal Wastes B): each player may swap 1 fluctuation in initiative order
+  if (mapId === 'lothal-wastes' && variant === 'b') {
+    const _fInitNum = getInitiativePlayerNum(game);
+    const _fOtherNum = opponentPlayerNum(_fInitNum);
+    game.pendingFluctuationSwapQueue = [_fInitNum, _fOtherNum];
+    game.fluctuationSwappedThisRound = [];
+    game.pendingFluctuationSwapFirst = null;
+    game._pendingStatusPhaseLog = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
+    const _fGenCh = await fetchGameChannel(client, game.generalId);
+    if (postFluctuationSwapButtons) {
+      await postFluctuationSwapButtons(game, _fGenCh, gameId, _fInitNum);
+    }
+    if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
+  await _runInitiativeSwapAndContinue(game, gameId, interaction, ctx,
+    { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines });
+}
+
+/**
+ * Continuation after fluctuation swap (or when no swap needed).
+ * Runs initiative swap, status phase log, mission SOR gate, and continues to activation phase.
+ */
+async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, logVars) {
+  const {
+    logGameAction, client, saveGames,
+    getMissionRules, getMapTokensData, runStartOfRoundRules,
+    getInitiativePlayerZoneLabel,
+  } = ctx;
+  const { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines } = logVars;
+  const mapId = game.selectedMap?.id;
+  const variant = game.selectedMission?.variant;
+  const missionRules = getMissionRules?.(mapId, variant) ?? {};
+
   const prevInitiative = game.initiativePlayerId;
   game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
   game.currentRound = (game.currentRound || 1) + 1;
@@ -919,6 +956,19 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
     await interaction.message.edit({ components: [] }).catch(discordCatch);
   }
   saveGames();
+}
+
+/**
+ * Resume status phase flow after fluctuation swap phase completes.
+ * Called from map-events.js handleFluctuationSwap/handleFluctuationSkip when queue is empty.
+ */
+export async function continueAfterFluctuationSwap(game, gameId, interaction, ctx) {
+  const logVars = game._pendingStatusPhaseLog || {};
+  delete game._pendingStatusPhaseLog;
+  delete game.pendingFluctuationSwapQueue;
+  delete game.pendingFluctuationSwapFirst;
+  // fluctuationSwappedThisRound is cleared at next round start in cleanupRoundStart — leave it for now
+  await _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, logVars);
 }
 
 /**

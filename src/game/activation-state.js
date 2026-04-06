@@ -328,6 +328,7 @@ const ROUND_ARRAY_FLAGS = [
   'crippledFigures',
   'disabledFigures',
   'etiquetteBlockPairs',
+  'fluctuationSwappedThisRound',
 ];
 
 const ROUND_FALSE_FLAGS = [

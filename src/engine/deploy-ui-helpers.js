@@ -83,7 +83,7 @@ export async function getMapAttachmentForSpaces(game, validSpaces, deps) {
   if (!map?.id || !validSpaces?.length) return null;
   try {
     const figures = deps.getFiguresForRender(game);
-    const tokens = deps.getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain);
+    const tokens = deps.getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain, game?.fluctuationPositions);
     const labelCoords = validSpaces.map((s) => String(s).toLowerCase());
     const buffer = await deps.renderMap(map.id, {
       figures,

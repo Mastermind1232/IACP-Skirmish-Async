@@ -135,7 +135,8 @@ const CONTEXT_GROUPS = {
     'updateHandVisualMessage', 'buildHandDisplayPayload',
     'sendRoundActivationPhaseMessage', 'buildBoardMapPayload',
     'postDevaronDoorButtons', 'postDevaronCratePushPrompts',
-    'postKryknaPushButtons', 'client', 'sendPhaseGateMessages',
+    'postKryknaPushButtons', 'postFluctuationSwapButtons',
+    'client', 'sendPhaseGateMessages',
   ],
 
   startOfRound: [

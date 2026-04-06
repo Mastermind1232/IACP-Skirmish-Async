@@ -234,13 +234,20 @@ export function buildMissionTokens(missionData, fallbackLabel) {
 // getMapTokensForRender
 // ---------------------------------------------------------------------------
 
-/** Get map tokens (terminals + mission-specific + closed doors + ancillary) for renderMap. */
-export function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null, tokenLabel = 'Token', strainMap = null) {
+/** Get map tokens (terminals + mission-specific + closed doors + ancillary) for renderMap.
+ * @param {object|null} fluctuationPositions - If provided, overrides missionB positions for Lothal Wastes B swap rendering.
+ *   Shape: { "0": ["j10", "p10"], ... } — same as game.fluctuationPositions from getCurrentFluctuationPositions(). */
+export function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null, tokenLabel = 'Token', strainMap = null, fluctuationPositions = null) {
   const mapData = getMapTokensData()[mapId];
   if (!mapData) return { terminals: [], missionA: [], missionB: [], doors: [], smoke: [], rubble: [], energyShield: [], device: [], napalm: [] };
   const terminals = mapData.terminals || [];
   const missionA = buildMissionTokens(mapData.missionA, tokenLabel);
-  const missionB = buildMissionTokens(mapData.missionB, tokenLabel);
+  // If fluctuation positions are provided (post-swap), build missionB with overridden positions
+  let missionBData = mapData.missionB;
+  if (fluctuationPositions && missionBData) {
+    missionBData = { ...missionBData, positions: fluctuationPositions };
+  }
+  const missionB = buildMissionTokens(missionBData, tokenLabel);
   const doorEdges = mapData.doors || [];
   const openedSet = new Set((openedDoors || []).map((k) => String(k).toLowerCase()));
   const doors = doorEdges.filter((edge) => {
@@ -320,7 +327,7 @@ export async function getActivationMinimapAttachment(game, msgId) {
     : [];
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain, game?.fluctuationPositions);
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -368,7 +375,7 @@ export async function getMovementMinimapAttachment(game, msgId, figureKey, space
   const labelCoords = spacesAtCost.map((s) => String(s).toLowerCase());
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain, game?.fluctuationPositions);
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -395,7 +402,7 @@ export async function getDeploymentMapAttachment(game, zone, opts = {}) {
   if (!map?.id) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain, game?.fluctuationPositions);
     let zoneSpaces = zone && getDeploymentZones()[map.id]?.[zone] ? [...getDeploymentZones()[map.id][zone]] : null;
     // For Massive/Mobile figures, include blocking cells in the zone so they appear numbered
     if (opts.includeBlocking && zoneSpaces) {
@@ -437,7 +444,7 @@ export async function buildBoardMapPayload(gameId, map, game, client, { getMissi
   const components = getBoardButtons(gameId, { game });
   const embeds = game && getMissionVpBonus ? [buildScorecardEmbed(game, getMissionVpBonus(game))] : (game ? [buildScorecardEmbed(game, 0)] : []);
   const figures = game ? getFiguresForRender(game) : [];
-  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain);
+  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain, game?.fluctuationPositions);
   const hasFigures = figures.length > 0;
   const hasAncillary = (tokens.smoke?.length || 0) + (tokens.rubble?.length || 0) + (tokens.energyShield?.length || 0) + (tokens.device?.length || 0) + (tokens.napalm?.length || 0) > 0;
   const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0 || tokens.doors?.length > 0 || hasAncillary;

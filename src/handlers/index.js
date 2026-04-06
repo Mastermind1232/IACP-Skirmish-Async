@@ -129,7 +129,7 @@ import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
-import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
+import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleFluctuationSwap, handleFluctuationSkip } from './map-events.js';
 import {
   handleFavSave, handleFavRemove, handleFavRename,
   handleFavChoose, handleFavChooseSelect,
@@ -474,6 +474,8 @@ register('extra_protection_skip_', handleExtraProtection, 'interrupts');
 register('devaron_door_open_', handleDevaronDoorOpen, 'mapEvents');
 register('devaron_crate_push_', handleDevaronCratePush, 'mapEvents');
 register('krykna_push_', handleKryknaPush, 'mapEvents');
+register('fluctuation_swap_', handleFluctuationSwap, 'round');
+register('fluctuation_skip_', handleFluctuationSkip, 'round');
 
 // --- Combat special effects ---
 register('bleed_accept_', handleBleedResolve, 'combatSpecialEffects');
@@ -666,7 +668,7 @@ export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleDoubtReroll } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
-export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
+export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleFluctuationSwap, handleFluctuationSkip } from './map-events.js';
 export { buildFavoritesListPayload, handleFavNameModal, handleFavRenameModal, handleFavListRenameModal } from './favorites.js';
 export {
   handleBleedResolve,

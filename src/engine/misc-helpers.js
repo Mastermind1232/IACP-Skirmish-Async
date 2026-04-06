@@ -305,6 +305,88 @@ export async function postKryknaPushButtons(game, channel, gameId, deps) {
 }
 
 /**
+ * Post fluctuation swap buttons for Lothal Wastes B end-of-round swap phase.
+ * Shows one button per fluctuation position (that hasn't been moved this round) + Skip.
+ * If game.pendingFluctuationSwapFirst is set, we're in the second-pick phase (target selection).
+ * @param {object} game
+ * @param {import('discord.js').TextChannel} channel - general channel
+ * @param {string} gameId
+ * @param {number} playerNum - whose turn to swap
+ * @param {object} deps - { getPlayerId, getMapTokensData, discordCatch, getCurrentFluctuationPositions }
+ */
+export async function postFluctuationSwapButtons(game, channel, gameId, playerNum, deps) {
+  const pid = deps.getPlayerId(game, playerNum);
+  const mapId = game.selectedMap?.id;
+  const positions = deps.getCurrentFluctuationPositions(game, mapId, deps.getMapTokensData);
+  const allTokens = deps.getMapTokensData()[mapId]?.missionB;
+  const tokenTypes = allTokens?.tokenTypes || [];
+  const colorToPowerToken = { yellow: 'Surge', blue: 'Evade', green: 'Block', red: 'Damage' };
+  const swappedSet = new Set(game.fluctuationSwappedThisRound || []);
+  const firstPick = game.pendingFluctuationSwapFirst || null;
+
+  // Build flat list of {coord, color, label} for all current fluctuation positions
+  const allFluctuations = [];
+  for (const [id, coords] of Object.entries(positions)) {
+    if (!Array.isArray(coords)) continue;
+    const typeInfo = tokenTypes[parseInt(id)];
+    const imageMatch = (typeInfo?.image || '').match(/Neutral (\w+)\./i);
+    const color = imageMatch ? imageMatch[1].toLowerCase() : 'unknown';
+    for (const coord of coords) {
+      if (!coord) continue;
+      allFluctuations.push({ coord: String(coord).toLowerCase(), color, id });
+    }
+  }
+
+  // Filter: exclude already-swapped-this-round coords
+  let available = allFluctuations.filter(f => !swappedSet.has(f.coord));
+  // In second-pick mode, exclude the first pick itself
+  if (firstPick) {
+    available = available.filter(f => f.coord !== firstPick);
+  }
+
+  if (available.length === 0 && !firstPick) {
+    // No fluctuations available to swap — auto-skip
+    await channel.send(sanitizeMentions({
+      content: `<@${pid}> — **Fluctuations**: No swappable fluctuations remaining. Skipping.`,
+      allowedMentions: { users: [pid] },
+    })).catch(deps.discordCatch);
+    return;
+  }
+
+  const label = firstPick
+    ? `Select target fluctuation to swap with **${firstPick.toUpperCase()}** (${allFluctuations.find(f => f.coord === firstPick)?.color?.toUpperCase() || '?'}):`
+    : `Select a fluctuation to swap (or Skip):`;
+
+  const buttons = available.slice(0, 24).map(f =>
+    new ButtonBuilder()
+      .setCustomId(`fluctuation_swap_${gameId}_${f.coord}`)
+      .setLabel(`${f.color.charAt(0).toUpperCase() + f.color.slice(1)} @ ${f.coord.toUpperCase()}`)
+      .setStyle(ButtonStyle.Primary)
+  );
+  if (!firstPick) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`fluctuation_skip_${gameId}`)
+        .setLabel('Skip Swap')
+        .setStyle(ButtonStyle.Secondary)
+    );
+  } else {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`fluctuation_skip_${gameId}`)
+        .setLabel('Cancel (Skip)')
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+  const rows = chunkButtonsToRows(buttons);
+  await channel.send(sanitizeMentions({
+    content: `🔄 **Fluctuation Swap** — <@${pid}> (P${playerNum}), ${label}`,
+    components: rows.slice(0, 5),
+    allowedMentions: { users: [pid] },
+  })).catch(deps.discordCatch);
+}
+
+/**
  * Find a Figurehead figure within range 4 of the target (for Figurehead ability).
  * @param {object} game
  * @param {number} defenderPlayerNum

@@ -220,6 +220,7 @@ import {
   postDevaronDoorButtons as _postDevaronDoorButtonsPure,
   postDevaronCratePushPrompts as _postDevaronCratePushPromptsPure,
   postKryknaPushButtons as _postKryknaPushButtonsPure,
+  postFluctuationSwapButtons as _postFluctuationSwapButtonsPure,
 } from './src/engine/misc-helpers.js';
 import {
   updateAttachmentMessageForDc as _updateAttachmentMessageForDcPure,
@@ -474,7 +475,7 @@ import {
   getPlayableCcDoubleActionsForDc,
   getPlayableCcEndOfActivationForDc,
 } from './src/game/cc-timing.js';
-import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation, runNpcKryknaActivation } from './src/game/mission-rules.js';
+import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation, runNpcKryknaActivation, getCurrentFluctuationPositions } from './src/game/mission-rules.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getSquad, getCcHand, getCcDeck, getCcDiscard, getCcAttachments, getDcAttachments,
@@ -1085,6 +1086,12 @@ async function postDevaronCratePushPrompts(game, channel, gameId) {
 async function postKryknaPushButtons(game, channel, gameId) {
   return _postKryknaPushButtonsPure(game, channel, gameId, {
     getPlayerId, discordCatch,
+  });
+}
+
+async function postFluctuationSwapButtons(game, channel, gameId, playerNum) {
+  return _postFluctuationSwapButtonsPure(game, channel, gameId, playerNum, {
+    getPlayerId, getMapTokensData, discordCatch, getCurrentFluctuationPositions,
   });
 }
 
@@ -3117,7 +3124,7 @@ function buildAllDeps() {
     getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton,
     countTerminalsControlledByPlayer, isFigureInDeploymentZone,
     getFiguresOnOrAdjacentToSpace, applyNpcDamageToFigure,
-    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons,
+    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postFluctuationSwapButtons,
     getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
     getDetermineInitiativeButtons, populatePlayAreas,
     postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState,

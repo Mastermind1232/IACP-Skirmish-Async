@@ -1,13 +1,14 @@
 /**
- * Map event handlers: devaron_door_open_, devaron_crate_push_, krykna_push_
+ * Map event handlers: devaron_door_open_, devaron_crate_push_, krykna_push_, fluctuation_swap_, fluctuation_skip_
  */
 import { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { getPlayerId } from '../game/player-helpers.js';
-import { edgeKey } from '../game/coords.js';
+import { edgeKey, normalizeCoord } from '../game/coords.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
+import { continueAfterFluctuationSwap } from './round.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -119,4 +120,142 @@ export async function handleKryknaPush(interaction, ctx) {
     );
     await interaction.showModal(modal).catch(discordCatch);
     return;
+}
+
+/**
+ * Handle fluctuation swap pick (first or second).
+ * First click: saves source coord to game.pendingFluctuationSwapFirst, re-posts target buttons.
+ * Second click: executes swap, advances queue. If queue empty, continues round flow.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleFluctuationSwap(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, postFluctuationSwapButtons } = ctx;
+  // customId: fluctuation_swap_{gameId}_{coord}
+  const rest = parseCustomId(interaction.customId, 'fluctuation_swap_');
+  const lastUnderscore = rest.lastIndexOf('_');
+  const gameId = rest.substring(0, lastUnderscore);
+  const coord = rest.substring(lastUnderscore + 1).toLowerCase();
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingFluctuationSwapQueue || game.pendingFluctuationSwapQueue.length === 0) {
+    await interaction.followUp({ content: 'No fluctuation swap pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const expectedPlayerNum = game.pendingFluctuationSwapQueue[0];
+  const expectedPlayerId = getPlayerId(game, expectedPlayerNum);
+  if (interaction.user.id !== expectedPlayerId) {
+    await interaction.followUp({ content: `It's Player ${expectedPlayerNum}'s turn to swap a fluctuation.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+
+  if (!game.pendingFluctuationSwapFirst) {
+    // First pick — save source, re-post target buttons
+    game.pendingFluctuationSwapFirst = coord;
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    const generalCh = await fetchGameChannel(client, game.generalId);
+    if (postFluctuationSwapButtons) {
+      await postFluctuationSwapButtons(game, generalCh, gameId, expectedPlayerNum);
+    }
+    saveGames();
+    return;
+  }
+
+  // Second pick — execute the swap
+  const source = game.pendingFluctuationSwapFirst;
+  const target = coord;
+  game.pendingFluctuationSwapFirst = null;
+
+  // Find which token type IDs contain source and target coords
+  const positions = game.fluctuationPositions || {};
+  let sourceTypeId = null, sourceIdx = -1;
+  let targetTypeId = null, targetIdx = -1;
+  for (const [id, coords] of Object.entries(positions)) {
+    if (!Array.isArray(coords)) continue;
+    const sIdx = coords.findIndex(c => normalizeCoord(c) === normalizeCoord(source));
+    if (sIdx >= 0) { sourceTypeId = id; sourceIdx = sIdx; }
+    const tIdx = coords.findIndex(c => normalizeCoord(c) === normalizeCoord(target));
+    if (tIdx >= 0) { targetTypeId = id; targetIdx = tIdx; }
+  }
+  if (sourceTypeId === null || targetTypeId === null) {
+    await interaction.followUp({ content: 'Could not find fluctuation positions to swap.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Swap the coordinates between the two token type arrays
+  positions[sourceTypeId][sourceIdx] = normalizeCoord(target);
+  positions[targetTypeId][targetIdx] = normalizeCoord(source);
+
+  // Mark both coords as swapped this round
+  game.fluctuationSwappedThisRound = game.fluctuationSwappedThisRound || [];
+  game.fluctuationSwappedThisRound.push(normalizeCoord(source), normalizeCoord(target));
+
+  const pid = getPlayerId(game, expectedPlayerNum);
+  await logGameAction(game, client, `🔄 <@${pid}> swapped fluctuations **${source.toUpperCase()}** ↔ **${target.toUpperCase()}**.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  // Advance queue
+  game.pendingFluctuationSwapQueue.shift();
+  if (game.pendingFluctuationSwapQueue.length > 0) {
+    // Next player's turn to swap
+    const nextPn = game.pendingFluctuationSwapQueue[0];
+    const generalCh = await fetchGameChannel(client, game.generalId);
+    if (postFluctuationSwapButtons) {
+      await postFluctuationSwapButtons(game, generalCh, gameId, nextPn);
+    }
+    saveGames();
+    return;
+  }
+
+  // Queue empty — continue round flow
+  await continueAfterFluctuationSwap(game, gameId, interaction, ctx);
+  saveGames();
+}
+
+/**
+ * Handle fluctuation swap skip (player declines to swap).
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleFluctuationSkip(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, postFluctuationSwapButtons } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'fluctuation_skip_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingFluctuationSwapQueue || game.pendingFluctuationSwapQueue.length === 0) {
+    await interaction.followUp({ content: 'No fluctuation swap pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const expectedPlayerNum = game.pendingFluctuationSwapQueue[0];
+  const expectedPlayerId = getPlayerId(game, expectedPlayerNum);
+  if (interaction.user.id !== expectedPlayerId) {
+    await interaction.followUp({ content: `It's Player ${expectedPlayerNum}'s turn to swap a fluctuation.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+
+  // Clear any first-pick state
+  game.pendingFluctuationSwapFirst = null;
+
+  const pid = getPlayerId(game, expectedPlayerNum);
+  await logGameAction(game, client, `🔄 <@${pid}> skipped fluctuation swap.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  // Advance queue
+  game.pendingFluctuationSwapQueue.shift();
+  if (game.pendingFluctuationSwapQueue.length > 0) {
+    // Next player's turn to swap
+    const nextPn = game.pendingFluctuationSwapQueue[0];
+    const generalCh = await fetchGameChannel(client, game.generalId);
+    if (postFluctuationSwapButtons) {
+      await postFluctuationSwapButtons(game, generalCh, gameId, nextPn);
+    }
+    saveGames();
+    return;
+  }
+
+  // Queue empty — continue round flow
+  await continueAfterFluctuationSwap(game, gameId, interaction, ctx);
+  saveGames();
 }
