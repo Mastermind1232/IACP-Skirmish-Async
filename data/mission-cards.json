@@ -56,7 +56,15 @@
         "setup": "Thugs are hostile to all figures except other thugs.\nA figure can attack a thug (Health: 4, Defense: 1 black die)",
         "persistent": "Thugs are hostile to all figures except other thugs.\nA figure can attack a thug (Health: 4, Defense: 1 black die)",
         "startOfRound": "",
-        "endOfRound": "Move each thug 2 spaces to the closest hostile figure. Then, each hostile figure adjacent to a thug suffers 2 Damage. (If multiple hostile figures are tied for closest to the thug, then the player with Initiative decides which figure is targeted.)\nThe player who controls the Cantina gains 6 VPs."
+        "endOfRound": "Move each thug 2 spaces to the closest hostile figure. Then, each hostile figure adjacent to a thug suffers 2 Damage. (If multiple hostile figures are tied for closest to the thug, then the player with Initiative decides which figure is targeted.)\nThe player who controls the Cantina gains 6 VPs.",
+        "rules": {
+          "endOfRound": {
+            "vpForControllingNamedArea": {
+              "areaName": "Cantina",
+              "vp": 6
+            }
+          }
+        }
       },
       "b": {
         "name": "Sabacc Standoff",
