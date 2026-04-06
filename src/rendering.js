@@ -235,7 +235,7 @@ export function buildMissionTokens(missionData, fallbackLabel) {
 // ---------------------------------------------------------------------------
 
 /** Get map tokens (terminals + mission-specific + closed doors + ancillary) for renderMap. */
-export function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null, tokenLabel = 'Token') {
+export function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null, tokenLabel = 'Token', strainMap = null) {
   const mapData = getMapTokensData()[mapId];
   if (!mapData) return { terminals: [], missionA: [], missionB: [], doors: [], smoke: [], rubble: [], energyShield: [], device: [], napalm: [] };
   const terminals = mapData.terminals || [];
@@ -260,7 +260,18 @@ export function getMapTokensForRender(mapId, missionVariant, openedDoors = [], a
     device: anc.device || [],
     napalm: anc.napalm || [],
     namedAreas: (mapData.namedAreas || []).filter(a => a.name && a.cells?.length),
+    strainMarkers: _buildStrainMarkers(strainMap),
   };
+}
+
+/** Convert strain state map {coord: count} to render-ready array [{coord, count}]. */
+function _buildStrainMarkers(strainMap) {
+  if (!strainMap || typeof strainMap !== 'object') return [];
+  const markers = [];
+  for (const [coord, count] of Object.entries(strainMap)) {
+    if (count > 0) markers.push({ coord, count });
+  }
+  return markers;
 }
 
 // ---------------------------------------------------------------------------
@@ -309,7 +320,7 @@ export async function getActivationMinimapAttachment(game, msgId) {
     : [];
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain);
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -357,7 +368,7 @@ export async function getMovementMinimapAttachment(game, msgId, figureKey, space
   const labelCoords = spacesAtCost.map((s) => String(s).toLowerCase());
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain);
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -384,7 +395,7 @@ export async function getDeploymentMapAttachment(game, zone, opts = {}) {
   if (!map?.id) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain);
     let zoneSpaces = zone && getDeploymentZones()[map.id]?.[zone] ? [...getDeploymentZones()[map.id][zone]] : null;
     // For Massive/Mobile figures, include blocking cells in the zone so they appear numbered
     if (opts.includeBlocking && zoneSpaces) {
@@ -426,7 +437,7 @@ export async function buildBoardMapPayload(gameId, map, game, client, { getMissi
   const components = getBoardButtons(gameId, { game });
   const embeds = game && getMissionVpBonus ? [buildScorecardEmbed(game, getMissionVpBonus(game))] : (game ? [buildScorecardEmbed(game, 0)] : []);
   const figures = game ? getFiguresForRender(game) : [];
-  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
+  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain);
   const hasFigures = figures.length > 0;
   const hasAncillary = (tokens.smoke?.length || 0) + (tokens.rubble?.length || 0) + (tokens.energyShield?.length || 0) + (tokens.device?.length || 0) + (tokens.napalm?.length || 0) > 0;
   const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0 || tokens.doors?.length > 0 || hasAncillary;

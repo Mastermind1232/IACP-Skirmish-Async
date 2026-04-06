@@ -377,6 +377,53 @@ export async function renderMap(mapId, options = {}) {
     }
   }
 
+  // Strain markers: draw strain token image + orange count badge on signal markers
+  const strainMarkers = tokens.strainMarkers || [];
+  if (strainMarkers.length > 0) {
+    const strainImagePath = join(rootDir, 'vassal_extracted', 'images', 'tokens', 'Counter--Strain.gif');
+    let strainImg = null;
+    if (existsSync(strainImagePath)) {
+      try { strainImg = await loadImage(strainImagePath); } catch { /* fallback */ }
+    }
+    const strainSize = tokenSize * 0.5;
+    for (const sm of strainMarkers) {
+      const { col, row } = parseCoord(sm.coord);
+      if (col < 0 || row < 0 || col >= numCols || row >= numRows) continue;
+      // Position in bottom-right quadrant of the cell
+      const cx = sx0 + col * sdx + sdx * 0.72;
+      const cy = sy0 + row * sdy + sdy * 0.72;
+      if (strainImg) {
+        const tw = strainImg.width;
+        const th = strainImg.height;
+        const tScale = Math.min(strainSize / tw, strainSize / th);
+        const dw = Math.round(tw * tScale);
+        const dh = Math.round(th * tScale);
+        ctx.drawImage(strainImg, cx - dw / 2, cy - dh / 2, dw, dh);
+      } else {
+        ctx.fillStyle = 'rgba(100,149,237,0.8)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, strainSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Orange count badge with black background
+      const badgeFontSize = Math.max(9, Math.round(12 * scale));
+      const countLabel = String(sm.count);
+      ctx.font = `bold ${badgeFontSize}px "${FONT_FAMILY}"`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const bm = ctx.measureText(countLabel);
+      const badgeR = Math.max(badgeFontSize * 0.65, (bm.width + 6) / 2);
+      const bx = cx + strainSize * 0.35;
+      const by = cy - strainSize * 0.35;
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(bx, by, badgeR + 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FF8C00';
+      ctx.fillText(countLabel, bx, by);
+    }
+  }
+
   const doorEdges = tokens.doors || [];
   const grouped = new Map();
   for (const edge of doorEdges) {

@@ -81,7 +81,8 @@ export async function renderBoardState(game, opts = {}) {
     game?.selectedMission?.variant,
     game?.openedDoors,
     game?.ancillaryTokens,
-    game?.selectedMission?.tokenLabel || 'Token'
+    game?.selectedMission?.tokenLabel || 'Token',
+    game?.signalMarkerStrain
   );
 
   // Player labels over deployment zones

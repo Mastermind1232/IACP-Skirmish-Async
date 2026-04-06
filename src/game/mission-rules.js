@@ -277,7 +277,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
       for (const [coord, strainCount] of Object.entries(strainMap)) {
         if (!strainCount || strainCount <= 0) continue;
         const controller = getSpaceController(game, mapId, coord);
-        if (!controller) { game[strainStateKey][coord] = 0; continue; }
+        if (!controller) continue; // uncontrolled markers retain strain
         vpByPlayer[controller] += vpPerStrain * strainCount;
         strainRemovedByPlayer[controller] += strainCount;
         game[strainStateKey][coord] = 0;
@@ -461,9 +461,15 @@ export async function runStartOfRoundRules(game, mapId, variant, rules, ctx = {}
     }
     if (colorGroups.length > 0) {
       game[strainStateKey] = game[strainStateKey] || {};
+      // Shuffle tokens (Fisher-Yates) — draw without replacement like physical tokens
+      const shuffled = [...colorGroups];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
       const reveals = [];
       for (let p = 1; p <= 2; p++) {
-        const pick = colorGroups[Math.floor(Math.random() * colorGroups.length)];
+        const pick = shuffled[p - 1]; // each player gets a distinct token
         reveals.push({ player: p, color: pick.color, coords: pick.coords });
         for (const coord of pick.coords) {
           const c = normalizeCoord(coord);
