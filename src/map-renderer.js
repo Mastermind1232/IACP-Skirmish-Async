@@ -655,7 +655,7 @@ export async function renderMap(mapId, options = {}) {
     }
     // Power Tokens: up to 3 slots at top-left of unit
     const powerTokenTypes = (fig.powerTokens || []).slice(0, 3);
-    const ptSize = Math.max(14, clipRadius * (powerTokenTypes.length > 2 ? 0.375 : 0.45));
+    const ptSize = Math.max(11, clipRadius * (powerTokenTypes.length > 2 ? 0.3 : 0.36));
     const ptConfig = getTokenImagesConfig().powerTokens || {};
     const figX0 = cx - clipW;
     const figY0 = cy - clipH;
@@ -692,7 +692,7 @@ export async function renderMap(mapId, options = {}) {
     // Pre-load condition icon images in parallel, then draw sequentially (stacking leftward)
     const conditionIcons = (fig.conditions || []).slice(0, 5);
     if (conditionIcons.length > 0) {
-      const iconSize = Math.max(14, Math.min(clipW, clipH) * 0.4875);
+      const iconSize = Math.max(11, Math.min(clipW, clipH) * 0.39);
       // Game state stores short verbs (Focus, Stun, etc.); GIF files use participles (Focused, Stunned, etc.)
       const COND_FILE_NAME = { Focus: 'Focused', Stun: 'Stunned', Bleed: 'Bleeding', Weaken: 'Weakened', Hide: 'Hidden' };
       const condImgPromises = conditionIcons.map((cond) => {

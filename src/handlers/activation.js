@@ -1453,9 +1453,11 @@ export async function handleConfirmActivate(interaction, ctx) {
         }
       } else {
         console.error(`[AWR] Krennic selfPos is null — figurePositions[${meta.playerNum}] keys:`, Object.keys(game.figurePositions?.[meta.playerNum] || {}));
+        await thread.send({ content: `⚠️ **Advanced Weapons Research** — Could not locate Krennic's position (key: \`Director Krennic-${dgIndex}-0\`). Available: ${Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith('Director Krennic')).join(', ') || 'none'}` }).catch(discordCatch);
       }
     } catch (err) {
       console.error('[AWR] Failed to send Advanced Weapons Research prompt:', err);
+      await thread.send({ content: `⚠️ **Advanced Weapons Research** — Error: ${err.message}` }).catch(discordCatch);
     }
   }
   // Durasteel Fist (Dark Trooper Mk III): once during activation, choose adjacent figure, roll 1 green die
