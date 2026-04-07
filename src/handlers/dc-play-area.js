@@ -345,6 +345,14 @@ export async function handleDcActivate(interaction, ctx) {
         }
       }
     }
+    // Responsive (Shyla Varad): choose 1 MP or recover 1 Damage
+    if (dcName === 'Shyla Varad') {
+      const respRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_responsive_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_responsive_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `🏃 **Responsive** — **${displayName}**: Choose one:`, components: [respRow] }).catch(discordCatch);
+    }
     saveGames();
     const logCh = await fetchGameChannel(client, game.generalId);
     const icon = ACTION_ICONS.activate || '⚡';
@@ -711,6 +719,14 @@ export async function handleDcToggle(interaction, ctx) {
             }
           }
         }
+      }
+      // Responsive (Shyla Varad): choose 1 MP or recover 1 Damage
+      if (meta.dcName === 'Shyla Varad') {
+        const respRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_responsive_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_responsive_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({ content: `🏃 **Responsive** — **${displayName}**: Choose one:`, components: [respRow] }).catch(discordCatch);
       }
     }
   }
