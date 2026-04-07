@@ -1,7 +1,7 @@
 /**
  * DC Play Area handlers: dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
@@ -15,7 +15,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards } from '../data-loader.js';
-import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, figureChoiceLabels, isCompanionHostDefeated } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getActivationsRemaining, getActivationsTotal, getActivatedDcIndices,
@@ -27,7 +27,7 @@ import {
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
-import { countGameSpaces } from '../game/board-helpers.js';
+import { finalizeActivation } from '../engine/activation-setup.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -196,206 +196,30 @@ export async function handleDcActivate(interaction, ctx) {
   }
   try {
     const channel = await fetchGameChannel(client, getPlayAreaId(game, playerNum));
-    const msg = await channel.messages.fetch(msgId);
-    dcExhaustedState.set(msgId, true);
-    const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted: true });
-    await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, dcName) }));
-    const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
-    const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
-    game.movementBank = game.movementBank || {};
-    const _pendingMp1 = game.pendingMpBonus?.[msgId] ?? 0;
-    if (_pendingMp1) delete game.pendingMpBonus[msgId];
-    game.movementBank[msgId] = { total: _pendingMp1, remaining: _pendingMp1, threadId: thread.id, messageId: null, displayName };
-    game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
-    const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
-    const actMinimap = await getActivationMinimapAttachment(game, msgId);
-    const actionsPayload = sanitizeMentions({
-      content: pingContent,
-      components: getDcActionButtons(msgId, dcName, displayName, game.dcActionsData[msgId], game),
-      allowedMentions: { users: [ownerId] },
+    const dcMessage = await channel.messages.fetch(msgId);
+    await finalizeActivation({
+      game, gameId, playerNum, dcIndex,
+      dcName, displayName, msgId, ownerId,
+      dcMessage,
+      editActivateReplyFn: (rows) => interaction.editReply({
+        content: '**Activate a Deployment Card**',
+        components: rows.length > 0 ? rows : [],
+      }),
+      deps: {
+        dcExhaustedState, dcHealthState: ctx.dcHealthState,
+        dcMessageMeta: ctx.dcMessageMeta,
+        renderDcEmbed, getDcPlayAreaComponents,
+        updateActivationsMessage, getActionsCounterContent,
+        getDcActionButtons, getActivationMinimapAttachment,
+        getActivateDcButtons,
+        DC_ACTIONS_PER_ACTIVATION, ACTION_ICONS,
+        logGameAction, saveGames, client,
+        findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
+        hasLineOfSight: ctx.hasLineOfSight,
+        getMapData: ctx.getMapData,
+        getDcStats: ctx.getDcStats,
+      },
     });
-    if (actMinimap) actionsPayload.files = [actMinimap];
-    const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
-    game.dcActionsData[msgId].messageId = actionsMsg.id;
-    setActivationsRemaining(game, playerNum, getActivationsRemaining(game, playerNum) - 1);
-    getActivatedDcIndices(game, playerNum).push(dcIndex);
-    await updateActivationsMessage(game, playerNum, client);
-    // Strength in Numbers: clear the flag after the extra activation is committed
-    if (game.strengthInNumbersData && game.strengthInNumbersData.playerNum === playerNum) {
-      game.strengthInNumbersData = null;
-      game.strengthInNumbersPlayerNum = null;
-    }
-    // Meditation: if this player has a deferred free attack (from Meditation CC) and this DC is FORCE USER, grant it
-    if (game.nextActivationFreeAttack?.[playerNum]) {
-      const _natEff = getDcEffects ? (getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')]) : null;
-      const _natKws = (_natEff?.keywords || []).map((k) => String(k).toUpperCase());
-      if (_natKws.includes('FORCE USER')) {
-        const _natData = game.nextActivationFreeAttack[playerNum];
-        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[msgId] = true;
-        if (_natData?.dice) {
-          game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-          game.pendingOverrideAttackDice[msgId] = { type: _natData.melee ? 'Melee' : null, dice: _natData.dice, pierce: 0, bonusAccuracy: 0 };
-        }
-        delete game.nextActivationFreeAttack[playerNum];
-        if (logGameAction) await logGameAction(game, client, `**Meditation** — **${displayName}** has a free Melee attack (1 red + 1 yellow) available this activation.`, { phase: 'ROUND', icon: 'card' });
-      }
-    }
-    // Orbital Bombardment: if this DC has tokens, prompt to deplete at start of activation
-    const _obTokens = game.orbitalBombardmentTokens?.[msgId] || 0;
-    if (_obTokens > 0) {
-      const _obAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-      if (_obAtts.includes('Orbital Bombardment')) {
-        const obRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`ob_deplete_${gameId}_${msgId}`).setLabel(`Deplete OB: ${_obTokens} spaces, 2 dmg each`).setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId(`ob_skip_${gameId}_${msgId}`).setLabel('Keep tokens').setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send({
-          content: `**Orbital Bombardment** — You have **${_obTokens} Bombardment token${_obTokens > 1 ? 's' : ''}**. Deplete to choose ${_obTokens} space${_obTokens > 1 ? 's' : ''} — each figure on a chosen space suffers 2 Damage.`,
-          components: [obRow],
-        }).catch(discordCatch);
-      }
-    }
-    // Overwatch: remind if token is placed (for interrupt awareness)
-    const _owPos = game.overwatchTokenPosition?.[msgId];
-    if (_owPos) {
-      await thread.send(`**Overwatch** — Your token is at **${String(_owPos).toUpperCase()}**. Exhaust when a hostile enters a space on/adjacent to the token to interrupt and perform an attack.`).catch(discordCatch);
-    }
-    // Companion activation reminders (Clan of Two, Indentured Jester)
-    const _cmpAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-    if (_cmpAtts.includes('Clan of Two')) {
-      await thread.send(`**Clan of Two** — **The Child** activates at the start or end of this activation. At the end, push The Child to your space or an adjacent space.`).catch(discordCatch);
-    }
-    if (_cmpAtts.includes('Indentured Jester')) {
-      await thread.send(`**Indentured Jester** — **Salacious B. Crumb** activates at the start or end of this activation. (Not counted for control.)`).catch(discordCatch);
-    }
-    // Force Vision (Kanan): opponent chooses one of their ready groups and must activate it next
-    {
-      const _fvEff = getDcEffects ? (getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')]) : null;
-      const _fvIds = _fvEff?.specialAbilityIds || [];
-      if (_fvIds.includes('force_vision_kanan')) {
-        const _fvOppNum = opponentPlayerNum(playerNum);
-        const _fvOppOwnerId = getPlayerId(game, _fvOppNum);
-        const _fvOppDcList = getDcList(game, _fvOppNum) || [];
-        const _fvOppActivated = getActivatedDcIndices(game, _fvOppNum) || [];
-        const _fvReadyGroups = [];
-        for (let i = 0; i < _fvOppDcList.length; i++) {
-          if (_fvOppActivated.includes(i)) continue;
-          const dc = _fvOppDcList[i];
-          const figs = game.figurePositions?.[_fvOppNum] || {};
-          const alive = Object.entries(figs).some(([fk, pos]) => fk.startsWith(dc.dcName + '-') && pos);
-          if (!alive) continue;
-          _fvReadyGroups.push({ index: i, dcName: dc.dcName, displayName: dc.displayName || dc.dcName });
-        }
-        if (_fvReadyGroups.length > 0) {
-          game.forceVisionPending = _fvOppNum;
-          const _fvRows = [];
-          const _fvBtns = [];
-          for (const rg of _fvReadyGroups.slice(0, 20)) {
-            _fvBtns.push(
-              new ButtonBuilder()
-                .setCustomId(`fv_pick_${gameId}_${_fvOppNum}_${rg.index}`)
-                .setLabel(truncateLabel(rg.displayName))
-                .setStyle(ButtonStyle.Primary)
-            );
-            if (_fvBtns.length === 5) {
-              _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns.splice(0)));
-            }
-          }
-          if (_fvBtns.length > 0) _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns));
-          try {
-            const _fvGeneralCh = await fetchGameChannel(client, game.generalId);
-            await _fvGeneralCh.send({
-              content: `👁️ **Force Vision** — <@${_fvOppOwnerId}>, **Kanan Jarrus** is activating! Choose one of your ready groups — you **must** activate it next, if possible:`,
-              components: _fvRows.slice(0, 5),
-              allowedMentions: { users: [_fvOppOwnerId] },
-            });
-          } catch (_fvErr) {
-            console.error('Force Vision prompt error:', _fvErr);
-          }
-        } else {
-          await thread.send({ content: `👁️ **Force Vision** — Opponent has no ready groups to choose from.` }).catch(discordCatch);
-        }
-      }
-    }
-    // Imperial Citadel (I47): friendly Imperial figure may gain 1 Power Token from the card
-    {
-      const _icEff = getDcEffects ? (getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')]) : null;
-      if (_icEff?.affiliation === 'Imperial') {
-        const _icHasCitadel = dcList.some(dc => dc.dcName === '[Imperial Citadel]');
-        if (_icHasCitadel) {
-          const _icTokens = game.imperialCitadelTokens || {};
-          const _icAvailable = Object.entries(_icTokens).filter(([, count]) => count > 0);
-          if (_icAvailable.length > 0) {
-            const _icBtns = _icAvailable.slice(0, 4).map(([type, count]) => {
-              const label = `${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`;
-              return new ButtonBuilder()
-                .setCustomId(`act_passive_${gameId}_${msgId}_citadel_token_${type}`)
-                .setLabel(label)
-                .setStyle(ButtonStyle.Primary);
-            });
-            _icBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_citadel_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-            await logGameAction(game, client, `🏰 **Imperial Citadel** — <@${ownerId}>, **${displayName}** may gain 1 Power Token from the Citadel:`, {
-              phase: 'ACTIVATION', icon: 'card',
-              components: [new ActionRowBuilder().addComponents(_icBtns)],
-              allowedMentions: { users: [ownerId] },
-            });
-          }
-        }
-      }
-    }
-    // Responsive (Shyla Varad): choose 1 MP or recover 1 Damage
-    if (dcName === 'Shyla Varad') {
-      const respRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_responsive_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_responsive_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send({ content: `🏃 **Responsive** — **${displayName}**: Choose one:`, components: [respRow] }).catch(discordCatch);
-    }
-    saveGames();
-    const logCh = await fetchGameChannel(client, game.generalId);
-    const icon = ACTION_ICONS.activate || '⚡';
-    const pLabel = `P${playerNum}`;
-    const logMsg = await logCh.send(sanitizeMentions({
-      content: `${icon} <t:${Math.floor(Date.now() / 1000)}:t> — **${pLabel}:** <@${ownerId}> activated **${displayName}**!`,
-      allowedMentions: { users: [ownerId] },
-    }));
-    game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
-    game.dcActivationLogMessageIds[msgId] = logMsg.id;
-    // Still Faster Than You: if the opponent has SFTY active, post an interrupt prompt in the thread
-    if (game.stillFasterPlayerNum && game.stillFasterPlayerNum !== playerNum) {
-      const sftPlayerNum = game.stillFasterPlayerNum;
-      const sftOwnerId = getPlayerId(game, sftPlayerNum);
-      const sftRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`still_faster_use_${gameId}_${msgId}`).setLabel('Use Still Faster Than You').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`still_faster_skip_${gameId}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send({
-        content: `<@${sftOwnerId}> — **Still Faster Than You**: interrupt now (move 2 + attack a different hostile) or skip?`,
-        components: [sftRow],
-        allowedMentions: { users: [sftOwnerId] },
-      }).catch(discordCatch);
-      game.pendingStillFaster = { gameId, activatingMsgId: msgId, activatingPlayerNum: playerNum, sftPlayerNum };
-    }
-    // Auto-prompt opponent for hostile-activation reaction cards (Overcharged Weapons, etc.)
-    try {
-      const oppNum = opponentPlayerNum(playerNum);
-      const reactCards = getPlayableReactionCardsForTiming(game, oppNum, [
-        'whenEnemyFigureActivates', 'atStartOfHostileFigureActivation', 'atStartOfActivationOfHostileFigureInYourLineOfSight',
-      ]);
-      if (reactCards.length) {
-        const oppId = getPlayerId(game, oppNum);
-        await thread.send({
-          content: `<@${oppId}> — Hostile activated! You have ${reactCards.length} reaction card(s) playable now. Check your Hand channel.`,
-          allowedMentions: { users: [oppId] },
-        }).catch(discordCatch);
-      }
-    } catch (_actReactErr) {
-      console.error('Activation reaction prompt error:', _actReactErr?.message ?? _actReactErr);
-    }
-    const activateRows = getActivateDcButtons(game, playerNum);
-    await interaction.editReply({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(discordCatch);
   } catch (err) {
     console.error('dc_activate_ error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'dc_activate');
@@ -614,121 +438,27 @@ export async function handleDcToggle(interaction, ctx) {
       }));
       return;
     }
-    dcExhaustedState.set(msgId, true);
-    const remaining = getActivationsRemaining(game, meta.playerNum);
-    if (remaining > 0) {
-      setActivationsRemaining(game, meta.playerNum, remaining - 1);
-      const dcIndex = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
-      if (dcIndex !== -1) {
-        const indices = getActivatedDcIndices(game, meta.playerNum) || [];
-        setActivatedDcIndices(game, meta.playerNum, indices);
-        indices.push(dcIndex);
-      }
-      await updateActivationsMessage(game, meta.playerNum, client);
-      const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
-      let thread;
-      try {
-        thread = await interaction.message.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
-      } catch (threadErr) {
-        if (threadErr.code === 'MessageExistingThread' || threadErr.code === 160004) {
-          // Thread already exists (e.g. from a failed unactivate) — reuse it
-          thread = interaction.message.thread;
-          if (thread?.archived) await thread.setArchived(false);
-        } else {
-          throw threadErr;
-        }
-      }
-      game.movementBank = game.movementBank || {};
-      const _pendingMp2 = game.pendingMpBonus?.[msgId] ?? 0;
-      if (_pendingMp2) delete game.pendingMpBonus[msgId];
-      game.movementBank[msgId] = { total: _pendingMp2, remaining: _pendingMp2, threadId: thread.id, messageId: null, displayName };
-      game.dcActionsData = game.dcActionsData || {};
-      game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
-      const pingContent = `<@${getPlayerId(game, meta.playerNum)}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
-      const actMinimap = await getActivationMinimapAttachment(game, msgId);
-      const actionsPayload = {
-        content: pingContent,
-        components: getDcActionButtons(msgId, meta.dcName, displayName, game.dcActionsData[msgId], game),
-        allowedMentions: { users: [getPlayerId(game, meta.playerNum)] },
-      };
-      if (actMinimap) actionsPayload.files = [actMinimap];
-      const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
-      game.dcActionsData[msgId].messageId = actionsMsg.id;
-      const logCh = await fetchGameChannel(client, game.generalId);
-      const icon = ACTION_ICONS.activate || '⚡';
-      const pLabel = `P${meta.playerNum}`;
-      const logMsg = await logCh.send({
-        content: `${icon} <t:${Math.floor(Date.now() / 1000)}:t> — **${pLabel}:** <@${playerId}> activated **${displayName}**!`,
-        allowedMentions: { users: [playerId] },
-      });
-      game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
-      game.dcActivationLogMessageIds[msgId] = logMsg.id;
-      // Advanced Weapons Research (Director Krennic): friendly within range gains 1 Hit or Surge Token
-      if (meta.dcName === 'Director Krennic') {
-        try {
-          const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-          const selfFk = `Director Krennic-${dgIndex}-0`;
-          const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
-          if (selfPos) {
-            const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-            const _awrRange = cardNameIncludes(_awrAtts, 'Advanced Com Systems') ? 3 : 2;
-            const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
-              .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= _awrRange)
-              .sort(([a], [b]) => (a === selfFk ? -1 : b === selfFk ? 1 : 0));
-            if (friendlyFigs.length > 0) {
-              const _awrSlice = friendlyFigs.slice(0, 4);
-              const _awrLabels = figureChoiceLabels(_awrSlice.map(([fk]) => fk));
-              const btns = _awrSlice.map(([fk], i) =>
-                new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(_awrLabels[i]).setStyle(ButtonStyle.Primary)
-              );
-              btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-              const awrRow = new ActionRowBuilder().addComponents(btns);
-              game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
-              await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within ${_awrRange} spaces to grant a **Damage Token** or **Surge Token**:`, components: [awrRow] });
-            } else {
-              await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within ${_awrRange} spaces.` });
-            }
-          }
-        } catch (err) {
-          console.error('[AWR] Failed in dc_toggle_ path:', err);
-        }
-      }
-      // Imperial Citadel (I47): friendly Imperial figure may gain 1 Power Token from the card
-      {
-        const _icEff = ctx.getDcEffects?.()?.[meta.dcName];
-        if (_icEff?.affiliation === 'Imperial') {
-          const _icDcList = getDcList(game, meta.playerNum) || [];
-          const _icHasCitadel = _icDcList.some(dc => dc.dcName === '[Imperial Citadel]');
-          if (_icHasCitadel) {
-            const _icTokens = game.imperialCitadelTokens || {};
-            const _icAvailable = Object.entries(_icTokens).filter(([, count]) => count > 0);
-            if (_icAvailable.length > 0) {
-              const _icBtns = _icAvailable.slice(0, 4).map(([type, count]) => {
-                const label = `${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`;
-                return new ButtonBuilder()
-                  .setCustomId(`act_passive_${game.gameId}_${msgId}_citadel_token_${type}`)
-                  .setLabel(label)
-                  .setStyle(ButtonStyle.Primary);
-              });
-              _icBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_citadel_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-              await logGameAction(game, client, `🏰 **Imperial Citadel** — <@${playerId}>, **${displayName}** may gain 1 Power Token from the Citadel:`, {
-                phase: 'ACTIVATION', icon: 'card',
-                components: [new ActionRowBuilder().addComponents(_icBtns)],
-                allowedMentions: { users: [playerId] },
-              });
-            }
-          }
-        }
-      }
-      // Responsive (Shyla Varad): choose 1 MP or recover 1 Damage
-      if (meta.dcName === 'Shyla Varad') {
-        const respRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_responsive_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_responsive_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send({ content: `🏃 **Responsive** — **${displayName}**: Choose one:`, components: [respRow] }).catch(discordCatch);
-      }
-    }
+    const dcIndex = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
+    await finalizeActivation({
+      game, gameId: meta.gameId, playerNum: meta.playerNum, dcIndex,
+      dcName: meta.dcName, displayName, msgId, ownerId,
+      dcMessage: interaction.message,
+      deps: {
+        dcExhaustedState, dcHealthState,
+        dcMessageMeta,
+        renderDcEmbed, getDcPlayAreaComponents,
+        updateActivationsMessage, getActionsCounterContent,
+        getDcActionButtons, getActivationMinimapAttachment,
+        getActivateDcButtons: ctx.getActivateDcButtons,
+        DC_ACTIONS_PER_ACTIVATION, ACTION_ICONS,
+        logGameAction, saveGames, client,
+        findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
+        hasLineOfSight: ctx.hasLineOfSight,
+        getMapData: ctx.getMapData,
+        getDcStats: ctx.getDcStats,
+      },
+    });
+    return; // orchestrator handles embed re-render, save, and log
   }
   if (wasExhausted && !nowExhausted) {
     dcExhaustedState.set(msgId, false);
