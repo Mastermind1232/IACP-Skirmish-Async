@@ -10,11 +10,11 @@
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { pickBestAction, getRuntimeStats, resetRuntimeStats } from '../../src/ai/strategy.js';
-import { getDcStats, getMapData, getDeploymentZones, getDcEffects } from '../../src/data-loader.js';
+import { getDcStats, getMapData, getDeploymentZones, getDcEffects, getCcEffect } from '../../src/data-loader.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { computeMovementCache, getBoardStateForMovement, getMovementProfile } from '../../src/game/movement.js';
 import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
-import { abstractActionType } from './learnings.js';
+import { abstractActionType, COMBAT_CC_TIMINGS } from './learnings.js';
 import { getRange } from '../../src/game/spatial.js';
 import { getMapTokensData } from '../../src/data-loader.js';
 import { readFileSync } from 'fs';
@@ -73,7 +73,7 @@ async function runOneGame(gameNum) {
   };
 
   // Telemetry
-  const actionLog = { planner: 0, dqn: 0, attacks: 0, moves: 0, endActs: 0, cc: 0, ccPlayed: 0, ccFiltered: 0, surges: 0, interacts: 0, interactsOffered: 0, reactive: 0 };
+  const actionLog = { planner: 0, dqn: 0, attacks: 0, moves: 0, endActs: 0, cc: 0, ccPlayed: 0, ccFiltered: 0, combatCcPlayed: 0, surges: 0, interacts: 0, interactsOffered: 0, reactive: 0 };
   // Activation divergence tracking
   const actDiv = { total: 0, diverged: 0, chosenCloserToObj: 0, chosenCloserToEnemy: 0, chosenCloserToBoth: 0, gatedByCombat: 0 };
   let consecutiveEmpty = 0;
@@ -134,9 +134,9 @@ async function runOneGame(gameNum) {
       lastFingerprint = fp;
     }
 
-    // Get actions for both players (mirror self-play.js logic)
-    const p1ActionsRaw = getAvailableActions(g, 1, actionDeps);
-    const p2ActionsRaw = getAvailableActions(g, 2, actionDeps);
+    // Get actions for both players (mirror train.js logic — tag with actingPlayer)
+    const p1ActionsRaw = getAvailableActions(g, 1, actionDeps).map(a => ({ ...a, actingPlayer: 1 }));
+    const p2ActionsRaw = getAvailableActions(g, 2, actionDeps).map(a => ({ ...a, actingPlayer: 2 }));
 
     // Pre-filter: CC, headless-incompatible, attack_target without targets, failed moves
     const filterActions = (actions) => (actions || []).filter(a => {
@@ -403,6 +403,9 @@ async function runOneGame(gameNum) {
         }
         await playCommandCardHeadless(g, chosen.actingPlayer, chosen.params.cardName, hDeps);
         actionLog.ccPlayed++;
+        // Track combat CC plays
+        const ccTiming = (getCcEffect(chosen.params.cardName)?.timing || '').toLowerCase();
+        if (COMBAT_CC_TIMINGS.has(ccTiming)) actionLog.combatCcPlayed++;
       } catch (err) {
         const ccKey = `P${chosen.actingPlayer}:${chosen.params.cardName}:R${g.currentRound || 1}`;
         const count = (ccFailureCounts.get(ccKey) || 0) + 1;
@@ -456,7 +459,7 @@ async function main() {
     const totalVP = (result.p1VP?.total || 0) + (result.p2VP?.total || 0);
     const killVP = (result.p1VP?.kills || 0) + (result.p2VP?.kills || 0);
     const objVP = (result.p1VP?.objectives || 0) + (result.p2VP?.objectives || 0);
-    console.log(`  [${i + 1}/${NUM_GAMES}] ${status} | R${result.rounds} | VP: ${totalVP} (kill: ${killVP}, obj: ${objVP}) | atk: ${result.actionLog.attacks} | mv: ${result.actionLog.moves} | cc: ${result.actionLog.cc}(${result.actionLog.ccPlayed}ok/${result.actionLog.ccFiltered}filt) | interact: ${result.actionLog.interacts}`);
+    console.log(`  [${i + 1}/${NUM_GAMES}] ${status} | R${result.rounds} | VP: ${totalVP} (kill: ${killVP}, obj: ${objVP}) | atk: ${result.actionLog.attacks} | mv: ${result.actionLog.moves} | cc: ${result.actionLog.cc}(${result.actionLog.ccPlayed}ok/${result.actionLog.combatCcPlayed}cbt/${result.actionLog.ccFiltered}filt) | interact: ${result.actionLog.interacts}`);
     results.push(result);
   }
 
@@ -503,7 +506,8 @@ async function main() {
   console.log(`  Moves:               ${totalMoves} (${(totalMoves / NUM_GAMES).toFixed(1)}/game)`);
   const totalCcPlayed = results.reduce((s, r) => s + r.actionLog.ccPlayed, 0);
   const totalCcFiltered = results.reduce((s, r) => s + r.actionLog.ccFiltered, 0);
-  console.log(`  CC plays:            ${totalCC} chosen, ${totalCcPlayed} executed, ${totalCcFiltered} filtered`);
+  const totalCombatCc = results.reduce((s, r) => s + r.actionLog.combatCcPlayed, 0);
+  console.log(`  CC plays:            ${totalCC} chosen, ${totalCcPlayed} executed (${totalCombatCc} combat), ${totalCcFiltered} filtered`);
   console.log(`  Surges:              ${totalSurges} (${(totalSurges / NUM_GAMES).toFixed(1)}/game)`);
   const totalInteractsOffered = results.reduce((s, r) => s + r.actionLog.interactsOffered, 0);
   console.log(`  Interacts:           ${totalInteracts} chosen / ${totalInteractsOffered} offered (${(totalInteracts / NUM_GAMES).toFixed(1)}/game)`);

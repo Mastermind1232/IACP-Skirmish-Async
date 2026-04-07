@@ -210,6 +210,29 @@ const FEATURE_NAMES = [
   'activeDcHasSpecial',         // 1 if active DC has at least one usable special ability
 ];
 
+// Combat-phase CC timings — these CCs are free interrupts during combat resolution.
+// Lowercased to match the convention in canResolveCcHeadless.
+export const COMBAT_CC_TIMINGS = new Set([
+  // Attacker timings
+  'whenyoudeclareattack', 'beforeyoudeclareattack', 'beforedeclaringrangedattack',
+  'duringattack', 'afterattack',
+  'afteryouresolveattackthatdidnotmissduetoaccuracy',
+  'afteryouresolveattacktargetingfigure',
+  'whileattackingbeforedefenderrerolls',
+  'whenyoudeclareattacktargetinghostilewithhighestfigurecost',
+  'whenyoudeclareclosequarters', 'whenyoudeclareindiscriminatefire',
+  'whenyouperformrapidfire',
+  // Defender timings
+  'whenattackdeclaredonyou', 'whiledefending',
+  'afterattacktargetingyouresolved',
+  // Combat-any timings
+  'afterattackdice', 'afterdamage',
+  'whenfigurewithin3spacesdefending',
+  'whileadjacentfriendlyfiguredefending',
+  'whenfriendlyrebelforceuserwithin4spacesrollsdice',
+  'whenanotherfriendlytrooperdeclaresattacktargetinginyourlineofsight',
+]);
+
 const ABSTRACT_TYPES = [
   // Original 15 (indices 0-14 preserved for network weight compatibility)
   'attack_close', 'attack_ranged', 'move_toward', 'move_away', 'move_lateral',
@@ -2333,6 +2356,25 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     const moveTypes = new Set(['move_toward', 'move_away', 'move_lateral', 'start_move']);
     if (attackTypes.length > 0 && moveTypes.has(bestType)) {
       bestType = attackTypes[0]; // within-group scorer picks which target
+    }
+  }
+
+  // Domain rule: play combat CCs during combat resolution.
+  // Combat CCs are free interrupts that enhance damage/defense without consuming
+  // the figure's actions. Not playing them wastes the timing window — dominated
+  // strategy. The within-group CC scorer picks which specific combat CC to play.
+  {
+    const cbt = game.combat || game.pendingCombat;
+    if (cbt && absTypes.includes('play_cc')) {
+      const hasCombatCc = strategicActions.some(a => {
+        if (abstractActionType(a, game) !== 'play_cc') return false;
+        const timing = (getCcEffect(a.params?.cardName)?.timing || '').toLowerCase();
+        return COMBAT_CC_TIMINGS.has(timing);
+      });
+      if (hasCombatCc && bestType !== 'play_cc') {
+        bestType = 'play_cc';
+        _diag.combatCcOverrides = (_diag.combatCcOverrides || 0) + 1;
+      }
     }
   }
 
