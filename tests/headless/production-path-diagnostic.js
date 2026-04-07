@@ -16,7 +16,8 @@ import { computeMovementCache, getBoardStateForMovement, getMovementProfile } fr
 import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
 import { abstractActionType, COMBAT_CC_TIMINGS } from './learnings.js';
 import { getRange } from '../../src/game/spatial.js';
-import { getMapTokensData } from '../../src/data-loader.js';
+import { parseCoord } from '../../src/game/coords.js';
+import { getMapTokensData, getMissionCardsData } from '../../src/data-loader.js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -284,7 +285,7 @@ async function runOneGame(gameNum) {
       const activateActions = actions.filter(a => a.type === 'activate_dc');
       const oppNum = pn === 1 ? 2 : 1;
       const oppFigs = Object.values(g.figurePositions?.[oppNum] || {}).filter(Boolean);
-      // Get objective coords
+      // Get objective coords (matching learnings.js getObjectiveCoords)
       let objCoords = [];
       try {
         const mapId = g.selectedMap?.id;
@@ -299,6 +300,26 @@ async function runOneGame(gameNum) {
           }
           for (const area of mapData.namedAreas || []) {
             for (const c of area.cells || []) objCoords.push(String(c).toLowerCase());
+          }
+          // Deployment zone centroids for zone-control missions
+          const mRules = getMissionCardsData()?.[mapId]?.[variant]?.rules?.endOfRound;
+          if (mRules?.vpPerControlledDeploymentZone) {
+            const zones = getDeploymentZones()?.[mapId];
+            if (zones) {
+              for (const color of ['red', 'blue']) {
+                const cells = zones[color];
+                if (!cells?.length) continue;
+                let sumCol = 0, sumRow = 0;
+                for (const c of cells) {
+                  const p = parseCoord(c);
+                  sumCol += p.col;
+                  sumRow += p.row;
+                }
+                const avgCol = Math.round(sumCol / cells.length);
+                const avgRow = Math.round(sumRow / cells.length);
+                objCoords.push(String.fromCharCode(97 + avgCol) + String(avgRow + 1));
+              }
+            }
           }
         }
       } catch {}

@@ -5,7 +5,7 @@
  * Q(s,a) = V(s) + (A(s,a) - mean(A(s,*)))
  */
 import { parseCoord } from '../../src/game/coords.js';
-import { getDcEffects, getMapTokensData, getCcEffect } from '../../src/data-loader.js';
+import { getDcEffects, getMapTokensData, getCcEffect, getDeploymentZones, getMissionCardsData } from '../../src/data-loader.js';
 import { parseSurgeEffect } from '../../src/game/combat.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import {
@@ -2151,7 +2151,36 @@ function getObjectiveCoords(game) {
   for (const area of mapData.namedAreas || []) {
     for (const c of area.cells || []) coords.add(String(c).toLowerCase());
   }
+  // Deployment zone centroids when mission awards VP for zone control
+  _addDeploymentZoneCentroids(game, mapId, variant, coords);
   return [...coords];
+}
+
+
+// Add deployment zone centroids when mission scores VP for zone control.
+// Without these, the AI has no signal to stay in zones — it evacuates both
+// and neither player scores the 3 VP/zone that drives natural completion.
+function _addDeploymentZoneCentroids(game, mapId, variant, coords) {
+  try {
+    const missionCards = getMissionCardsData();
+    const rules = missionCards?.[mapId]?.[variant]?.rules?.endOfRound;
+    if (!rules?.vpPerControlledDeploymentZone) return;
+    const zones = getDeploymentZones()?.[mapId];
+    if (!zones) return;
+    for (const color of ['red', 'blue']) {
+      const cells = zones[color];
+      if (!cells?.length) continue;
+      let sumCol = 0, sumRow = 0;
+      for (const c of cells) {
+        const p = parseCoord(c);
+        sumCol += p.col;
+        sumRow += p.row;
+      }
+      const avgCol = Math.round(sumCol / cells.length);
+      const avgRow = Math.round(sumRow / cells.length);
+      coords.add(String.fromCharCode(97 + avgCol) + String(avgRow + 1));
+    }
+  } catch { /* data not available */ }
 }
 
 function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMeta) {

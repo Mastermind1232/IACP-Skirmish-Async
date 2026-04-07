@@ -5,8 +5,9 @@
  */
 
 import { pickSmartAction, loadLearnings, setGreedyMode, setEncoderType, getEncoderType } from '../../tests/headless/learnings.js';
-import { isCcAttachment, getMapTokensData } from '../data-loader.js';
+import { isCcAttachment, getMapTokensData, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getRange } from '../game/spatial.js';
+import { parseCoord } from '../game/coords.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -57,7 +58,32 @@ function getObjectiveCoords(game) {
   for (const area of mapData.namedAreas || []) {
     for (const c of area.cells || []) coords.add(String(c).toLowerCase());
   }
+  // Deployment zone centroids when mission awards VP for zone control
+  _addDeploymentZoneCentroids(game, mapId, variant, coords);
   return [...coords];
+}
+
+function _addDeploymentZoneCentroids(game, mapId, variant, coords) {
+  try {
+    const missionCards = getMissionCardsData();
+    const rules = missionCards?.[mapId]?.[variant]?.rules?.endOfRound;
+    if (!rules?.vpPerControlledDeploymentZone) return;
+    const zones = getDeploymentZones()?.[mapId];
+    if (!zones) return;
+    for (const color of ['red', 'blue']) {
+      const cells = zones[color];
+      if (!cells?.length) continue;
+      let sumCol = 0, sumRow = 0;
+      for (const c of cells) {
+        const p = parseCoord(c);
+        sumCol += p.col;
+        sumRow += p.row;
+      }
+      const avgCol = Math.round(sumCol / cells.length);
+      const avgRow = Math.round(sumRow / cells.length);
+      coords.add(String.fromCharCode(97 + avgCol) + String(avgRow + 1));
+    }
+  } catch { /* data not available */ }
 }
 
 // Lazy-loaded singleton — initialized on first use
