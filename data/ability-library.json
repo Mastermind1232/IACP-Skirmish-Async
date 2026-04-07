@@ -5310,7 +5310,7 @@
       "pushTargetWithinRange": {
         "range": 3,
         "requiresSmall": true,
-        "requiresLos": false
+        "requiresLos": true
       },
       "pushLandingEffect": {
         "mustAdjacentToActivator": true
