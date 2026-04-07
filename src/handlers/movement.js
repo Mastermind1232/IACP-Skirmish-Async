@@ -361,7 +361,11 @@ export async function handleMovePick(interaction, ctx) {
     await clearMoveGridMessages(game, moveKey, interaction.channel);
     try { await interaction.message.delete(); } catch { /* already gone */ }
     _cleanupMoveState(game, moveKey, msgId);
-    await interaction.followUp({ content: `**${displayName}** paused movement (**${mpRemaining}** MP remaining).`, ephemeral: false }).catch(discordCatch);
+    await interaction.followUp({ content: `**${displayName}** ended movement (**${mpRemaining}** MP forfeited).`, ephemeral: false }).catch(discordCatch);
+    // Restore activation buttons (figure selector, Move/Attack/etc.)
+    if (ctx.updateDcActionsMessage) {
+      await ctx.updateDcActionsMessage(game, msgId, client).catch(() => {});
+    }
     saveGames();
     return;
   }
