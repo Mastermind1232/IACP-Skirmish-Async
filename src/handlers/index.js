@@ -72,6 +72,8 @@ import {
   handleBoRiflePick,
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,
+  handleOrderMove,
+  handleOrderMoveSpacePick,
   handleRushPushFig,
   handleRushPushSpace,
   handleRushPushSkip,
@@ -252,6 +254,8 @@ register('lasat_die_', handleLasatDiePick, 'combat');
 register('lasat_face_', handleLasatFacePick, 'combat');
 register('false_orders_action_', handleFalseOrdersAction, 'dcPlayArea');
 register('false_orders_space_', handleFalseOrdersMovePick, 'dcPlayArea');
+register('order_move_space_', handleOrderMoveSpacePick, 'dcPlayArea');
+register('order_move_', handleOrderMove, 'dcPlayArea');
 register('false_orders_atk_', handleFalseOrdersAtkPick, 'combat');
 register('zillo_discard_skip_', handleZilloDiscard, 'combat');
 register('zillo_discard_', handleZilloDiscard, 'combat');
@@ -613,6 +617,8 @@ export {
   handleBoRiflePick,
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,
+  handleOrderMove,
+  handleOrderMoveSpacePick,
   handleRushPushFig,
   handleRushPushSpace,
   handleRushPushSkip,

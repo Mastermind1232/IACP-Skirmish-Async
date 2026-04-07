@@ -2601,6 +2601,40 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     return;
   }
 
+  // Order / Tactical Maneuver: present "Move (Figure)" button for the ordered figure
+  if (resolveResult.applied && resolveResult.orderMovePrompt) {
+    const omp = resolveResult.orderMovePrompt;
+    game.pendingOrderedMove = {
+      figureKey: omp.figureKey,
+      targetMsgId: omp.msgId,
+      playerNum,
+      mp: omp.mp,
+      label: omp.label || 'Order',
+    };
+    // Deduct action
+    const actionsData = game.dcActionsData?.[msgId];
+    if (actionsData) {
+      actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+      await updateDcActionsMessage(game, msgId, client);
+    }
+    const moveBtn = new ButtonBuilder()
+      .setCustomId(`order_move_${gameId}_${msgId}`)
+      .setLabel(`Move — ${omp.name}`)
+      .setStyle(ButtonStyle.Primary);
+    const skipBtn = new ButtonBuilder()
+      .setCustomId(`special_done_${gameId}_${msgId}`)
+      .setLabel('Done (skip move)')
+      .setStyle(ButtonStyle.Secondary);
+    await interaction.followUp({
+      content: `**${omp.label}** — **${omp.name}** gained **${omp.mp} movement points**. Move them now or skip:`,
+      components: [new ActionRowBuilder().addComponents(moveBtn, skipBtn)],
+      ephemeral: false,
+    }).catch(discordCatch);
+    if (logGameAction) await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
+    saveGames();
+    return;
+  }
+
   // Deduct action (was refunded when showing choice buttons)
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
@@ -3152,6 +3186,130 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   if (buildBoardMapPayload) boardPayload = await buildBoardMapPayload(game).catch(() => null);
   const replyPayload = {
     content: `**False Orders** — **${controlledName}** moved to **${chosenSpace.toUpperCase()}**. Click Done when finished.`,
+    components: [doneRow],
+    ephemeral: false,
+  };
+  if (boardPayload?.files) replyPayload.files = boardPayload.files;
+  await interaction.followUp(replyPayload).catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * Handle order_move_ button: player chose to move the ordered figure.
+ * Computes reachable spaces and presents the space picker.
+ * customId: order_move_{gameId}_{officerMsgId}
+ */
+export async function handleOrderMove(interaction, ctx) {
+  const m = interaction.customId.match(/^order_move_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, officerMsgId] = m;
+  const {
+    getGame, replyIfGameEnded, getDcStats,
+    getBoardStateForMovement, getMovementProfile, computeMovementCache,
+    getMapAttachmentForSpaces, saveGames, client, FIGURE_LETTERS,
+  } = ctx;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const pending = game.pendingOrderedMove;
+  if (!pending) {
+    await interaction.followUp({ content: 'No pending ordered move.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the ordering player may choose.')) return;
+
+  const { figureKey, mp, label } = pending;
+  const pos = game.figurePositions?.[pending.playerNum]?.[figureKey];
+  if (!pos) {
+    const dcName = dcNameFromFigureKey(figureKey);
+    await interaction.followUp({ content: `**${dcName}** has no position on the board.`, ephemeral: false }).catch(discordCatch);
+    delete game.pendingOrderedMove;
+    saveGames();
+    return;
+  }
+
+  const dcName = dcNameFromFigureKey(figureKey);
+  const boardState = getBoardStateForMovement(game, figureKey);
+  if (!boardState) {
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const profile = getMovementProfile(dcName, figureKey, game);
+  const cache = computeMovementCache(pos, mp, boardState, profile);
+  const reachableSpaces = [...cache.cells.keys()];
+  if (reachableSpaces.length === 0) {
+    await interaction.followUp({ content: `**${dcName}** cannot move (no valid spaces within ${mp} MP).`, ephemeral: false }).catch(discordCatch);
+    delete game.pendingOrderedMove;
+    saveGames();
+    return;
+  }
+
+  const contextKey = `${gameId}_${officerMsgId}`;
+  const headerText = `**${label}** — Choose a space for **${dcName}** to move to`;
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[contextKey] = {
+    validSpaces: reachableSpaces,
+    cellPrefix: `order_move_space_${gameId}_${officerMsgId}_`,
+    mapSpaces: boardState.mapSpaces || {},
+    headerText,
+  };
+  const { rows } = buildRowPickerButtons(reachableSpaces, `space_row_${contextKey}_`);
+  const mapAttachment = getMapAttachmentForSpaces ? await getMapAttachmentForSpaces(game, reachableSpaces) : null;
+  const payload = {
+    content: `${headerText}:\nChoose a row:`,
+    components: rows.slice(0, 5),
+    ephemeral: false,
+  };
+  if (mapAttachment) payload.files = [mapAttachment];
+  await interaction.followUp(payload).catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * Handle order_move_space_ button: complete the ordered figure move when a space is chosen.
+ * customId: order_move_space_{gameId}_{officerMsgId}_{space}
+ */
+export async function handleOrderMoveSpacePick(interaction, ctx) {
+  const m = interaction.customId.match(/^order_move_space_([^_]+)_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, officerMsgId, space] = m;
+  const chosenSpace = String(space).toLowerCase();
+  const { getGame, replyIfGameEnded, logGameAction, buildBoardMapPayload, saveGames, client } = ctx;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  cleanupSpacePick(game, `${gameId}_${officerMsgId}`);
+  if (await replyIfGameEnded(game, interaction)) return;
+  const pending = game.pendingOrderedMove;
+  if (!pending) {
+    await interaction.followUp({ content: 'No pending ordered move.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the ordering player may choose.')) return;
+
+  const { figureKey, targetMsgId, label } = pending;
+  const dcName = dcNameFromFigureKey(figureKey);
+  game.figurePositions = game.figurePositions || {};
+  game.figurePositions[pending.playerNum] = game.figurePositions[pending.playerNum] || {};
+  game.figurePositions[pending.playerNum][figureKey] = chosenSpace;
+
+  // Clear the movement bank since all ordered MP are spent
+  if (targetMsgId && game.movementBank?.[targetMsgId]) {
+    game.movementBank[targetMsgId].remaining = 0;
+  }
+  delete game.pendingOrderedMove;
+
+  if (logGameAction) await logGameAction(game, client, `🎯 **${label}** — **${dcName}** moved to **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'move' }).catch(discordCatch);
+
+  const doneRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`special_done_${gameId}_${officerMsgId}`)
+      .setLabel('Done')
+      .setStyle(ButtonStyle.Success)
+  );
+  let boardPayload = null;
+  if (buildBoardMapPayload) boardPayload = await buildBoardMapPayload(game).catch(() => null);
+  const replyPayload = {
+    content: `**${label}** — **${dcName}** moved to **${chosenSpace.toUpperCase()}**. Click Done when finished.`,
     components: [doneRow],
     ephemeral: false,
   };

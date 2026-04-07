@@ -933,7 +933,7 @@ export function resolveAbility(abilityId, context) {
         addMovementPoints(game, chosenMsgId, 2);
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Tactical Maneuver** — **${chosenName}** gained **2 movement points**.` };
+      return { applied: true, logMessage: `**Tactical Maneuver** — **${chosenName}** gained **2 movement points**.`, orderMovePrompt: { figureKey: targetFigureKey, msgId: chosenMsgId, name: chosenName, mp: 2, label: 'Tactical Maneuver' } };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
@@ -993,7 +993,7 @@ export function resolveAbility(abilityId, context) {
         addMovementPoints(game, chosenMsgId, 2);
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Order** — **${chosenName}** gained **2 movement points**.` };
+      return { applied: true, logMessage: `**Order** — **${chosenName}** gained **2 movement points**.`, orderMovePrompt: { figureKey: targetFigureKey, msgId: chosenMsgId, name: chosenName, mp: 2, label: 'Order' } };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
