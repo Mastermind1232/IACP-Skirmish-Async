@@ -5303,7 +5303,8 @@
     "wrist_cord": {
       "type": "dcSpecial",
       "label": "Wrist Cord",
-      "description": "Spend 2 MP to push a SMALL figure within 3 spaces adjacent to you.",
+      "description": "Once per round, spend 2 MP to push a SMALL figure within 3 spaces adjacent to you.",
+      "oncePer": "round",
       "mpCostToActivate": 2,
       "pushTargetWithinRange": {
         "range": 3,
@@ -5322,7 +5323,7 @@
       "trigger": "activation",
       "label": "Wrist Flamethrower",
       "description": "Once per round, spend 2 MP to choose a space within 2 spaces. Each figure on or adjacent suffers 1 Damage + 1 Strain + becomes Weakened.",
-      "oncePer": "activation",
+      "oncePer": "round",
       "wiredStatus": "wired",
       "fixedAreaEffect": true,
       "fixedAreaRange": 2,
