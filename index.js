@@ -485,7 +485,7 @@ import {
   setActivationsRemaining, setActivationsTotal, setActivatedDcIndices,
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, dcAttachmentsKey,
   dcAttachmentMessageIdsKey, vpKey, deployMetadataKey, deployLabelsKey, armyCostModifierKey,
-  removeFigurePosition, syncHealthStateToList,
+  removeFigurePosition, syncHealthStateToList, recomputeActivationCounts,
 } from './src/game/player-helpers.js';
 import { discordCatch } from './src/error-handling.js';
 
@@ -1168,8 +1168,8 @@ async function refreshAllGameComponents(game, client) {
     getDiscardThreadId, getDiscardPileEmbed, getDiscardPileButtons,
     getDcMessageIds, dcAttachmentMessageIdsKey, ccAttachmentsKey, dcAttachmentsKey,
     buildAttachmentEmbedsAndFiles, getTokensForDcMessage,
-    getDcList, getActivatedDcIndices, getActivationsRemaining, setActivationsRemaining,
-    getActivationsTotal, setActivationsTotal, updateActivationsMessage,
+    getDcList, getActivatedDcIndices,
+    recomputeActivationCounts, updateActivationsMessage,
   });
 }
 
@@ -1667,6 +1667,7 @@ async function populatePlayAreas(game, client) {
     getNicknamesForDcMessage, dcMessageMeta, dcExhaustedState, dcHealthState,
     getDcPlayAreaComponents, getPlayAreaTooltipEmbed, getHandVisualEmbed,
     getDiscardPileEmbed, getDiscardPileButtons, getActivationsLine,
+    recomputeActivationCounts,
   });
 }
 

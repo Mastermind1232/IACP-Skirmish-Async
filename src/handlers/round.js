@@ -16,8 +16,7 @@ import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getCcHand, getCcDeck, getCcDiscard, getDcAttachments,
-  setActivationsRemaining, setActivatedDcIndices,
-  getActivationsTotal,
+  setActivatedDcIndices, recomputeActivationCounts,
   ccHandKey, ccDiscardKey, ccDeckKey,
   opponentPlayerNum, syncHealthStateToList,
   getInitiativePlayerNum,
@@ -207,25 +206,8 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
   }
   for (const pn of [1, 2]) {
-    let total = getActivationsTotal(game, pn) ?? 0;
-    // Subtract activations for fully defeated deployment groups
-    const dcList = getDcList(game, pn) || [];
-    const figs = game.figurePositions?.[pn] || {};
-    const figKeys = Object.keys(figs);
-    // Figure keys that are set aside via Lie in Ambush (not defeated, just not yet deployed)
-    const liaKeys = game.lieInAmbushSetAside?.[pn] || [];
-    for (const dc of dcList) {
-      const dcName = dc.dcName || dc;
-      // Skip figureless DCs (upgrades like [Extra Armor]) — they never have figures
-      if (/^\[.+\]$/.test(dcName)) continue;
-      // Skip Lie in Ambush set-aside groups — already excluded from activationsTotal
-      if (liaKeys.some(fk => fk.startsWith(dcName + '-'))) continue;
-      if (!figKeys.some(fk => fk.startsWith(dcName + '-'))) {
-        total = Math.max(0, total - 1);
-      }
-    }
-    setActivationsRemaining(game, pn, total);
     setActivatedDcIndices(game, pn, []);
+    recomputeActivationCounts(game, pn);
   }
 
   // ══ STEP 2: Draw Command Cards (rules: STATUS PHASE IN A SKIRMISH L2716-2717) ══

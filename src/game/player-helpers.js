@@ -45,6 +45,45 @@ export function setActivationsRemaining(game, pn, v) { if (pn === 1) game.p1Acti
 export function setActivationsTotal(game, pn, v)     { if (pn === 1) game.p1ActivationsTotal = v; else game.p2ActivationsTotal = v; }
 export function setActivatedDcIndices(game, pn, v)   { if (pn === 1) game.p1ActivatedDcIndices = v; else game.p2ActivatedDcIndices = v; }
 
+// ── Activation count recompute (single source of truth) ─────────────────────
+
+/**
+ * Recompute ActivationsTotal and ActivationsRemaining from board state.
+ * A DC is activatable if it has figures on the board OR is Lie-in-Ambush set-aside.
+ * Remaining = activatable DCs that haven't been activated this round.
+ *
+ * Call this instead of hand-rolling ±1 delta math on activation counts.
+ * @returns {{ total: number, remaining: number }}
+ */
+export function recomputeActivationCounts(game, pn) {
+  const dcList = getDcList(game, pn) || [];
+  const figs = game.figurePositions?.[pn] || {};
+  const figKeys = Object.keys(figs);
+  const liaKeys = game.lieInAmbushSetAside?.[pn] || [];
+  const activatedIndices = getActivatedDcIndices(game, pn) || [];
+
+  let total = 0;
+  let activated = 0;
+
+  for (let i = 0; i < dcList.length; i++) {
+    const dcName = dcList[i]?.dcName || dcList[i];
+    // Skip figureless DCs (skirmish upgrades like [Extra Armor])
+    if (/^\[.+\]$/.test(dcName)) continue;
+
+    const hasFigures = figKeys.some(fk => fk.startsWith(dcName + '-') && figs[fk]);
+    const isLia = liaKeys.some(fk => fk.startsWith(dcName + '-'));
+
+    if (hasFigures || isLia) {
+      total++;
+      if (activatedIndices.includes(i)) activated++;
+    }
+  }
+
+  setActivationsTotal(game, pn, total);
+  setActivationsRemaining(game, pn, total - activated);
+  return { total, remaining: total - activated };
+}
+
 // ── Mutations ────────────────────────────────────────────────────────────────
 
 /** Remove a figure's position and clean up per-figure state (device tokens, conditions). */

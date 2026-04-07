@@ -395,30 +395,9 @@ export async function refreshAllGameComponents(game, client, deps) {
     }
   }
 
-  // Recompute activation counts from scratch based on board state.
-  // Count figure DCs that have at least one living figure on the board.
+  // Recompute activation counts from board state (single source of truth)
   for (const pn of [1, 2]) {
-    const dcList = deps.getDcList(game, pn) || [];
-    const figs = game.figurePositions?.[pn] || {};
-    const figKeys = Object.keys(figs);
-    const activatedIndices = deps.getActivatedDcIndices(game, pn) || [];
-    const liaKeys = game.lieInAmbushSetAside?.[pn] || [];
-
-    // Count activatable DCs: has figures on board OR is LiA set-aside (not yet deployed)
-    let activatable = 0;
-    let alreadyActivated = 0;
-    for (let i = 0; i < dcList.length; i++) {
-      const dcName = dcList[i]?.dcName || dcList[i];
-      if (/^\[.+\]$/.test(dcName)) continue; // skip figureless upgrades
-      const hasFigures = figKeys.some(fk => fk.startsWith(dcName + '-') && figs[fk]);
-      const isLia = liaKeys.some(fk => fk.startsWith(dcName + '-'));
-      if (hasFigures || isLia) {
-        activatable++;
-        if (activatedIndices.includes(i)) alreadyActivated++;
-      }
-    }
-    deps.setActivationsTotal(game, pn, activatable);
-    deps.setActivationsRemaining(game, pn, Math.max(0, activatable - alreadyActivated));
+    deps.recomputeActivationCounts(game, pn);
     if (deps.updateActivationsMessage) {
       await deps.updateActivationsMessage(game, pn, client);
     }

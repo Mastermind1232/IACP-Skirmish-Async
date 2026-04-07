@@ -18,8 +18,8 @@ import { getLoadoutCards } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
-  getActivationsRemaining, getActivationsTotal, getActivatedDcIndices,
-  setActivationsRemaining, setActivatedDcIndices,
+  getActivationsRemaining, getActivatedDcIndices,
+  setActivatedDcIndices, recomputeActivationCounts,
   getCcHand, getCcDeck, getSquad,
   ccHandKey, ccDiscardKey, ccAttachmentsKey, dcAttachmentsKey, vpKey as vpKeyFn,
   opponentPlayerNum,
@@ -155,7 +155,7 @@ export async function handleDcActivate(interaction, ctx) {
         const activatedKey = `p${playerNum}ActivatedDcIndices`;
         game[activatedKey] = game[activatedKey] || [];
         if (!game[activatedKey].includes(dcIndex)) game[activatedKey].push(dcIndex);
-        setActivationsRemaining(game, playerNum, getActivationsRemaining(game, playerNum) - 1);
+        recomputeActivationCounts(game, playerNum);
         saveGames();
         return;
       }
@@ -271,16 +271,12 @@ export async function handleDcUnactivate(interaction, ctx) {
   }
   const displayName = meta.displayName || meta.dcName;
   dcExhaustedState.set(msgId, false);
-  const total = getActivationsTotal(game, meta.playerNum);
-  const remaining = getActivationsRemaining(game, meta.playerNum);
-  if (remaining < total) {
-    setActivationsRemaining(game, meta.playerNum, remaining + 1);
-    const dcIndex = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
-    if (dcIndex !== -1 && getActivatedDcIndices(game, meta.playerNum)) {
-      setActivatedDcIndices(game, meta.playerNum, getActivatedDcIndices(game, meta.playerNum).filter((i) => i !== dcIndex));
-    }
-    await updateActivationsMessage(game, meta.playerNum, client);
+  const dcIndex = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
+  if (dcIndex !== -1 && getActivatedDcIndices(game, meta.playerNum)) {
+    setActivatedDcIndices(game, meta.playerNum, getActivatedDcIndices(game, meta.playerNum).filter((i) => i !== dcIndex));
   }
+  recomputeActivationCounts(game, meta.playerNum);
+  await updateActivationsMessage(game, meta.playerNum, client);
   const threadId = game.dcActionsData?.[msgId]?.threadId;
   if (threadId) {
     try {
@@ -462,16 +458,12 @@ export async function handleDcToggle(interaction, ctx) {
   }
   if (wasExhausted && !nowExhausted) {
     dcExhaustedState.set(msgId, false);
-    const total = getActivationsTotal(game, meta.playerNum);
-    const remaining = getActivationsRemaining(game, meta.playerNum);
-    if (remaining < total) {
-      setActivationsRemaining(game, meta.playerNum, remaining + 1);
-      const dcIndex = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
-      if (dcIndex !== -1 && getActivatedDcIndices(game, meta.playerNum)) {
-        setActivatedDcIndices(game, meta.playerNum, getActivatedDcIndices(game, meta.playerNum).filter((i) => i !== dcIndex));
-      }
-      await updateActivationsMessage(game, meta.playerNum, client);
+    const dcIdx = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
+    if (dcIdx !== -1 && getActivatedDcIndices(game, meta.playerNum)) {
+      setActivatedDcIndices(game, meta.playerNum, getActivatedDcIndices(game, meta.playerNum).filter((i) => i !== dcIdx));
     }
+    recomputeActivationCounts(game, meta.playerNum);
+    await updateActivationsMessage(game, meta.playerNum, client);
     const threadId = game.dcActionsData?.[msgId]?.threadId;
     if (threadId) {
       try {

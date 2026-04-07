@@ -13,7 +13,7 @@ import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getCcHand, getCcDeck, getActivatedDcIndices,
-  getActivationsRemaining, setActivationsRemaining,
+  recomputeActivationCounts,
   ccDiscardKey, ccHandKey, ccDeckKey, ccAttachmentsKey, vpKey,
   opponentPlayerNum, getInitiativePlayerNum,
   removeFigurePosition,
@@ -523,11 +523,8 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     const dcIds = getDcMessageIds(game, playerNum);
     const idx = (dcIds || []).indexOf(msgId);
     if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
-      const activatedIndices = getActivatedDcIndices(game, playerNum) || [];
-      if (!activatedIndices.includes(idx)) {
-        setActivationsRemaining(game, playerNum, Math.max(0, (getActivationsRemaining(game, playerNum) ?? 0) - 1));
-        if (updateActivationsMessage) await updateActivationsMessage(game, playerNum, client);
-      }
+      recomputeActivationCounts(game, playerNum);
+      if (updateActivationsMessage) await updateActivationsMessage(game, playerNum, client);
       const ccAttachKey = ccAttachmentsKey(playerNum);
       if (game[ccAttachKey]?.[msgId]?.length) {
         delete game[ccAttachKey][msgId];
@@ -600,11 +597,8 @@ async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
     const dcIds = getDcMessageIds(game, playerNum);
     const idx = (dcIds || []).indexOf(msgId);
     if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
-      const activatedIndices = getActivatedDcIndices(game, playerNum) || [];
-      if (!activatedIndices.includes(idx)) {
-        setActivationsRemaining(game, playerNum, Math.max(0, (getActivationsRemaining(game, playerNum) ?? 0) - 1));
-        if (updateActivationsMessage) await updateActivationsMessage(game, playerNum, client);
-      }
+      recomputeActivationCounts(game, playerNum);
+      if (updateActivationsMessage) await updateActivationsMessage(game, playerNum, client);
       const ccAttachKey = ccAttachmentsKey(playerNum);
       if (game[ccAttachKey]?.[msgId]?.length) {
         delete game[ccAttachKey][msgId];
@@ -5584,11 +5578,8 @@ export async function handleFigureheadDecision(interaction, ctx) {
           const fhDcIds = getDcMessageIds(game, defenderPlayerNum);
           const fhIdx = (fhDcIds || []).indexOf(fhMsgId);
           if (fhIdx >= 0 && isGroupDefeated?.(game, defenderPlayerNum, fhIdx)) {
-            const fhActivated = getActivatedDcIndices(game, defenderPlayerNum) || [];
-            if (!fhActivated.includes(fhIdx)) {
-              setActivationsRemaining(game, defenderPlayerNum, Math.max(0, (getActivationsRemaining(game, defenderPlayerNum) ?? 0) - 1));
-              if (updateActivationsMessage) await updateActivationsMessage(game, defenderPlayerNum, client);
-            }
+            recomputeActivationCounts(game, defenderPlayerNum);
+            if (updateActivationsMessage) await updateActivationsMessage(game, defenderPlayerNum, client);
             const fhCcAttachKey = ccAttachmentsKey(defenderPlayerNum);
             if (game[fhCcAttachKey]?.[fhMsgId]?.length) {
               delete game[fhCcAttachKey][fhMsgId];

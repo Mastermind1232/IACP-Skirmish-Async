@@ -25,13 +25,11 @@ import {
   getPlayAreaId,
   getHandChannelId,
   getActivationsRemaining,
-  getActivationsTotal,
-  setActivationsTotal,
   getActivatedDcIndices,
   getCcHand,
   getDcAttachments,
-  setActivationsRemaining,
   setActivatedDcIndices,
+  recomputeActivationCounts,
   ccDeckKey,
   ccDiscardKey,
   ccHandKey,
@@ -480,12 +478,9 @@ export async function handleLiaDeployZone(interaction, ctx) {
   delete game.lieInAmbushSetAside[playerNum];
   delete game.pendingLieInAmbush;
 
-  // The group is now deployable and can activate — add it back to the activation count
+  // Recompute activation counts — LiA set-aside was cleared, figures now on board
   if (placed > 0) {
-    const curTotal = getActivationsTotal(game, playerNum) ?? 0;
-    setActivationsTotal(game, playerNum, curTotal + 1);
-    const curRemaining = getActivationsRemaining(game, playerNum) ?? 0;
-    setActivationsRemaining(game, playerNum, curRemaining + 1);
+    recomputeActivationCounts(game, playerNum);
   }
 
   // Remove the zone selection message

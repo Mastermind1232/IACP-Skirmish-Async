@@ -415,17 +415,7 @@ export async function populatePlayAreas(game, client, deps) {
   const p2PlayArea = await fetchGameChannel(client, game.p2PlayAreaId);
   const gameId = game.gameId;
 
-  const p1FigureDcs = (game.player1Squad?.dcList || []).filter((d) => !deps.isFigurelessDc(deps.resolveDcName(d)));
-  const p2FigureDcs = (game.player2Squad?.dcList || []).filter((d) => !deps.isFigurelessDc(deps.resolveDcName(d)));
-  const p1Total = p1FigureDcs.length || game.player1Squad?.dcCount || 0;
-  const p2Total = p2FigureDcs.length || game.player2Squad?.dcCount || 0;
-  // Subtract Lie in Ambush set-aside groups (not deployed, cannot activate Round 1)
-  const p1Lia = game.lieInAmbushSetAside?.[1]?.length > 0 ? 1 : 0;
-  const p2Lia = game.lieInAmbushSetAside?.[2]?.length > 0 ? 1 : 0;
-  game.p1ActivationsTotal = p1Total - p1Lia;
-  game.p2ActivationsTotal = p2Total - p2Lia;
-  game.p1ActivationsRemaining = p1Total - p1Lia;
-  game.p2ActivationsRemaining = p2Total - p2Lia;
+  // Activation counts are set below after dcList is populated (recomputeActivationCounts)
 
   const processDcList = (dcList) => {
     const counts = {};
@@ -463,6 +453,9 @@ export async function populatePlayAreas(game, client, deps) {
   game.p2DcList = p2Dcs;
   game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || [];
   game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || [];
+  // Derive activation counts from board state (handles LiA set-aside automatically)
+  deps.recomputeActivationCounts(game, 1);
+  deps.recomputeActivationCounts(game, 2);
   game.p1DcMessageIds = [];
   game.p2DcMessageIds = [];
   game.p1DcAttachmentMessageIds = [];

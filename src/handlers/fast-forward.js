@@ -9,7 +9,8 @@ import { parseCoord, normalizeCoord } from '../game/coords.js';
 import {
   getDcList, getDcMessageIds, getPlayAreaId, getPlayerId,
   getActivatedDcIndices, getCcHand,
-  setActivationsRemaining, setActivatedDcIndices, getActivationsRemaining, getActivatedDcIndices as getActivatedIndices,
+  setActivatedDcIndices, getActivatedDcIndices as getActivatedIndices,
+  recomputeActivationCounts,
   ccHandKey, ccDiscardKey,
 } from '../game/player-helpers.js';
 import { dcNameFromFigureKey } from '../game/index.js';
@@ -193,7 +194,7 @@ export function simulateMovementRounds(game, activatorNum, defenderNum, timing, 
     setRoundPhase(game, ROUND_PHASES.START_OF_ROUND);
     for (const pn of [1, 2]) {
       setActivatedDcIndices(game, pn, []);
-      setActivationsRemaining(game, pn, game[`p${pn}ActivationsTotal`] ?? 0);
+      recomputeActivationCounts(game, pn);
     }
   }
 
@@ -258,10 +259,10 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
   const actionsMsg = await thread.send(actionsPayload);
   game.dcActionsData[msgId].messageId = actionsMsg.id;
 
-  setActivationsRemaining(game, playerNum, Math.max(0, (getActivationsRemaining(game, playerNum) || 0) - 1));
   const currentActivated = getActivatedIndices(game, playerNum) || [];
   currentActivated.push(dcIndex);
   setActivatedDcIndices(game, playerNum, currentActivated);
+  recomputeActivationCounts(game, playerNum);
   await updateActivationsMessage(game, playerNum, client);
 
   return { thread, msgId, displayName };

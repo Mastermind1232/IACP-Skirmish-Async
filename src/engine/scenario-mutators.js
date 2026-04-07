@@ -9,7 +9,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
-import { setActivationsRemaining, setActivatedDcIndices } from '../game/player-helpers.js';
+import { setActivatedDcIndices, recomputeActivationCounts } from '../game/player-helpers.js';
 import { fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
 
 // ── Error class ──────────────────────────────────────────────────────────────
@@ -81,8 +81,8 @@ async function mutateToEndOfRound(game, client, deps, userId) {
 
   // Exhaust all DCs for both players
   for (const pn of [1, 2]) {
-    setActivationsRemaining(game, pn, 0);
     setActivatedDcIndices(game, pn, (game[`p${pn}DcMessageIds`] || []).map((_, i) => i));
+    recomputeActivationCounts(game, pn);
   }
   for (const msgId of [...(game.p1DcMessageIds || []), ...(game.p2DcMessageIds || [])]) {
     dcExhaustedState.set(msgId, true);
@@ -139,8 +139,8 @@ async function mutateToStartOfRound(game, client, deps, userId) {
 
   // Un-exhaust all DCs for fresh round
   for (const pn of [1, 2]) {
-    setActivationsRemaining(game, pn, game[`p${pn}ActivationsTotal`] || (game[`p${pn}DcMessageIds`] || []).length);
     setActivatedDcIndices(game, pn, []);
+    recomputeActivationCounts(game, pn);
   }
   for (const msgId of [...(game.p1DcMessageIds || []), ...(game.p2DcMessageIds || [])]) {
     dcExhaustedState.set(msgId, false);
