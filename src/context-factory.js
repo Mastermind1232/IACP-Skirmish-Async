@@ -183,7 +183,7 @@ const CONTEXT_GROUPS = {
   ],
 
   refreshAll: [
-    'getGame', 'refreshAllGameComponents', 'logGameErrorToBotLogs', 'client',
+    'getGame', 'refreshAllGameComponents', 'logGameErrorToBotLogs', 'saveGames', 'client',
   ],
 
   undo: [

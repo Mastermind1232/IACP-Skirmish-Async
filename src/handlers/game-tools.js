@@ -115,7 +115,7 @@ export async function handleRefreshMap(interaction, ctx) {
  * @param {object} ctx - getGame, refreshAllGameComponents, logGameErrorToBotLogs, client
  */
 export async function handleRefreshAll(interaction, ctx) {
-  const { getGame, refreshAllGameComponents, logGameErrorToBotLogs, client } = ctx;
+  const { getGame, refreshAllGameComponents, logGameErrorToBotLogs, saveGames, client } = ctx;
   const gameId = parseCustomId(interaction.customId, 'refresh_all_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
@@ -125,6 +125,7 @@ export async function handleRefreshAll(interaction, ctx) {
   }
   try {
     await refreshAllGameComponents(game, client);
+    saveGames();
     await interaction.message.delete().catch(discordCatch);
     await interaction.followUp({ content: '✓ Full refresh complete. Reloaded all JSON data, map renderer cache, map, DCs, hands, discard piles.', ephemeral: true }).catch(discordCatch);
   } catch (err) {

@@ -1168,6 +1168,7 @@ async function refreshAllGameComponents(game, client) {
     getDiscardThreadId, getDiscardPileEmbed, getDiscardPileButtons,
     getDcMessageIds, dcAttachmentMessageIdsKey, ccAttachmentsKey, dcAttachmentsKey,
     buildAttachmentEmbedsAndFiles, getTokensForDcMessage,
+    getDcList, getActivatedDcIndices, getActivationsRemaining, setActivationsRemaining,
   });
 }
 

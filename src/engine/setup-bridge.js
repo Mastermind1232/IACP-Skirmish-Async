@@ -419,10 +419,13 @@ export async function populatePlayAreas(game, client, deps) {
   const p2FigureDcs = (game.player2Squad?.dcList || []).filter((d) => !deps.isFigurelessDc(deps.resolveDcName(d)));
   const p1Total = p1FigureDcs.length || game.player1Squad?.dcCount || 0;
   const p2Total = p2FigureDcs.length || game.player2Squad?.dcCount || 0;
-  game.p1ActivationsTotal = p1Total;
-  game.p2ActivationsTotal = p2Total;
-  game.p1ActivationsRemaining = p1Total;
-  game.p2ActivationsRemaining = p2Total;
+  // Subtract Lie in Ambush set-aside groups (not deployed, cannot activate Round 1)
+  const p1Lia = game.lieInAmbushSetAside?.[1]?.length > 0 ? 1 : 0;
+  const p2Lia = game.lieInAmbushSetAside?.[2]?.length > 0 ? 1 : 0;
+  game.p1ActivationsTotal = p1Total - p1Lia;
+  game.p2ActivationsTotal = p2Total - p2Lia;
+  game.p1ActivationsRemaining = p1Total - p1Lia;
+  game.p2ActivationsRemaining = p2Total - p2Lia;
 
   const processDcList = (dcList) => {
     const counts = {};
