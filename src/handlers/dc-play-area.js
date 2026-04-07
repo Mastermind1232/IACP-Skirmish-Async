@@ -6,6 +6,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { bottomLeftCoord, edgeKey, normalizeCoord } from '../game/coords.js';
 import { countSpaces } from '../game/spatial.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
@@ -345,12 +346,10 @@ export async function handleDcActivate(interaction, ctx) {
     }
     // Auto-prompt opponent for hostile-activation reaction cards (Overcharged Weapons, etc.)
     try {
-      const { getCcEffectsData } = await import('../data-loader.js');
-      const ccCards = getCcEffectsData?.()?.cards || {};
       const oppNum = opponentPlayerNum(playerNum);
-      const oppHand = getCcHand(game, oppNum) || [];
-      const activationTimings = new Set(['whenEnemyFigureActivates', 'atStartOfHostileFigureActivation', 'atStartOfActivationOfHostileFigureInYourLineOfSight']);
-      const reactCards = [...new Set(oppHand)].filter(c => ccCards[c]?.timing && activationTimings.has(ccCards[c].timing));
+      const reactCards = getPlayableReactionCardsForTiming(game, oppNum, [
+        'whenEnemyFigureActivates', 'atStartOfHostileFigureActivation', 'atStartOfActivationOfHostileFigureInYourLineOfSight',
+      ]);
       if (reactCards.length) {
         const oppId = getPlayerId(game, oppNum);
         await thread.send({

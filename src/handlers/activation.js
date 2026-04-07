@@ -12,6 +12,7 @@ import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, r
 import { getAllFigureCoords } from '../game/spatial.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
@@ -1006,10 +1007,9 @@ export async function handleDcEndActivation(interaction, ctx) {
 
   // Auto-prompt owner for post-activation reaction cards (Change of Plans, Provoke, etc.)
   try {
-    const ccCards = getCcEffectsData?.()?.cards || {};
-    const _endActTimings = new Set(['afterYouResolveGroupsActivation', 'afterActivationResolves', 'endOfActivation']);
-    const hand = getCcHand(game, meta.playerNum) || [];
-    const reactCards = [...new Set(hand)].filter(c => ccCards[c]?.timing && _endActTimings.has(ccCards[c].timing));
+    const reactCards = getPlayableReactionCardsForTiming(game, meta.playerNum, [
+      'afterYouResolveGroupsActivation', 'afterActivationResolves', 'endOfActivation',
+    ]);
     if (reactCards.length) {
       const handId = getHandChannelId(game, meta.playerNum);
       if (handId) {
