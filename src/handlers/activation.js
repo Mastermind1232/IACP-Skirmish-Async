@@ -1185,6 +1185,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (actMinimap) actionsPayload.files = [actMinimap];
   const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
   game.dcActionsData[msgId].messageId = actionsMsg.id;
+  await thread.send({ content: `[DEBUG] handleConfirmActivate reached post-actions. dcName="${meta.dcName}" msgId=${msgId}` }).catch(discordCatch);
   // Hair Trigger (Jyn Odan): at start of hostile activation, interrupt to attack that figure. Once/round.
   {
     const _htOpponentPN = opponentPlayerNum(meta.playerNum);
