@@ -125,6 +125,7 @@ export async function handleRefreshAll(interaction, ctx) {
   }
   try {
     await refreshAllGameComponents(game, client);
+    await interaction.message.delete().catch(discordCatch);
     await interaction.followUp({ content: '✓ Full refresh complete. Reloaded all JSON data, map renderer cache, map, DCs, hands, discard piles.', ephemeral: true }).catch(discordCatch);
   } catch (err) {
     console.error('Failed to refresh all:', err);
