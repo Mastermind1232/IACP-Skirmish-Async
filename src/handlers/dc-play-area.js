@@ -662,11 +662,15 @@ export async function handleDcToggle(interaction, ctx) {
       // Imperial Citadel (I47): friendly Imperial figure may gain 1 Power Token from the card
       {
         const _icEff = ctx.getDcEffects?.()?.[meta.dcName];
+        console.log('[IC-DEBUG] dc_toggle_ Citadel check:', meta.dcName, 'affiliation=', _icEff?.affiliation, 'hasDcEffects=', !!ctx.getDcEffects, 'tokens=', JSON.stringify(game.imperialCitadelTokens));
         if (_icEff?.affiliation === 'Imperial') {
           const _icDcList = getDcList(game, meta.playerNum) || [];
-          if (_icDcList.some(dc => dc.dcName === '[Imperial Citadel]')) {
+          const _icHasCitadel = _icDcList.some(dc => dc.dcName === '[Imperial Citadel]');
+          console.log('[IC-DEBUG] Imperial check passed. hasCitadel=', _icHasCitadel, 'dcList=', _icDcList.map(d => d?.dcName).join(','));
+          if (_icHasCitadel) {
             const _icTokens = game.imperialCitadelTokens || {};
             const _icAvailable = Object.entries(_icTokens).filter(([, count]) => count > 0);
+            console.log('[IC-DEBUG] tokens=', JSON.stringify(_icTokens), 'available=', _icAvailable.length);
             if (_icAvailable.length > 0) {
               const _icBtns = _icAvailable.slice(0, 4).map(([type, count]) => {
                 const label = `${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`;
