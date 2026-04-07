@@ -723,7 +723,7 @@ export async function handleSubmitOrFight(interaction, ctx) {
     // Return last CC from discard to game box (permanently removed)
     const returnedCc = discard.pop();
     // Heal 1 HP (reverse the strain damage) — uses healHp for Map+dcList sync
-    healHp(dcHealthState, game, msgId, figureIndex, 1, playerNum);
+    if (dcHealthState) healHp(dcHealthState, game, msgId, figureIndex, 1, playerNum);
     const dcName = meta?.dcName || 'Paz Vizsla';
     await interaction.message.edit({ content: `🛡️ **Submit or Fight** — **${dcName}** returned **${returnedCc}** to game box to heal 1 Strain damage.`, components: [] }).catch(discordCatch);
     if (logGameAction) {
