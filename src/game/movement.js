@@ -686,7 +686,8 @@ export function getMovementPath(cache, startCoord, destTopLeft, destSize, profil
 }
 
 export function ensureMovementCache(moveState, startCoord, mpLimit, board, profile) {
-  if (!moveState.movementCache || (moveState.cacheMaxMp || 0) < mpLimit) {
+  const cached = moveState.movementCache;
+  if (!cached || (moveState.cacheMaxMp || 0) < mpLimit || !(cached.cells instanceof Map)) {
     moveState.movementCache = computeMovementCache(startCoord, mpLimit, board, profile);
     moveState.cacheMaxMp = mpLimit;
   }
