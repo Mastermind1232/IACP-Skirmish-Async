@@ -405,6 +405,12 @@ export async function handleDcUnactivate(interaction, ctx) {
     await interaction.followUp({ content: 'Cannot un-activate — actions have already been performed.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Also block unactivate if MP was spent (e.g. Boba Fett's abilities cost MP, not actions)
+  const bank = game.movementBank?.[msgId];
+  if (bank && bank.remaining < bank.total) {
+    await interaction.followUp({ content: 'Cannot un-activate — movement points have been spent.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const displayName = meta.displayName || meta.dcName;
   dcExhaustedState.set(msgId, false);
   const total = getActivationsTotal(game, meta.playerNum);
@@ -586,7 +592,18 @@ export async function handleDcToggle(interaction, ctx) {
       }
       await updateActivationsMessage(game, meta.playerNum, client);
       const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
-      const thread = await interaction.message.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
+      let thread;
+      try {
+        thread = await interaction.message.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
+      } catch (threadErr) {
+        if (threadErr.code === 'MessageExistingThread' || threadErr.code === 160004) {
+          // Thread already exists (e.g. from a failed unactivate) — reuse it
+          thread = interaction.message.thread;
+          if (thread?.archived) await thread.setArchived(false);
+        } else {
+          throw threadErr;
+        }
+      }
       game.movementBank = game.movementBank || {};
       const _pendingMp2 = game.pendingMpBonus?.[msgId] ?? 0;
       if (_pendingMp2) delete game.pendingMpBonus[msgId];

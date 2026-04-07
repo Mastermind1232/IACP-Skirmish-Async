@@ -449,17 +449,13 @@ export async function populatePlayAreas(game, client, deps) {
   const p2DcsRaw = processDcList(game.player2Squad.dcList || []);
   const p1Dcs = p1DcsRaw.filter((dc) => !deps.isDcAttachment(dc.dcName));
   const p2Dcs = p2DcsRaw.filter((dc) => !deps.isDcAttachment(dc.dcName));
-  // Sort: figure DCs first (preserve squad order), figureless DCs (skirmish upgrades) last
-  p1Dcs.sort((a, b) => {
-    const af = deps.isFigurelessDc(a.dcName) ? 1 : 0;
-    const bf = deps.isFigurelessDc(b.dcName) ? 1 : 0;
-    return af - bf;
-  });
-  p2Dcs.sort((a, b) => {
-    const af = deps.isFigurelessDc(a.dcName) ? 1 : 0;
-    const bf = deps.isFigurelessDc(b.dcName) ? 1 : 0;
-    return af - bf;
-  });
+  // Sort: figure DCs by cost descending (most expensive first), figureless DCs (skirmish upgrades) last
+  const _dcSortKey = (dc) => {
+    if (deps.isFigurelessDc(dc.dcName)) return -Infinity;
+    return deps.getDcStats(dc.dcName)?.cost ?? 0;
+  };
+  p1Dcs.sort((a, b) => _dcSortKey(b) - _dcSortKey(a));
+  p2Dcs.sort((a, b) => _dcSortKey(b) - _dcSortKey(a));
   game.p1DcList = p1Dcs;
   game.p2DcList = p2Dcs;
   game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || [];
