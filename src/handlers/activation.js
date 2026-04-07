@@ -2556,6 +2556,7 @@ export async function handleActPassive(interaction, ctx) {
     grantPowerTokens(game, targetFk, tokenType, 1);
     delete game.pendingAwr;
     await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
+    await logGameAction(game, client, `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, { phase: 'ACTIVATION', icon: 'card' });
     if (game.pendingPowerTokenOverflow?.length > 0) {
       await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
     }
