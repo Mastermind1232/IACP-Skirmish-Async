@@ -111,12 +111,15 @@ export function getDcToggleButton(msgId, exhausted, game = null) {
           .setStyle(ButtonStyle.Secondary),
       );
     }
-    btns.push(
-      new ButtonBuilder()
-        .setCustomId(`dc_toggle_${msgId}`)
-        .setLabel('Ready')
-        .setStyle(ButtonStyle.Success),
-    );
+    // Only show Ready if activation hasn't finished (undo misclick); once done, card stays exhausted until Status Phase
+    if (!activationFinished) {
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`dc_toggle_${msgId}`)
+          .setLabel('Ready')
+          .setStyle(ButtonStyle.Success),
+      );
+    }
     if (hasActiveActivation) {
       btns.push(new ButtonBuilder()
         .setCustomId(`dc_end_activation_${msgId}`)
@@ -124,7 +127,7 @@ export function getDcToggleButton(msgId, exhausted, game = null) {
         .setStyle(ButtonStyle.Danger)
       );
     }
-    return new ActionRowBuilder().addComponents(...btns);
+    return btns.length ? new ActionRowBuilder().addComponents(...btns) : null;
   }
   const bothDrawn = game && game.player1CcDrawn && game.player2CcDrawn;
   if (!bothDrawn) return null;
@@ -171,7 +174,12 @@ export function getDcPlayAreaComponents(msgId, exhausted, game, dcName, helpers 
     }
     // else: no toggle row for figureless cards without exhaust
   } else {
-    toggleRow = getDcToggleButton(msgId, exhausted, game);
+    // Don't show Activate for DCs with no figures on the board (e.g. Lie in Ambush — not yet deployed)
+    const _dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').trim();
+    const _hasFiguresOnBoard = !game || !_dcBase || [1, 2].some(pn =>
+      Object.keys(game.figurePositions?.[pn] || {}).some(fk => fk.startsWith(_dcBase + '-'))
+    );
+    toggleRow = _hasFiguresOnBoard ? getDcToggleButton(msgId, exhausted, game) : null;
   }
   const rows = toggleRow ? [toggleRow] : [];
   if (hasDepleteEffect(dcName)) {

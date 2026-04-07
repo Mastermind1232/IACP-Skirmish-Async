@@ -1661,9 +1661,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const moveActionBtns = [
         { customId: `move_adjust_mp_${msgId}_${figureIndex}`, label: 'Pick Path Manually', style: ButtonStyle.Secondary },
       ];
-      if (mpRemaining > 0 && !game.urgencyMustSpendAll?.[msgId]) {
+      if (!game.urgencyMustSpendAll?.[msgId]) {
         moveActionBtns.push(
-          { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'Pause Movement', style: ButtonStyle.Secondary }
+          { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'End Movement', style: ButtonStyle.Secondary }
         );
       }
       game.pendingSpacePick = game.pendingSpacePick || {};
