@@ -261,6 +261,13 @@ async function runOneGame(learnings, gameNum) {
       }
       continue; // Re-enter loop to process new state
     }
+    // Auto-skip fluctuation swap (Lothal Wastes B end-of-round interactive phase)
+    if (g.pendingFluctuationSwapQueue?.length > 0) {
+      const pn = g.pendingFluctuationSwapQueue[0];
+      const userId = pn === 1 ? g.player1Id : g.player2Id;
+      try { await harness.submitAction(`fluctuation_skip_${g.gameId}`, userId); } catch {}
+      continue;
+    }
     // Combat ready: both players must confirm — no decision involved.
     // Submit for each player sequentially so the handler sets ready flags.
     if (g.pendingCombat && (!g.pendingCombat.p1Ready || !g.pendingCombat.p2Ready)) {

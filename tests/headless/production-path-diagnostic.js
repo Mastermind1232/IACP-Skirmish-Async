@@ -199,6 +199,13 @@ async function runOneGame(gameNum) {
         }
         continue;
       }
+      // Auto-skip fluctuation swap (Lothal Wastes B end-of-round interactive phase)
+      if (g.pendingFluctuationSwapQueue?.length > 0) {
+        const pn = g.pendingFluctuationSwapQueue[0];
+        const userId = pn === 1 ? g.player1Id : g.player2Id;
+        try { await harness.submitAction(`fluctuation_skip_${g.gameId}`, userId); } catch {}
+        continue;
+      }
       consecutiveEmpty++;
       if (consecutiveEmpty > 10) { stuckReason = 'no_actions_10x'; break; }
       continue;

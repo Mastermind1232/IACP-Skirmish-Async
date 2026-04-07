@@ -867,6 +867,33 @@ export async function runSelfPlayLoop(game, client, opts) {
         continue;
       }
 
+      // Auto-skip fluctuation swap (Lothal Wastes B end-of-round interactive phase)
+      if (g.pendingFluctuationSwapQueue?.length > 0) {
+        const pn = g.pendingFluctuationSwapQueue[0];
+        const userId = pn === 1 ? g.player1Id : g.player2Id;
+        const skipCustomId = `fluctuation_skip_${g.gameId}`;
+        const skipHandlerKey = getHandlerKey(skipCustomId, 'button');
+        const skipHandler = skipHandlerKey ? getHandler(skipHandlerKey) : null;
+        if (skipHandler) {
+          try {
+            const skipInteraction = createLiveAiInteraction(skipCustomId, userId, g, client);
+            skipInteraction.client = client;
+            if (g.generalId) {
+              try { skipInteraction.channel = await fetchGameChannel(client, g.generalId); skipInteraction.message.channel = skipInteraction.channel; } catch {}
+            }
+            const skipGroup = getHandlerGroup(skipHandlerKey);
+            if (skipGroup) {
+              await skipHandler(skipInteraction, buildContext(skipGroup, buildAllDeps()));
+            } else {
+              await skipHandler(skipInteraction);
+            }
+          } catch (err) {
+            console.error(`[self-play] Fluctuation skip crash (P${pn}): ${err.message}`);
+          }
+        }
+        continue;
+      }
+
       // Determine acting player
       const acting = determineActingPlayer(g);
       const playerNums = acting === 'both' ? [1, 2] : [acting];
