@@ -116,7 +116,7 @@ const CONTEXT_GROUPS = {
     'dcExhaustedState', 'updateActivationsMessage', 'getActionsCounterContent',
     'getDcActionButtons', 'getActivationMinimapAttachment', 'getActivateDcButtons',
     'DC_ACTIONS_PER_ACTIVATION', 'ThreadAutoArchiveDuration', 'ACTION_ICONS',
-    'getDcStats', 'getRange', 'hasLineOfSight', 'getMapData',
+    'updateDcActionsMessage', 'getDcStats', 'getRange', 'hasLineOfSight', 'getMapData',
     'findDcMessageIdForFigure', 'updateHandVisualMessage',
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
   ],

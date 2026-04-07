@@ -817,6 +817,32 @@ export async function handleEndTurn(interaction, ctx) {
 }
 
 /**
+ * Handle dc_switch_fig_ — "Switch Figure" button in multi-figure DG activation thread.
+ * Deselects the current figure and shows the figure picker dropdown again.
+ */
+export async function handleDcSwitchFig(interaction, ctx) {
+  const { getGame, dcMessageMeta, updateDcActionsMessage, saveGames, client } = ctx;
+  const msgId = parseCustomId(interaction.customId, 'dc_switch_fig_');
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  const ownerId = getPlayerId(game, meta.playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owner can switch figures.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (game.dcActionsData?.[msgId]) {
+    game.dcActionsData[msgId].selectedFigure = null;
+  }
+  saveGames();
+  await updateDcActionsMessage(game, msgId, client);
+}
+
+/**
  * Handle dc_end_activation_ — red "End Activation" button on the DC card.
  * Immediately ends the current activation: deletes thread, cleans up state, pings opponent.
  * @param {import('discord.js').ButtonInteraction} interaction

@@ -1110,12 +1110,24 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   }
   // End Activation button in thread (mirrors dc_end_activation_ on DC card in play area)
   if (rows.length < 5) {
-    rows.push(new ActionRowBuilder().addComponents(
+    const endActBtns = [];
+    // Multi-figure DG: add Switch Figure button to go back to figure picker
+    if (figures > 1 && selectedFigure != null) {
+      endActBtns.push(
+        new ButtonBuilder()
+          .setCustomId(`dc_switch_fig_${msgId}`)
+          .setLabel('Switch Figure')
+          .setStyle(ButtonStyle.Primary)
+      );
+    }
+    const endLabel = figures > 1 ? 'End Group Activation' : 'End Activation';
+    endActBtns.push(
       new ButtonBuilder()
         .setCustomId(`dc_end_activation_${msgId}`)
-        .setLabel('End Activation')
+        .setLabel(endLabel)
         .setStyle(ButtonStyle.Danger)
-    ));
+    );
+    rows.push(new ActionRowBuilder().addComponents(...endActBtns));
   }
   return rows;
 }
