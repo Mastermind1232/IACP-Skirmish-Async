@@ -592,7 +592,7 @@ export async function handleEndTurn(interaction, ctx) {
     try {
       const ch = await fetchGameChannel(client, game.generalId);
       const endTurnMsg = await ch.messages.fetch(pending.messageId);
-      await endTurnMsg.edit({ components: [] }).catch(discordCatch);
+      await endTurnMsg.delete().catch(discordCatch);
     } catch {}
   }
   // Shield (Riot Trooper E/R): at end of activation, if no Block tokens, gain 1 Block token

@@ -3,7 +3,8 @@
  * Uses game state to derive play context and cc-effects timing field.
  */
 import { getCcEffect, getDcKeywords, getDcEffects } from '../data-loader.js';
-import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand } from './player-helpers.js';
+import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, opponentPlayerNum } from './player-helpers.js';
+import { countGameSpaces } from './board-helpers.js';
 
 /**
  * Derive current CC play context from game state.
@@ -548,6 +549,34 @@ export function getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displ
 }
 
 /**
+ * Check if there's at least one hostile figure adjacent to a friendly TROOPER or GUARDIAN.
+ * Used to gate Provoke's playability notification.
+ */
+function _hasProvokeTarget(game, playerNum) {
+  const dcEffects = getDcEffects() || {};
+  const oppNum = opponentPlayerNum(playerNum);
+  const friendlyPositions = game.figurePositions?.[playerNum] || {};
+  const hostilePositions = game.figurePositions?.[oppNum] || {};
+  const hostileEntries = Object.entries(hostilePositions);
+  if (!hostileEntries.length) return false;
+
+  // Find all friendly figures with TROOPER or GUARDIAN keyword
+  for (const [fk, pos] of Object.entries(friendlyPositions)) {
+    if (!pos) continue;
+    const dcName = fk.replace(/-\d+-\d+$/, '');
+    const eff = dcEffects[dcName] || {};
+    const kws = (eff.keywords || []).map(k => String(k).toUpperCase());
+    if (!kws.includes('TROOPER') && !kws.includes('GUARDIAN')) continue;
+    // Check if any hostile is adjacent (distance 1)
+    for (const [, hPos] of hostileEntries) {
+      if (!hPos) continue;
+      if (countGameSpaces(game, pos, hPos) <= 1) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Get reaction cards from hand that match timing triggers AND pass full legality checks.
  * Replaces the local timing-only filter in combat.js with canonical pipeline:
  * timing trigger match + isCcPlayableNow (game-state blocks) + isCcPlayLegalByRestriction (playableBy).
@@ -572,6 +601,8 @@ export function getPlayableReactionCardsForTiming(game, playerNum, timingTrigger
     if (!isCcPlayableNow(game, playerNum, cardName)) continue;
     const { legal } = isCcPlayLegalByRestriction(game, playerNum, cardName);
     if (!legal) continue;
+    // Provoke: skip if no hostile adjacent to a friendly TROOPER/GUARDIAN
+    if (cardName === 'Provoke' && !_hasProvokeTarget(game, playerNum)) continue;
     results.push({ cardName, timing: effect.timing, playableBy: effect.playableBy || 'Any Figure', cost: effect.cost ?? 0 });
   }
   return results;
