@@ -882,21 +882,24 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const figures = stats.figures ?? 1;
   let specials = stats.specials || [];
   let specialCosts = stats.specialCosts || [];
+  let specialMpCosts = stats.specialMpCosts || [];
   // Skirmish Upgrade attachments may remove DC specials (e.g. Driven by Hatred removes Brutality)
   const _suUpgrades = game ? (game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || []) : [];
   if (_suUpgrades.length) {
     const _lostSpecials = new Set();
     if (cardNameIncludes(_suUpgrades, 'Driven by Hatred')) _lostSpecials.add('Brutality');
     if (_lostSpecials.size) {
-      const _filteredPairs = specials.map((s, i) => [s, specialCosts[i] ?? 1]).filter(([s]) => !_lostSpecials.has(s));
+      const _filteredPairs = specials.map((s, i) => [s, specialCosts[i] ?? 1, specialMpCosts[i] ?? 0]).filter(([s]) => !_lostSpecials.has(s));
       specials = _filteredPairs.map(([s]) => s);
       specialCosts = _filteredPairs.map(([, c]) => c);
+      specialMpCosts = _filteredPairs.map(([,, m]) => m);
     }
     // Inject attachment-provided special actions
     const injected = getAttachmentSpecials(_suUpgrades, game, msgId);
     if (injected.names.length) {
       specials = [...specials, ...injected.names];
       specialCosts = [...specialCosts, ...injected.costs];
+      specialMpCosts = [...specialMpCosts, ...injected.names.map(() => 0)];
     }
   }
   // Bomb Drop (Hoth Battle Station B): inject special action if figure is carrying explosive
@@ -1010,15 +1013,26 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     const specialBtns = specials.slice(0, 5).map((name, idx) => {
       const alreadyUsed = specialsUsed.includes(idx);
       const cost = specialCosts[idx] ?? 1;
+      const mpCost = specialMpCosts[idx] ?? 0;
       const needsDoubleAction = cost >= 2;
       // VF: Focus — limit once per round per group
       const isVfFocusUsed = name === 'VF: Focus' && !!game?.vadersFocusUsedThisRound?.[msgId];
-      const label = needsDoubleAction ? `Special Action: ${name} (2 Actions)`.slice(0, 80) : `Special Action: ${name}`.slice(0, 80);
+      let label;
+      if (mpCost > 0 && cost <= 0) {
+        // MP-based ability (e.g. Boba Fett's Wrist Cord) — not an action
+        label = `${name} (${mpCost} MP)`.slice(0, 80);
+      } else if (needsDoubleAction) {
+        label = `Special Action: ${name} (2 Actions)`.slice(0, 80);
+      } else {
+        label = `Special Action: ${name}`.slice(0, 80);
+      }
+      const bankMp = game?.movementBank?.[msgId]?.remaining ?? 0;
+      const mpDisabled = mpCost > 0 && bankMp < mpCost;
       return new ButtonBuilder()
         .setCustomId(`dc_special_${idx}_${msgId}`)
         .setLabel(label)
         .setStyle(ButtonStyle.Primary)
-        .setDisabled(isStunned || alreadyUsed || isVfFocusUsed || (actionsRemaining ?? 2) < cost);
+        .setDisabled(isStunned || alreadyUsed || isVfFocusUsed || (mpCost > 0 ? mpDisabled : (actionsRemaining ?? 2) < cost));
     });
     // Split into multiple rows if > 5 specials
     for (let i = 0; i < specialBtns.length; i += 5) {

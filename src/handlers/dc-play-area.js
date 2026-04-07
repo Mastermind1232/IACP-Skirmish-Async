@@ -1478,7 +1478,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
   const hasFellSwoopFreeAttack = action === 'Attack' && !!game.fellSwoopFreeAttack?.[msgId];
   const hasPummelFreeAttack = action === 'Attack' && !!(game.pummelTwoAttacksThisActivation?.[msgId]);
-  if (actionsRemaining <= 0 && action !== 'SpendMp' && !hasFellSwoopFreeAttack && !hasPummelFreeAttack) {
+  const isMpBasedSpecial = buttonKey === 'dc_special_' && _effectiveActionCost === 0;
+  if (actionsRemaining <= 0 && action !== 'SpendMp' && !hasFellSwoopFreeAttack && !hasPummelFreeAttack && !isMpBasedSpecial) {
     await interaction.followUp({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch(discordCatch);
     return;
   }

@@ -435,6 +435,18 @@ export function getDcStats(dcName) {
         const entry = lib.abilities?.[id];
         return entry?.label || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
       });
+      // Build specialMpCosts and specialCosts from ability library
+      if (!eff.specialCosts?.length) {
+        const mpCosts = filtered.map((id) => {
+          const entry = lib.abilities?.[id];
+          return entry?.mpCost ?? entry?.mpCostToActivate ?? 0;
+        });
+        if (mpCosts.some(c => c > 0)) {
+          eff._specialMpCosts = mpCosts;
+          // MP-based abilities cost 0 actions; others default to 1
+          eff._specialActionCosts = mpCosts.map(mp => mp > 0 ? 0 : 1);
+        }
+      }
     }
     return {
       health: eff.health ?? null,
@@ -445,7 +457,8 @@ export function getDcStats(dcName) {
       defense: eff.defense ?? null,
       specials: specials || [],
       specialIds,
-      specialCosts: eff.specialCosts || [],
+      specialCosts: eff.specialCosts?.length ? eff.specialCosts : (eff._specialActionCosts || []),
+      specialMpCosts: eff._specialMpCosts || [],
       passives: eff.passives || [],
       abilityText: eff.abilityText || '',
     };
