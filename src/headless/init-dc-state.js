@@ -83,14 +83,40 @@ export function initializeDcState(game, dcMessageMeta, dcExhaustedState, dcHealt
 export function initializeFigurePositions(game, dcMessageMeta, opts = {}) {
   game.figurePositions = game.figurePositions || { 1: {}, 2: {} };
 
-  // Collect ALL playable spaces for placing figures near each other
+  // Try real deployment zones first — places teams on opposite sides of the map
+  const mapId = game.selectedMap?.id;
+  const zoneData = mapId ? opts.deploymentZones?.[mapId] : null;
+  if (zoneData?.red?.length && zoneData?.blue?.length) {
+    const p1Zone = Math.random() < 0.5 ? 'red' : 'blue';
+    const p2Zone = p1Zone === 'red' ? 'blue' : 'red';
+    game.deploymentZoneChosen = p1Zone;
+
+    for (const playerNum of [1, 2]) {
+      const zone = playerNum === 1 ? zoneData[p1Zone] : zoneData[p2Zone];
+      let spaceIdx = 0;
+      for (const [, meta] of dcMessageMeta) {
+        if (meta.gameId !== game.gameId || meta.playerNum !== playerNum) continue;
+        if (isFigurelessDc(meta.dcName)) continue;
+        const stats = getDcStats(meta.dcName);
+        const figureCount = stats?.figures ?? 1;
+        const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const dgIndex = dgMatch ? dgMatch[1] : '1';
+        for (let f = 0; f < figureCount; f++) {
+          const figureKey = `${meta.dcName}-${dgIndex}-${f}`;
+          game.figurePositions[playerNum][figureKey] = zone[spaceIdx % zone.length];
+          spaceIdx++;
+        }
+      }
+    }
+    return;
+  }
+
+  // Fallback: central cluster (for maps without zone data or tests that don't need zones)
   let allSpaces = [];
   if (opts.mapSpaces?.adjacency) {
     allSpaces = Object.keys(opts.mapSpaces.adjacency);
   }
 
-  // Use a central cluster of adjacent spaces so figures are within attack range
-  // Pick a central space and expand outward via adjacency
   let clusterSpaces = [];
   if (allSpaces.length > 0 && opts.mapSpaces?.adjacency) {
     const adj = opts.mapSpaces.adjacency;
@@ -109,7 +135,6 @@ export function initializeFigurePositions(game, dcMessageMeta, opts = {}) {
     clusterSpaces = [...visited];
   }
 
-  // Count P1 figures to offset P2 placement (avoid overlap)
   let p1FigCount = 0;
   for (const [, meta] of dcMessageMeta) {
     if (meta.gameId !== game.gameId || meta.playerNum !== 1) continue;
@@ -123,19 +148,15 @@ export function initializeFigurePositions(game, dcMessageMeta, opts = {}) {
     if (!dcList?.length) continue;
 
     let spaceIdx = playerNum === 1 ? 0 : p1FigCount;
-    for (const [msgId, meta] of dcMessageMeta) {
+    for (const [, meta] of dcMessageMeta) {
       if (meta.gameId !== game.gameId || meta.playerNum !== playerNum) continue;
-      const dcName = meta.dcName;
-      if (isFigurelessDc(dcName)) continue;
-
-      const stats = getDcStats(dcName);
+      if (isFigurelessDc(meta.dcName)) continue;
+      const stats = getDcStats(meta.dcName);
       const figureCount = stats?.figures ?? 1;
-
       const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
       const dgIndex = dgMatch ? dgMatch[1] : '1';
-
       for (let f = 0; f < figureCount; f++) {
-        const figureKey = `${dcName}-${dgIndex}-${f}`;
+        const figureKey = `${meta.dcName}-${dgIndex}-${f}`;
         if (clusterSpaces.length > 0) {
           game.figurePositions[playerNum][figureKey] = clusterSpaces[spaceIdx % clusterSpaces.length];
           spaceIdx++;

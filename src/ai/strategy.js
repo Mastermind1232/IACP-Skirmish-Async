@@ -5,7 +5,7 @@
  */
 
 import { pickSmartAction, loadLearnings, setGreedyMode, setEncoderType, getEncoderType } from '../../tests/headless/learnings.js';
-import { isCcAttachment } from '../data-loader.js';
+import { isCcAttachment, getMapTokensData } from '../data-loader.js';
 import { getRange } from '../game/spatial.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -33,6 +33,31 @@ function shouldUseGreedyMovement(learnings) {
   if (!moveWeights) return true; // no weights → fall back to greedy
   const maxMag = Math.max(...moveWeights.map(Math.abs));
   return maxMag < MOVEMENT_TRUST_THRESHOLD;
+}
+
+/**
+ * Extract all mission-relevant objective coordinates from map token data.
+ * Includes mission token positions (panels, contraband) and named areas (Cantina, etc.).
+ * Ported from the validated diagnostic planner (learnings.js getObjectiveCoords).
+ */
+function getObjectiveCoords(game) {
+  const mapId = game.selectedMap?.id;
+  if (!mapId) return [];
+  let mapData;
+  try { mapData = getMapTokensData()?.[mapId]; } catch { return []; }
+  if (!mapData) return [];
+  const coords = new Set();
+  const variant = game.selectedMission?.variant;
+  const missionSide = variant === 'a' ? 'missionA' : variant === 'b' ? 'missionB' : null;
+  if (missionSide && mapData[missionSide]?.positions) {
+    for (const posArr of Object.values(mapData[missionSide].positions)) {
+      for (const c of posArr) coords.add(String(c).toLowerCase());
+    }
+  }
+  for (const area of mapData.namedAreas || []) {
+    for (const c of area.cells || []) coords.add(String(c).toLowerCase());
+  }
+  return [...coords];
 }
 
 // Lazy-loaded singleton — initialized on first use
@@ -291,8 +316,9 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   viable = applyActivationHeuristic(viable);
   const idleWasSuppressed = preIdleViable !== null && viable.length < preIdleViable.length;
 
-  // Move-toward-enemies heuristic: when picking movement spaces, suppress "done"
-  // and pick the space that minimizes distance to the nearest enemy figure.
+  // Move-toward-enemies-or-objectives heuristic: pick the space that minimizes
+  // distance to the nearest enemy OR nearest objective, whichever is closer.
+  // Ported from validated diagnostic planner (min(distEnemy, distObj) blending).
   // Gated by MOVEMENT_STRATEGY — in 'auto' mode, falls through to learned WG
   // scorer once WG move weights exceed MOVEMENT_TRUST_THRESHOLD.
   const moveDone = viable.filter(a => a.type === 'move_pick_space' && a.params?.done);
@@ -308,8 +334,10 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
       const actingPn = moveSpaces[0].actingPlayer || moveSpaces[0]._playerNum;
       const enemyPn = actingPn === 1 ? 2 : 1;
       const enemyPositions = Object.values(game.figurePositions?.[enemyPn] || {}).filter(Boolean);
-      if (enemyPositions.length > 0) {
-        // Compute current distance from figure's position to nearest enemy
+      const objPositions = getObjectiveCoords(game);
+      const hasTargets = enemyPositions.length > 0 || objPositions.length > 0;
+      if (hasTargets) {
+        // Compute current distance from figure's position to nearest target
         const moveEntry = Object.values(game.moveInProgress || {})[0];
         const curPos = moveEntry?.currentPosition || moveEntry?.startCoord;
         let currentDist = Infinity;
@@ -319,23 +347,31 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
             const d = getRange(cp, String(ePos).toLowerCase());
             if (d < currentDist) currentDist = d;
           }
+          for (const oPos of objPositions) {
+            const d = getRange(cp, String(oPos).toLowerCase());
+            if (d < currentDist) currentDist = d;
+          }
         }
 
-        // Pick spaces that STRICTLY improve distance to nearest enemy
+        // Pick spaces closest to nearest enemy OR nearest objective
         const bestSpaces = [];
         let bestDist = Infinity;
         for (const a of moveSpaces) {
           const coord = String(a.params.coord).toLowerCase();
-          let minEnemyDist = Infinity;
+          let minDist = Infinity;
           for (const ePos of enemyPositions) {
             const d = getRange(coord, String(ePos).toLowerCase());
-            if (d < minEnemyDist) minEnemyDist = d;
+            if (d < minDist) minDist = d;
           }
-          if (minEnemyDist < bestDist) {
-            bestDist = minEnemyDist;
+          for (const oPos of objPositions) {
+            const d = getRange(coord, String(oPos).toLowerCase());
+            if (d < minDist) minDist = d;
+          }
+          if (minDist < bestDist) {
+            bestDist = minDist;
             bestSpaces.length = 0;
             bestSpaces.push(a);
-          } else if (minEnemyDist === bestDist) {
+          } else if (minDist === bestDist) {
             bestSpaces.push(a);
           }
         }
@@ -354,7 +390,7 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
         _moveGreedyUsed++;
         return { action: bestSpaces[Math.floor(Math.random() * bestSpaces.length)], score: 0 };
       }
-      // No enemy positions found — just suppress done and let DQN pick
+      // No targets found — just suppress done and let DQN pick
       if (moveDone.length > 0) {
         viable = viable.filter(a => !(a.type === 'move_pick_space' && a.params?.done));
       }

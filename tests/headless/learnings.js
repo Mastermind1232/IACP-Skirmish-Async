@@ -20,11 +20,11 @@ const GAMMA = 0.95;          // Discount factor
 let ALPHA = 0.001;           // Base learning rate (scheduled — see getEffectiveAlpha)
 const ALPHA_TAU = 3000;      // Inverse-sqrt half-life in games
 const ALPHA_FLOOR = 0.0001;  // Minimum LR (10% of base)
-const HIDDEN_SIZE = 64;      // Hidden layer width (Phase 2: 32→64 for richer active-DC features)
+const HIDDEN_SIZE = 64;      // Hidden layer width (Phase 2: 32→64)
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
 const N_STEP = 4;            // N-step returns — multi-step credit assignment (was 1)
-let WEIGHT_DECAY = 0.0001;        // L2 regularization — increased 3.3× to fix slow weight drift (stability Branch A, 2026-03-22)
+let WEIGHT_DECAY = 0;             // L2 regularization disabled — testing whether any decay blocks stable weight learning (Phase 7)
 const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger with decay active
 
 // ── Encoder Type Switch ──────────────────────────────────────────────────────
@@ -163,6 +163,7 @@ const REWARD_WEIGHTS = {
   step: -0.005,           // Per-action cost (was -0.02 — lowered so step penalty doesn't drown out dist signal)
   activationAction: 0.15, // Bonus for productive actions during activation (move, attack, ability, interact)
 };
+export function setVpWeight(v) { REWARD_WEIGHTS.vp = v; }
 
 const NUM_FEATURES = 50;
 
@@ -1920,6 +1921,14 @@ const CC_REWARD_CAP = 5;
 const DC_SPECIAL_REWARD = 1.0;
 const DC_SPECIAL_CAP = 8;  // ~1-2 per DC per game for a 4-DC army
 
+// ── Attack-Specific Reward Shaping ───────────────────────────────────────────
+// Problem: movement gets 3 dedicated shaping terms (closing, engage, decision)
+// totaling up to ~1.35/action, while attacks get only the shared 0.15
+// activationAction bonus plus noisy dmg:0.5×damage (zero on a miss).
+// Greedy argmax therefore always prefers move over attack.
+// Fix: flat bonus per attack action, regardless of hit/miss outcome.
+const ATTACK_SHAPE_REWARD = 0.50;  // matches MOVE_ENGAGE_BONUS magnitude
+
 // ── Movement-Specific Reward Shaping ─────────────────────────────────────────
 // Problem: movement payoff is delayed (positioning → future attack), but TD
 // updates only see the immediate near-zero reward. The global dist:0.4 in
@@ -1932,8 +1941,8 @@ const DC_SPECIAL_CAP = 8;  // ~1-2 per DC per game for a 4-DC army
 //   2. MOVE_ENGAGE_BONUS — one-time bonus for transitioning from "no targets in
 //      range" to "targets in range" (the whole point of moving).
 //   3. Cap per-activation to prevent pacing exploit (walk back/forth).
-const MOVE_CLOSING_REWARD = 0.15;  // per space closed — 3 spaces = 0.45 ≈ one dmg pip
-const MOVE_ENGAGE_BONUS = 0.50;    // one-time for entering attack range
+const MOVE_CLOSING_REWARD = 0.075;  // halved (was 0.15) — reduce proxy dominance over VP signal
+const MOVE_ENGAGE_BONUS = 0.25;    // halved (was 0.50) — reduce proxy dominance over VP signal
 const MOVE_REWARD_CAP_PER_ACT = 1.5; // max movement shaping per activation
 
 // ── start_move decision bonus (permanent, Phase 4 validated) ───────────────
@@ -1944,7 +1953,7 @@ const MOVE_REWARD_CAP_PER_ACT = 1.5; // max movement shaping per activation
 // only way to reach combat). Validated in Phase 4 A/B: flipped Q-gap from
 // -0.37 to +0.04, increased movement 75-109%, no quality/stability harm.
 // Override via --move-decision-bonus= CLI arg (0 to disable for experiments).
-let MOVE_DECISION_BONUS = 0.30;  // permanent graph default (Phase 4 result)
+let MOVE_DECISION_BONUS = 0.15;  // halved (was 0.30) — reduce proxy dominance over VP signal
 /** Override move-decision bonus for controlled experiments. */
 export function setMoveDecisionBonus(v) { MOVE_DECISION_BONUS = v; }
 
@@ -2061,9 +2070,147 @@ let _greedyMode = false;
 /** Set greedy mode: when true, both DQN epsilon and WG epsilon are forced to 0. */
 export function setGreedyMode(v) { _greedyMode = !!v; }
 
+// ── Diagnostic counters for end_activation-over-attack leak ─────────────────
+const _diag = { endActOverAttack: 0, totalDecisions: 0, endActTotal: 0, attackAvailTotal: 0 };
+export function getDiagnostics() { return { ..._diag }; }
+export function resetDiagnostics() { _diag.endActOverAttack = 0; _diag.totalDecisions = 0; _diag.endActTotal = 0; _diag.attackAvailTotal = 0; }
+
+// ── Softmax (Boltzmann) action selection for greedy eval ─────────────────────
+// When enabled, greedy eval uses softmax(Q/τ) instead of argmax(Q).
+// This allows near-tied Q-values (e.g. attack vs move) to both be selected
+// proportionally, rather than argmax deterministically picking the slightly
+// higher one every time. Only applies in greedy mode (_greedyMode=true).
+// τ=0.3 chosen because Q-values are in the 1-5 range:
+//   gap=0.5 → 15.8% for lower action (meaningful randomization)
+//   gap=1.0 → 3.6% for lower action (effectively still argmax)
+let _softmaxEvalEnabled = false;
+let _softmaxTau = 0.3;
+export function setSoftmaxEval(enabled, tau) {
+  _softmaxEvalEnabled = !!enabled;
+  if (tau !== undefined) _softmaxTau = tau;
+}
+
 function getEpsilon(totalGames) {
   if (_greedyMode) return 0;
   return Math.max(0.05, 0.3 * Math.exp(-totalGames / 5000));
+}
+
+// ── Within-activation planner (always-on) ─────────────────────────────────────
+// Deterministic within-activation sequencing. Replaces per-action DQN choices
+// during a DC's turn with oracle-style priority: attack weakest > move toward
+// nearest enemy > end activation. The DQN handles between-activation decisions
+// (which DC to activate, CC play, surge spending, reactive abilities).
+// Always-on (train + eval) so the DQN learns between-activation Q-values from
+// planner-quality game states, aligning the train/eval distribution.
+// Proven by ceiling test: VP/round 14.26 vs DQN-only 8.13, beats oracle 13.19.
+const _WITHIN_ACT_TYPES = new Set([
+  'attack_close', 'attack_ranged', 'interact', 'start_move',
+  'move_toward', 'move_away', 'move_lateral', 'move_done',
+  'end_activation',
+]);
+
+/** Extract all mission-relevant objective coordinates from map/mission data. */
+function getObjectiveCoords(game) {
+  const mapId = game.selectedMap?.id;
+  if (!mapId) return [];
+  const mapData = getMapTokensData()?.[mapId];
+  if (!mapData) return [];
+  const coords = new Set();
+  const variant = game.selectedMission?.variant;
+  const missionSide = variant === 'a' ? 'missionA' : variant === 'b' ? 'missionB' : null;
+  // Mission token positions (panels, contraband, critical positions)
+  if (missionSide && mapData[missionSide]?.positions) {
+    for (const posArr of Object.values(mapData[missionSide].positions)) {
+      for (const c of posArr) coords.add(String(c).toLowerCase());
+    }
+  }
+  // Named areas (Cantina, Command Center, etc.)
+  for (const area of mapData.namedAreas || []) {
+    for (const c of area.cells || []) coords.add(String(c).toLowerCase());
+  }
+  return [...coords];
+}
+
+function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMeta) {
+  // Only fire for within-activation decisions (not between-activation)
+  if (absTypes.includes('activate')) return null;
+  const hasWithinAct = absTypes.some(t => _WITHIN_ACT_TYPES.has(t));
+  if (!hasWithinAct) return null;
+
+  // Priority 1: Attack weakest target (focus-fire)
+  for (const at of ['attack_close', 'attack_ranged']) {
+    const actions = groups[at];
+    if (!actions || actions.length === 0) continue;
+    const oppNum = actions[0].actingPlayer === 1 ? 2 : 1;
+    const scored = actions.map(a => {
+      const targetFk = a.params?.targetFigureKey;
+      const hp = targetFk ? lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta) : null;
+      const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+      const attackerPos = getAttackerPosition(a, game, dcMessageMeta);
+      const dist = (targetPos && attackerPos) ? coordDistance(attackerPos, targetPos) : 99;
+      return { action: a, currentHp: hp?.current ?? 99, maxHp: hp?.max ?? 99, dist };
+    });
+    scored.sort((a, b) => {
+      if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
+      if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
+      return a.dist - b.dist;
+    });
+    return scored[0].action;
+  }
+
+  // Priority 2: Interact with mission token (if adjacent and available)
+  // Only mission-scoring interacts (launch_panel, open_door, retrieve_contraband),
+  // not use_terminal which has no VP value.
+  if (groups['interact']?.length > 0) {
+    const missionInteracts = groups['interact'].filter(
+      a => a.params?.optionId && a.params.optionId !== 'use_terminal'
+    );
+    if (missionInteracts.length > 0) return missionInteracts[0];
+  }
+
+  // Priority 3: Start movement if haven't started yet
+  if (groups['start_move']?.length > 0) {
+    return groups['start_move'][0];
+  }
+
+  // Priority 3: Pick movement space closest to nearest enemy OR nearest objective
+  const allMoveActions = [];
+  for (const mt of ['move_toward', 'move_away', 'move_lateral']) {
+    if (groups[mt]) allMoveActions.push(...groups[mt]);
+  }
+  const spaceActions = allMoveActions.filter(a => a.params?.coord && !a.params?.done);
+  if (spaceActions.length > 0) {
+    const playerNum = spaceActions[0].actingPlayer;
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
+    const objCoords = getObjectiveCoords(game);
+    if (oppFigs.length > 0 || objCoords.length > 0) {
+      const scored = spaceActions.map(a => {
+        const distEnemy = oppFigs.length > 0
+          ? Math.min(...oppFigs.map(p => coordDistance(a.params.coord, p)))
+          : Infinity;
+        const distObj = objCoords.length > 0
+          ? Math.min(...objCoords.map(c => coordDistance(a.params.coord, c)))
+          : Infinity;
+        return { action: a, dist: Math.min(distEnemy, distObj) };
+      });
+      scored.sort((a, b) => a.dist - b.dist);
+      return scored[0].action;
+    }
+    return spaceActions[0];
+  }
+
+  // Priority 4: End movement (done action)
+  const doneActions = allMoveActions.filter(a => a.params?.done);
+  if (doneActions.length > 0) return doneActions[0];
+  if (groups['move_done']?.length > 0) return groups['move_done'][0];
+
+  // Priority 5: End activation
+  if (groups['end_activation']?.length > 0) {
+    return groups['end_activation'][0];
+  }
+
+  return null; // not a within-activation context — let DQN handle
 }
 
 export function pickSmartAction(allActions, game, learnings, playerNum, dcHealthState, dcMessageMeta) {
@@ -2117,30 +2264,79 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
   if (absTypes.length === 0) return heuristicPick(strategicActions, game);
 
-  let bestType = null;
-  let bestQ = -Infinity;
-  for (const absType of absTypes) {
-    const idx = ABSTRACT_TYPES.indexOf(absType);
-    if (idx < 0) continue;
-    if (Q[idx] > bestQ) {
-      bestQ = Q[idx];
-      bestType = absType;
+  // ── Within-activation planner (always-on) ──────────────────────────────────
+  // Deterministic sequencing replaces per-action DQN during a DC's turn.
+  // Active during both training and eval so the DQN trains on planner-quality
+  // game states — aligning train/eval distributions for between-activation
+  // decisions (which DC, CC, surges, reactive abilities).
+  {
+    const planResult = oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMeta);
+    if (planResult) {
+      pickSmartAction._lastWgFeatures = null;
+      pickSmartAction._lastWgType = null;
+      pickSmartAction._lastMoveContrastive = null;
+      return planResult;
     }
   }
 
-  // Targeted surge exploration: when surge types are available, force spend
-  // 50% of the time to overcome the skip-heavy replay buffer distribution.
-  // Q-learning is off-policy, so forced exploration transitions are valid.
-  // Only active during training (epsilon > 0); greedy mode skips this.
-  if (!_greedyMode && epsilon > 0) {
+  let bestType = null;
+  if (_greedyMode && _softmaxEvalEnabled && absTypes.length > 1) {
+    // Softmax (Boltzmann) selection: sample proportionally to exp(Q/τ)
+    const tau = _softmaxTau;
+    const qVals = absTypes.map(t => {
+      const idx = ABSTRACT_TYPES.indexOf(t);
+      return idx >= 0 ? Q[idx] / tau : -Infinity;
+    });
+    const maxQ = Math.max(...qVals);
+    const expQ = qVals.map(q => Math.exp(q - maxQ)); // numerically stable
+    const sumExp = expQ.reduce((s, e) => s + e, 0);
+    const r = Math.random() * sumExp;
+    let cumSum = 0;
+    for (let i = 0; i < absTypes.length; i++) {
+      cumSum += expQ[i];
+      if (r <= cumSum) { bestType = absTypes[i]; break; }
+    }
+    if (!bestType) bestType = absTypes[absTypes.length - 1];
+  } else {
+    // Argmax selection (training exploitation + non-softmax greedy)
+    let bestQ = -Infinity;
+    for (const absType of absTypes) {
+      const idx = ABSTRACT_TYPES.indexOf(absType);
+      if (idx < 0) continue;
+      if (Q[idx] > bestQ) {
+        bestQ = Q[idx];
+        bestType = absType;
+      }
+    }
+  }
+
+  // Domain rule: always spend surges when beneficial surge options exist.
+  // Surge spending is a dominated strategy (always better than skipping).
+  // Bypass learned Q-values entirely — the within-group scorer picks which surge.
+  {
     const surgeSpendTypes = absTypes.filter(t =>
       t === 'surge_damage' || t === 'surge_special' || t === 'spend_surge');
     if (surgeSpendTypes.length > 0 && absTypes.includes('skip_surges')) {
-      if (Math.random() < 0.5) {
-        bestType = surgeSpendTypes[Math.floor(Math.random() * surgeSpendTypes.length)];
-      }
+      bestType = surgeSpendTypes[0]; // within-group scorer picks which specific surge
     }
+  }
 
+  // Domain rule: prefer attack over movement when attack targets are available.
+  // Same dominated-strategy pattern as surges — when the active figure already
+  // has targets in attack range, attacking almost always dominates further
+  // movement. The Q-value network overvalues move types due to higher shaping
+  // rewards during training (~1.5 move vs ~0.65 attack). Bypass the learned
+  // Q-values for this decision; the within-group attack scorer still picks
+  // which specific target.
+  {
+    const attackTypes = absTypes.filter(t => t === 'attack_close' || t === 'attack_ranged');
+    const moveTypes = new Set(['move_toward', 'move_away', 'move_lateral', 'start_move']);
+    if (attackTypes.length > 0 && moveTypes.has(bestType)) {
+      bestType = attackTypes[0]; // within-group scorer picks which target
+    }
+  }
+
+  if (!_greedyMode && epsilon > 0) {
     // Targeted CC exploration: force play_cc 15% of the time when available.
     // Same rationale as surge exploration — overcome replay buffer distribution
     // dominated by non-CC actions. Rate is lower than surge (15% vs 50%) because
@@ -2152,6 +2348,15 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
         bestType = 'play_cc';
       }
     }
+  }
+
+  // ── Diagnostic: count end_activation chosen when attacks are available ──
+  if (_greedyMode) {
+    _diag.totalDecisions++;
+    const hasAttackTypes = absTypes.some(t => t === 'attack_close' || t === 'attack_ranged');
+    if (hasAttackTypes) _diag.attackAvailTotal++;
+    if (bestType === 'end_activation') _diag.endActTotal++;
+    if (bestType === 'end_activation' && hasAttackTypes) _diag.endActOverAttack++;
   }
 
   if (bestType === null) return heuristicPick(strategicActions, game);
@@ -2175,20 +2380,76 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
   if (actions.length <= 1) return { action: actions[0], wgFeatures: null, wgType: null };
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-  // Attack scorer (Phase 5 learned)
+  // Attack scorer — domain-rule focus-fire override (EVAL ONLY).
+  // Same dominated-strategy pattern as surges and attack-over-move: always
+  // prefer the weakest target (lowest current HP → lowest max HP → nearest).
+  // The learned scorer spreads damage across figures instead of finishing kills,
+  // resulting in 1.9x worse attack-to-kill ratio than the oracle.
+  // Gated on _greedyMode to preserve training exploration diversity — applying
+  // both focus-fire and activation-order overrides during training degrades
+  // the Q-network through reduced within-group exploration.
+  // Attack scorer — domain-rule focus-fire override (always-on).
+  // Prefer weakest target (lowest current HP → lowest max HP → nearest).
+  // Must stay active during training: focus-fire produces more kills,
+  // which gives the Q-network stronger VP reward signal for Q(attack).
+  // Without it during training, Q(attack) stays weak → end_activation dominates.
   if (absType === 'attack_close' || absType === 'attack_ranged') {
     const group = 'attack';
-    const weights = wgWeights?.[group];
-    if (weights && Math.random() >= getWgEpsilon(totalGames || 0)) {
-      let bestScore = -Infinity, bestAction = null, bestFeatures = null;
-      for (const a of actions) {
-        const f = extractAttackFeatures(a, game, dcHealthState, dcMessageMeta);
-        const score = dotProductWg(weights, f);
-        if (score > bestScore) { bestScore = score; bestAction = a; bestFeatures = f; }
-      }
-      return { action: bestAction, wgFeatures: bestFeatures, wgType: group };
+    const oppNum = actions[0].actingPlayer === 1 ? 2 : 1;
+    const scored = actions.map(a => {
+      const f = extractAttackFeatures(a, game, dcHealthState, dcMessageMeta);
+      const targetFk = a.params?.targetFigureKey;
+      const hp = targetFk ? lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta) : null;
+      const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+      const attackerPos = getAttackerPosition(a, game, dcMessageMeta);
+      const dist = (targetPos && attackerPos) ? coordDistance(attackerPos, targetPos) : 99;
+      return {
+        action: a, features: f,
+        currentHp: hp?.current ?? 99,
+        maxHp: hp?.max ?? 99,
+        dist,
+      };
+    });
+    scored.sort((a, b) => {
+      if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
+      if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
+      return a.dist - b.dist;
+    });
+    const best = scored[0];
+    return { action: best.action, wgFeatures: best.features, wgType: group };
+  }
+
+  // Activation order — domain-rule: activate the DC closest to enemies OR objectives.
+  // Same min(distEnemy, distObj) blending proven in movement scoring.
+  // Activating a nearby DC means it can attack or interact immediately without
+  // wasting movement actions. Gated on _greedyMode to preserve training exploration.
+  if (_greedyMode && absType === 'activate') {
+    const playerNum = actions[0].actingPlayer;
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
+    const objCoords = getObjectiveCoords(game);
+    if (oppFigs.length > 0 || objCoords.length > 0) {
+      const scored = actions.map(a => {
+        const dcName = a.params?.dcName;
+        if (!dcName) return { action: a, minDist: 99 };
+        const myFigs = Object.entries(game.figurePositions?.[playerNum] || {})
+          .filter(([fk]) => fk.startsWith(dcName + '-'));
+        let minDist = 99;
+        for (const [, myPos] of myFigs) {
+          for (const oppPos of oppFigs) {
+            const d = coordDistance(myPos, oppPos);
+            if (d < minDist) minDist = d;
+          }
+          for (const oc of objCoords) {
+            const d = coordDistance(myPos, oc);
+            if (d < minDist) minDist = d;
+          }
+        }
+        return { action: a, minDist };
+      });
+      scored.sort((a, b) => a.minDist - b.minDist);
+      return { action: scored[0].action, wgFeatures: null, wgType: 'activate' };
     }
-    return { action: pick(actions), wgFeatures: null, wgType: null };
   }
 
   // Move scorer (Phase 5 Slice 2 — learned with contrastive signal)
@@ -2498,6 +2759,15 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
         moveDecisionBonus = MOVE_DECISION_BONUS;
       }
 
+      // ── Attack shaping bonus ──────────────────────────────────────────────
+      // Flat bonus for choosing to attack, regardless of hit/miss outcome.
+      // Without this, attacks get 0.15 base vs movement's 0.85-1.35,
+      // causing greedy argmax to never select attack actions.
+      let attackBonus = 0;
+      if (ATTACK_SHAPE_REWARD > 0 && (absType === 'attack_close' || absType === 'attack_ranged')) {
+        attackBonus = ATTACK_SHAPE_REWARD;
+      }
+
       // Activation-action bonus: reward productive actions during activation phase.
       // Movement, attack, ability, and interact all deserve immediate credit because
       // they advance board state. end_activation / pass get no bonus (just step cost).
@@ -2507,7 +2777,7 @@ export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageM
       ]);
       const activationBonus = PRODUCTIVE_ABS_TYPES.has(absType) ? (REWARD_WEIGHTS.activationAction || 0) : 0;
 
-      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus + dcSpecialBonus + moveBonus + moveDecisionBonus + activationBonus;
+      const reward = computeReward(lastSnapshot, afterSnap, false, false) + surgeBonus + ccBonus + dcSpecialBonus + moveBonus + moveDecisionBonus + attackBonus + activationBonus;
       const actionIdx = ABSTRACT_TYPES.indexOf(absType);
       const wgFeatures = pickSmartAction._lastWgFeatures || null;
       const wgType = pickSmartAction._lastWgType || null;

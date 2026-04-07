@@ -2,7 +2,7 @@
  * Pure board-state helper functions — NO Discord dependency.
  * Extracted from index.js for modularity.
  */
-import { normalizeCoord, parseCoord, edgeKey, toLowerSet, getFootprintCells } from './coords.js';
+import { normalizeCoord, parseCoord, colRowToCoord, edgeKey, toLowerSet, getFootprintCells } from './coords.js';
 import { getBoundedMapSpaces } from './movement.js';
 import { countSpaces } from './spatial.js';
 import { dcNameFromFigureKey, getDcEffect } from './dc-helpers.js';
@@ -109,22 +109,8 @@ export function isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, map
   const mapData = getMapTokensData()[mapId];
   const coords = getMissionTokenCoords(mapData?.[missionSide]);
   if (!coords.length) return false;
-  const mapSpaces = getBoundedMapSpaces(mapId);
-  if (!mapSpaces?.adjacency) return false;
-  const adjacency = mapSpaces.adjacency || {};
   const tokenSet = toLowerSet(coords);
-  const pos = game.figurePositions?.[playerNum]?.[figureKey];
-  if (!pos) return false;
-  const dcName = dcNameFromFigureKey(figureKey);
-  const footprint = getFootprintCells(pos, getEffectiveFigureSize(game, figureKey, dcName));
-  for (const c of footprint) {
-    const n = normalizeCoord(c);
-    if (tokenSet.has(n)) return true;
-    for (const adj of adjacency[n] || []) {
-      if (tokenSet.has(normalizeCoord(adj))) return true;
-    }
-  }
-  return false;
+  return getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, tokenSet).length > 0;
 }
 
 /** Effective speed, accounting for mission-defined carry penalty and round bonuses (Fuel Upgrade, etc.). */
@@ -157,12 +143,27 @@ export function isFigureInDeploymentZone(game, playerNum, figureKey, mapId) {
   return footprint.some((c) => zoneSpaces.has(normalizeCoord(c)));
 }
 
+/** 8-connected geometric neighbors of a coordinate (ignores walls/blocking). */
+function geometricNeighbors(coord) {
+  const { col, row } = parseCoord(coord);
+  const out = [];
+  for (let dc = -1; dc <= 1; dc++) {
+    for (let dr = -1; dr <= 1; dr++) {
+      if (dc === 0 && dr === 0) continue;
+      const nc = col + dc, nr = row + dr;
+      if (nc >= 0 && nr >= 0) out.push(normalizeCoord(colRowToCoord(nc, nr)));
+    }
+  }
+  return out;
+}
+
 /** True if figure footprint or any adjacent cell is in the given coord set. */
 export function isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, coordSet) {
   return getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, coordSet).length > 0;
 }
 
-/** Returns coords from coordSet that the figure is on or adjacent to. */
+/** Returns coords from coordSet that the figure is on or adjacent to.
+ *  Uses graph adjacency first, then geometric fallback for blocking-terrain targets (e.g. mission panels). */
 export function getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, coordSet) {
   if (!coordSet?.size) return [];
   const mapSpaces = getBoundedMapSpaces(mapId);
@@ -179,6 +180,11 @@ export function getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId
     for (const adj of adjacency[n] || []) {
       const na = normalizeCoord(adj);
       if (coordSet.has(na)) result.add(na);
+    }
+    // Geometric fallback: blocking-terrain targets (mission panels) are excluded from the
+    // movement adjacency graph but are still geometrically adjacent for interact purposes.
+    for (const gn of geometricNeighbors(n)) {
+      if (coordSet.has(gn)) result.add(gn);
     }
   }
   return [...result];
@@ -384,7 +390,10 @@ export function getSpaceController(game, mapId, coord) {
   if (!mapSpaces?.adjacency) return null;
   const adjacency = mapSpaces.adjacency || {};
   const t = normalizeCoord(coord);
-  const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
+  const graphNeighbors = (adjacency[t] || []).map((n) => normalizeCoord(n));
+  // Geometric fallback for blocking-terrain spaces (e.g. mission panels) with no graph neighbors
+  const neighbors = graphNeighbors.length > 0 ? graphNeighbors : geometricNeighbors(t);
+  const controlSet = new Set([t, ...neighbors]);
   // Alter Mind (Obi-Wan): figures cost ≤9 within 3 spaces don't count for control
   const alterMindExcluded = _getAlterMindExcludedCells(game);
   // A Powerful Influence (CC): hostile figures within 3 spaces of REBEL FORCE USER don't count for control
@@ -404,7 +413,9 @@ export function getFiguresOnOrAdjacentToSpace(game, playerNum, coord, mapId) {
   if (!mapSpaces?.adjacency) return [];
   const adjacency = mapSpaces?.adjacency || {};
   const t = normalizeCoord(coord);
-  const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
+  const graphNeighbors = (adjacency[t] || []).map((n) => normalizeCoord(n));
+  const neighbors = graphNeighbors.length > 0 ? graphNeighbors : geometricNeighbors(t);
+  const controlSet = new Set([t, ...neighbors]);
   const result = [];
   const poses = game.figurePositions?.[playerNum] || {};
   for (const [figKey, figCoord] of Object.entries(poses)) {
