@@ -382,6 +382,19 @@ export async function refreshAllGameComponents(game, client, deps) {
     }
   }
 
+  // Refresh any active activation threads (dcActionsData)
+  if (game.dcActionsData) {
+    for (const msgId of Object.keys(game.dcActionsData)) {
+      const data = game.dcActionsData[msgId];
+      if (!data?.threadId) continue;
+      try {
+        await updateDcActionsMessage(game, msgId, client, deps);
+      } catch (err) {
+        console.error('Refresh All: activation thread failed', msgId, err);
+      }
+    }
+  }
+
   await updateHandChannelMessages(game, client, deps);
   for (const pn of [1, 2]) {
     await updateHandVisualMessage(game, pn, client, deps);
