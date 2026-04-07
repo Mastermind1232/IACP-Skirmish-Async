@@ -1169,6 +1169,7 @@ async function refreshAllGameComponents(game, client) {
     getDcMessageIds, dcAttachmentMessageIdsKey, ccAttachmentsKey, dcAttachmentsKey,
     buildAttachmentEmbedsAndFiles, getTokensForDcMessage,
     getDcList, getActivatedDcIndices, getActivationsRemaining, setActivationsRemaining,
+    getActivationsTotal, setActivationsTotal, updateActivationsMessage,
   });
 }
 

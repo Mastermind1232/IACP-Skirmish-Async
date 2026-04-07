@@ -493,6 +493,27 @@ export async function handleLiaDeployZone(interaction, ctx) {
     await interaction.message.delete();
   } catch {}
 
+  // Apply post-deploy effects that were missed because figures weren't on-board at scan time
+  if (placed > 0) {
+    const atts = getDcAttachments(game, playerNum) || {};
+    const deployedMsgIds = getDcMessageIds(game, playerNum) || [];
+    const deployedDcList = getDcList(game, playerNum) || [];
+    for (let i = 0; i < deployedDcList.length; i++) {
+      if (deployedDcList[i]?.dcName !== dcName) continue;
+      const mid = deployedMsgIds[i];
+      const dcAtts = atts[mid] || [];
+      if (dcAtts.some(a => a.toLowerCase() === 'cross training')) {
+        for (const fk of setAsideKeys) {
+          if (game.figurePositions[playerNum][fk]) {
+            applyCondition(game, fk, 'Hide');
+          }
+        }
+        await logGameAction(game, client, `🥷 **Cross Training** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+      }
+      break;
+    }
+  }
+
   await logGameAction(game, client, `🎯 **Lie in Ambush** — **${dcName}** deployed ${placed} figure(s) to the **${zone}** zone!`, {
     phase: 'ROUND',
     icon: 'deploy',

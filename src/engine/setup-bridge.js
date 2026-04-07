@@ -498,8 +498,8 @@ export async function populatePlayAreas(game, client, deps) {
   game.p1DiscardPileMessageId = p1DiscardMsg.id;
   game.p2DiscardPileMessageId = p2DiscardMsg.id;
 
-  const p1ActivationsMsg = await p1PlayArea.send(deps.getActivationsLine(p1Total, p1Total));
-  const p2ActivationsMsg = await p2PlayArea.send(deps.getActivationsLine(p2Total, p2Total));
+  const p1ActivationsMsg = await p1PlayArea.send(deps.getActivationsLine(game.p1ActivationsTotal, game.p1ActivationsTotal));
+  const p2ActivationsMsg = await p2PlayArea.send(deps.getActivationsLine(game.p2ActivationsTotal, game.p2ActivationsTotal));
   game.p1ActivationsMessageId = p1ActivationsMsg.id;
   game.p2ActivationsMessageId = p2ActivationsMsg.id;
 

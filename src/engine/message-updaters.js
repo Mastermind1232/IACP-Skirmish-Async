@@ -412,10 +412,17 @@ export async function refreshAllGameComponents(game, client, deps) {
       }
     }
     if (unactivatable > 0) {
+      const total = deps.getActivationsTotal(game, pn) ?? 0;
+      if (total > 0) {
+        deps.setActivationsTotal(game, pn, Math.max(0, total - unactivatable));
+      }
       const rem = deps.getActivationsRemaining(game, pn) ?? 0;
       if (rem > 0) {
         deps.setActivationsRemaining(game, pn, Math.max(0, rem - unactivatable));
       }
+    }
+    if (deps.updateActivationsMessage) {
+      await deps.updateActivationsMessage(game, pn, client);
     }
   }
 
