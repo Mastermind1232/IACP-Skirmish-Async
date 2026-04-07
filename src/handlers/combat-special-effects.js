@@ -787,9 +787,11 @@ export async function handleHeavyFireUse(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
-  // Exhaust the Heavy Fire card
+  // Exhaust the Heavy Fire card (persist for restart survival)
   if (pending.hfMsgId) {
     dcExhaustedState.set(pending.hfMsgId, true);
+    game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
+    if (!game.abilityExhaustedMsgIds.includes(pending.hfMsgId)) game.abilityExhaustedMsgIds.push(pending.hfMsgId);
     // Refresh the Heavy Fire DC embed
     try {
       const hfMeta = dcMessageMeta.get(pending.hfMsgId);

@@ -8517,8 +8517,12 @@ export function resolveAbility(abilityId, context) {
     // Apply Weaken to activating figure
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     actKeys.forEach((fk) => { applyCondition(game, fk, 'Weaken'); });
-    // Exhaust the DC card (if dcExhaustedState is available)
+    // Exhaust the DC card (persist for restart survival)
     if (dcExhaustedState) dcExhaustedState.set(msgId, true);
+    if (game) {
+      game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
+      if (!game.abilityExhaustedMsgIds.includes(msgId)) game.abilityExhaustedMsgIds.push(msgId);
+    }
     return { applied: true, logMessage: `**Overcharged Weapons** — **${meta?.dcName || 'VEHICLE'}** gains 1 free attack (+Pierce 2). ${meta?.dcName || 'Vehicle'} is exhausted and Weakened.` };
   }
 
@@ -8720,6 +8724,12 @@ export function resolveAbility(abilityId, context) {
       const readyMeta = dcMessageMeta?.get(readyMsgId);
       if (dcExhaustedState && exhaustMsgId) dcExhaustedState.set(exhaustMsgId, true);
       if (dcExhaustedState && readyMsgId) dcExhaustedState.set(readyMsgId, false);
+      // Persist ability-driven exhaustion/readying for restart survival
+      if (game) {
+        game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
+        if (exhaustMsgId && !game.abilityExhaustedMsgIds.includes(exhaustMsgId)) game.abilityExhaustedMsgIds.push(exhaustMsgId);
+        if (readyMsgId) game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds.filter(id => id !== readyMsgId);
+      }
       return { applied: true, logMessage: `**Change of Plans** — **${exhaustMeta?.dcName || exhaustMsgId}** exhausted → **${readyMeta?.dcName || readyMsgId}** readied (shared trait). DC embeds will update on next interaction.` };
     }
     // Phase 1: enumerate valid (exhaust→ready) pairs that share at least one keyword/trait

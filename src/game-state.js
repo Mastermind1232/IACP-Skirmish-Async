@@ -436,7 +436,8 @@ function repopulateDcMapsFromGames() {
           dcName: dc.dcName,
           displayName: dc.displayName || dc.dcName,
         });
-        dcExhaustedState.set(msgId, activatedIndices.has(i));
+        const abilityExhausted = (game.abilityExhaustedMsgIds || []).includes(msgId);
+        dcExhaustedState.set(msgId, activatedIndices.has(i) || abilityExhausted);
         dcHealthState.set(msgId, dc.healthState || [[null, null]]);
       }
     }
@@ -478,7 +479,8 @@ export function repopulateDcMapsForGame(gameId) {
         dcName: dc.dcName,
         displayName: dc.displayName || dc.dcName,
       });
-      dcExhaustedState.set(msgId, activatedIndices.has(i));
+      const abilityExhausted = (game.abilityExhaustedMsgIds || []).includes(msgId);
+      dcExhaustedState.set(msgId, activatedIndices.has(i) || abilityExhausted);
       dcHealthState.set(msgId, dc.healthState || [[null, null]]);
     }
   }

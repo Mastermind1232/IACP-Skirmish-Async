@@ -275,8 +275,6 @@ export async function checkHuntDissent(game, attackerPlayerNum, attackerFigureKe
  */
 export async function decrementActivationIfGroupDefeated(game, playerNum, dcIdx, client, deps) {
   if (dcIdx < 0 || !deps.isGroupDefeated(game, playerNum, dcIdx)) return;
-  const activatedIndices = deps.getActivatedDcIndices(game, playerNum) || [];
-  if (activatedIndices.includes(dcIdx)) return;
-  deps.setActivationsRemaining(game, playerNum, Math.max(0, (deps.getActivationsRemaining(game, playerNum) ?? 0) - 1));
+  deps.recomputeActivationCounts(game, playerNum);
   await deps.updateActivationsMessage(game, playerNum, client);
 }

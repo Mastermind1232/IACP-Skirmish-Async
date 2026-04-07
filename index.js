@@ -1297,7 +1297,7 @@ async function checkHuntDissent(game, attackerPlayerNum, attackerFigureKey, clie
 /** If a deployment group is fully defeated and hasn't activated yet, decrement remaining activations. */
 async function decrementActivationIfGroupDefeated(game, playerNum, dcIdx, client) {
   return _decrementActivationIfGroupDefeatedPure(game, playerNum, dcIdx, client, {
-    isGroupDefeated, getActivatedDcIndices, setActivationsRemaining, getActivationsRemaining, updateActivationsMessage,
+    isGroupDefeated, recomputeActivationCounts, updateActivationsMessage,
   });
 }
 

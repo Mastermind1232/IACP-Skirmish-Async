@@ -7,7 +7,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, applyCondition, filterCondition, grantMovementBank, HARMFUL_CONDITIONS } from '../game/index.js';
+import { reduceHp, healHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, applyCondition, filterCondition, grantMovementBank, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -722,11 +722,8 @@ export async function handleSubmitOrFight(interaction, ctx) {
     }
     // Return last CC from discard to game box (permanently removed)
     const returnedCc = discard.pop();
-    // Heal 1 HP (reverse the strain damage)
-    const healthState = dcHealthState?.get(msgId);
-    if (healthState?.[figureIndex]) {
-      healthState[figureIndex][0] = Math.min(healthState[figureIndex][0] + 1, healthState[figureIndex][1]);
-    }
+    // Heal 1 HP (reverse the strain damage) — uses healHp for Map+dcList sync
+    healHp(dcHealthState, game, msgId, figureIndex, 1, playerNum);
     const dcName = meta?.dcName || 'Paz Vizsla';
     await interaction.message.edit({ content: `🛡️ **Submit or Fight** — **${dcName}** returned **${returnedCc}** to game box to heal 1 Strain damage.`, components: [] }).catch(discordCatch);
     if (logGameAction) {

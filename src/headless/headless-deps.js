@@ -48,6 +48,7 @@ import {
   getPlayerId, getDcList, getDcMessageIds,
   getCcHand, getCcDiscard, getCcDeck,
   getActivatedDcIndices, getActivationsRemaining, setActivationsRemaining,
+  recomputeActivationCounts,
   vpKey, ccHandKey, ccDiscardKey, ccDeckKey, ccAttachmentsKey,
 } from '../game/player-helpers.js';
 
@@ -382,9 +383,7 @@ export function buildHeadlessDeps(options = {}) {
   const decrementActivationIfGroupDefeated = async (game, playerNum, dcIdx, clientArg) => {
     await _realDecrementActivation(game, playerNum, dcIdx, clientArg || client, {
       isGroupDefeated: _isGroupDefeated,
-      getActivatedDcIndices,
-      getActivationsRemaining,
-      setActivationsRemaining,
+      recomputeActivationCounts,
       updateActivationsMessage,
     });
   };
