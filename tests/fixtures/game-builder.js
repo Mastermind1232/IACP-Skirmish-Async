@@ -14,7 +14,7 @@
 import { createHarness } from '../../src/headless/game-harness.js';
 import { buildHeadlessDeps } from '../../src/headless/headless-deps.js';
 import { initializeDcState, initializeFigurePositions } from '../../src/headless/init-dc-state.js';
-import { getDcStats, getDeploymentZones, getMapData, getMissionCardsData } from '../../src/data-loader.js';
+import { getDcStats, getDeploymentZones, getMapData, getMissionCardsData, getMapTokensData } from '../../src/data-loader.js';
 import { PHASES, ROUND_PHASES } from '../../src/game/phase.js';
 import { isFigurelessDc } from '../../src/game/dc-helpers.js';
 
@@ -163,6 +163,9 @@ class GameBuilder {
 
       // Undo
       undoStack: [],
+
+      // Channel IDs (headless: fake IDs so fetchGameChannel returns a usable channel)
+      generalId: `fake-general-${this._gameId}`,
     };
 
     // Set phase based on build config
@@ -175,6 +178,19 @@ class GameBuilder {
       game.roundPhase = ROUND_PHASES.START_OF_ROUND;
     } else {
       game.phase = PHASES.LOBBY;
+    }
+
+    // Mission NPC initialization (mirrors dc-play-area.js NPC init)
+    if (this._missionVariant && this._deployed) {
+      const mapTokens = getMapTokensData();
+      if (this._mapId === 'chopper-base-atollon' && this._missionVariant === 'a') {
+        const positions = Object.values(mapTokens[this._mapId]?.missionA?.positions || {}).flat().filter(Boolean);
+        if (positions.length > 0) game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: String(coord).toLowerCase(), hp: 8, maxHp: 8, defeated: false }));
+      }
+      if (this._mapId === 'corellian-underground' && this._missionVariant === 'a') {
+        const positions = Object.values(mapTokens[this._mapId]?.missionA?.positions || {}).flat().filter(Boolean);
+        if (positions.length > 0) game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: String(coord).toLowerCase(), hp: 4, maxHp: 4, defeated: false }));
+      }
     }
 
     return game;

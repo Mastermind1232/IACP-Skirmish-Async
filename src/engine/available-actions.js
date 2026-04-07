@@ -2175,5 +2175,27 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     targets.push({ figureKey: fk, coord: coordLc, label: targetDcName, hasLOS: los, dist });
   }
 
+  // NPC targets (Krykna, Thugs): neutral hostile figures targetable by attacks
+  for (const [npcArray, npcType] of [[game.npcKrykna, 'krykna'], [game.npcThugs, 'thug']]) {
+    if (!Array.isArray(npcArray)) continue;
+    for (let i = 0; i < npcArray.length; i++) {
+      const npc = npcArray[i];
+      if (npc.defeated) continue;
+      const npcCoord = String(npc.coord).toLowerCase();
+      const npcDist = countSpaces(ms, attackerPosLc, npcCoord, _aaClosedDoorEdges);
+      if (npcDist < minRange || npcDist > maxRange) continue;
+      // LOS check — remove NPC's own coord from blocking set
+      let npcLosBlocking = figureBlockingCoords;
+      if (figureBlockingCoords.has(npcCoord)) {
+        npcLosBlocking = new Set(figureBlockingCoords);
+        npcLosBlocking.delete(npcCoord);
+      }
+      const npcLos = hasLineOfSight(attackerPosLc, npcCoord, ms, npcLosBlocking);
+      if (!npcLos) continue;
+      const npcLabel = npcType === 'thug' ? `Thug ${i + 1}` : `Krykna ${i + 1}`;
+      targets.push({ figureKey: `npc_${npcType}_${i}`, coord: npcCoord, label: npcLabel, hasLOS: npcLos, dist: npcDist, isNpc: true, npcType, npcIndex: i });
+    }
+  }
+
   return targets;
 }

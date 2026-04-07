@@ -261,6 +261,12 @@ async function runOneGame(learnings, gameNum) {
       }
       continue; // Re-enter loop to process new state
     }
+    // Auto-skip Krykna push queue (Chopper Base A end-of-round interactive phase)
+    if (g.pendingKryknaPushQueue?.length > 0) {
+      g.pendingKryknaPushQueue = null;
+      g.kryknaPushedIds = null;
+      continue;
+    }
     // Auto-skip fluctuation swap (Lothal Wastes B end-of-round interactive phase)
     if (g.pendingFluctuationSwapQueue?.length > 0) {
       const pn = g.pendingFluctuationSwapQueue[0];

@@ -345,6 +345,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
       await thread.send({ content: resultText || '(No effect)', components: [] });
+      delete game.pendingCombat;
       saveGames();
       return;
     }
@@ -357,7 +358,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         resultText += ` — ${combat.target.label}: ${npc.hp}/${npc.maxHp} HP remaining.`;
         if (npc.hp <= 0) {
           npc.defeated = true;
-          awardKillVp(game, attackerPlayerNum, 2);
+          awardObjectiveVp(game, attackerPlayerNum, 2);
           resultText += ` **${combat.target.label} defeated! +2 VP**`;
           // Krykna claim: track on game state for end-of-round deploy option
           if (combat.target.npcType === 'krykna') {
@@ -370,6 +371,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
     await thread.send({ content: resultText || '(No effect)', components: [] });
+    delete game.pendingCombat;
     saveGames();
     return;
   }
@@ -902,14 +904,24 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
       if (newCur <= 0 && !_sbrImmune && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey))?.toLowerCase().includes('fifth')))) {
-        // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
-        removeFigurePosition(game, defenderPlayerNum, combat.target.figureKey);
-        if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
-        // Set defeat info for CC timing validation (Of No Importance, etc.)
+        // PRE-DEFEAT: Combat-specific context for CC timing validation (Of No Importance, etc.)
         game.lastDefeatInfo = { playerNum: defenderPlayerNum, figureKey: combat.target.figureKey, dcName: targetDcName };
-        const vp = calculateKillVp(targetDcName);
+        // CANONICAL DEFEAT CORE — handles: position removal, conditions, device tokens,
+        // VP (including attachment VP), defeat log, activation decrement, CC attachment cleanup,
+        // passive redraws, Nefarious Gains, Hunt Dissent, Heroic Effort, Scavenged Weaponry.
+        // Win conditions skipped: combat-specific post-defeat effects may modify VP first.
+        const { vp } = await processFigureDefeat(game, {
+          defeatedPlayerNum: defenderPlayerNum,
+          figureKey: combat.target.figureKey,
+          attackerPlayerNum,
+          attackerFigureKey: combat.attackerFigureKey,
+          msgId: targetMsgId,
+          dcIdx: idx,
+          dcName: targetDcName,
+          displayName: combat.target.label,
+          skipWinConditions: true,
+        }, { ...deps, client });
         const _vpK = vpKey(attackerPlayerNum);
-        awardKillVp(game, attackerPlayerNum, vp);
         // Achievement: activation kill streak (Double Kill / Triple Kill / PENTAKILL)
         if (combat.attackerMsgId) {
           game.activationKills = game.activationKills || {};
@@ -1016,8 +1028,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             }
           }
         }
-        // Nefarious Gains (Jabba): when a hostile figure is defeated, Jabba's owner gains 1 VP
-        await checkNefariousGains(game, defenderPlayerNum, client);
+        // Nefarious Gains — now handled by processFigureDefeat
         // Imperial Citadel: when a friendly Imperial figure is defeated, transfer its Power Tokens to the Citadel card
         {
           const _icDefDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
@@ -1039,8 +1050,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             }
           }
         }
-        // Hunt Dissent (Agent Kallus): when Kallus or friendly TROOPER within 3 defeats hostile, Kallus gains Block Token
-        await checkHuntDissent(game, attackerPlayerNum, combat.attackerFigureKey, client);
+        // Hunt Dissent — now handled by processFigureDefeat
         // Into the Force (Obi-Wan): when defeated, a friendly figure becomes Focused
         if (_lsDcName === 'Obi-Wan Kenobi') {
           const _obiAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).filter(k => !k.startsWith('Obi-Wan Kenobi-'));
@@ -1054,7 +1064,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
         // Vengeance (Royal Guard Regular): when adjacent friendly non-GUARDIAN defeated, become Focused
         {
-          const _defPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+          const _defPos = _targetCoordBeforeDefeat;
           if (_defPos) {
             const _defDcEff = getDcEffects()?.[_lsDcName];
             const _defKws = (_defDcEff?.keywords || []).map(k => k.toUpperCase());
@@ -1104,8 +1114,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             return (getDcEffects()?.[dcN]?.passives || []).includes('Brutal Tactics');
           });
           if (_btHasSaw) {
-            // defeated figure's position
-            const _btDefPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey || ''];
+            // defeated figure's position (use saved coord — figure already removed from figurePositions)
+            const _btDefPos = _targetCoordBeforeDefeat;
             if (_btDefPos) {
               const _btEnemyPos = game.figurePositions?.[defenderPlayerNum] || {};
               let _btWeakened = 0;
@@ -1147,24 +1157,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             }
           }
         }
-        // CC Passive Redraw: friendly-defeated trigger (Shared Experience)
-        {
-          const _fdprDcName = _lsDcName || dcNameFromFigureKey(combat.target.figureKey);
-          const _fdprResult = checkFriendlyDefeatedPassiveRedraws(game, defenderPlayerNum, _fdprDcName);
-          for (const _fdprCard of _fdprResult.redrawn) {
-            await logGameAction(game, client, `**Passive Redraw** — **${_fdprCard}** re-drawn from discard (friendly **${_fdprDcName}** defeated).`, { phase: 'ROUND', icon: 'card' });
-          }
-        }
+        // Passive Redraws, defeat log, activation decrement, CC attachment cleanup — now handled by processFigureDefeat
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;
-        await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-        if (idx >= 0) {
-          await decrementActivationIfGroupDefeated(game, defenderPlayerNum, idx, client);
-          const ccAttachKey = ccAttachmentsKey(defenderPlayerNum);
-          if (game[ccAttachKey]?.[targetMsgId]?.length) {
-            delete game[ccAttachKey][targetMsgId];
-            await updateAttachmentMessageForDc(game, defenderPlayerNum, targetMsgId, client);
-          }
-        }
         // Clean up pending sub-states referencing this DC (prevents orphaned states after defeat)
         if (targetMsgId) {
           if (game.pendingDcAbilityChoice) {
@@ -1403,6 +1397,19 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         if (_drCur === 1) {
           reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
           await logGameAction(game, client, `\u{1F480} **Disruptor Rifle** — **${combat.target?.label || ''}** had 1 HP remaining — suffers 1 additional Damage and is **defeated**.`, { phase: 'ROUND', icon: 'attack' });
+          // Process defeat through canonical pipeline
+          const { idx: _drIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
+          await processFigureDefeat(game, {
+            defeatedPlayerNum: defenderPlayerNum,
+            figureKey: combat.target.figureKey,
+            attackerPlayerNum,
+            attackerFigureKey: combat.attackerFigureKey,
+            msgId: targetMsgId,
+            dcIdx: _drIdx,
+            dcName: targetDcName,
+            displayName: combat.target.label,
+            source: 'Disruptor Rifle',
+          }, { ...deps, client });
         }
       }
     }
