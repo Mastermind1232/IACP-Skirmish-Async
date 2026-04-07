@@ -395,32 +395,30 @@ export async function refreshAllGameComponents(game, client, deps) {
     }
   }
 
-  // Correct activation counts: subtract for groups with no figures on the board
-  // (e.g. Lie in Ambush set-aside groups that haven't deployed yet)
+  // Recompute activation counts from scratch based on board state.
+  // Count figure DCs that have at least one living figure on the board.
   for (const pn of [1, 2]) {
     const dcList = deps.getDcList(game, pn) || [];
     const figs = game.figurePositions?.[pn] || {};
     const figKeys = Object.keys(figs);
     const activatedIndices = deps.getActivatedDcIndices(game, pn) || [];
-    let unactivatable = 0;
+    const liaKeys = game.lieInAmbushSetAside?.[pn] || [];
+
+    // Count activatable DCs: has figures on board OR is LiA set-aside (not yet deployed)
+    let activatable = 0;
+    let alreadyActivated = 0;
     for (let i = 0; i < dcList.length; i++) {
-      if (activatedIndices.includes(i)) continue;
       const dcName = dcList[i]?.dcName || dcList[i];
-      if (/^\[.+\]$/.test(dcName)) continue;
-      if (!figKeys.some(fk => fk.startsWith(dcName + '-') && figs[fk])) {
-        unactivatable++;
+      if (/^\[.+\]$/.test(dcName)) continue; // skip figureless upgrades
+      const hasFigures = figKeys.some(fk => fk.startsWith(dcName + '-') && figs[fk]);
+      const isLia = liaKeys.some(fk => fk.startsWith(dcName + '-'));
+      if (hasFigures || isLia) {
+        activatable++;
+        if (activatedIndices.includes(i)) alreadyActivated++;
       }
     }
-    if (unactivatable > 0) {
-      const total = deps.getActivationsTotal(game, pn) ?? 0;
-      if (total > 0) {
-        deps.setActivationsTotal(game, pn, Math.max(0, total - unactivatable));
-      }
-      const rem = deps.getActivationsRemaining(game, pn) ?? 0;
-      if (rem > 0) {
-        deps.setActivationsRemaining(game, pn, Math.max(0, rem - unactivatable));
-      }
-    }
+    deps.setActivationsTotal(game, pn, activatable);
+    deps.setActivationsRemaining(game, pn, Math.max(0, activatable - alreadyActivated));
     if (deps.updateActivationsMessage) {
       await deps.updateActivationsMessage(game, pn, client);
     }
