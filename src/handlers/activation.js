@@ -1185,7 +1185,6 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (actMinimap) actionsPayload.files = [actMinimap];
   const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
   game.dcActionsData[msgId].messageId = actionsMsg.id;
-  await thread.send({ content: `[DEBUG] handleConfirmActivate reached post-actions. dcName="${meta.dcName}" msgId=${msgId}` }).catch(discordCatch);
   // Hair Trigger (Jyn Odan): at start of hostile activation, interrupt to attack that figure. Once/round.
   {
     const _htOpponentPN = opponentPlayerNum(meta.playerNum);
@@ -1429,7 +1428,6 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Advanced Weapons Research (Director Krennic): friendly within range gains 1 Hit or Surge Token
   // Range is 2 (or 3 with Advanced Com Systems attachment)
-  await thread.send({ content: `[AWR-debug] dcName="${meta.dcName}" match=${meta.dcName === 'Director Krennic'}` }).catch(discordCatch);
   if (meta.dcName === 'Director Krennic') {
     try {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';

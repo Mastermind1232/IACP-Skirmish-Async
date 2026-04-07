@@ -26,6 +26,7 @@ import {
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+import { countGameSpaces } from '../game/board-helpers.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -612,6 +613,35 @@ export async function handleDcToggle(interaction, ctx) {
       });
       game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
       game.dcActivationLogMessageIds[msgId] = logMsg.id;
+      // Advanced Weapons Research (Director Krennic): friendly within range gains 1 Hit or Surge Token
+      if (meta.dcName === 'Director Krennic') {
+        try {
+          const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+          const selfFk = `Director Krennic-${dgIndex}-0`;
+          const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
+          if (selfPos) {
+            const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+            const _awrRange = cardNameIncludes(_awrAtts, 'Advanced Com Systems') ? 3 : 2;
+            const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
+              .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= _awrRange)
+              .sort(([a], [b]) => (a === selfFk ? -1 : b === selfFk ? 1 : 0));
+            if (friendlyFigs.length > 0) {
+              const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
+                const label = dcNameFromFigureKey(fk);
+                return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
+              });
+              btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+              const awrRow = new ActionRowBuilder().addComponents(btns);
+              game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
+              await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within ${_awrRange} spaces to grant a **Damage Token** or **Surge Token**:`, components: [awrRow] });
+            } else {
+              await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within ${_awrRange} spaces.` });
+            }
+          }
+        } catch (err) {
+          console.error('[AWR] Failed in dc_toggle_ path:', err);
+        }
+      }
     }
   }
   if (wasExhausted && !nowExhausted) {

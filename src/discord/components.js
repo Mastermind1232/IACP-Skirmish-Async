@@ -100,16 +100,23 @@ export function getDiscardPileButtons(gameId, playerNum, hasOpenThread) {
 export function getDcToggleButton(msgId, exhausted, game = null) {
   if (exhausted) {
     const hasActiveActivation = !!game?.dcActionsData?.[msgId];
-    const btns = [
-      new ButtonBuilder()
-        .setCustomId(`dc_unactivate_${msgId}`)
-        .setLabel('Un-activate')
-        .setStyle(ButtonStyle.Secondary),
+    const activationFinished = !!game?.dcFinishedPinged?.[msgId];
+    const btns = [];
+    // Only show Un-activate if the activation hasn't completed yet (undo a misclick)
+    if (!activationFinished) {
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`dc_unactivate_${msgId}`)
+          .setLabel('Un-activate')
+          .setStyle(ButtonStyle.Secondary),
+      );
+    }
+    btns.push(
       new ButtonBuilder()
         .setCustomId(`dc_toggle_${msgId}`)
         .setLabel('Ready')
         .setStyle(ButtonStyle.Success),
-    ];
+    );
     if (hasActiveActivation) {
       btns.push(new ButtonBuilder()
         .setCustomId(`dc_end_activation_${msgId}`)
