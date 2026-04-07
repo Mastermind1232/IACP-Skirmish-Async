@@ -14,7 +14,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards } from '../data-loader.js';
-import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, figureChoiceLabels, isCompanionHostDefeated } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getActivationsRemaining, getActivationsTotal, getActivatedDcIndices,
@@ -626,10 +626,11 @@ export async function handleDcToggle(interaction, ctx) {
               .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= _awrRange)
               .sort(([a], [b]) => (a === selfFk ? -1 : b === selfFk ? 1 : 0));
             if (friendlyFigs.length > 0) {
-              const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
-                const label = dcNameFromFigureKey(fk);
-                return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
-              });
+              const _awrSlice = friendlyFigs.slice(0, 4);
+              const _awrLabels = figureChoiceLabels(_awrSlice.map(([fk]) => fk));
+              const btns = _awrSlice.map(([fk], i) =>
+                new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(_awrLabels[i]).setStyle(ButtonStyle.Primary)
+              );
               btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
               const awrRow = new ActionRowBuilder().addComponents(btns);
               game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
@@ -640,6 +641,32 @@ export async function handleDcToggle(interaction, ctx) {
           }
         } catch (err) {
           console.error('[AWR] Failed in dc_toggle_ path:', err);
+        }
+      }
+      // Imperial Citadel (I47): friendly Imperial figure may gain 1 Power Token from the card
+      {
+        const _icEff = ctx.getDcEffects?.()?.[meta.dcName];
+        if (_icEff?.affiliation === 'Imperial') {
+          const _icDcList = getDcList(game, meta.playerNum) || [];
+          if (_icDcList.some(dc => dc.dcName === '[Imperial Citadel]')) {
+            const _icTokens = game.imperialCitadelTokens || {};
+            const _icAvailable = Object.entries(_icTokens).filter(([, count]) => count > 0);
+            if (_icAvailable.length > 0) {
+              const _icBtns = _icAvailable.slice(0, 4).map(([type, count]) => {
+                const label = `${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`;
+                return new ButtonBuilder()
+                  .setCustomId(`act_passive_${game.gameId}_${msgId}_citadel_token_${type}`)
+                  .setLabel(label)
+                  .setStyle(ButtonStyle.Primary);
+              });
+              _icBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_citadel_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+              await logGameAction(game, client, `🏰 **Imperial Citadel** — <@${playerId}>, **${displayName}** may gain 1 Power Token from the Citadel:`, {
+                phase: 'ACTIVATION', icon: 'card',
+                components: [new ActionRowBuilder().addComponents(_icBtns)],
+                allowedMentions: { users: [playerId] },
+              });
+            }
+          }
         }
       }
     }

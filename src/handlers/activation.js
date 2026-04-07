@@ -8,7 +8,7 @@ import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, awardKillVp } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, awardKillVp, figureChoiceLabels } from '../game/index.js';
 import { getAllFigureCoords } from '../game/spatial.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
@@ -693,8 +693,10 @@ export async function handleEndTurn(interaction, ctx) {
           .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && countGameSpaces(game, _tgbwSelfPos, fp) <= 1) : [];
         if (_tgbwFriendlies.length > 0) {
           const ownerId = getPlayerId(game, meta.playerNum);
-          const btns = _tgbwFriendlies.slice(0, 4).map(([fk]) =>
-            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${dcMsgId}_trustboth_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+          const _tgbwSlice = _tgbwFriendlies.slice(0, 4);
+          const _tgbwLabels = figureChoiceLabels(_tgbwSlice.map(([fk]) => fk));
+          const btns = _tgbwSlice.map(([fk], i) =>
+            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${dcMsgId}_trustboth_${fk}`).setLabel(_tgbwLabels[i]).setStyle(ButtonStyle.Primary)
           );
           btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${dcMsgId}_trustboth_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
           await logGameAction(game, client, `<@${ownerId}> 🤝 **Trust Goes Both Ways** (end of activation) — Choose an adjacent friendly figure. You and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`, {
@@ -1440,10 +1442,11 @@ export async function handleConfirmActivate(interaction, ctx) {
           .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= _awrRange)
           .sort(([a], [b]) => (a === selfFk ? -1 : b === selfFk ? 1 : 0)); // self first
         if (friendlyFigs.length > 0) {
-          const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
-            const label = dcNameFromFigureKey(fk);
-            return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
-          });
+          const _awrSlice = friendlyFigs.slice(0, 4);
+          const _awrLabels = figureChoiceLabels(_awrSlice.map(([fk]) => fk));
+          const btns = _awrSlice.map(([fk], i) =>
+            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(_awrLabels[i]).setStyle(ButtonStyle.Primary)
+          );
           btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
           const awrRow = new ActionRowBuilder().addComponents(btns);
           game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
@@ -1481,8 +1484,10 @@ export async function handleConfirmActivate(interaction, ctx) {
         }
       }
       if (_dfTargets.length > 0) {
-        const _dfBtns = _dfTargets.slice(0, 4).map(({ fk }) =>
-          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_durasteelfist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Danger)
+        const _dfSlice = _dfTargets.slice(0, 4);
+        const _dfLabels = figureChoiceLabels(_dfSlice.map(({ fk }) => fk));
+        const _dfBtns = _dfSlice.map(({ fk }, i) =>
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_durasteelfist_${fk}`).setLabel(_dfLabels[i]).setStyle(ButtonStyle.Danger)
         );
         _dfBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_durasteelfist_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         await thread.send({ content: `🤜 **Durasteel Fist** — Choose an adjacent figure to target (roll 1 green die, apply Hits as damage):`, components: [new ActionRowBuilder().addComponents(_dfBtns)] }).catch(discordCatch);
@@ -1605,8 +1610,10 @@ export async function handleConfirmActivate(interaction, ctx) {
       .filter(([fk, fp]) => fk !== _goSelfFk && fp);
     if (friendlyFigs.length > 0) {
       game.pendingGeneralsOrders = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: 2, chosen: [] };
-      const btns = friendlyFigs.slice(0, 4).map(([fk]) =>
-        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_genorders_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+      const _goSlice = friendlyFigs.slice(0, 4);
+      const _goLabels = figureChoiceLabels(_goSlice.map(([fk]) => fk));
+      const btns = _goSlice.map(([fk], i) =>
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_genorders_${fk}`).setLabel(_goLabels[i]).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_genorders_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
       await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each gains **2 MP** (pick 1 of 2):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
@@ -1624,8 +1631,9 @@ export async function handleConfirmActivate(interaction, ctx) {
       .filter(([fk, fp]) => fp && countGameSpaces(game, _llpSelfPos, fp) <= 3) : [];
     if (_llpFriendlies.length > 0 && roundNum > 0) {
       game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: roundNum, ability: 'longlaid', tokenTypes: ['Damage', 'Block', 'Surge', 'Evade'] };
-      const btns = _llpFriendlies.map(([fk]) =>
-        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+      const _llpLabels = figureChoiceLabels(_llpFriendlies.map(([fk]) => fk));
+      const btns = _llpFriendlies.map(([fk], i) =>
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(_llpLabels[i]).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
       await thread.send({ content: `🧠 **Long-Laid Plans** — Distribute **${roundNum} power token${roundNum > 1 ? 's' : ''}** among friendly figures within 3 spaces. Pick a figure (${roundNum} remaining):`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
@@ -1729,8 +1737,10 @@ export async function handleConfirmActivate(interaction, ctx) {
       .filter(([fk, fp]) => fp && countGameSpaces(game, _adSelfPos, fp) <= 3) : [];
     if (_adFriendlies.length > 0) {
       game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: 2, ability: 'armsdist', tokenTypes: ['Damage', 'Block'] };
-      const btns = _adFriendlies.slice(0, 4).map(([fk]) =>
-        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+      const _adSlice = _adFriendlies.slice(0, 4);
+      const _adLabels = figureChoiceLabels(_adSlice.map(([fk]) => fk));
+      const btns = _adSlice.map(([fk], i) =>
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(_adLabels[i]).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
       await thread.send({ content: `🎯 **Arms Distribution** — Distribute **2 power tokens** (Hit or Block) among friendly figures within 3 spaces. Pick a figure (2 remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
@@ -1748,8 +1758,10 @@ export async function handleConfirmActivate(interaction, ctx) {
       const _tgbwFriendlies = _tgbwSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
         .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && countGameSpaces(game, _tgbwSelfPos, fp) <= 1) : [];
       if (_tgbwFriendlies.length > 0) {
-        const btns = _tgbwFriendlies.slice(0, 4).map(([fk]) =>
-          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+        const _tgbw2Slice = _tgbwFriendlies.slice(0, 4);
+        const _tgbw2Labels = figureChoiceLabels(_tgbw2Slice.map(([fk]) => fk));
+        const btns = _tgbw2Slice.map(([fk], i) =>
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_${fk}`).setLabel(_tgbw2Labels[i]).setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         await thread.send({ content: `🤝 **Trust Goes Both Ways** — Choose an adjacent friendly figure. You and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
@@ -1923,8 +1935,10 @@ export async function handleConfirmActivate(interaction, ctx) {
         const _waHostiles = Object.entries(game.figurePositions?.[_waEnemyNum] || {})
           .filter(([, fp]) => fp && _waAdj.includes(String(fp).toLowerCase()));
         if (_waHostiles.length > 0) {
-          const btns = _waHostiles.slice(0, 4).map(([fk]) =>
-            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_wookslam_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+          const _waSlice = _waHostiles.slice(0, 4);
+          const _waLabels = figureChoiceLabels(_waSlice.map(([fk]) => fk));
+          const btns = _waSlice.map(([fk], i) =>
+            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_wookslam_${fk}`).setLabel(_waLabels[i]).setStyle(ButtonStyle.Primary)
           );
           btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_wookslam_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
           await thread.send({ content: `**Wookiee Avenger** — **${meta.dcName}** may use **Slam** without spending an action. Choose an adjacent hostile figure:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
@@ -1954,8 +1968,10 @@ export async function handleConfirmActivate(interaction, ctx) {
           return true; // If LOS unavailable, allow all
         }) : [];
       if (_motFriendlies.length > 0) {
-        const btns = _motFriendlies.slice(0, 4).map(([fk]) =>
-          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_motivation_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+        const _motSlice = _motFriendlies.slice(0, 4);
+        const _motLabels = figureChoiceLabels(_motSlice.map(([fk]) => fk));
+        const btns = _motSlice.map(([fk], i) =>
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_motivation_${fk}`).setLabel(_motLabels[i]).setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_motivation_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         await thread.send({ content: `**Motivation** — Choose a friendly figure with lower cost in your LOS (recover 1 Damage or discard HARMFUL, then gain 1 MP):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
@@ -1974,8 +1990,10 @@ export async function handleConfirmActivate(interaction, ctx) {
       const _taFriendlies = Object.entries(game.figurePositions?.[meta.playerNum] || {})
         .filter(([fk, fp]) => fk !== _taSelfFk && fp && _taAdj.includes(String(fp).toLowerCase()));
       if (_taFriendlies.length > 0) {
-        const btns = _taFriendlies.slice(0, 4).map(([fk]) =>
-          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustedally_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+        const _taSlice = _taFriendlies.slice(0, 4);
+        const _taLabels = figureChoiceLabels(_taSlice.map(([fk]) => fk));
+        const btns = _taSlice.map(([fk], i) =>
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustedally_${fk}`).setLabel(_taLabels[i]).setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustedally_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         await thread.send({ content: `**Trusted Ally** — Choose an adjacent friendly figure (recover 1 Damage or discard 1 HARMFUL condition):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
@@ -2858,8 +2876,10 @@ export async function handleActPassive(interaction, ctx) {
         const _goSelfFk = `${meta.dcName}-${_goSelfDgIdx}-0`;
         const filtered = friendlyFigs.filter(([fk]) => fk !== _goSelfFk);
         if (filtered.length > 0) {
-          const btns = filtered.slice(0, 4).map(([fk]) =>
-            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+          const _go2Slice = filtered.slice(0, 4);
+          const _go2Labels = figureChoiceLabels(_go2Slice.map(([fk]) => fk));
+          const btns = _go2Slice.map(([fk], i) =>
+            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_${fk}`).setLabel(_go2Labels[i]).setStyle(ButtonStyle.Primary)
           );
           btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
           await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. Pick figure ${2 - pending.remaining + 1} of 2:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
@@ -3321,8 +3341,10 @@ export async function handleActPassive(interaction, ctx) {
             const _conFriendlies = Object.entries(game.figurePositions?.[meta.playerNum] || {})
               .filter(([fk2, pos2]) => fk2 !== _conFk && pos2 && _conAdj.includes(String(pos2).toLowerCase()));
             if (_conFriendlies.length > 0) {
-              const btns = _conFriendlies.slice(0, 4).map(([fk2]) =>
-                new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_${fk2}`).setLabel(dcNameFromFigureKey(fk2)).setStyle(ButtonStyle.Primary)
+              const _conSlice = _conFriendlies.slice(0, 4);
+              const _conLabels = figureChoiceLabels(_conSlice.map(([fk2]) => fk2));
+              const btns = _conSlice.map(([fk2], i) =>
+                new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_${fk2}`).setLabel(_conLabels[i]).setStyle(ButtonStyle.Primary)
               );
               btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_skip`).setLabel('Done').setStyle(ButtonStyle.Secondary));
               const thread = interaction.channel;

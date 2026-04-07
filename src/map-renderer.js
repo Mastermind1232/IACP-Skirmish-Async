@@ -679,7 +679,7 @@ export async function renderMap(mapId, options = {}) {
     ctx.imageSmoothingQuality = 'high';
     for (const result of ptResults) {
       if (!result) continue;
-      const px = figX0 + result.i * (ptSize * 0.9);
+      const px = figX0 - ptSize * 0.15 + result.i * (ptSize * 0.9);
       const py = figY0;
       const tw = result.img.width;
       const th = result.img.height;
@@ -704,7 +704,7 @@ export async function renderMap(mapId, options = {}) {
         return Promise.resolve(null);
       });
       const condImgs = await Promise.all(condImgPromises);
-      let ciX = cx + clipW;
+      let ciX = cx + clipW + iconSize * 0.15;
       const ciY = cy - clipH;
       for (const condImg of condImgs) {
         if (!condImg) continue;

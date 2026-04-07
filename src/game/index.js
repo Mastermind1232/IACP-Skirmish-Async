@@ -94,7 +94,7 @@ export { awardKillVp, awardObjectiveVp, deductVp, checkNefariousGains } from './
 
 export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS, applyCondition, resetCondition } from './conditions.js';
 
-export { dcNameFromFigureKey, parseFigureKey, getDcEffect, isFigurelessDc, hasDepleteEffect, hasExhaustEffect, getCompanionDescriptionForDc, getMaxPowerTokens, buildFigureButtonLabel, isCompanionHostDefeated } from './dc-helpers.js';
+export { dcNameFromFigureKey, parseFigureKey, getDcEffect, isFigurelessDc, hasDepleteEffect, hasExhaustEffect, getCompanionDescriptionForDc, getMaxPowerTokens, buildFigureButtonLabel, figureChoiceLabels, isCompanionHostDefeated } from './dc-helpers.js';
 
 export { opponentPlayerNum, getInitiativePlayerNum } from './player-helpers.js';
 
