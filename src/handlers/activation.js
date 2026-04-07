@@ -38,7 +38,6 @@ import {
   opponentPlayerNum,
   getInitiativePlayerNum,
   removeFigurePosition,
-  syncHealthStateToList,
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -392,7 +391,7 @@ async function checkLieInAmbushTrigger(game, activatingPlayerNum, ctx) {
  * Handle lia_deploy_zone_ button: deploy the set-aside group to chosen zone.
  */
 export async function handleLiaDeployZone(interaction, ctx) {
-  const { getGame, logGameAction, client, saveGames } = ctx;
+  const { getGame, logGameAction, client, saveGames, updateActivationsMessage } = ctx;
   // customId: lia_deploy_zone_<gameId>_<playerNum>_<zone>
   const parts = splitCustomId(interaction.customId, 'lia_deploy_zone_');
   const zone = parts[parts.length - 1]; // red or blue
@@ -500,6 +499,7 @@ export async function handleLiaDeployZone(interaction, ctx) {
   });
 
   saveGames();
+  await updateActivationsMessage?.(game, playerNum, client);
   await interaction.followUp({ content: `Deployed **${dcName}** (${placed} figure(s)) to the **${zone}** zone.`, ephemeral: true }).catch(discordCatch);
 }
 
@@ -1176,15 +1176,7 @@ export async function handleActPassive(interaction, ctx) {
       game.movementBank[msgId].remaining += 1;
       await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
     } else if (choice === 'heal') {
-      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const fk = `${meta.dcName}-${dgIndex}-0`;
-      const fkIdx = 0;
-      const hs = dcHealthState.get(msgId);
-      if (hs?.[fkIdx] && Array.isArray(hs[fkIdx])) {
-        const [cur, max] = hs[fkIdx];
-        hs[fkIdx] = [Math.min(max, (cur ?? max) + 1), max];
-        syncHealthStateToList(game, meta.playerNum, msgId, hs);
-      }
+      healHp(dcHealthState, game, msgId, 0, 1, meta.playerNum);
       await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** recovered **1 Damage**.`, components: [] }).catch(discordCatch);
     }
   } else if (ability === 'fulcrum') {
