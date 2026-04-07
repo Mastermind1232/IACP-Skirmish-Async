@@ -1563,13 +1563,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     if (_sfSmallFriendlies.length === 1) {
       // Auto-grant 2 MP to the only eligible friendly
       const _sfF = _sfSmallFriendlies[0];
-      game.movementBank = game.movementBank || {};
-      if (!game.movementBank[_sfF.msgId]) {
-        game.movementBank[_sfF.msgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _sfF.dcName };
-      } else {
-        game.movementBank[_sfF.msgId].total += 2;
-        game.movementBank[_sfF.msgId].remaining += 2;
-      }
+      grantMovementBank(game, _sfF.msgId, 2);
       await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. **${_sfF.dcName}** gains **2 MP**.`).catch(discordCatch);
       await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened; **${_sfF.dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
     } else if (_sfSmallFriendlies.length > 1) {
@@ -2163,9 +2157,8 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     if (!game.roundFigureAbilityUsed[fsKey]) {
       game.roundFigureAbilityUsed[fsKey] = true;
       _applyCondition(game, combat.attackerFigureKey, 'Hide');
+      grantMovementBank(game, combat.attackerMsgId, 2);
       if (game.movementBank?.[combat.attackerMsgId]) {
-        game.movementBank[combat.attackerMsgId].remaining += 2;
-        game.movementBank[combat.attackerMsgId].total += 2;
         updateMovementBankMessage(game, combat.attackerMsgId, client).catch(discordCatch);
       }
       game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};

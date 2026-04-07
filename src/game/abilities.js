@@ -6,7 +6,7 @@ import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffects
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
-import { reduceHp } from './damage-helpers.js';
+import { reduceHp, healHp } from './damage-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 
@@ -619,28 +619,15 @@ export function resolveAbility(abilityId, context) {
       // Recover self
       if (recoverSelf > 0 && dcHealthState) {
         const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
-        const healthState = dcHealthState.get(msgId) || [];
-        let recovered = 0;
-        if (healthState[selectedFig]) {
-          const [cur, max] = healthState[selectedFig];
-          const heal = Math.min(recoverSelf, (max ?? cur) - cur);
-          if (heal > 0) { healthState[selectedFig] = [cur + heal, max ?? cur]; dcHealthState.set(msgId, healthState); recovered = heal; }
-        }
+        const { healed: recovered } = healHp(dcHealthState, game, msgId, selectedFig, recoverSelf, playerNum);
         if (recovered > 0) parts.push(`you recovered ${recovered} Damage`);
       }
       // Recover target
       if (recoverTarget > 0 && dcHealthState) {
         const targetMsgId = findMsgIdForFigureKey(game, playerNum, targetFigureKey, dcMessageMeta);
         if (targetMsgId) {
-          const healthState = dcHealthState.get(targetMsgId) || [];
-          const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
-          const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-          if (healthState[figIdx]) {
-            const [cur, max] = healthState[figIdx];
-            const heal = Math.min(recoverTarget, (max ?? cur) - cur);
-            if (heal > 0) { healthState[figIdx] = [cur + heal, max ?? cur]; dcHealthState.set(targetMsgId, healthState); }
-            syncHealthStateToList(game, playerNum, targetMsgId, healthState);
-          }
+          const figIdx = parseFigureKey(targetFigureKey).figureIndex;
+          healHp(dcHealthState, game, targetMsgId, figIdx, recoverTarget, playerNum);
         }
         parts.push(`${dcNameFromFigureKey(targetFigureKey)} recovered ${recoverTarget} Damage`);
       }

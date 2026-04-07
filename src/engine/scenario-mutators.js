@@ -9,6 +9,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
+import { setActivationsRemaining, setActivatedDcIndices } from '../game/player-helpers.js';
 import { fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
 
 // ── Error class ──────────────────────────────────────────────────────────────
@@ -79,10 +80,10 @@ async function mutateToEndOfRound(game, client, deps, userId) {
   } = deps;
 
   // Exhaust all DCs for both players
-  game.p1ActivationsRemaining = 0;
-  game.p2ActivationsRemaining = 0;
-  game.p1ActivatedDcIndices = (game.p1DcMessageIds || []).map((_, i) => i);
-  game.p2ActivatedDcIndices = (game.p2DcMessageIds || []).map((_, i) => i);
+  for (const pn of [1, 2]) {
+    setActivationsRemaining(game, pn, 0);
+    setActivatedDcIndices(game, pn, (game[`p${pn}DcMessageIds`] || []).map((_, i) => i));
+  }
   for (const msgId of [...(game.p1DcMessageIds || []), ...(game.p2DcMessageIds || [])]) {
     dcExhaustedState.set(msgId, true);
   }
@@ -137,10 +138,10 @@ async function mutateToStartOfRound(game, client, deps, userId) {
   cleanupRoundStart(game);
 
   // Un-exhaust all DCs for fresh round
-  game.p1ActivationsRemaining = game.p1ActivationsTotal || (game.p1DcMessageIds || []).length;
-  game.p2ActivationsRemaining = game.p2ActivationsTotal || (game.p2DcMessageIds || []).length;
-  game.p1ActivatedDcIndices = [];
-  game.p2ActivatedDcIndices = [];
+  for (const pn of [1, 2]) {
+    setActivationsRemaining(game, pn, game[`p${pn}ActivationsTotal`] || (game[`p${pn}DcMessageIds`] || []).length);
+    setActivatedDcIndices(game, pn, []);
+  }
   for (const msgId of [...(game.p1DcMessageIds || []), ...(game.p2DcMessageIds || [])]) {
     dcExhaustedState.set(msgId, false);
   }

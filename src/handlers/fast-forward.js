@@ -191,10 +191,10 @@ export function simulateMovementRounds(game, activatorNum, defenderNum, timing, 
     // Advance game state for next round
     game.currentRound = (game.currentRound || 1) + 1;
     setRoundPhase(game, ROUND_PHASES.START_OF_ROUND);
-    game.p1ActivatedDcIndices = [];
-    game.p2ActivatedDcIndices = [];
-    game.p1ActivationsRemaining = game.p1ActivationsTotal ?? 0;
-    game.p2ActivationsRemaining = game.p2ActivationsTotal ?? 0;
+    for (const pn of [1, 2]) {
+      setActivatedDcIndices(game, pn, []);
+      setActivationsRemaining(game, pn, game[`p${pn}ActivationsTotal`] ?? 0);
+    }
   }
 
   return { roundsSimulated, movementLog };

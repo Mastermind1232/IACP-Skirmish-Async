@@ -7,7 +7,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, applyCondition, filterCondition, HARMFUL_CONDITIONS } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, applyCondition, filterCondition, grantMovementBank, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -471,13 +471,7 @@ export async function handleOnDiplomatic(interaction, ctx) {
     _odmGame.exhaustedSkirmishUpgrades = _odmGame.exhaustedSkirmishUpgrades || {};
     _odmGame.exhaustedSkirmishUpgrades[_odmMsgId] = [...(_odmGame.exhaustedSkirmishUpgrades[_odmMsgId] || []), 'On a Diplomatic Mission'];
     if (_odmChoice === 'mp') {
-      _odmGame.movementBank = _odmGame.movementBank || {};
-      if (!_odmGame.movementBank[_odmMsgId]) {
-        _odmGame.movementBank[_odmMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _odmMeta.displayName || _odmMeta.dcName };
-      } else {
-        _odmGame.movementBank[_odmMsgId].total += 2;
-        _odmGame.movementBank[_odmMsgId].remaining += 2;
-      }
+      grantMovementBank(_odmGame, _odmMsgId, 2);
       await logGameAction(_odmGame, client, `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
     } else if (_odmChoice === 'evade') {
       _odmGame.diplomaticMissionEvade = _odmGame.diplomaticMissionEvade || {};
@@ -587,13 +581,7 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
     break;
   }
   if (!targetMsgId) { await interaction.followUp({ content: 'Could not find DC for this figure.', ephemeral: true }).catch(discordCatch); return; }
-  game.movementBank = game.movementBank || {};
-  if (!game.movementBank[targetMsgId]) {
-    game.movementBank[targetMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: dcName };
-  } else {
-    game.movementBank[targetMsgId].total += 2;
-    game.movementBank[targetMsgId].remaining += 2;
-  }
+  grantMovementBank(game, targetMsgId, 2);
   await interaction.message.edit({ content: `**Suppressive Fire** — **${dcName}** gains **2 MP**.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Suppressive Fire** — **${dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
   saveGames(); return;
@@ -683,13 +671,7 @@ export async function handleDrivenByHatred(interaction, ctx) {
     await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** skipped end-of-round move + attack.`, { phase: 'ROUND', icon: 'card' });
   } else {
     // Grant 2 MP for movement
-    _dbhGame.movementBank = _dbhGame.movementBank || {};
-    if (!_dbhGame.movementBank[_dbhMsgId]) {
-      _dbhGame.movementBank[_dbhMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _dbhDisplayName };
-    } else {
-      _dbhGame.movementBank[_dbhMsgId].total += 2;
-      _dbhGame.movementBank[_dbhMsgId].remaining += 2;
-    }
+    grantMovementBank(_dbhGame, _dbhMsgId, 2);
 
     if (buttonKey === 'dbh_force_choke_') {
       // Flag that Vader should use Force Choke after moving (manual resolution — player uses Force Choke special action button)

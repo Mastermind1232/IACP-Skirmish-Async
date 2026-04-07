@@ -10,7 +10,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getMapData, getCcEffect } from '../data-loader.js';
 import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { dcNameFromFigureKey } from '../game/index.js';
+import { dcNameFromFigureKey, grantMovementBank } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
@@ -98,10 +98,7 @@ export async function handleReactionUse(interaction, ctx) {
     // Add 2 MP to Bossk's movement bank
     const bosskMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, targetFigKey);
     if (bosskMsgId) {
-      game.movementBank = game.movementBank || {};
-      game.movementBank[bosskMsgId] = game.movementBank[bosskMsgId] || { remaining: 0, total: 0 };
-      game.movementBank[bosskMsgId].remaining += 2;
-      game.movementBank[bosskMsgId].total += 2;
+      grantMovementBank(game, bosskMsgId, 2);
     }
   } else if (cardName === "Right Back At Ya!") {
     // Right Back At Ya! (Ahsoka): attacker suffers 1 Damage (3 if defender spends Block Token)

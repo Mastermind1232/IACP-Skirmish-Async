@@ -18,7 +18,7 @@ import {
 import { countGameSpaces } from '../game/board-helpers.js';
 import { getAllFigureCoords } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, figureChoiceLabels, isCompanionHostDefeated } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, grantMovementBank, figureChoiceLabels, isCompanionHostDefeated, reduceHp } from '../game/index.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { getConfig } from '../game/figure-config.js';
@@ -209,8 +209,7 @@ export async function finalizeActivation({
       }
     }
     if (_dbTotal > 0) {
-      game.movementBank[msgId].total += _dbTotal;
-      game.movementBank[msgId].remaining += _dbTotal;
+      grantMovementBank(game, msgId, _dbTotal);
     }
     if (Object.keys(game.deployBonusMp).length === 0) delete game.deployBonusMp;
   }
@@ -289,13 +288,8 @@ export async function finalizeActivation({
         game.roundFigureAbilityUsed[_swKey] = true;
         const _swTgtMsgId = findDcMessageIdForFigure(gameId, _swEnemyPN, _swEfk);
         if (_swTgtMsgId) {
-          const _swFkMatch = _swEfk.match(/-(\d+)-(\d+)$/);
-          const _swFigIdx = _swFkMatch ? parseInt(_swFkMatch[2], 10) : 0;
-          const hs = dcHealthState.get(_swTgtMsgId);
-          if (hs?.[_swFigIdx] && Array.isArray(hs[_swFigIdx])) {
-            const [cur, max] = hs[_swFigIdx];
-            hs[_swFigIdx] = [Math.max(0, (cur ?? max) - 1), max];
-          }
+          const _swFigIdx = parseFigureKey(_swEfk).figureIndex;
+          reduceHp(dcHealthState, game, _swTgtMsgId, _swFigIdx, 1, _swEnemyPN);
         }
         const _swTgtName = dcNameFromFigureKey(_swEfk);
         await thread.send(`**Swipe** — **Salacious B. Crumb** activates in **${_swTgtName}**'s space: **${_swTgtName}** suffers 1 Damage.`).catch(discordCatch);
@@ -347,9 +341,7 @@ export async function finalizeActivation({
 
   // D1. Mounted (Captain Terro, Kuiil, Dewback): gain 3 MP
   if (_abilityIds.includes('mounted_terro') || _abilityIds.includes('mounted_kuiil') || _abilityIds.includes('mounted_dewback') || (_dcEff?.passives || []).includes('Mounted')) {
-    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    game.movementBank[msgId].total += 3;
-    game.movementBank[msgId].remaining += 3;
+    grantMovementBank(game, msgId, 3);
     await thread.send({ content: `🐎 **Mounted** — **${displayName}** gains **3 movement points** at the start of activation.` }).catch(discordCatch);
   }
 
@@ -370,11 +362,7 @@ export async function finalizeActivation({
       for (const fk of figureKeys) {
         applyCondition(game, fk, 'Focus');
         const fkIdx = parseFigureKey(fk).figureIndex;
-        const hs = dcHealthState.get(msgId);
-        if (hs?.[fkIdx] && Array.isArray(hs[fkIdx])) {
-          const [cur, max] = hs[fkIdx];
-          hs[fkIdx] = [Math.max(0, (cur ?? max) - 1), max];
-        }
+        reduceHp(dcHealthState, game, msgId, fkIdx, 1, playerNum);
       }
       await thread.send({ content: `😤 **Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffered **1 Strain** and became **Focused**.` }).catch(discordCatch);
       await logGameAction(game, client, `**Madness** — **${displayName}** suffered 1 Strain and became Focused (${hand.length} CC in hand).`, { phase: 'ACTIVATION', icon: 'condition' });
@@ -412,18 +400,14 @@ export async function finalizeActivation({
       return !hostilePos.some(hp => hp && countGameSpaces(game, pos, hp) <= range);
     };
     if (dcName === 'Wampa' && _hungerCheck('Wampa', 3)) {
-      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      game.movementBank[msgId].total += 2;
-      game.movementBank[msgId].remaining += 2;
+      grantMovementBank(game, msgId, 2);
       await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **2 MP** (no hostile within 3 spaces).` }).catch(discordCatch);
     } else if (dcName === 'Wampa' && !_hungerCheck('Wampa', 3)) {
       await thread.send({ content: `🐻 **Hunger** — Hostile figure within 3 spaces; **${displayName}** does not gain MP.` }).catch(discordCatch);
     }
     if (dcName === 'Wampa (Elite)') {
       if (_hungerCheck('Wampa (Elite)', 2)) {
-        game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-        game.movementBank[msgId].total += 3;
-        game.movementBank[msgId].remaining += 3;
+        grantMovementBank(game, msgId, 3);
         const hungerRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_hunger_block`).setLabel('Block Token').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_hunger_evade`).setLabel('Evade Token').setStyle(ButtonStyle.Secondary),
@@ -459,10 +443,7 @@ export async function finalizeActivation({
 
   // D8. Into the Fray (Baze Malbus): gain 1 Surge Token per hostile with LOS, then gain 1 MP
   if (dcName === 'Baze Malbus') {
-    game.movementBank = game.movementBank || {};
-    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    game.movementBank[msgId].total += 1;
-    game.movementBank[msgId].remaining += 1;
+    grantMovementBank(game, msgId, 1);
     const _mapSpaces = getMapDataFn(game.selectedMap?.id);
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const selfFk = `Baze Malbus-${dgIndex}-0`;
@@ -878,13 +859,7 @@ export async function finalizeActivation({
       await thread.send({ content: `🔄 **Form: ${chosenForm}** — ${fCard?.abilityText || 'Apply form abilities.'}`, files: imgFiles }).catch(discordCatch);
       // Fleet (Streetrat): gain MP
       if (fCard?.fleetMp && fCard.fleetMp > 0) {
-        game.movementBank = game.movementBank || {};
-        if (!game.movementBank[msgId]) {
-          game.movementBank[msgId] = { total: fCard.fleetMp, remaining: fCard.fleetMp, threadId: thread.id, messageId: null, displayName };
-        } else {
-          game.movementBank[msgId].total += fCard.fleetMp;
-          game.movementBank[msgId].remaining += fCard.fleetMp;
-        }
+        grantMovementBank(game, msgId, fCard.fleetMp);
         await thread.send({ content: `🏃 **Fleet** — **${dcName}** gains **${fCard.fleetMp} MP** at start of activation.` }).catch(discordCatch);
       }
       // Conspire (Senator)
@@ -965,13 +940,7 @@ export async function finalizeActivation({
   if (_suActivationUpgrades.length) {
     // Focused on the Kill (IG-88): +2 MP
     if (cardNameIncludes(_suActivationUpgrades, 'Focused on the Kill')) {
-      game.movementBank = game.movementBank || {};
-      if (!game.movementBank[msgId]) {
-        game.movementBank[msgId] = { total: 2, remaining: 2, threadId: thread.id, messageId: null, displayName };
-      } else {
-        game.movementBank[msgId].total += 2;
-        game.movementBank[msgId].remaining += 2;
-      }
+      grantMovementBank(game, msgId, 2);
       await thread.send({ content: `**Focused on the Kill** — **${dcName}** gains **2 MP** at start of activation.` }).catch(discordCatch);
     }
     // Wookiee Avenger (Chewbacca): free Slam
@@ -1064,13 +1033,7 @@ export async function finalizeActivation({
         }
         const _btSpeed = getDcStatsFn(dcName)?.speed ?? 0;
         if (_btSpeed > 0) {
-          game.movementBank = game.movementBank || {};
-          if (!game.movementBank[msgId]) {
-            game.movementBank[msgId] = { total: _btSpeed, remaining: _btSpeed, threadId: thread.id, messageId: null, displayName };
-          } else {
-            game.movementBank[msgId].total += _btSpeed;
-            game.movementBank[msgId].remaining += _btSpeed;
-          }
+          grantMovementBank(game, msgId, _btSpeed);
         }
         const _btAbilityText = _btEff?.abilityText || '';
         const _btIsNonSentient = _btAbilityText.includes('Non-Sentient');
@@ -1166,10 +1129,7 @@ export async function finalizeActivation({
         if (countGameSpaces(game, cadPos, fp) > 4) continue;
         for (const [mId, mMeta] of dcMessageMeta) {
           if (mMeta.gameId !== gameId || mMeta.playerNum !== pn || mMeta.dcName !== fDcName) continue;
-          game.movementBank = game.movementBank || {};
-          game.movementBank[mId] = game.movementBank[mId] || { total: 0, remaining: 0 };
-          game.movementBank[mId].remaining += 1;
-          game.movementBank[mId].total += 1;
+          grantMovementBank(game, mId, 1);
           await thread.send({ content: `🔫 **I Make the Rules Now** — **${fDcName}** (HUNTER within 4 of Cad Bane) gains **1 MP**.` }).catch(discordCatch);
           break;
         }

@@ -9,7 +9,7 @@ import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, awardKillVp, figureChoiceLabels } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, awardKillVp, figureChoiceLabels } from '../game/index.js';
 import { getAllFigureCoords } from '../game/spatial.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
@@ -1154,10 +1154,7 @@ export async function handleActPassive(interaction, ctx) {
 
   if (ability === 'vigor') {
     if (choice === 'mp') {
-      game.movementBank = game.movementBank || {};
-      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      game.movementBank[msgId].total += 2;
-      game.movementBank[msgId].remaining += 2;
+      grantMovementBank(game, msgId, 2);
       await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **2 MP**.`, components: [] }).catch(discordCatch);
     } else if (choice === 'block') {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -1170,10 +1167,7 @@ export async function handleActPassive(interaction, ctx) {
     }
   } else if (ability === 'responsive') {
     if (choice === 'mp') {
-      game.movementBank = game.movementBank || {};
-      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      game.movementBank[msgId].total += 1;
-      game.movementBank[msgId].remaining += 1;
+      grantMovementBank(game, msgId, 1);
       await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
     } else if (choice === 'heal') {
       healHp(dcHealthState, game, msgId, 0, 1, meta.playerNum);
@@ -1227,12 +1221,7 @@ export async function handleActPassive(interaction, ctx) {
           break;
         }
       }
-      if (targetMsgId) {
-        game.movementBank = game.movementBank || {};
-        game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
-        game.movementBank[targetMsgId].total += 2;
-        game.movementBank[targetMsgId].remaining += 2;
-      }
+      grantMovementBank(game, targetMsgId, 2);
       await interaction.message.edit({ content: `🎯 **Tactical Movement** — **${targetDcName}** gained **2 MP**.`, components: [] }).catch(discordCatch);
     }
   } else if (ability === 'awr') {
@@ -1266,10 +1255,7 @@ export async function handleActPassive(interaction, ctx) {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const fk = `${meta.dcName}-${dgIndex}-0`;
     if (choice === 'mp') {
-      game.movementBank = game.movementBank || {};
-      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      game.movementBank[msgId].total += 1;
-      game.movementBank[msgId].remaining += 1;
+      grantMovementBank(game, msgId, 1);
       await interaction.message.edit({ content: `🧠 **Open-Minded** — **${displayName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
     } else if (choice === 'token') {
       // Grant 1 Power Token — player chooses type via power_token_choice_ flow
@@ -1318,10 +1304,7 @@ export async function handleActPassive(interaction, ctx) {
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[nmMsgId] = [...(game.exhaustedSkirmishUpgrades[nmMsgId] || []), "Nemik's Manifesto"];
       // Grant 1 MP
-      game.movementBank = game.movementBank || {};
-      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      game.movementBank[msgId].total += 1;
-      game.movementBank[msgId].remaining += 1;
+      grantMovementBank(game, msgId, 1);
       // Apply 2 Strain to the activating figure
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const fk = `${meta.dcName}-${dgIndex}-0`;
@@ -1559,12 +1542,7 @@ export async function handleActPassive(interaction, ctx) {
           break;
         }
       }
-      if (targetMsgId) {
-        game.movementBank = game.movementBank || {};
-        game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
-        game.movementBank[targetMsgId].total += 2;
-        game.movementBank[targetMsgId].remaining += 2;
-      }
+      grantMovementBank(game, targetMsgId, 2);
       pending.chosen.push(targetFk);
       pending.remaining--;
       await logGameAction?.(game, client, `**General's Orders** — ${targetDcName} gained 2 MP.`, { phase: 'ACTIVATION', icon: 'activate' });
@@ -1804,10 +1782,7 @@ export async function handleActPassive(interaction, ctx) {
     }
     // Grant 1 MP to target
     if (targetMsgId) {
-      game.movementBank = game.movementBank || {};
-      game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
-      game.movementBank[targetMsgId].total += 1;
-      game.movementBank[targetMsgId].remaining += 1;
+      grantMovementBank(game, targetMsgId, 1);
       resultParts.push('gained 1 MP');
     }
     delete game.pendingMotivation;
@@ -1903,13 +1878,7 @@ export async function handleActPassive(interaction, ctx) {
         }
         // Grant Speed MP to the vehicle
         const _irSpeed = ctx.getDcStats?.(meta.dcName)?.speed ?? 4;
-        game.movementBank = game.movementBank || {};
-        if (!game.movementBank[msgId]) {
-          game.movementBank[msgId] = { total: _irSpeed, remaining: _irSpeed, threadId: interaction.channel?.id, messageId: null, displayName: displayName };
-        } else {
-          game.movementBank[msgId].total += _irSpeed;
-          game.movementBank[msgId].remaining += _irSpeed;
-        }
+        grantMovementBank(game, msgId, _irSpeed);
         await interaction.message.edit({ content: `**Imperial Retrofitting** — Exhausted. **${displayName}** performs a move (**${_irSpeed} MP**).`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Imperial Retrofitting** exhausted — **${displayName}** gains ${_irSpeed} MP (performs a move).`, { phase: 'ACTIVATION', icon: 'card' });
         // After exhaust, offer deplete for Focus if card is not yet depleted
@@ -2308,12 +2277,7 @@ export async function handleScFigPick(interaction, ctx) {
       break;
     }
   }
-  if (targetMsgId) {
-    game.movementBank = game.movementBank || {};
-    game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
-    game.movementBank[targetMsgId].total += 2;
-    game.movementBank[targetMsgId].remaining += 2;
-  }
+  grantMovementBank(game, targetMsgId, 2);
 
   await interaction.message.edit({
     content: `**[Spectre Cell]** — **${targetDcName}** gains 2 MP and may interrupt to perform an attack. (Exhausted)`,
@@ -2484,9 +2448,8 @@ export async function handleItWillBeAlrightPick(interaction, ctx) {
 
   // Defeat the figure: set HP to 0
   const hs = dcHealthState?.get(targetMsgId);
-  if (hs?.[targetFigIdx] && Array.isArray(hs[targetFigIdx])) {
-    hs[targetFigIdx] = [0, hs[targetFigIdx][1]];
-  }
+  const prevHp = hs?.[targetFigIdx]?.[0] ?? 0;
+  if (prevHp > 0) reduceHp(dcHealthState, game, targetMsgId, targetFigIdx, prevHp, playerNum);
 
   // Remove from board
   removeFigurePosition(game, playerNum, figureKey);
@@ -2542,10 +2505,7 @@ export async function handleItWillBeAlrightAction(interaction, ctx) {
     // Grant Cassian's speed as movement points
     const cassianStats = getDcStats('Cassian Andor');
     const speed = cassianStats?.speed ?? 4;
-    game.movementBank = game.movementBank || {};
-    game.movementBank[cassianMsgId] = game.movementBank[cassianMsgId] || { total: 0, remaining: 0 };
-    game.movementBank[cassianMsgId].total += speed;
-    game.movementBank[cassianMsgId].remaining += speed;
+    grantMovementBank(game, cassianMsgId, speed);
     await interaction.message.edit({
       content: `**It Will Be Alright** — **${cassianDisplay}** gains **${speed} MP** (free move).`,
       components: [],

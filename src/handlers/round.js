@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { getDcEffects, getMapData, getFormCards, getCcEffectsData, getMapTokensData as _getMapTokensData } from '../data-loader.js';
 import { getConfig, getFormsChosenByTeamClawdites } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
-import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, buildFigureButtonLabel, getMaxPowerTokens } from '../game/index.js';
+import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, grantMovementBank, buildFigureButtonLabel, getMaxPowerTokens } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { countSpaces } from '../game/spatial.js';
@@ -1034,10 +1034,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
         if (sIds.includes('brush_ezra')) {
           const mid = msgIds[i];
           if (mid) {
-            game.movementBank = game.movementBank || {};
-            game.movementBank[mid] = game.movementBank[mid] || { total: 0, remaining: 0 };
-            game.movementBank[mid].total += 4;
-            game.movementBank[mid].remaining += 4;
+            grantMovementBank(game, mid, 4);
             await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** gains **4 MP** at the start of the round.`, { phase: 'ROUND', icon: 'round' });
           }
         }
@@ -1303,10 +1300,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
         if (sIds.includes('brush_ezra')) {
           const mid = msgIds[i];
           if (mid) {
-            game.movementBank = game.movementBank || {};
-            game.movementBank[mid] = game.movementBank[mid] || { total: 0, remaining: 0 };
-            game.movementBank[mid].total += 4;
-            game.movementBank[mid].remaining += 4;
+            grantMovementBank(game, mid, 4);
             await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** gains **4 MP** at the start of the round.`, { phase: 'ROUND', icon: 'round' });
           }
         }
