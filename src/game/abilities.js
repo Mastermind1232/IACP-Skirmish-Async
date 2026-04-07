@@ -376,7 +376,8 @@ export function resolveAbility(abilityId, context) {
       ].filter(Boolean));
       occupiedSet.delete(targetPos);
       const validSpaces = [];
-      for (const coord of Object.keys(mapSpaces)) {
+      const _allCoords = mapSpaces.spaces || Object.keys(mapSpaces.adjacency || {});
+      for (const coord of _allCoords) {
         if (occupiedSet.has(coord)) continue;
         if (maxDistanceFromTarget != null) {
           if (countGameSpaces(game, targetPos, coord) > maxDistanceFromTarget) continue;
@@ -6324,7 +6325,8 @@ export function resolveAbility(abilityId, context) {
       ].filter(Boolean));
       occupiedSet.delete(targetPos);
       const validSpaces = [];
-      for (const coord of Object.keys(mapSpaces)) {
+      const _allCoords = mapSpaces.spaces || Object.keys(mapSpaces.adjacency || {});
+      for (const coord of _allCoords) {
         if (occupiedSet.has(coord)) continue;
         if (countGameSpaces(game, targetPos, coord) > pushDist) continue;
         validSpaces.push(coord);
