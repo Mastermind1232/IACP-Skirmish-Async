@@ -212,10 +212,14 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     const dcList = getDcList(game, pn) || [];
     const figs = game.figurePositions?.[pn] || {};
     const figKeys = Object.keys(figs);
+    // Figure keys that are set aside via Lie in Ambush (not defeated, just not yet deployed)
+    const liaKeys = game.lieInAmbushSetAside?.[pn] || [];
     for (const dc of dcList) {
       const dcName = dc.dcName || dc;
       // Skip figureless DCs (upgrades like [Extra Armor]) — they never have figures
       if (/^\[.+\]$/.test(dcName)) continue;
+      // Skip Lie in Ambush set-aside groups — already excluded from activationsTotal
+      if (liaKeys.some(fk => fk.startsWith(dcName + '-'))) continue;
       if (!figKeys.some(fk => fk.startsWith(dcName + '-'))) {
         total = Math.max(0, total - 1);
       }

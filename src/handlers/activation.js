@@ -25,6 +25,8 @@ import {
   getPlayAreaId,
   getHandChannelId,
   getActivationsRemaining,
+  getActivationsTotal,
+  setActivationsTotal,
   getActivatedDcIndices,
   getCcHand,
   getDcAttachments,
@@ -36,6 +38,7 @@ import {
   opponentPlayerNum,
   getInitiativePlayerNum,
   removeFigurePosition,
+  syncHealthStateToList,
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -477,6 +480,14 @@ export async function handleLiaDeployZone(interaction, ctx) {
   // Clean up set-aside state
   delete game.lieInAmbushSetAside[playerNum];
   delete game.pendingLieInAmbush;
+
+  // The group is now deployable and can activate — add it back to the activation count
+  if (placed > 0) {
+    const curTotal = getActivationsTotal(game, playerNum) ?? 0;
+    setActivationsTotal(game, playerNum, curTotal + 1);
+    const curRemaining = getActivationsRemaining(game, playerNum) ?? 0;
+    setActivationsRemaining(game, playerNum, curRemaining + 1);
+  }
 
   // Remove the zone selection message
   try {
@@ -1125,7 +1136,7 @@ export async function handleCancelActivate(interaction, _ctx) {
  */
 export async function handleActPassive(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
-  const { getGame, dcMessageMeta, dcExhaustedState, saveGames, logGameAction, client, renderDcEmbed, getDcPlayAreaComponents } = ctx;
+  const { getGame, dcMessageMeta, dcExhaustedState, dcHealthState, saveGames, logGameAction, client, renderDcEmbed, getDcPlayAreaComponents } = ctx;
   // Parse: act_passive_{gameId}_{msgId}_{ability}_{choice}
   const parts = splitCustomId(interaction.customId, 'act_passive_');
   if (parts.length < 3) return;
@@ -1172,6 +1183,7 @@ export async function handleActPassive(interaction, ctx) {
       if (hs?.[fkIdx] && Array.isArray(hs[fkIdx])) {
         const [cur, max] = hs[fkIdx];
         hs[fkIdx] = [Math.min(max, (cur ?? max) + 1), max];
+        syncHealthStateToList(game, meta.playerNum, msgId, hs);
       }
       await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** recovered **1 Damage**.`, components: [] }).catch(discordCatch);
     }
