@@ -293,17 +293,23 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Military Efficiency** — **${toReturn}** shuffled from discard back into your Command deck.`, refreshDiscard: true };
   }
 
-  // dcSpecial: pushTargetWithinRange (Force Throw, Wrist Cord) — pick a SMALL enemy, then pick landing space, then push.
-  // Phase 1 (no targetFigureKey): enumerate valid SMALL enemies → requiresChoice.
+  // dcSpecial: pushTargetWithinRange (Force Throw, Wrist Cord, Mandalorian Whip) — pick a target, then pick landing space, then push.
+  // Phase 1 (no targetFigureKey): enumerate valid targets → requiresChoice.
   // Phase 2 (targetFigureKey set, no chosenSpace): enumerate valid landing spaces → requiresSpaceChoice.
   // Phase 3 (targetFigureKey + chosenSpace set): apply position update.
   if (entry.type === 'dcSpecial' && entry.pushTargetWithinRange && typeof entry.pushTargetWithinRange === 'object') {
-    const { range = 3, requiresSmall = false, requiresLos = false } = entry.pushTargetWithinRange;
+    const { range = 3, requiresSmall = false, requiresLos = false, hostileOnly = false } = entry.pushTargetWithinRange;
     const { mustAdjacentToActivator = false, maxDistanceFromTarget } = entry.pushLandingEffect || {};
     const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSight: losCheck, getRange: getRng, getMapData: getMs, targetFigureKey, chosenSpace } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
     const enemyNum = opponentPlayerNum(playerNum);
     const label = entry.label || 'Push';
+    // Resolve which player owns a given figure key (needed when targeting friendly or any figure)
+    const _findOwner = (fk) => {
+      if (game.figurePositions?.[1]?.[fk] != null) return 1;
+      if (game.figurePositions?.[2]?.[fk] != null) return 2;
+      return enemyNum; // fallback
+    };
 
     // Phase 3: apply push to chosen space
     if (targetFigureKey && chosenSpace) {
@@ -319,10 +325,11 @@ export function resolveAbility(abilityId, context) {
           return { applied: false, manualMessage: `**Spiked Boots** — **${_pushTargetDcName}** cannot be pushed except by MASSIVE figures.` };
         }
       }
+      const targetOwner = _findOwner(targetFigureKey);
       game.figurePositions = game.figurePositions || {};
-      game.figurePositions[enemyNum] = game.figurePositions[enemyNum] || {};
-      const prevPos = game.figurePositions[enemyNum][targetFigureKey];
-      game.figurePositions[enemyNum][targetFigureKey] = chosenSpace;
+      game.figurePositions[targetOwner] = game.figurePositions[targetOwner] || {};
+      const prevPos = game.figurePositions[targetOwner][targetFigureKey];
+      game.figurePositions[targetOwner][targetFigureKey] = chosenSpace;
       // Deduct MP cost if applicable
       if (entry.mpCostToActivate && game.movementBank?.[msgId]) {
         game.movementBank[msgId].remaining = Math.max(0, game.movementBank[msgId].remaining - entry.mpCostToActivate);
@@ -337,7 +344,7 @@ export function resolveAbility(abilityId, context) {
         game.forcedAttackTarget[msgId] = targetFigureKey;
       }
       // Compute path and adjacency-exit warnings for the push
-      const { pathStr: _pushPathStr, warnings: _pushWarnings } = computePushPathAndWarnings(game, prevPos, chosenSpace, enemyNum);
+      const { pathStr: _pushPathStr, warnings: _pushWarnings } = computePushPathAndWarnings(game, prevPos, chosenSpace, targetOwner);
       let _pushLogMsg = `**${label}** — **${dcDisplay}** pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} to ${String(chosenSpace).toUpperCase()}${_pushPathStr}.${entry.postPushFreeAttack ? ' Now attack that figure (free action).' : ''}`;
       if (_pushWarnings.length > 0) {
         const _warnList = _pushWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
@@ -354,7 +361,8 @@ export function resolveAbility(abilityId, context) {
 
     // Phase 2: target chosen — enumerate valid landing spaces
     if (targetFigureKey && !chosenSpace) {
-      const targetPos = game.figurePositions?.[enemyNum]?.[targetFigureKey];
+      const targetOwnerP2 = _findOwner(targetFigureKey);
+      const targetPos = game.figurePositions?.[targetOwnerP2]?.[targetFigureKey];
       if (!targetPos) return { applied: false, manualMessage: `**${label}** — target figure has no position.` };
       const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
       const attackerKey = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
@@ -382,13 +390,23 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, requiresSpaceChoice: true, validSpaces, targetFigureKey, spaceChoiceLabel: `**${label}** — Pick a landing space for **${dcNameFromFigureKey(targetFigureKey)}**:` };
     }
 
-    // Phase 1: enumerate valid SMALL hostile targets within range
+    // Phase 1: enumerate valid SMALL targets within range (hostile only if hostileOnly flag set)
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const attackerKey = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const attackerPos = attackerKey ? game.figurePositions?.[playerNum]?.[attackerKey] : null;
     const mapSpaces = getMs ? getMs(game.selectedMap?.id) : null;
     const validTargets = [];
-    for (const [fk, coord] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+    // Build candidate pool: hostile only, or both sides
+    const _candidateEntries = [];
+    _candidateEntries.push(...Object.entries(game.figurePositions?.[enemyNum] || {}));
+    if (!hostileOnly) {
+      // Include friendly figures, but exclude the activating figure itself
+      for (const [fk, coord] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+        if (fk === attackerKey) continue;
+        _candidateEntries.push([fk, coord]);
+      }
+    }
+    for (const [fk, coord] of _candidateEntries) {
       if (!coord) continue;
       // SMALL check: figures with LARGE or MASSIVE keywords are not small
       const targetDcName = dcNameFromFigureKey(fk);
