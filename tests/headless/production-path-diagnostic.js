@@ -10,11 +10,13 @@
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { pickBestAction, getRuntimeStats, resetRuntimeStats } from '../../src/ai/strategy.js';
-import { getDcStats, getMapData, getDeploymentZones } from '../../src/data-loader.js';
+import { getDcStats, getMapData, getDeploymentZones, getDcEffects } from '../../src/data-loader.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { computeMovementCache, getBoardStateForMovement, getMovementProfile } from '../../src/game/movement.js';
 import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
 import { abstractActionType } from './learnings.js';
+import { getRange } from '../../src/game/spatial.js';
+import { getMapTokensData } from '../../src/data-loader.js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -72,6 +74,8 @@ async function runOneGame(gameNum) {
 
   // Telemetry
   const actionLog = { planner: 0, dqn: 0, attacks: 0, moves: 0, endActs: 0, cc: 0, ccPlayed: 0, ccFiltered: 0, surges: 0, interacts: 0, interactsOffered: 0, reactive: 0 };
+  // Activation divergence tracking
+  const actDiv = { total: 0, diverged: 0, chosenCloserToObj: 0, chosenCloserToEnemy: 0, chosenCloserToBoth: 0, gatedByCombat: 0 };
   let consecutiveEmpty = 0;
   let lastActionType = null;
   let sameTypeCount = 0;
@@ -262,6 +266,80 @@ async function runOneGame(gameNum) {
     if (absType === 'interact') actionLog.interacts++;
     if (absType === 'react_use' || absType === 'react_skip') actionLog.reactive++;
 
+    // Activation divergence: compare enemy-only vs obj-aware ordering
+    if (chosen.type === 'activate_dc' && actions.filter(a => a.type === 'activate_dc').length > 1) {
+      const activateActions = actions.filter(a => a.type === 'activate_dc');
+      const oppNum = pn === 1 ? 2 : 1;
+      const oppFigs = Object.values(g.figurePositions?.[oppNum] || {}).filter(Boolean);
+      // Get objective coords
+      let objCoords = [];
+      try {
+        const mapId = g.selectedMap?.id;
+        const mapData = mapId ? getMapTokensData()?.[mapId] : null;
+        if (mapData) {
+          const variant = g.selectedMission?.variant;
+          const ms = variant === 'a' ? 'missionA' : variant === 'b' ? 'missionB' : null;
+          if (ms && mapData[ms]?.positions) {
+            for (const posArr of Object.values(mapData[ms].positions)) {
+              for (const c of posArr) objCoords.push(String(c).toLowerCase());
+            }
+          }
+          for (const area of mapData.namedAreas || []) {
+            for (const c of area.cells || []) objCoords.push(String(c).toLowerCase());
+          }
+        }
+      } catch {}
+      if (oppFigs.length > 0 && objCoords.length > 0) {
+        let dcEffects;
+        try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
+        // Score each DC with enemy dist, obj dist, and combat-ready flag
+        const scored = activateActions.map(a => {
+          const dcName = a.params?.dcName;
+          const myFigs = Object.entries(g.figurePositions?.[pn] || {})
+            .filter(([fk]) => fk.startsWith(dcName + '-'));
+          let atkRange = 1;
+          if (dcEffects && dcName) {
+            const lower = dcName.toLowerCase();
+            const ciKey = Object.keys(dcEffects).find(k => k.toLowerCase() === lower);
+            const eff = dcEffects[dcName] || (ciKey ? dcEffects[ciKey] : null);
+            atkRange = eff?.attack?.range || 1;
+          }
+          let minEnemy = 99, minObj = 99, combatReady = false;
+          for (const [, myPos] of myFigs) {
+            for (const ePos of oppFigs) {
+              const d = getRange(String(myPos).toLowerCase(), String(ePos).toLowerCase());
+              if (d < minEnemy) minEnemy = d;
+              if (d <= atkRange) combatReady = true;
+            }
+            for (const oc of objCoords) {
+              const d = getRange(String(myPos).toLowerCase(), oc);
+              if (d < minObj) minObj = d;
+            }
+          }
+          return { dcName, minEnemy, minObj, minCombined: Math.min(minEnemy, minObj), combatReady };
+        });
+        // What would pure obj-aware ordering pick?
+        const objAwareBest = [...scored].sort((a, b) => a.minCombined - b.minCombined)[0].dcName;
+        // What does the actual gated heuristic pick?
+        const ready = scored.filter(s => s.combatReady);
+        const actualBest = ready.length > 0
+          ? [...ready].sort((a, b) => a.minEnemy - b.minEnemy)[0].dcName
+          : objAwareBest;
+        actDiv.total++;
+        if (ready.length > 0 && actualBest !== objAwareBest) {
+          actDiv.gatedByCombat++;
+        }
+        const enemyOnlyBest = [...scored].sort((a, b) => a.minEnemy - b.minEnemy)[0].dcName;
+        if (enemyOnlyBest !== objAwareBest) {
+          actDiv.diverged++;
+          const winner = scored.find(s => s.dcName === objAwareBest);
+          if (winner.minObj < winner.minEnemy) actDiv.chosenCloserToObj++;
+          else if (winner.minEnemy < winner.minObj) actDiv.chosenCloserToEnemy++;
+          else actDiv.chosenCloserToBoth++;
+        }
+      }
+    }
+
     // Verbose logging for first 30 actions of first game
     if (gameNum === 0 && iter < 30) {
       const absT = abstractActionType(chosen, g);
@@ -355,6 +433,7 @@ async function runOneGame(gameNum) {
     p1VP: g.player1VP,
     p2VP: g.player2VP,
     actionLog,
+    actDiv: { ...actDiv },
     runtimeStats: stats,
     p1Army: p1Army.map(a => a.dcName).join(', '),
     p2Army: p2Army.map(a => a.dcName).join(', '),
@@ -429,6 +508,22 @@ async function main() {
   const totalInteractsOffered = results.reduce((s, r) => s + r.actionLog.interactsOffered, 0);
   console.log(`  Interacts:           ${totalInteracts} chosen / ${totalInteractsOffered} offered (${(totalInteracts / NUM_GAMES).toFixed(1)}/game)`);
   console.log(`  Reactive:            ${totalReactive} (${(totalReactive / NUM_GAMES).toFixed(1)}/game)`);
+
+  // Activation divergence summary
+  const totalActDiv = results.reduce((s, r) => s + r.actDiv.total, 0);
+  const totalDiverged = results.reduce((s, r) => s + r.actDiv.diverged, 0);
+  const totalCloserObj = results.reduce((s, r) => s + r.actDiv.chosenCloserToObj, 0);
+  const totalCloserEnemy = results.reduce((s, r) => s + r.actDiv.chosenCloserToEnemy, 0);
+  const totalCloserBoth = results.reduce((s, r) => s + r.actDiv.chosenCloserToBoth, 0);
+  const totalGated = results.reduce((s, r) => s + r.actDiv.gatedByCombat, 0);
+  console.log('');
+  console.log('  ── Activation Ordering Divergence ──');
+  console.log(`  Activate decisions:  ${totalActDiv}`);
+  console.log(`  Diverged (obj≠enemy):${totalDiverged} (${totalActDiv > 0 ? ((totalDiverged / totalActDiv) * 100).toFixed(1) : 0}%)`);
+  console.log(`  Gated by combat:     ${totalGated} (${totalActDiv > 0 ? ((totalGated / totalActDiv) * 100).toFixed(1) : 0}%)`);
+  console.log(`  Chose closer-to-obj: ${totalCloserObj}`);
+  console.log(`  Chose closer-to-enemy:${totalCloserEnemy}`);
+  console.log(`  Chose closer-to-both:${totalCloserBoth}`);
 
   // Runtime stats from last game
   const lastStats = results[results.length - 1]?.runtimeStats;

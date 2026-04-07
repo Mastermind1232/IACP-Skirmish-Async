@@ -2419,11 +2419,16 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     return { action: best.action, wgFeatures: best.features, wgType: group };
   }
 
-  // Activation order — domain-rule: activate the DC closest to enemies OR objectives.
-  // Same min(distEnemy, distObj) blending proven in movement scoring.
-  // Activating a nearby DC means it can attack or interact immediately without
-  // wasting movement actions. Gated on _greedyMode to preserve training exploration.
+  // Activation order — combat-ready DCs first, then objective-aware fallback.
+  // Phase 1: if any DC has an enemy within its actual attack range, activate
+  //   that DC first (combat-ready gating). Ties broken by nearest enemy distance.
+  // Phase 2: if NO DC is combat-ready, use min(distEnemy, distObj) ordering.
+  // This prevents "objective gravity well" on maps like corellian where
+  // objective proximity pulls DCs away from immediate combat opportunities.
+  // Gated on _greedyMode to preserve training exploration diversity.
   if (_greedyMode && absType === 'activate') {
+    let dcEffects;
+    try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
     const playerNum = actions[0].actingPlayer;
     const oppNum = playerNum === 1 ? 2 : 1;
     const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
@@ -2431,23 +2436,33 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     if (oppFigs.length > 0 || objCoords.length > 0) {
       const scored = actions.map(a => {
         const dcName = a.params?.dcName;
-        if (!dcName) return { action: a, minDist: 99 };
+        if (!dcName) return { action: a, minEnemy: 99, minCombined: 99, combatReady: false };
+        const atkRange = dcEffects ? getAttackRange(dcEffects, dcName) : 1;
         const myFigs = Object.entries(game.figurePositions?.[playerNum] || {})
           .filter(([fk]) => fk.startsWith(dcName + '-'));
-        let minDist = 99;
+        let minEnemy = 99, minObj = 99;
+        let combatReady = false;
         for (const [, myPos] of myFigs) {
           for (const oppPos of oppFigs) {
             const d = coordDistance(myPos, oppPos);
-            if (d < minDist) minDist = d;
+            if (d < minEnemy) minEnemy = d;
+            if (d <= atkRange) combatReady = true;
           }
           for (const oc of objCoords) {
             const d = coordDistance(myPos, oc);
-            if (d < minDist) minDist = d;
+            if (d < minObj) minObj = d;
           }
         }
-        return { action: a, minDist };
+        return { action: a, minEnemy, minCombined: Math.min(minEnemy, minObj), combatReady };
       });
-      scored.sort((a, b) => a.minDist - b.minDist);
+      // Phase 1: combat-ready DCs first (sorted by nearest enemy)
+      const ready = scored.filter(s => s.combatReady);
+      if (ready.length > 0) {
+        ready.sort((a, b) => a.minEnemy - b.minEnemy);
+        return { action: ready[0].action, wgFeatures: null, wgType: 'activate' };
+      }
+      // Phase 2: no DC in attack range — use objective-aware distance
+      scored.sort((a, b) => a.minCombined - b.minCombined);
       return { action: scored[0].action, wgFeatures: null, wgType: 'activate' };
     }
   }
