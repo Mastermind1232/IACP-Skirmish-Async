@@ -173,7 +173,7 @@ describe('ORACLE-TEMPT-004: Tempt HP floors at 0', () => {
 
 // ── ORACLE-TEMPT-005: Tempt defeats figure at 1 HP (canonical path) ─────────
 describe('ORACLE-TEMPT-005: Tempt defeats figure and removes from board', () => {
-  it('005a: figure at 1 HP is defeated and removed from figurePositions', () => {
+  it('005a: figure at 1 HP is defeated — defeatedFigures returned for processFigureDefeat', () => {
     const { game, dcMessageMeta, dcHealthState, palpatineMsgId, targetMsgId, activatingPlayerNum, targetPlayerNum } = buildTemptGame();
 
     dcHealthState.set(targetMsgId, [[1, 12]]);
@@ -188,13 +188,18 @@ describe('ORACLE-TEMPT-005: Tempt defeats figure and removes from board', () => 
     });
 
     assert.equal(result.applied, true);
-    assert.ok(result.logMessage.includes('DEFEATED'), 'Log should mention defeat');
-    assert.equal(
-      game.figurePositions[targetPlayerNum]['Luke Skywalker-1-0'],
-      undefined,
-      'Defeated figure must be removed from figurePositions'
-    );
     assert.equal(result.refreshBoard, true, 'Board should refresh after defeat');
+    // Defeat is now routed through processFigureDefeat — result signals defeat via defeatedFigures
+    assert.ok(result.defeatedFigures, 'Result should include defeatedFigures array');
+    assert.equal(result.defeatedFigures.length, 1);
+    assert.equal(result.defeatedFigures[0].figureKey, 'Luke Skywalker-1-0');
+    assert.equal(result.defeatedFigures[0].defeatedPlayerNum, targetPlayerNum);
+    assert.equal(result.defeatedFigures[0].attackerPlayerNum, activatingPlayerNum);
+    // Figure is NOT yet removed — that's processFigureDefeat's job
+    assert.ok(
+      game.figurePositions[targetPlayerNum]['Luke Skywalker-1-0'],
+      'Figure should still be in figurePositions (processFigureDefeat handles removal)'
+    );
   });
 
   it('005b: defeated figure does not receive Damage token', () => {

@@ -1,16 +1,16 @@
 /**
- * Movement A/B eval: runs N headless games comparing greedy vs learned movement.
+ * Headless A/B eval for Skirbo strategy experiments.
  *
- * Uses pickSmartAction (like train.js) for reliable headless games, but intercepts
- * move_pick_space decisions to apply either:
- *   - greedy: strategy.js-style "walk toward nearest enemy" heuristic
- *   - learned: WG move scorer from training (the default pickSmartAction path)
+ * Uses pickSmartAction (like train.js) for reliable headless games, with
+ * optional overrides to isolate specific decision points:
  *
- * This isolates the movement decision while keeping everything else identical.
+ *   --greedy    : override move_pick_space with "walk toward nearest enemy"
+ *   --learned   : use WG move scorer from training (default pickSmartAction)
+ *   --attack-pref : when attack is available but DQN chose movement, override to attack
  *
  * Usage:
- *   node tests/headless/eval-movement-ab.js 50 --greedy
  *   node tests/headless/eval-movement-ab.js 50 --learned
+ *   node tests/headless/eval-movement-ab.js 50 --learned --attack-pref
  */
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
@@ -26,14 +26,16 @@ import { readFileSync } from 'fs';
 import {
   loadLearnings, createGameTracer, pickSmartAction, abstractActionType,
   extractFeatures, recordMatchResult, replayUpdate,
-  setGreedyMode,
+  setGreedyMode, getQValues,
 } from './learnings.js';
 import { getRange } from '../../src/game/spatial.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const LEARNINGS_PATH = join(__dirname, 'learnings-data.json');
+const LEARNINGS_PATH = process.env.LEARNINGS_PATH
+  ? join(__dirname, process.env.LEARNINGS_PATH)
+  : join(__dirname, 'learnings-data.json');
 const MAX_ITERATIONS = 10000;
 const MAX_ROUNDS = 10;
 
@@ -45,12 +47,19 @@ const args = process.argv.slice(2);
 const numGames = parseInt(args.find(a => !a.startsWith('-')) || '50', 10);
 const useGreedy = args.includes('--greedy');
 const useLearned = args.includes('--learned');
-const armLabel = useGreedy ? 'greedy' : 'learned';
+const useAttackPref = args.includes('--attack-pref');
+const armLabel = [
+  useGreedy ? 'greedy' : 'learned',
+  useAttackPref ? '+atkpref' : '',
+].filter(Boolean).join('');
 
 if (!useGreedy && !useLearned) {
-  console.error('Usage: node eval-movement-ab.js <numGames> --greedy|--learned');
+  console.error('Usage: node eval-movement-ab.js <numGames> --greedy|--learned [--attack-pref]');
   process.exit(1);
 }
+
+// Movement types that the attack-pref heuristic will override
+const MOVE_ACTION_TYPES = new Set(['move_figure', 'move_pick_space']);
 
 function pickMatchup(gameNum) {
   const i = gameNum % TEST_DECKS.length;
@@ -117,6 +126,14 @@ function greedyMoveOverride(game, moveSpaces, moveDone, actingPN) {
 
 let greedyOverrideCount = 0;
 let learnedMoveCount = 0;
+
+// Attack-preference instrumentation (global across all games)
+let atkAvailable = 0;         // decisions where attack_target was in the pool
+let atkChosen = 0;            // DQN naturally chose attack
+let atkAvailNotChosen = 0;    // attack available but DQN chose something else
+let atkPrefOverrides = 0;     // --attack-pref actually fired (overrode movement→attack)
+let qGapSum = 0;              // cumulative Q(start_move) - Q(attack_close)
+let qGapCount = 0;            // number of Q-gap samples
 
 async function runOneGame(learnings, gameNum) {
   const { p1Deck, p2Deck } = pickMatchup(gameNum);
@@ -382,6 +399,44 @@ async function runOneGame(learnings, gameNum) {
       if (action?.type === 'move_pick_space') learnedMoveCount++;
     }
 
+    // === ATTACK PREFERENCE INSTRUMENTATION + OVERRIDE ===
+    // Only instrument at the key decision point: when BOTH attack and move_figure
+    // (start a new move) are available — this is the "attack or move?" decision.
+    const attackPool = playerActions.filter(a => a.type === 'attack_target' && a.params?.targetFigureKey);
+    const hasMoveStart = playerActions.some(a => a.type === 'move_figure');
+    if (attackPool.length > 0 && hasMoveStart && action) {
+      atkAvailable++;
+      if (action.type === 'attack_target') {
+        atkChosen++;
+      } else {
+        atkAvailNotChosen++;
+        // Override: when DQN chose to START a move but attack was available, force attack.
+        // Gate: only fire when activeDcHasTargetsInRange=1 (feature 42), meaning
+        // the active figure genuinely has enemies it can hit RIGHT NOW.
+        // If targets aren't in range, moving to close distance is correct.
+        let targetsInRange = false;
+        try {
+          const feats = extractFeatures(g, actingPN, dcHealthState, dcMessageMeta);
+          targetsInRange = feats[42] > 0.5;
+        } catch {}
+        if (useAttackPref && action.type === 'move_figure' && targetsInRange && Math.random() < 0.5) {
+          const atkPick = pickSmartAction(attackPool, g, learnings, actingPN, dcHealthState, dcMessageMeta);
+          if (atkPick) {
+            action = atkPick;
+            atkPrefOverrides++;
+          }
+        }
+      }
+      // Q-gap sample
+      try {
+        const features = extractFeatures(g, actingPN, dcHealthState, dcMessageMeta);
+        const Q = getQValues(learnings, features);
+        // attack_close=0, start_move=6
+        qGapSum += Q[6] - Q[0];
+        qGapCount++;
+      } catch { /* feature extraction can fail in edge states */ }
+    }
+
     if (!action) continue;
 
     // Track metrics
@@ -411,9 +466,11 @@ async function runOneGame(learnings, gameNum) {
           if (action.actingPlayer === 1) g.p1LaunchPanelFlippedThisRound = true;
           else g.p2LaunchPanelFlippedThisRound = true;
         } else if (optionId?.startsWith('open_door_')) {
-          const ek = optionId.replace('open_door_', '');
+          const edgeKeys = optionId.replace('open_door_', '').split(',');
           g.openedDoors = g.openedDoors || [];
-          if (!g.openedDoors.includes(ek)) g.openedDoors.push(ek);
+          for (const ek of edgeKeys) {
+            if (!g.openedDoors.includes(ek)) g.openedDoors.push(ek);
+          }
         }
       }
       tracer.afterAction(harness.getGame(), action);
@@ -505,9 +562,10 @@ async function main() {
   const moveWeights = learnings?.withinGroupWeights?.move;
   const maxMag = moveWeights ? Math.max(...moveWeights.map(Math.abs)).toFixed(3) : 'none';
 
-  console.log(`\n=== Movement A/B Eval: ${armLabel} ===`);
+  console.log(`\n=== A/B Eval: ${armLabel} ===`);
   console.log(`  Games: ${numGames}`);
   console.log(`  WG move max|w|: ${maxMag}`);
+  console.log(`  Attack preference: ${useAttackPref ? 'ON' : 'OFF'}`);
   console.log(`  Prior games in checkpoint: ${learnings.meta?.totalGames || 0}`);
 
   let completed = 0, p1Wins = 0, p2Wins = 0;
@@ -543,6 +601,10 @@ async function main() {
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
+  const atkAvailRate = atkAvailable > 0 ? ((atkAvailNotChosen / atkAvailable) * 100).toFixed(1) : 'n/a';
+  const avgQGap = qGapCount > 0 ? (qGapSum / qGapCount).toFixed(3) : 'n/a';
+  const noProgressCount = stopReasons['no_progress'] || 0;
+
   console.log(`\n=== RESULTS: ${armLabel} (${numGames} games, ${elapsed}s) ===`);
   console.log(`  Completed: ${completed}/${numGames}`);
   console.log(`  Wins P1/P2: ${p1Wins}/${p2Wins}`);
@@ -555,6 +617,13 @@ async function main() {
   console.log(`  Avg iterations/game: ${(totalIterations / numGames).toFixed(0)}`);
   console.log(`  Stop reasons: ${Object.entries(stopReasons).map(([r,c]) => `${r}:${c}`).join(' ')}`);
   console.log(`  Movement overrides: greedy=${greedyOverrideCount} learned=${learnedMoveCount}`);
+  console.log(`  --- Attack preference diagnostics ---`);
+  console.log(`  Attack available: ${atkAvailable} decisions`);
+  console.log(`  Attack chosen (organic): ${atkChosen}`);
+  console.log(`  Attack avail but not chosen: ${atkAvailNotChosen} (${atkAvailRate}%)`);
+  console.log(`  Attack-pref overrides: ${atkPrefOverrides}`);
+  console.log(`  Avg Q-gap (move-attack): ${avgQGap}`);
+  console.log(`  No-progress games: ${noProgressCount}/${numGames}`);
 }
 
 main().catch(err => {

@@ -2204,8 +2204,35 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
   const hasWithinAct = absTypes.some(t => _WITHIN_ACT_TYPES.has(t));
   if (!hasWithinAct) return null;
 
-  // Priority 1: Attack weakest target (focus-fire)
-  for (const at of ['attack_close', 'attack_ranged']) {
+  // ── Carrier priority override ──────────────────────────────────────────────
+  // Figures carrying contraband on delivery missions must prioritize movement
+  // toward the opponent deployment zone over attacking. Without this, carriers
+  // sit at pickup spots attacking nearby enemies and never deliver.
+  let isCarrier = false;
+  if (game.figureContraband) {
+    const anyAction = Object.values(groups).flat()[0];
+    const msgId = anyAction?.params?.msgId;
+    if (msgId && dcMessageMeta) {
+      const meta = dcMessageMeta.get(msgId);
+      if (meta) {
+        const figureIndex = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+        const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const dgIndex = dgMatch ? dgMatch[1] : '1';
+        const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+        isCarrier = !!game.figureContraband[figureKey];
+        if (!oracleActivationPlan._debugged) {
+          const contKeys = Object.keys(game.figureContraband).filter(k => game.figureContraband[k]);
+          if (contKeys.length > 0) {
+            console.log(`[CARRIER-DEBUG] figureKey=${figureKey}, contraband=${JSON.stringify(contKeys)}, match=${isCarrier}`);
+            oracleActivationPlan._debugged = true;
+          }
+        }
+      }
+    }
+  }
+
+  // Priority 1: Attack weakest target (focus-fire) — skip if carrying contraband
+  if (!isCarrier) for (const at of ['attack_close', 'attack_ranged']) {
     const actions = groups[at];
     if (!actions || actions.length === 0) continue;
     const oppNum = actions[0].actingPlayer === 1 ? 2 : 1;
@@ -2249,6 +2276,60 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
   if (spaceActions.length > 0) {
     const playerNum = spaceActions[0].actingPlayer;
     const oppNum = playerNum === 1 ? 2 : 1;
+
+    // ── Carrier delivery routing ───────────────────────────────────────────
+    // Carriers route toward the opponent's deployment zone for end-of-round VP.
+    if (isCarrier) {
+      try {
+        const mapId = game.selectedMap?.id;
+        const zones = getDeploymentZones()?.[mapId];
+        if (zones) {
+          const initPn = game.initiativePlayerId === game.player1Id ? 1 : 2;
+          const chosenColor = game.deploymentZoneChosen || 'red';
+          const oppColor = playerNum === initPn
+            ? (chosenColor === 'red' ? 'blue' : 'red')
+            : chosenColor;
+          const oppZoneCells = (zones[oppColor] || []).map(c => String(c).toLowerCase());
+          if (oppZoneCells.length > 0) {
+            const _mip = game.moveInProgress ? Object.values(game.moveInProgress)[0] : null;
+            const curPos = _mip?.startCoord || _mip?.currentCoord;
+            let currentDist = Infinity;
+            if (curPos) {
+              const cp = String(curPos).toLowerCase();
+              for (const z of oppZoneCells) {
+                const d = coordDistance(cp, z);
+                if (d < currentDist) currentDist = d;
+              }
+            }
+            let bestDist = Infinity;
+            const bestSpaces = [];
+            for (const a of spaceActions) {
+              const coord = String(a.params.coord).toLowerCase();
+              let minDist = Infinity;
+              for (const z of oppZoneCells) {
+                const d = coordDistance(coord, z);
+                if (d < minDist) minDist = d;
+              }
+              if (minDist < bestDist) {
+                bestDist = minDist;
+                bestSpaces.length = 0;
+                bestSpaces.push(a);
+              } else if (minDist === bestDist) {
+                bestSpaces.push(a);
+              }
+            }
+            if (bestDist < currentDist) {
+              return bestSpaces[Math.floor(Math.random() * bestSpaces.length)];
+            }
+            // No improvement — stop moving
+            const doneActs = allMoveActions.filter(a => a.params?.done);
+            if (doneActs.length > 0) return doneActs[0];
+            if (groups['move_done']?.length > 0) return groups['move_done'][0];
+          }
+        }
+      } catch { /* data not available — fall through to normal routing */ }
+    }
+
     const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
     const objCoords = getObjectiveCoords(game);
     // Positional-VP missions (Powered Perimeter): route toward strained markers

@@ -324,9 +324,11 @@ async function diagnoseOneGame(learnings, gameNum) {
           if (action.actingPlayer === 1) g.p1LaunchPanelFlippedThisRound = true;
           else g.p2LaunchPanelFlippedThisRound = true;
         } else if (optionId?.startsWith('open_door_')) {
+          const edgeKeys = optionId.replace('open_door_', '').split(',');
           g.openedDoors = g.openedDoors || [];
-          const ek = optionId.replace('open_door_', '');
-          if (!g.openedDoors.includes(ek)) g.openedDoors.push(ek);
+          for (const ek of edgeKeys) {
+            if (!g.openedDoors.includes(ek)) g.openedDoors.push(ek);
+          }
         }
       }
       tracer.afterAction(harness.getGame(), action);

@@ -158,6 +158,39 @@ async function runOneGame(gameNum) {
         console.log(`  [CARRY] G${gameNum} R${lastRound}→R${curRound}: no carriers`);
       }
       carryTelemetry.push({ round: lastRound, carriers: carriers.length });
+      // Per-round VP trace for first 2 games
+      if (gameNum <= 1) {
+        const p1v = g.player1VP?.total || 0;
+        const p2v = g.player2VP?.total || 0;
+        const p1o = g.player1VP?.objectives || 0;
+        const p2o = g.player2VP?.objectives || 0;
+        const p1k = g.player1VP?.kills || 0;
+        const p2k = g.player2VP?.kills || 0;
+        // Count figures in each zone for zone-control missions
+        const zones = getDeploymentZones()?.[g.selectedMap?.id];
+        let zoneStr = '';
+        if (zones) {
+          for (const color of ['red', 'blue']) {
+            const cells = new Set((zones[color] || []).map(s => String(s).toLowerCase()));
+            let p1c = 0, p2c = 0;
+            for (const [, pos] of Object.entries(g.figurePositions?.[1] || {})) { if (pos && cells.has(String(pos).toLowerCase())) p1c++; }
+            for (const [, pos] of Object.entries(g.figurePositions?.[2] || {})) { if (pos && cells.has(String(pos).toLowerCase())) p2c++; }
+            zoneStr += ` ${color}:${p1c}v${p2c}`;
+          }
+        }
+        // Command Center figure count
+        const mapTokens = getMapTokensData()?.[g.selectedMap?.id];
+        const ccArea = mapTokens?.namedAreas?.find(a => a.name === 'Command Center');
+        let ccStr = '';
+        if (ccArea?.cells?.length) {
+          const ccCells = new Set(ccArea.cells.map(c => String(c).toLowerCase()));
+          let p1cc = 0, p2cc = 0;
+          for (const [, pos] of Object.entries(g.figurePositions?.[1] || {})) { if (pos && ccCells.has(String(pos).toLowerCase())) p1cc++; }
+          for (const [, pos] of Object.entries(g.figurePositions?.[2] || {})) { if (pos && ccCells.has(String(pos).toLowerCase())) p2cc++; }
+          ccStr = ` CC:${p1cc}v${p2cc}`;
+        }
+        console.log(`  [VP] G${gameNum} R${lastRound}→R${curRound}: P1=${p1v}(obj:${p1o},k:${p1k}) P2=${p2v}(obj:${p2o},k:${p2k})${zoneStr}${ccStr}`);
+      }
       lastRound = curRound;
     }
 
@@ -600,9 +633,11 @@ async function runOneGame(gameNum) {
           if (chosen.actingPlayer === 1) g.p1LaunchPanelFlippedThisRound = true;
           else g.p2LaunchPanelFlippedThisRound = true;
         } else if (optionId?.startsWith('open_door_')) {
-          const ek = optionId.replace('open_door_', '');
+          const edgeKeys = optionId.replace('open_door_', '').split(',');
           g.openedDoors = g.openedDoors || [];
-          if (!g.openedDoors.includes(ek)) g.openedDoors.push(ek);
+          for (const ek of edgeKeys) {
+            if (!g.openedDoors.includes(ek)) g.openedDoors.push(ek);
+          }
         }
       }
       continue;

@@ -140,6 +140,87 @@ describe('cleanupRoundStart', () => {
   });
 });
 
+describe('stale-state cleanup: pendingMissileSalvo', () => {
+  it('is cleaned at end of activation', () => {
+    const game = {
+      pendingMissileSalvo: {
+        'dc-msg-1': { playerNum: 1, diceAvailable: ['blue'], targetsFired: [] },
+        'dc-msg-2': { playerNum: 2, diceAvailable: ['red'], targetsFired: [] },
+      },
+    };
+    cleanupActivation(game, 'dc-msg-1', 1, []);
+    assert.strictEqual(game.pendingMissileSalvo['dc-msg-1'], undefined,
+      'pendingMissileSalvo for activated DC is cleaned');
+    assert.ok(game.pendingMissileSalvo['dc-msg-2'],
+      'pendingMissileSalvo for other DC is preserved');
+  });
+});
+
+describe('stale-state cleanup: pendingPounceSpaceChoice', () => {
+  it('is cleaned at end of activation', () => {
+    const game = {
+      pendingPounceSpaceChoice: {
+        'dc-msg-1': { playerNum: 1, validSpaces: ['a3', 'b3'] },
+        'dc-msg-2': { playerNum: 2, validSpaces: ['c1'] },
+      },
+    };
+    cleanupActivation(game, 'dc-msg-1', 1, []);
+    assert.strictEqual(game.pendingPounceSpaceChoice['dc-msg-1'], undefined,
+      'pendingPounceSpaceChoice for activated DC is cleaned');
+    assert.ok(game.pendingPounceSpaceChoice['dc-msg-2'],
+      'pendingPounceSpaceChoice for other DC is preserved');
+  });
+});
+
+describe('stale-state cleanup: moveInProgress compound keys', () => {
+  it('cleans compound keys matching msgId at end of activation', () => {
+    const game = {
+      moveInProgress: {
+        'dc-msg-1_0': { figureKey: 'Trooper-1-0', mpRemaining: 3 },
+        'dc-msg-1_1': { figureKey: 'Trooper-1-1', mpRemaining: 2 },
+        'dc-msg-2_0': { figureKey: 'Rebel-1-0', mpRemaining: 4 },
+      },
+    };
+    cleanupActivation(game, 'dc-msg-1', 1, ['Trooper-1-0', 'Trooper-1-1']);
+    assert.strictEqual(game.moveInProgress['dc-msg-1_0'], undefined,
+      'moveInProgress for figure 0 of activated DC is cleaned');
+    assert.strictEqual(game.moveInProgress['dc-msg-1_1'], undefined,
+      'moveInProgress for figure 1 of activated DC is cleaned');
+    assert.ok(game.moveInProgress['dc-msg-2_0'],
+      'moveInProgress for other DC is preserved');
+  });
+
+  it('is reset to {} at round start', () => {
+    const game = {
+      moveInProgress: { 'dc-msg-1_0': { figureKey: 'Trooper-1-0' } },
+    };
+    cleanupRoundStart(game);
+    assert.deepStrictEqual(game.moveInProgress, {},
+      'moveInProgress reset to {} at round start');
+  });
+});
+
+describe('stale-state cleanup: forceSlowSkipActivation', () => {
+  it('is reset to {} at round start', () => {
+    const game = {
+      forceSlowSkipActivation: { 'Rebel Trooper-1-0': true },
+    };
+    cleanupRoundStart(game);
+    assert.deepStrictEqual(game.forceSlowSkipActivation, {},
+      'forceSlowSkipActivation reset to {} at round start');
+  });
+
+  it('persists during activation cleanup of a different DC', () => {
+    const game = {
+      forceSlowSkipActivation: { 'Rebel Trooper-1-0': true },
+    };
+    // Cleaning a Stormtrooper activation should not touch forceSlowSkipActivation
+    cleanupActivation(game, 'st-msg', 1, ['Stormtrooper-1-0']);
+    assert.ok(game.forceSlowSkipActivation['Rebel Trooper-1-0'],
+      'forceSlowSkipActivation persists within round (intentional — figure must activate to clear)');
+  });
+});
+
 describe('flag list completeness', () => {
   it('no duplicate flags across activation lists', () => {
     const all = [...ACTIVATION_MSGID_FLAGS, ...ACTIVATION_FIGKEY_FLAGS, ...ACTIVATION_PLAYERNUM_FLAGS, ...ACTIVATION_SCALAR_FLAGS];
