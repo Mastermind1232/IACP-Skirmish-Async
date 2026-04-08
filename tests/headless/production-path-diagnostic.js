@@ -99,15 +99,20 @@ async function runOneGame(gameNum) {
     const p2figs = Object.keys(g.figurePositions?.[2] || {}).length;
     const p1vp = g.player1VP?.total || 0;
     const p2vp = g.player2VP?.total || 0;
-    const activeDc = g.currentActivatingDcIndex ?? -1;
     const round = g.currentRound || 1;
     const phase = g.roundPhase || '?';
     const pending = g.pendingCombat ? 'C' : g.moveInProgress ? 'M' : g.phaseGate ? 'G' : '';
+    // Activation progression: remaining activations + actions within current activation
+    const p1rem = g.p1ActivationsRemaining ?? 0;
+    const p2rem = g.p2ActivationsRemaining ?? 0;
+    const actIdx = (g.p1ActivatedDcIndices?.length ?? 0) + (g.p2ActivatedDcIndices?.length ?? 0);
+    let actionsRem = 0;
+    for (const v of Object.values(g.dcActionsData || {})) actionsRem += (v?.remaining ?? 0);
     // Include figure positions so movement changes the fingerprint
     const posHash = [1, 2].map(pn =>
       Object.entries(g.figurePositions?.[pn] || {}).sort().map(([k, v]) => `${k}@${v}`).join(',')
     ).join('|');
-    return `${round}:${phase}:${p1vp}:${p2vp}:${p1figs}:${p2figs}:${p1hp}:${activeDc}:${pending}:${posHash}`;
+    return `${round}:${phase}:${p1vp}:${p2vp}:${p1figs}:${p2figs}:${p1hp}:${p1rem}+${p2rem}:${actIdx}:${actionsRem}:${pending}:${posHash}`;
   }
 
   resetRuntimeStats();
@@ -133,6 +138,12 @@ async function runOneGame(gameNum) {
     } else {
       noProgressCount = 0;
       lastFingerprint = fp;
+    }
+
+    // Auto-resolve pending interactive states BEFORE action generation
+    if (g.pendingMissionSorReveal) {
+      try { await harness.submitAction(`sor_mission_reveal_${g.gameId}`, g.player1Id); } catch {}
+      continue;
     }
 
     // Get actions for both players (mirror train.js logic — tag with actingPlayer)
@@ -435,11 +446,19 @@ async function runOneGame(gameNum) {
             else actData.remaining = 0;
           }
         }
-        await playCommandCardHeadless(g, chosen.actingPlayer, chosen.params.cardName, hDeps);
-        actionLog.ccPlayed++;
-        // Track combat CC plays
-        const ccTiming = (getCcEffect(chosen.params.cardName)?.timing || '').toLowerCase();
-        if (COMBAT_CC_TIMINGS.has(ccTiming)) actionLog.combatCcPlayed++;
+        const ccResult = await playCommandCardHeadless(g, chosen.actingPlayer, chosen.params.cardName, hDeps);
+        if (ccResult?.played === false) {
+          // Card stayed in hand (cost>0 resolve failed) — count as failure for retry guard
+          const ccKey = `P${chosen.actingPlayer}:${chosen.params.cardName}:R${g.currentRound || 1}`;
+          const count = (ccFailureCounts.get(ccKey) || 0) + 1;
+          ccFailureCounts.set(ccKey, count);
+          if (gameNum === 0 && iter < 30) console.log(`    CC SKIP: "${chosen.params.cardName}" attempt=${count} reason=${ccResult.reason || 'resolve-failed'}`);
+        } else {
+          actionLog.ccPlayed++;
+          // Track combat CC plays
+          const ccTiming = (getCcEffect(chosen.params.cardName)?.timing || '').toLowerCase();
+          if (COMBAT_CC_TIMINGS.has(ccTiming)) actionLog.combatCcPlayed++;
+        }
       } catch (err) {
         const ccKey = `P${chosen.actingPlayer}:${chosen.params.cardName}:R${g.currentRound || 1}`;
         const count = (ccFailureCounts.get(ccKey) || 0) + 1;
@@ -453,7 +472,7 @@ async function runOneGame(gameNum) {
     try {
       await harness.submitAction(chosen.customId, userId);
     } catch (err) {
-      if (gameNum === 0 && iter < 30) console.log(`    ERROR: ${err.message}`);
+      if ((gameNum === 0 && iter < 30) || (gameNum <= 2 && noProgressCount > 0 && noProgressCount <= 10)) console.log(`    ERROR: type=${chosen.type} err=${err.message}`);
       if (chosen.type === 'move_pick_space' && chosen.params?.coord) {
         failedMoves.add(`${chosen.params.moveKey}_${chosen.params.coord}`);
       }

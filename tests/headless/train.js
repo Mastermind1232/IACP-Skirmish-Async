@@ -211,7 +211,6 @@ async function runOneGame(learnings, gameNum) {
   let stopReason = 'normal'; // track how the game ended
 
   function boardFingerprint(g) {
-    // Lightweight hash: round, VP, phase, figure count, total HP, active DC
     const p1hp = dcHealthState ? [...dcHealthState.values()].reduce((s, arr) => {
       for (const fig of arr) if (fig) s += fig[0]; return s;
     }, 0) : 0;
@@ -219,11 +218,20 @@ async function runOneGame(learnings, gameNum) {
     const p2figs = Object.keys(g.figurePositions?.[2] || {}).length;
     const p1vp = g.player1VP?.total || 0;
     const p2vp = g.player2VP?.total || 0;
-    const activeDc = g.currentActivatingDcIndex ?? -1;
     const round = g.currentRound || 1;
     const phase = g.roundPhase || '?';
     const pending = g.pendingCombat ? 'C' : g.moveInProgress ? 'M' : g.phaseGate ? 'G' : '';
-    return `${round}:${phase}:${p1vp}:${p2vp}:${p1figs}:${p2figs}:${p1hp}:${activeDc}:${pending}`;
+    // Activation progression: remaining activations + actions within current activation
+    const p1rem = g.p1ActivationsRemaining ?? 0;
+    const p2rem = g.p2ActivationsRemaining ?? 0;
+    const actIdx = (g.p1ActivatedDcIndices?.length ?? 0) + (g.p2ActivatedDcIndices?.length ?? 0);
+    let actionsRem = 0;
+    for (const v of Object.values(g.dcActionsData || {})) actionsRem += (v?.remaining ?? 0);
+    // Include figure positions so movement changes the fingerprint
+    const posHash = [1, 2].map(pn =>
+      Object.entries(g.figurePositions?.[pn] || {}).sort().map(([k, v]) => `${k}@${v}`).join(',')
+    ).join('|');
+    return `${round}:${phase}:${p1vp}:${p2vp}:${p1figs}:${p2figs}:${p1hp}:${p1rem}+${p2rem}:${actIdx}:${actionsRem}:${pending}:${posHash}`;
   }
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -260,6 +268,11 @@ async function runOneGame(learnings, gameNum) {
         try { await harness.submitAction(gateId, g.player2Id); } catch {}
       }
       continue; // Re-enter loop to process new state
+    }
+    // Auto-resolve mission SOR token reveal (Chopper Base B "Powered Perimeter")
+    if (g.pendingMissionSorReveal) {
+      try { await harness.submitAction(`sor_mission_reveal_${g.gameId}`, g.player1Id); } catch {}
+      continue;
     }
     // Auto-skip Krykna push queue (Chopper Base A end-of-round interactive phase)
     if (g.pendingKryknaPushQueue?.length > 0) {
@@ -540,7 +553,13 @@ async function runOneGame(learnings, gameNum) {
             else actData.remaining = 0; // doubleActionSpecial consumes all actions
           }
         }
-        await playCommandCardHeadless(g, action.actingPlayer, action.params.cardName, hDeps);
+        const ccResult = await playCommandCardHeadless(g, action.actingPlayer, action.params.cardName, hDeps);
+        if (ccResult?.played === false) {
+          // Card stayed in hand (cost>0 resolve failed) — count as failure for retry guard
+          const ccKey = `P${action.actingPlayer}:${action.params.cardName}:R${g.currentRound || 1}:${g.roundPhase || '?'}:${g.currentActivatingDcIndex ?? 'x'}`;
+          const count = (ccFailureCounts.get(ccKey) || 0) + 1;
+          ccFailureCounts.set(ccKey, count);
+        }
       } catch (err) {
         const ccKey = `P${action.actingPlayer}:${action.params.cardName}:R${g.currentRound || 1}:${g.roundPhase || '?'}:${g.currentActivatingDcIndex ?? 'x'}`;
         const count = (ccFailureCounts.get(ccKey) || 0) + 1;
