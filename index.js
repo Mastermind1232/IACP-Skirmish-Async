@@ -477,6 +477,7 @@ import {
   getPlayableCcEndOfActivationForDc,
 } from './src/game/cc-timing.js';
 import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation, runNpcKryknaActivation, getCurrentFluctuationPositions } from './src/game/mission-rules.js';
+import { processFigureDefeat as _processFigureDefeat } from './src/engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getSquad, getCcHand, getCcDeck, getCcDiscard, getCcAttachments, getDcAttachments,
@@ -3046,6 +3047,27 @@ async function refreshGameVisuals(game) {
 /** Guard set: game IDs currently being cleaned up, prevents channelDelete re-entrancy. */
 const channelDeleteGuard = new Set();
 
+/** Pre-wired processFigureDefeat for handler contexts (CC play, DC abilities, etc.). */
+async function processFigureDefeat(game, opts) {
+  return _processFigureDefeat(game, opts, {
+    removeFigurePosition,
+    calculateKillVp,
+    awardKillVp,
+    dcNameFromFigureKey,
+    logGameAction,
+    client,
+    decrementActivationIfGroupDefeated,
+    ccAttachmentsKey,
+    updateAttachmentMessageForDc,
+    checkFriendlyDefeatedPassiveRedraws,
+    checkNefariousGains,
+    checkHuntDissent,
+    checkWinConditions,
+    findDcMessageIdForFigure,
+    dcMessageMeta,
+  });
+}
+
 function buildAllDeps() {
   return {
     // Core state
@@ -3143,6 +3165,9 @@ function buildAllDeps() {
     renderDcEmbed, buildDcDisplayState,
     filterCondition, isConditionImmune,
     applyCondition: _applyCondition, HARMFUL_CONDITIONS,
+
+    // Defeat pipeline
+    processFigureDefeat,
 
     // Game lifecycle
     postGameOver,

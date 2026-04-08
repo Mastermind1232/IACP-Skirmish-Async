@@ -80,7 +80,10 @@ function _addDeploymentZoneCentroids(game, mapId, variant, coords) {
   try {
     const missionCards = getMissionCardsData();
     const rules = missionCards?.[mapId]?.[variant]?.rules?.endOfRound;
-    if (!rules?.vpPerControlledDeploymentZone && !rules?.vpPerContrabandInOpponentDeploymentZone) return;
+    // Zone-control missions: centroids pull figures toward zones they already
+    // control or can't reach (past CC doors). Only CC cells matter.
+    if (rules?.vpPerControlledDeploymentZone) return;
+    if (!rules?.vpPerContrabandInOpponentDeploymentZone) return;
     const zones = getDeploymentZones()?.[mapId];
     if (!zones) return;
     for (const color of ['red', 'blue']) {
@@ -423,6 +426,7 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   // missions in favor of objective positioning.
   let _inEndgame = false;
   let _inCloseout = false;
+  let _isZoneControl = false;
   {
     const game = engine.getState();
     const p1vp = game.player1VP?.total || 0;
@@ -431,12 +435,61 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     _inEndgame = maxVP >= VP_ENDGAME_THRESHOLD;
     _inCloseout = maxVP >= VP_CLOSEOUT_THRESHOLD;
 
-    if (_inEndgame) {
+    // Zone-control missions: activate objective routing once VP >= 6 (after R2)
+    // AND only when own zone has enough figures to maintain majority with a buffer.
+    // This prevents the entire army from abandoning the zone.
+    try {
+      const mapId = game.selectedMap?.id;
+      const variant = game.selectedMission?.variant;
+      const mCards = getMissionCardsData();
+      const eorRules = mCards?.[mapId]?.[variant]?.rules?.endOfRound;
+      if (eorRules?.vpPerControlledDeploymentZone && maxVP >= 6) {
+        const zones = getDeploymentZones()?.[mapId];
+        if (zones) {
+          const initPn = game.initiativePlayerId === game.player1Id ? 1 : 2;
+          const chosenColor = game.deploymentZoneChosen || 'red';
+          const ownColor = playerNum === initPn ? chosenColor : (chosenColor === 'red' ? 'blue' : 'red');
+          const ownZoneCells = new Set((zones[ownColor] || []).map(c => String(c).toLowerCase()));
+          // Count figures in own zone
+          let myInZone = 0, oppInZone = 0;
+          const oppPn = playerNum === 1 ? 2 : 1;
+          for (const pos of Object.values(game.figurePositions?.[playerNum] || {})) {
+            if (pos && ownZoneCells.has(String(pos).toLowerCase())) myInZone++;
+          }
+          for (const pos of Object.values(game.figurePositions?.[oppPn] || {})) {
+            if (pos && ownZoneCells.has(String(pos).toLowerCase())) oppInZone++;
+          }
+          // Route toward CC if we can spare figures while keeping zone majority
+          _isZoneControl = myInZone > oppInZone + 1;
+        }
+      }
+    } catch {}
+
+    if (_inEndgame || _isZoneControl) {
       // Endgame activation ordering: when choosing which DC to activate,
       // prefer the one closest to any objective/scoring position.
+      // For zone-control missions, filters out own-zone cells (same logic as movement).
       const activateActions = viable.filter(a => a.type === 'activate_dc');
       if (activateActions.length > 1) {
-        const objCoords = getObjectiveCoords(game);
+        let objCoords = getObjectiveCoords(game);
+        try {
+          const mapId = game.selectedMap?.id;
+          const variant = game.selectedMission?.variant;
+          const mCards = getMissionCardsData();
+          const eorRules = mCards?.[mapId]?.[variant]?.rules?.endOfRound;
+          if (eorRules?.vpPerControlledDeploymentZone) {
+            // Add door approach cells for activation ordering too
+            const objSet = new Set(objCoords);
+            const mapTokens = getMapTokensData()?.[mapId];
+            const doors = mapTokens?.doors || [];
+            for (const [c1, c2] of doors) {
+              const lc1 = String(c1).toLowerCase();
+              const lc2 = String(c2).toLowerCase();
+              if (objSet.has(lc1) && !objSet.has(lc2)) objCoords.push(lc2);
+              else if (objSet.has(lc2) && !objSet.has(lc1)) objCoords.push(lc1);
+            }
+          }
+        } catch { /* data not available */ }
         if (objCoords.length > 0) {
           let bestActivate = null;
           let bestDist = Infinity;
@@ -493,6 +546,18 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     }
   }
 
+  // Zone-control door heuristic: force opening doors adjacent to the named area
+  // (CC) so figures can enter. Without this, figures reach the door cell but the
+  // DQN doesn't reliably choose interact to open the door.
+  if (_isZoneControl) {
+    const doorInteract = viable.find(a =>
+      a.type === 'interact' && a.params?.optionId?.startsWith('open_door_')
+    );
+    if (doorInteract) {
+      return { action: doorInteract, score: 0 };
+    }
+  }
+
   // Move-toward-enemies-or-objectives heuristic: pick the space that minimizes
   // distance to the nearest enemy OR nearest objective, whichever is closer.
   // Ported from validated diagnostic planner (min(distEnemy, distObj) blending).
@@ -509,8 +574,8 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     // toward the opponent's deployment zone, regardless of WG scorer state.
     // This must run before the useGreedy gate since the WG scorer has no carry signal.
     const game = engine.getState();
-    const actingPn = moveSpaces[0].actingPlayer || moveSpaces[0]._playerNum;
     const moveEntry = Object.values(game.moveInProgress || {})[0];
+    const actingPn = moveEntry?.playerNum || moveSpaces[0].actingPlayer || moveSpaces[0]._playerNum || playerNum;
     const movingFigKey = moveEntry?.figureKey;
     let carryOverride = false;
     if (movingFigKey && game.figureContraband?.[movingFigKey]) {
@@ -579,50 +644,97 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     // Skip for strain-based missions (Powered Perimeter) — existing strain-aware
     // routing inside the greedy block handles those more precisely.
     const _hasStrainMission = !!game.signalMarkerStrain;
-    if (_inEndgame && !carryOverride && !_hasStrainMission) {
-      const objPositions = getObjectiveCoords(game);
+    if ((_inEndgame || _isZoneControl) && !carryOverride && !_hasStrainMission) {
+      let objPositions = getObjectiveCoords(game);
+      let _ccHoldCells = null; // CC cells only (excludes door approach cells)
+      try {
+        const mapId = game.selectedMap?.id;
+        const variant = game.selectedMission?.variant;
+        const mCards = getMissionCardsData();
+        const eorRules = mCards?.[mapId]?.[variant]?.rules?.endOfRound;
+        if (eorRules?.vpPerControlledDeploymentZone) {
+          // Snapshot CC cells before adding door approach cells
+          _ccHoldCells = new Set(objPositions);
+          // Add door approach cells: the outside cell of each door adjacent
+          // to a named area (CC). Figures must reach these cells to open the
+          // door, since CC is walled off. Without these targets, Manhattan
+          // distance routing gets stuck at the wall.
+          const mapTokens = getMapTokensData()?.[mapId];
+          const doors = mapTokens?.doors || [];
+          for (const [c1, c2] of doors) {
+            const lc1 = String(c1).toLowerCase();
+            const lc2 = String(c2).toLowerCase();
+            if (_ccHoldCells.has(lc1) && !_ccHoldCells.has(lc2)) objPositions.push(lc2);
+            else if (_ccHoldCells.has(lc2) && !_ccHoldCells.has(lc1)) objPositions.push(lc1);
+          }
+        }
+      } catch { /* data not available */ }
       if (objPositions.length > 0) {
-        // Already ON an objective — stop to hold position
+        // Already ON a scoring cell (CC cell) — stop to hold position
         if (moveDone.length > 0 && moveEntry?.startCoord) {
           const _cp = String(moveEntry.startCoord).toLowerCase();
-          const _atObj = objPositions.some(c => getRange(_cp, String(c).toLowerCase()) === 0);
+          const _atObj = _ccHoldCells
+            ? _ccHoldCells.has(_cp)
+            : objPositions.some(c => getRange(_cp, String(c).toLowerCase()) === 0);
           if (_atObj) {
             _moveGreedyUsed++;
             _endgameObjOnlyMoves++;
             return { action: moveDone[0], score: 0 };
           }
         }
-        // Route toward nearest objective
+        // Two-pass routing for zone-control missions:
+        // Pass 1: try to get closer to CC cells (enters through open doors)
+        // Pass 2: try to get closer to approach cells (reach door to open it)
+        // Non-zone-control: single pass against all objectives
+        const _distTargets = _ccHoldCells ? [..._ccHoldCells] : objPositions;
+        const _approachTargets = _ccHoldCells
+          ? objPositions.filter(c => !_ccHoldCells.has(c))
+          : [];
         const curPos = moveEntry?.startCoord;
-        let currentDist = Infinity;
-        if (curPos) {
-          const cp = String(curPos).toLowerCase();
-          for (const oPos of objPositions) {
-            const d = getRange(cp, oPos);
-            if (d < currentDist) currentDist = d;
+        const _tryRoute = (targets) => {
+          let currentDist = Infinity;
+          if (curPos) {
+            const cp = String(curPos).toLowerCase();
+            for (const oPos of targets) {
+              const d = getRange(cp, oPos);
+              if (d < currentDist) currentDist = d;
+            }
           }
-        }
-        const bestSpaces = [];
-        let bestDist = Infinity;
-        for (const a of moveSpaces) {
-          const coord = String(a.params.coord).toLowerCase();
-          let minDist = Infinity;
-          for (const oPos of objPositions) {
-            const d = getRange(coord, oPos);
-            if (d < minDist) minDist = d;
+          const bestSpaces = [];
+          let bestDist = Infinity;
+          for (const a of moveSpaces) {
+            const coord = String(a.params.coord).toLowerCase();
+            let minDist = Infinity;
+            for (const oPos of targets) {
+              const d = getRange(coord, oPos);
+              if (d < minDist) minDist = d;
+            }
+            if (minDist < bestDist) {
+              bestDist = minDist;
+              bestSpaces.length = 0;
+              bestSpaces.push(a);
+            } else if (minDist === bestDist) {
+              bestSpaces.push(a);
+            }
           }
-          if (minDist < bestDist) {
-            bestDist = minDist;
-            bestSpaces.length = 0;
-            bestSpaces.push(a);
-          } else if (minDist === bestDist) {
-            bestSpaces.push(a);
-          }
-        }
-        if (bestDist < currentDist) {
+          if (bestDist < currentDist && bestSpaces.length > 0) return bestSpaces;
+          return null;
+        };
+        // Pass 1: route toward CC cells (or all objectives for non-zone-control)
+        const pass1 = _tryRoute(_distTargets);
+        if (pass1) {
           _moveGreedyUsed++;
           _endgameObjOnlyMoves++;
-          return { action: bestSpaces[Math.floor(Math.random() * bestSpaces.length)], score: 0 };
+          return { action: pass1[Math.floor(Math.random() * pass1.length)], score: 0 };
+        }
+        // Pass 2 (zone-control only): route toward door approach cells
+        if (_approachTargets.length > 0) {
+          const pass2 = _tryRoute(_approachTargets);
+          if (pass2) {
+            _moveGreedyUsed++;
+            _endgameObjOnlyMoves++;
+            return { action: pass2[Math.floor(Math.random() * pass2.length)], score: 0 };
+          }
         }
         // No closer space — stop
         if (moveDone.length > 0) {

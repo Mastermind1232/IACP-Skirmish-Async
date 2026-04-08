@@ -443,10 +443,37 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       if (!entry || typeof entry.damage !== 'number') continue;
       const msgId = entry.msgId;
       if (!msgId || !dcMessageMeta.get(msgId)) continue;
-      reduceHp(dcHealthState, game, msgId, 0, entry.damage, playerNum);
+      const { wasDefeated: _eorDied } = reduceHp(dcHealthState, game, msgId, 0, entry.damage, playerNum);
       const meta = dcMessageMeta.get(msgId);
       const displayName = meta?.displayName || meta?.dcName || 'Figure';
       await logGameAction(game, client, `**End of round:** ${displayName} suffered ${entry.damage} Damage (e.g. Blaze of Glory).`, { phase: 'ROUND', icon: 'round' });
+      if (_eorDied) {
+        const _eorDcName = meta?.dcName || 'Figure';
+        const _eorDgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const _eorDgIdx = _eorDgMatch ? _eorDgMatch[1] : '0';
+        const _eorFigKey = `${_eorDcName.replace(/\s*\[.*\]\s*$/, '').trim()}-${_eorDgIdx}-0`;
+        const _eorDcIds = getDcMessageIds(game, playerNum) || [];
+        const _eorIdx = _eorDcIds.indexOf(msgId);
+        await processFigureDefeat(game, {
+          defeatedPlayerNum: playerNum,
+          figureKey: _eorFigKey,
+          attackerPlayerNum: playerNum,
+          msgId,
+          dcIdx: _eorIdx,
+          dcName: _eorDcName,
+          displayName,
+          source: 'Blaze of Glory',
+          awardVp: false,
+        }, {
+          removeFigurePosition,
+          calculateKillVp: () => 0,
+          awardKillVp,
+          dcNameFromFigureKey,
+          logGameAction,
+          client,
+          checkWinConditions,
+        });
+      }
     }
     game.endOfRoundSelfDamage = {};
   }
@@ -1096,6 +1123,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           awardObjectiveVp(game, 1, 4);
           awardObjectiveVp(game, 2, 4);
           await logGameAction(game, client, `⚔️ **First Strike** — Both players receive **4 VPs**.`);
+          await checkWinConditions(game, client);
         }
 
         // [Extra Armor]: Now handled by post-deploy queue (post-deploy.js)

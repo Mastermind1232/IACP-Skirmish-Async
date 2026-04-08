@@ -55,6 +55,7 @@ export async function processFigureDefeat(game, opts, deps) {
     displayName: displayNameOpt = null,
     source = '',
     awardVp = true,
+    skipWinConditions = false,
   } = opts;
 
   const {
@@ -285,8 +286,8 @@ export async function processFigureDefeat(game, opts, deps) {
     }
   }
 
-  // 9. Check win conditions
-  if (checkWinConditions) {
+  // 9. Check win conditions (skipped when caller handles timing, e.g. combat post-defeat VP mods)
+  if (checkWinConditions && !skipWinConditions) {
     await checkWinConditions(game, client);
   }
 

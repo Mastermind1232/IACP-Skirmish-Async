@@ -178,6 +178,18 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // --- Process figure defeats routed through processFigureDefeat pipeline ---
+  if (result.applied && result.defeatedFigures?.length && ctx.processFigureDefeat) {
+    for (const df of result.defeatedFigures) {
+      await ctx.processFigureDefeat(game, {
+        defeatedPlayerNum: df.defeatedPlayerNum,
+        figureKey: df.figureKey,
+        attackerPlayerNum: df.attackerPlayerNum,
+        source: df.source || '',
+      });
+    }
+  }
+
   // --- Post condition card images to game log ---
   if (result.applied && result.conditionCardsToPost?.length && getConditionCardPath && logGameAction) {
     const seen = new Set();

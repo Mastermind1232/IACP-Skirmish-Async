@@ -121,6 +121,7 @@ import {
 } from '../engine/win-conditions.js';
 
 import { checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
+import { processFigureDefeat as _realProcessFigureDefeat } from '../engine/defeat-handler.js';
 import { isWithinN } from '../engine/utils.js';
 import { lookupFigureDcIndex as _lookupFigureDcIndex } from '../engine/game-readers.js';
 import { findFigureheadFigure as _findFigureheadFigureRaw } from '../engine/misc-helpers.js';
@@ -388,6 +389,27 @@ export function buildHeadlessDeps(options = {}) {
     });
   };
 
+  // processFigureDefeat: wired with headless deps (Discord I/O no-oped)
+  const processFigureDefeat = async (game, opts) => {
+    return _realProcessFigureDefeat(game, opts, {
+      removeFigurePosition,
+      calculateKillVp,
+      awardKillVp,
+      dcNameFromFigureKey,
+      logGameAction,
+      client,
+      decrementActivationIfGroupDefeated,
+      ccAttachmentsKey,
+      updateAttachmentMessageForDc,
+      checkFriendlyDefeatedPassiveRedraws,
+      checkNefariousGains,
+      checkHuntDissent,
+      checkWinConditions,
+      findDcMessageIdForFigure: _findDcMessageIdForFigure,
+      dcMessageMeta,
+    });
+  };
+
   // applyDamageAndFinishCombat: real implementation with full deps
   const applyDamageAndFinishCombat = async (game, combat, params, clientArg) => {
     const combatDeps = _buildCombatDeps();
@@ -564,6 +586,7 @@ export function buildHeadlessDeps(options = {}) {
     getDcActionButtons, getActivateDcButtons,
 
     // Game operations (real implementations wired with headless deps)
+    processFigureDefeat,
     checkWinConditions, resolveCombatAfterRolls, applyDamageAndFinishCombat,
     finishCombatResolution, checkPostCombatSurges,
     applyDirectDamageToFigure, applyNpcDamageToFigure,

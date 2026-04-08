@@ -24,10 +24,12 @@ import {
   ccHandKey, ccDiscardKey, ccAttachmentsKey, dcAttachmentsKey, vpKey as vpKeyFn,
   opponentPlayerNum,
   getInitiativePlayerNum,
+  pushFigure,
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { finalizeActivation } from '../engine/activation-setup.js';
+import { cleanupActivation } from '../game/activation-state.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -310,6 +312,20 @@ export async function handleDcUnactivate(interaction, ctx) {
       }
     } catch {}
     delete game.dcActivationLogMessageIds[msgId];
+  }
+  // Clean all activation-scoped flags (scalars, msgId-keyed, figKey-keyed, playerNum-keyed).
+  // The manual deletes above handle Discord-specific cleanup (thread, log message);
+  // cleanupActivation handles the full game-state safety net.
+  {
+    const getDcEffects = ctx.getDcEffects;
+    const _uaEff = getDcEffects?.()?.[meta.dcName];
+    const _uaFigCount = _uaEff?.figures || 1;
+    const _uaDgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '0';
+    const _uaFigureKeys = [];
+    for (let fi = 0; fi < _uaFigCount; fi++) {
+      _uaFigureKeys.push(`${meta.dcName}-${_uaDgIdx}-${fi}`);
+    }
+    cleanupActivation(game, msgId, meta.playerNum, _uaFigureKeys);
   }
   const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted: false });
   await interaction.message.edit({
@@ -2939,6 +2955,8 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   game.figurePositions = game.figurePositions || {};
   game.figurePositions[controlledPlayerNum] = game.figurePositions[controlledPlayerNum] || {};
   game.figurePositions[controlledPlayerNum][controlledFigureKey] = chosenSpace;
+  game.figureMoved = game.figureMoved || {};
+  game.figureMoved[controlledFigureKey] = true;
   delete game.pendingFalseOrders;
   if (logGameAction) await logGameAction(game, client, `🎯 **False Orders** — P${controllerPlayerNum} moved **${controlledName}** to **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'move' }).catch(discordCatch);
   const doneRow = new ActionRowBuilder().addComponents(
@@ -3056,6 +3074,8 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
   game.figurePositions = game.figurePositions || {};
   game.figurePositions[pending.playerNum] = game.figurePositions[pending.playerNum] || {};
   game.figurePositions[pending.playerNum][figureKey] = chosenSpace;
+  game.figureMoved = game.figureMoved || {};
+  game.figureMoved[figureKey] = true;
 
   // Clear the movement bank since all ordered MP are spent
   if (targetMsgId && game.movementBank?.[targetMsgId]) {
@@ -3117,7 +3137,7 @@ export async function handleRushPushFig(interaction, ctx) {
   const [, gameId, msgId, choiceIdxStr] = m;
   const choiceIndex = parseInt(choiceIdxStr, 10);
   const { getGame, dcMessageMeta, dcHealthState, getMapData, logGameAction, buildBoardMapPayload,
-    updateDcActionsMessage, getMapAttachmentForSpaces, saveGames, client } = ctx;
+    updateDcActionsMessage, getMapAttachmentForSpaces, saveGames, client, processFigureDefeat } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingRushPush;
@@ -3152,10 +3172,16 @@ export async function handleRushPushFig(interaction, ctx) {
     const targetName = dcNameFromFigureKey(targetFk);
     const t = _applyHpDamage(game, dcHealthState, dcMessageMeta, targetFk, 1);
     const a = _applyHpDamage(game, dcHealthState, dcMessageMeta, pending.activatorFigureKey, 1);
-    const tNote = t.wasDefeated ? ' **(may be defeated)**' : '';
-    const aNote = a.wasDefeated ? ' **(may be defeated)**' : '';
+    const tNote = t.wasDefeated ? ' **(defeated)**' : '';
+    const aNote = a.wasDefeated ? ' **(defeated)**' : '';
     const logMsg = `**Rush** — Both suffer 1 Damage: **${targetName}**${tNote}, **Onar**${aNote}. No push (no open space).`;
     if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+    if (t.wasDefeated && processFigureDefeat) {
+      await processFigureDefeat(game, { defeatedPlayerNum: oppNum, figureKey: targetFk, attackerPlayerNum: pending.playerNum, source: 'Rush' });
+    }
+    if (a.wasDefeated && processFigureDefeat) {
+      await processFigureDefeat(game, { defeatedPlayerNum: pending.playerNum, figureKey: pending.activatorFigureKey, attackerPlayerNum: oppNum, source: 'Rush' });
+    }
     await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
     delete game.pendingRushPush;
     await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
@@ -3196,7 +3222,7 @@ export async function handleRushPushSpace(interaction, ctx) {
   const [, gameId, msgId, space] = m;
   const chosenSpace = String(space).toLowerCase();
   const { getGame, dcMessageMeta, dcHealthState, logGameAction, buildBoardMapPayload,
-    updateDcActionsMessage, saveGames, client } = ctx;
+    updateDcActionsMessage, saveGames, client, processFigureDefeat } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   cleanupSpacePick(game, `${gameId}_${msgId}`);
@@ -3208,19 +3234,23 @@ export async function handleRushPushSpace(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
   const targetFk = pending.chosenTarget;
   const oppNum = opponentPlayerNum(pending.playerNum);
-  const prevPos = game.figurePositions?.[oppNum]?.[targetFk];
+  const { prevPos } = pushFigure(game, oppNum, targetFk, chosenSpace) || { prevPos: null };
   const targetName = dcNameFromFigureKey(targetFk);
-  // Move target to chosen space
-  game.figurePositions[oppNum][targetFk] = chosenSpace;
-  const pushed = chosenSpace !== prevPos;
+  const pushed = chosenSpace !== (prevPos ? String(prevPos).toLowerCase() : null);
   // Apply 1 damage to both
   const t = _applyHpDamage(game, dcHealthState, dcMessageMeta, targetFk, 1);
   const a = _applyHpDamage(game, dcHealthState, dcMessageMeta, pending.activatorFigureKey, 1);
-  const tNote = t.wasDefeated ? ' **(may be defeated)**' : '';
-  const aNote = a.wasDefeated ? ' **(may be defeated)**' : '';
+  const tNote = t.wasDefeated ? ' **(defeated)**' : '';
+  const aNote = a.wasDefeated ? ' **(defeated)**' : '';
   const pushNote = pushed ? ` Pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} → ${chosenSpace.toUpperCase()}.` : '';
   const logMsg = `**Rush** —${pushNote} Both suffer 1 Damage: **${targetName}**${tNote}, **Onar**${aNote}.`;
   if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  if (t.wasDefeated && processFigureDefeat) {
+    await processFigureDefeat(game, { defeatedPlayerNum: oppNum, figureKey: targetFk, attackerPlayerNum: pending.playerNum, source: 'Rush' });
+  }
+  if (a.wasDefeated && processFigureDefeat) {
+    await processFigureDefeat(game, { defeatedPlayerNum: pending.playerNum, figureKey: pending.activatorFigureKey, attackerPlayerNum: oppNum, source: 'Rush' });
+  }
   // Refresh board
   if (game.boardId && game.selectedMap && buildBoardMapPayload) {
     try {
@@ -3373,13 +3403,11 @@ export async function handleShoulderRushSpace(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
   const targetFk = pending.chosenTarget;
   const oppNum = opponentPlayerNum(pending.playerNum);
-  const prevPos = game.figurePositions?.[oppNum]?.[targetFk];
+  const { prevPos } = pushFigure(game, oppNum, targetFk, chosenSpace) || { prevPos: null };
   const targetName = dcNameFromFigureKey(targetFk);
-  // Push target to chosen space
-  game.figurePositions[oppNum][targetFk] = chosenSpace;
   // Move activator into the vacated space
-  if (pending.activatorFigureKey && pending.activatorPos) {
-    game.figurePositions[pending.playerNum][pending.activatorFigureKey] = prevPos;
+  if (pending.activatorFigureKey && pending.activatorPos && prevPos) {
+    pushFigure(game, pending.playerNum, pending.activatorFigureKey, prevPos);
   }
   // Grant free attack targeting the pushed figure
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
@@ -3506,7 +3534,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   const m = interaction.customId.match(/^ob_space_([^_]+)_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, msgId, space] = m;
-  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapData, findDcMessageIdForFigure } = ctx;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapData, findDcMessageIdForFigure, processFigureDefeat } = ctx;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game?.pendingOrbitalBombardment) return;
   const pending = game.pendingOrbitalBombardment;
@@ -3540,6 +3568,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   const meta = dcMessageMeta?.get(msgId);
   const attackerPlayerNum = pending.playerNum;
   const damageLog = [];
+  const defeatedFigures = [];
   for (const sp of pending.spacesChosen) {
     // Check both players' figures
     for (const pn of [1, 2]) {
@@ -3564,7 +3593,10 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
         if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
         const dcName = dcNameFromFigureKey(fk);
         damageLog.push(`**${dcName}** (${cur ?? max} → ${newCur} HP)`);
-        if (newCur <= 0) damageLog[damageLog.length - 1] += ' *(may be defeated)*';
+        if (newCur <= 0) {
+          damageLog[damageLog.length - 1] += ' **(defeated)**';
+          defeatedFigures.push({ figureKey: fk, playerNum: pn });
+        }
       }
     }
   }
@@ -3575,6 +3607,11 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
     components: [],
   }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — Bombarded spaces: ${spacesStr}. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
+  for (const df of defeatedFigures) {
+    if (processFigureDefeat) {
+      await processFigureDefeat(game, { defeatedPlayerNum: df.playerNum, figureKey: df.figureKey, attackerPlayerNum: opponentPlayerNum(df.playerNum), source: 'Orbital Bombardment' });
+    }
+  }
   cleanupSpacePick(game, `${gameId}_${msgId}`);
   delete game.pendingOrbitalBombardment;
   saveGames();
@@ -3585,7 +3622,7 @@ export async function handleBombDropSpacePick(interaction, ctx) {
   const m = interaction.customId.match(/^bomb_drop_space_([^_]+)_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, msgId, space] = m;
-  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapData, findDcMessageIdForFigure } = ctx;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapData, findDcMessageIdForFigure, processFigureDefeat } = ctx;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game?.pendingBombDrop?.[msgId]) return;
   cleanupSpacePick(game, `${gameId}_${msgId}`);
@@ -3605,6 +3642,7 @@ export async function handleBombDropSpacePick(interaction, ctx) {
 
   // Apply 2 damage to each figure on affected spaces
   const damageLog = [];
+  const defeatedFigures = [];
   for (const pn of [1, 2]) {
     const positions = game.figurePositions?.[pn] || {};
     for (const [fk, pos] of Object.entries(positions)) {
@@ -3626,7 +3664,10 @@ export async function handleBombDropSpacePick(interaction, ctx) {
       if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
       const dcName = dcNameFromFigureKey(fk);
       damageLog.push(`**${dcName}** (${cur ?? max} → ${newCur} HP)`);
-      if (newCur <= 0) damageLog[damageLog.length - 1] += ' *(may be defeated)*';
+      if (newCur <= 0) {
+        damageLog[damageLog.length - 1] += ' **(defeated)**';
+        defeatedFigures.push({ figureKey: fk, playerNum: pn });
+      }
     }
   }
   const resultStr = damageLog.length > 0 ? `Damage: ${damageLog.join(', ')}` : 'No figures affected.';
@@ -3635,6 +3676,11 @@ export async function handleBombDropSpacePick(interaction, ctx) {
     components: [],
   }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Bomb Drop** — Detonated at **${chosenSpace.toUpperCase()}**. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
+  for (const df of defeatedFigures) {
+    if (processFigureDefeat) {
+      await processFigureDefeat(game, { defeatedPlayerNum: df.playerNum, figureKey: df.figureKey, attackerPlayerNum: opponentPlayerNum(df.playerNum), source: 'Bomb Drop' });
+    }
+  }
   delete game.pendingBombDrop[msgId];
   saveGames();
 }

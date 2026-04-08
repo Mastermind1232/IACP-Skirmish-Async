@@ -1137,6 +1137,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
   await interaction.message.edit({ content: `**Celebration** — +4 VP.`, components: [] }).catch(discordCatch);
   const celPlayerId = getPlayerId(game, attackerPlayerNum);
   await logGameAction(game, client, `<@${celPlayerId}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [celPlayerId] } });
+  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
   saveGames();
 }
 

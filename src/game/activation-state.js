@@ -244,6 +244,7 @@ const ROUND_OBJECT_FLAGS = [
   'pendingDcAbilityChoice',
   'moveInProgress',
   'forceSlowSkipActivation',
+  'executorTriggered',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -339,6 +340,38 @@ const ROUND_NULL_FLAGS = [
   'pendingMastery',
   'pendingMissionSorReveal',
   'pendingSuppressiveFireMp',
+  // Combat pipeline pendings — safety net (deleted on happy path, but no fallback if handler throws)
+  // NOTE: pendingCombat intentionally omitted — handled by recovery.js
+  'pendingCelebration',
+  'pendingCleave',
+  'pendingFightingKnife',
+  'pendingConcussiveBolt',
+  'pendingSpreadThePain',
+  'pendingSpreadThePainCondPick',
+  'pendingReaction',
+  'pendingBoltslinger',
+  'pendingIndiscriminateFire',
+  'pendingHeavyFire',
+  'pendingHavocShot',
+  'pendingDeflect',
+  'pendingWantonDestruction',
+  'pendingFigurehead',
+  'pendingRogueOneTokenPick',
+  'pendingZilloDiscard',
+  'pendingStrikeMeDown',
+  'pendingSlowOnTheDraw',
+  'pendingForceExhaustion',
+  'slowOnTheDrawInterrupt',
+  // Movement/activation pendings — safety net
+  'pendingFalseOrders',
+  'pendingOrderedMove',
+  'pendingShoulderRush',
+  'pendingDioFollow',
+  'pendingEe3Carbine',
+  'pendingRightBackAtYa',
+  'pendingBattlefieldLeadership',
+  'pendingScavengedWeaponryTransfer',
+  'pendingHeroicEffortReturn',
 ];
 
 const ROUND_ARRAY_FLAGS = [
@@ -375,6 +408,15 @@ const ROUND_DELETE_FLAGS = [
   'pendingFluctuationSwapQueue',
   'pendingFluctuationSwapFirst',
   'drivenByHatredForceChoke',
+  // Stale per-attack tracking — safety net
+  'lastAttackAttackerMsgId',
+  'lastAttackAttackerFigureIndex',
+  'lastAttackTargetFigureKey',
+  'lastDefeatInfo',
+  'lastAttackTargetSpacesForRubble',
+  'lastAttackAttackerPlayerNum',
+  // Per-round gates that must reset
+  'iKnowEverythingResolved',
 ];
 
 /**

@@ -5,10 +5,10 @@
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { splitCustomId } from '../discord/custom-id.js';
-import { reduceHp, awardKillVp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, checkNefariousGains, applyCondition } from '../game/index.js';
-import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, ccHandKey, ccDiscardKey, removeFigurePosition } from '../game/player-helpers.js';
+import { reduceHp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, applyCondition } from '../game/index.js';
+import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, ccHandKey, ccDiscardKey, pushFigure } from '../game/player-helpers.js';
 import { getDcKeywords } from '../data-loader.js';
-import { checkDeckDiscardPassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
+import { checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
@@ -21,6 +21,7 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
   const {
     client, saveGames, dcMessageMeta, dcHealthState, dcExhaustedState,
     findDcMessageIdForFigure, renderDcEmbed, getDcEffects, logGameAction,
+    checkWinConditions, processFigureDefeat,
   } = ctx;
   const totalDmg = die.dmg || 0;
   const totalStrain = die.surge || 0;
@@ -60,15 +61,14 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
     if (totalStrain > 0) parts.push(`${totalStrain} Strain`);
     lines.push(`• **${t.label}** suffers ${parts.join(' + ')}`);
     if (newHp <= 0) {
-      removeFigurePosition(game, t.playerNum, t.figureKey);
-      if (game.figureConditions?.[t.figureKey]) delete game.figureConditions[t.figureKey];
-      const splashDcEff = getDcEffects()?.[dcNameFromFigureKey(t.figureKey)];
-      const splashVP = splashDcEff?.cost ?? 1;
-      awardKillVp(game, attackerPlayerNum, splashVP);
+      const defeatResult = processFigureDefeat ? await processFigureDefeat(game, {
+        defeatedPlayerNum: t.playerNum,
+        figureKey: t.figureKey,
+        attackerPlayerNum,
+        source: 'Indiscriminate Fire',
+      }) : null;
+      const splashVP = defeatResult?.vp ?? 0;
       lines.push(`  → **${t.label} defeated!** +${splashVP} VP`);
-      // Nefarious Gains (Jabba): Indiscriminate Fire defeat
-      const _ngIF = checkNefariousGains(game, t.playerNum);
-      if (_ngIF) lines.push(`  → 💰 **Nefarious Gains** — Jabba gains 1 VP (P${_ngIF.jabbaOwnerPN} VP: ${_ngIF.vpTotal})`);
     }
     try {
       const tMeta = dcMessageMeta.get(mid);
@@ -146,6 +146,7 @@ export async function handleBleedResolve(interaction, ctx) {
     decrementActivationIfGroupDefeated, checkWinConditions, canActAsPlayer,
     filterCondition,
     updateHandVisualMessage, updateDiscardPileMessage,
+    processFigureDefeat,
   } = ctx;
   const match = interaction.customId.match(/^bleed_(accept|prevent)_(\d+)_(1|2)_(.+)$/);
   if (!match) return;
@@ -174,35 +175,26 @@ export async function handleBleedResolve(interaction, ctx) {
         const dcList = getDcList(game, playerNum);
         const idx = (dcIds || []).indexOf(msgId);
         if (wasDefeated) {
-          removeFigurePosition(game, playerNum, figureKey);
           const oppPN = opponentPlayerNum(playerNum);
-          const vp = calculateKillVp(dcName);
-          awardKillVp(game, oppPN, vp);
-          await logGameAction(game, interaction.client, `\u{1FA78} **Bleeding** — **${dcName}** was defeated! +${vp} VP to P${oppPN}`, { phase: 'ROUND', icon: 'attack' });
-          // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Bleed defeat
-          {
-            const _bleedPrResult = checkFriendlyDefeatedPassiveRedraws(game, playerNum, dcName);
-            for (const _bleedPrCard of _bleedPrResult.redrawn) {
-              await logGameAction(game, interaction.client, `**Passive Redraw** — **${_bleedPrCard}** re-drawn from discard (friendly **${dcName}** defeated by Bleeding).`, { phase: 'ROUND', icon: 'card' });
-            }
-            if (_bleedPrResult.redrawn.length > 0) {
-              if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, interaction.client).catch(discordCatch);
-              if (updateDiscardPileMessage) await updateDiscardPileMessage(game, playerNum, interaction.client).catch(discordCatch);
-            }
+          // Route through centralized defeat handler (VP, CC attachments, passive redraws,
+          // Heroic Effort, Scavenged Weaponry, Hunt Dissent, activation decrement, win conditions)
+          if (processFigureDefeat) {
+            await processFigureDefeat(game, {
+              defeatedPlayerNum: playerNum,
+              figureKey,
+              attackerPlayerNum: oppPN,
+              msgId,
+              dcIdx: idx,
+              dcName,
+              source: 'Bleeding',
+            });
           }
-          // Nefarious Gains (Jabba): Bleeding defeat
-          const _ngBleed = checkNefariousGains(game, playerNum);
-          if (_ngBleed) await logGameAction(game, interaction.client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngBleed.jabbaOwnerPN} VP: ${_ngBleed.vpTotal}`, { phase: 'ROUND', icon: 'card' });
-          if (idx >= 0) {
-            await decrementActivationIfGroupDefeated(game, playerNum, idx, interaction.client);
-          }
-          // Clean up dcActionsData if entire group is defeated (prevents dead-end)
+          // Bespoke cleanup: clear game sub-states tied to this DC when group fully defeated
           const _bleedHs = dcHealthState.get(msgId);
           if (_bleedHs && _bleedHs.every(fig => fig && fig[0] <= 0)) {
             if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
             if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
           }
-          // Clean up pending sub-states referencing this DC/figure (prevents orphaned states)
           if (game.pendingDcAbilityChoice) {
             for (const k of Object.keys(game.pendingDcAbilityChoice)) {
               if (k.startsWith(`${msgId}_`)) delete game.pendingDcAbilityChoice[k];
@@ -213,7 +205,6 @@ export async function handleBleedResolve(interaction, ctx) {
             delete game.pendingPounceSpaceChoice[msgId];
             if (Object.keys(game.pendingPounceSpaceChoice).length === 0) delete game.pendingPounceSpaceChoice;
           }
-          await checkWinConditions(game, interaction.client);
         }
         // Refresh DC embed
         try {
@@ -319,6 +310,7 @@ export async function handleBoltslingerTarget(interaction, ctx) {
   const {
     getGame, saveGames, client, canActAsPlayer, dcMessageMeta, dcHealthState,
     dcExhaustedState, renderDcEmbed, logGameAction, findDcMessageIdForFigure,
+    processFigureDefeat,
   } = ctx;
   const m = interaction.customId.match(/^boltslinger_target_([^_]+)_(\d+)$/);
   if (!m) return;
@@ -333,7 +325,7 @@ export async function handleBoltslingerTarget(interaction, ctx) {
   const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
   if (targetMsgId) {
     const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
-    const { newHp: bsNewHp } = reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
+    const { newHp: bsNewHp, wasDefeated: bsDied } = reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
     try {
       const tMeta = dcMessageMeta.get(targetMsgId);
       if (tMeta) {
@@ -343,6 +335,21 @@ export async function handleBoltslingerTarget(interaction, ctx) {
         await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch (e) { console.error('Failed to refresh Boltslinger target embed:', e); }
+    if (bsDied && processFigureDefeat) {
+      const _bsDcIds = getDcMessageIds(game, target.playerNum) || [];
+      const _bsIdx = _bsDcIds.indexOf(targetMsgId);
+      const _bsDcName = dcNameFromFigureKey(target.figureKey);
+      await processFigureDefeat(game, {
+        defeatedPlayerNum: target.playerNum,
+        figureKey: target.figureKey,
+        attackerPlayerNum,
+        msgId: targetMsgId,
+        dcIdx: _bsIdx,
+        dcName: _bsDcName,
+        displayName: target.label,
+        source: 'Boltslinger',
+      });
+    }
   }
   const blThread = await fetchCombatThread(client, combatThreadId);
   if (blThread) await blThread.send(`**Boltslinger** — **${target.label}** suffers 1 Damage.`);
@@ -400,8 +407,8 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   const {
     getGame, saveGames, client, canActAsPlayer, dcMessageMeta, dcHealthState,
     dcExhaustedState, renderDcEmbed, logGameAction, findDcMessageIdForFigure,
-    calculateKillVp, decrementActivationIfGroupDefeated, checkWinConditions,
     finishCombatResolution, rollSingleAttackDie,
+    processFigureDefeat,
   } = ctx;
   const m = interaction.customId.match(/^fighting_knife_target_([^_]+)_(\d+)$/);
   if (!m) return;
@@ -438,21 +445,16 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
       }
     }
     embedRefreshMsgIds.add(target.msgId);
-    if (fkDefeated) {
-      removeFigurePosition(game, target.playerNum, target.figureKey);
-      const dcName = dcNameFromFigureKey(target.figureKey);
-      const vp = calculateKillVp(dcName);
-      awardKillVp(game, pending.attackerPlayerNum, vp);
-      await logGameAction(game, client, `**Fighting Knife** — **${target.label}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
-      // Nefarious Gains (Jabba): Fighting Knife defeat
-      const _ngFK = checkNefariousGains(game, target.playerNum);
-      if (_ngFK) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngFK.jabbaOwnerPN} VP: ${_ngFK.vpTotal}`, { phase: 'ROUND', icon: 'card' });
-      const dcIds = getDcMessageIds(game, target.playerNum);
-      const idx = (dcIds || []).indexOf(target.msgId);
-      if (idx >= 0) {
-        await decrementActivationIfGroupDefeated(game, target.playerNum, idx, client);
-      }
-      await checkWinConditions(game, client);
+    if (fkDefeated && processFigureDefeat) {
+      await processFigureDefeat(game, {
+        defeatedPlayerNum: target.playerNum,
+        figureKey: target.figureKey,
+        attackerPlayerNum: pending.attackerPlayerNum,
+        msgId: target.msgId,
+        dcName: dcNameFromFigureKey(target.figureKey),
+        displayName: target.label,
+        source: 'Fighting Knife',
+      });
     }
   }
   const dieDesc = `${die.dmg}dmg${die.surge ? `/${die.surge}\u21AF` : ''}`;
@@ -496,9 +498,7 @@ export async function handleConcussiveBoltPush(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   delete game.pendingConcussiveBolt;
   // Move the figure to the chosen space
-  game.figurePositions = game.figurePositions || {};
-  game.figurePositions[pending.defenderPlayerNum] = game.figurePositions[pending.defenderPlayerNum] || {};
-  game.figurePositions[pending.defenderPlayerNum][pending.figureKey] = space;
+  pushFigure(game, pending.defenderPlayerNum, pending.figureKey, space);
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await logGameAction(game, client, `**Concussive Bolt** — **${pending.figureLabel}** pushed from ${String(pending.currentPos).toUpperCase()} to **${space.toUpperCase()}**`, { phase: 'ROUND', icon: 'attack' });
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
@@ -672,8 +672,8 @@ async function advanceHeavyFirePick(game, pending, ctx) {
 async function startHeavyFireConditions(game, pending, ctx) {
   const {
     client, saveGames, dcMessageMeta, dcHealthState, dcExhaustedState,
-    findDcMessageIdForFigure, renderDcEmbed, getDcEffects, logGameAction, calculateKillVp,
-    decrementActivationIfGroupDefeated, checkWinConditions,
+    findDcMessageIdForFigure, renderDcEmbed, getDcEffects, logGameAction,
+    processFigureDefeat,
   } = ctx;
   const thread = await fetchCombatThread(client, pending.combatThreadId);
   if (!thread) { saveGames(); return; }
@@ -694,22 +694,18 @@ async function startHeavyFireConditions(game, pending, ctx) {
     const { figureIndex: figIdx } = parseFigureKey(t.figureKey);
     const { newHp, wasDefeated } = reduceHp(dcHealthState, game, mid, figIdx, 1, t.playerNum);
     lines.push(`• **${t.label}** suffers 1 Damage`);
-    if (wasDefeated) {
-      removeFigurePosition(game, t.playerNum, t.figureKey);
-      if (game.figureConditions?.[t.figureKey]) delete game.figureConditions[t.figureKey];
-      const dcEff = getDcEffects()?.[dcNameFromFigureKey(t.figureKey)];
-      const vp = dcEff?.cost ?? 1;
-      awardKillVp(game, pending.attackerPlayerNum, vp);
-      lines.push(`  → **${t.label} defeated!** +${vp} VP`);
+    if (wasDefeated && processFigureDefeat) {
+      const defeatResult = await processFigureDefeat(game, {
+        defeatedPlayerNum: t.playerNum,
+        figureKey: t.figureKey,
+        attackerPlayerNum: pending.attackerPlayerNum,
+        msgId: mid,
+        dcName: dcNameFromFigureKey(t.figureKey),
+        displayName: t.label,
+        source: 'Heavy Fire',
+      });
+      lines.push(`  → **${t.label} defeated!** +${defeatResult?.vp ?? 0} VP`);
       defeatedTargets.push(t);
-      const _ngHF = checkNefariousGains(game, t.playerNum);
-      if (_ngHF) lines.push(`  → **Nefarious Gains** — Jabba gains 1 VP (P${_ngHF.jabbaOwnerPN} VP: ${_ngHF.vpTotal})`);
-      const dcIds = getDcMessageIds(game, t.playerNum);
-      const idx = (dcIds || []).indexOf(mid);
-      if (idx >= 0) {
-        await decrementActivationIfGroupDefeated(game, t.playerNum, idx, client);
-      }
-      await checkWinConditions(game, client);
     }
     // Refresh DC embed
     try {

@@ -20,7 +20,7 @@ const COMBAT_DEPS = [
   'calculateKillVp', 'checkHuntDissent', 'decrementActivationIfGroupDefeated',
   'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
   'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage',
-  'sendBleedingPrompt',
+  'sendBleedingPrompt', 'processFigureDefeat',
 ];
 
 const CONTEXT_GROUPS = {
@@ -40,6 +40,7 @@ const CONTEXT_GROUPS = {
     'getMapAttachmentForSpaces',
     'ensureMovementBankMessage', 'updateMovementBankMessage', 'getConditionCardPath',
     'getCommandCardImagePath', 'getDeploymentZones', 'updateDeployPromptMessages',
+    'processFigureDefeat', 'checkWinConditions',
   ],
 
   dcPlayArea: [
@@ -65,6 +66,7 @@ const CONTEXT_GROUPS = {
     'findDcMessageIdForFigure', 'isGroupDefeated', 'checkWinConditions',
     'getMapAttachmentForSpaces',
     'getMapTokensData', 'getDeploymentZones',
+    'processFigureDefeat',
   ],
 
   move: [
@@ -86,6 +88,7 @@ const CONTEXT_GROUPS = {
     'getMovementMinimapAttachment', 'buildBoardMapPayload',
     'updateDcActionsMessage', 'sendBleedingPrompt', 'getDcStats', 'dcHealthState',
     'saveGames', 'client',
+    'processFigureDefeat',
   ],
 
   combat: COMBAT_DEPS,
@@ -119,6 +122,7 @@ const CONTEXT_GROUPS = {
     'updateDcActionsMessage', 'getDcStats', 'getRange', 'hasLineOfSight', 'getMapData',
     'findDcMessageIdForFigure', 'updateHandVisualMessage',
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
+    'checkWinConditions', 'processFigureDefeat',
   ],
 
   round: [
@@ -253,6 +257,7 @@ const CONTEXT_GROUPS = {
     'getDcPlayAreaComponents', 'getDcStats', 'DC_ACTIONS_PER_ACTIVATION',
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
     'updateHandChannelMessages',
+    'processFigureDefeat',
   ],
 
   requests: [
@@ -336,6 +341,7 @@ const CONTEXT_GROUPS = {
     'rollSingleAttackDie', 'getDcEffects', 'getMapData', 'getFigureLabel',
     'filterCondition', 'isConditionImmune', 'applyCondition', 'HARMFUL_CONDITIONS',
     'updateDcActionsMessage', 'updateHandVisualMessage', 'updateDiscardPileMessage',
+    'processFigureDefeat',
   ],
 };
 

@@ -75,7 +75,7 @@ export async function playCommandCardHeadless(game, playerNum, cardName, deps) {
 
 // ── Path 1: Attachment CCs ──────────────────────────────────────────────────
 
-function handleAttachment(game, playerNum, cardName, idx, hand, handKey, abilityId, deps) {
+async function handleAttachment(game, playerNum, cardName, idx, hand, handKey, abilityId, deps) {
   const {
     getCcEffect, getDcEffects: getDcEffectsFn, getDcKeywords: getDcKeywordsFn,
     resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState,
@@ -126,6 +126,7 @@ function handleAttachment(game, playerNum, cardName, idx, hand, handKey, ability
   const result = resolveAbility(abilityId, context);
   if (result.applied) {
     applyReadyDcMsgIds(result, deps);
+    await processDefeatedFigures(result, game, deps);
   }
 
   return { played: true };
@@ -133,7 +134,7 @@ function handleAttachment(game, playerNum, cardName, idx, hand, handKey, ability
 
 // ── Path 2: Cost > 0 (resolve first) ────────────────────────────────────────
 
-function handleCostPositive(game, playerNum, cardName, abilityId, idx, hand,
+async function handleCostPositive(game, playerNum, cardName, abilityId, idx, hand,
   handKey, discardKey, baseContext, deps) {
   const { resolveAbility } = deps;
 
@@ -153,6 +154,7 @@ function handleCostPositive(game, playerNum, cardName, abilityId, idx, hand,
     game[handKey] = handNow;
     game[discardKey] = (game[discardKey] || []).concat(cardName);
     applyReadyDcMsgIds(result, deps);
+    await processDefeatedFigures(result, game, deps);
   }
 
   return { played: true };
@@ -160,7 +162,7 @@ function handleCostPositive(game, playerNum, cardName, abilityId, idx, hand,
 
 // ── Path 3: Cost = 0 (move card, check Negation, then resolve) ──────────────
 
-function handleCostZero(game, playerNum, cardName, abilityId, idx, hand,
+async function handleCostZero(game, playerNum, cardName, abilityId, idx, hand,
   handKey, discardKey, baseContext, deps) {
   const { resolveAbility } = deps;
 
@@ -198,6 +200,7 @@ function handleCostZero(game, playerNum, cardName, abilityId, idx, hand,
 
   if (result.applied) {
     applyReadyDcMsgIds(result, deps);
+    await processDefeatedFigures(result, game, deps);
   }
 
   return { played: true };
@@ -239,13 +242,26 @@ function resolveInline(abilityId, context, deps) {
   return result;
 }
 
-// ── applyReadyDcMsgIds: the ONLY game-state side effect from applyAbilityResult ─
+// ── Side-effect helpers for headless ability results ─────────────────────────
 
 function applyReadyDcMsgIds(result, deps) {
   if (result.readyDcMsgIds?.length && deps.dcExhaustedState) {
     for (const id of result.readyDcMsgIds) {
       deps.dcExhaustedState.set(id, false);
     }
+  }
+}
+
+/** Process defeatedFigures through the centralized defeat pipeline (VP, position removal, etc.) */
+async function processDefeatedFigures(result, game, deps) {
+  if (!result.applied || !result.defeatedFigures?.length || !deps.processFigureDefeat) return;
+  for (const df of result.defeatedFigures) {
+    await deps.processFigureDefeat(game, {
+      defeatedPlayerNum: df.defeatedPlayerNum,
+      figureKey: df.figureKey,
+      attackerPlayerNum: df.attackerPlayerNum,
+      source: df.source || '',
+    });
   }
 }
 

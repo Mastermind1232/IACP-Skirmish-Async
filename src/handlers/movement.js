@@ -6,8 +6,8 @@ import { buildRowPickerButtons, cleanupSpacePick } from '../discord/components.j
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapData } from '../data-loader.js';
 import { bottomLeftCoord, getFootprintCells, normalizeCoord } from '../game/coords.js';
-import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens } from '../game/index.js';
-import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
+import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens, grantPowerTokens } from '../game/index.js';
+import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum, pushFigure } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
@@ -78,8 +78,7 @@ export async function handleMassivePushSpace(interaction, ctx) {
     await interaction.followUp({ content: 'Invalid space.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
-  game.figurePositions[entry.playerNum][entry.figureKey] = chosenSpace.toLowerCase();
+  const { prevPos } = pushFigure(game, entry.playerNum, entry.figureKey, chosenSpace) || { prevPos: null };
   const from = prevPos ? String(prevPos).toUpperCase() : '?';
   await logGameAction(game, client, `**${entry.dcName}** displaced **${from}** → **${chosenSpace.toUpperCase()}** by massive figure (controller choice).`, { icon: 'move', phase: 'ROUND' });
   try { await interaction.message.edit({ content: `Placed **${entry.dcName}** at **${chosenSpace.toUpperCase()}**.`, components: [] }).catch(discordCatch); } catch {}
@@ -331,6 +330,7 @@ export async function handleMovePick(interaction, ctx) {
     getDcStats,
     saveGames,
     client,
+    processFigureDefeat,
   } = ctx;
   const m = interaction.customId.match(/^move_pick_(.+)_(\d+)_(.+)$/);
   if (!m) {
@@ -531,8 +531,16 @@ export async function handleMovePick(interaction, ctx) {
       if (hMax === 0 || hCurHp <= 0) continue;
       const { prevHp: curHp, newHp } = reduceHp(_dcHealthState, game, hostileMsgId, hFigIndex, 2, hostilePlayerNum);
       const hDisplayName = dcMessageMeta.get(hostileMsgId)?.displayName || hostileDcName;
-      const defeatNote = newHp <= 0 ? ' **(may be defeated — check manually)**' : '';
+      const defeatNote = newHp <= 0 ? ' **(defeated)**' : '';
       await logGameAction(game, client, `**Overrun** — **${displayName}** entered **${hDisplayName}**'s space: 2 Damage${defeatNote} (HP: ${curHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
+      if (newHp <= 0 && processFigureDefeat) {
+        await processFigureDefeat(game, {
+          defeatedPlayerNum: hostilePlayerNum,
+          figureKey: hostileFigureKey,
+          attackerPlayerNum: playerNum,
+          source: 'Overrun',
+        });
+      }
     }
   }
   // Cut and Run (Davith Elso): when exiting a space containing a hostile, that hostile suffers 1 Damage (once/fig/round)
@@ -577,8 +585,16 @@ export async function handleMovePick(interaction, ctx) {
         if (hMax2 === 0 || hCurHp2 <= 0) continue;
         const { prevHp: hCur, newHp: hNewHp } = reduceHp(_dcHs, game, hMsgId, hFigIdx, 1, hostilePlayerNum);
         const hDispName = dcMessageMeta.get(hMsgId)?.displayName || hDcName;
-        const defeatNote = hNewHp <= 0 ? ' **(may be defeated)**' : '';
+        const defeatNote = hNewHp <= 0 ? ' **(defeated)**' : '';
         await logGameAction(game, client, `⚔️ **Cut and Run** — **${displayName}** exits **${hDispName}**'s space: 1 Damage${defeatNote} (HP: ${hCur}→${hNewHp}).`, { phase: 'ROUND', icon: 'attack' });
+        if (hNewHp <= 0 && processFigureDefeat) {
+          await processFigureDefeat(game, {
+            defeatedPlayerNum: hostilePlayerNum,
+            figureKey: hFk,
+            attackerPlayerNum: playerNum,
+            source: 'Cut and Run',
+          });
+        }
       }
     }
   }
@@ -600,8 +616,7 @@ export async function handleMovePick(interaction, ctx) {
         const validSpaces = getValidDisplacementSpaces(game, entry.figureKey, entry.playerNum, footprintSet);
         if (validSpaces.length === 1) {
           // Only 1 option → auto-place
-          const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
-          game.figurePositions[entry.playerNum][entry.figureKey] = validSpaces[0];
+          const { prevPos } = pushFigure(game, entry.playerNum, entry.figureKey, validSpaces[0]) || { prevPos: null };
           const from = prevPos ? String(prevPos).toUpperCase() : '?';
           await logGameAction(game, client, `**${entry.dcName}** displaced **${from}** → **${validSpaces[0].toUpperCase()}** by massive figure.`, { icon: 'move', phase: 'ROUND' });
         } else if (validSpaces.length === 0) {
@@ -924,13 +939,9 @@ export async function handleMovePick(interaction, ctx) {
         if (game.roundFigureAbilityUsed[dpKey]) continue;
         game.roundFigureAbilityUsed[dpKey] = true;
         // Grant Block token
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-        if (game.figurePowerTokens[fk].length < getMaxPowerTokens(fk)) {
-          game.figurePowerTokens[fk].push('Block');
-          if (logGameAction) {
-            await logGameAction(game, client, `**Deference Protocol** — **${dpDcName}** gained a Block token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'defend' });
-          }
+        grantPowerTokens(game, fk, 'Block', 1);
+        if (logGameAction) {
+          await logGameAction(game, client, `**Deference Protocol** — **${dpDcName}** gained a Block token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'defend' });
         }
       }
     }
@@ -956,13 +967,9 @@ export async function handleMovePick(interaction, ctx) {
         const csKey = `cassian_said_i_had_to_${fk}`;
         if (game.roundFigureAbilityUsed[csKey]) continue;
         game.roundFigureAbilityUsed[csKey] = true;
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-        if (game.figurePowerTokens[fk].length < getMaxPowerTokens(fk)) {
-          game.figurePowerTokens[fk].push('Damage');
-          if (logGameAction) {
-            await logGameAction(game, client, `**Cassian Said I Had To** — **${csDcName}** gained a Damage Token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'attack' });
-          }
+        grantPowerTokens(game, fk, 'Damage', 1);
+        if (logGameAction) {
+          await logGameAction(game, client, `**Cassian Said I Had To** — **${csDcName}** gained a Damage Token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'attack' });
         }
       }
     }
@@ -998,8 +1005,16 @@ export async function handleMovePick(interaction, ctx) {
         const [_swCur, _swMax] = _swEntry;
         if ((_swMax ?? 0) === 0 || ((_swCur ?? _swMax ?? 0) <= 0)) continue;
         const { prevHp: _swPrev, newHp: _swNew } = reduceHp(_swHs, game, _swTgtMsgId, _swFigIdx, 1, _swOppPN);
-        const _swDefeat = _swNew <= 0 ? ' **(may be defeated)**' : '';
+        const _swDefeat = _swNew <= 0 ? ' **(defeated)**' : '';
         await logGameAction(game, client, `**Swipe** — **Salacious B. Crumb** enters **${_swTgtDcName}**'s space: 1 Damage${_swDefeat} (HP: ${_swPrev}→${_swNew}).`, { phase: 'ROUND', icon: 'attack' });
+        if (_swNew <= 0 && processFigureDefeat) {
+          await processFigureDefeat(game, {
+            defeatedPlayerNum: _swOppPN,
+            figureKey: _swEfk,
+            attackerPlayerNum: playerNum,
+            source: 'Swipe',
+          });
+        }
       }
     }
   }

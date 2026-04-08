@@ -90,6 +90,8 @@ export function getRecoveryReason(game) {
   // pendingBleeding: headless-only state, never set in production — skip
   if (game.pendingLastResort) return 'pendingLastResort';
   if (game.pendingFalseOrders) return 'pendingFalseOrders';
+  if (game.pendingInterrogate) return 'pendingInterrogate';
+  if (game.pendingMastery) return 'pendingMastery';
   if (game.forceVisionPending) return 'forceVisionPending';
   if (game.phase === 'cc_draw' && (!game.player1CcDrawn || !game.player2CcDrawn)) return 'ccDrawPending';
   return null;
@@ -139,6 +141,8 @@ export function needsRecovery(game) {
   // pendingBleeding: headless-only state, never set in production — skip
   if (game.pendingLastResort) return true;
   if (game.pendingFalseOrders) return true;
+  if (game.pendingInterrogate) return true;
+  if (game.pendingMastery) return true;
   if (game.forceVisionPending) return true;
 
   // CC draw phase with undrawn hands

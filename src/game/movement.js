@@ -21,7 +21,7 @@ import {
   getFigureSize,
   isDcCompanion,
 } from '../data-loader.js';
-import { getDcList, getDcMessageIds, getDcAttachments, opponentPlayerNum } from './player-helpers.js';
+import { getDcList, getDcMessageIds, getDcAttachments, opponentPlayerNum, pushFigure } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -781,7 +781,7 @@ export function pushFigureToNearestValid(game, playerNum, figureKey, forbiddenSe
     const overlapOther = [...footprint].some((cell) => board.occupiedSet.has(cell));
     const blocked = !profile.ignoreBlocking && [...footprint].some((cell) => board.blockingSet.has(cell));
     if (!overlapForbidden && !overlapOther && !blocked) {
-      game.figurePositions[playerNum][figureKey] = topLeft;
+      pushFigure(game, playerNum, figureKey, topLeft);
       return true;
     }
     const moveVectors = [
