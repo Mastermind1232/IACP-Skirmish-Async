@@ -155,6 +155,7 @@ class GameBuilder {
       initiativePlayerId: this._p1Id,
 
       // Deployment zones
+      deploymentZoneChosen: 'red',
       player1DeploymentZone: 'red',
       player2DeploymentZone: 'blue',
 
