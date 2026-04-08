@@ -20,6 +20,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOVEMENT_STRATEGY = 'auto';
 const MOVEMENT_TRUST_THRESHOLD = 0.05; // min max|weight| to trust WG move scorer
 
+// ── Endgame Closeout Configuration ─────────────────────────────────────────
+// When max(p1VP, p2VP) reaches this threshold, the AI enters endgame mode:
+// - Activation ordering prioritizes DCs closest to scoring positions
+// - Movement routing switches to objective-only (ignores enemy approach)
+const VP_ENDGAME_THRESHOLD = 24;
+// At this higher threshold, attacks are suppressed when movement toward objectives is available
+const VP_CLOSEOUT_THRESHOLD = 32;
+
 /**
  * Decide whether the greedy movement heuristic should run.
  * In 'auto' mode, trusts the learned scorer only when WG move weights have
@@ -218,6 +226,10 @@ let _idleSupGraphWouldPlayCc = 0;
 let _moveGreedyUsed = 0;          // greedy heuristic picked the space
 let _moveLearnedUsed = 0;         // WG scorer picked the space (fell through to pickSmartAction)
 let _moveGreedyMaxWgMag = 0;      // snapshot of max|wgWeight.move| at decision time
+// Endgame closeout tracking
+let _endgameActivations = 0;      // activate_dc decisions overridden by endgame ordering
+let _endgameObjOnlyMoves = 0;     // movement decisions routed to objectives-only in endgame
+let _endgameAttacksSuppressed = 0; // attacks suppressed in closeout mode
 
 export function resetRuntimeStats() {
   _graphDecisions = 0;
@@ -250,6 +262,9 @@ export function resetRuntimeStats() {
   _moveGreedyUsed = 0;
   _moveLearnedUsed = 0;
   _moveGreedyMaxWgMag = 0;
+  _endgameActivations = 0;
+  _endgameObjOnlyMoves = 0;
+  _endgameAttacksSuppressed = 0;
 }
 
 export function getRuntimeStats() {
@@ -286,6 +301,9 @@ export function getRuntimeStats() {
     moveGreedyUsed: _moveGreedyUsed,
     moveLearnedUsed: _moveLearnedUsed,
     moveGreedyMaxWgMag: _moveGreedyMaxWgMag,
+    endgameActivations: _endgameActivations,
+    endgameObjOnlyMoves: _endgameObjOnlyMoves,
+    endgameAttacksSuppressed: _endgameAttacksSuppressed,
   };
 }
 
@@ -397,6 +415,84 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     } catch { /* data not available */ }
   }
 
+  // ── Endgame Closeout Heuristic ────────────────────────────────────────────
+  // When max(p1VP, p2VP) >= VP_ENDGAME_THRESHOLD, shift priorities toward
+  // objective-scoring positions to convert accumulated VP into a natural win.
+  // Two tiers: ENDGAME (24+) biases activation ordering and movement toward
+  // objectives; CLOSEOUT (32+) additionally suppresses attacks on point-control
+  // missions in favor of objective positioning.
+  let _inEndgame = false;
+  let _inCloseout = false;
+  {
+    const game = engine.getState();
+    const p1vp = game.player1VP?.total || 0;
+    const p2vp = game.player2VP?.total || 0;
+    const maxVP = Math.max(p1vp, p2vp);
+    _inEndgame = maxVP >= VP_ENDGAME_THRESHOLD;
+    _inCloseout = maxVP >= VP_CLOSEOUT_THRESHOLD;
+
+    if (_inEndgame) {
+      // Endgame activation ordering: when choosing which DC to activate,
+      // prefer the one closest to any objective/scoring position.
+      const activateActions = viable.filter(a => a.type === 'activate_dc');
+      if (activateActions.length > 1) {
+        const objCoords = getObjectiveCoords(game);
+        if (objCoords.length > 0) {
+          let bestActivate = null;
+          let bestDist = Infinity;
+          for (const act of activateActions) {
+            const dcName = act.params?.dcName;
+            if (!dcName) continue;
+            // Find closest figure of this DC to any objective
+            const myFigs = Object.entries(game.figurePositions?.[playerNum] || {})
+              .filter(([fk]) => fk.startsWith(dcName + '-'));
+            for (const [, pos] of myFigs) {
+              if (!pos) continue;
+              const pc = String(pos).toLowerCase();
+              for (const oc of objCoords) {
+                const d = getRange(pc, oc);
+                if (d < bestDist) {
+                  bestDist = d;
+                  bestActivate = act;
+                }
+              }
+            }
+          }
+          if (bestActivate) {
+            _endgameActivations++;
+            return { action: bestActivate, score: 0 };
+          }
+        }
+      }
+
+      // Closeout attack suppression: at VP_CLOSEOUT_THRESHOLD+, suppress attacks
+      // when movement toward objectives is available — reaching scoring positions
+      // beats chasing kills. Only for point-control missions (fluctuations,
+      // critical positions) where being ON the space is what matters. Zone-control
+      // and kill-based missions are excluded (kills help maintain majority there).
+      if (_inCloseout) {
+        let _suppressAttacks = false;
+        try {
+          const mapId = game.selectedMap?.id;
+          const variant = game.selectedMission?.variant;
+          const mCards = getMissionCardsData();
+          const eorRules = mCards?.[mapId]?.[variant]?.rules?.endOfRound;
+          // Point-control missions: being on the space IS the scoring mechanism
+          if (eorRules?.vpPerControlledFluctuation) _suppressAttacks = true;
+          if (eorRules?.vpPerControlledSpaceInList) _suppressAttacks = true;
+        } catch { /* data not available */ }
+        if (_suppressAttacks) {
+          const hasAttack = viable.some(a => a.type === 'attack_target');
+          const hasMoveFig = viable.some(a => a.type === 'move_figure');
+          if (hasAttack && hasMoveFig) {
+            viable = viable.filter(a => a.type !== 'attack_target');
+            _endgameAttacksSuppressed++;
+          }
+        }
+      }
+    }
+  }
+
   // Move-toward-enemies-or-objectives heuristic: pick the space that minimizes
   // distance to the nearest enemy OR nearest objective, whichever is closer.
   // Ported from validated diagnostic planner (min(distEnemy, distObj) blending).
@@ -477,6 +573,66 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
       } catch { /* data not available */ }
     }
 
+    // Endgame objective-only movement: when VP is near threshold, route purely
+    // toward objectives regardless of WG scorer. Must fire before useGreedy gate
+    // since the learned scorer has no VP-awareness.
+    // Skip for strain-based missions (Powered Perimeter) — existing strain-aware
+    // routing inside the greedy block handles those more precisely.
+    const _hasStrainMission = !!game.signalMarkerStrain;
+    if (_inEndgame && !carryOverride && !_hasStrainMission) {
+      const objPositions = getObjectiveCoords(game);
+      if (objPositions.length > 0) {
+        // Already ON an objective — stop to hold position
+        if (moveDone.length > 0 && moveEntry?.startCoord) {
+          const _cp = String(moveEntry.startCoord).toLowerCase();
+          const _atObj = objPositions.some(c => getRange(_cp, String(c).toLowerCase()) === 0);
+          if (_atObj) {
+            _moveGreedyUsed++;
+            _endgameObjOnlyMoves++;
+            return { action: moveDone[0], score: 0 };
+          }
+        }
+        // Route toward nearest objective
+        const curPos = moveEntry?.startCoord;
+        let currentDist = Infinity;
+        if (curPos) {
+          const cp = String(curPos).toLowerCase();
+          for (const oPos of objPositions) {
+            const d = getRange(cp, oPos);
+            if (d < currentDist) currentDist = d;
+          }
+        }
+        const bestSpaces = [];
+        let bestDist = Infinity;
+        for (const a of moveSpaces) {
+          const coord = String(a.params.coord).toLowerCase();
+          let minDist = Infinity;
+          for (const oPos of objPositions) {
+            const d = getRange(coord, oPos);
+            if (d < minDist) minDist = d;
+          }
+          if (minDist < bestDist) {
+            bestDist = minDist;
+            bestSpaces.length = 0;
+            bestSpaces.push(a);
+          } else if (minDist === bestDist) {
+            bestSpaces.push(a);
+          }
+        }
+        if (bestDist < currentDist) {
+          _moveGreedyUsed++;
+          _endgameObjOnlyMoves++;
+          return { action: bestSpaces[Math.floor(Math.random() * bestSpaces.length)], score: 0 };
+        }
+        // No closer space — stop
+        if (moveDone.length > 0) {
+          _moveGreedyUsed++;
+          _endgameObjOnlyMoves++;
+          return { action: moveDone[0], score: 0 };
+        }
+      }
+    }
+
     const useGreedy = shouldUseGreedyMovement(getLearnings());
     if (useGreedy) {
       const enemyPn = actingPn === 1 ? 2 : 1;
@@ -488,12 +644,17 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
       const _strainedObj = (_strainMap && objPositions.length > 0)
         ? objPositions.filter(c => (_strainMap[c] || 0) > 0)
         : [];
-      const _preferObj = _strainedObj.length > 0;
-      // Already adjacent to a strained marker — stop moving to hold position
+      // Prefer objectives when: strained markers exist (Powered Perimeter)
+      // OR endgame mode is active (route toward scoring positions, not enemies)
+      const _preferObj = _strainedObj.length > 0 || (_inEndgame && objPositions.length > 0);
+      if (_inEndgame && _preferObj && !_strainedObj.length) _endgameObjOnlyMoves++;
+      // Already at/adjacent to a scoring position — stop moving to hold position.
+      // Applies to: Powered Perimeter strained markers, and endgame objective spaces.
       if (_preferObj && moveDone.length > 0 && moveEntry?.startCoord) {
         const _cp = String(moveEntry.startCoord).toLowerCase();
-        const _atMarker = _strainedObj.some(c => getRange(_cp, String(c).toLowerCase()) <= 1);
-        if (_atMarker) {
+        const _atStrained = _strainedObj.some(c => getRange(_cp, String(c).toLowerCase()) <= 1);
+        const _atObjective = _inEndgame && objPositions.some(c => getRange(_cp, String(c).toLowerCase()) === 0);
+        if (_atStrained || _atObjective) {
           _moveGreedyUsed++;
           return { action: moveDone[0], score: 0 };
         }
@@ -511,7 +672,7 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
               if (d < currentDist) currentDist = d;
             }
           }
-          const _objTargets = _preferObj ? _strainedObj : objPositions;
+          const _objTargets = _strainedObj.length > 0 ? _strainedObj : objPositions;
           for (const oPos of _objTargets) {
             const d = getRange(cp, String(oPos).toLowerCase());
             if (d < currentDist) currentDist = d;
@@ -529,7 +690,7 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
               if (d < minDist) minDist = d;
             }
           }
-          const _objTargets = _preferObj ? _strainedObj : objPositions;
+          const _objTargets = _strainedObj.length > 0 ? _strainedObj : objPositions;
           for (const oPos of _objTargets) {
             const d = getRange(coord, String(oPos).toLowerCase());
             if (d < minDist) minDist = d;

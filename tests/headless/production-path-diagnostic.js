@@ -112,7 +112,16 @@ async function runOneGame(gameNum) {
     const p2vp = g.player2VP?.total || 0;
     const round = g.currentRound || 1;
     const phase = g.roundPhase || '?';
-    const pending = g.pendingCombat ? 'C' : g.moveInProgress ? 'M' : g.phaseGate ? 'G' : '';
+    // Combat sub-state: track phase progression so reroll→surge→resolve changes fingerprint
+    let pending = '';
+    if (g.pendingCombat) {
+      const c = g.pendingCombat;
+      pending = `C:${c.rerollPhase || '-'}:${c.surgeRemaining ?? '-'}:${c.p1Ready ? 1 : 0}${c.p2Ready ? 1 : 0}`;
+    } else if (g.moveInProgress) {
+      pending = 'M';
+    } else if (g.phaseGate) {
+      pending = 'G';
+    }
     // Activation progression: remaining activations + actions within current activation
     const p1rem = g.p1ActivationsRemaining ?? 0;
     const p2rem = g.p2ActivationsRemaining ?? 0;
@@ -157,6 +166,28 @@ async function runOneGame(gameNum) {
     if (fp === lastFingerprint) {
       noProgressCount++;
       if (noProgressCount >= NO_PROGRESS_LIMIT) {
+        const p1FigCount = Object.keys(g.figurePositions?.[1] || {}).filter(k => g.figurePositions[1][k]).length;
+        const p2FigCount = Object.keys(g.figurePositions?.[2] || {}).filter(k => g.figurePositions[2][k]).length;
+        const pending = g.pendingCombat ? 'combat' : g.moveInProgress ? 'move' : g.phaseGate ? 'gate' : 'none';
+        const p1Pos = Object.entries(g.figurePositions?.[1] || {}).filter(([,v]) => v).map(([k,v]) => `${k}@${v}`).join(', ');
+        const p2Pos = Object.entries(g.figurePositions?.[2] || {}).filter(([,v]) => v).map(([k,v]) => `${k}@${v}`).join(', ');
+        const combatSnap = g.pendingCombat ? JSON.stringify({
+          p1Rdy: g.pendingCombat.p1Ready, p2Rdy: g.pendingCombat.p2Ready,
+          atkRoll: !!g.pendingCombat.attackRoll, defRoll: !!g.pendingCombat.defenseRoll,
+          rerollPhase: g.pendingCombat.rerollPhase || null,
+          surgeRem: g.pendingCombat.surgeRemaining, pendingSurges: !!g.pendingCombat.pendingSurges,
+          atkPn: g.pendingCombat.attackerPlayerNum,
+        }) : 'none';
+        // Snapshot available actions at break point
+        const breakP1Acts = getAvailableActions(g, 1, actionDeps).map(a => a.type);
+        const breakP2Acts = getAvailableActions(g, 2, actionDeps).map(a => a.type);
+        const breakTypeCounts = {};
+        for (const t of [...breakP1Acts, ...breakP2Acts]) breakTypeCounts[t] = (breakTypeCounts[t] || 0) + 1;
+        const breakActStr = Object.entries(breakTypeCounts).map(([k,v]) => `${k}:${v}`).join(' ');
+        console.log(`  [NP-BREAK] G${gameNum} R${g.currentRound} iter=${iter} pending=${pending} figs=${p1FigCount}+${p2FigCount} combat=${combatSnap}`);
+        console.log(`    actions=[${breakActStr || 'EMPTY'}]`);
+        console.log(`    fp=${fp.slice(0,100)}`);
+        console.log(`    failedMoves=${failedMoves.size} consecutiveEmpty=${consecutiveEmpty}`);
         g.ended = true;
         stuckReason = 'no_progress';
         const p1vp = g.player1VP?.total || 0;
@@ -244,6 +275,20 @@ async function runOneGame(gameNum) {
       }
       g.pendingKryknaPushQueue = null;
       g.kryknaPushedIds = null;
+      continue;
+    }
+
+    // Combat ready-gate: both players must confirm — submit before action generation
+    // (matches train.js pattern; without this, getAvailableActions may return empty
+    // during combat-ready phase, causing false NO_PROGRESS)
+    if (g.pendingCombat && (!g.pendingCombat.p1Ready || !g.pendingCombat.p2Ready)) {
+      const combatReadyId = `combat_ready_${g.gameId}`;
+      if (!g.pendingCombat.p1Ready) {
+        try { await harness.submitAction(combatReadyId, g.player1Id); } catch {}
+      }
+      if (g.pendingCombat && !g.pendingCombat.p2Ready) {
+        try { await harness.submitAction(combatReadyId, g.player2Id); } catch {}
+      }
       continue;
     }
 
@@ -368,6 +413,15 @@ async function runOneGame(gameNum) {
     let chosen = result?.action || actions[0];
 
     if (!chosen) { stuckReason = 'no_chosen_action'; break; }
+
+    // R1 stall trace: log every action while fingerprint is stuck
+    if (noProgressCount > 0 && noProgressCount <= 25 && g.currentRound <= 2) {
+      const types = actions.map(a => a.type);
+      const typeCounts = {};
+      for (const t of types) typeCounts[t] = (typeCounts[t] || 0) + 1;
+      const typeStr = Object.entries(typeCounts).map(([k,v]) => `${k}:${v}`).join(' ');
+      console.log(`  [STALL] iter=${iter} npc=${noProgressCount} R${g.currentRound} pn=${pn} chosen=${chosen.type}/${chosen.params?.dcName || chosen.params?.cardName || chosen.customId?.slice(0,30) || ''} fp=${lastFingerprint.slice(0,60)} avail=[${typeStr}]`);
+    }
 
     // Stall-escape: after 15 consecutive unchanged fingerprints, override DQN
     // to pick progression actions instead of stalling on movement/CC
@@ -722,6 +776,13 @@ async function main() {
     console.log(`  Move greedy used:    ${lastStats.moveGreedyUsed}`);
     console.log(`  Move learned used:   ${lastStats.moveLearnedUsed}`);
     console.log(`  Encoder:             ${lastStats.encoder}`);
+    if (lastStats.endgameActivations || lastStats.endgameObjOnlyMoves || lastStats.endgameAttacksSuppressed) {
+      console.log('');
+      console.log('  ── Endgame Closeout (last game) ──');
+      console.log(`  Endgame activations: ${lastStats.endgameActivations}`);
+      console.log(`  Obj-only moves:      ${lastStats.endgameObjOnlyMoves}`);
+      console.log(`  Attacks suppressed:  ${lastStats.endgameAttacksSuppressed}`);
+    }
   }
 
   console.log(`\n${'='.repeat(60)}`);
