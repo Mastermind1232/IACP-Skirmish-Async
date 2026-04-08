@@ -93,6 +93,20 @@ export function removeFigurePosition(game, pn, figureKey) {
   if (game.figureConditions?.[figureKey]) delete game.figureConditions[figureKey];
 }
 
+/**
+ * Canonical push/pull/displacement write. Moves a figure that is already on the
+ * board to a new space. Returns { prevPos, newPos } or null if the figure has
+ * no current position (guard — prevents ghost writes).
+ */
+export function pushFigure(game, playerNum, figureKey, newSpace) {
+  const positions = game.figurePositions?.[playerNum];
+  if (!positions) return null;
+  const prevPos = positions[figureKey];
+  if (prevPos == null) return null;
+  positions[figureKey] = String(newSpace).toLowerCase();
+  return { prevPos, newPos: positions[figureKey] };
+}
+
 // ── Key helpers (for code that needs both read + write via game[key]) ───────
 
 export function ccHandKey(pn)       { return pn === 1 ? 'player1CcHand' : 'player2CcHand'; }
