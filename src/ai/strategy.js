@@ -464,6 +464,21 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
       const enemyPositions = Object.values(game.figurePositions?.[enemyPn] || {}).filter(Boolean);
       const objPositions = getObjectiveCoords(game);
 
+      // Positional-VP missions (Powered Perimeter): route toward strained markers
+      const _strainMap = game.signalMarkerStrain;
+      const _strainedObj = (_strainMap && objPositions.length > 0)
+        ? objPositions.filter(c => (_strainMap[c] || 0) > 0)
+        : [];
+      const _preferObj = _strainedObj.length > 0;
+      // Already adjacent to a strained marker — stop moving to hold position
+      if (_preferObj && moveDone.length > 0 && moveEntry?.startCoord) {
+        const _cp = String(moveEntry.startCoord).toLowerCase();
+        const _atMarker = _strainedObj.some(c => getRange(_cp, String(c).toLowerCase()) <= 1);
+        if (_atMarker) {
+          _moveGreedyUsed++;
+          return { action: moveDone[0], score: 0 };
+        }
+      }
       const targetEnemies = enemyPositions;
       const hasTargets = targetEnemies.length > 0 || objPositions.length > 0;
       if (hasTargets) {
@@ -471,11 +486,14 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
         let currentDist = Infinity;
         if (curPos) {
           const cp = String(curPos).toLowerCase();
-          for (const ePos of targetEnemies) {
-            const d = getRange(cp, String(ePos).toLowerCase());
-            if (d < currentDist) currentDist = d;
+          if (!_preferObj) {
+            for (const ePos of targetEnemies) {
+              const d = getRange(cp, String(ePos).toLowerCase());
+              if (d < currentDist) currentDist = d;
+            }
           }
-          for (const oPos of objPositions) {
+          const _objTargets = _preferObj ? _strainedObj : objPositions;
+          for (const oPos of _objTargets) {
             const d = getRange(cp, String(oPos).toLowerCase());
             if (d < currentDist) currentDist = d;
           }
@@ -486,11 +504,14 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
         for (const a of moveSpaces) {
           const coord = String(a.params.coord).toLowerCase();
           let minDist = Infinity;
-          for (const ePos of targetEnemies) {
-            const d = getRange(coord, String(ePos).toLowerCase());
-            if (d < minDist) minDist = d;
+          if (!_preferObj) {
+            for (const ePos of targetEnemies) {
+              const d = getRange(coord, String(ePos).toLowerCase());
+              if (d < minDist) minDist = d;
+            }
           }
-          for (const oPos of objPositions) {
+          const _objTargets = _preferObj ? _strainedObj : objPositions;
+          for (const oPos of _objTargets) {
             const d = getRange(coord, String(oPos).toLowerCase());
             if (d < minDist) minDist = d;
           }

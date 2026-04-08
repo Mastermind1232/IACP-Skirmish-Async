@@ -2246,13 +2246,34 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
     const oppNum = playerNum === 1 ? 2 : 1;
     const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
     const objCoords = getObjectiveCoords(game);
+    // Positional-VP missions (Powered Perimeter): route toward strained markers
+    const _strainMap = game.signalMarkerStrain;
+    const _strainedObj = (_strainMap && objCoords.length > 0)
+      ? objCoords.filter(c => (_strainMap[String(c).toLowerCase()] || 0) > 0)
+      : [];
+    const _preferObj = _strainedObj.length > 0;
+    // Already adjacent to a strained marker — stop moving to hold position
+    if (_preferObj) {
+      const _mip = game.moveInProgress ? Object.values(game.moveInProgress)[0] : null;
+      const _figPos = _mip?.startCoord || _mip?.currentCoord;
+      if (_figPos) {
+        const _fp = String(_figPos).toLowerCase();
+        const _atMarker = _strainedObj.some(c => coordDistance(_fp, String(c).toLowerCase()) <= 1);
+        if (_atMarker) {
+          const _doneActs = allMoveActions.filter(a => a.params?.done);
+          if (_doneActs.length > 0) return _doneActs[0];
+          if (groups['move_done']?.length > 0) return groups['move_done'][0];
+        }
+      }
+    }
     if (oppFigs.length > 0 || objCoords.length > 0) {
       const scored = spaceActions.map(a => {
-        const distEnemy = oppFigs.length > 0
+        const distEnemy = (!_preferObj && oppFigs.length > 0)
           ? Math.min(...oppFigs.map(p => coordDistance(a.params.coord, p)))
           : Infinity;
-        const distObj = objCoords.length > 0
-          ? Math.min(...objCoords.map(c => coordDistance(a.params.coord, c)))
+        const _objTargets = _preferObj ? _strainedObj : objCoords;
+        const distObj = _objTargets.length > 0
+          ? Math.min(..._objTargets.map(c => coordDistance(a.params.coord, c)))
           : Infinity;
         return { action: a, dist: Math.min(distEnemy, distObj) };
       });
