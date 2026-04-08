@@ -2,20 +2,22 @@
  * Deterministic activation effects — shared between Discord and headless.
  * No Discord dependency. Uses only game-state primitives.
  */
-import { getDcEffects, getMapData } from '../data-loader.js';
+import { getDcEffects, getDcStats, getMapData } from '../data-loader.js';
 import { applyCondition, isConditionImmune } from '../game/conditions.js';
 import { grantPowerTokens, grantMovementBank } from '../game/game-helpers.js';
-import { opponentPlayerNum, getActivatedDcIndices, setActivatedDcIndices, getCcHand } from '../game/player-helpers.js';
+import { opponentPlayerNum, getActivatedDcIndices, setActivatedDcIndices, getCcHand, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
 import { reduceHp } from '../game/damage-helpers.js';
 import { hasLineOfSight, getAllFigureCoords } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { countGameSpaces } from '../game/board-helpers.js';
 
 /**
  * Apply deterministic start-of-activation passives for a DC that is beginning activation.
  * Returns a list of applied effects for the caller to log/display.
  *
- * Scope: Mounted, Comms Jammer, Focused on the Kill, Madness, Into the Fray.
+ * Scope: Mounted, Hunger Regular, Madness, Into the Fray, Comms Jammer,
+ *         Focused on the Kill, Beast Tamer.
  *
  * @param {object} game
  * @param {object} opts
@@ -35,6 +37,27 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
   if (abilityIds.includes('mounted_terro') || abilityIds.includes('mounted_kuiil') || abilityIds.includes('mounted_dewback') || (dcEff?.passives || []).includes('Mounted')) {
     grantMovementBank(game, msgId, 3);
     applied.push({ effect: 'Mounted', message: `**Mounted** — **${displayName}** gains **3 movement points** at the start of activation.` });
+  }
+
+  // Hunger Regular (Wampa only): if no hostile within 3 spaces, gain 2 MP.
+  // NOTE: Wampa Elite Hunger remains inline in activation-setup.js — it has a choice branch
+  // (Block or Evade token) that cannot be expressed in the deterministic shared helper.
+  if (dcName === 'Wampa') {
+    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const figureKey = `Wampa-${dgIndex}-0`;
+    const pos = game.figurePositions?.[playerNum]?.[figureKey];
+    let hostileNearby = false;
+    if (pos) {
+      const enemyNum = opponentPlayerNum(playerNum);
+      const hostilePos = Object.values(game.figurePositions?.[enemyNum] || {});
+      hostileNearby = hostilePos.some(hp => hp && countGameSpaces(game, pos, hp) <= 3);
+    }
+    if (!hostileNearby && pos) {
+      grantMovementBank(game, msgId, 2);
+      applied.push({ effect: 'Hunger', message: `**Hunger** — **${displayName}** gains **2 MP** (no hostile within 3 spaces).` });
+    } else {
+      applied.push({ effect: 'Hunger', message: `**Hunger** — Hostile figure within 3 spaces; **${displayName}** does not gain MP.` });
+    }
   }
 
   // Madness (Taron Malicos): if ≤2 CC in hand, suffer 1 Strain and become Focused
@@ -86,6 +109,65 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
   if (attachments.length && cardNameIncludes(attachments, 'Focused on the Kill')) {
     grantMovementBank(game, msgId, 2);
     applied.push({ effect: 'Focused on the Kill', message: `**Focused on the Kill** — **${dcName}** gains **2 MP** at start of activation.` });
+  }
+
+  // Beast Tamer (Skirmish Upgrade attachment): exhaust → grant Speed as MP, set interact override for Non-Sentient
+  if (attachments.length && cardNameIncludes(attachments, 'Beast Tamer')) {
+    const btKws = (dcEff?.keywords || []).map(k => String(k).toUpperCase());
+    if (btKws.includes('CREATURE')) {
+      const btExhausted = game.exhaustedSkirmishUpgrades?.[msgId] || [];
+      if (!cardNameIncludes(btExhausted, 'Beast Tamer')) {
+        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+        game.exhaustedSkirmishUpgrades[msgId] = game.exhaustedSkirmishUpgrades[msgId] || [];
+        game.exhaustedSkirmishUpgrades[msgId].push('Beast Tamer');
+        const btSpeed = getDcStats(dcName)?.speed ?? 0;
+        if (btSpeed > 0) {
+          grantMovementBank(game, msgId, btSpeed);
+        }
+        const btIsNonSentient = (dcEff?.abilityText || '').includes('Non-Sentient');
+        if (btIsNonSentient) {
+          game.beastTamerInteractOverride = game.beastTamerInteractOverride || {};
+          game.beastTamerInteractOverride[msgId] = true;
+        }
+        applied.push({
+          effect: 'Beast Tamer',
+          message: `**Beast Tamer** — **${displayName}** gains **${btSpeed} MP** (Speed)${btIsNonSentient ? ' and **can interact** this activation (Non-Sentient override)' : ''}.`,
+        });
+      }
+    }
+  }
+
+  // I Make the Rules Now (Cad Bane): each friendly HUNTER within 4 of Cad Bane gains 1 MP
+  for (const pn of [1, 2]) {
+    const imrnDcList = getDcList(game, pn) || [];
+    const imrnDcMsgIds = getDcMessageIds(game, pn) || [];
+    for (let di = 0; di < imrnDcList.length; di++) {
+      const dc = imrnDcList[di];
+      if (!dc?.dcName) continue;
+      const eff = getDcEffects()?.[dc.dcName];
+      if (!(eff?.specialAbilityIds || []).includes('i_make_the_rules_cad_bane')) continue;
+      // Skip if Cad Bane IS the activating DC (his own activation doesn't trigger this)
+      if (dc.dcName === dcName && pn === playerNum) continue;
+      const cadDgIdx = (dc.displayName || dc.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const cadFk = `${dc.dcName}-${cadDgIdx}-0`;
+      const cadPos = game.figurePositions?.[pn]?.[cadFk];
+      if (!cadPos) continue;
+      const friendlyFigs = game.figurePositions?.[pn] || {};
+      for (const [fk, fp] of Object.entries(friendlyFigs)) {
+        if (!fp) continue;
+        const fDcName = dcNameFromFigureKey(fk);
+        const fEff = getDcEffects()?.[fDcName];
+        if (!(fEff?.keywords || []).some(k => String(k).toUpperCase() === 'HUNTER')) continue;
+        if (countGameSpaces(game, cadPos, fp) > 4) continue;
+        // Find msgId for this HUNTER DC via parallel dcList/dcMsgIds arrays
+        for (let j = 0; j < imrnDcList.length; j++) {
+          if (imrnDcList[j]?.dcName !== fDcName) continue;
+          grantMovementBank(game, imrnDcMsgIds[j], 1);
+          applied.push({ effect: 'I Make the Rules Now', message: `**I Make the Rules Now** — **${fDcName}** (HUNTER within 4 of Cad Bane) gains **1 MP**.` });
+          break;
+        }
+      }
+    }
   }
 
   return { applied };

@@ -379,35 +379,28 @@ export async function finalizeActivation({
     await thread.send({ content: `🕵️ **Fulcrum** — **${displayName}**: Each player may draw 1 Command card. Use Fulcrum?`, components: [fulcrumRow] }).catch(discordCatch);
   }
 
-  // D6. Hunger (Wampa Regular/Elite): proximity-based MP/token gain
-  {
-    const _hungerCheck = (dn, range) => {
-      if (dcName !== dn) return false;
+  // D6. Hunger — Wampa Regular now handled by applyStartOfActivationEffects().
+  // Wampa Elite Hunger remains inline: it has a choice branch (Block or Evade token)
+  // that cannot be expressed in the deterministic shared helper. This split is intentional.
+  if (dcName === 'Wampa (Elite)') {
+    const _hungerEliteCheck = () => {
       const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const figureKey = `${dn}-${dgIndex}-0`;
+      const figureKey = `Wampa (Elite)-${dgIndex}-0`;
       const pos = game.figurePositions?.[playerNum]?.[figureKey];
       if (!pos) return false;
       const enemyNum = opponentPlayerNum(playerNum);
       const hostilePos = Object.values(game.figurePositions?.[enemyNum] || {});
-      return !hostilePos.some(hp => hp && countGameSpaces(game, pos, hp) <= range);
+      return !hostilePos.some(hp => hp && countGameSpaces(game, pos, hp) <= 2);
     };
-    if (dcName === 'Wampa' && _hungerCheck('Wampa', 3)) {
-      grantMovementBank(game, msgId, 2);
-      await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **2 MP** (no hostile within 3 spaces).` }).catch(discordCatch);
-    } else if (dcName === 'Wampa' && !_hungerCheck('Wampa', 3)) {
-      await thread.send({ content: `🐻 **Hunger** — Hostile figure within 3 spaces; **${displayName}** does not gain MP.` }).catch(discordCatch);
-    }
-    if (dcName === 'Wampa (Elite)') {
-      if (_hungerCheck('Wampa (Elite)', 2)) {
-        grantMovementBank(game, msgId, 3);
-        const hungerRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_hunger_block`).setLabel('Block Token').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_hunger_evade`).setLabel('Evade Token').setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **3 MP** (no hostile within 2 spaces). Choose a token:`, components: [hungerRow] }).catch(discordCatch);
-      } else {
-        await thread.send({ content: `🐻 **Hunger** — Hostile figure within 2 spaces; **${displayName}** does not gain MP or tokens.` }).catch(discordCatch);
-      }
+    if (_hungerEliteCheck()) {
+      grantMovementBank(game, msgId, 3);
+      const hungerRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_hunger_block`).setLabel('Block Token').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_hunger_evade`).setLabel('Evade Token').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **3 MP** (no hostile within 2 spaces). Choose a token:`, components: [hungerRow] }).catch(discordCatch);
+    } else {
+      await thread.send({ content: `🐻 **Hunger** — Hostile figure within 2 spaces; **${displayName}** does not gain MP or tokens.` }).catch(discordCatch);
     }
   }
 
@@ -982,32 +975,7 @@ export async function finalizeActivation({
         await thread.send({ content: `**Trusted Ally** — No adjacent friendly figures.` }).catch(discordCatch);
       }
     }
-    // Beast Tamer: exhaust at start of CREATURE activation
-    if (cardNameIncludes(_suActivationUpgrades, 'Beast Tamer') && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[msgId], 'Beast Tamer')) {
-      const _btEff = getDcEffects()?.[dcName];
-      const _btKws = (_btEff?.keywords || []).map(k => String(k).toUpperCase());
-      if (_btKws.includes('CREATURE')) {
-        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-        game.exhaustedSkirmishUpgrades[msgId] = game.exhaustedSkirmishUpgrades[msgId] || [];
-        if (!cardNameIncludes(game.exhaustedSkirmishUpgrades[msgId], 'Beast Tamer')) {
-          game.exhaustedSkirmishUpgrades[msgId].push('Beast Tamer');
-        }
-        const _btSpeed = getDcStatsFn(dcName)?.speed ?? 0;
-        if (_btSpeed > 0) {
-          grantMovementBank(game, msgId, _btSpeed);
-        }
-        const _btAbilityText = _btEff?.abilityText || '';
-        const _btIsNonSentient = _btAbilityText.includes('Non-Sentient');
-        if (_btIsNonSentient) {
-          game.beastTamerInteractOverride = game.beastTamerInteractOverride || {};
-          game.beastTamerInteractOverride[msgId] = true;
-          await thread.send({ content: `**Beast Tamer** — **${displayName}** gains **${_btSpeed} MP** (Speed) and **can interact** this activation (Non-Sentient override).` }).catch(discordCatch);
-        } else {
-          await thread.send({ content: `**Beast Tamer** — **${displayName}** gains **${_btSpeed} MP** (Speed).` }).catch(discordCatch);
-        }
-        await logGameAction(game, client, `**Beast Tamer** exhausted — **${displayName}** gains ${_btSpeed} MP${_btIsNonSentient ? ' and can interact' : ''}.`, { phase: 'ACTIVATION', icon: 'activate' });
-      }
-    }
+    // Beast Tamer — now handled by applyStartOfActivationEffects()
   }
 
   // D36. Imperial Retrofitting (I48)
@@ -1067,36 +1035,7 @@ export async function finalizeActivation({
     }
   }
 
-  // D38. I Make the Rules Now (Cad Bane): HUNTER within 4 gains 1 MP
-  for (const pn of [1, 2]) {
-    const _imrDcList = getDcList(game, pn) || [];
-    const _imrDcMsgIds = getDcMessageIds(game, pn) || [];
-    for (let di = 0; di < _imrDcList.length; di++) {
-      const dc = _imrDcList[di];
-      if (!dc?.dcName) continue;
-      const eff = getDcEffects()?.[dc.dcName];
-      if (!(eff?.specialAbilityIds || []).includes('i_make_the_rules_cad_bane')) continue;
-      if (dc.dcName === dcName && pn === playerNum) continue;
-      const cadDgIdx = (dc.displayName || dc.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const cadFk = `${dc.dcName}-${cadDgIdx}-0`;
-      const cadPos = game.figurePositions?.[pn]?.[cadFk];
-      if (!cadPos) continue;
-      const friendlyFigs = game.figurePositions?.[pn] || {};
-      for (const [fk, fp] of Object.entries(friendlyFigs)) {
-        if (!fp) continue;
-        const fDcName = dcNameFromFigureKey(fk);
-        const fEff = getDcEffects()?.[fDcName];
-        if (!(fEff?.keywords || []).some(k => String(k).toUpperCase() === 'HUNTER')) continue;
-        if (countGameSpaces(game, cadPos, fp) > 4) continue;
-        for (const [mId, mMeta] of dcMessageMeta) {
-          if (mMeta.gameId !== gameId || mMeta.playerNum !== pn || mMeta.dcName !== fDcName) continue;
-          grantMovementBank(game, mId, 1);
-          await thread.send({ content: `🔫 **I Make the Rules Now** — **${fDcName}** (HUNTER within 4 of Cad Bane) gains **1 MP**.` }).catch(discordCatch);
-          break;
-        }
-      }
-    }
-  }
+  // D38. I Make the Rules Now — now handled by applyStartOfActivationEffects()
 
   // D39. Calming Presence (Yoda): when friendly REBEL activates, remove 1 harmful condition
   if (playerNum) {
