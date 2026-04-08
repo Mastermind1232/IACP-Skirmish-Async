@@ -2164,7 +2164,7 @@ function _addDeploymentZoneCentroids(game, mapId, variant, coords) {
   try {
     const missionCards = getMissionCardsData();
     const rules = missionCards?.[mapId]?.[variant]?.rules?.endOfRound;
-    if (!rules?.vpPerControlledDeploymentZone) return;
+    if (!rules?.vpPerControlledDeploymentZone && !rules?.vpPerContrabandInOpponentDeploymentZone) return;
     const zones = getDeploymentZones()?.[mapId];
     if (!zones) return;
     for (const color of ['red', 'blue']) {

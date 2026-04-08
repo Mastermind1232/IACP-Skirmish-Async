@@ -67,7 +67,7 @@ function _addDeploymentZoneCentroids(game, mapId, variant, coords) {
   try {
     const missionCards = getMissionCardsData();
     const rules = missionCards?.[mapId]?.[variant]?.rules?.endOfRound;
-    if (!rules?.vpPerControlledDeploymentZone) return;
+    if (!rules?.vpPerControlledDeploymentZone && !rules?.vpPerContrabandInOpponentDeploymentZone) return;
     const zones = getDeploymentZones()?.[mapId];
     if (!zones) return;
     for (const color of ['red', 'blue']) {
@@ -342,6 +342,42 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   viable = applyActivationHeuristic(viable);
   const idleWasSuppressed = preIdleViable !== null && viable.length < preIdleViable.length;
 
+  // Carry-mission heuristic: pickup first, then carry toward delivery zone.
+  // Step 1: If a retrieve_contraband interact is available, force it (pickup before move).
+  // Step 2: If a carrier has move_figure, force starting movement toward delivery zone.
+  {
+    const game = engine.getState();
+    try {
+      const mapId = game.selectedMap?.id;
+      const variant = game.selectedMission?.variant;
+      const mCards = getMissionCardsData();
+      const eorRules = mCards?.[mapId]?.[variant]?.rules?.endOfRound;
+      if (eorRules?.vpPerContrabandInOpponentDeploymentZone) {
+        // Step 1: Force pickup if available
+        const pickupAction = viable.find(a =>
+          a.type === 'interact' && a.params?.optionId === 'retrieve_contraband'
+        );
+        if (pickupAction) {
+          return { action: pickupAction, score: 0 };
+        }
+        // Step 2: Force carrier movement
+        const moveFigActions = viable.filter(a => a.type === 'move_figure');
+        if (moveFigActions.length > 0 && game.figureContraband) {
+          for (const mf of moveFigActions) {
+            const dcName = mf.params?.dcName;
+            if (!dcName) continue;
+            const hasCargo = Object.keys(game.figureContraband).some(
+              fk => fk.startsWith(dcName + '-') && game.figureContraband[fk]
+            );
+            if (hasCargo) {
+              return { action: mf, score: 0 };
+            }
+          }
+        }
+      }
+    } catch { /* data not available */ }
+  }
+
   // Move-toward-enemies-or-objectives heuristic: pick the space that minimizes
   // distance to the nearest enemy OR nearest objective, whichever is closer.
   // Ported from validated diagnostic planner (min(distEnemy, distObj) blending).
@@ -354,22 +390,88 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     const _wgMoveW = getLearnings()?.withinGroupWeights?.move;
     if (_wgMoveW) _moveGreedyMaxWgMag = Math.max(..._wgMoveW.map(Math.abs));
 
+    // Carry-aware movement: carriers on carry missions ALWAYS use greedy targeting
+    // toward the opponent's deployment zone, regardless of WG scorer state.
+    // This must run before the useGreedy gate since the WG scorer has no carry signal.
+    const game = engine.getState();
+    const actingPn = moveSpaces[0].actingPlayer || moveSpaces[0]._playerNum;
+    const moveEntry = Object.values(game.moveInProgress || {})[0];
+    const movingFigKey = moveEntry?.figureKey;
+    let carryOverride = false;
+    if (movingFigKey && game.figureContraband?.[movingFigKey]) {
+      try {
+        const mapId = game.selectedMap?.id;
+        const variant = game.selectedMission?.variant;
+        const missionCards = getMissionCardsData();
+        const rules = missionCards?.[mapId]?.[variant]?.rules?.endOfRound;
+        if (rules?.vpPerContrabandInOpponentDeploymentZone) {
+          const zones = getDeploymentZones()?.[mapId];
+          if (zones) {
+            const initPn = game.initiativePlayerId === game.player1Id ? 1 : 2;
+            const chosenColor = game.deploymentZoneChosen || 'red';
+            const oppColor = actingPn === initPn
+              ? (chosenColor === 'red' ? 'blue' : 'red')
+              : chosenColor;
+            const oppZoneCells = zones[oppColor] || [];
+            if (oppZoneCells.length > 0) {
+              carryOverride = true;
+              // Greedy: move carrier toward delivery zone, using all MP
+              const objPositions = oppZoneCells.map(c => String(c).toLowerCase());
+              const curPos = moveEntry.startCoord;
+              let currentDist = Infinity;
+              if (curPos) {
+                const cp = String(curPos).toLowerCase();
+                for (const oPos of objPositions) {
+                  const d = getRange(cp, oPos);
+                  if (d < currentDist) currentDist = d;
+                }
+              }
+              const bestSpaces = [];
+              let bestDist = Infinity;
+              for (const a of moveSpaces) {
+                const coord = String(a.params.coord).toLowerCase();
+                let minDist = Infinity;
+                for (const oPos of objPositions) {
+                  const d = getRange(coord, oPos);
+                  if (d < minDist) minDist = d;
+                }
+                if (minDist < bestDist) {
+                  bestDist = minDist;
+                  bestSpaces.length = 0;
+                  bestSpaces.push(a);
+                } else if (minDist === bestDist) {
+                  bestSpaces.push(a);
+                }
+              }
+              if (bestDist < currentDist) {
+                _moveGreedyUsed++;
+                return { action: bestSpaces[Math.floor(Math.random() * bestSpaces.length)], score: 0 };
+              }
+              // No improvement — stop and save remaining MP
+              if (moveDone.length > 0) {
+                _moveGreedyUsed++;
+                return { action: moveDone[0], score: 0 };
+              }
+            }
+          }
+        }
+      } catch { /* data not available */ }
+    }
+
     const useGreedy = shouldUseGreedyMovement(getLearnings());
     if (useGreedy) {
-      const game = engine.getState();
-      const actingPn = moveSpaces[0].actingPlayer || moveSpaces[0]._playerNum;
       const enemyPn = actingPn === 1 ? 2 : 1;
       const enemyPositions = Object.values(game.figurePositions?.[enemyPn] || {}).filter(Boolean);
       const objPositions = getObjectiveCoords(game);
-      const hasTargets = enemyPositions.length > 0 || objPositions.length > 0;
+
+      const targetEnemies = enemyPositions;
+      const hasTargets = targetEnemies.length > 0 || objPositions.length > 0;
       if (hasTargets) {
-        // Compute current distance from figure's position to nearest target
-        const moveEntry = Object.values(game.moveInProgress || {})[0];
-        const curPos = moveEntry?.currentPosition || moveEntry?.startCoord;
+        const curPos = moveEntry?.startCoord;
         let currentDist = Infinity;
         if (curPos) {
           const cp = String(curPos).toLowerCase();
-          for (const ePos of enemyPositions) {
+          for (const ePos of targetEnemies) {
             const d = getRange(cp, String(ePos).toLowerCase());
             if (d < currentDist) currentDist = d;
           }
@@ -379,13 +481,12 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
           }
         }
 
-        // Pick spaces closest to nearest enemy OR nearest objective
         const bestSpaces = [];
         let bestDist = Infinity;
         for (const a of moveSpaces) {
           const coord = String(a.params.coord).toLowerCase();
           let minDist = Infinity;
-          for (const ePos of enemyPositions) {
+          for (const ePos of targetEnemies) {
             const d = getRange(coord, String(ePos).toLowerCase());
             if (d < minDist) minDist = d;
           }
@@ -402,13 +503,11 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
           }
         }
 
-        // Only move if it strictly improves distance; otherwise stop to save MP
         if (bestDist < currentDist) {
           _moveGreedyUsed++;
           const bestAction = bestSpaces[Math.floor(Math.random() * bestSpaces.length)];
           return { action: bestAction, score: 0 };
         }
-        // No improvement possible — pick "done" if available, else pick randomly
         if (moveDone.length > 0) {
           _moveGreedyUsed++;
           return { action: moveDone[0], score: 0 };
