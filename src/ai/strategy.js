@@ -347,7 +347,8 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
   viable = applyActivationHeuristic(viable);
   const idleWasSuppressed = preIdleViable !== null && viable.length < preIdleViable.length;
 
-  // Carry-mission heuristic: pickup first, then carry toward delivery zone.
+  // Carry-mission heuristic: activate carrier first, pickup, then carry toward delivery zone.
+  // Step 0: If activate_dc choices include a DC with a carrying figure, activate it first.
   // Step 1: If a retrieve_contraband interact is available, force it (pickup before move).
   // Step 2: If a carrier has move_figure, force starting movement toward delivery zone.
   {
@@ -358,6 +359,19 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
       const mCards = getMissionCardsData();
       const eorRules = mCards?.[mapId]?.[variant]?.rules?.endOfRound;
       if (eorRules?.vpPerContrabandInOpponentDeploymentZone) {
+        // Step 0: Activate carrier DC first
+        const activateActions = viable.filter(a => a.type === 'activate_dc');
+        if (activateActions.length > 1 && game.figureContraband) {
+          const carrierActivate = activateActions.find(a => {
+            const dcName = a.params?.dcName;
+            return dcName && Object.keys(game.figureContraband).some(
+              fk => fk.startsWith(dcName + '-') && game.figureContraband[fk]
+            );
+          });
+          if (carrierActivate) {
+            return { action: carrierActivate, score: 0 };
+          }
+        }
         // Step 1: Force pickup if available
         const pickupAction = viable.find(a =>
           a.type === 'interact' && a.params?.optionId === 'retrieve_contraband'
