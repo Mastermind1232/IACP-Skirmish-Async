@@ -318,11 +318,21 @@ function extractAttackFeatures(action, game, dcHealthState, dcMessageMeta) {
   const oppNum = actingPN === 1 ? 2 : 1;
 
   // [0] targetHpRatio — how wounded the target is (lower = more wounded)
-  const hp = lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta);
+  // NPC targets (Krykna, Thugs) aren't in dcHealthState — look up from game state
+  let hp = null;
+  let targetPos = null;
+  if (targetFk.startsWith('npc_')) {
+    const parts = targetFk.split('_');
+    const npcType = parts[1];
+    const npcIndex = parseInt(parts[2], 10);
+    const npcArr = npcType === 'krykna' ? game.npcKrykna : game.npcThugs;
+    const npc = npcArr?.[npcIndex];
+    if (npc) { hp = { current: npc.hp, max: npc.maxHp }; targetPos = npc.coord; }
+  } else {
+    hp = lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta);
+    targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+  }
   if (hp && hp.max > 0) features[0] = hp.current / hp.max;
-
-  // [1] targetDistNorm — distance from THIS attacker to target (not nearest ally)
-  const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
   const attackerPos = getAttackerPosition(action, game, dcMessageMeta);
   if (targetPos && attackerPos) {
     const dist = coordDistance(attackerPos, targetPos);
@@ -2470,8 +2480,20 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     const scored = actions.map(a => {
       const f = extractAttackFeatures(a, game, dcHealthState, dcMessageMeta);
       const targetFk = a.params?.targetFigureKey;
-      const hp = targetFk ? lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta) : null;
-      const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+      // NPC targets (Krykna, Thugs) aren't in dcHealthState — look up from game state
+      let hp = null;
+      let targetPos = null;
+      if (targetFk?.startsWith('npc_')) {
+        const parts = targetFk.split('_');
+        const npcType = parts[1];
+        const npcIndex = parseInt(parts[2], 10);
+        const npcArr = npcType === 'krykna' ? game.npcKrykna : game.npcThugs;
+        const npc = npcArr?.[npcIndex];
+        if (npc) { hp = { current: npc.hp, max: npc.maxHp }; targetPos = npc.coord; }
+      } else {
+        hp = targetFk ? lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta) : null;
+        targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+      }
       const attackerPos = getAttackerPosition(a, game, dcMessageMeta);
       const dist = (targetPos && attackerPos) ? coordDistance(attackerPos, targetPos) : 99;
       return {
