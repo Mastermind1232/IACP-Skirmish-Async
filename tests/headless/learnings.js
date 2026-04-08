@@ -2496,14 +2496,21 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
       }
       const attackerPos = getAttackerPosition(a, game, dcMessageMeta);
       const dist = (targetPos && attackerPos) ? coordDistance(attackerPos, targetPos) : 99;
+      // Mission-target priority: on Krykna Infestation (Chopper A), Krykna kills
+      // are worth 2 VP each — prefer them over player figures. Without this,
+      // Krykna (8 HP) always sort below player figures (3-6 HP) in focus-fire.
+      const isKryknaTarget = targetFk?.startsWith('npc_krykna_');
+      const missionTargetPriority = (game.npcKrykna && isKryknaTarget) ? 0 : 1;
       return {
         action: a, features: f,
+        missionTargetPriority,
         currentHp: hp?.current ?? 99,
         maxHp: hp?.max ?? 99,
         dist,
       };
     });
     scored.sort((a, b) => {
+      if (a.missionTargetPriority !== b.missionTargetPriority) return a.missionTargetPriority - b.missionTargetPriority;
       if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
       if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
       return a.dist - b.dist;

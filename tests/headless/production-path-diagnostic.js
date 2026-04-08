@@ -94,6 +94,8 @@ async function runOneGame(gameNum) {
   const ccFailureCounts = new Map();
   const CC_MAX_RETRIES = 3;
   let stuckReason = null;
+  let lastRound = 1;
+  const carryTelemetry = []; // per-round carry state for Hoth B
 
   // No-progress fingerprint (matches train.js safety net)
   let lastFingerprint = '';
@@ -131,6 +133,25 @@ async function runOneGame(gameNum) {
     if (g.ended) break;
     if (g.currentRound > MAX_ROUNDS) { stuckReason = 'max_rounds'; break; }
 
+    // Carry telemetry: log state when round changes
+    const curRound = g.currentRound || 1;
+    if (curRound !== lastRound && gameNum <= 2) {
+      const carriers = Object.entries(g.figureContraband || {}).filter(([, v]) => v);
+      if (carriers.length > 0) {
+        for (const [fk] of carriers) {
+          const p1Pos = g.figurePositions?.[1]?.[fk];
+          const p2Pos = g.figurePositions?.[2]?.[fk];
+          const pos = p1Pos || p2Pos;
+          const pn = p1Pos ? 1 : (p2Pos ? 2 : '?');
+          console.log(`  [CARRY] G${gameNum} R${lastRound}→R${curRound}: P${pn} ${fk} at ${pos} carrying`);
+        }
+      } else {
+        console.log(`  [CARRY] G${gameNum} R${lastRound}→R${curRound}: no carriers`);
+      }
+      carryTelemetry.push({ round: lastRound, carriers: carriers.length });
+      lastRound = curRound;
+    }
+
     // No-progress detection (general safety net)
     const fp = boardFingerprint(g);
     if (fp === lastFingerprint) {
@@ -160,6 +181,69 @@ async function runOneGame(gameNum) {
     // Auto-resolve pending interactive states BEFORE action generation
     if (g.pendingMissionSorReveal) {
       try { await harness.submitAction(`sor_mission_reveal_${g.gameId}`, g.player1Id); } catch {}
+      continue;
+    }
+    // Auto-push Krykna toward figures (Chopper Base A end-of-round)
+    // Must be checked BEFORE getAvailableActions — the phase gate fires first
+    // and would short-circuit the push check if it were inside actions.length===0.
+    if (g.pendingKryknaPushQueue?.length > 0 && Array.isArray(g.npcKrykna)) {
+      if (gameNum <= 1) console.log(`  [KPUSH] R${g.currentRound} queue=${g.pendingKryknaPushQueue.length} krykna=${g.npcKrykna.filter(k=>!k.defeated).length}`);
+      const allFigPos = [];
+      for (const pn of [1, 2]) {
+        for (const [fk, pos] of Object.entries(g.figurePositions?.[pn] || {})) {
+          if (pos) allFigPos.push({ fk, pn, pos: String(pos).toLowerCase() });
+        }
+      }
+      for (const k of g.npcKrykna) {
+        if (k.defeated) continue;
+        // Greedy 3-step push toward nearest figure
+        let cur = String(k.coord).toLowerCase();
+        for (let step = 0; step < 3; step++) {
+          let bestDist = Infinity;
+          for (const fp of allFigPos) {
+            const d = getRange(cur, fp.pos);
+            if (d < bestDist) bestDist = d;
+          }
+          if (bestDist <= 1) break; // already adjacent
+          // Try 4 cardinal neighbors
+          const cp = parseCoord(cur);
+          const neighbors = [
+            [cp.col - 1, cp.row], [cp.col + 1, cp.row],
+            [cp.col, cp.row - 1], [cp.col, cp.row + 1],
+          ].map(([c, r]) => (c >= 0 && r >= 0) ? String.fromCharCode(97 + c) + String(r + 1) : null).filter(Boolean);
+          let bestNeighbor = null, bestNeighborDist = Infinity;
+          for (const n of neighbors) {
+            let minD = Infinity;
+            for (const fp of allFigPos) {
+              const d = getRange(n, fp.pos);
+              if (d < minD) minD = d;
+            }
+            if (minD < bestNeighborDist) { bestNeighborDist = minD; bestNeighbor = n; }
+          }
+          if (bestNeighbor && bestNeighborDist < bestDist) {
+            cur = bestNeighbor;
+          } else break;
+        }
+        k.coord = cur;
+      }
+      // Apply 2 damage to non-Krykna figures adjacent to any Krykna
+      for (const fp of allFigPos) {
+        const adjToKrykna = g.npcKrykna.some(k => !k.defeated && getRange(String(k.coord).toLowerCase(), fp.pos) <= 1);
+        if (adjToKrykna) {
+          for (const [msgId, meta] of dcMessageMeta) {
+            if (meta.gameId !== g.gameId || meta.playerNum !== fp.pn) continue;
+            const figs = meta.figures || [];
+            const figIdx = figs.findIndex(f => f.figureKey === fp.fk);
+            if (figIdx < 0) continue;
+            const hs = dcHealthState.get(msgId);
+            if (hs?.[figIdx]) {
+              hs[figIdx][0] = Math.max(0, hs[figIdx][0] - 2);
+            }
+          }
+        }
+      }
+      g.pendingKryknaPushQueue = null;
+      g.kryknaPushedIds = null;
       continue;
     }
 
@@ -226,12 +310,6 @@ async function runOneGame(gameNum) {
         if (!g.phaseGate.p2Ready) {
           try { await harness.submitAction(gateCustomId, g.player2Id); } catch {}
         }
-        continue;
-      }
-      // Auto-skip Krykna push queue (Chopper Base A end-of-round interactive phase)
-      if (g.pendingKryknaPushQueue?.length > 0) {
-        g.pendingKryknaPushQueue = null;
-        g.kryknaPushedIds = null;
         continue;
       }
       // Auto-skip fluctuation swap (Lothal Wastes B end-of-round interactive phase)
@@ -455,6 +533,10 @@ async function runOneGame(gameNum) {
         if (optionId === 'retrieve_contraband') {
           g.figureContraband = g.figureContraband || {};
           g.figureContraband[p.figureKey] = true;
+          if (gameNum <= 2) {
+            const pos = g.figurePositions?.[chosen.actingPlayer]?.[p.figureKey];
+            console.log(`  [PICKUP] G${gameNum} R${g.currentRound} P${chosen.actingPlayer} ${p.figureKey} at ${pos}`);
+          }
         } else if (optionId?.startsWith('launch_panel_')) {
           const parts = optionId.replace('launch_panel_', '').split('_');
           const coord = parts[0];
@@ -508,6 +590,17 @@ async function runOneGame(gameNum) {
     const userId = pn === 1 ? g.player1Id : g.player2Id;
     try {
       await harness.submitAction(chosen.customId, userId);
+      // Track carrier move lifecycle
+      if (gameNum <= 1 && chosen.type === 'move_figure') {
+        const mip = g.moveInProgress || {};
+        const mKeys = Object.keys(mip);
+        const fk = mKeys.length > 0 ? mip[mKeys[0]]?.figureKey : null;
+        console.log(`  [MF] ${chosen.params?.dcName} → mip=${mKeys.length} fk=${fk} cargo=${!!g.figureContraband?.[fk]}`);
+      }
+      if (gameNum <= 1 && chosen.type === 'move_pick_space') {
+        const fk = Object.values(g.moveInProgress || {})[0]?.figureKey;
+        console.log(`  [MS] ${fk || '?'} coord=${chosen.params?.coord || 'done'} cargo=${!!g.figureContraband?.[fk]}`);
+      }
     } catch (err) {
       if ((gameNum === 0 && iter < 30) || (gameNum <= 2 && noProgressCount > 0 && noProgressCount <= 10)) console.log(`    ERROR: type=${chosen.type} err=${err.message}`);
       if (chosen.type === 'move_pick_space' && chosen.params?.coord) {
