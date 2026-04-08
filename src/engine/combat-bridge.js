@@ -2454,9 +2454,9 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _hsAtkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
     if (_hsTargetPos && _hsAtkPos) {
       const _hsMapSpaces = getMapData(game.selectedMap.id);
-      const _hsAllFigCoords = [];
-      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _hsAllFigCoords.push(String(fp).toLowerCase());
-      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _hsAllFigCoords.push(String(fp).toLowerCase());
+      const _hsAllFigCoords = new Set();
+      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _hsAllFigCoords.add(String(fp).toLowerCase());
+      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _hsAllFigCoords.add(String(fp).toLowerCase());
       const _hsEligible = [];
       for (const pn of [1, 2]) {
         for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
@@ -2498,9 +2498,9 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _dflAtkPN = combat.attackerPlayerNum;
     // Check defender and adjacent friendlies for deflect
     const _dflMapSpaces = getMapData(game.selectedMap.id);
-    const _dflAllFigCoords = [];
-    for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _dflAllFigCoords.push(String(fp).toLowerCase());
-    for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _dflAllFigCoords.push(String(fp).toLowerCase());
+    const _dflAllFigCoords = new Set();
+    for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _dflAllFigCoords.add(String(fp).toLowerCase());
+    for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _dflAllFigCoords.add(String(fp).toLowerCase());
     // Gather all figures on the defender's team that have deflect and are either the target or adjacent to the target
     const _dflTargetPos = game.figurePositions?.[_dflDefPN]?.[combat.target.figureKey];
     const _dflCandidates = [];
