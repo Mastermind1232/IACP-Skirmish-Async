@@ -5,11 +5,12 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
 import { finalizeActivation, getCompanionForDc, formatCompanionStats } from '../engine/activation-setup.js';
+import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, awardKillVp, figureChoiceLabels } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels } from '../game/index.js';
 import { getAllFigureCoords } from '../game/spatial.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
@@ -35,7 +36,7 @@ import {
   ccHandKey,
   opponentPlayerNum,
   getInitiativePlayerNum,
-  removeFigurePosition,
+  pushFigure,
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -576,91 +577,8 @@ export async function handleEndTurn(interaction, ctx) {
       await endTurnMsg.delete().catch(discordCatch);
     } catch {}
   }
-  // Shield (Riot Trooper E/R): at end of activation, if no Block tokens, gain 1 Block token
-  const _shieldEff = getDcEffects()?.[meta.dcName];
-  if ((_shieldEff?.passives || []).includes('Shield')) {
-    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const prefix = `${meta.dcName}-${dgIndex}-`;
-    const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
-    for (const fk of figureKeys) {
-      const tokens = game.figurePowerTokens?.[fk] || [];
-      if (!tokens.includes('Block')) {
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-        if (game.figurePowerTokens[fk].length < getMaxPowerTokens(fk)) {
-          game.figurePowerTokens[fk].push('Block');
-          const fkName = dcNameFromFigureKey(fk);
-          await logGameAction(game, client, `🛡️ **Shield** — **${fkName}** gained 1 **Block Token** at end of activation.`, { phase: 'ROUND', icon: 'activate' });
-        }
-      }
-    }
-  }
-
-  // In The Shadows (ISB Infiltrator Elite): become Hidden at end of activation
-  if (meta.dcName === 'ISB Infiltrator (Elite)') {
-    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const prefix = `${meta.dcName}-${dgIndex}-`;
-    const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
-    for (const fk of figureKeys) {
-      applyCondition(game, fk, 'Hide');
-    }
-    if (figureKeys.length > 0) {
-      await logGameAction(game, client, `🥷 **In The Shadows** — **ISB Infiltrator (Elite)** figures became **Hidden** at end of activation.`, { phase: 'ROUND', icon: 'activate' });
-    }
-  }
-  // Unnerving (0-0-0): at end of activation, each adjacent hostile becomes Weakened
-  if (meta.dcName === '0-0-0') {
-    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const prefix = `${meta.dcName}-${dgIndex}-`;
-    const figureKeys000 = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
-    const enemyNum = opponentPlayerNum(meta.playerNum);
-    const ms = getMapData(game.selectedMap?.id);
-    const weakened = [];
-    for (const fk of figureKeys000) {
-      const pos = game.figurePositions?.[meta.playerNum]?.[fk];
-      if (!pos) continue;
-      const posNorm = String(pos).toLowerCase();
-      const adj = (ms?.adjacency?.[posNorm] || []).map(a => String(a).toLowerCase());
-      for (const [eFk, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
-        if (!ePos) continue;
-        if (!adj.includes(String(ePos).toLowerCase())) continue;
-        // Condition Immunity: skip Weaken for immune figures
-        const _unnEff = getDcEffects()?.[dcNameFromFigureKey(eFk)] || getDcEffects()?.[dcNameFromFigureKey(eFk)?.replace(/\s*\[.*\]\s*$/, '')];
-        const _unnImm = (_unnEff?.specialAbilityIds || []).includes('immune_onar') || (_unnEff?.specialAbilityIds || []).includes('immune_snowtrooper_elite');
-        if (_unnImm) continue;
-        if (applyCondition(game, eFk, 'Weaken')) {
-          weakened.push(dcNameFromFigureKey(eFk));
-        }
-      }
-    }
-    if (weakened.length > 0) {
-      await logGameAction(game, client, `😈 **Unnerving** — **0-0-0** Weakened adjacent hostiles: ${weakened.join(', ')}.`, { phase: 'ROUND', icon: 'activate' });
-    }
-  }
-  // Hold the Line (Baze Malbus): at end of activation, gain 1 Block Token per hostile with LOS
-  if (meta.dcName === 'Baze Malbus') {
-    const _htlHasLos = ctx.hasLineOfSight;
-    const _htlMapSpaces = ctx.getMapData?.(game.selectedMap?.id);
-    const _htlDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const _htlFk = `Baze Malbus-${_htlDgIndex}-0`;
-    const _htlPos = game.figurePositions?.[meta.playerNum]?.[_htlFk];
-    let _htlBlockCount = 0;
-    if (_htlPos && _htlHasLos && _htlMapSpaces) {
-      const _htlEnemyNum = opponentPlayerNum(meta.playerNum);
-      const _htlAllFigCoords = getAllFigureCoords(game);
-      for (const [, ePos] of Object.entries(game.figurePositions?.[_htlEnemyNum] || {})) {
-        if (!ePos) continue;
-        if (_htlHasLos(String(_htlPos).toLowerCase(), String(ePos).toLowerCase(), _htlMapSpaces, _htlAllFigCoords)) _htlBlockCount++;
-      }
-    }
-    if (_htlBlockCount > 0) {
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[_htlFk] = game.figurePowerTokens[_htlFk] || [];
-      const _htlMax = getMaxPowerTokens(_htlFk);
-      for (let i = 0; i < _htlBlockCount; i++) { if (game.figurePowerTokens[_htlFk].length < _htlMax) game.figurePowerTokens[_htlFk].push('Block'); }
-    }
-    await logGameAction(game, client, `🛡️ **Hold the Line** — **${meta.displayName || 'Baze Malbus'}** gained **${_htlBlockCount} Block Token${_htlBlockCount !== 1 ? 's' : ''}** (${_htlBlockCount} hostile${_htlBlockCount !== 1 ? 's' : ''} with LOS).`, { phase: 'ROUND', icon: 'activate' });
-  }
+  // Deterministic end-of-activation effects now handled by applyEndOfActivationEffects()
+  // in handleDcEndActivation (shared with headless). Only choice-based effects remain here.
 
   // Trust Goes Both Ways (Jyn Erso): end-of-activation trigger (limit once per round, shared with start-of-activation)
   {
@@ -739,24 +657,7 @@ export async function handleEndTurn(interaction, ctx) {
     }
   }
 
-  // Son of Skywalker: auto-ready Luke's DC after any activation ends
-  if (game.sonOfSkywalkerActive) {
-    const sos = game.sonOfSkywalkerActive;
-    const sosDcMsgId = sos.dcMsgId;
-    const sosPlayerNum = sos.playerNum;
-    // Don't re-ready if this IS Luke's activation ending (he just activated, should stay exhausted)
-    if (sosDcMsgId !== dcMsgId) {
-      const sosDcIds = getDcMessageIds(game, sosPlayerNum) || [];
-      const sosIdx = sosDcIds.indexOf(sosDcMsgId);
-      const sosActivated = getActivatedDcIndices(game, sosPlayerNum);
-      if (sosIdx >= 0 && Array.isArray(sosActivated) && sosActivated.includes(sosIdx)) {
-        setActivatedDcIndices(game, sosPlayerNum, sosActivated.filter((i) => i !== sosIdx));
-        const sosMeta = dcMessageMeta.get(sosDcMsgId);
-        const sosName = sosMeta?.displayName || sosMeta?.dcName || 'Luke Skywalker';
-        await logGameAction(game, client, `⚡ **Son of Skywalker** — **${sosName}** is automatically **Readied**.`, { phase: 'ROUND', icon: 'activate' });
-      }
-    }
-  }
+  // Son of Skywalker now handled by applyEndOfActivationEffects() in handleDcEndActivation.
 
   game.currentActivationTurnPlayerId = otherPlayerId;
   await logGameAction(game, client, `<@${otherPlayerId}> (**Player ${otherPlayerNum}'s turn**) **${pending.displayName}** finished all actions — your turn to activate a figure!`, {
@@ -893,6 +794,17 @@ export async function handleDcEndActivation(interaction, ctx) {
         filterCondition(game, fk, 'Weaken');
       }
     }
+  }
+
+  // End-of-activation deterministic effects (shared with headless)
+  const { applied: _endEffects } = applyEndOfActivationEffects(game, {
+    dcName: meta.dcName,
+    playerNum: meta.playerNum,
+    displayName,
+    msgId,
+  });
+  for (const eff of _endEffects) {
+    await logGameAction(game, client, eff.message, { phase: 'ROUND', icon: 'activate' });
   }
 
   // Update DC card (stays exhausted)
@@ -1152,7 +1064,7 @@ export async function handleCancelActivate(interaction, _ctx) {
  */
 export async function handleActPassive(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
-  const { getGame, dcMessageMeta, dcExhaustedState, dcHealthState, saveGames, logGameAction, client, renderDcEmbed, getDcPlayAreaComponents } = ctx;
+  const { getGame, dcMessageMeta, dcExhaustedState, dcHealthState, saveGames, logGameAction, client, renderDcEmbed, getDcPlayAreaComponents, processFigureDefeat } = ctx;
   // Parse: act_passive_{gameId}_{msgId}_{ability}_{choice}
   const parts = splitCustomId(interaction.customId, 'act_passive_');
   if (parts.length < 3) return;
@@ -1629,15 +1541,25 @@ export async function handleActPassive(interaction, ctx) {
             const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
             const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
             const res = reduceHp(dcHealthState, game, targetMsgId, figIdx, hits, targetPlayerNum);
-            resultParts.push(`${hits} Damage to **${targetDcName}** (HP: ${res.prevHp} -> ${res.newHp})`);
+            const _wsDefNote = res.newHp <= 0 ? ' **(defeated)**' : '';
+            resultParts.push(`${hits} Damage to **${targetDcName}**${_wsDefNote} (HP: ${res.prevHp} -> ${res.newHp})`);
+            if (res.newHp <= 0 && processFigureDefeat) {
+              await processFigureDefeat(game, {
+                defeatedPlayerNum: targetPlayerNum,
+                figureKey: targetFk,
+                attackerPlayerNum: meta.playerNum,
+                source: 'Wookiee Avenger Slam',
+              });
+            }
           } else {
             resultParts.push(`Apply ${hits} Damage to **${targetDcName}** manually`);
           }
         }
-        // SMALL push check: if target is SMALL, offer space picker for push
+        // SMALL push check: if target is SMALL, alive, and took hits, offer space picker for push
+        const _wsTargetAlive = targetPlayerNum && game.figurePositions?.[targetPlayerNum]?.[targetFk];
         const targetKws = getDcKeywords(game)?.[targetDcName] || [];
         const isSmall = !targetKws.some(k => /large|massive/i.test(String(k)));
-        if (isSmall && hits > 0) {
+        if (isSmall && hits > 0 && _wsTargetAlive) {
           const _waMapId = game.selectedMap?.id;
           const _waMs = _waMapId ? getMapData(_waMapId) : null;
           const _waDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -1681,9 +1603,7 @@ export async function handleActPassive(interaction, ctx) {
       const { targetFk, targetPlayerNum } = pending;
       const targetDcName = dcNameFromFigureKey(targetFk);
       const chosenSpace = String(choice).toLowerCase();
-      game.figurePositions = game.figurePositions || {};
-      game.figurePositions[targetPlayerNum] = game.figurePositions[targetPlayerNum] || {};
-      game.figurePositions[targetPlayerNum][targetFk] = chosenSpace;
+      pushFigure(game, targetPlayerNum, targetFk, chosenSpace);
       delete game.pendingWookSlamPush;
       await interaction.message.edit({ content: `**Wookiee Avenger Slam** — Pushed **${targetDcName}** to **${chosenSpace.toUpperCase()}**.`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `**Wookiee Avenger Slam** — Pushed **${targetDcName}** to **${chosenSpace.toUpperCase()}**.`, { phase: 'ACTIVATION', icon: 'move' });
@@ -1727,7 +1647,16 @@ export async function handleActPassive(interaction, ctx) {
             const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
             const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
             const res = reduceHp(dcHealthState, game, targetMsgId, figIdx, hits, targetPlayerNum);
-            resultParts.push(`${hits} Damage to **${targetDcName}** (HP: ${res.prevHp} -> ${res.newHp})`);
+            const _dfDefNote = res.newHp <= 0 ? ' **(defeated)**' : '';
+            resultParts.push(`${hits} Damage to **${targetDcName}**${_dfDefNote} (HP: ${res.prevHp} -> ${res.newHp})`);
+            if (res.newHp <= 0 && processFigureDefeat) {
+              await processFigureDefeat(game, {
+                defeatedPlayerNum: targetPlayerNum,
+                figureKey: targetFk,
+                attackerPlayerNum: meta.playerNum,
+                source: 'Durasteel Fist',
+              });
+            }
           } else {
             resultParts.push(`Apply ${hits} Damage to **${targetDcName}** manually`);
           }
@@ -1986,16 +1915,9 @@ export async function handleActPassive(interaction, ctx) {
       if (tokenType) {
         const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
         const fk = `${meta.dcName}-${dgIndex}-0`;
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-        const cap = getMaxPowerTokens(fk);
-        if (game.figurePowerTokens[fk].length < cap) {
-          game.figurePowerTokens[fk].push(tokenType);
-          await interaction.message.edit({ content: `🤖 **Droid Kit** — **${displayName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
-          await logGameAction?.(game, client, `🤖 **Droid Kit** — **${displayName}** gained 1 ${tokenType} Token.`, { phase: 'ACTIVATION', icon: 'activate' });
-        } else {
-          await interaction.message.edit({ content: `🤖 **Droid Kit** — **${displayName}** is at max Power Tokens (${cap}). No token gained.`, components: [] }).catch(discordCatch);
-        }
+        grantPowerTokens(game, fk, tokenType, 1);
+        await interaction.message.edit({ content: `🤖 **Droid Kit** — **${displayName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `🤖 **Droid Kit** — **${displayName}** gained 1 ${tokenType} Token.`, { phase: 'ACTIVATION', icon: 'activate' });
       }
     }
   // --- Conspire (Senator form): distribute Focus tokens to friendlies within 1 space ---
@@ -2006,16 +1928,9 @@ export async function handleActPassive(interaction, ctx) {
     } else {
       const targetFk = choice;
       const targetDcName = dcNameFromFigureKey(targetFk);
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[targetFk] = game.figurePowerTokens[targetFk] || [];
-      const cap = getMaxPowerTokens(targetFk);
-      if (game.figurePowerTokens[targetFk].length < cap) {
-        game.figurePowerTokens[targetFk].push('Damage');
-        await interaction.message.edit({ content: `🗣️ **Conspire** — **${targetDcName}** gained **1 Focus (Damage) Token**.`, components: [] }).catch(discordCatch);
-        await logGameAction?.(game, client, `🗣️ **Conspire** — **${targetDcName}** gained 1 Focus (Damage) Token.`, { phase: 'ACTIVATION', icon: 'activate' });
-      } else {
-        await interaction.message.edit({ content: `🗣️ **Conspire** — **${targetDcName}** is at max tokens (${cap}). No token gained.`, components: [] }).catch(discordCatch);
-      }
+      grantPowerTokens(game, targetFk, 'Damage', 1);
+      await interaction.message.edit({ content: `🗣️ **Conspire** — **${targetDcName}** gained **1 Focus (Damage) Token**.`, components: [] }).catch(discordCatch);
+      await logGameAction?.(game, client, `🗣️ **Conspire** — **${targetDcName}** gained 1 Focus (Damage) Token.`, { phase: 'ACTIVATION', icon: 'activate' });
       // If more tokens to distribute, show picker again
       if (game.pendingConspire) {
         game.pendingConspire.tokensRemaining = (game.pendingConspire.tokensRemaining || 1) - 1;
@@ -2437,7 +2352,7 @@ export async function handleItWillBeAlrightSkip(interaction, ctx) {
  * It Will Be Alright: Pick — defeat chosen figure, then offer free move or attack.
  */
 export async function handleItWillBeAlrightPick(interaction, ctx) {
-  const { getGame, dcMessageMeta, dcHealthState, saveGames, logGameAction, client } = ctx;
+  const { getGame, dcMessageMeta, dcHealthState, saveGames, logGameAction, client, processFigureDefeat } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // iwba_pick_{gameId}_{figureKey}
   const m = interaction.customId.match(/^iwba_pick_([^_]+)_(.+)$/);
@@ -2467,19 +2382,18 @@ export async function handleItWillBeAlrightPick(interaction, ctx) {
   const prevHp = hs?.[targetFigIdx]?.[0] ?? 0;
   if (prevHp > 0) reduceHp(dcHealthState, game, targetMsgId, targetFigIdx, prevHp, playerNum);
 
-  // Remove from board
-  removeFigurePosition(game, playerNum, figureKey);
-
-  // Award VP to opponent
-  const dcEff = getDcEffects()?.[targetDcName];
-  const isCompanion = dcEff?.companion === true;
-  if (!isCompanion) {
-    const stats = getDcStats(targetDcName);
-    const vp = stats?.cost ?? 0;
-    if (vp > 0) awardKillVp(game, oppNum, vp);
-    await logGameAction(game, client, `**It Will Be Alright** — **${targetDcName}** is sacrificed and defeated! (+${vp} VP to P${oppNum})`, { phase: 'ACTIVATION', icon: 'attack' });
-  } else {
-    await logGameAction(game, client, `**It Will Be Alright** — **${targetDcName}** (companion) is sacrificed and defeated!`, { phase: 'ACTIVATION', icon: 'attack' });
+  // Route through centralized defeat handler (VP, CC attachments, passive redraws,
+  // Heroic Effort, Scavenged Weaponry, Hunt Dissent, activation decrement, win conditions)
+  if (processFigureDefeat) {
+    await processFigureDefeat(game, {
+      defeatedPlayerNum: playerNum,
+      figureKey,
+      attackerPlayerNum: oppNum,
+      msgId: targetMsgId,
+      dcName: targetDcName,
+      displayName: targetDcName,
+      source: 'It Will Be Alright',
+    });
   }
 
   // Offer free move or attack

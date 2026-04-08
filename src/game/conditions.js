@@ -60,6 +60,26 @@ export function applyCondition(game, figureKey, cond) {
  * @param {string} figureKey
  * @param {string} cond
  */
+/**
+ * Apply a condition and, if it stuck, append a bonus die to attackInfo.
+ * Encodes the rule: "become [Condition] → gain +1 [die color]".
+ * @param {object} game
+ * @param {string} figureKey
+ * @param {string} condition - e.g. 'Focus'
+ * @param {object} attackInfo - current attack info (has .dice array)
+ * @param {string} dieColor - e.g. 'green'
+ * @returns {{ attackInfo: object, applied: boolean }}
+ */
+export function applyConditionWithDie(game, figureKey, condition, attackInfo, dieColor) {
+  if (applyCondition(game, figureKey, condition)) {
+    return {
+      attackInfo: { ...attackInfo, dice: [...(attackInfo.dice || []), dieColor] },
+      applied: true,
+    };
+  }
+  return { attackInfo, applied: false };
+}
+
 export function resetCondition(game, figureKey, cond) {
   game.figureConditions = game.figureConditions || {};
   game.figureConditions[figureKey] = [...(game.figureConditions[figureKey] || []).filter(c => c !== cond), cond];

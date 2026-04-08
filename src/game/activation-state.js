@@ -231,6 +231,7 @@ const ROUND_OBJECT_FLAGS = [
   'arcingShotActive',
   'pendingSpacePick',
   'roundTrooperSurgeStun',
+  'pendingDcAbilityChoice',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -322,6 +323,10 @@ const ROUND_NULL_FLAGS = [
   'pendingCcSpaceChoice',
   'pendingIKnowEverything',
   'pendingSurgeOverflow',
+  'pendingInterrogate',
+  'pendingMastery',
+  'pendingMissionSorReveal',
+  'pendingSuppressiveFireMp',
 ];
 
 const ROUND_ARRAY_FLAGS = [
@@ -355,6 +360,9 @@ const ROUND_DELETE_FLAGS = [
   'roundDioxisActive',
   'pendingStartOfRoundResolve',
   'pendingDeployOrientation',
+  'pendingFluctuationSwapQueue',
+  'pendingFluctuationSwapFirst',
+  'drivenByHatredForceChoke',
 ];
 
 /**

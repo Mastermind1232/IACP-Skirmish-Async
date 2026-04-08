@@ -7,7 +7,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, healHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, applyCondition, filterCondition, grantMovementBank, HARMFUL_CONDITIONS } from '../game/index.js';
+import { reduceHp, healHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, grantPowerTokens, applyCondition, filterCondition, grantMovementBank, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -142,7 +142,7 @@ export async function handleSquadSwarm(interaction, ctx) {
 
 // ── 3. Overdrive ────────────────────────────────────────────────────────────
 export async function handleOverdrive(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, dcHealthState, DC_ACTIONS_PER_ACTIVATION, updateDcActionsMessage, renderDcEmbed, getDcPlayAreaComponents } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, dcHealthState, DC_ACTIONS_PER_ACTIVATION, updateDcActionsMessage, renderDcEmbed, getDcPlayAreaComponents, processFigureDefeat } = ctx;
 
   const _odMsgId = parseCustomId(interaction.customId, 'overdrive_use_');
   const _odMeta = dcMessageMeta.get(_odMsgId);
@@ -162,7 +162,17 @@ export async function handleOverdrive(interaction, ctx) {
   const _odDgIdx = (_odMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   _odGame.overdriveUsedThisActivation = _odGame.overdriveUsedThisActivation || {};
   _odGame.overdriveUsedThisActivation[`${_odMeta.dcName}-${_odDgIdx}-0`] = true;
-  await logGameAction(_odGame, client, `**Overdrive** — **${_odMeta.displayName || _odMeta.dcName}** took 1 Damage${_odHpNote}; +1 Action granted.`, { phase: 'ROUND', icon: 'activate' });
+  const _odDefeatNote = _odNewHp <= 0 ? ' **(defeated)**' : '';
+  await logGameAction(_odGame, client, `**Overdrive** — **${_odMeta.displayName || _odMeta.dcName}** took 1 Damage${_odHpNote}${_odDefeatNote}; +1 Action granted.`, { phase: 'ROUND', icon: 'activate' });
+  if (_odNewHp <= 0 && processFigureDefeat) {
+    const _odFigKey = `${_odMeta.dcName}-${_odDgIdx}-0`;
+    await processFigureDefeat(_odGame, {
+      defeatedPlayerNum: _odMeta.playerNum,
+      figureKey: _odFigKey,
+      attackerPlayerNum: opponentPlayerNum(_odMeta.playerNum),
+      source: 'Overdrive',
+    });
+  }
   await updateDcActionsMessage(_odGame, _odMsgId, client);
   const { embed: _odEmbed, files: _odFiles } = await renderDcEmbed(_odGame, _odMsgId, ctx, { exhausted: true });
   try {
@@ -175,7 +185,7 @@ export async function handleOverdrive(interaction, ctx) {
 
 // ── 4. Self-Destruct Probe ──────────────────────────────────────────────────
 export async function handleSelfDestructProbe(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, processFigureDefeat } = ctx;
   const buttonKey = interaction.customId.startsWith('self_destruct_probe_use_') ? 'self_destruct_probe_use_' : 'self_destruct_probe_skip_';
 
   const _sdpSuffix = parseCustomId(interaction.customId, buttonKey);
@@ -204,6 +214,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
     const _sdpAllAdjSpaces = new Set([String(_sdpPos).toLowerCase(), ..._sdpAdj.map(s => String(s).toLowerCase())]);
     const _sdpHostileNum = opponentPlayerNum(_sdpMeta.playerNum);
     const _sdpDamaged = [];
+    const _sdpDefeated = [];
     for (const [_sdpFk, _sdpFkPos] of Object.entries(_sdpGame.figurePositions?.[_sdpHostileNum] || {})) {
       if (!_sdpFkPos || !_sdpAllAdjSpaces.has(String(_sdpFkPos).toLowerCase())) continue;
       let _sdpHMsgId = null;
@@ -215,22 +226,42 @@ export async function handleSelfDestructProbe(interaction, ctx) {
       const _sdpHFigIdx = parseInt(_sdpFkMatch[3], 10);
       const { prevHp: _hc, newHp: _hnc, maxHp: _sdpMaxHp } = reduceHp(dcHealthState, _sdpGame, _sdpHMsgId, _sdpHFigIdx, _sdpHits, _sdpHostileNum);
       if (_sdpMaxHp === 0 || _hc === null || _hc <= 0) continue;
-      _sdpDamaged.push(`${_sdpHM?.displayName || _sdpFkMatch[1]} (HP: ${_hc}→${_hnc})`);
+      const _sdpDefNote = _hnc <= 0 ? ' **(defeated)**' : '';
+      _sdpDamaged.push(`${_sdpHM?.displayName || _sdpFkMatch[1]} (HP: ${_hc}→${_hnc})${_sdpDefNote}`);
+      if (_hnc <= 0) _sdpDefeated.push({ figureKey: _sdpFk, playerNum: _sdpHostileNum });
     }
     _sdpResultLog += _sdpDamaged.length ? _sdpDamaged.join(', ') : 'No adjacent hostiles.';
   } else {
     _sdpResultLog += 'No hits.';
   }
-  // Defeat the probe
-  const { maxHp: _sdpProbeMax } = reduceHp(dcHealthState, _sdpGame, _sdpMsgId, 0, 9999, _sdpMeta.playerNum);
-  if (_sdpGame.figurePositions?.[_sdpMeta.playerNum]) delete _sdpGame.figurePositions[_sdpMeta.playerNum][`${_sdpMeta.dcName}-1-0`];
-  await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName}: ${_sdpResultLog} Probe defeated.`, { phase: 'ROUND', icon: 'attack' });
+  // Defeat the probe via centralized defeat pipeline
+  reduceHp(dcHealthState, _sdpGame, _sdpMsgId, 0, 9999, _sdpMeta.playerNum);
+  await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName}: ${_sdpResultLog}`, { phase: 'ROUND', icon: 'attack' });
+  const _sdpFigureKey = `${_sdpMeta.dcName}-1-0`;
+  await processFigureDefeat(_sdpGame, {
+    defeatedPlayerNum: _sdpMeta.playerNum,
+    figureKey: _sdpFigureKey,
+    attackerPlayerNum: opponentPlayerNum(_sdpMeta.playerNum),
+    msgId: _sdpMsgId,
+    dcName: _sdpMeta.dcName,
+    displayName: _sdpMeta.displayName || _sdpMeta.dcName,
+    source: 'Self-Destruct',
+  });
+  // Process defeats of hostile figures damaged by the explosion
+  for (const _sdpDf of _sdpDefeated) {
+    await processFigureDefeat(_sdpGame, {
+      defeatedPlayerNum: _sdpDf.playerNum,
+      figureKey: _sdpDf.figureKey,
+      attackerPlayerNum: _sdpMeta.playerNum,
+      source: 'Self-Destruct Probe',
+    });
+  }
   saveGames(); return;
 }
 
 // ── 5. Self-Destruct Protocol ───────────────────────────────────────────────
 export async function handleSelfDestructProtocol(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, applyDamageAndFinishCombat } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, applyDamageAndFinishCombat, processFigureDefeat } = ctx;
   const buttonKey = interaction.customId.startsWith('self_destruct_protocol_use_') ? 'self_destruct_protocol_use_' : 'self_destruct_protocol_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
@@ -262,6 +293,7 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
       const _sdcpAllAdj = new Set([String(_sdcpPos).toLowerCase(), ..._sdcpAdj.map(s => String(s).toLowerCase())]);
       const _sdcpHostileNum = opponentPlayerNum(_sdcpPending.defenderPlayerNum);
       const _sdcpDamaged = [];
+      const _sdcpDefeated = [];
       for (const [_sfk, _sfkPos] of Object.entries(_sdcpGame.figurePositions?.[_sdcpHostileNum] || {})) {
         if (!_sfkPos || !_sdcpAllAdj.has(String(_sfkPos).toLowerCase())) continue;
         if (_sfk === _sdcpFigKey) continue;
@@ -273,13 +305,26 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
         const _sfkFigIdx = parseInt(_sfkFigMatch[3], 10);
         const { prevHp: _shc, newHp: _shnc, maxHp: _sfkMaxHp } = reduceHp(dcHealthState, _sdcpGame, _sfkMsgId, _sfkFigIdx, _sdcpHits, _sdcpHostileNum);
         if (_sfkMaxHp === 0 || _shc === null || _shc <= 0) continue;
-        _sdcpDamaged.push(`${dcMessageMeta.get(_sfkMsgId)?.displayName || _sfkFigMatch[1]} (HP: ${_shc}→${_shnc})`);
+        const _sdcpDefNote = _shnc <= 0 ? ' **(defeated)**' : '';
+        _sdcpDamaged.push(`${dcMessageMeta.get(_sfkMsgId)?.displayName || _sfkFigMatch[1]} (HP: ${_shc}→${_shnc})${_sdcpDefNote}`);
+        if (_shnc <= 0) _sdcpDefeated.push({ figureKey: _sfk, playerNum: _sdcpHostileNum });
       }
       _sdcpResultLog += _sdcpDamaged.length ? _sdcpDamaged.join(', ') : 'No adjacent hostiles.';
     } else {
       _sdcpResultLog += 'No hits.';
     }
     await logGameAction(_sdcpGame, client, `**Self-Destruct Protocol** — ${_sdcpCombat?.target?.label || 'Figure'}: ${_sdcpResultLog}`, { phase: 'ROUND', icon: 'attack' });
+    // Process defeats of hostile figures damaged by the explosion
+    for (const _sdcpDf of _sdcpDefeated) {
+      if (processFigureDefeat) {
+        await processFigureDefeat(_sdcpGame, {
+          defeatedPlayerNum: _sdcpDf.playerNum,
+          figureKey: _sdcpDf.figureKey,
+          attackerPlayerNum: _sdcpPending.defenderPlayerNum,
+          source: 'Self-Destruct Protocol',
+        });
+      }
+    }
   } else {
     await logGameAction(_sdcpGame, client, `**Self-Destruct Protocol** — Skipped. ${_sdcpCombat?.target?.label || 'Figure'} is defeated.`, { phase: 'ROUND', icon: 'card' });
   }
@@ -295,7 +340,7 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
 
 // ── 5b. You Have Something I Want (Moff Gideon) ────────────────────────────
 export async function handleYHSIW(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, processFigureDefeat } = ctx;
   const isTransfer = interaction.customId.startsWith('yhsiw_transfer_');
   await interaction.deferUpdate().catch(discordCatch);
   const gameId = parseCustomId(interaction.customId, isTransfer ? 'yhsiw_transfer_' : 'yhsiw_damage_');
@@ -318,11 +363,7 @@ export async function handleYHSIW(interaction, ctx) {
       const tIdx = tTokens.indexOf(token);
       if (tIdx >= 0) tTokens.splice(tIdx, 1);
       // Add to Gideon
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[gideonFk] = game.figurePowerTokens[gideonFk] || [];
-      if (game.figurePowerTokens[gideonFk].length < getMaxPowerTokens(gideonFk)) {
-        game.figurePowerTokens[gideonFk].push(token);
-      }
+      grantPowerTokens(game, gideonFk, token, 1);
     } else {
       // Condition token: remove from target, apply to Gideon
       filterCondition(game, targetFk, token);
@@ -342,7 +383,16 @@ export async function handleYHSIW(interaction, ctx) {
       const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
       const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
       const { prevHp, newHp } = reduceHp(dcHealthState, game, tMsgId, figIdx, 3, oppPlayerNum);
-      await logGameAction(game, client, `**You Have Something I Want** — **${targetName}** suffers **3 Damage** (HP: ${prevHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
+      const _yhDefNote = newHp <= 0 ? ' **(defeated)**' : '';
+      await logGameAction(game, client, `**You Have Something I Want** — **${targetName}** suffers **3 Damage**${_yhDefNote} (HP: ${prevHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
+      if (newHp <= 0 && processFigureDefeat) {
+        await processFigureDefeat(game, {
+          defeatedPlayerNum: oppPlayerNum,
+          figureKey: targetFk,
+          attackerPlayerNum: pending.gideonPlayerNum,
+          source: 'You Have Something I Want',
+        });
+      }
     } else {
       await logGameAction(game, client, `**You Have Something I Want** — **${targetName}** suffers **3 Damage** (apply manually).`, { phase: 'ROUND', icon: 'attack' });
     }
@@ -354,7 +404,7 @@ export async function handleYHSIW(interaction, ctx) {
 
 // ── 6. Last Resort ──────────────────────────────────────────────────────────
 export async function handleLastResort(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, applyDamageAndFinishCombat } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, applyDamageAndFinishCombat, processFigureDefeat } = ctx;
   const buttonKey = interaction.customId.startsWith('last_resort_use_') ? 'last_resort_use_' : 'last_resort_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
@@ -390,6 +440,7 @@ export async function handleLastResort(interaction, ctx) {
       const _lrMs = getMapData ? getMapData(_lrGame.selectedMap.id) : null;
       const _lrAdj = _lrMs?.adjacency?.[String(_lrPos).toLowerCase()] || [];
       const _lrDamaged = [];
+      const _lrDefeated = [];
       for (const pn of [1, 2]) {
         for (const [_lfk, _lfkPos] of Object.entries(_lrGame.figurePositions?.[pn] || {})) {
           if (!_lfkPos) continue;
@@ -403,7 +454,9 @@ export async function handleLastResort(interaction, ctx) {
           const _lfkFigIdx = parseInt(_lfkMatch[3], 10);
           const { prevHp: _lhc, newHp: _lhnc, maxHp: _lfkMaxHp } = reduceHp(dcHealthState, _lrGame, _lfkMsgId, _lfkFigIdx, _lrHits, pn);
           if (_lfkMaxHp === 0 || _lhc === null || _lhc <= 0) continue;
-          _lrDamaged.push(`${dcMessageMeta.get(_lfkMsgId)?.displayName || _lfkMatch[1]} (HP: ${_lhc}→${_lhnc})`);
+          const _lrDefNote = _lhnc <= 0 ? ' **(defeated)**' : '';
+          _lrDamaged.push(`${dcMessageMeta.get(_lfkMsgId)?.displayName || _lfkMatch[1]} (HP: ${_lhc}→${_lhnc})${_lrDefNote}`);
+          if (_lhnc <= 0) _lrDefeated.push({ figureKey: _lfk, playerNum: pn });
         }
       }
       _lrResultLog += _lrDamaged.length ? _lrDamaged.join(', ') : 'No adjacent figures.';
@@ -411,6 +464,17 @@ export async function handleLastResort(interaction, ctx) {
       _lrResultLog += 'No hits.';
     }
     await logGameAction(_lrGame, client, `**Last Resort** — ${_lrCombat?.target?.label || 'Figure'}: ${_lrResultLog}`, { phase: 'ROUND', icon: 'attack' });
+    // Process defeats of figures damaged by the explosion
+    for (const _lrDf of _lrDefeated) {
+      if (processFigureDefeat) {
+        await processFigureDefeat(_lrGame, {
+          defeatedPlayerNum: _lrDf.playerNum,
+          figureKey: _lrDf.figureKey,
+          attackerPlayerNum: opponentPlayerNum(_lrDf.playerNum),
+          source: 'Last Resort',
+        });
+      }
+    }
   } else {
     await logGameAction(_lrGame, client, `**Last Resort** — Skipped.`, { phase: 'ROUND', icon: 'card' });
   }
@@ -525,7 +589,7 @@ export async function handleBelReorder(interaction, ctx) {
 // ── 10. Assassin's Blade pick ──────────────────────────────────────────────
 // NEW PREFIX: ab_blade_pick_ — add to router.js
 export async function handleAssassinsBladePickTarget(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, processFigureDefeat } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   // ab_blade_pick_{gameId}_{figureKey}
   const suffix = parseCustomId(interaction.customId, 'ab_blade_pick_');
@@ -544,14 +608,25 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
   delete game.pendingAssassinsBlade;
   const dcName = dcNameFromFigureKey(figureKey);
   // Find the DC message for this figure and apply damage
+  let _abNewHp = null;
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId || meta.playerNum !== defenderPlayerNum || meta.dcName !== dcName) continue;
     const figIdx = parseFigureKey(figureKey).figureIndex;
-    reduceHp(dcHealthState, game, msgId, figIdx, hits, defenderPlayerNum);
+    const result = reduceHp(dcHealthState, game, msgId, figIdx, hits, defenderPlayerNum);
+    _abNewHp = result.newHp;
     break;
   }
-  await interaction.message.edit({ content: `🗡️ **Assassin's Blade** — Rolled 1 red die: **${rollStr}**. **${dcName}** suffers **${hits} Damage**.`, components: [] }).catch(discordCatch);
-  await logGameAction(game, client, `🗡️ **Assassin's Blade** — **${dcName}** suffers **${hits} Damage**.`, { phase: 'ROUND', icon: 'attack' });
+  const _abDefNote = (_abNewHp !== null && _abNewHp <= 0) ? ' **(defeated)**' : '';
+  await interaction.message.edit({ content: `🗡️ **Assassin's Blade** — Rolled 1 red die: **${rollStr}**. **${dcName}** suffers **${hits} Damage**${_abDefNote}.`, components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `🗡️ **Assassin's Blade** — **${dcName}** suffers **${hits} Damage**${_abDefNote}.`, { phase: 'ROUND', icon: 'attack' });
+  if (_abNewHp !== null && _abNewHp <= 0 && processFigureDefeat) {
+    await processFigureDefeat(game, {
+      defeatedPlayerNum: defenderPlayerNum,
+      figureKey: figureKey,
+      attackerPlayerNum: attackerPlayerNum,
+      source: "Assassin's Blade",
+    });
+  }
   saveGames(); return;
 }
 
@@ -741,7 +816,7 @@ export async function handleSubmitOrFight(interaction, ctx) {
  * Buttons: bm_draw_, bm_discard_, bm_return_, bm_skip_
  */
 export async function handleBlackMarket(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcHealthState, dcMessageMeta, logGameAction, checkWinConditions } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcHealthState, dcMessageMeta, logGameAction, checkWinConditions, processFigureDefeat } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
 
   // Parse customId: bm_{choice}_{gameId}_{msgId}_{playerNum}
@@ -776,17 +851,16 @@ export async function handleBlackMarket(interaction, ctx) {
     return;
   }
 
-  // Apply 1 Strain (= 1 HP damage) to the SMUGGLER
-  const _bmHs = dcHealthState.get(smugglerMsgId);
-  if (_bmHs?.[smugglerFigIdx] && Array.isArray(_bmHs[smugglerFigIdx])) {
-    const [cur, max] = _bmHs[smugglerFigIdx];
-    _bmHs[smugglerFigIdx] = [Math.max(0, (cur ?? max) - 1), max];
-    dcHealthState.set(smugglerMsgId, _bmHs);
-    // Sync to dcList
-    const _bmDcIds = getDcMessageIds(game, _bmPn) || [];
-    const _bmDcList = getDcList(game, _bmPn) || [];
-    const _bmDcIdx = _bmDcIds.indexOf(smugglerMsgId);
-    if (_bmDcIdx >= 0 && _bmDcList[_bmDcIdx]) _bmDcList[_bmDcIdx].healthState = [..._bmHs];
+  // Apply 1 Strain (= 1 HP damage) to the SMUGGLER via canonical reduceHp path
+  const { prevHp: _bmPrevHp, newHp: _bmNewHp } = reduceHp(dcHealthState, game, smugglerMsgId, smugglerFigIdx, 1, _bmPn);
+  const _bmDefeatNote = _bmNewHp <= 0 ? ' **(defeated)**' : '';
+  if (_bmNewHp <= 0 && processFigureDefeat) {
+    await processFigureDefeat(game, {
+      defeatedPlayerNum: _bmPn,
+      figureKey: smugglerFk,
+      attackerPlayerNum: opponentPlayerNum(_bmPn),
+      source: 'Black Market strain',
+    });
   }
 
   // Remove top card from deck (it was only peeked before)
@@ -803,7 +877,7 @@ export async function handleBlackMarket(interaction, ctx) {
     }
     const handKey = _bmPn === 1 ? 'player1CcHand' : 'player2CcHand';
     game[handKey] = [...(game[handKey] || []), topCard];
-    resultMsg = `Drew **${topCard}** (spent ${cardCost} VP). **${smugglerName}** suffered 1 Strain.`;
+    resultMsg = `Drew **${topCard}** (spent ${cardCost} VP). **${smugglerName}** suffered 1 Strain (HP: ${_bmPrevHp}→${_bmNewHp})${_bmDefeatNote}.`;
   } else if (_bmChoice === 'discard') {
     // Discard the card, gain VP equal to cost
     const discardKey = _bmPn === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
@@ -811,19 +885,17 @@ export async function handleBlackMarket(interaction, ctx) {
     if (cardCost > 0) {
       awardObjectiveVp(game, _bmPn, cardCost);
     }
-    resultMsg = `Discarded **${topCard}** (gained ${cardCost} VP). **${smugglerName}** suffered 1 Strain.`;
+    resultMsg = `Discarded **${topCard}** (gained ${cardCost} VP). **${smugglerName}** suffered 1 Strain (HP: ${_bmPrevHp}→${_bmNewHp})${_bmDefeatNote}.`;
   } else if (_bmChoice === 'return') {
     // Return card to top of deck (put it back)
     deck.unshift(topCard);
-    resultMsg = `Returned **${topCard}** to top of deck. **${smugglerName}** suffered 1 Strain.`;
+    resultMsg = `Returned **${topCard}** to top of deck. **${smugglerName}** suffered 1 Strain (HP: ${_bmPrevHp}→${_bmNewHp})${_bmDefeatNote}.`;
   }
 
   delete game.pendingBlackMarket[_bmPn];
   await interaction.message.edit({ content: `**[Black Market]** — ${resultMsg}`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**[Black Market]** — ${resultMsg}`, { phase: 'ROUND', icon: 'card' });
-  if (_bmChoice === 'draw' || _bmChoice === 'discard') {
-    await checkWinConditions(game, client);
-  }
+  await checkWinConditions(game, client);
   saveGames();
 }
 

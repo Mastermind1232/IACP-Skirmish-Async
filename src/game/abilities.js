@@ -48,7 +48,7 @@ function getStatsForDc(dcName) {
 import { applyCondition, resetCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces } from './movement.js';
-import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList } from './player-helpers.js';
+import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure } from './player-helpers.js';
 import { hasLineOfSight } from './spatial.js';
 import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
 
@@ -326,10 +326,7 @@ export function resolveAbility(abilityId, context) {
         }
       }
       const targetOwner = _findOwner(targetFigureKey);
-      game.figurePositions = game.figurePositions || {};
-      game.figurePositions[targetOwner] = game.figurePositions[targetOwner] || {};
-      const prevPos = game.figurePositions[targetOwner][targetFigureKey];
-      game.figurePositions[targetOwner][targetFigureKey] = chosenSpace;
+      const { prevPos } = pushFigure(game, targetOwner, targetFigureKey, chosenSpace) || { prevPos: null };
       // Deduct MP cost if applicable
       if (entry.mpCostToActivate && game.movementBank?.[msgId]) {
         game.movementBank[msgId].remaining = Math.max(0, game.movementBank[msgId].remaining - entry.mpCostToActivate);
@@ -858,14 +855,16 @@ export function resolveAbility(abilityId, context) {
         hpNote = ` (HP: ${prevHp} → ${newHp})`;
         if (wasDefeated) {
           defeated = true;
-          delete game.figurePositions?.[targetOwnerNum]?.[targetFigureKey];
-          hpNote += ' — **DEFEATED**';
         }
       }
       // Grant 1 Damage Token to target (skip if defeated)
       if (!defeated) grantPowerTokens(game, targetFigureKey, 'Damage', 1);
       const tokenNote = defeated ? '' : ' and gains 1 Damage Token';
-      return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage${hpNote}${tokenNote}.`, refreshDcEmbed: true, refreshBoard: defeated };
+      const temptResult = { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage${hpNote}${tokenNote}.`, refreshDcEmbed: true, refreshBoard: defeated };
+      if (defeated) {
+        temptResult.defeatedFigures = [{ figureKey: targetFigureKey, defeatedPlayerNum: targetOwnerNum, attackerPlayerNum: opponentPlayerNum(targetOwnerNum), source: 'Tempt' }];
+      }
+      return temptResult;
     }
     // Enumerate all figures (friendly + hostile) within 4 spaces except self
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -1934,10 +1933,7 @@ export function resolveAbility(abilityId, context) {
             return { applied: true, logMessage: `**Spiked Boots** — **${_pushDcName}** cannot be pushed.`, refreshDcEmbed: true, refreshBoard: true };
           }
         }
-        game.figurePositions = game.figurePositions || {};
-        game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
-        const _slamPrevPos = game.figurePositions[oppNum][targetFigureKey];
-        game.figurePositions[oppNum][targetFigureKey] = context.chosenSpace;
+        const { prevPos: _slamPrevPos } = pushFigure(game, oppNum, targetFigureKey, context.chosenSpace) || { prevPos: null };
         const { pathStr: _slamPathStr, warnings: _slamWarnings } = computePushPathAndWarnings(game, _slamPrevPos, context.chosenSpace, oppNum);
         let _slamLogMsg = `**${entry.label}** — Pushed **${_pushDcName}** to **${String(context.chosenSpace).toUpperCase()}**${_slamPathStr}.`;
         if (_slamWarnings.length > 0) {
@@ -2955,12 +2951,8 @@ export function resolveAbility(abilityId, context) {
         syncHealthStateToList(game, playerNum, msgId, selfHs);
       }
       const activatingFk = figureKeys[0];
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[activatingFk] = game.figurePowerTokens[activatingFk] || [];
-      const tokensCur = game.figurePowerTokens[activatingFk].length;
-      const tokensToAdd = combo.slice(0, Math.max(0, getMaxPowerTokens(activatingFk) - tokensCur));
-      for (const tok of tokensToAdd) game.figurePowerTokens[activatingFk].push(tok);
-      parts.push(`suffered 1 Damage, gained ${tokensToAdd.length} Power Token(s): ${tokensToAdd.join(' + ')}`);
+      for (const tok of combo) grantPowerTokens(game, activatingFk, tok, 1);
+      parts.push(`suffered 1 Damage, gained ${combo.length} Power Token(s): ${combo.join(' + ')}`);
       tokenRefresh = true;
     }
     return { applied: true, logMessage: parts.join(', ') + '.', refreshDcEmbed: recovered > 0 || tokenRefresh };
@@ -3443,6 +3435,7 @@ export function resolveAbility(abilityId, context) {
     const parts = [];
     const refreshMsgIds = [];
     let anyDefeated = false;
+    const defeatedFigures = [];
     for (const pn of [1, 2]) {
       const poses = game.figurePositions?.[pn] || {};
       for (const fk of Object.keys(poses)) {
@@ -3462,10 +3455,9 @@ export function resolveAbility(abilityId, context) {
         dcHealthState.set(tMsgId, hs);
         syncHealthStateToList(game, pn, tMsgId, hs);
         if (newCur <= 0) {
-          // Figure defeated — remove from board
-          delete game.figurePositions[pn][fk];
           parts.push(`**${dcName}** (${cur ?? max}→0, DEFEATED)`);
           anyDefeated = true;
+          defeatedFigures.push({ figureKey: fk, defeatedPlayerNum: pn, attackerPlayerNum: opponentPlayerNum(pn), source: 'Dioxis Fumes' });
         } else {
           parts.push(`**${dcName}** (${cur ?? max}→${newCur})`);
         }
@@ -3475,7 +3467,9 @@ export function resolveAbility(abilityId, context) {
     // Set round flag: non-DROID figures cannot recover Strain this round
     game.roundDioxisActive = true;
     const affected = parts.length > 0 ? parts.join(', ') : 'no non-DROID figures on the board';
-    return { applied: true, logMessage: `**Dioxis Fumes** — 1 Strain to each non-DROID: ${affected}.\n⚠️ Non-DROID figures cannot recover Strain for the rest of this round.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshMsgIds, refreshBoard: anyDefeated };
+    const dioxisResult = { applied: true, logMessage: `**Dioxis Fumes** — 1 Strain to each non-DROID: ${affected}.\n⚠️ Non-DROID figures cannot recover Strain for the rest of this round.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshMsgIds, refreshBoard: anyDefeated };
+    if (defeatedFigures.length > 0) dioxisResult.defeatedFigures = defeatedFigures;
+    return dioxisResult;
   }
 
   // ccEffect: vpGainSelf + vpGainOpponent (e.g. Dangerous Bargains — start of round, if self VP ≤ N, both gain VP)
@@ -5545,6 +5539,9 @@ export function resolveAbility(abilityId, context) {
         const tMsgId = findMsgIdForFigureKey(game, oppNum, actualFk, dcMessageMeta);
         const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
         const tName = tMeta?.displayName || tMeta?.dcName || actualFk;
+        if (isConditionImmune(game, actualFk)) {
+          return { applied: true, logMessage: `**${tName}** is immune to harmful conditions — Stun skipped.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: tMsgId ? [tMsgId] : [] };
+        }
         applyCondition(game, actualFk, 'Stun');
         return { applied: true, logMessage: `**${tName}** becomes Stunned.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: tMsgId ? [tMsgId] : [] };
       }
@@ -6263,14 +6260,17 @@ export function resolveAbility(abilityId, context) {
     if (!targetMeta) return { applied: false, manualMessage: `Could not find hostile DC. Resolve manually.` };
     const figureKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
     let stunned = 0;
+    let skipped = 0;
     for (const fk of figureKeys.slice(0, entry.applyStunToUpToNAdjacentHostiles)) {
+      if (isConditionImmune(game, fk)) { skipped++; continue; }
       applyCondition(game, fk, 'Stun');
       stunned++;
     }
     const label = targetMeta.displayName || targetMeta.dcName || 'hostile figure(s)';
+    const immuneNote = skipped > 0 ? ` (${skipped} immune)` : '';
     return {
       applied: true,
-      logMessage: `**${label}** — ${stunned} figure(s) became Stunned.`,
+      logMessage: `**${label}** — ${stunned} figure(s) became Stunned.${immuneNote}`,
     };
   }
 
@@ -6288,8 +6288,7 @@ export function resolveAbility(abilityId, context) {
     if (targetFigureKey && chosenSpace) {
       game.figurePositions = game.figurePositions || {};
       game.figurePositions[playerNum] = game.figurePositions[playerNum] || {};
-      const prevPos = game.figurePositions[playerNum][targetFigureKey];
-      game.figurePositions[playerNum][targetFigureKey] = chosenSpace;
+      const { prevPos } = pushFigure(game, playerNum, targetFigureKey, chosenSpace) || { prevPos: null };
       const targetName = dcNameFromFigureKey(targetFigureKey);
       const { pathStr: _rpPathStr, warnings: _rpWarnings } = computePushPathAndWarnings(game, prevPos, chosenSpace, playerNum);
       let _rpLogMsg = `**Reposition** — pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} to ${String(chosenSpace).toUpperCase()}${_rpPathStr}.`;
@@ -6898,8 +6897,12 @@ export function resolveAbility(abilityId, context) {
           results.push(`**${dcName}** 2 Strain (apply manually)`);
         }
       } else {
-        applyCondition(game, fk, 'Weaken');
-        results.push(`**${dcName}** Weakened`);
+        if (isConditionImmune(game, fk)) {
+          results.push(`**${dcName}** immune to Weaken`);
+        } else {
+          applyCondition(game, fk, 'Weaken');
+          results.push(`**${dcName}** Weakened`);
+        }
       }
     }
     return { applied: true, logMessage: `**Static Pulse** — ${results.join(', ')}.`, refreshDcEmbed: true };
@@ -7479,10 +7482,7 @@ export function resolveAbility(abilityId, context) {
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     // Phase 3: push hostile to chosen space, grant free melee attack
     if (chosenFigureKey && chosenSpace) {
-      game.figurePositions = game.figurePositions || {};
-      game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
-      const _fmPrevPos = game.figurePositions[oppNum][chosenFigureKey];
-      game.figurePositions[oppNum][chosenFigureKey] = chosenSpace;
+      const { prevPos: _fmPrevPos } = pushFigure(game, oppNum, chosenFigureKey, chosenSpace) || { prevPos: null };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = true;
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
@@ -7630,10 +7630,7 @@ export function resolveAbility(abilityId, context) {
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     // Phase 3: apply push + deal 1 Damage
     if (chosenFigureKey && chosenSpace) {
-      game.figurePositions = game.figurePositions || {};
-      game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
-      const _dePrevPos = game.figurePositions[oppNum][chosenFigureKey];
-      game.figurePositions[oppNum][chosenFigureKey] = chosenSpace;
+      const { prevPos: _dePrevPos } = pushFigure(game, oppNum, chosenFigureKey, chosenSpace) || { prevPos: null };
       const targetName = dcNameFromFigureKey(chosenFigureKey);
       const targetMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
       const refreshIds = [];
@@ -7729,10 +7726,7 @@ export function resolveAbility(abilityId, context) {
     const activatorFk = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     // Phase 3: push hostile to chosen space
     if (chosenFigureKey && chosenFigureKey !== 'move2' && chosenSpace) {
-      game.figurePositions = game.figurePositions || {};
-      game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
-      const _lffPrevPos = game.figurePositions[oppNum][chosenFigureKey];
-      game.figurePositions[oppNum][chosenFigureKey] = chosenSpace;
+      const { prevPos: _lffPrevPos } = pushFigure(game, oppNum, chosenFigureKey, chosenSpace) || { prevPos: null };
       const nm = dcNameFromFigureKey(chosenFigureKey);
       const { pathStr: _lffPathStr, warnings: _lffWarnings } = computePushPathAndWarnings(game, _lffPrevPos, chosenSpace, oppNum);
       let _lffLogMsg = `**Looking for a Fight** — Pushed **${nm}** to ${String(chosenSpace).toUpperCase()}${_lffPathStr}.`;
@@ -8017,11 +8011,7 @@ export function resolveAbility(abilityId, context) {
     // Phase 3: move target figure to chosen space (space-by-space path with trigger checks)
     if (chosenFigureKey && chosenSpace) {
       const targetPn = game.figurePositions?.[1]?.[chosenFigureKey] != null ? 1 : 2;
-      const oldPos = game.figurePositions?.[targetPn]?.[chosenFigureKey];
-      const destLower = String(chosenSpace).toLowerCase();
-      game.figurePositions = game.figurePositions || {};
-      game.figurePositions[targetPn] = game.figurePositions[targetPn] || {};
-      game.figurePositions[targetPn][chosenFigureKey] = destLower;
+      const { prevPos: oldPos, newPos: destLower } = pushFigure(game, targetPn, chosenFigureKey, chosenSpace) || { prevPos: null, newPos: String(chosenSpace).toLowerCase() };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
 
       const { pathStr, warnings } = computePushPathAndWarnings(game, oldPos, destLower, targetPn);
@@ -8076,11 +8066,7 @@ export function resolveAbility(abilityId, context) {
     // Phase 3: move target figure to chosen space
     if (chosenFigureKey && chosenSpace) {
       const targetPn = playerNum; // always friendly
-      const oldPos = game.figurePositions?.[targetPn]?.[chosenFigureKey];
-      const destLower = String(chosenSpace).toLowerCase();
-      game.figurePositions = game.figurePositions || {};
-      game.figurePositions[targetPn] = game.figurePositions[targetPn] || {};
-      game.figurePositions[targetPn][chosenFigureKey] = destLower;
+      const { prevPos: oldPos, newPos: destLower } = pushFigure(game, targetPn, chosenFigureKey, chosenSpace) || { prevPos: null, newPos: String(chosenSpace).toLowerCase() };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
 
       const { pathStr, warnings } = computePushPathAndWarnings(game, oldPos, destLower, targetPn);
@@ -8514,9 +8500,9 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending[msgId] = true;
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
     game.pendingOverrideAttackDice[msgId] = { ...(game.pendingOverrideAttackDice[msgId] || {}), pierce: (game.pendingOverrideAttackDice[msgId]?.pierce || 0) + 2 };
-    // Apply Weaken to activating figure
+    // Apply Weaken to activating figure (respects immunity)
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    actKeys.forEach((fk) => { applyCondition(game, fk, 'Weaken'); });
+    actKeys.forEach((fk) => { if (!isConditionImmune(game, fk)) applyCondition(game, fk, 'Weaken'); });
     // Exhaust the DC card (persist for restart survival)
     if (dcExhaustedState) dcExhaustedState.set(msgId, true);
     if (game) {
@@ -8543,10 +8529,12 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending[msgId] = true;
     // Mark as used this move (cleared when a new Move action starts — G36)
     game.partingShotTriggered[msgId] = true;
-    // Apply Stun to activating figure
+    // Apply Stun to activating figure (respects immunity)
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    actKeys.forEach((fk) => { applyCondition(game, fk, 'Stun'); });
-    return { applied: true, logMessage: `**Parting Blow** — **${meta?.dcName || 'BRAWLER'}** gains 1 free attack before the hostile finishes exiting. ${meta?.dcName || 'Figure'} becomes Stunned.` };
+    const _pbImmune = actKeys.length > 0 && actKeys.every(fk => isConditionImmune(game, fk));
+    if (!_pbImmune) actKeys.forEach((fk) => { if (!isConditionImmune(game, fk)) applyCondition(game, fk, 'Stun'); });
+    const stunNote = _pbImmune ? ' (immune to Stun)' : ' becomes Stunned';
+    return { applied: true, logMessage: `**Parting Blow** — **${meta?.dcName || 'BRAWLER'}** gains 1 free attack before the hostile finishes exiting. ${meta?.dcName || 'Figure'}${stunNote}.` };
   }
 
   // ccEffect: chooseASideEffect (Choose a Side) — SCUM: round defense block +1 for Mobile friendlies; IMPERIAL: free flamethrower-style attack
@@ -8890,6 +8878,8 @@ export function resolveAbility(abilityId, context) {
       game.figurePositions = game.figurePositions || {};
       game.figurePositions[playerNum] = game.figurePositions[playerNum] || {};
       game.figurePositions[playerNum][activatingFigureKey] = chosenSpace;
+      game.figureMoved = game.figureMoved || {};
+      game.figureMoved[activatingFigureKey] = true;
       const mapId = game.selectedMap?.id;
       if (!mapId) return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. No map data — resolve attack manually.`, refreshBoard: true };
       const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
@@ -8999,6 +8989,8 @@ export function resolveAbility(abilityId, context) {
     game.figurePositions = game.figurePositions || {};
     game.figurePositions[playerNum] = game.figurePositions[playerNum] || {};
     game.figurePositions[playerNum][fk] = chosenSpace;
+    game.figureMoved = game.figureMoved || {};
+    game.figureMoved[fk] = true;
     if (entry.pounceNoAttack) {
       return {
         applied: true,
@@ -9597,6 +9589,11 @@ export function resolveAbility(abilityId, context) {
     const existingBd1Key = Object.keys(playerPositions).find((k) => k.startsWith('BD-1-'));
     const bd1Key = existingBd1Key || 'BD-1-1-0';
     game.figurePositions[playerNum][bd1Key] = String(chosenSpace).toLowerCase();
+    // Register companion → host relationship so isCompanionHostDefeated() works
+    if (calFigKey) {
+      game.companionHostMap = game.companionHostMap || {};
+      game.companionHostMap[bd1Key] = { hostFigureKey: calFigKey, playerNum };
+    }
     return {
       applied: true,
       logMessage: `**Cal's Buddy** — BD-1 deployed to **${String(chosenSpace).toUpperCase()}**. BD-1 activates at the start or end of Cal's activation.`,

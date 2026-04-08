@@ -92,7 +92,7 @@ export { reduceHp, healHp, healHpDistributed } from './damage-helpers.js';
 
 export { awardKillVp, awardObjectiveVp, deductVp, checkNefariousGains } from './vp-helpers.js';
 
-export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS, applyCondition, resetCondition } from './conditions.js';
+export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS, applyCondition, applyConditionWithDie, resetCondition } from './conditions.js';
 
 export { dcNameFromFigureKey, parseFigureKey, getDcEffect, isFigurelessDc, hasDepleteEffect, hasExhaustEffect, getCompanionDescriptionForDc, getMaxPowerTokens, buildFigureButtonLabel, figureChoiceLabels, isCompanionHostDefeated } from './dc-helpers.js';
 

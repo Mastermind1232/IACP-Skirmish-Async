@@ -8,7 +8,7 @@ import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDc
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
@@ -300,8 +300,8 @@ export async function resumeSurgeChoiceOrResolve(game, gameId, combat, thread, c
  */
 async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLabel, sourceLabel, ctx, thread) {
   const {
-    dcHealthState, findDcMessageIdForFigure, logGameAction, isGroupDefeated, checkWinConditions,
-    updateActivationsMessage, updateAttachmentMessageForDc, getDcStats, getDcEffects, client,
+    dcHealthState, findDcMessageIdForFigure, logGameAction, getDcStats, getDcEffects, client,
+    processFigureDefeat: ctxProcessFigureDefeat,
   } = ctx;
   if (!dcHealthState || !findDcMessageIdForFigure) return;
   const msgId = findDcMessageIdForFigure(game.gameId, playerNum, figureKey);
@@ -496,42 +496,16 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     }
   }
   if (newCur <= 0) {
-    const attackerPlayerNum = opponentPlayerNum(playerNum);
-    removeFigurePosition(game, playerNum, figureKey);
-    const stats = getDcStats?.(dcName);
-    const effects = getDcEffects?.()?.[dcName];
-    const figures = stats?.figures ?? 1;
-    const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
-    awardKillVp(game, attackerPlayerNum, vp);
-    if (logGameAction) {
-      await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
+    if (ctxProcessFigureDefeat) {
+      await ctxProcessFigureDefeat(game, {
+        defeatedPlayerNum: playerNum,
+        figureKey,
+        attackerPlayerNum: opponentPlayerNum(playerNum),
+        msgId,
+        dcName,
+        source: abilityLabel,
+      });
     }
-    // Nefarious Gains (Jabba): strain/ability defeat
-    const _ngStrain = checkNefariousGains(game, playerNum);
-    if (_ngStrain && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngStrain.jabbaOwnerPN} VP: ${_ngStrain.vpTotal}`, { phase: 'ROUND', icon: 'card' });
-    // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — strain/ability defeat
-    {
-      const _strPrResult = checkFriendlyDefeatedPassiveRedraws(game, playerNum, dcName);
-      for (const _strPrCard of _strPrResult.redrawn) {
-        if (logGameAction) await logGameAction(game, client, `**Passive Redraw** — **${_strPrCard}** re-drawn from discard (friendly **${dcName}** defeated).`, { phase: 'ROUND', icon: 'card' });
-      }
-      if (_strPrResult.redrawn.length > 0) {
-        if (ctx.updateHandVisualMessage) await ctx.updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
-        if (ctx.updateDiscardPileMessage) await ctx.updateDiscardPileMessage(game, playerNum, client).catch(discordCatch);
-      }
-    }
-    const dcIds = getDcMessageIds(game, playerNum);
-    const idx = (dcIds || []).indexOf(msgId);
-    if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
-      recomputeActivationCounts(game, playerNum);
-      if (updateActivationsMessage) await updateActivationsMessage(game, playerNum, client);
-      const ccAttachKey = ccAttachmentsKey(playerNum);
-      if (game[ccAttachKey]?.[msgId]?.length) {
-        delete game[ccAttachKey][msgId];
-        if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, playerNum, msgId, client);
-      }
-    }
-    await checkWinConditions?.(game, client);
   }
 }
 
@@ -541,8 +515,8 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
  */
 async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
   const {
-    dcHealthState, logGameAction, isGroupDefeated, checkWinConditions,
-    updateActivationsMessage, updateAttachmentMessageForDc, getDcStats, getDcEffects, client,
+    dcHealthState, logGameAction, getDcEffects, client,
+    processFigureDefeat: ctxProcessFigureDefeat,
   } = ctx;
   const { playerNum, figureKey, dcName, msgId, figureIndex, abilityLabel } = pending;
   if (hpDamage <= 0) return;
@@ -572,40 +546,16 @@ async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
     }
   }
   if (newCur <= 0) {
-    const attackerPlayerNum = opponentPlayerNum(playerNum);
-    removeFigurePosition(game, playerNum, figureKey);
-    const stats = getDcStats?.(dcName);
-    const effects = getDcEffects?.()?.[dcName];
-    const figures = stats?.figures ?? 1;
-    const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
-    awardKillVp(game, attackerPlayerNum, vp);
-    if (logGameAction) {
-      await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
+    if (ctxProcessFigureDefeat) {
+      await ctxProcessFigureDefeat(game, {
+        defeatedPlayerNum: playerNum,
+        figureKey,
+        attackerPlayerNum: opponentPlayerNum(playerNum),
+        msgId,
+        dcName,
+        source: abilityLabel,
+      });
     }
-    const _ngStrain = checkNefariousGains(game, playerNum);
-    if (_ngStrain && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngStrain.jabbaOwnerPN} VP: ${_ngStrain.vpTotal}`, { phase: 'ROUND', icon: 'card' });
-    {
-      const _strPrResult = checkFriendlyDefeatedPassiveRedraws(game, playerNum, dcName);
-      for (const _strPrCard of _strPrResult.redrawn) {
-        if (logGameAction) await logGameAction(game, client, `**Passive Redraw** — **${_strPrCard}** re-drawn from discard (friendly **${dcName}** defeated).`, { phase: 'ROUND', icon: 'card' });
-      }
-      if (_strPrResult.redrawn.length > 0) {
-        if (ctx.updateHandVisualMessage) await ctx.updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
-        if (ctx.updateDiscardPileMessage) await ctx.updateDiscardPileMessage(game, playerNum, client).catch(discordCatch);
-      }
-    }
-    const dcIds = getDcMessageIds(game, playerNum);
-    const idx = (dcIds || []).indexOf(msgId);
-    if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
-      recomputeActivationCounts(game, playerNum);
-      if (updateActivationsMessage) await updateActivationsMessage(game, playerNum, client);
-      const ccAttachKey = ccAttachmentsKey(playerNum);
-      if (game[ccAttachKey]?.[msgId]?.length) {
-        delete game[ccAttachKey][msgId];
-        if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, playerNum, msgId, client);
-      }
-    }
-    await checkWinConditions?.(game, client);
   }
 }
 
@@ -1122,10 +1072,7 @@ export async function handleAttackTarget(interaction, ctx) {
   const _atkEff = getDcEffects()?.[meta.dcName];
   let _mysticHunterFired = false;
   if ((_atkEff?.passives || []).includes('Mystic Hunter')) {
-    if (applyCondition(game, attackerFigureKey, 'Focus')) {
-      attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
-      _mysticHunterFired = true;
-    }
+    ({ attackInfo, applied: _mysticHunterFired } = applyConditionWithDie(game, attackerFigureKey, 'Focus', attackInfo, 'green'));
   }
   // Full of Rage (Krrsantan): auto-Focus before attacking if 3+ damage suffered
   let _fullOfRageFired = false;
@@ -1135,10 +1082,7 @@ export async function handleAttackTarget(interaction, ctx) {
     const _forFigHp = _forHpArr[figureIndex];
     _fullOfRageDmg = _forFigHp ? Math.max(0, (_forFigHp[1] ?? _forFigHp[0] ?? 0) - (_forFigHp[0] ?? 0)) : 0;
     if (_fullOfRageDmg >= 3) {
-      if (applyCondition(game, attackerFigureKey, 'Focus')) {
-        attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
-        _fullOfRageFired = true;
-      }
+      ({ attackInfo, applied: _fullOfRageFired } = applyConditionWithDie(game, attackerFigureKey, 'Focus', attackInfo, 'green'));
     }
   }
   // Fly-By (Jet Trooper Elite): if target within 2 spaces, add 1 blue die
@@ -1396,8 +1340,9 @@ export async function handleAttackTarget(interaction, ctx) {
       _pc.bonusSurgeAbilities.push('pierce 1');
       // Pre-attack Focus: apply Focus if not already Focused
       if (!attackerConds.includes('Focus')) {
-        if (applyCondition(game, attackerFigureKey, 'Focus')) {
-          _pc.attackInfo = { ..._pc.attackInfo, dice: [...(_pc.attackInfo.dice || []), 'green'] };
+        const _fotkResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', _pc.attackInfo, 'green');
+        if (_fotkResult.applied) {
+          _pc.attackInfo = _fotkResult.attackInfo;
           await thread.send('**Focused on the Kill** — IG-88 becomes Focused before attacking.').catch(discordCatch);
         }
       }
@@ -1405,8 +1350,9 @@ export async function handleAttackTarget(interaction, ctx) {
     // Heir to the Jedi: Saber Strike pre-attack Focus (when using Saber Strike override)
     if (cardNameIncludes(_atkUpgrades, 'Heir to the Jedi') && overrideDiceSource === 'saber_strike') {
       if (!attackerConds.includes('Focus')) {
-        if (applyCondition(game, attackerFigureKey, 'Focus')) {
-          _pc.attackInfo = { ..._pc.attackInfo, dice: [...(_pc.attackInfo.dice || []), 'green'] };
+        const _httjResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', _pc.attackInfo, 'green');
+        if (_httjResult.applied) {
+          _pc.attackInfo = _httjResult.attackInfo;
           await thread.send('**Heir to the Jedi** — Luke becomes Focused before Saber Strike.').catch(discordCatch);
         }
       }
@@ -1514,10 +1460,10 @@ export async function handleAttackTarget(interaction, ctx) {
   }
   // Z-6 Trooper Rotary Cannon: before attacking, become Focused
   if (cardNameIncludes(_atkUpgrades, 'Z-6 Trooper')) {
-    const _z6Pc = game.pendingCombat;
     if (!attackerConds.includes('Focus')) {
-      if (applyCondition(game, attackerFigureKey, 'Focus')) {
-        _z6Pc.attackInfo = { ..._z6Pc.attackInfo, dice: [...(_z6Pc.attackInfo.dice || []), 'green'] };
+      const _z6Result = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
+      if (_z6Result.applied) {
+        game.pendingCombat.attackInfo = _z6Result.attackInfo;
         await thread.send('**Rotary Cannon** — Z-6 Trooper becomes Focused before attacking.').catch(discordCatch);
       }
     }
@@ -1689,20 +1635,22 @@ export async function handleAttackTarget(interaction, ctx) {
   const atkDamageSuffered = atkFigHp ? Math.max(0, (atkFigHp[1] ?? atkFigHp[0] ?? 0) - (atkFigHp[0] ?? 0)) : 0;
 
   // Battle Meditation / Assassin (Diala Passil, BT-1): auto-Focus before attacking
-  if (atkSpecialIds.includes('battle_meditation') && !game.pendingCombat.attackerConds.includes('Focus') &&
-      !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus')) {
-    game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
-    resetCondition(game, attackerFigureKey, 'Focus');
-    const bm_label = meta.dcName === 'BT-1' ? 'Assassin' : 'Battle Meditation';
-    await thread.send(`**${bm_label}** — **${meta.dcName}** is **Focused** before attacking (+1 green die).`);
+  if (atkSpecialIds.includes('battle_meditation')) {
+    const _bmResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
+    if (_bmResult.applied) {
+      game.pendingCombat.attackInfo = _bmResult.attackInfo;
+      const bm_label = meta.dcName === 'BT-1' ? 'Assassin' : 'Battle Meditation';
+      await thread.send(`**${bm_label}** — **${meta.dcName}** is **Focused** before attacking (+1 green die).`);
+    }
   }
 
   // Full of Rage (Krrsantan): auto-Focus if 3+ damage suffered
-  if (atkSpecialIds.includes('full_of_rage') && !game.pendingCombat.attackerConds.includes('Focus') &&
-      !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus') && atkDamageSuffered >= 3) {
-    game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
-    resetCondition(game, attackerFigureKey, 'Focus');
-    await thread.send(`**Full of Rage** — Krrsantan is **Focused** before attacking (${atkDamageSuffered} damage suffered, +1 green die).`);
+  if (atkSpecialIds.includes('full_of_rage') && atkDamageSuffered >= 3) {
+    const _forResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
+    if (_forResult.applied) {
+      game.pendingCombat.attackInfo = _forResult.attackInfo;
+      await thread.send(`**Full of Rage** — Krrsantan is **Focused** before attacking (${atkDamageSuffered} damage suffered, +1 green die).`);
+    }
   }
 
   // Fury (Wookiee Warriors): +1 Surge if 5+ damage
@@ -1768,12 +1716,11 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // Advanced Targeting Computer (Dark Trooper Mk III): auto-Focus on declare
   if (atkSpecialIds.includes('adv_targeting_computer_dark_trooper')) {
-    if (!attackerConds.includes('Focus') && !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus')) {
-      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
-      resetCondition(game, attackerFigureKey, 'Focus');
+    const _atcResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
+    if (_atcResult.applied) {
+      game.pendingCombat.attackInfo = _atcResult.attackInfo;
       await thread.send('**Advanced Targeting Computer** — Dark Trooper Mk III is **Focused** before attacking (+1 green die).');
     }
-    // Focus already applied — still grant the green die from Focus condition (handled above at line ~286)
   }
 
   // Flawless Execution (Cad Bane): become Focused; if already Focused → Wild token + yellow die
@@ -1853,9 +1800,9 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // Sharpshooter (Fennec Shand): auto-Focus if target is 5+ spaces away
   if (atkSpecialIds.includes('sharpshooter') && distanceToTarget >= 5) {
-    if (!attackerConds.includes('Focus') && !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus')) {
-      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
-      resetCondition(game, attackerFigureKey, 'Focus');
+    const _ssResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
+    if (_ssResult.applied) {
+      game.pendingCombat.attackInfo = _ssResult.attackInfo;
       await thread.send(`**Sharpshooter** — **${meta.dcName}** is **Focused** (target ${distanceToTarget} spaces away, +1 green die).`);
     }
   }
@@ -4147,6 +4094,7 @@ export async function handleCombatPassive(interaction, ctx) {
       deductVp(game, _negDefPN, 2);
       awardObjectiveVp(game, combat.attackerPlayerNum, 2);
       await thread.send(`**Negotiate** — Defender paid 2 VP to Hondo. No bonus damage applied.`);
+      if (checkWinConditions) await checkWinConditions(game, client);
     } else {
       // Accept +2 Damage
       combat.bonusHits = (combat.bonusHits || 0) + 2;
@@ -4184,6 +4132,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       if (landoPN) {
         awardObjectiveVp(game, landoPN, 2);
         await thread.send(`**Shrewd Scoundrel** — Guessed ${guess} Hits, rolled ${hitCount} Hits. **Correct! +2 VP!**`);
+        if (checkWinConditions) await checkWinConditions(game, client);
       }
     } else {
       await thread.send(`**Shrewd Scoundrel** — Guessed ${guess} Hits, rolled ${hitCount} Hits. Incorrect.`);
@@ -4828,6 +4777,7 @@ export async function handleCombatSurge(interaction, ctx) {
         const _utinniVpKey = vpKey(attackerPlayerNum);
         await thread.send(`**Utinni!** — +1 VP earned (${game[_utinniVpKey].total} total).`).catch(discordCatch);
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Utinni!** — Jawa Scavenger earned +1 VP.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+        if (checkWinConditions) await checkWinConditions(game, client);
       }
       // Gain VP (Senator/Streetrat form surge): spending this surge earns N VP
       if (mod.surgeVpGain && mod.surgeVpGain > 0) {
@@ -4835,6 +4785,7 @@ export async function handleCombatSurge(interaction, ctx) {
         const _gvpKey = vpKey(attackerPlayerNum);
         await thread.send(`**+${mod.surgeVpGain} VP** earned (${game[_gvpKey].total} total).`).catch(discordCatch);
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Surge: +${mod.surgeVpGain} VP** (${game[_gvpKey].total} total).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+        if (checkWinConditions) await checkWinConditions(game, client);
       }
       // Bargain (Jawa Scavenger Elite): inline VP exchange during surge phase
       if (mod.surgeBargain) {
@@ -5523,7 +5474,7 @@ async function _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx) {
  * @param {object} ctx - combat context
  */
 export async function handleFigureheadDecision(interaction, ctx) {
-  const { getGame, client, saveGames, applyDamageAndFinishCombat, isDcUnique, getCelebrationButtons, dcHealthState, findDcMessageIdForFigure, logGameAction, isGroupDefeated, checkWinConditions, updateActivationsMessage, updateAttachmentMessageForDc, getDcStats, getDcEffects } = ctx;
+  const { getGame, client, saveGames, applyDamageAndFinishCombat, isDcUnique, getCelebrationButtons, dcHealthState, logGameAction, getDcStats, getDcEffects, processFigureDefeat: ctxProcessFigureDefeat } = ctx;
   const isUse = interaction.customId.startsWith('figurehead_use_');
   const gameId = parseCustomId(interaction.customId, isUse ? 'figurehead_use_' : 'figurehead_skip_');
   const game = await requireGame(interaction, getGame, gameId);
@@ -5551,42 +5502,21 @@ export async function handleFigureheadDecision(interaction, ctx) {
       if (fhMaxHp > 0) {
         fhResultText = `**Figurehead** — ${fhLabel || 'Murne Rin'} suffers **${fhDamage} damage** (${fhPrev} — ${fhNew} HP); ${combat.target.label} suffers 0.`;
         if (fhNew <= 0) {
-          // Murne Rin defeated
-          removeFigurePosition(game, defenderPlayerNum, fhFigKey);
+          // Murne Rin defeated — centralized defeat pipeline
           const fhDcName = dcNameFromFigureKey(fhFigKey);
-          const fhStats = getDcStats?.(fhDcName);
-          const fhEff = getDcEffects?.()?.[fhDcName];
-          const fhFigures = fhStats?.figures ?? 1;
-          const fhVp = (fhFigures > 1 && fhEff?.subCost != null) ? fhEff.subCost : (fhStats?.cost ?? 4);
-          awardKillVp(game, attackerPlayerNum, fhVp);
-          fhResultText += ` — **${fhLabel || 'Murne Rin'} defeated!** +${fhVp} VP`;
-          if (logGameAction) await logGameAction(game, client, `**Figurehead** — ${fhLabel || 'Murne Rin'} was defeated! +${fhVp} VP`, { phase: 'ROUND', icon: 'attack' });
-          // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Figurehead defeat
-          {
-            const _fhPrResult = checkFriendlyDefeatedPassiveRedraws(game, defenderPlayerNum, fhDcName);
-            for (const _fhPrCard of _fhPrResult.redrawn) {
-              if (logGameAction) await logGameAction(game, client, `**Passive Redraw** — **${_fhPrCard}** re-drawn from discard (friendly **${fhDcName}** defeated by Figurehead).`, { phase: 'ROUND', icon: 'card' });
-            }
-            if (_fhPrResult.redrawn.length > 0) {
-              if (ctx.updateHandVisualMessage) await ctx.updateHandVisualMessage(game, defenderPlayerNum, client).catch(discordCatch);
-              if (ctx.updateDiscardPileMessage) await ctx.updateDiscardPileMessage(game, defenderPlayerNum, client).catch(discordCatch);
-            }
+          if (ctxProcessFigureDefeat) {
+            const defeatResult = await ctxProcessFigureDefeat(game, {
+              defeatedPlayerNum: defenderPlayerNum,
+              figureKey: fhFigKey,
+              attackerPlayerNum,
+              msgId: fhMsgId,
+              dcName: fhDcName,
+              displayName: fhLabel || fhDcName,
+              source: 'Figurehead',
+            });
+            fhResultText += ` — **${fhLabel || 'Murne Rin'} defeated!** +${defeatResult?.vp ?? 0} VP`;
           }
-          // Nefarious Gains (Jabba): Figurehead defeat
-          const _ngFH = checkNefariousGains(game, defenderPlayerNum);
-          if (_ngFH && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngFH.jabbaOwnerPN} VP: ${_ngFH.vpTotal}`, { phase: 'ROUND', icon: 'card' });
-          const fhDcIds = getDcMessageIds(game, defenderPlayerNum);
-          const fhIdx = (fhDcIds || []).indexOf(fhMsgId);
-          if (fhIdx >= 0 && isGroupDefeated?.(game, defenderPlayerNum, fhIdx)) {
-            recomputeActivationCounts(game, defenderPlayerNum);
-            if (updateActivationsMessage) await updateActivationsMessage(game, defenderPlayerNum, client);
-            const fhCcAttachKey = ccAttachmentsKey(defenderPlayerNum);
-            if (game[fhCcAttachKey]?.[fhMsgId]?.length) {
-              delete game[fhCcAttachKey][fhMsgId];
-              if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client);
-            }
-          }
-          await checkWinConditions?.(game, client);
+          // Post-defeat: Celebration (unique figure defeated → offer Celebration CC play)
           const fhAtkerOwnerId = getPlayerId(game, attackerPlayerNum);
           if (!game.pendingCelebration && isDcUnique?.(fhDcName)) {
             game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
