@@ -74,6 +74,8 @@ const ACTIVATION_MSGID_FLAGS = [
   'multiFireActive',
   'multiFireBlockedTarget',
   'spotWeldPending',
+  'pendingMissileSalvo',
+  'pendingPounceSpaceChoice',
 ];
 
 /**
@@ -135,6 +137,13 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
   }
   for (const key of ACTIVATION_SCALAR_FLAGS) {
     delete game[key];
+  }
+  // moveInProgress uses compound keys `${msgId}_${figureIndex}` — clean any matching this activation
+  if (game.moveInProgress) {
+    const prefix = `${msgId}_`;
+    for (const mk of Object.keys(game.moveInProgress)) {
+      if (mk.startsWith(prefix)) delete game.moveInProgress[mk];
+    }
   }
 }
 
@@ -211,6 +220,7 @@ const ROUND_OBJECT_FLAGS = [
   'attackPerformedThisActivation',
   'vadersFocusUsedThisRound',
   'scavengedWalkerAttackPenalty',
+  'drivenByHatredAttackPenalty',
   'roundProgrammingOverrideTrait',
   'autofireActive',
   'fireMissionActive',
@@ -232,6 +242,8 @@ const ROUND_OBJECT_FLAGS = [
   'pendingSpacePick',
   'roundTrooperSurgeStun',
   'pendingDcAbilityChoice',
+  'moveInProgress',
+  'forceSlowSkipActivation',
 ];
 
 const ROUND_NULL_FLAGS = [

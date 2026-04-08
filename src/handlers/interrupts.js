@@ -208,13 +208,13 @@ export async function handleSelfDestructProbe(interaction, ctx) {
   const _sdpFaceLabel = `${_sdpHits}H`;
   const _sdpPos = (() => { for (const [, pos] of Object.entries(_sdpGame.figurePositions?.[_sdpMeta.playerNum] || {})) { const fk = `${_sdpMeta.dcName}-1-0`; return _sdpGame.figurePositions?.[_sdpMeta.playerNum]?.[fk] || null; } return null; })();
   let _sdpResultLog = `Rolled red die: **${_sdpFaceLabel}** — `;
+  const _sdpDamaged = [];
+  const _sdpDefeated = [];
   if (_sdpHits > 0 && _sdpPos) {
     const _sdpMs = getMapData ? getMapData(_sdpGame.selectedMap?.id) : null;
     const _sdpAdj = _sdpMs?.adjacency?.[String(_sdpPos).toLowerCase()] || [];
     const _sdpAllAdjSpaces = new Set([String(_sdpPos).toLowerCase(), ..._sdpAdj.map(s => String(s).toLowerCase())]);
     const _sdpHostileNum = opponentPlayerNum(_sdpMeta.playerNum);
-    const _sdpDamaged = [];
-    const _sdpDefeated = [];
     for (const [_sdpFk, _sdpFkPos] of Object.entries(_sdpGame.figurePositions?.[_sdpHostileNum] || {})) {
       if (!_sdpFkPos || !_sdpAllAdjSpaces.has(String(_sdpFkPos).toLowerCase())) continue;
       let _sdpHMsgId = null;
@@ -287,13 +287,13 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
     const _sdcpFigKey = _sdcpCombat?.target?.figureKey;
     const _sdcpPos = _sdcpFigKey ? _sdcpGame.figurePositions?.[_sdcpPending.defenderPlayerNum]?.[_sdcpFigKey] : null;
     let _sdcpResultLog = `Rolled red die: **${_sdcpFaceLabel}** — `;
+    const _sdcpDamaged = [];
+    const _sdcpDefeated = [];
     if (_sdcpHits > 0 && _sdcpPos && _sdcpGame.selectedMap?.id) {
       const _sdcpMs = getMapData ? getMapData(_sdcpGame.selectedMap.id) : null;
       const _sdcpAdj = _sdcpMs?.adjacency?.[String(_sdcpPos).toLowerCase()] || [];
       const _sdcpAllAdj = new Set([String(_sdcpPos).toLowerCase(), ..._sdcpAdj.map(s => String(s).toLowerCase())]);
       const _sdcpHostileNum = opponentPlayerNum(_sdcpPending.defenderPlayerNum);
-      const _sdcpDamaged = [];
-      const _sdcpDefeated = [];
       for (const [_sfk, _sfkPos] of Object.entries(_sdcpGame.figurePositions?.[_sdcpHostileNum] || {})) {
         if (!_sfkPos || !_sdcpAllAdj.has(String(_sfkPos).toLowerCase())) continue;
         if (_sfk === _sdcpFigKey) continue;
@@ -436,11 +436,11 @@ export async function handleLastResort(interaction, ctx) {
     const _lrFigKey = _lrCombat?.target?.figureKey;
     const _lrPos = _lrFigKey ? _lrGame.figurePositions?.[_lrPending.defenderPlayerNum]?.[_lrFigKey] : null;
     let _lrResultLog = `Rolled red die: **${_lrFaceLabel}** — `;
+    const _lrDamaged = [];
+    const _lrDefeated = [];
     if (_lrHits > 0 && _lrPos && _lrGame.selectedMap?.id) {
       const _lrMs = getMapData ? getMapData(_lrGame.selectedMap.id) : null;
       const _lrAdj = _lrMs?.adjacency?.[String(_lrPos).toLowerCase()] || [];
-      const _lrDamaged = [];
-      const _lrDefeated = [];
       for (const pn of [1, 2]) {
         for (const [_lfk, _lfkPos] of Object.entries(_lrGame.figurePositions?.[pn] || {})) {
           if (!_lfkPos) continue;

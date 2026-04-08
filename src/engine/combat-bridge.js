@@ -401,10 +401,20 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
 
   let _fdNeedsEmbedRefresh = false;
   if (damage > 0 && targetMsgId) {
-    let { newHp: newCur } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, damage, defenderPlayerNum);
+    // Extra Protection re-entry guard: damage was already applied in the first pass.
+    // extraProtectionTriggeredThisCombat is set before the first-pass return;
+    // pendingExtraProtection is deleted by the handler before re-calling us.
+    const _epReentry = !!(game.extraProtectionTriggeredThisCombat && !game.pendingExtraProtection);
+    let newCur;
+    if (_epReentry) {
+      const _epHpState = dcHealthState.get(targetMsgId)?.[targetFigIndex];
+      newCur = Array.isArray(_epHpState) ? _epHpState[0] : 0;
+    } else {
+      ({ newHp: newCur } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, damage, defenderPlayerNum));
+    }
     if (dcHealthState.get(targetMsgId)?.[targetFigIndex]) {
       // Achievement: Devastator (10+ damage in a single attack)
-      if (damage >= 10 && isDbConfigured() && achievementsChannelId) {
+      if (damage >= 10 && !_epReentry && isDbConfigured() && achievementsChannelId) {
         const _devUserId = getPlayerId(game, attackerPlayerNum);
         checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, _devUserId, 'single_attack_damage', damage)
           .catch((err) => console.error('[Achievements] Devastator check failed:', err.message));
@@ -415,7 +425,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // G22: Surge conditions (Bleed, Stun, Weaken, etc.) only apply when the attack deals damage.
       // This block is already inside `if (damage > 0 && targetMsgId)`, but we add an explicit
       // guard as defense-in-depth so conditions are never applied if damage is 0.
-      if (damage > 0) {
+      // Also skip on Extra Protection re-entry since conditions were already applied.
+      if (damage > 0 && !_epReentry) {
         let allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
         // Condition Immunity: filter out harmful conditions for immune figures
         if (allConditions.length && isConditionImmune(game, combat.target.figureKey)) {
@@ -453,6 +464,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
+      // Skip post-damage effects on Extra Protection re-entry — they already fired in the first pass.
+      if (!_epReentry) {
       // Furious Charge: if defender's player played this CC, and suffered >= threshold damage, grant Focus
       if (game.conditionalFocusIfDamagedGte?.playerNum === defenderPlayerNum && damage >= game.conditionalFocusIfDamagedGte.threshold) {
         if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
@@ -508,6 +521,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
+      } // end !_epReentry guard for post-damage effects
       // Extra Protection (Onar Koma CC): when a friendly figure within 2 spaces suffers 3+ damage
       // and survives, prompt the defending player to play Extra Protection (move 2 + free attack).
       if (damage >= 3 && newCur > 0 && !game.extraProtectionTriggeredThisCombat) {
