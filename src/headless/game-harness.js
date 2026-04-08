@@ -24,6 +24,7 @@ import { translateDiffToEvents } from '../domain/diff-translator.js';
 import { getDcList, getDcMessageIds, getActivationsRemaining, setActivationsRemaining, getActivatedDcIndices } from '../game/player-helpers.js';
 import { DC_ACTIONS_PER_ACTIVATION } from '../discord/messages.js';
 import { isCompanionHostDefeated } from '../game/dc-helpers.js';
+import { applyStartOfActivationEffects } from '../engine/activation-effects.js';
 
 /**
  * Headless-only DC activation: performs the 4 critical game-state mutations
@@ -35,9 +36,10 @@ import { isCompanionHostDefeated } from '../game/dc-helpers.js';
  * @param {object} game - The game state object
  * @param {string} customId - The dc_activate_ customId
  * @param {Map} dcExhaustedState - DC exhausted state map
+ * @param {Map} dcHealthState - DC health state map
  * @returns {{ ok: boolean, error?: string }}
  */
-function headlessActivateDc(game, customId, dcExhaustedState) {
+function headlessActivateDc(game, customId, dcExhaustedState, dcHealthState) {
   // customId format: dc_activate_{gameId}_{playerNum}_{dcIndex}_{ownerId}
   const suffix = customId.replace(/^dc_activate_/, '');
   const parts = suffix.split('_');
@@ -95,6 +97,9 @@ function headlessActivateDc(game, customId, dcExhaustedState) {
   if (game.agitateNextActivation && game.agitateNextActivation.playerNum === playerNum) {
     game.agitateNextActivation = null;
   }
+
+  // Deterministic start-of-activation effects
+  applyStartOfActivationEffects(game, { dcName, playerNum, displayName, msgId, dcHealthState });
 
   return { ok: true };
 }
@@ -181,7 +186,7 @@ export function createHarness(initialGame, options = {}) {
         const game = gamesMap.get(gameId);
         if (!game) return { game: null, messages: [], error: 'Game not found', events: [] };
         const beforeSnap = lightweight ? null : captureSnapshot(game);
-        const result = headlessActivateDc(game, customId, deps.dcExhaustedState);
+        const result = headlessActivateDc(game, customId, deps.dcExhaustedState, deps.dcHealthState);
         if (!result.ok) {
           // Graceful rejection (validation gate) vs hard error
           return { game, messages: [], error: result.rejected ? undefined : result.error, events: [] };

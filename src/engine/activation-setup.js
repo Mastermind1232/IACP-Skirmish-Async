@@ -26,6 +26,7 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
 import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from '../handlers/combat.js';
+import { applyStartOfActivationEffects } from './activation-effects.js';
 import { join } from 'path';
 
 // ─── Companion helpers (used by activation.js too) ───────────────────────────
@@ -339,10 +340,14 @@ export async function finalizeActivation({
   const _dcEff = getDcEffects()?.[dcName];
   const _abilityIds = _dcEff?.specialAbilityIds || [];
 
-  // D1. Mounted (Captain Terro, Kuiil, Dewback): gain 3 MP
-  if (_abilityIds.includes('mounted_terro') || _abilityIds.includes('mounted_kuiil') || _abilityIds.includes('mounted_dewback') || (_dcEff?.passives || []).includes('Mounted')) {
-    grantMovementBank(game, msgId, 3);
-    await thread.send({ content: `🐎 **Mounted** — **${displayName}** gains **3 movement points** at the start of activation.` }).catch(discordCatch);
+  // Shared deterministic start-of-activation effects (Mounted, Madness, Into the Fray, Comms Jammer, Focused on the Kill)
+  const { applied: _startEffects } = applyStartOfActivationEffects(game, { dcName, playerNum, displayName, msgId, dcHealthState });
+  for (const eff of _startEffects) {
+    await thread.send({ content: eff.message }).catch(discordCatch);
+  }
+  // Into the Fray may cause power token overflow — handle Discord UI
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    await sendPowerTokenOverflowUI(game, gameId, thread, playerNum, saveGames);
   }
 
   // D2. Vigor (Ahsoka Tano, Fifth Brother): choose 2 MP or 1 Block Token
@@ -354,20 +359,7 @@ export async function finalizeActivation({
     await thread.send({ content: `✨ **Vigor** — **${displayName}**: Choose one:`, components: [vigorRow] }).catch(discordCatch);
   }
 
-  // D3. Madness (Taron Malicos): if ≤2 CC in hand, suffer 1 Strain and become Focused
-  if (dcName === 'Taron Malicos') {
-    const hand = getCcHand(game, playerNum) || [];
-    if (hand.length <= 2) {
-      const figureKeys = Object.keys(game.figurePositions?.[playerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
-      for (const fk of figureKeys) {
-        applyCondition(game, fk, 'Focus');
-        const fkIdx = parseFigureKey(fk).figureIndex;
-        reduceHp(dcHealthState, game, msgId, fkIdx, 1, playerNum);
-      }
-      await thread.send({ content: `😤 **Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffered **1 Strain** and became **Focused**.` }).catch(discordCatch);
-      await logGameAction(game, client, `**Madness** — **${displayName}** suffered 1 Strain and became Focused (${hand.length} CC in hand).`, { phase: 'ACTIVATION', icon: 'condition' });
-    }
-  }
+  // D3. Madness — now handled by applyStartOfActivationEffects()
 
   // D4. Responsive (Shyla Varad): choose 1 MP or recover 1 Damage
   if (dcName === 'Shyla Varad') {
@@ -441,30 +433,8 @@ export async function finalizeActivation({
     }
   }
 
-  // D8. Into the Fray (Baze Malbus): gain 1 Surge Token per hostile with LOS, then gain 1 MP
-  if (dcName === 'Baze Malbus') {
-    grantMovementBank(game, msgId, 1);
-    const _mapSpaces = getMapDataFn(game.selectedMap?.id);
-    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const selfFk = `Baze Malbus-${dgIndex}-0`;
-    const selfPos = game.figurePositions?.[playerNum]?.[selfFk];
-    let surgeCount = 0;
-    if (selfPos && hasLineOfSight && _mapSpaces) {
-      const enemyNum = opponentPlayerNum(playerNum);
-      const allFigCoords = getAllFigureCoords(game);
-      for (const [, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
-        if (!ePos) continue;
-        if (hasLineOfSight(String(selfPos).toLowerCase(), String(ePos).toLowerCase(), _mapSpaces, allFigCoords)) surgeCount++;
-      }
-    }
-    if (surgeCount > 0) {
-      grantPowerTokens(game, selfFk, 'Surge', surgeCount);
-    }
-    await thread.send({ content: `🔥 **Into the Fray** — **${displayName}** gains **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).` }).catch(discordCatch);
-    if (game.pendingPowerTokenOverflow?.length > 0) {
-      await sendPowerTokenOverflowUI(game, gameId, thread, playerNum, saveGames);
-    }
-  }
+  // D8. Into the Fray — now handled by applyStartOfActivationEffects()
+  // (overflow UI handled after the shared function call above)
 
   // D9. Advanced Weapons Research (Director Krennic): friendly within range gains token
   if (dcName === 'Director Krennic') {
@@ -535,12 +505,7 @@ export async function finalizeActivation({
     }
   }
 
-  // D11. Comms Jammer (ISB Infiltrator Elite)
-  if (_abilityIds.includes('comms_jammer_isb')) {
-    const oppNum = opponentPlayerNum(playerNum);
-    game.commsJammerActivePlayerNum = playerNum;
-    await thread.send({ content: `📡 **Comms Jammer** — Opponent (P${oppNum}) cannot play Command Cards during this activation.` }).catch(discordCatch);
-  }
+  // D11. Comms Jammer — now handled by applyStartOfActivationEffects()
 
   // D12. Unstable Devices (Saska Teft): friendly in LOS gains 1 Device token
   if (_abilityIds.includes('unstable_devices_saska') && !game.unstableDevicesUsedThisActivation?.[msgId]) {
@@ -936,13 +901,9 @@ export async function finalizeActivation({
   }
 
   // D35. Skirmish Upgrade attachment activation effects
+  // Focused on the Kill — now handled by applyStartOfActivationEffects()
   const _suActivationUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
   if (_suActivationUpgrades.length) {
-    // Focused on the Kill (IG-88): +2 MP
-    if (cardNameIncludes(_suActivationUpgrades, 'Focused on the Kill')) {
-      grantMovementBank(game, msgId, 2);
-      await thread.send({ content: `**Focused on the Kill** — **${dcName}** gains **2 MP** at start of activation.` }).catch(discordCatch);
-    }
     // Wookiee Avenger (Chewbacca): free Slam
     if (cardNameIncludes(_suActivationUpgrades, 'Wookiee Avenger') && !game.wookieeAvengerSlamUsed?.[msgId]) {
       const _waMapId = game.selectedMap?.id;
