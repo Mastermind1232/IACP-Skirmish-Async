@@ -1,6 +1,6 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
-import { opponentPlayerNum, getPlayerId, getDcList, getDcMessageIds, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, checkNefariousGains } from '../game/index.js';
+import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
+import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { chunkButtonsToRows } from '../discord/components.js';
@@ -33,12 +33,24 @@ export async function handleToughLuck(interaction, ctx) {
     if (tlData.side === 'atk' && combat?.attackDiceResults?.[dieIdx]) {
       const die = combat.attackDiceResults[dieIdx];
       combat.attackDiceResults.splice(dieIdx, 1);
+      // Fix stale reroll tracking: removed die's index is gone, higher indices shift down
+      if (combat.attackerRerolledIndices) {
+        combat.attackerRerolledIndices = combat.attackerRerolledIndices
+          .filter(i => i !== dieIdx)
+          .map(i => i > dieIdx ? i - 1 : i);
+      }
       const t = recalcAttackTotals(combat.attackDiceResults);
       combat.attackRoll = { acc: t.acc, dmg: t.dmg, surge: t.surge };
       await logGameAction(game, client, `**Tough Luck** — Removed rerolled ${die.color} attack die. New totals: ${t.acc} acc, ${t.dmg} dmg, ${t.surge} surge.`, { phase: 'ROUND', icon: 'card' });
     } else if (tlData.side === 'def' && combat?.defenseDiceResults?.[dieIdx]) {
       const die = combat.defenseDiceResults[dieIdx];
       combat.defenseDiceResults.splice(dieIdx, 1);
+      // Fix stale reroll tracking: removed die's index is gone, higher indices shift down
+      if (combat.defenderRerolledIndices) {
+        combat.defenderRerolledIndices = combat.defenderRerolledIndices
+          .filter(i => i !== dieIdx)
+          .map(i => i > dieIdx ? i - 1 : i);
+      }
       const t = recalcDefenseTotals(combat.defenseDiceResults);
       combat.defenseRoll = { block: t.block, evade: t.evade, dodge: t.dodge };
       await logGameAction(game, client, `**Tough Luck** — Removed rerolled ${die.color} defense die. New totals: ${t.block} block, ${t.evade} evade.`, { phase: 'ROUND', icon: 'card' });
@@ -313,9 +325,8 @@ export async function handleStrikeMeDown(interaction, ctx) {
   const {
     getGame, canActAsPlayer, saveGames, client,
     dcHealthState, findDcMessageIdForFigure,
-    removeFigurePosition, logGameAction, isGroupDefeated,
-    updateActivationsMessage, getDcStats,
-    checkWinConditions,
+    logGameAction, getDcStats,
+    processFigureDefeat,
   } = ctx;
 
   const isYes = interaction.customId.startsWith('strike_me_down_yes_');
@@ -337,7 +348,7 @@ export async function handleStrikeMeDown(interaction, ctx) {
   await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   if (isYes) {
-    // Defeat Obi-Wan: set HP to 0, remove position
+    // Defeat Obi-Wan: set HP to 0 in embed
     const fk = smd.defenderFigureKey;
     const fkMatch = fk.match(/-(\d+)-(\d+)$/);
     const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
@@ -352,13 +363,7 @@ export async function handleStrikeMeDown(interaction, ctx) {
       }
     }
 
-    // Remove position
-    if (removeFigurePosition) removeFigurePosition(game, defPN, fk);
-
-    // Clean up conditions
-    if (game.figureConditions?.[fk]) delete game.figureConditions[fk];
-
-    // Award VP (reduced by 3, min 0) to the attacker
+    // Strike Me Down special VP: reduced by 3, min 0
     const dcName = dcNameFromFigureKey(fk);
     const stats = getDcStats?.(dcName);
     const baseCost = stats?.cost ?? 5;
@@ -369,24 +374,24 @@ export async function handleStrikeMeDown(interaction, ctx) {
     // Cancel the pending combat (attack ends)
     game.pendingCombat = null;
 
-    // Check if group fully defeated → decrement activations
-    if (targetMsgId) {
-      const dcMsgIds = getDcMessageIds(game, defPN);
-      const dcIdx = dcMsgIds?.indexOf(targetMsgId) ?? -1;
-      if (dcIdx >= 0 && isGroupDefeated?.(game, defPN, dcIdx)) {
-        if (updateActivationsMessage) await updateActivationsMessage(game, defPN, client);
-      }
-    }
-
     if (thread) await thread.send(`**Strike Me Down** — Obi-Wan is defeated (VP cost reduced by 3: ${reducedCost} VP awarded to attacker). Attack ended.`).catch(discordCatch);
     if (logGameAction) await logGameAction(game, client, `**Strike Me Down** — Obi-Wan chose to be defeated. Attacker gains ${reducedCost} VP (cost reduced by 3). Attack cancelled.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
-    // Nefarious Gains (Jabba): Strike Me Down defeat
-    const _ngSMD = checkNefariousGains(game, defPN);
-    if (_ngSMD && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngSMD.jabbaOwnerPN} VP: ${_ngSMD.vpTotal}`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
-
-    // Check win conditions
-    if (checkWinConditions) await checkWinConditions(game, client);
+    // Route through centralized defeat handler with awardVp: false (VP already awarded above with special reduction).
+    // Handles: position removal, conditions cleanup, CC attachments, passive redraws,
+    // Nefarious Gains, Hunt Dissent, Heroic Effort, Scavenged Weaponry, activation decrement, win conditions.
+    if (processFigureDefeat) {
+      await processFigureDefeat(game, {
+        defeatedPlayerNum: defPN,
+        figureKey: fk,
+        attackerPlayerNum: atkPN,
+        msgId: targetMsgId,
+        dcName,
+        displayName: dcName,
+        source: 'Strike Me Down',
+        awardVp: false,
+      });
+    }
   } else {
     if (thread) await thread.send('**Strike Me Down** — Declined. Attack continues normally.').catch(discordCatch);
   }
@@ -675,8 +680,8 @@ export async function handleIllicitArms(interaction, ctx) {
 
   let gameId;
   if (isPick) {
-    // illicit_arms_pick_{gameId}_{ccIndex}
-    const match = customId.match(/^illicit_arms_pick_([^_]+)_(\d+)$/);
+    // illicit_arms_pick_{gameId}_{cardName}
+    const match = customId.match(/^illicit_arms_pick_([^_]+)_(.+)$/);
     if (!match) return;
     gameId = match[1];
   } else {
@@ -816,12 +821,13 @@ export async function handleForceExhaustion(interaction, ctx) {
       }
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
 
-      // Apply Weakened to the attacker
+      // Apply Weakened to the attacker (respects immunity)
       const atkFk = fe.attackerFigureKey;
-      applyCondition(game, atkFk, 'Weakened');
-      // Also track in pendingCombat attacker conditions so combat resolution sees it
-      if (!game.pendingCombat.attackerConds.includes('Weakened')) {
-        game.pendingCombat.attackerConds.push('Weakened');
+      if (!isConditionImmune(game, atkFk)) {
+        applyCondition(game, atkFk, 'Weaken');
+        if (!game.pendingCombat.attackerConds.includes('Weaken')) {
+          game.pendingCombat.attackerConds.push('Weaken');
+        }
       }
     }
 

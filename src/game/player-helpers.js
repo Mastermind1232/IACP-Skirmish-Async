@@ -49,7 +49,8 @@ export function setActivatedDcIndices(game, pn, v)   { if (pn === 1) game.p1Acti
 
 /**
  * Recompute ActivationsTotal and ActivationsRemaining from board state.
- * A DC is activatable if it has figures on the board OR is Lie-in-Ambush set-aside.
+ * A DC is activatable if it has figures on the board (alive and deployed).
+ * Lie-in-Ambush set-aside groups are "out of play" and do NOT count until deployed.
  * Remaining = activatable DCs that haven't been activated this round.
  *
  * Call this instead of hand-rolling ±1 delta math on activation counts.
@@ -59,7 +60,6 @@ export function recomputeActivationCounts(game, pn) {
   const dcList = getDcList(game, pn) || [];
   const figs = game.figurePositions?.[pn] || {};
   const figKeys = Object.keys(figs);
-  const liaKeys = game.lieInAmbushSetAside?.[pn] || [];
   const activatedIndices = getActivatedDcIndices(game, pn) || [];
 
   let total = 0;
@@ -71,9 +71,8 @@ export function recomputeActivationCounts(game, pn) {
     if (/^\[.+\]$/.test(dcName)) continue;
 
     const hasFigures = figKeys.some(fk => fk.startsWith(dcName + '-') && figs[fk]);
-    const isLia = liaKeys.some(fk => fk.startsWith(dcName + '-'));
 
-    if (hasFigures || isLia) {
+    if (hasFigures) {
       total++;
       if (activatedIndices.includes(i)) activated++;
     }
