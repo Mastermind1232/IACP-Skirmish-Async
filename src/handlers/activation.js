@@ -1031,6 +1031,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     activateCardMsgId,
     deps: {
       dcExhaustedState, dcHealthState, dcMessageMeta: ctx.dcMessageMeta,
+      buildDcEmbedAndFiles: ctx.buildDcEmbedAndFiles,
       renderDcEmbed, getDcPlayAreaComponents,
       updateActivationsMessage, getActionsCounterContent,
       getDcActionButtons, getActivationMinimapAttachment,

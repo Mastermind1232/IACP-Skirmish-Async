@@ -210,6 +210,7 @@ export async function handleDcActivate(interaction, ctx) {
       deps: {
         dcExhaustedState, dcHealthState: ctx.dcHealthState,
         dcMessageMeta: ctx.dcMessageMeta,
+        buildDcEmbedAndFiles: ctx.buildDcEmbedAndFiles,
         renderDcEmbed, getDcPlayAreaComponents,
         updateActivationsMessage, getActionsCounterContent,
         getDcActionButtons, getActivationMinimapAttachment,
@@ -458,6 +459,7 @@ export async function handleDcToggle(interaction, ctx) {
       deps: {
         dcExhaustedState, dcHealthState,
         dcMessageMeta,
+        buildDcEmbedAndFiles: ctx.buildDcEmbedAndFiles,
         renderDcEmbed, getDcPlayAreaComponents,
         updateActivationsMessage, getActionsCounterContent,
         getDcActionButtons, getActivationMinimapAttachment,
