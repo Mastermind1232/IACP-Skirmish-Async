@@ -28,14 +28,22 @@ const TEST_DECKS = JSON.parse(readFileSync(join(__dirname, '../../data/destruct-
 const MAX_ITERATIONS = 10000;
 const MAX_ROUNDS = 10;
 
-// CLI args: --map <id> --mission <a|b> --games <n>
+// CLI args: --map <id> --mission <mapId:variant|a|b> --games <n>
 const cliArgs = process.argv.slice(2);
 function cliArg(flag, defaultVal) {
   const idx = cliArgs.indexOf(flag);
   return idx >= 0 && cliArgs[idx + 1] ? cliArgs[idx + 1] : defaultVal;
 }
-const MAP_ID = cliArg('--map', 'mos-eisley-outskirts');
-const MISSION_VARIANT = cliArg('--mission', 'a');
+// --mission accepts 'a', 'b', or 'mapId:variant' (e.g. 'hoth-battle-station:a').
+// When mapId:variant format is used, the map portion overrides --map.
+const MISSION_RAW = cliArg('--mission', 'a');
+let MAP_ID, MISSION_VARIANT;
+if (MISSION_RAW.includes(':')) {
+  [MAP_ID, MISSION_VARIANT] = MISSION_RAW.split(':');
+} else {
+  MAP_ID = cliArg('--map', 'mos-eisley-outskirts');
+  MISSION_VARIANT = MISSION_RAW;
+}
 const NUM_GAMES = parseInt(cliArg('--games', '10'), 10);
 
 async function runOneGame(gameNum) {
