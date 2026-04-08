@@ -2151,8 +2151,13 @@ function getObjectiveCoords(game) {
   const coords = new Set();
   const variant = game.selectedMission?.variant;
   const missionSide = variant === 'a' ? 'missionA' : variant === 'b' ? 'missionB' : null;
-  // Mission token positions (panels, contraband, critical positions)
-  if (missionSide && mapData[missionSide]?.positions) {
+  // Krykna missions: use CURRENT alive Krykna positions instead of static starts
+  if (Array.isArray(game.npcKrykna)) {
+    for (const k of game.npcKrykna) {
+      if (!k.defeated && k.coord) coords.add(String(k.coord).toLowerCase());
+    }
+  } else if (missionSide && mapData[missionSide]?.positions) {
+    // Mission token positions (panels, contraband, critical positions)
     for (const posArr of Object.values(mapData[missionSide].positions)) {
       for (const c of posArr) coords.add(String(c).toLowerCase());
     }
