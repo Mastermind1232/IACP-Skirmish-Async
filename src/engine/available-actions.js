@@ -353,9 +353,9 @@ function getRoundActiveActions(game, playerNum, deps) {
   }
   if (game.pendingDeflect) {
     const df = game.pendingDeflect;
-    if (playerNum === (df.defenderPlayerNum || df.attackerPlayerNum)) {
-      const acts = (df.targets || []).slice(0, 4).map((t, i) => ({
-        type: 'deflect_target', customId: `deflect_target_${gameId}_${i}`,
+    if (playerNum === df.deflectorPlayerNum) {
+      const acts = (df.hostiles || []).slice(0, 4).map((t, i) => ({
+        type: 'deflect_target', customId: `deflect_pick_${gameId}_${i}`,
         description: `Deflect: ${t.label}`,
       }));
       acts.push({ type: 'deflect_skip', customId: `deflect_skip_${gameId}`, description: 'Skip Deflect' });
