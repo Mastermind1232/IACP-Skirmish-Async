@@ -208,6 +208,7 @@ async function runOneGame(learnings, gameNum) {
   let lastFingerprint = '';
   let noProgressCount = 0;
   const NO_PROGRESS_LIMIT = 40; // 40 iterations with zero state change = stuck
+  let lastChosenMoveKey = null; // for fingerprint-based move failure detection
   let stopReason = 'normal'; // track how the game ended
 
   function boardFingerprint(g) {
@@ -321,6 +322,13 @@ async function runOneGame(learnings, gameNum) {
     } else {
       noProgressCount = 0;
       lastFingerprint = fp;
+    }
+
+    // Fingerprint-based move failure detection: if fingerprint unchanged and last
+    // action was move_pick_space, mark that coord as failed (catches silent failures)
+    if (noProgressCount > 0 && lastChosenMoveKey) {
+      failedMoves.add(lastChosenMoveKey);
+      lastChosenMoveKey = null;
     }
 
     // Prevent OOM: clear accumulated state every 200 iterations
@@ -452,6 +460,26 @@ async function runOneGame(learnings, gameNum) {
     action = pickSmartAction(playerActions, g, learnings, actingPN, dcHealthState, dcMessageMeta);
 
     if (!action) continue;
+
+    // Stall-escape: after 15 consecutive unchanged fingerprints, override AI
+    // to pick progression actions instead of stalling on movement/CC
+    const STALL_ESCAPE_THRESHOLD = 15;
+    if (noProgressCount >= STALL_ESCAPE_THRESHOLD) {
+      const escape =
+        playerActions.find(a => a.type === 'move_pick_space' && a.params?.done) ||
+        playerActions.find(a => a.type === 'dc_end_activation') ||
+        playerActions.find(a => a.type === 'end_activation') ||
+        playerActions.find(a => a.type === 'pass_activation_turn') ||
+        playerActions.find(a => a.type === 'end_round_phase') ||
+        playerActions.find(a => a.type === 'combat_gate' || a.type === 'combat_ready') ||
+        playerActions.find(a => a.type === 'combat_roll') ||
+        playerActions.find(a => !a.type.startsWith('play_cc') && !a.type.startsWith('move_'));
+      if (escape) action = escape;
+    }
+
+    // Track move_pick_space coord for fingerprint-based failure detection
+    lastChosenMoveKey = (action.type === 'move_pick_space' && action.params?.coord)
+      ? `${action.params.moveKey}_${action.params.coord}` : null;
 
     // Movement metrics tracking
     if (action.type === 'move_figure') { moveActions++; lastMoveId = action.customId; }

@@ -82,6 +82,7 @@ async function runOneGame(gameNum) {
   let sameTypeCount = 0;
   const failedMoves = new Set();
   let lastMoveId = null;
+  let lastChosenMoveKey = null; // for fingerprint-based move failure detection
   const ccFailureCounts = new Map();
   const CC_MAX_RETRIES = 3;
   let stuckReason = null;
@@ -138,6 +139,14 @@ async function runOneGame(gameNum) {
     } else {
       noProgressCount = 0;
       lastFingerprint = fp;
+    }
+
+    // Fingerprint-based move failure detection: if fingerprint unchanged and last
+    // action was move_pick_space, mark that coord as failed (catches silent failures
+    // where the submission doesn't throw but the figure doesn't actually move)
+    if (noProgressCount > 0 && lastChosenMoveKey) {
+      failedMoves.add(lastChosenMoveKey);
+      lastChosenMoveKey = null;
     }
 
     // Auto-resolve pending interactive states BEFORE action generation
@@ -270,9 +279,29 @@ async function runOneGame(gameNum) {
     const pn = turnActions.length > 0 ? turnPlayer : otherPlayer;
     const actions = pn === 1 ? p1Actions : p2Actions;
     const result = pickBestAction(engine, actions, pn, actionDeps);
-    const chosen = result?.action || actions[0];
+    let chosen = result?.action || actions[0];
 
     if (!chosen) { stuckReason = 'no_chosen_action'; break; }
+
+    // Stall-escape: after 15 consecutive unchanged fingerprints, override DQN
+    // to pick progression actions instead of stalling on movement/CC
+    const STALL_ESCAPE_THRESHOLD = 15;
+    if (noProgressCount >= STALL_ESCAPE_THRESHOLD) {
+      const escape =
+        actions.find(a => a.type === 'move_pick_space' && a.params?.done) ||
+        actions.find(a => a.type === 'dc_end_activation') ||
+        actions.find(a => a.type === 'end_activation') ||
+        actions.find(a => a.type === 'pass_activation_turn') ||
+        actions.find(a => a.type === 'end_round_phase') ||
+        actions.find(a => a.type === 'combat_gate' || a.type === 'combat_ready') ||
+        actions.find(a => a.type === 'combat_roll') ||
+        actions.find(a => !a.type.startsWith('play_cc') && !a.type.startsWith('move_'));
+      if (escape) chosen = escape;
+    }
+
+    // Track move_pick_space coord for fingerprint-based failure detection
+    lastChosenMoveKey = (chosen.type === 'move_pick_space' && chosen.params?.coord)
+      ? `${chosen.params.moveKey}_${chosen.params.coord}` : null;
 
     // Track move_figure submissions for failure detection
     if (chosen.type === 'move_figure') lastMoveId = chosen.customId;
