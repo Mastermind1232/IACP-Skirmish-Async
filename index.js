@@ -2265,7 +2265,7 @@ client.on('messageCreate', async (message) => {
   if (!botReady) return;
 
   // ── Kill all selfplay games (MCP) ────────────────────────────────────────────
-  // Deletes all active games (channels + DB) — use before starting fresh selfplay.
+  // Deletes only self-play games (channels + DB) — never touches human games.
   if (message.content.startsWith('killgamemcp')) {
     const mcpBothelpersId = '1481314970666008607';
     if (message.channel.id !== mcpBothelpersId) return;
@@ -2275,9 +2275,12 @@ client.on('messageCreate', async (message) => {
     try { stopQueue(); } catch {}
 
     const gamesMap = getGamesMap();
-    const gameIds = [...gamesMap.keys()];
+    const gameIds = [...gamesMap.keys()].filter(gid => {
+      const g = gamesMap.get(gid);
+      return g && g.selfPlay;
+    });
     if (gameIds.length === 0) {
-      await reply('No active games to kill.');
+      await reply('No active self-play games to kill.');
       return;
     }
     let killed = 0;
@@ -2295,7 +2298,7 @@ client.on('messageCreate', async (message) => {
         console.error(`[killgamemcp] Failed to delete game ${gid}:`, err.message);
       }
     }
-    await reply(`**Killed ${killed}/${gameIds.length} game(s).** Channels and DB cleaned up.`);
+    await reply(`**Killed ${killed} self-play game(s).** Channels and DB cleaned up.`);
     return;
   }
 
@@ -2454,9 +2457,12 @@ client.on('messageCreate', async (message) => {
       await reply(`**Seed game starting (MCP)**: ${p1Deck.name} vs ${p2Deck.name} @ ${mapId}`);
 
       try {
-        // Auto-cleanup stale games
+        // Auto-cleanup stale SELF-PLAY games only (never touch human games)
         const gamesMap = getGamesMap();
-        const staleIds = [...gamesMap.keys()];
+        const staleIds = [...gamesMap.keys()].filter(gid => {
+          const g = gamesMap.get(gid);
+          return g && g.selfPlay;
+        });
         if (staleIds.length > 0) {
           for (const gid of staleIds) {
             const g = gamesMap.get(gid);
@@ -2470,7 +2476,7 @@ client.on('messageCreate', async (message) => {
               console.error(`[selfplaymcp seed] Pre-start cleanup failed for ${gid}:`, err.message);
             }
           }
-          await reply(`Cleaned up ${staleIds.length} stale game(s) before starting.`);
+          await reply(`Cleaned up ${staleIds.length} stale self-play game(s) before starting.`);
         }
 
         const seedConfig = { mapId, p1Deck, p2Deck };
