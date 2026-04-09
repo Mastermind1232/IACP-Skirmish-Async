@@ -326,6 +326,37 @@ export async function postKryknaPushButtons(game, channel, gameId, deps) {
 }
 
 /**
+ * Post claimed Krykna placement buttons (Place / Skip) for the current player.
+ * @param {object} game
+ * @param {import('discord.js').TextChannel} channel
+ * @param {string} gameId
+ * @param {object} deps - { getPlayerId, discordCatch }
+ */
+export async function postKryknaPlaceButtons(game, channel, gameId, deps) {
+  if (!game.pendingClaimedKryknaQueue || game.pendingClaimedKryknaQueue.length === 0) return;
+  const playerNum = game.pendingClaimedKryknaQueue[0];
+  const pid = deps.getPlayerId(game, playerNum);
+  const claimed = game.claimedKrykna?.[playerNum] || 0;
+  const rows = [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`krykna_place_${gameId}`)
+        .setLabel(`Place a Krykna (${claimed} claimed)`)
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`krykna_place_skip_${gameId}`)
+        .setLabel('Skip')
+        .setStyle(ButtonStyle.Secondary),
+    ),
+  ];
+  await channel.send(sanitizeMentions({
+    content: `🕷️ **Claimed Krykna Placement** — <@${pid}>, you may place 1 claimed Krykna in your opponent's deployment zone:`,
+    components: rows,
+    allowedMentions: { users: [pid] },
+  })).catch(deps.discordCatch);
+}
+
+/**
  * Post fluctuation swap buttons for Lothal Wastes B end-of-round swap phase.
  * Shows one button per fluctuation position (that hasn't been moved this round) + Skip.
  * If game.pendingFluctuationSwapFirst is set, we're in the second-pick phase (target selection).

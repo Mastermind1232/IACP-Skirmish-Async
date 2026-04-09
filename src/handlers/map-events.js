@@ -1,13 +1,15 @@
 /**
- * Map event handlers: devaron_door_open_, devaron_crate_push_, krykna_push_, fluctuation_swap_, fluctuation_skip_
+ * Map event handlers: devaron_door_open_, devaron_crate_push_, krykna_push_, krykna_place_, krykna_place_skip_, krykna_place_pick_, fluctuation_swap_, fluctuation_skip_
  */
-import { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
-import { getPlayerId } from '../game/player-helpers.js';
+import { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, ButtonStyle } from 'discord.js';
+import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum } from '../game/player-helpers.js';
 import { edgeKey, normalizeCoord } from '../game/coords.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
+import { buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
+import { getValidKryknaPlacementSpaces } from '../game/mission-rules.js';
 import { continueAfterFluctuationSwap } from './round.js';
 
 /**
@@ -257,5 +259,152 @@ export async function handleFluctuationSkip(interaction, ctx) {
 
   // Queue empty — continue round flow
   await continueAfterFluctuationSwap(game, gameId, interaction, ctx);
+  saveGames();
+}
+
+// ── Claimed Krykna Placement handlers ──────────────────────────────────────
+
+/**
+ * Player clicks "Place a Krykna" — show space grid for opponent's deployment zone.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleKryknaPlace(interaction, ctx) {
+  const { getGame, saveGames, canActAsPlayer } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'krykna_place_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingClaimedKryknaQueue || game.pendingClaimedKryknaQueue.length === 0) {
+    await interaction.followUp({ content: 'No Krykna placement pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const expectedPlayerNum = game.pendingClaimedKryknaQueue[0];
+  if (!await requirePlayer(interaction, game, interaction.user.id, expectedPlayerNum, canActAsPlayer, `It's Player ${expectedPlayerNum}'s turn to place a Krykna.`)) return;
+
+  const claimed = game.claimedKrykna?.[expectedPlayerNum] || 0;
+  if (claimed <= 0) {
+    await interaction.followUp({ content: 'You have no claimed Krykna to place.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const mapId = game.selectedMap?.id;
+  const validSpaces = getValidKryknaPlacementSpaces(game, expectedPlayerNum, mapId);
+  if (validSpaces.length === 0) {
+    await interaction.followUp({ content: 'No valid spaces in opponent\'s deployment zone (all occupied).', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  await interaction.deferUpdate().catch(discordCatch);
+
+  // Set up pendingSpacePick for the generic space picker
+  const contextKey = `${gameId}_krykna_place`;
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[contextKey] = {
+    validSpaces,
+    cellPrefix: `krykna_place_pick_${gameId}_`,
+    mapSpaces: null,
+    headerText: `Place claimed Krykna in opponent's deployment zone`,
+    style: ButtonStyle.Success,
+  };
+
+  const { rows } = buildRowPickerButtons(validSpaces, `space_row_${contextKey}_`, { style: ButtonStyle.Success });
+  await interaction.message.edit({
+    content: `🕷️ **Place Krykna** — Pick a row, then a space in opponent's deployment zone:`,
+    components: rows.slice(0, 5),
+  }).catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * Player clicks "Skip" — declines to place a claimed Krykna this round.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleKryknaPlaceSkip(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, canActAsPlayer, postKryknaPlaceButtons } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'krykna_place_skip_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingClaimedKryknaQueue || game.pendingClaimedKryknaQueue.length === 0) {
+    await interaction.followUp({ content: 'No Krykna placement pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const expectedPlayerNum = game.pendingClaimedKryknaQueue[0];
+  if (!await requirePlayer(interaction, game, interaction.user.id, expectedPlayerNum, canActAsPlayer, `It's Player ${expectedPlayerNum}'s turn to place a Krykna.`)) return;
+
+  await interaction.deferUpdate().catch(discordCatch);
+  const pid = getPlayerId(game, expectedPlayerNum);
+  await logGameAction(game, client, `🕷️ <@${pid}> skipped claimed Krykna placement.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  // Advance queue
+  game.pendingClaimedKryknaQueue.shift();
+  if (game.pendingClaimedKryknaQueue.length > 0) {
+    const generalCh = await fetchGameChannel(client, game.generalId);
+    if (generalCh && postKryknaPlaceButtons) {
+      await postKryknaPlaceButtons(game, generalCh, gameId, { getPlayerId, discordCatch });
+    }
+  } else {
+    delete game.pendingClaimedKryknaQueue;
+  }
+  saveGames();
+}
+
+/**
+ * Player picked a space from the grid — place a Krykna NPC there.
+ * customId: krykna_place_pick_{gameId}_{coord}
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleKryknaPlacePick(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, canActAsPlayer, postKryknaPlaceButtons } = ctx;
+  const rest = parseCustomId(interaction.customId, 'krykna_place_pick_');
+  const lastUnderscore = rest.lastIndexOf('_');
+  const gameId = rest.substring(0, lastUnderscore);
+  const coord = rest.substring(lastUnderscore + 1).toLowerCase();
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingClaimedKryknaQueue || game.pendingClaimedKryknaQueue.length === 0) {
+    await interaction.followUp({ content: 'No Krykna placement pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const expectedPlayerNum = game.pendingClaimedKryknaQueue[0];
+  if (!await requirePlayer(interaction, game, interaction.user.id, expectedPlayerNum, canActAsPlayer, `It's Player ${expectedPlayerNum}'s turn to place a Krykna.`)) return;
+
+  // Validate the coord is still valid (occupancy may have changed)
+  const mapId = game.selectedMap?.id;
+  const validSpaces = getValidKryknaPlacementSpaces(game, expectedPlayerNum, mapId);
+  if (!validSpaces.includes(normalizeCoord(coord))) {
+    await interaction.followUp({ content: `${coord.toUpperCase()} is not a valid placement space (occupied or outside zone).`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  await interaction.deferUpdate().catch(discordCatch);
+
+  // Place a new Krykna NPC
+  const nextId = `krykna-${(game.npcKrykna || []).length + 1}`;
+  game.npcKrykna = game.npcKrykna || [];
+  game.npcKrykna.push({ id: nextId, coord: normalizeCoord(coord), hp: 8, maxHp: 8, defeated: false });
+
+  // Decrement claimed count
+  game.claimedKrykna[expectedPlayerNum] = Math.max(0, (game.claimedKrykna[expectedPlayerNum] || 0) - 1);
+
+  // Clean up space picker
+  cleanupSpacePick(game, `${gameId}_krykna_place`);
+
+  const pid = getPlayerId(game, expectedPlayerNum);
+  await logGameAction(game, client, `🕷️ <@${pid}> placed a claimed Krykna at **${coord.toUpperCase()}** (${nextId}).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  // Advance queue
+  game.pendingClaimedKryknaQueue.shift();
+  if (game.pendingClaimedKryknaQueue.length > 0) {
+    const generalCh = await fetchGameChannel(client, game.generalId);
+    if (generalCh && postKryknaPlaceButtons) {
+      await postKryknaPlaceButtons(game, generalCh, gameId, { getPlayerId, discordCatch });
+    }
+  } else {
+    delete game.pendingClaimedKryknaQueue;
+  }
   saveGames();
 }

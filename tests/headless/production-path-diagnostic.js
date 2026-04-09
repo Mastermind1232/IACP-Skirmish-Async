@@ -311,6 +311,12 @@ async function runOneGame(gameNum) {
       continue;
     }
 
+    // Auto-skip claimed Krykna placement (Chopper Base A post-push interactive phase)
+    if (g.pendingClaimedKryknaQueue?.length > 0) {
+      g.pendingClaimedKryknaQueue = null;
+      continue;
+    }
+
     // Combat ready-gate: both players must confirm — submit before action generation
     // (matches train.js pattern; without this, getAvailableActions may return empty
     // during combat-ready phase, causing false NO_PROGRESS)

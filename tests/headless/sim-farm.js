@@ -42,7 +42,7 @@ const TRACKED_PENDING = [
   'pendingCcConfirmation', 'pendingCcChoice', 'pendingCcSpaceChoice',
   'pendingCommDisruptionPrompt',
   // Interact/objectives
-  'pendingDoorSelections', 'pendingKryknaPushQueue',
+  'pendingDoorSelections', 'pendingKryknaPushQueue', 'pendingClaimedKryknaQueue',
 ];
 
 // Known handler prefixes, sorted longest-first for greedy matching

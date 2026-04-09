@@ -875,6 +875,12 @@ export async function runSelfPlayLoop(game, client, opts) {
         continue;
       }
 
+      // Auto-skip claimed Krykna placement (Chopper Base A post-push interactive phase)
+      if (g.pendingClaimedKryknaQueue?.length > 0) {
+        g.pendingClaimedKryknaQueue = null;
+        continue;
+      }
+
       // Auto-skip fluctuation swap (Lothal Wastes B end-of-round interactive phase)
       if (g.pendingFluctuationSwapQueue?.length > 0) {
         const pn = g.pendingFluctuationSwapQueue[0];

@@ -576,15 +576,41 @@ export function runNpcKryknaActivation(game, mapId, ctx = {}) {
     logs.push(`${damageEvents.length} hostile figure(s) adjacent to Krykna each suffer **2 damage**.`);
   }
 
-  // Deployment prompt for claimed Krykna
+  // Flag whether any claimed Krykna need interactive placement (after damage resolves)
   const claimed1 = game.claimedKrykna?.[1] || 0;
   const claimed2 = game.claimedKrykna?.[2] || 0;
-  if (claimed1 > 0 || claimed2 > 0) {
-    if (claimed1 > 0) logs.push(`Player 1 has ${claimed1} claimed Krykna — may deploy in opponent's deployment zone.`);
-    if (claimed2 > 0) logs.push(`Player 2 has ${claimed2} claimed Krykna — may deploy in opponent's deployment zone.`);
+  const claimedPlacementNeeded = claimed1 > 0 || claimed2 > 0;
+
+  return { logs, damageEvents, claimedPlacementNeeded };
+}
+
+/**
+ * Get valid spaces for placing a claimed Krykna — opponent's deployment zone minus occupied spaces.
+ * @param {object} game
+ * @param {number} playerNum - the player placing (they place in the OPPONENT's zone)
+ * @param {string} mapId
+ * @returns {string[]} normalized coords that are valid for placement
+ */
+export function getValidKryknaPlacementSpaces(game, playerNum, mapId) {
+  const zones = getDeploymentZones()[mapId];
+  if (!zones) return [];
+
+  // Player places in opponent's deployment zone
+  const opponentZoneLabel = playerNum === 1 ? 'blue' : 'red';
+  const zoneCoords = (zones[opponentZoneLabel] || []).map(c => normalizeCoord(c));
+
+  // Collect all occupied spaces (both players' figures + active Krykna)
+  const occupied = new Set();
+  for (const pn of [1, 2]) {
+    for (const coord of Object.values(game.figurePositions?.[pn] || {})) {
+      occupied.add(normalizeCoord(coord));
+    }
+  }
+  for (const k of (game.npcKrykna || [])) {
+    if (!k.defeated) occupied.add(normalizeCoord(k.coord));
   }
 
-  return { logs, damageEvents };
+  return zoneCoords.filter(c => !occupied.has(c));
 }
 
 /**

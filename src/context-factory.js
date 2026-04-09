@@ -267,7 +267,7 @@ const CONTEXT_GROUPS = {
   mapEvents: [
     'getGame', 'canActAsPlayer', 'saveGames', 'client', 'logGameAction',
     'getMapTokensData', 'postDevaronDoorButtons', 'postDevaronCratePushPrompts',
-    'getSpaceController',
+    'getSpaceController', 'postKryknaPlaceButtons',
   ],
 
   postDeploy: [

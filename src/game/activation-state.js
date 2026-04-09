@@ -402,6 +402,7 @@ const ROUND_DELETE_FLAGS = [
   'pendingDoorSelections',
   'pendingKryknaPushQueue',
   'kryknaPushedIds',
+  'pendingClaimedKryknaQueue',
   'roundDioxisActive',
   'pendingStartOfRoundResolve',
   'pendingDeployOrientation',

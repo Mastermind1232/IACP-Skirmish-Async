@@ -221,6 +221,7 @@ import {
   postDevaronDoorButtons as _postDevaronDoorButtonsPure,
   postDevaronCratePushPrompts as _postDevaronCratePushPromptsPure,
   postKryknaPushButtons as _postKryknaPushButtonsPure,
+  postKryknaPlaceButtons as _postKryknaPlaceButtonsPure,
   postFluctuationSwapButtons as _postFluctuationSwapButtonsPure,
 } from './src/engine/misc-helpers.js';
 import {
@@ -1088,6 +1089,12 @@ async function postDevaronCratePushPrompts(game, channel, gameId) {
  */
 async function postKryknaPushButtons(game, channel, gameId) {
   return _postKryknaPushButtonsPure(game, channel, gameId, {
+    getPlayerId, discordCatch,
+  });
+}
+
+async function postKryknaPlaceButtons(game, channel, gameId) {
+  return _postKryknaPlaceButtonsPure(game, channel, gameId, {
     getPlayerId, discordCatch,
   });
 }
@@ -3146,7 +3153,7 @@ function buildAllDeps() {
     getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton,
     countTerminalsControlledByPlayer, isFigureInDeploymentZone,
     getFiguresOnOrAdjacentToSpace, getFiguresAdjacentToCoord, applyNpcDamageToFigure,
-    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postFluctuationSwapButtons,
+    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postKryknaPlaceButtons, postFluctuationSwapButtons,
     getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
     getDetermineInitiativeButtons, populatePlayAreas,
     postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState,
@@ -4086,7 +4093,7 @@ client.on('interactionCreate', async (interaction) => {
         // All pushes done — run damage phase
         game2.kryknaPushedIds = null;
         const mapId2 = game2.selectedMap?.id;
-        const { logs: kryknaLogs2, damageEvents: kryknaEvt2 } = runNpcKryknaActivation(game2, mapId2, { getMapTokensData, getMapData, getMapRegistry, filterMapSpacesByBounds });
+        const { logs: kryknaLogs2, damageEvents: kryknaEvt2, claimedPlacementNeeded } = runNpcKryknaActivation(game2, mapId2, { getMapTokensData, getMapData, getMapRegistry, filterMapSpacesByBounds });
         for (const line of kryknaLogs2) {
           if (generalCh2) await logGameAction(game2, client, `🕷️ **Krykna:** ${line}`, { phase: 'ROUND', icon: 'attack' });
         }
@@ -4094,6 +4101,19 @@ client.on('interactionCreate', async (interaction) => {
           await applyNpcDamageToFigure(game2, pnDmg, figureKey, damage, 'Krykna', logGameAction, client, dcHealthState, dcMessageMeta);
         }
         if (kryknaEvt2.length > 0) await checkWinConditions(game2, client);
+
+        // After damage: claimed Krykna placement (initiative order, 1 per player per round)
+        if (claimedPlacementNeeded && generalCh2) {
+          const _kpInitNum = getInitiativePlayerNum(game2);
+          const _kpOtherNum = opponentPlayerNum(_kpInitNum);
+          const queue = [];
+          if ((game2.claimedKrykna?.[_kpInitNum] || 0) > 0) queue.push(_kpInitNum);
+          if ((game2.claimedKrykna?.[_kpOtherNum] || 0) > 0) queue.push(_kpOtherNum);
+          if (queue.length > 0) {
+            game2.pendingClaimedKryknaQueue = queue;
+            await postKryknaPlaceButtons(game2, generalCh2, gameId2);
+          }
+        }
       }
       saveGames();
     } else if (modalKey === 'dc_rename_modal_') {

@@ -27,6 +27,7 @@ import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js'
 import { chunkButtonsToRows, buildRowPickerButtons } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { _matchesKeywordPhrase } from '../game/validation.js';
+import { isBlitzMission, initBlitzDeployment, sendBlitzTurnPrompt, checkBlitzGroupComplete } from './blitz-deploy.js';
 
 /** Get blocking terrain info for deployment filtering.
  * When ignoreBlocking is true (Massive/Mobile), blocking cells are merged into
@@ -990,6 +991,13 @@ export async function handleDeploymentZone(interaction, ctx) {
   }
 
   // No attachments — proceed directly to deployment
+  // Blitz (Lothal-Wastes-A): special alternating deployment with post-deploy movement
+  if (isBlitzMission(game)) {
+    initBlitzDeployment(game);
+    await sendBlitzTurnPrompt(game, game.blitzDeployment.currentPlayerNum, ctx);
+    saveGames();
+    return;
+  }
   await _sendInitiativeDeployButtons(game, gameId, ctx);
   // Store deploy message IDs in the undo entry so they can be cleaned up on undo
   const undoEntry = game.undoStack?.[game.undoStack.length - 1];
@@ -1061,6 +1069,13 @@ async function _sendInitiativeDeployButtons(game, gameId, ctx) {
  */
 export async function startDeploymentAfterAttachments(game, client, ctx) {
   const gameId = game.gameId;
+  // Blitz: use alternating deployment instead of standard sequential
+  if (isBlitzMission(game)) {
+    initBlitzDeployment(game);
+    await sendBlitzTurnPrompt(game, game.blitzDeployment.currentPlayerNum, ctx);
+    ctx.saveGames();
+    return;
+  }
   await _sendInitiativeDeployButtons(game, gameId, ctx);
   ctx.saveGames();
 }
@@ -1558,7 +1573,10 @@ export async function handleDeployPick(interaction, ctx) {
     figLabel: figLabel.replace(/^Deploy /, ''),
     gameLogMessageId: deployLogMsg?.id,
   });
-  await updateDeployPromptMessages(game, playerNum, client);
+  // Blitz mode: skip full deploy prompt refresh — Blitz manages its own buttons
+  if (!game.blitzDeployment?.activeGroup) {
+    await updateDeployPromptMessages(game, playerNum, client);
+  }
   if (game.boardId && game.selectedMap) {
     try {
       const boardChannel = await fetchGameChannel(client, game.boardId);
@@ -1626,6 +1644,11 @@ export async function handleDeployPick(interaction, ctx) {
         console.error('Failed to send form picker:', err);
       }
     }
+  }
+
+  // Blitz: check if the active group is now fully deployed
+  if (game.blitzDeployment?.activeGroup) {
+    await checkBlitzGroupComplete(game, playerNum, interaction, ctx);
   }
 }
 

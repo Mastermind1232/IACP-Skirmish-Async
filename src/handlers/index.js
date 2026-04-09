@@ -55,6 +55,13 @@ import {
   startDeploymentAfterAttachments,
 } from './setup.js';
 import {
+  handleBlitzGroupSelect,
+  handleBlitzPass,
+  handleBlitzMoveFig,
+  handleBlitzMovePick,
+  handleBlitzMoveDone,
+} from './blitz-deploy.js';
+import {
   handleDcActivate,
   handleDcUnactivate,
   handleDcToggle,
@@ -131,7 +138,7 @@ import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
-import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleFluctuationSwap, handleFluctuationSkip } from './map-events.js';
+import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip } from './map-events.js';
 import {
   handleFavSave, handleFavRemove, handleFavRename,
   handleFavChoose, handleFavChooseSelect,
@@ -311,6 +318,13 @@ register('attach_reselect_', handleAttachReselect, 'setup');
 register('attach_done_confirm_', handleAttachDoneConfirm, 'setup');
 register('attach_done_redo_', handleAttachDoneRedo, 'setup');
 
+// --- Blitz Deployment (Lothal-Wastes-A) ---
+register('blitz_group_', handleBlitzGroupSelect, 'setup');
+register('blitz_pass_', handleBlitzPass, 'setup');
+register('blitz_move_fig_', handleBlitzMoveFig, 'setup');
+register('blitz_move_pick_', handleBlitzMovePick, 'setup');
+register('blitz_move_done_', handleBlitzMoveDone, 'setup');
+
 // --- DC Play Area ---
 register('dc_activate_', handleDcActivate, 'dcPlayArea');
 register('dc_unactivate_', handleDcUnactivate, 'dcPlayArea');
@@ -480,6 +494,9 @@ register('extra_protection_skip_', handleExtraProtection, 'interrupts');
 register('devaron_door_open_', handleDevaronDoorOpen, 'mapEvents');
 register('devaron_crate_push_', handleDevaronCratePush, 'mapEvents');
 register('krykna_push_', handleKryknaPush, 'mapEvents');
+register('krykna_place_pick_', handleKryknaPlacePick, 'mapEvents');
+register('krykna_place_skip_', handleKryknaPlaceSkip, 'mapEvents');
+register('krykna_place_', handleKryknaPlace, 'mapEvents');
 register('fluctuation_swap_', handleFluctuationSwap, 'round');
 register('fluctuation_skip_', handleFluctuationSkip, 'round');
 
@@ -601,6 +618,13 @@ export {
   startDeploymentAfterAttachments,
 } from './setup.js';
 export {
+  handleBlitzGroupSelect,
+  handleBlitzPass,
+  handleBlitzMoveFig,
+  handleBlitzMovePick,
+  handleBlitzMoveDone,
+} from './blitz-deploy.js';
+export {
   handleDcActivate,
   handleDcUnactivate,
   handleDcToggle,
@@ -676,7 +700,7 @@ export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleDoubtReroll } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
-export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleFluctuationSwap, handleFluctuationSkip } from './map-events.js';
+export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip } from './map-events.js';
 export { buildFavoritesListPayload, handleFavNameModal, handleFavRenameModal, handleFavListRenameModal } from './favorites.js';
 export {
   handleBleedResolve,
