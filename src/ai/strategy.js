@@ -843,6 +843,23 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
     } else {
       // Learned movement: fall through to pickSmartAction / WG move scorer
       _moveLearnedUsed++;
+      // Anti-oscillation: the WG scorer has no spatial memory and produces
+      // near-identical scores for adjacent squares, causing ping-pong loops.
+      // Remove move_pick_space targets the figure already visited this move.
+      const visitedSet = new Set((moveEntry?.visitedCoords || []).map(c => String(c).toLowerCase()));
+      if (visitedSet.size > 0) {
+        const freshViable = viable.filter(a => {
+          if (a.type !== 'move_pick_space' || a.params?.done || !a.params?.coord) return true;
+          return !visitedSet.has(String(a.params.coord).toLowerCase());
+        });
+        const hasFreshMoves = freshViable.some(a => a.type === 'move_pick_space' && !a.params?.done);
+        if (!hasFreshMoves && moveDone.length > 0) {
+          // All reachable spaces already visited — stop moving
+          _moveGreedyUsed++;
+          return { action: moveDone[0], score: 0 };
+        }
+        if (freshViable.length > 0) viable = freshViable;
+      }
     }
   }
 
