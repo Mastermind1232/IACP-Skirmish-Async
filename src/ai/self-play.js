@@ -912,7 +912,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         allActions.push(...actions
           .filter(a => {
             if (a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)) return false;
-            if (bannedStaleActions.has(a.customId)) return false;
+            if (bannedStaleActions.has(`${a.customId}::P${pn}`)) return false;
             return true;
           })
           .map(a => ({ ...a, _playerNum: pn, actingPlayer: pn })));
@@ -926,7 +926,7 @@ export async function runSelfPlayLoop(game, client, opts) {
         allActions.push(...otherActions
           .filter(a => {
             if (a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)) return false;
-            if (bannedStaleActions.has(a.customId)) return false;
+            if (bannedStaleActions.has(`${a.customId}::P${otherPn}`)) return false;
             return true;
           })
           .map(a => ({ ...a, _playerNum: otherPn, actingPlayer: otherPn })));
@@ -1176,8 +1176,8 @@ export async function runSelfPlayLoop(game, client, opts) {
       // (e.g. both readying for combat) doesn't trigger a false ban.
       const lci = lastCustomIds.length;
       if (lci >= 2 && lastCustomIds[lci - 1] === lastCustomIds[lci - 2]) {
-        bannedStaleActions.add(chosen.customId);
-        console.log(`[self-play] Banning stale action: ${chosen.customId}`);
+        bannedStaleActions.add(stampedId);
+        console.log(`[self-play] Banning stale action: ${stampedId}`);
       }
 
       // Trace collection
