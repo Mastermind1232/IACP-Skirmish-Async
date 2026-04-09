@@ -966,11 +966,24 @@ export async function runSelfPlayLoop(game, client, opts) {
         continue;
       }
 
-      // Action loop detection: same 3 actions repeating
+      // Action loop detection: same 2 or 3 actions repeating
+      if (lastCustomIds.length >= 4) {
+        // 2-action oscillation: ABAB
+        const a2 = lastCustomIds.slice(-4, -2).join(',');
+        const b2 = lastCustomIds.slice(-2).join(',');
+        if (a2 === b2) {
+          const loopPattern = lastCustomIds.slice(-2).join(' → ');
+          const loopErr = new Error(`Repeating 2-action loop detected: ${loopPattern}`);
+          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
+          await insertSelfPlayRun(artifact);
+          return { result: 'failed', artifact };
+        }
+      }
       if (lastCustomIds.length >= 6) {
-        const a = lastCustomIds.slice(0, 3).join(',');
-        const b = lastCustomIds.slice(3, 6).join(',');
-        if (a === b) {
+        // 3-action cycle: ABCABC
+        const a3 = lastCustomIds.slice(0, 3).join(',');
+        const b3 = lastCustomIds.slice(3, 6).join(',');
+        if (a3 === b3) {
           const loopPattern = lastCustomIds.slice(0, 3).join(' → ');
           const loopErr = new Error(`Repeating 3-action loop detected: ${loopPattern}`);
           const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });

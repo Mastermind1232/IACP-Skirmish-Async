@@ -650,6 +650,11 @@ export async function handleMovePick(interaction, ctx) {
   const massivePushHappened = game.massiveMovementLocked?.[figureKey];
   const newMp = massivePushHappened ? 0 : (mpRemaining - cost);
   moveState.mpRemaining = newMp;
+  // Track visited coords for anti-oscillation: record the space we're leaving
+  if (moveState.startCoord) {
+    if (!moveState.visitedCoords) moveState.visitedCoords = [];
+    moveState.visitedCoords.push(String(moveState.startCoord).toLowerCase());
+  }
   moveState.startCoord = targetInfo.topLeft;
   moveState.boardState = null;
   moveState.movementCache = null;

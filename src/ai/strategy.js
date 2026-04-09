@@ -791,6 +791,9 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
           }
         }
 
+        // Anti-oscillation: collect coords the figure already visited this move
+        const visitedSet = new Set((moveEntry?.visitedCoords || []).map(c => String(c).toLowerCase()));
+
         const bestSpaces = [];
         let bestDist = Infinity;
         for (const a of moveSpaces) {
@@ -816,17 +819,22 @@ export function pickBestAction(engine, actions, playerNum, deps = {}) {
           }
         }
 
-        if (bestDist < currentDist) {
+        // Filter out already-visited coords to prevent oscillation
+        const freshSpaces = bestSpaces.filter(a => !visitedSet.has(String(a.params.coord).toLowerCase()));
+        const candidates = freshSpaces.length > 0 ? freshSpaces : bestSpaces;
+
+        if (bestDist < currentDist && freshSpaces.length > 0) {
           _moveGreedyUsed++;
-          const bestAction = bestSpaces[Math.floor(Math.random() * bestSpaces.length)];
+          const bestAction = candidates[Math.floor(Math.random() * candidates.length)];
           return { action: bestAction, score: 0 };
         }
+        // No fresh improvement — stop moving rather than shuffle
         if (moveDone.length > 0) {
           _moveGreedyUsed++;
           return { action: moveDone[0], score: 0 };
         }
         _moveGreedyUsed++;
-        return { action: bestSpaces[Math.floor(Math.random() * bestSpaces.length)], score: 0 };
+        return { action: candidates[Math.floor(Math.random() * candidates.length)], score: 0 };
       }
       // No targets found — just suppress done and let DQN pick
       if (moveDone.length > 0) {
