@@ -71,6 +71,13 @@ export function getAvailableActions(game, playerNum, deps = {}) {
     }
     return [];
   }
+  // Post-deploy active ability: interactive buttons stashed by post-deploy handlers
+  if (game.postDeployQueue?.pendingActions?.length > 0) {
+    const q = game.postDeployQueue;
+    const pNum = q.activeAbility?.playerNum ?? q.currentPlayerNum;
+    if (playerNum === pNum) return q.pendingActions;
+    return [];
+  }
 
   // Phase gate takes priority — only ready/unready allowed
   if (game.phaseGate) {

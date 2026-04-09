@@ -26,6 +26,19 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 // cleaned up in finishPostDeploy.
 const _companionEmbedDeps = new Map();
 
+/**
+ * Stash pending button customIds on the postDeployQueue so getAvailableActions
+ * can surface them for the AI / selfplay without duplicating button-generation logic.
+ */
+function _stashPendingActions(game, buttons, label) {
+  if (!game.postDeployQueue) return;
+  game.postDeployQueue.pendingActions = buttons.map(b => ({
+    type: 'post_deploy_active',
+    customId: b.data.custom_id,
+    description: `Post-deploy: ${label}`,
+  }));
+}
+
 // ── Ability scanning ────────────────────────────────────────────────────────
 
 /**
@@ -375,6 +388,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
   const { logGameAction, saveGames } = ctx;
   const q = game.postDeployQueue;
   if (!q) return;
+  q.pendingActions = null; // Clear stash — movement system handles its own buttons
   const active = q.activeAbility;
   if (!active || !active.moveFigures) return;
 
@@ -401,6 +415,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
         .setLabel(buildFigureButtonLabel(f.figureKey, game))
         .setStyle(ButtonStyle.Primary)
       );
+      _stashPendingActions(game, btns, 'Smooth Landing');
       const rows = chunkButtonsToRows(btns);
       const generalChannel = await fetchGameChannel(client, game.generalId);
       if (generalChannel) {
@@ -493,6 +508,7 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
       .setCustomId(`pd_move_stay_${gameId}_${playerNum}_${figureKey}`)
       .setLabel('Stay (Skip Movement)')
       .setStyle(ButtonStyle.Secondary);
+    _stashPendingActions(game, [stayBtn], active.abilityLabel || 'Post-Deploy');
     await generalChannel.send({
       content: `🛬 **${active.abilityLabel || 'Post-Deploy'}** — <@${ownerId}>, **${dcName}** has no valid movement spaces (${mp} MP). Figure may stay in place.`,
       components: [new ActionRowBuilder().addComponents(stayBtn)],
@@ -654,6 +670,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         .setLabel(l.dcName)
         .setStyle(ButtonStyle.Primary)
       );
+      _stashPendingActions(game, btns, 'Security Detail');
       const rows = chunkButtonsToRows(btns);
       await logGameAction(game, client, `🛡️ **Security Detail** (${ability.dcName}) — <@${ownerId}>, choose which **LEADER** gains 1 Block Token:`, {
         components: rows,
@@ -737,6 +754,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
           new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${ability.playerNum}_cassian`).setLabel(`Move ${ability.dcName} first`).setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${ability.playerNum}_friend`).setLabel(`Move ${friend.dcName} first`).setStyle(ButtonStyle.Primary),
         ];
+        _stashPendingActions(game, orderBtns, 'Strike Team');
         await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose who moves first:`, {
           components: [new ActionRowBuilder().addComponents(orderBtns)],
           allowedMentions: { users: [ownerId] },
@@ -758,6 +776,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
           .setLabel(f.dcName)
           .setStyle(ButtonStyle.Primary)
         );
+        _stashPendingActions(game, btns, 'Strike Team');
         const rows = chunkButtonsToRows(btns);
         await logGameAction(game, client, `⚡ **Strike Team** — **${ability.dcName}** gains **2 MP**. <@${ownerId}>, choose an adjacent friendly figure to also gain **2 MP**:`, {
           components: rows,
@@ -793,6 +812,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
           .setLabel(buildFigureButtonLabel(fk, game))
           .setStyle(ButtonStyle.Primary)
         );
+        _stashPendingActions(game, btns, 'Extra Armor');
         const rows = chunkButtonsToRows(btns);
         await logGameAction(game, client, `🛡️ **Extra Armor** — <@${ownerId}>, distribute **4 Block Tokens** among your figures (4 remaining). Check your hand channel.`, {
           allowedMentions: { users: [ownerId] },
@@ -836,7 +856,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       }
       if (eligible.length === 0) {
         await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — No friendly figures within 3 spaces of **${ability.dcName}**.`, { phase: 'ROUND', icon: 'deployed' });
-        game.postDeployQueue.activeAbility = null;
+        game.postDeployQueue.activeAbility = null; game.postDeployQueue.pendingActions = null;
         await postAbilityPicker(game, gameId, client, logGameAction);
         break;
       }
@@ -853,6 +873,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         .setLabel(buildFigureButtonLabel(fk, game))
         .setStyle(ButtonStyle.Primary)
       );
+      _stashPendingActions(game, btns, 'Arms Distribution');
       const rows = chunkButtonsToRows(btns);
       await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — <@${ownerId}>, choose **1 friendly figure** within 3 spaces of **${ability.dcName}** to gain **1 Power Token**:`, {
         components: rows.slice(0, 5),
@@ -916,6 +937,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         companionName,
         msgId: ability.msgId,
       };
+      _stashPendingActions(game, btns, `Deploy ${companionName}`);
 
       await logGameAction(game, client, `👶 **Deploy ${companionName}** — <@${ownerId}>, choose a space to deploy **${companionName}** (${ability.dcName}'s space or an adjacent space):`, {
         components: rows,
@@ -942,6 +964,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         new ButtonBuilder().setCustomId(`pd_walker_move_${gameId}_${ability.playerNum}_${ability.msgId}`).setLabel('Perform Move').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`pd_walker_skip_${gameId}_${ability.playerNum}_${ability.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       ];
+      _stashPendingActions(game, btns, 'Scavenged Walker');
       await logGameAction(game, client, `🚶 **Scavenged Walker** — <@${ownerId}>, **${ability.dcName}** may perform a move after deployment:`, {
         components: [new ActionRowBuilder().addComponents(btns)],
         allowedMentions: { users: [ownerId] },
@@ -977,7 +1000,7 @@ async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGa
 
   if (outsideZone.length === 0 || active.tokenRemaining <= 0) {
     await logGameAction(game, client, `⚡ **Strike Team** — No friendly figures outside deployment zone (or no tokens remaining).`, { phase: 'ROUND', icon: 'deployed' });
-    game.postDeployQueue.activeAbility = null;
+    game.postDeployQueue.activeAbility = null; game.postDeployQueue.pendingActions = null;
     await postAbilityPicker(game, gameId, client, logGameAction);
     return;
   }
@@ -992,6 +1015,7 @@ async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGa
     .setLabel(`Done (${active.tokenRemaining} remaining)`)
     .setStyle(ButtonStyle.Secondary)
   );
+  _stashPendingActions(game, btns, 'Strike Team');
   const rows = chunkButtonsToRows(btns);
   await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose up to **${active.tokenRemaining}** friendly figure(s) outside your deployment zone to gain **1 Damage Token** each:`, {
     components: rows,
@@ -1303,6 +1327,7 @@ export async function handleStrikeTeamAdjPick(interaction, ctx) {
       new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${playerNum}_cassian`).setLabel(`Move ${cassianName} first`).setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${playerNum}_friend`).setLabel(`Move ${friendDcName} first`).setStyle(ButtonStyle.Primary),
     ];
+    _stashPendingActions(game, orderBtns, 'Strike Team');
     await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose who moves first:`, {
       components: [new ActionRowBuilder().addComponents(orderBtns)],
       allowedMentions: { users: [ownerId] },
@@ -1378,7 +1403,7 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   if (active.tokenRemaining <= 0) {
-    game.postDeployQueue.activeAbility = null;
+    game.postDeployQueue.activeAbility = null; game.postDeployQueue.pendingActions = null;
     await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   } else {
     await _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction);
@@ -1624,6 +1649,7 @@ export async function handleArmsDistFigPick(interaction, ctx) {
     .setLabel(t)
     .setStyle(t === 'Damage' || t === 'Surge' ? ButtonStyle.Danger : ButtonStyle.Primary)
   );
+  _stashPendingActions(game, tokenBtns, 'Arms Distribution');
   await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — Choose a Power Token type for **${dcName}**:`, {
     components: [new ActionRowBuilder().addComponents(tokenBtns)],
   });
