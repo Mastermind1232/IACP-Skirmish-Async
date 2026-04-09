@@ -16,7 +16,7 @@ const COMBAT_DEPS = [
   'recalcDefenseTotals', 'getInnateRerolls', 'getAttackerSurgeAbilities',
   'SURGE_LABELS', 'parseSurgeEffect', 'getAbility', 'resolveSurgeAbility',
   'getSurgeAbilityLabel', 'getRange', 'hasLineOfSight', 'getDiceData',
-  'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons',
+  'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons', 'getFiguresAdjacentToCoord',
   'calculateKillVp', 'checkHuntDissent', 'decrementActivationIfGroupDefeated',
   'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
   'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage',
