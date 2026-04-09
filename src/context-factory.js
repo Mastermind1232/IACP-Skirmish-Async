@@ -258,6 +258,7 @@ const CONTEXT_GROUPS = {
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
     'updateHandChannelMessages',
     'processFigureDefeat',
+    'sendPhaseGateMessages',
   ],
 
   requests: [

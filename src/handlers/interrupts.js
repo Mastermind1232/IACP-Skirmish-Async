@@ -12,6 +12,7 @@ import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { resolveStartOfRoundEffect } from './round.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
 export async function handleStillFaster(interaction, ctx) {
@@ -681,6 +682,7 @@ export async function handleForceSlowPick(interaction, ctx) {
   const dcName = dcNameFromFigureKey(figureKey);
   await interaction.message.edit({ content: `🐌 **Force Slow** — **${dcName}** will skip its next activation.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `🐌 **Force Slow** — **${dcName}** will skip its next activation.`, { phase: 'ROUND', icon: 'round' });
+  await resolveStartOfRoundEffect(game, ctx);
   saveGames(); return;
 }
 
@@ -717,6 +719,7 @@ export async function handleExcavationPick(interaction, ctx) {
   await interaction.message.edit({ content: `⛏️ **Excavation** — **${cardName}** moved from discard to hand.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `⛏️ **Excavation** — retrieved **${cardName}** from discard pile.`, { phase: 'ROUND', icon: 'round' });
   if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
+  await resolveStartOfRoundEffect(game, ctx);
   saveGames(); return;
 }
 

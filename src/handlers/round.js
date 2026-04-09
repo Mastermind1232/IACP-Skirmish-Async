@@ -1063,6 +1063,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
 
         // Programming Override (4-LOM): choose a TRAIT at start of round
         if (sIds.includes('programming_override_4lom')) {
+          game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
           const ownerId = getPlayerId(game, playerNum);
           const traits = ['TROOPER', 'SPY', 'HUNTER', 'SMUGGLER', 'FORCE USER', 'BRAWLER', 'CREATURE', 'LEADER', 'GUARDIAN', 'WOOKIEE', 'VEHICLE'];
           const btns = traits.map(t => new ButtonBuilder()
@@ -1087,6 +1088,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           const takenForms = _fk ? getFormsChosenByTeamClawdites(game, playerNum, _fk) : new Set();
           const formNames = Object.keys(formCards).filter(n => !takenForms.has(n));
           if (_fk && formNames.length > 0) {
+            game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
             const btns = formNames.map(name => new ButtonBuilder()
               .setCustomId(`form_pick_${gameId}_${_fk}_${name}`)
               .setLabel(name === _curForm ? `${name} (current)` : name)
@@ -1235,7 +1237,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
  * effect completes. Decrements the counter and triggers the activation phase when
  * all pending effects are resolved.
  */
-async function resolveStartOfRoundEffect(game, ctx) {
+export async function resolveStartOfRoundEffect(game, ctx) {
   game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 1) - 1;
   if (game.pendingStartOfRoundResolve <= 0) {
     delete game.pendingStartOfRoundResolve;
@@ -1338,6 +1340,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
           const takenForms = _fk ? getFormsChosenByTeamClawdites(game, playerNum, _fk) : new Set();
           const formNames = Object.keys(formCards).filter(n => !takenForms.has(n));
           if (_fk && formNames.length > 0) {
+            game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
             const btns = formNames.map(name => new ButtonBuilder()
               .setCustomId(`form_pick_${gameId}_${_fk}_${name}`)
               .setLabel(name === _curForm ? `${name} (current)` : name)
@@ -1356,6 +1359,11 @@ export async function handleEndStartOfRound(interaction, ctx) {
   }
 
   // Phase gate: both confirm SOR effects done before activation begins
+  if ((game.pendingStartOfRoundResolve || 0) > 0) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    saveGames();
+    return;
+  }
   const { sendPhaseGateMessages: _sorSendGate } = ctx;
   if (_sorSendGate) {
     await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -1445,7 +1453,8 @@ async function _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, 
     await logGameAction(game, client, `🐌 **Force Slow** — **${hostiles[0].dcName}** will skip its next activation (only hostile in range).`, { phase: 'ROUND', icon: 'round' });
     return;
   }
-  // Multiple targets — show picker
+  // Multiple targets — show picker (block activation until resolved)
+  game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
   const btns = hostiles.map(({ fk, dcName }) =>
     new ButtonBuilder().setCustomId(`force_slow_pick_${gameId}_${playerNum}_${fk}`).setLabel(dcName).setStyle(ButtonStyle.Primary)
   );
@@ -1487,7 +1496,8 @@ async function _postExcavationPicker(game, gameId, playerNum, dc, logGameAction,
     await logGameAction(game, client, `⛏️ **Excavation** — **${dc.displayName || dc.dcName}** retrieved **${cardName}** from discard pile (only eligible card).`, { phase: 'ROUND', icon: 'round' });
     return;
   }
-  // Multiple eligible — show picker
+  // Multiple eligible — show picker (block activation until resolved)
+  game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
   const btns = eligible.map(({ name, index }) =>
     new ButtonBuilder().setCustomId(`excavation_pick_${gameId}_${playerNum}_${index}`).setLabel(name.slice(0, 80)).setStyle(ButtonStyle.Primary)
   );
@@ -1971,6 +1981,7 @@ export async function handleProgrammingOverride(interaction, ctx) {
   game.roundProgrammingOverrideTrait[playerNum] = trait;
   await logGameAction(game, client, `🔧 **Programming Override** — **4-LOM** gains **${trait}** until end of round.`, { phase: 'ROUND', icon: 'round' });
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  await resolveStartOfRoundEffect(game, ctx);
   saveGames();
 }
 

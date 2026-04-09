@@ -23,6 +23,7 @@ import { dcNameFromFigureKey, isFigurelessDc } from '../game/index.js';
 import { stripBrackets, cardNameEquals } from '../game/card-names.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+import { resolveStartOfRoundEffect } from './round.js';
 import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows, buildRowPickerButtons } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
@@ -1843,6 +1844,9 @@ export async function handleFormPick(interaction, ctx) {
   }).catch(discordCatch);
   const isRoundShift = (game.currentRound || 0) >= 1 && game.p1ActivationsRemaining != null;
   await logGameAction?.(game, client, `🔄 **${isRoundShift ? 'Shift' : 'Shape'}** — **${dcName}** chose **${formName}** form.`, { phase: isRoundShift ? 'ROUND' : 'DEPLOYMENT', icon: isRoundShift ? 'round' : 'deploy' });
+  if (isRoundShift && (game.pendingStartOfRoundResolve || 0) > 0) {
+    await resolveStartOfRoundEffect(game, ctx);
+  }
 }
 
 /**
