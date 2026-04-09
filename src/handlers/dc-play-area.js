@@ -183,7 +183,7 @@ export async function handleDcActivate(interaction, ctx) {
   }
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const isMyTurn = ownerId === turnPlayerId;
-  if (!isMyTurn) {
+  if (!isMyTurn && !game.selfPlay) {
     const playAreaCh = await fetchGameChannel(client, getPlayAreaId(game, playerNum));
     const promptRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`confirm_activate_${gameId}_${msgId}_${interaction.message.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),

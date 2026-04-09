@@ -59,6 +59,19 @@ export function getAvailableActions(game, playerNum, deps = {}) {
     return [];
   }
 
+  // Post-deploy queue: player must pick which interactive ability to resolve next
+  if (game.postDeployQueue?.awaitingOrder) {
+    const q = game.postDeployQueue;
+    if (playerNum === q.currentPlayerNum) {
+      return (q.abilities || []).map((ab, idx) => ({
+        type: 'post_deploy_pick',
+        customId: `pd_pick_${game.gameId}_${q.currentPlayerNum}_${idx}`,
+        description: `Post-deploy: ${ab.label} — ${ab.dcName}`,
+      }));
+    }
+    return [];
+  }
+
   // Phase gate takes priority — only ready/unready allowed
   if (game.phaseGate) {
     return getPhaseGateActions(game, playerNum);

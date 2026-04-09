@@ -174,6 +174,7 @@ const PENDING_KEYS = [
   // Core phases
   'phaseGate', 'pendingCombat', 'moveInProgress', 'pendingEndTurn',
   'setupAttachmentPhase', 'endOfRoundWhoseTurn', 'startOfRoundWhoseTurn',
+  'postDeployQueue',
   // CC / negation / disruption
   'pendingNegation', 'pendingCommDisruptionPrompt',
   'pendingCcConfirmation', 'pendingCcChoice', 'pendingCcSpaceChoice',
