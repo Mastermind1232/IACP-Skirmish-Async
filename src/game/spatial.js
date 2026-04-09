@@ -157,12 +157,12 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
  * Collect all figure coordinates from both players (normalized to lowercase).
  * Used as the blocking-figure list for LOS checks.
  * @param {object} game
- * @returns {string[]}
+ * @returns {Set<string>}
  */
 export function getAllFigureCoords(game) {
-  const coords = [];
-  for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) coords.push(String(fp).toLowerCase());
-  for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) coords.push(String(fp).toLowerCase());
+  const coords = new Set();
+  for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) coords.add(String(fp).toLowerCase());
+  for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) coords.add(String(fp).toLowerCase());
   return coords;
 }
 
