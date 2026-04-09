@@ -1207,6 +1207,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
 
         // [Imperial Citadel]: At the start of each round, place 1 Damage or Block token on this card
         if (dcName.includes('Imperial Citadel') && text.includes('At the start of each round')) {
+          game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
           const btns = [
             new ButtonBuilder()
               .setCustomId(`imp_citadel_${gameId}_${playerNum}_damage`)
@@ -1947,6 +1948,7 @@ export async function handleImpCitadel(interaction, ctx) {
   } catch (err) {
     console.error('Failed to refresh Imperial Citadel embed:', err);
   }
+  await resolveStartOfRoundEffect(game, ctx);
   saveGames();
   await interaction.followUp({ content: `Placed ${label} token on Imperial Citadel.`, ephemeral: true }).catch(discordCatch);
 }

@@ -630,7 +630,7 @@ export async function renderMap(mapId, options = {}) {
     }
     // Power Tokens: up to 3 slots at top-left of unit
     const powerTokenTypes = (fig.powerTokens || []).slice(0, 3);
-    const ptSize = Math.max(11, clipRadius * (powerTokenTypes.length > 2 ? 0.3 : 0.36));
+    const ptSize = Math.max(12, clipRadius * (powerTokenTypes.length > 2 ? 0.33 : 0.396));
     const ptConfig = getTokenImagesConfig().powerTokens || {};
     const figX0 = cx - clipW;
     const figY0 = cy - clipH;
