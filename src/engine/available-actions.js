@@ -79,6 +79,13 @@ export function getAvailableActions(game, playerNum, deps = {}) {
     return [];
   }
 
+  // Start-of-round interactive effects (Rule by Fear, Force Slow, etc.)
+  if (game.pendingSorActions?.length > 0) {
+    const mine = game.pendingSorActions.filter(a => a.playerNum === playerNum);
+    if (mine.length > 0) return mine;
+    return [];
+  }
+
   // Phase gate takes priority — only ready/unready allowed
   if (game.phaseGate) {
     return getPhaseGateActions(game, playerNum);

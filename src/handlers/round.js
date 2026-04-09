@@ -30,6 +30,25 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
+ * Stash pending button customIds on game.pendingSorActions so getAvailableActions
+ * can surface them for the AI / selfplay without duplicating button-generation logic.
+ * @param {object} game
+ * @param {Array} buttons - ButtonBuilder instances or objects with customId/custom_id
+ * @param {string} label - Human-readable label for the effect
+ * @param {number} playerNum - Owning player
+ */
+function _stashSorActions(game, buttons, label, playerNum) {
+  game.pendingSorActions = game.pendingSorActions || [];
+  const newActions = buttons.map(b => ({
+    type: 'sor_effect',
+    customId: b.data?.custom_id ?? b.customId ?? b,
+    description: `SOR: ${label}`,
+    playerNum,
+  }));
+  game.pendingSorActions.push(...newActions);
+}
+
+/**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getFiguresOnOrAdjacentToSpace, runNpcThugActivation, applyNpcDamageToFigure, getMapData, getMapRegistry, filterMapSpacesByBounds, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, client
  */
@@ -1071,6 +1090,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
             .setLabel(t)
             .setStyle(ButtonStyle.Primary)
           );
+          _stashSorActions(game, btns, 'Programming Override', playerNum);
           const rows = chunkButtonsToRows(btns);
           await logGameAction(game, client, `🔧 **Programming Override** — <@${ownerId}>, choose a TRAIT for **${dc.displayName || dc.dcName}** to gain this round:`, {
             phase: 'ROUND', icon: 'round',
@@ -1094,6 +1114,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
               .setLabel(name === _curForm ? `${name} (current)` : name)
               .setStyle(name === _curForm ? ButtonStyle.Secondary : ButtonStyle.Primary)
             );
+            _stashSorActions(game, btns, 'Shape/Shift', playerNum);
             const rows = chunkButtonsToRows(btns);
             await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card (current: **${_curForm || 'none'}**):`, {
               phase: 'ROUND', icon: 'round',
@@ -1160,6 +1181,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
                 .setLabel(truncateLabel(card))
                 .setStyle(ButtonStyle.Danger)
               );
+              _stashSorActions(game, discardBtns, 'Rule by Fear', playerNum);
               const discardRows = chunkButtonsToRows(discardBtns);
               await withDiscordRetry(() => handCh.send({ content: `<@${ownerId}> **Rule by Fear** — You drew: ${drewText}. Choose 1 card from your hand to discard:`, components: discardRows, allowedMentions: { users: [ownerId] } }));
             } catch (err) {
@@ -1199,6 +1221,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
                 .setLabel(truncateLabel(card))
                 .setStyle(ButtonStyle.Primary)
               );
+              _stashSorActions(game, pickBtns, 'Rogue One', playerNum);
               const pickRows = chunkButtonsToRows(pickBtns);
               await withDiscordRetry(() => handCh.send({ content: `<@${ownerId}> **Rogue One** — You drew: ${drewText}. Choose a card to place on top of your deck (1 of 2):`, components: pickRows, allowedMentions: { users: [ownerId] } }));
             } catch (err) {
@@ -1220,6 +1243,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
               .setLabel('Place Block Token')
               .setStyle(ButtonStyle.Primary),
           ];
+          _stashSorActions(game, btns, 'Imperial Citadel', playerNum);
           await logGameAction(game, client, `🏰 **Imperial Citadel** — <@${ownerId}>, place 1 token on Imperial Citadel:`, {
             components: [new ActionRowBuilder().addComponents(btns)],
             allowedMentions: { users: [ownerId] },
@@ -1241,6 +1265,7 @@ export async function resolveStartOfRoundEffect(game, ctx) {
   game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 1) - 1;
   if (game.pendingStartOfRoundResolve <= 0) {
     delete game.pendingStartOfRoundResolve;
+    delete game.pendingSorActions;
     const { sendPhaseGateMessages, saveGames } = ctx;
     if (sendPhaseGateMessages) {
       await sendPhaseGateMessages(game, 'pre_activation', ctx);
@@ -1346,6 +1371,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
               .setLabel(name === _curForm ? `${name} (current)` : name)
               .setStyle(name === _curForm ? ButtonStyle.Secondary : ButtonStyle.Primary)
             );
+            _stashSorActions(game, btns, 'Shape/Shift', playerNum);
             const rows = chunkButtonsToRows(btns);
             await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card (current: **${_curForm || 'none'}**):`, {
               phase: 'ROUND', icon: 'round',
@@ -1458,6 +1484,7 @@ async function _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, 
   const btns = hostiles.map(({ fk, dcName }) =>
     new ButtonBuilder().setCustomId(`force_slow_pick_${gameId}_${playerNum}_${fk}`).setLabel(dcName).setStyle(ButtonStyle.Primary)
   );
+  _stashSorActions(game, btns, 'Force Slow', playerNum);
   const rows = chunkButtonsToRows(btns);
   await logGameAction(game, client, `🐌 **Force Slow** — <@${ownerId}>, choose a hostile figure within 3 spaces of **${dc.displayName || dc.dcName}** to skip its next activation:`, {
     phase: 'ROUND', icon: 'round',
@@ -1501,6 +1528,7 @@ async function _postExcavationPicker(game, gameId, playerNum, dc, logGameAction,
   const btns = eligible.map(({ name, index }) =>
     new ButtonBuilder().setCustomId(`excavation_pick_${gameId}_${playerNum}_${index}`).setLabel(name.slice(0, 80)).setStyle(ButtonStyle.Primary)
   );
+  _stashSorActions(game, btns, 'Excavation', playerNum);
   const rows = chunkButtonsToRows(btns);
   await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card (cost ≤1) from your discard pile to add to hand:`, {
     phase: 'ROUND', icon: 'round',
@@ -1747,12 +1775,17 @@ export async function handleRogueOneReturn(interaction, ctx) {
       await resolveStartOfRoundEffect(game, ctx);
     }
   } else {
-    // Rebuild buttons with updated hand
+    // Rebuild buttons with updated hand — re-stash for AI visibility
     const pickBtns = hand.slice(0, 25).map((c, idx) => new ButtonBuilder()
       .setCustomId(`rogue_one_return_${gameId}_${playerNum}_${idx}`)
       .setLabel(truncateLabel(c))
       .setStyle(ButtonStyle.Primary)
     );
+    // Clear old Rogue One stash entries and re-stash with updated indices
+    if (game.pendingSorActions) {
+      game.pendingSorActions = game.pendingSorActions.filter(a => !a.customId.startsWith('rogue_one_return_'));
+    }
+    _stashSorActions(game, pickBtns, 'Rogue One', playerNum);
     const pickRows = chunkButtonsToRows(pickBtns);
     await interaction.message.edit({ components: pickRows }).catch(discordCatch);
     await interaction.followUp({ content: `Placed **${card}** on deck. Pick 1 more card to return.`, ephemeral: true }).catch(discordCatch);

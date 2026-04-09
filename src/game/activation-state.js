@@ -405,6 +405,7 @@ const ROUND_DELETE_FLAGS = [
   'pendingClaimedKryknaQueue',
   'roundDioxisActive',
   'pendingStartOfRoundResolve',
+  'pendingSorActions',
   'pendingDeployOrientation',
   'pendingFluctuationSwapQueue',
   'pendingFluctuationSwapFirst',
