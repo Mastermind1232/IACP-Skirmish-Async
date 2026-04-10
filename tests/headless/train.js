@@ -27,6 +27,7 @@ import {
   recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, getEffectiveAlpha, getQValues,
   extractFeatures, setEncoderType, getEncoderType, setWgWeightClamp, setMoveDecisionBonus,
   setMoveQualitySignalFlag, setBoundaryFix,
+  getWgAuditCounters, resetWgAuditCounters,
 } from './learnings.js';
 import { buildGraph, graphForwardPass, setAttentionPool, setRichEdges, setMoveQualitySignal } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
@@ -172,6 +173,8 @@ async function runOneGame(learnings, gameNum) {
   let attackActions = 0;      // attack_target
   let totalActivations = 0;   // activate_dc (total activation starts)
   let passActivations = 0;    // pass_activation_turn
+  let activationsWithAttack = 0;  // activations that included at least one attack_target
+  let currentActivationHadAttack = false;
 
   // ── Runaway-loop diagnostics ────────────────────────────────────────────
   // Track per-game action type histogram + detect runaway windows (>200 iterations
@@ -196,6 +199,11 @@ async function runOneGame(learnings, gameNum) {
   let endWhenNoTargets = 0;           // chose end_activation when hasTargetsInRange=0
   let decisionsWithTargets = 0;       // total decisions where hasTargetsInRange=1
   let decisionsWithoutTargets = 0;    // total decisions where hasTargetsInRange=0
+
+  // ── Audit instrumentation ────────────────────────────────────────────────
+  let figureDefeats = 0;         // opponent figures that disappeared
+  let lastP1FigCount = Object.keys(game.figurePositions?.[1] || {}).length;
+  let lastP2FigCount = Object.keys(game.figurePositions?.[2] || {}).length;
 
   // CC failure retry guard: track failures scoped to game context
   // Key: "P{n}:{cardName}:R{round}:{roundPhase}:{activatingDcIdx}"
@@ -489,8 +497,13 @@ async function runOneGame(learnings, gameNum) {
     // Movement metrics tracking
     if (action.type === 'move_figure') { moveActions++; lastMoveId = action.customId; }
     else if (action.type === 'dc_end_activation') endActivations++;
-    else if (action.type === 'attack_target') attackActions++;
-    else if (action.type === 'activate_dc') totalActivations++;
+    else if (action.type === 'attack_target') { attackActions++; currentActivationHadAttack = true; }
+    else if (action.type === 'activate_dc') {
+      // Close out previous activation before starting new one
+      if (totalActivations > 0 && currentActivationHadAttack) activationsWithAttack++;
+      totalActivations++;
+      currentActivationHadAttack = false;
+    }
     else if (action.type === 'pass_activation_turn') passActivations++;
 
     // Runaway-loop diagnostics — track action type histogram + sliding window
@@ -640,6 +653,15 @@ async function runOneGame(learnings, gameNum) {
     } catch {
       tracer.afterAction(harness.getGame(), action);
     }
+
+    // ── Figure defeat tracking ─────────────────────────────────────────────
+    const curG = harness.getGame();
+    const p1fc = Object.keys(curG.figurePositions?.[1] || {}).length;
+    const p2fc = Object.keys(curG.figurePositions?.[2] || {}).length;
+    if (p1fc < lastP1FigCount) figureDefeats += lastP1FigCount - p1fc;
+    if (p2fc < lastP2FigCount) figureDefeats += lastP2FigCount - p2fc;
+    lastP1FigCount = p1fc;
+    lastP2FigCount = p2fc;
   }
 
   // Set stopReason for MAX_ITERATIONS case (loop exhausted without game ending)
@@ -676,6 +698,9 @@ async function runOneGame(learnings, gameNum) {
   // Use the round as a proxy — more precise iteration tracking below
   const finalRound = finalG.currentRound || 1;
 
+  // Close out final activation for per-activation attack tracking
+  if (totalActivations > 0 && currentActivationHadAttack) activationsWithAttack++;
+
   return {
     ended: finalGame.ended || false,
     winnerId: finalGame.winnerId,
@@ -690,6 +715,7 @@ async function runOneGame(learnings, gameNum) {
     attackActions,
     endActivations,
     totalActivations,
+    activationsWithAttack,
     passActivations,
     // Phase 2 metrics
     productiveActions,
@@ -709,6 +735,8 @@ async function runOneGame(learnings, gameNum) {
     runawayDominantType,
     actionTypeHist,
     stopReason,
+    // Audit instrumentation
+    figureDefeats,
   };
 }
 
@@ -815,6 +843,10 @@ async function main() {
   let cpCompleted = 0, cpP1 = 0, cpP2 = 0, cpVP = 0, cpGames = 0;
   let cpRunawayGames = 0, cpRunawayWindows = 0, cpTotalIters = 0; // runaway accumulators
   const cpStopReasons = {}; // stopReason → count per checkpoint window
+  let cpFigureDefeats = 0; // figure defeats in checkpoint window
+  // Audit: snapshot attack weights at start for delta tracking
+  const attackWeightsStart = learnings.withinGroupWeights?.attack ? learnings.withinGroupWeights.attack.map(w => w) : null;
+  resetWgAuditCounters();
   const startTime = Date.now();
   const updatesBefore = learnings.trainingStats?.totalUpdates || 0;
   let lastCheckpointUpdates = updatesBefore;
@@ -841,6 +873,7 @@ async function main() {
       attackActions: result.attackActions || 0,
       endActivations: result.endActivations || 0,
       totalActivations: result.totalActivations || 0,
+      activationsWithAttack: result.activationsWithAttack || 0,
       passActivations: result.passActivations || 0,
       // Phase 2
       productiveActions: result.productiveActions || 0,
@@ -858,6 +891,8 @@ async function main() {
       runawayWindowCount: result.runawayWindowCount || 0,
       runawayDominantType: result.runawayDominantType || null,
       stopReason: result.stopReason || 'normal',
+      // Audit
+      figureDefeats: result.figureDefeats || 0,
     });
 
     // Log runaway games immediately
@@ -874,6 +909,7 @@ async function main() {
       if (result.winnerLabel === 'P1') { p1Wins++; cpP1++; }
       if (result.winnerLabel === 'P2') { p2Wins++; cpP2++; }
     }
+    cpFigureDefeats += result.figureDefeats || 0;
     // Accumulate runaway stats
     cpTotalIters += result.totalIterations || 0;
     cpRunawayWindows += result.runawayWindowCount || 0;
@@ -937,6 +973,38 @@ async function main() {
           console.log(`    ChainHist: 1:${h['1']} 2:${h['2']} 3-5:${h['3-5']} 6-10:${h['6-10']} 11-20:${h['11-20']} 21+:${h['21+']}`);
         }
       }
+      // ── Audit Assertions ──────────────────────────────────────────────────
+      const wgAudit = getWgAuditCounters();
+      const atkW = learnings.withinGroupWeights?.attack;
+      const atkWeightMoved = atkW && attackWeightsStart
+        ? atkW.some((w, idx) => Math.abs(w - attackWeightsStart[idx]) > 1e-8)
+        : false;
+      const atkWeightDelta = atkW && attackWeightsStart
+        ? atkW.map((w, idx) => w - attackWeightsStart[idx])
+        : null;
+      const replayBuf = learnings.replayBuffer;
+      const replayFresh = replayBuf ? replayBuf.transitions.length > 0 : false;
+      const assertions = {
+        'ATTACK-FEAT-NONZERO': wgAudit.attackEntries > 0,
+        'ATTACK-WEIGHT-MOVED': atkWeightMoved,
+        'SURGE-FEAT-NONZERO':  wgAudit.surgeEntries > 0,
+        'MOVE-FEAT-NONZERO':   wgAudit.moveEntries > 0,
+        'REWARD-VP-FLOW':      cpVP > 0,
+        'REWARD-DMG-FLOW':     cpFigureDefeats > 0,
+        'REPLAY-FRESH':        replayFresh,
+        'WG-UPDATE-FIRES':     wgAudit.attackUpdates > 0,
+        'MOVE-CONTRASTIVE':    wgAudit.moveUpdates > 0,
+      };
+      const passCount = Object.values(assertions).filter(Boolean).length;
+      const totalAssertions = Object.keys(assertions).length;
+      console.log(`\n  ── AUDIT ASSERTIONS: ${passCount}/${totalAssertions} PASS ──`);
+      for (const [name, pass] of Object.entries(assertions)) {
+        console.log(`    ${pass ? 'PASS' : 'FAIL'} ${name}`);
+      }
+      console.log(`  WG counters: atk_entries=${wgAudit.attackEntries} atk_updates=${wgAudit.attackUpdates} move_entries=${wgAudit.moveEntries} move_updates=${wgAudit.moveUpdates} surge_entries=${wgAudit.surgeEntries} surge_updates=${wgAudit.surgeUpdates}`);
+      console.log(`  Figure defeats this window: ${cpFigureDefeats}`);
+      if (atkWeightDelta) console.log(`  Attack weight delta: [${atkWeightDelta.map(d => d.toFixed(4)).join(', ')}]`);
+
       // Persist checkpoint to training history for plateau detection
       recordTrainingCheckpoint(learnings, {
         completed: cpCompleted, total: cpGames,
@@ -948,6 +1016,8 @@ async function main() {
       // Reset window counters
       cpCompleted = 0; cpP1 = 0; cpP2 = 0; cpVP = 0; cpGames = 0;
       cpRunawayGames = 0; cpRunawayWindows = 0; cpTotalIters = 0;
+      cpFigureDefeats = 0;
+      resetWgAuditCounters();
       for (const k of Object.keys(cpStopReasons)) delete cpStopReasons[k];
       lastCheckpointUpdates = cpUpdatesNow;
     }
@@ -1019,6 +1089,8 @@ async function main() {
     console.log(`Avg rounds to finish: ${avgRound.toFixed(1)} (lower = faster resolution)`);
     console.log(`Avg updates per game: ${avgUpdates.toFixed(0)} (lower = fewer iterations)`);
     console.log(`Decisive wins (VP diff >= 10): ${decisive}/${completedGames.length} (${(decisive/completedGames.length*100).toFixed(0)}%)`);
+    const totalDefeats = completedGames.reduce((s, r) => s + (r.figureDefeats || 0), 0);
+    console.log(`Avg figure defeats/game: ${(totalDefeats / completedGames.length).toFixed(1)}`);
   }
 
   // Movement metrics
@@ -1152,9 +1224,12 @@ async function main() {
     const avgR1Closed = r1Closed.length > 0
       ? r1Closed.reduce((s, r) => s + r.round1DistClosed, 0) / r1Closed.length : null;
 
+    const totalActWithAtk = perGameResults.reduce((s, r) => s + r.activationsWithAttack, 0);
+
     console.log('\n=== Phase 2: Activation Quality ===');
     console.log(`  Avg productive actions/game: ${(totalProductive / n).toFixed(1)}`);
     console.log(`  Avg productive/activation: ${totalAct > 0 ? (totalProductive / totalAct).toFixed(2) : 'N/A'}`);
+    console.log(`  Activations with attack: ${totalActWithAtk}/${totalAct} (${totalAct > 0 ? (totalActWithAtk/totalAct*100).toFixed(1) : 'N/A'}%) — per-activation attack rate`);
     console.log(`  Premature end_activation/game: ${(totalPremature / n).toFixed(2)} (ended with productive actions available)`);
     if (avgR1Closed !== null) {
       console.log(`  Round-1 distance closed (avg): ${avgR1Closed.toFixed(1)} spaces`);
@@ -1170,6 +1245,7 @@ async function main() {
     const totEndNoTgt = perGameResults.reduce((s, r) => s + r.endWhenNoTargets, 0);
 
     console.log('\n=== Phase 2: Action Conditioning on hasTargetsInRange ===');
+    console.log(`  (per-decision rate — denominator includes move_pick_space steps; see per-activation rate above for attack frequency)`);
     if (totWithTargets > 0) {
       console.log(`  When targets IN range (${totWithTargets} decisions):`);
       console.log(`    attack: ${(totAtkInRange/totWithTargets*100).toFixed(1)}% | move: ${(totMoveInRange/totWithTargets*100).toFixed(1)}% | end: ${(totEndInRange/totWithTargets*100).toFixed(1)}%`);

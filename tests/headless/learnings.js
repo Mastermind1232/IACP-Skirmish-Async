@@ -92,6 +92,11 @@ export function setBoundaryFix(v) { BOUNDARY_FIX_ENABLED = !!v; }
 // (3x per update). Attack/surge/CC apply L2 once per update. Fix: L2 is now
 // applied once before the alternatives loop, matching all other scorers.
 
+// ── WG Audit Counters (per-checkpoint instrumentation) ──────────────────────
+let _wgAudit = { attackEntries: 0, attackUpdates: 0, moveEntries: 0, moveUpdates: 0, surgeEntries: 0, surgeUpdates: 0 };
+export function getWgAuditCounters() { return { ..._wgAudit }; }
+export function resetWgAuditCounters() { _wgAudit = { attackEntries: 0, attackUpdates: 0, moveEntries: 0, moveUpdates: 0, surgeEntries: 0, surgeUpdates: 0 }; }
+
 function getWgDecay(wgType) {
   switch (wgType) {
     case 'attack': return WG_DECAY_ATTACK;
@@ -1612,11 +1617,17 @@ function updateTraceNeural(learnings, trace) {
 
     // Within-group scorer update (Phase 5) — now with per-scorer L2 decay
     if (entry.wgFeatures && entry.wgType && learnings.withinGroupWeights) {
+      // Audit: count WG entries by type
+      if (entry.wgType === 'attack') _wgAudit.attackEntries++;
+      else if (entry.wgType === 'move') _wgAudit.moveEntries++;
+      else if (entry.wgType === 'surge') _wgAudit.surgeEntries++;
+
       const wgW = learnings.withinGroupWeights[entry.wgType];
       if (wgW) {
         const wgDecay = getWgDecay(entry.wgType);
         if (entry.wgType === 'move' && entry.moveContrastive) {
           // ── Contrastive move scorer update ──────────────────────────────
+          _wgAudit.moveUpdates++;
           const mc = entry.moveContrastive;
           const chosenQ = mc.chosenQuality;
           // L2 decay: apply once per update (matches attack/surge/CC scorers)
@@ -1637,6 +1648,8 @@ function updateTraceNeural(learnings, trace) {
           }
         } else {
           // Standard TD-delta-based WG update (attack, surge, CC)
+          if (entry.wgType === 'attack') _wgAudit.attackUpdates++;
+          else if (entry.wgType === 'surge') _wgAudit.surgeUpdates++;
           const alpha = entry.wgType === 'surge' ? ALPHA_WG_SURGE : ALPHA_WG;
           for (let fi = 0; fi < wgW.length; fi++) {
             wgW[fi] *= (1 - wgDecay); // L2 decay before gradient step
@@ -2412,7 +2425,40 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   // Epsilon-greedy exploration
   const epsilon = getEpsilon(learnings.meta.totalGames);
   if (Math.random() < epsilon) {
-    return heuristicPick(strategicActions, game);
+    const hAction = heuristicPick(strategicActions, game);
+    // Extract WG features for the SPECIFIC action the heuristic chose.
+    if (hAction) {
+      const hAbsType = abstractActionType(hAction, game);
+      const hGroup = groups[hAbsType];
+      if (hGroup && hGroup.length > 1) {
+        if (hAbsType === 'attack_close' || hAbsType === 'attack_ranged') {
+          pickSmartAction._lastWgFeatures = extractAttackFeatures(hAction, game, dcHealthState, dcMessageMeta);
+          pickSmartAction._lastWgType = 'attack';
+          pickSmartAction._lastMoveContrastive = null;
+        } else if (hAbsType === 'move_toward' || hAbsType === 'move_away' || hAbsType === 'move_lateral') {
+          const feats = extractMoveFeatures(hAction, game, playerNum);
+          pickSmartAction._lastWgFeatures = feats;
+          pickSmartAction._lastWgType = 'move';
+          const hChosenQ = dotProductWg(MOVE_QUALITY_WEIGHTS, feats);
+          const hSpaceAlts = hGroup.filter(a => a !== hAction && a.params?.coord && !a.params?.done);
+          const hSampled = hSpaceAlts.length > MOVE_CONTRASTIVE_SAMPLES
+            ? Array.from({ length: MOVE_CONTRASTIVE_SAMPLES }, () => hSpaceAlts.splice(Math.floor(Math.random() * hSpaceAlts.length), 1)[0])
+            : hSpaceAlts;
+          const hAlternatives = hSampled.map(a => {
+            const af = extractMoveFeatures(a, game, playerNum);
+            return { features: af, qualityScore: dotProductWg(MOVE_QUALITY_WEIGHTS, af) };
+          });
+          pickSmartAction._lastMoveContrastive = hAlternatives.length > 0 ? {
+            chosen: feats, chosenQuality: hChosenQ, alternatives: hAlternatives,
+          } : null;
+        } else {
+          pickSmartAction._lastWgFeatures = null;
+          pickSmartAction._lastWgType = null;
+          pickSmartAction._lastMoveContrastive = null;
+        }
+      }
+    }
+    return hAction;
   }
 
   // Exploitation: compute Q via neural network (flat or graph encoder)
@@ -2441,9 +2487,44 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   {
     const planResult = oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMeta);
     if (planResult) {
-      pickSmartAction._lastWgFeatures = null;
-      pickSmartAction._lastWgType = null;
-      pickSmartAction._lastMoveContrastive = null;
+      // Extract within-group features for the SPECIFIC action the planner chose.
+      // Must match features to the executed action — calling pickWithinGroup would
+      // return features for whatever target IT prefers, creating a mismatch.
+      const planAbsType = abstractActionType(planResult, game);
+      const planGroup = groups[planAbsType];
+      if (planGroup && planGroup.length > 1) {
+        if (planAbsType === 'attack_close' || planAbsType === 'attack_ranged') {
+          const feats = extractAttackFeatures(planResult, game, dcHealthState, dcMessageMeta);
+          pickSmartAction._lastWgFeatures = feats;
+          pickSmartAction._lastWgType = 'attack';
+        } else if (planAbsType === 'move_toward' || planAbsType === 'move_away' || planAbsType === 'move_lateral') {
+          const feats = extractMoveFeatures(planResult, game, playerNum);
+          pickSmartAction._lastWgFeatures = feats;
+          pickSmartAction._lastWgType = 'move';
+          // Build contrastive data with real quality scores (MOVE_QUALITY_WEIGHTS)
+          // so the contrastive update has a non-zero gradient signal.
+          const chosenQ = dotProductWg(MOVE_QUALITY_WEIGHTS, feats);
+          const spaceAlts = planGroup.filter(a => a !== planResult && a.params?.coord && !a.params?.done);
+          const sampled = spaceAlts.length > MOVE_CONTRASTIVE_SAMPLES
+            ? Array.from({ length: MOVE_CONTRASTIVE_SAMPLES }, () => spaceAlts.splice(Math.floor(Math.random() * spaceAlts.length), 1)[0])
+            : spaceAlts;
+          const alternatives = sampled.map(a => {
+            const af = extractMoveFeatures(a, game, playerNum);
+            return { features: af, qualityScore: dotProductWg(MOVE_QUALITY_WEIGHTS, af) };
+          });
+          pickSmartAction._lastMoveContrastive = alternatives.length > 0 ? {
+            chosen: feats, chosenQuality: chosenQ, alternatives,
+          } : null;
+        } else {
+          pickSmartAction._lastWgFeatures = null;
+          pickSmartAction._lastWgType = null;
+          pickSmartAction._lastMoveContrastive = null;
+        }
+      } else {
+        pickSmartAction._lastWgFeatures = null;
+        pickSmartAction._lastWgType = null;
+        pickSmartAction._lastMoveContrastive = null;
+      }
       return planResult;
     }
   }
