@@ -672,11 +672,20 @@ export async function runSelfPlayLoop(game, client, opts) {
   let consecutiveEmpty = 0;
   let totalActionsDispatched = 0;
   let lastCustomIds = [];
+  let loopRecoveries = 0;
 
   // Stale-action safety net: if the same action is picked twice consecutively without
   // changing game state, the handler likely rejected it (stun, boxed in, etc.).
   // Ban it until the phase changes to prevent infinite loops.
   const bannedStaleActions = new Set();
+
+  // Max loop recoveries before killing the game — prevents infinite recovery cycles
+  const MAX_LOOP_RECOVERIES = 10;
+
+  // Phase-advancing action types used by the stuck escape hatch
+  const ESCAPE_ACTION_TYPES = new Set([
+    'dc_end_activation', 'pass_activation_turn', 'end_activation_phase', 'end_end_of_round',
+  ]);
 
   // CC retry-loop prevention: track cards that hit the "illegal/manual" handler path.
   // Keyed by "cardName|roundPhase|activatingDcIndex" so the same card can be retried
@@ -955,41 +964,72 @@ export async function runSelfPlayLoop(game, client, opts) {
           const allPending = Object.keys(g).filter(k => k.startsWith('pending') && g[k] != null && g[k] !== false);
           console.warn(`[self-play] Empty actions — pending: [${pendingStates.join(', ')}], allPending: [${allPending.join(', ')}], combat: ${combatSnap}, phase=${g.phase}, roundPhase=${g.roundPhase}, acting=${acting}, round=${g.round}`);
         }
-        if (consecutiveEmpty > 20) {
-          const pendingStates = PENDING_KEYS.filter(k => g[k] != null && g[k] !== false);
-          console.error(`[self-play] stuck_no_actions — pending: [${pendingStates.join(', ')}], phase=${g.phase}, roundPhase=${g.roundPhase}, round=${g.round}`);
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_no_actions', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
-          await insertSelfPlayRun(artifact);
-          return { result: 'failed', artifact };
+
+        // Escape hatch: when nearing stuck threshold, bypass bans and force
+        // a phase-advancing action (dc_end_activation, pass_activation_turn, etc.)
+        // to unstick the game. Only fires when ban filtering removed all actions —
+        // if the engine itself returns nothing, there's nothing to force.
+        if (consecutiveEmpty >= 15 && allActions.length === 0) {
+          const escapePns = acting === 'both' ? [1, 2] : [acting, acting === 1 ? 2 : 1];
+          for (const pn of escapePns) {
+            const rawActions = getAvailableActions(g, pn, actionDeps);
+            const escape = rawActions.find(a => ESCAPE_ACTION_TYPES.has(a.type));
+            if (escape) {
+              console.log(`[self-play] Escape hatch: forcing ${escape.type} (${escape.customId}) for P${pn} to advance phase (consecutiveEmpty=${consecutiveEmpty})`);
+              allActions = [{ ...escape, _playerNum: pn, actingPlayer: pn }];
+              consecutiveEmpty = 0;
+              break;
+            }
+          }
         }
-        if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
-        continue;
+
+        if (allActions.length === 0) {
+          if (consecutiveEmpty > 20) {
+            const pendingStates = PENDING_KEYS.filter(k => g[k] != null && g[k] !== false);
+            console.error(`[self-play] stuck_no_actions — pending: [${pendingStates.join(', ')}], phase=${g.phase}, roundPhase=${g.roundPhase}, round=${g.round}`);
+            const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'stuck_no_actions', surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
+            await insertSelfPlayRun(artifact);
+            return { result: 'failed', artifact };
+          }
+          if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+          continue;
+        }
       }
 
-      // Action loop detection: same 2 or 3 actions repeating
+      // Action loop detection: same 2 or 3 actions repeating.
+      // Instead of killing the game, ban the looping actions and continue.
+      // This converts action_loop from a fatal stop to a recoverable event.
+      let loopDetected = false;
       if (lastCustomIds.length >= 4) {
         // 2-action oscillation: ABAB
         const a2 = lastCustomIds.slice(-4, -2).join(',');
         const b2 = lastCustomIds.slice(-2).join(',');
         if (a2 === b2) {
-          const loopPattern = lastCustomIds.slice(-2).join(' → ');
-          const loopErr = new Error(`Repeating 2-action loop detected: ${loopPattern}`);
-          const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
-          await insertSelfPlayRun(artifact);
-          return { result: 'failed', artifact };
+          for (const id of lastCustomIds.slice(-2)) bannedStaleActions.add(id);
+          console.log(`[self-play] Loop recovery (2-cycle #${loopRecoveries + 1}): banned [${lastCustomIds.slice(-2).join(', ')}]`);
+          loopDetected = true;
         }
       }
-      if (lastCustomIds.length >= 6) {
+      if (!loopDetected && lastCustomIds.length >= 6) {
         // 3-action cycle: ABCABC
         const a3 = lastCustomIds.slice(0, 3).join(',');
         const b3 = lastCustomIds.slice(3, 6).join(',');
         if (a3 === b3) {
-          const loopPattern = lastCustomIds.slice(0, 3).join(' → ');
-          const loopErr = new Error(`Repeating 3-action loop detected: ${loopPattern}`);
+          for (const id of lastCustomIds.slice(0, 3)) bannedStaleActions.add(id);
+          console.log(`[self-play] Loop recovery (3-cycle #${loopRecoveries + 1}): banned [${lastCustomIds.slice(0, 3).join(', ')}]`);
+          loopDetected = true;
+        }
+      }
+      if (loopDetected) {
+        loopRecoveries++;
+        lastCustomIds.length = 0; // reset detection window
+        if (loopRecoveries > MAX_LOOP_RECOVERIES) {
+          const loopErr = new Error(`Exhausted ${MAX_LOOP_RECOVERIES} loop recoveries — game is genuinely stuck`);
           const artifact = buildRunArtifact(g, { scenario, guildId, startedAt, ringBuffer, stopReason: 'action_loop', error: loopErr, surfaceCtx, traceData, explorationMode, totalActionsDispatched, figureDefeats, vpPerRound });
           await insertSelfPlayRun(artifact);
           return { result: 'failed', artifact };
         }
+        continue; // retry with looping actions banned
       }
 
       // Pick best action
