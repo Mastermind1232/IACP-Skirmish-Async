@@ -24,8 +24,9 @@ const HIDDEN_SIZE = 64;      // Hidden layer width (Phase 2: 32→64)
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
 const N_STEP = 4;            // N-step returns — multi-step credit assignment (was 1)
-let WEIGHT_DECAY = 0;             // L2 regularization disabled — testing whether any decay blocks stable weight learning (Phase 7)
+let WEIGHT_DECAY = 1e-5;          // L2 regularization — gentle pull toward zero to prevent Q-value spiral
 const WEIGHT_CLAMP_EMERGENCY = 50.0; // Hard safety net — should never trigger with decay active
+const BIAS_CLAMP = 20.0;          // Cap biases to prevent unbounded accumulation
 
 // ── Encoder Type Switch ──────────────────────────────────────────────────────
 // 'flat' = original 49-dim scalar features (production default)
@@ -65,7 +66,7 @@ const WG_EPSILON_DECAY = 3000;   // Games to decay within-group epsilon
 // Attack scorer saturated fastest (all 6 weights at ±25), so gets strongest decay.
 // Move scorer saturated 4/9 weights; gets moderate decay.
 // Surge/CC are healthy — light decay as preventive measure.
-const WG_DECAY_ATTACK = 0.001;   // Strong: all weights saturated, need active pullback
+const WG_DECAY_ATTACK = 0.0001;  // Matched to surge/CC — attack weights no longer saturated (max|w|=0.33 vs clamp=10)
 const WG_DECAY_MOVE = 0.0005;    // Moderate: 4/9 saturated, some features still learning
 const WG_DECAY_SURGE = 0.0001;   // Light: preventive only — not currently saturated
 const WG_DECAY_CC = 0.0001;      // Light: preventive only — not currently saturated
@@ -142,9 +143,9 @@ const MOVE_FEATURE_NAMES = [
   'destInEnemyRange', 'destOnObjective', 'destAdjacentToAlly',
 ];
 
-const SURGE_FEATURE_NAMES = ['damageValue', 'isAccuracy', 'isRecover', 'bias'];
+const SURGE_FEATURE_NAMES = ['damageValue', 'isAccuracy', 'isRecover', 'bias', 'accuracyNeeded', 'accuracySurplusIfAcc'];
 
-const CC_FEATURE_NAMES = ['ccCost', 'isAttachment', 'inCombat', 'bias'];
+const CC_FEATURE_NAMES = ['ccCost', 'ccIsOffensive', 'inCombat', 'bias'];
 
 function getGroupCategory(absType) {
   if (absType === 'attack_close' || absType === 'attack_ranged') return 'attack';
@@ -214,6 +215,14 @@ const FEATURE_NAMES = [
   // Phase 6: dc_special visibility (index 49)
   'activeDcHasSpecial',         // 1 if active DC has at least one usable special ability
 ];
+
+// Offensive (attacker-side) CC timings — used by ccIsOffensive feature in WG CC scorer.
+export const OFFENSIVE_CC_TIMINGS = new Set([
+  'whenyoudeclareattack', 'beforeyoudeclareattack', 'beforedeclaringrangedattack',
+  'duringattack', 'afterattack',
+  'afteryouresolveattackthatdidnotmissduetoaccuracy',
+  'afteryouresolveattacktargetingfigure',
+]);
 
 // Combat-phase CC timings — these CCs are free interrupts during combat resolution.
 // Lowercased to match the convention in canResolveCcHeadless.
@@ -597,11 +606,28 @@ function estimateMoveQuality(game, playerNum, dcHealthState, dcMessageMeta, wgMo
 }
 
 /**
+ * Candidate D helper: is this surge pure accuracy with no other payload?
+ * Returns true only for surges that add accuracy and nothing else —
+ * no damage, pierce, blast, cleave, recover, conditions, or special effects.
+ */
+function _isPureAccuracySurge(surgeKey) {
+  const p = parseSurgeEffect(surgeKey);
+  if ((p.accuracy || 0) <= 0) return false;
+  if ((p.damage || 0) + (p.pierce || 0) + (p.blast || 0) + (p.cleave || 0) + (p.recover || 0) > 0) return false;
+  if (p.conditions?.length > 0) return false;
+  const stdKeys = new Set(['damage', 'pierce', 'accuracy', 'conditions', 'blast', 'recover', 'cleave']);
+  for (const k of Object.keys(p)) {
+    if (!stdKeys.has(k) && p[k]) return false;
+  }
+  return true;
+}
+
+/**
  * Extract per-surge features for surge scoring (Phase 5 Slice 3).
  * Scores each surge option by its combat value.
  */
-function extractSurgeFeatures(action) {
-  const features = new Float64Array(4);
+function extractSurgeFeatures(action, game) {
+  const features = new Float64Array(6);
   features[3] = 1.0; // bias
 
   const surgeKey = action.params?.surgeKey;
@@ -618,6 +644,27 @@ function extractSurgeFeatures(action) {
 
   // [2] isRecover — does this surge recover health
   features[2] = (parsed.recover || 0) > 0 ? 1.0 : 0.0;
+
+  const cbt = game?.pendingCombat || game?.combat;
+  if (cbt && cbt.isRanged) {
+    const dist = cbt.distanceToTarget || 0;
+    const rolledAcc = cbt.attackRoll?.acc || 0;
+    const bonusAcc = cbt.bonusAccuracy || 0;
+    const surgeAcc = cbt.surgeAccuracy || 0;
+    const totalAcc = rolledAcc + bonusAcc + surgeAcc;
+
+    // [4] accuracyNeeded — how much the attack needs more accuracy to hit.
+    // 1.0 = severe deficit (≥5 short), 0.0 = already sufficient or melee.
+    const deficit = Math.max(0, dist - totalAcc);
+    features[4] = Math.min(deficit / 5, 1.0);
+
+    // [5] accuracySurplusIfAcc — interaction: surplus × isAccuracy.
+    // Non-zero only for accuracy surges when accuracy is already sufficient.
+    // Discriminative: damage surges get 0, accuracy surges get normalized surplus.
+    // Expected learned weight: negative (penalize redundant accuracy surges).
+    const surplus = Math.max(0, totalAcc - dist);
+    features[5] = features[1] * Math.min(surplus / 5, 1.0);
+  }
 
   return features;
 }
@@ -638,8 +685,9 @@ function extractCcFeatures(action, game) {
   // [0] ccCost — higher cost CCs tend to be more impactful, normalized to 0-1
   features[0] = ccData ? Math.min(ccData.cost || 0, 4) / 4 : 0;
 
-  // [1] isAttachment — attachments have persistent value vs one-shot effects
-  features[1] = ccData?.attachment ? 1.0 : 0.0;
+  // [1] ccIsOffensive — attacker-side combat timing CCs are high-value free interrupts
+  const timing = (ccData?.timing || '').toLowerCase();
+  features[1] = OFFENSIVE_CC_TIMINGS.has(timing) ? 1.0 : 0.0;
 
   // [2] inCombat — is there an active combat? Combat-timed CCs are more valuable then
   features[2] = game.pendingCombat ? 1.0 : 0.0;
@@ -1416,14 +1464,14 @@ function backpropUpdate(network, actionIdx, delta, alpha, h_pre, h, features) {
     for (let j = 0; j < HIDDEN_SIZE; j++) {
       Wa[m][j] = Math.max(-clamp, Math.min(clamp, Wa[m][j] * decay + alpha * dA * h[j]));
     }
-    ba[m] += alpha * dA; // No decay on biases (standard practice)
+    ba[m] = Math.max(-BIAS_CLAMP, Math.min(BIAS_CLAMP, ba[m] + alpha * dA));
   }
 
   // Value head gradients + decay
   for (let j = 0; j < HIDDEN_SIZE; j++) {
     Wv[j] = Math.max(-clamp, Math.min(clamp, Wv[j] * decay + alpha * delta * h[j]));
   }
-  network.bv += alpha * delta;
+  network.bv = Math.max(-BIAS_CLAMP, Math.min(BIAS_CLAMP, network.bv + alpha * delta));
 
   // Hidden layer gradients (sum V + A head contributions, gate through ReLU)
   for (let j = 0; j < HIDDEN_SIZE; j++) {
@@ -1438,7 +1486,7 @@ function backpropUpdate(network, actionIdx, delta, alpha, h_pre, h, features) {
     for (let i = 0; i < NUM_FEATURES; i++) {
       W1[j][i] = Math.max(-clamp, Math.min(clamp, W1[j][i] * decay + alpha * grad_pre * (features[i] || 0)));
     }
-    b1[j] += alpha * grad_pre;
+    b1[j] = Math.max(-BIAS_CLAMP, Math.min(BIAS_CLAMP, b1[j] + alpha * grad_pre));
   }
 }
 
@@ -2245,21 +2293,37 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
   }
 
   // Priority 1: Attack weakest target (focus-fire) — skip if carrying contraband
+  // Turn-denial tiebreaker: among equal-HP targets, prefer unactivated ones
+  // to remove an opponent activation from the round.
   if (!isCarrier) for (const at of ['attack_close', 'attack_ranged']) {
     const actions = groups[at];
     if (!actions || actions.length === 0) continue;
     const oppNum = actions[0].actingPlayer === 1 ? 2 : 1;
+    const oppActivated = new Set(oppNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []));
+    const oppMsgIds = oppNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
     const scored = actions.map(a => {
       const targetFk = a.params?.targetFigureKey;
       const hp = targetFk ? lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta) : null;
       const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
       const attackerPos = getAttackerPosition(a, game, dcMessageMeta);
       const dist = (targetPos && attackerPos) ? coordDistance(attackerPos, targetPos) : 99;
-      return { action: a, currentHp: hp?.current ?? 99, maxHp: hp?.max ?? 99, dist };
+      let targetActivated = 0;
+      if (targetFk && !targetFk.startsWith('npc_')) {
+        const targetDcName = targetFk.replace(/-\d+-\d+$/, '');
+        for (let i = 0; i < oppMsgIds.length; i++) {
+          const meta = dcMessageMeta?.get(oppMsgIds[i]);
+          if (meta && meta.dcName === targetDcName) {
+            targetActivated = oppActivated.has(i) ? 1 : 0;
+            break;
+          }
+        }
+      }
+      return { action: a, currentHp: hp?.current ?? 99, maxHp: hp?.max ?? 99, targetActivated, dist };
     });
     scored.sort((a, b) => {
       if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
       if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
+      if (a.targetActivated !== b.targetActivated) return a.targetActivated - b.targetActivated;
       return a.dist - b.dist;
     });
     return scored[0].action;
@@ -2693,6 +2757,10 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
       }
     }
 
+    // Build set of activated DC indices for the opponent to check turn-denial
+    const oppActivated = new Set(oppNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []));
+    const oppMsgIds = oppNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+
     const scored = actions.map(a => {
       const f = extractAttackFeatures(a, game, dcHealthState, dcMessageMeta);
       const targetFk = a.params?.targetFigureKey;
@@ -2721,12 +2789,27 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
       // Melee always reliable (accuracy not checked). This ensures the AI prefers
       // targets it can actually hit over far-away targets, even if far target has lower HP.
       const hitViability = (isRangedAttack && attackerExpAcc > 0 && dist > attackerExpAcc) ? 1 : 0;
+      // Turn-denial tiebreaker: prefer unactivated targets (0) over already-activated (1).
+      // Killing an unactivated enemy removes an opponent turn this round.
+      // Map figureKey → dcName → msgId → index in DcMessageIds → check ActivatedDcIndices.
+      let targetActivated = 0; // default: unactivated (NPC/unknown)
+      if (targetFk && !targetFk.startsWith('npc_')) {
+        const targetDcName = targetFk.replace(/-\d+-\d+$/, '');
+        for (let i = 0; i < oppMsgIds.length; i++) {
+          const meta = dcMessageMeta?.get(oppMsgIds[i]);
+          if (meta && meta.dcName === targetDcName) {
+            targetActivated = oppActivated.has(i) ? 1 : 0;
+            break;
+          }
+        }
+      }
       return {
         action: a, features: f,
         missionTargetPriority,
         hitViability,
         currentHp: hp?.current ?? 99,
         maxHp: hp?.max ?? 99,
+        targetActivated,
         dist,
       };
     });
@@ -2735,58 +2818,65 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
       if (a.hitViability !== b.hitViability) return a.hitViability - b.hitViability;
       if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
       if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
+      // Turn-denial: among equal-HP targets, prefer unactivated (deny their turn)
+      if (a.targetActivated !== b.targetActivated) return a.targetActivated - b.targetActivated;
       return a.dist - b.dist;
     });
     const best = scored[0];
     return { action: best.action, wgFeatures: best.features, wgType: group };
   }
 
-  // Activation order — combat-ready DCs first, then objective-aware fallback.
-  // Phase 1: if any DC has an enemy within its actual attack range, activate
-  //   that DC first (combat-ready gating). Ties broken by nearest enemy distance.
-  // Phase 2: if NO DC is combat-ready, use min(distEnemy, distObj) ordering.
-  // This prevents "objective gravity well" on maps like corellian where
-  // objective proximity pulls DCs away from immediate combat opportunities.
-  // Gated on _greedyMode to preserve training exploration diversity.
-  if (_greedyMode && absType === 'activate') {
+  // Activation order — HP-aware, combat-ready, objective-aware.
+  // Always-on (train + eval): the previous _greedyMode gate meant training
+  // used random activation order, so the DQN never saw HP-aware sequencing.
+  // Sort priority:
+  //   1. Combat-ready (enemy within attack range) — get immediate value
+  //   2. Wounded (any figure below max HP) — act before they die
+  //   3. Nearest to enemy or objective — positional tiebreaker
+  if (absType === 'activate') {
     let dcEffects;
     try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
     const playerNum = actions[0].actingPlayer;
     const oppNum = playerNum === 1 ? 2 : 1;
     const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
     const objCoords = getObjectiveCoords(game);
-    if (oppFigs.length > 0 || objCoords.length > 0) {
-      const scored = actions.map(a => {
-        const dcName = a.params?.dcName;
-        if (!dcName) return { action: a, minEnemy: 99, minCombined: 99, combatReady: false };
-        const atkRange = dcEffects ? getAttackRange(dcEffects, dcName) : 1;
-        const myFigs = Object.entries(game.figurePositions?.[playerNum] || {})
-          .filter(([fk]) => fk.startsWith(dcName + '-'));
-        let minEnemy = 99, minObj = 99;
-        let combatReady = false;
-        for (const [, myPos] of myFigs) {
-          for (const oppPos of oppFigs) {
-            const d = coordDistance(myPos, oppPos);
-            if (d < minEnemy) minEnemy = d;
-            if (d <= atkRange) combatReady = true;
-          }
-          for (const oc of objCoords) {
-            const d = coordDistance(myPos, oc);
-            if (d < minObj) minObj = d;
-          }
+    const scored = actions.map(a => {
+      const dcName = a.params?.dcName;
+      const msgId = a.params?.msgId;
+      if (!dcName) return { action: a, combatReady: false, wounded: false, minEnemy: 99, minCombined: 99 };
+      const atkRange = dcEffects ? getAttackRange(dcEffects, dcName) : 1;
+      const myFigs = Object.entries(game.figurePositions?.[playerNum] || {})
+        .filter(([fk]) => fk.startsWith(dcName + '-'));
+      let minEnemy = 99, minObj = 99;
+      let combatReady = false;
+      for (const [, myPos] of myFigs) {
+        for (const oppPos of oppFigs) {
+          const d = coordDistance(myPos, oppPos);
+          if (d < minEnemy) minEnemy = d;
+          if (d <= atkRange) combatReady = true;
         }
-        return { action: a, minEnemy, minCombined: Math.min(minEnemy, minObj), combatReady };
-      });
-      // Phase 1: combat-ready DCs first (sorted by nearest enemy)
-      const ready = scored.filter(s => s.combatReady);
-      if (ready.length > 0) {
-        ready.sort((a, b) => a.minEnemy - b.minEnemy);
-        return { action: ready[0].action, wgFeatures: null, wgType: 'activate' };
+        for (const oc of objCoords) {
+          const d = coordDistance(myPos, oc);
+          if (d < minObj) minObj = d;
+        }
       }
-      // Phase 2: no DC in attack range — use objective-aware distance
-      scored.sort((a, b) => a.minCombined - b.minCombined);
-      return { action: scored[0].action, wgFeatures: null, wgType: 'activate' };
-    }
+      // Check if any figure in this DC is wounded (below max HP)
+      let wounded = false;
+      if (msgId && dcHealthState) {
+        const healthArr = dcHealthState.get(msgId);
+        if (healthArr) wounded = healthArr.some(h => h && h[0] < h[1]);
+      }
+      return { action: a, combatReady, wounded, minEnemy, minCombined: Math.min(minEnemy, minObj) };
+    });
+    scored.sort((a, b) => {
+      // Tier 1: combat-ready first
+      if (a.combatReady !== b.combatReady) return a.combatReady ? -1 : 1;
+      // Tier 2: wounded first (among same combat-ready tier)
+      if (a.wounded !== b.wounded) return a.wounded ? -1 : 1;
+      // Tier 3: positional — nearest to enemy or objective
+      return a.minCombined - b.minCombined;
+    });
+    return { action: scored[0].action, wgFeatures: null, wgType: 'activate' };
   }
 
   // Move scorer (Phase 5 Slice 2 — learned with contrastive signal)
@@ -2838,13 +2928,35 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     const group = 'surge';
     const weights = wgWeights?.[group];
     if (weights && Math.random() >= getWgEpsilon(totalGames || 0)) {
-      let bestScore = -Infinity, bestAction = null, bestFeatures = null;
+      // Score all options
+      const scored = [];
       for (const a of actions) {
-        const f = extractSurgeFeatures(a);
+        const f = extractSurgeFeatures(a, game);
         const score = dotProductWg(weights, f);
-        if (score > bestScore) { bestScore = score; bestAction = a; bestFeatures = f; }
+        scored.push({ action: a, features: f, score });
       }
-      return { action: bestAction, wgFeatures: bestFeatures, wgType: group };
+      scored.sort((a, b) => b.score - a.score);
+
+      // Candidate D: deterministic override for pure redundant accuracy.
+      // If shot is guaranteed to hit and the scorer picked a pure-accuracy surge
+      // (no damage/pierce/condition/etc.), override with the best scorer-ranked
+      // alternative that has actual payload. Preserves scorer ranking among
+      // non-pure-accuracy options.
+      const cbt = game?.pendingCombat || game?.combat;
+      if (cbt?.isRanged && cbt.distanceToTarget != null && scored.length > 1) {
+        const dist = cbt.distanceToTarget;
+        const totalAcc = (cbt.attackRoll?.acc || 0) + (cbt.bonusAccuracy || 0) + (cbt.surgeAccuracy || 0);
+        if (totalAcc >= dist && _isPureAccuracySurge(scored[0].action.params?.surgeKey)) {
+          for (let i = 1; i < scored.length; i++) {
+            if (!_isPureAccuracySurge(scored[i].action.params?.surgeKey)) {
+              return { action: scored[i].action, wgFeatures: scored[i].features, wgType: group };
+            }
+          }
+          // All options are pure accuracy — keep scorer's pick
+        }
+      }
+
+      return { action: scored[0].action, wgFeatures: scored[0].features, wgType: group };
     }
     return { action: pick(actions), wgFeatures: null, wgType: null };
   }
@@ -3261,6 +3373,20 @@ export function loadLearnings(filePath) {
           console.log('[learnings] Migrated surge WG weights from inverted basin → positive priors [1.0, 0.5, 0.3, 0.0]');
         }
         data._surgeWgResetV1 = true;
+      }
+
+      // One-time migration: extend surge WG weights from 4→5 for accuracyNeeded feature.
+      // Append 0.0 so the new feature starts with no influence — scorer behaves identically
+      // until training learns a weight for it.
+      if (data.withinGroupWeights?.surge && data.withinGroupWeights.surge.length === 4) {
+        data.withinGroupWeights.surge.push(0.0);
+        console.log('[learnings] Extended surge WG weights 4→5: appended accuracyNeeded=0.0');
+      }
+
+      // One-time migration: extend surge WG weights from 5→6 for accuracySurplus feature.
+      if (data.withinGroupWeights?.surge && data.withinGroupWeights.surge.length === 5) {
+        data.withinGroupWeights.surge.push(0.0);
+        console.log('[learnings] Extended surge WG weights 5→6: appended accuracySurplus=0.0');
       }
 
       // One-time migration: reset inverted move WG weights to mild priors.

@@ -11,7 +11,7 @@
  */
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
-import { getDcStats, getMapData, getDcEffects } from '../../src/data-loader.js';
+import { getDcStats, getMapData, getDcEffects, getCcEffect } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
@@ -28,6 +28,7 @@ import {
   extractFeatures, setEncoderType, getEncoderType, setWgWeightClamp, setMoveDecisionBonus,
   setMoveQualitySignalFlag, setBoundaryFix,
   getWgAuditCounters, resetWgAuditCounters,
+  OFFENSIVE_CC_TIMINGS,
 } from './learnings.js';
 import { buildGraph, graphForwardPass, setAttentionPool, setRichEdges, setMoveQualitySignal } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
@@ -47,6 +48,7 @@ const TEST_DECKS = JSON.parse(readFileSync(TEST_DECKS_PATH, 'utf8'));
 
 // Global flag: when true, use locked training matchups + whitelist validation
 let useTrainingMatchups = false;
+let auditMode = false;
 
 /**
  * Pick a random matchup: two different decks from the test deck pool.
@@ -199,6 +201,46 @@ async function runOneGame(learnings, gameNum) {
   let endWhenNoTargets = 0;           // chose end_activation when hasTargetsInRange=0
   let decisionsWithTargets = 0;       // total decisions where hasTargetsInRange=1
   let decisionsWithoutTargets = 0;    // total decisions where hasTargetsInRange=0
+
+  // ── Activation-order diagnostics ──────────────────────────────────────────
+  let roundActivationIndex = 0;       // position within current round (0-based)
+  let roundTotalExpected = 0;         // total DCs at round start (both sides)
+  let woundedActivatedEarly = 0;      // wounded DC activated in first half of round
+  let woundedActivatedLate = 0;       // wounded DC activated in second half
+  let adjKillableActivatedEarly = 0;  // DC adjacent to killable enemy, activated early
+  let adjKillableActivatedLate = 0;   // same, activated late
+  let passWhenAhead = 0;              // pass_activation when own VP > opponent VP
+  let passWhenBehind = 0;             // pass_activation when own VP < opponent VP
+  let passWhenTied = 0;               // pass_activation when VP tied
+  let totalWoundedActivations = 0;    // total activations of wounded DCs
+  let totalAdjKillableActivations = 0; // total activations adjacent to killable enemy
+  // Artifact-corrected wound tracking: snapshot which msgIds are wounded at round
+  // boundary, so mid-round damage doesn't inflate "wounded activated early" counts.
+  const woundedAtRoundStart = new Set(); // msgIds wounded before round began
+
+  // ── Turn-denial diagnostics (Candidate B) ─────────────────────────────────
+  // Track attacks where equal-HP targets existed and whether unactivated was preferred.
+  let turnDenialOpportunities = 0;    // attacks where ≥2 targets had same HP and ≥1 was unactivated
+  let turnDenialChosen = 0;           // of those, chose the unactivated target
+  let turnDenialMissed = 0;           // of those, chose the activated target
+
+  // ── Audit counters (coverage + surge accuracy) ──────────────────────────────
+  const auditDcAppearances = {};    // dcName → count (games appeared)
+  const auditDcActivations = {};    // dcName → count
+  const auditDcAttacks = {};        // dcName → count (attacks performed)
+  const auditDcDefeats = {};        // dcName → count (figures defeated from this DC)
+  const auditCcPlays = {};          // ccName → count
+  const auditCcOpportunities = {};  // ccName → count (offered but not necessarily chosen)
+  const auditSurgeEvents = [];      // detailed surge decision log
+  const auditCcDecisions = [];      // CC choice audit: mixed-choice + offensive tracking
+
+  // Record DC appearances for this game (must be after auditDcAppearances decl)
+  if (auditMode) {
+    for (const msgId of [...(game.p1DcMessageIds || []), ...(game.p2DcMessageIds || [])]) {
+      const meta = dcMessageMeta.get(msgId);
+      if (meta?.dcName) auditDcAppearances[meta.dcName] = (auditDcAppearances[meta.dcName] || 0) + 1;
+    }
+  }
 
   // ── Audit instrumentation ────────────────────────────────────────────────
   let figureDefeats = 0;         // opponent figures that disappeared
@@ -494,17 +536,197 @@ async function runOneGame(learnings, gameNum) {
     lastChosenMoveKey = (action.type === 'move_pick_space' && action.params?.coord)
       ? `${action.params.moveKey}_${action.params.coord}` : null;
 
+    // ── Audit: track CC opportunities (any time play_cc is in available actions) ──
+    if (auditMode) {
+      for (const a of playerActions) {
+        if (a.type === 'play_cc' || a.type === 'play_cc_special' || a.type === 'play_cc_double') {
+          if (a.params?.cardName) auditCcOpportunities[a.params.cardName] = (auditCcOpportunities[a.params.cardName] || 0) + 1;
+        }
+      }
+      // ── CC decision audit: mixed-choice tracking ──
+      if (action.type === 'play_cc' || action.type === 'play_cc_special' || action.type === 'play_cc_double') {
+        try {
+          const ccActions = playerActions.filter(a =>
+            (a.type === 'play_cc' || a.type === 'play_cc_special' || a.type === 'play_cc_double') && a.params?.cardName
+          );
+          if (ccActions.length >= 1) {
+            const classify = (cardName) => {
+              const t = (getCcEffect(cardName)?.timing || '').toLowerCase();
+              return OFFENSIVE_CC_TIMINGS.has(t) ? 'offensive' : 'non-offensive';
+            };
+            const chosenCard = action.params?.cardName;
+            const chosenClass = classify(chosenCard);
+            const optionClasses = ccActions.map(a => ({ card: a.params.cardName, cls: classify(a.params.cardName) }));
+            const hasOffensive = optionClasses.some(o => o.cls === 'offensive');
+            const hasNonOffensive = optionClasses.some(o => o.cls === 'non-offensive');
+            auditCcDecisions.push({
+              chosenCard,
+              chosenClass,
+              optionCount: ccActions.length,
+              isMixedChoice: hasOffensive && hasNonOffensive,
+              hasOffensive,
+              hasNonOffensive,
+              inCombat: !!(g.pendingCombat || g.combat),
+            });
+          }
+        } catch { /* best-effort */ }
+      }
+    }
+
     // Movement metrics tracking
     if (action.type === 'move_figure') { moveActions++; lastMoveId = action.customId; }
     else if (action.type === 'dc_end_activation') endActivations++;
-    else if (action.type === 'attack_target') { attackActions++; currentActivationHadAttack = true; }
+    else if (action.type === 'attack_target') {
+      attackActions++; currentActivationHadAttack = true;
+      if (auditMode && action.params?.dcName) auditDcAttacks[action.params.dcName] = (auditDcAttacks[action.params.dcName] || 0) + 1;
+
+      // ── Turn-denial tracking (tightened: only counts actual attack options) ──
+      // Check if this attack was a true tiebreak: ≥2 attack_target actions with
+      // same currentHp, at least one targeting an unactivated DC and one activated.
+      try {
+        const targetFk = action.params?.targetFigureKey;
+        if (targetFk && !targetFk.startsWith('npc_')) {
+          const oppPN = actingPN === 1 ? 2 : 1;
+          const oppActivated = new Set(oppPN === 1 ? (g.p1ActivatedDcIndices || []) : (g.p2ActivatedDcIndices || []));
+          const oppMsgIds = oppPN === 1 ? (g.p1DcMessageIds || []) : (g.p2DcMessageIds || []);
+          // Only count targets that were actual available attack actions
+          const atkActions = playerActions.filter(a => a.type === 'attack_target' && a.params?.targetFigureKey && !a.params.targetFigureKey.startsWith('npc_'));
+          if (atkActions.length >= 2) {
+            const targetInfo = atkActions.map(a => {
+              const fk = a.params.targetFigureKey;
+              let hp = null;
+              const _dcN = fk.replace(/-\d+-\d+$/, '');
+              const _fi = parseInt(fk.split('-').pop(), 10) || 0;
+              for (const [_mid, _harr] of dcHealthState) {
+                const _m = dcMessageMeta.get(_mid);
+                if (_m && _m.playerNum === oppPN && _m.dcName === _dcN && _harr?.[_fi]) {
+                  hp = { current: _harr[_fi][0], max: _harr[_fi][1] }; break;
+                }
+              }
+              let activated = false;
+              for (let i = 0; i < oppMsgIds.length; i++) {
+                const meta = dcMessageMeta.get(oppMsgIds[i]);
+                if (meta && meta.dcName === _dcN) { activated = oppActivated.has(i); break; }
+              }
+              return { fk, currentHp: hp?.current ?? 99, activated };
+            });
+            const chosenInfo = targetInfo.find(f => f.fk === targetFk);
+            if (chosenInfo) {
+              const sameHp = targetInfo.filter(f => f.currentHp === chosenInfo.currentHp && f.fk !== targetFk);
+              const hasUnactivated = sameHp.some(f => !f.activated) || !chosenInfo.activated;
+              const hasActivated = sameHp.some(f => f.activated) || chosenInfo.activated;
+              if (sameHp.length > 0 && hasUnactivated && hasActivated) {
+                turnDenialOpportunities++;
+                if (!chosenInfo.activated) turnDenialChosen++;
+                else turnDenialMissed++;
+              }
+            }
+          }
+        }
+      } catch { /* best-effort */ }
+    }
     else if (action.type === 'activate_dc') {
       // Close out previous activation before starting new one
       if (totalActivations > 0 && currentActivationHadAttack) activationsWithAttack++;
       totalActivations++;
       currentActivationHadAttack = false;
+      if (auditMode && action.params?.dcName) auditDcActivations[action.params.dcName] = (auditDcActivations[action.params.dcName] || 0) + 1;
+
+      // ── Activation-order diagnostics ──────────────────────────────────
+      try {
+        // Count DCs per side for expected activations this round
+        const p1DcCount = (g.p1DcMessageIds || []).length;
+        const p2DcCount = (g.p2DcMessageIds || []).length;
+        if (p1DcCount + p2DcCount > roundTotalExpected || roundTotalExpected === 0) {
+          roundTotalExpected = p1DcCount + p2DcCount;
+        }
+        roundActivationIndex++;
+        const isEarly = roundActivationIndex <= Math.ceil(roundTotalExpected / 2);
+
+        // Get msgId for the activated DC (params.msgId = "hl1dc0" etc.)
+        const msgId = action.params?.msgId;
+        const dcPN = actingPN;
+        if (msgId && dcPN) {
+
+          // Check if activated DC was wounded at round start (artifact-corrected).
+          // Uses snapshot taken at round boundary, not live HP, so mid-round
+          // damage doesn't inflate "wounded activated early" counts.
+          const wasWoundedAtRoundStart = woundedAtRoundStart.has(msgId);
+          if (wasWoundedAtRoundStart) {
+            totalWoundedActivations++;
+            if (isEarly) woundedActivatedEarly++;
+            else woundedActivatedLate++;
+          }
+
+          // Check if activated DC is adjacent to a killable enemy
+          const meta = dcMessageMeta.get(msgId);
+          if (meta) {
+            // Find this DC's figure positions
+            const myFigKeys = Object.keys(g.figurePositions?.[dcPN] || {})
+              .filter(fk => fk.startsWith(meta.dcName + '-'));
+            const oppPN = dcPN === 1 ? 2 : 1;
+            const oppMsgIds = g[`p${oppPN}DcMessageIds`] || [];
+
+            for (const myFk of myFigKeys) {
+              const myPos = g.figurePositions?.[dcPN]?.[myFk];
+              if (!myPos) continue;
+              const myCoord = parseCoord(myPos);
+              if (!myCoord) continue;
+
+              // Check all enemy figures
+              for (const oppMsgId of oppMsgIds) {
+                const oppHealth = dcHealthState.get(oppMsgId);
+                const oppMeta = dcMessageMeta.get(oppMsgId);
+                if (!oppHealth || !oppMeta) continue;
+                // Check if any enemy figure is killable (<=3 HP) and adjacent (dist <=2)
+                const oppFigKeys = Object.keys(g.figurePositions?.[oppPN] || {})
+                  .filter(fk => fk.startsWith(oppMeta.dcName + '-'));
+                for (let fi = 0; fi < oppFigKeys.length; fi++) {
+                  const oPos = g.figurePositions?.[oppPN]?.[oppFigKeys[fi]];
+                  if (!oPos) continue;
+                  const oCoord = parseCoord(oPos);
+                  if (!oCoord) continue;
+                  const dist = Math.abs(myCoord.row - oCoord.row) + Math.abs(myCoord.col - oCoord.col);
+                  if (dist <= 2 && oppHealth[fi] && oppHealth[fi][0] <= 3 && oppHealth[fi][0] > 0) {
+                    totalAdjKillableActivations++;
+                    if (isEarly) adjKillableActivatedEarly++;
+                    else adjKillableActivatedLate++;
+                    // Break out of both inner loops
+                    fi = oppFigKeys.length;
+                    break;
+                  }
+                }
+              }
+              break; // Only check first figure of the DC
+            }
+          }
+        }
+      } catch { /* activation-order diagnostics are best-effort */ }
     }
-    else if (action.type === 'pass_activation_turn') passActivations++;
+    else if (action.type === 'pass_activation_turn') {
+      passActivations++;
+      // Track pass usage relative to VP state
+      try {
+        const myVP = actingPN === 1 ? (g.player1VP?.total || 0) : (g.player2VP?.total || 0);
+        const oppVP = actingPN === 1 ? (g.player2VP?.total || 0) : (g.player1VP?.total || 0);
+        if (myVP > oppVP) passWhenAhead++;
+        else if (myVP < oppVP) passWhenBehind++;
+        else passWhenTied++;
+      } catch { /* best-effort */ }
+    }
+
+    // Reset round activation index on round boundary + snapshot wound state
+    if (action.type === 'end_activation_phase' || action.type === 'end_end_of_round') {
+      roundActivationIndex = 0;
+      // Snapshot which DCs are wounded at the START of the new round
+      // so mid-round damage doesn't inflate activation-order metrics
+      woundedAtRoundStart.clear();
+      for (const [msgId, healthArr] of dcHealthState) {
+        if (healthArr && healthArr.some(h => h && h[0] < h[1])) {
+          woundedAtRoundStart.add(msgId);
+        }
+      }
+    }
 
     // Runaway-loop diagnostics — track action type histogram + sliding window
     totalIterations++;
@@ -592,6 +814,7 @@ async function runOneGame(learnings, gameNum) {
 
     // Intercept CC plays — resolve directly via headless path
     if (action.type === 'play_cc' || action.type === 'play_cc_special' || action.type === 'play_cc_double') {
+      if (auditMode && action.params?.cardName) auditCcPlays[action.params.cardName] = (auditCcPlays[action.params.cardName] || 0) + 1;
       try {
         // Deduct activation actions for special-action CCs (matching Discord dc-play-area.js:801-808)
         if (action.type === 'play_cc_special' || action.type === 'play_cc_double') {
@@ -647,11 +870,80 @@ async function runOneGame(learnings, gameNum) {
 
     const userId = action.actingPlayer === 1 ? g.player1Id : g.player2Id;
 
+    // ── Audit: surge-accuracy tracking ────────────────────────────────────
+    if (auditMode && action.type === 'combat_surge' && action.params?.surgeKey) {
+      try {
+        const combat = g.pendingCombat;
+        if (combat?.isRanged && combat.distanceToTarget != null) {
+          const rolledAcc = combat.attackRoll?.acc || 0;
+          const bonusAcc = combat.bonusAccuracy || 0;
+          const surgeAccSoFar = combat.surgeAccuracy || 0;
+          const totalAccBefore = rolledAcc + bonusAcc + surgeAccSoFar;
+          const needed = combat.distanceToTarget;
+          const isAccSurge = /^accuracy\s+(-?\d+)$/i.test(action.params.surgeKey);
+          const accGain = isAccSurge ? parseInt(action.params.surgeKey.match(/(-?\d+)/)?.[1] || '0') : 0;
+          const excess = Math.max(0, totalAccBefore - needed);
+          // Capture alternative surge options available at this decision
+          const altSurges = playerActions
+            .filter(a => a.type === 'combat_surge' && a.params?.surgeKey && a.params.surgeKey !== action.params.surgeKey)
+            .map(a => {
+              const isAcc = /^accuracy\s+(-?\d+)$/i.test(a.params.surgeKey);
+              return { surgeKey: a.params.surgeKey, isAccSurge: isAcc };
+            });
+          const hadNonAccAlt = altSurges.some(a => !a.isAccSurge);
+          auditSurgeEvents.push({
+            isAccSurge,
+            surgeKey: action.params.surgeKey,
+            distance: needed,
+            rolledAcc,
+            bonusAcc,
+            surgeAccSoFar,
+            totalAccBefore,
+            alreadyEnough: totalAccBefore >= needed,
+            accGain,
+            excess,
+            hadNonAccAlt,
+            altCount: altSurges.length,
+          });
+        }
+      } catch { /* best-effort */ }
+    }
+
+    // ── Audit: snapshot figure counts before action for defeat tracking ────
+    const preP1fc = auditMode ? Object.keys(g.figurePositions?.[1] || {}).length : 0;
+    const preP2fc = auditMode ? Object.keys(g.figurePositions?.[2] || {}).length : 0;
+
     try {
       await harness.submitAction(action.customId, userId);
       tracer.afterAction(harness.getGame(), action);
     } catch {
       tracer.afterAction(harness.getGame(), action);
+    }
+
+    // ── Audit: detect defeats by figure count delta ───────────────────────
+    // figureKey format: "dcName-dgIndex-figureIndex" — dcName may contain hyphens,
+    // so strip the last two segments to recover it.
+    if (auditMode) {
+      const postG = harness.getGame();
+      const postP1fc = Object.keys(postG.figurePositions?.[1] || {}).length;
+      const postP2fc = Object.keys(postG.figurePositions?.[2] || {}).length;
+      const extractDcName = (fk) => fk.replace(/-\d+-\d+$/, '');
+      if (postP1fc < preP1fc) {
+        for (const [fk] of Object.entries(g.figurePositions?.[1] || {})) {
+          if (!postG.figurePositions?.[1]?.[fk]) {
+            const dcN = extractDcName(fk);
+            auditDcDefeats[dcN] = (auditDcDefeats[dcN] || 0) + 1;
+          }
+        }
+      }
+      if (postP2fc < preP2fc) {
+        for (const [fk] of Object.entries(g.figurePositions?.[2] || {})) {
+          if (!postG.figurePositions?.[2]?.[fk]) {
+            const dcN = extractDcName(fk);
+            auditDcDefeats[dcN] = (auditDcDefeats[dcN] || 0) + 1;
+          }
+        }
+      }
     }
 
     // ── Figure defeat tracking ─────────────────────────────────────────────
@@ -737,6 +1029,15 @@ async function runOneGame(learnings, gameNum) {
     stopReason,
     // Audit instrumentation
     figureDefeats,
+    // Activation-order diagnostics
+    woundedActivatedEarly, woundedActivatedLate, totalWoundedActivations,
+    adjKillableActivatedEarly, adjKillableActivatedLate, totalAdjKillableActivations,
+    passWhenAhead, passWhenBehind, passWhenTied,
+    // Turn-denial diagnostics
+    turnDenialOpportunities, turnDenialChosen, turnDenialMissed,
+    // Audit data
+    auditDcAppearances, auditDcActivations, auditDcAttacks, auditDcDefeats,
+    auditCcPlays, auditCcOpportunities, auditSurgeEvents, auditCcDecisions,
   };
 }
 
@@ -801,6 +1102,10 @@ async function main() {
   if (args.includes('--training')) {
     useTrainingMatchups = true;
     console.log(`  Training mode: LOCKED matchups (${TRAINING_MATCHUPS.length} matchups, ${TRAINING_WHITELIST_DCS.size} DCs, ${TRAINING_WHITELIST_CCS.size} CCs)`);
+  }
+  if (args.includes('--audit')) {
+    auditMode = true;
+    console.log(`  Audit mode: ENABLED (coverage + surge-accuracy tracking)`);
   }
 
   // A/B experiment: custom checkpoint load / save paths
@@ -893,6 +1198,28 @@ async function main() {
       stopReason: result.stopReason || 'normal',
       // Audit
       figureDefeats: result.figureDefeats || 0,
+      // Activation-order diagnostics
+      woundedActivatedEarly: result.woundedActivatedEarly || 0,
+      woundedActivatedLate: result.woundedActivatedLate || 0,
+      totalWoundedActivations: result.totalWoundedActivations || 0,
+      adjKillableActivatedEarly: result.adjKillableActivatedEarly || 0,
+      adjKillableActivatedLate: result.adjKillableActivatedLate || 0,
+      totalAdjKillableActivations: result.totalAdjKillableActivations || 0,
+      passWhenAhead: result.passWhenAhead || 0,
+      passWhenBehind: result.passWhenBehind || 0,
+      passWhenTied: result.passWhenTied || 0,
+      turnDenialOpportunities: result.turnDenialOpportunities || 0,
+      turnDenialChosen: result.turnDenialChosen || 0,
+      turnDenialMissed: result.turnDenialMissed || 0,
+      // Audit data (only populated with --audit)
+      auditDcAppearances: result.auditDcAppearances || {},
+      auditDcActivations: result.auditDcActivations || {},
+      auditDcAttacks: result.auditDcAttacks || {},
+      auditDcDefeats: result.auditDcDefeats || {},
+      auditCcPlays: result.auditCcPlays || {},
+      auditCcOpportunities: result.auditCcOpportunities || {},
+      auditSurgeEvents: result.auditSurgeEvents || [],
+      auditCcDecisions: result.auditCcDecisions || [],
     });
 
     // Log runaway games immediately
@@ -1253,6 +1580,226 @@ async function main() {
     if (totNoTargets > 0) {
       console.log(`  When targets NOT in range (${totNoTargets} decisions):`);
       console.log(`    move: ${(totMoveNoTgt/totNoTargets*100).toFixed(1)}% | end: ${(totEndNoTgt/totNoTargets*100).toFixed(1)}%`);
+    }
+
+    // Activation-order diagnostics
+    const totWoundedEarly = perGameResults.reduce((s, r) => s + r.woundedActivatedEarly, 0);
+    const totWoundedLate = perGameResults.reduce((s, r) => s + r.woundedActivatedLate, 0);
+    const totWoundedAct = perGameResults.reduce((s, r) => s + r.totalWoundedActivations, 0);
+    const totAdjKillEarly = perGameResults.reduce((s, r) => s + r.adjKillableActivatedEarly, 0);
+    const totAdjKillLate = perGameResults.reduce((s, r) => s + r.adjKillableActivatedLate, 0);
+    const totAdjKillAct = perGameResults.reduce((s, r) => s + r.totalAdjKillableActivations, 0);
+    const totPassAhead = perGameResults.reduce((s, r) => s + r.passWhenAhead, 0);
+    const totPassBehind = perGameResults.reduce((s, r) => s + r.passWhenBehind, 0);
+    const totPassTied = perGameResults.reduce((s, r) => s + r.passWhenTied, 0);
+    const totPasses = totPassAhead + totPassBehind + totPassTied;
+
+    console.log('\n=== Activation-Order Strategy ===');
+    if (totWoundedAct > 0) {
+      console.log(`  Wounded figures activated early: ${totWoundedEarly}/${totWoundedAct} (${(totWoundedEarly/totWoundedAct*100).toFixed(1)}%)`);
+      console.log(`  Wounded figures activated late:  ${totWoundedLate}/${totWoundedAct} (${(totWoundedLate/totWoundedAct*100).toFixed(1)}%)`);
+      console.log(`  (Smart play: activate wounded early to get value before they die)`);
+    } else {
+      console.log(`  Wounded activations: none observed`);
+    }
+    if (totAdjKillAct > 0) {
+      console.log(`  Adj-to-killable activated early: ${totAdjKillEarly}/${totAdjKillAct} (${(totAdjKillEarly/totAdjKillAct*100).toFixed(1)}%)`);
+      console.log(`  Adj-to-killable activated late:  ${totAdjKillLate}/${totAdjKillAct} (${(totAdjKillLate/totAdjKillAct*100).toFixed(1)}%)`);
+      console.log(`  (Smart play: activate near killable targets early to secure the kill)`);
+    } else {
+      console.log(`  Adj-to-killable activations: none observed`);
+    }
+    if (totPasses > 0) {
+      console.log(`  Pass when ahead on VP:  ${totPassAhead}/${totPasses} (${(totPassAhead/totPasses*100).toFixed(1)}%)`);
+      console.log(`  Pass when behind on VP: ${totPassBehind}/${totPasses} (${(totPassBehind/totPasses*100).toFixed(1)}%)`);
+      console.log(`  Pass when tied on VP:   ${totPassTied}/${totPasses} (${(totPassTied/totPasses*100).toFixed(1)}%)`);
+      console.log(`  (Smart play: pass more when ahead to force opponent to commit first)`);
+    } else {
+      console.log(`  Pass activations: none observed`);
+    }
+
+    // Turn-denial diagnostics (Candidate B)
+    const totTdOpp = perGameResults.reduce((s, r) => s + r.turnDenialOpportunities, 0);
+    const totTdChosen = perGameResults.reduce((s, r) => s + r.turnDenialChosen, 0);
+    const totTdMissed = perGameResults.reduce((s, r) => s + r.turnDenialMissed, 0);
+    console.log('\n=== Turn-Denial Targeting (Candidate B) ===');
+    if (totTdOpp > 0) {
+      console.log(`  Equal-HP tiebreak opportunities: ${totTdOpp}`);
+      console.log(`  Chose unactivated target (turn denial): ${totTdChosen}/${totTdOpp} (${(totTdChosen/totTdOpp*100).toFixed(1)}%)`);
+      console.log(`  Chose activated target (missed denial): ${totTdMissed}/${totTdOpp} (${(totTdMissed/totTdOpp*100).toFixed(1)}%)`);
+    } else {
+      console.log(`  No equal-HP tiebreak situations observed`);
+    }
+  }
+
+  // ── Audit report ────────────────────────────────────────────────────────────
+  if (auditMode && perGameResults.length > 0) {
+    // Aggregate DC coverage
+    const dcApp = {}, dcAct = {}, dcAtk = {}, dcDef = {};
+    const ccPlays = {}, ccOps = {};
+    const allSurges = [];
+    for (const r of perGameResults) {
+      for (const [k, v] of Object.entries(r.auditDcAppearances || {})) dcApp[k] = (dcApp[k] || 0) + v;
+      for (const [k, v] of Object.entries(r.auditDcActivations || {})) dcAct[k] = (dcAct[k] || 0) + v;
+      for (const [k, v] of Object.entries(r.auditDcAttacks || {})) dcAtk[k] = (dcAtk[k] || 0) + v;
+      for (const [k, v] of Object.entries(r.auditDcDefeats || {})) dcDef[k] = (dcDef[k] || 0) + v;
+      for (const [k, v] of Object.entries(r.auditCcPlays || {})) ccPlays[k] = (ccPlays[k] || 0) + v;
+      for (const [k, v] of Object.entries(r.auditCcOpportunities || {})) ccOps[k] = (ccOps[k] || 0) + v;
+      allSurges.push(...(r.auditSurgeEvents || []));
+    }
+
+    console.log('\n══════════════════════════════════════════════════');
+    console.log('  AUDIT: DC COVERAGE');
+    console.log('══════════════════════════════════════════════════');
+    const dcNames = [...new Set([...Object.keys(dcApp), ...Object.keys(dcAct)])].sort();
+    console.log(`  Total unique DCs seen: ${dcNames.length}`);
+    console.log(`  ${'DC Name'.padEnd(35)} ${'Apps'.padStart(5)} ${'Activ'.padStart(6)} ${'Atks'.padStart(6)} ${'Defs'.padStart(6)}`);
+    console.log(`  ${'─'.repeat(35)} ${'─'.repeat(5)} ${'─'.repeat(6)} ${'─'.repeat(6)} ${'─'.repeat(6)}`);
+    for (const dc of dcNames) {
+      const app = dcApp[dc] || 0;
+      const act = dcAct[dc] || 0;
+      const atk = dcAtk[dc] || 0;
+      const def = dcDef[dc] || 0;
+      console.log(`  ${dc.padEnd(35)} ${String(app).padStart(5)} ${String(act).padStart(6)} ${String(atk).padStart(6)} ${String(def).padStart(6)}`);
+    }
+    const zeroDcAct = dcNames.filter(dc => !(dcAct[dc] > 0));
+    if (zeroDcAct.length > 0) {
+      console.log(`\n  ⚠ DCs with 0 activations: ${zeroDcAct.join(', ')}`);
+    }
+
+    console.log('\n══════════════════════════════════════════════════');
+    console.log('  AUDIT: CC COVERAGE');
+    console.log('══════════════════════════════════════════════════');
+    const ccNames = [...new Set([...Object.keys(ccPlays), ...Object.keys(ccOps)])].sort();
+    console.log(`  Total unique CCs seen: ${ccNames.length}`);
+    console.log(`  ${'CC Name'.padEnd(40)} ${'Plays'.padStart(6)} ${'Opps'.padStart(7)} ${'Play%'.padStart(7)}`);
+    console.log(`  ${'─'.repeat(40)} ${'─'.repeat(6)} ${'─'.repeat(7)} ${'─'.repeat(7)}`);
+    for (const cc of ccNames) {
+      const plays = ccPlays[cc] || 0;
+      const ops = ccOps[cc] || 0;
+      const pct = ops > 0 ? (plays / ops * 100).toFixed(1) + '%' : 'N/A';
+      console.log(`  ${cc.padEnd(40)} ${String(plays).padStart(6)} ${String(ops).padStart(7)} ${pct.padStart(7)}`);
+    }
+    const zeroCcPlays = ccNames.filter(cc => !(ccPlays[cc] > 0));
+    if (zeroCcPlays.length > 0) {
+      console.log(`\n  ⚠ CCs with 0 plays: ${zeroCcPlays.join(', ')}`);
+    }
+
+    // ── CC Quality: mixed-choice metric + offensive tracking ──────────
+    const allCcDecisions = [];
+    for (const r of perGameResults) allCcDecisions.push(...(r.auditCcDecisions || []));
+
+    console.log('\n══════════════════════════════════════════════════');
+    console.log('  AUDIT: CC PLAY QUALITY');
+    console.log('══════════════════════════════════════════════════');
+    console.log(`  Total CC play decisions: ${allCcDecisions.length}`);
+
+    // Broad class breakdown
+    const offensivePlays = allCcDecisions.filter(d => d.chosenClass === 'offensive');
+    const nonOffensivePlays = allCcDecisions.filter(d => d.chosenClass === 'non-offensive');
+    const inCombatPlays = allCcDecisions.filter(d => d.inCombat);
+    console.log(`  Chose offensive CC: ${offensivePlays.length} (${allCcDecisions.length > 0 ? (offensivePlays.length/allCcDecisions.length*100).toFixed(1) : 'N/A'}%)`);
+    console.log(`  Chose non-offensive CC: ${nonOffensivePlays.length} (${allCcDecisions.length > 0 ? (nonOffensivePlays.length/allCcDecisions.length*100).toFixed(1) : 'N/A'}%)`);
+    console.log(`  During active combat: ${inCombatPlays.length} (${allCcDecisions.length > 0 ? (inCombatPlays.length/allCcDecisions.length*100).toFixed(1) : 'N/A'}%)`);
+
+    // Mixed-choice metric (the key discriminative signal)
+    const mixedChoices = allCcDecisions.filter(d => d.isMixedChoice);
+    const mixedChoseOffensive = mixedChoices.filter(d => d.chosenClass === 'offensive');
+    console.log(`\n  Mixed-choice opportunities (had both offensive + non-offensive):`);
+    console.log(`    Total: ${mixedChoices.length}`);
+    console.log(`    Chose offensive: ${mixedChoseOffensive.length} (${mixedChoices.length > 0 ? (mixedChoseOffensive.length/mixedChoices.length*100).toFixed(1) : 'N/A'}%)`);
+    console.log(`    Chose non-offensive: ${mixedChoices.length - mixedChoseOffensive.length} (${mixedChoices.length > 0 ? ((mixedChoices.length - mixedChoseOffensive.length)/mixedChoices.length*100).toFixed(1) : 'N/A'}%)`);
+
+    // Per-card sanity slice
+    const watchCards = ['Element of Surprise', 'Deathblow', 'Targeting Network', 'Planning', 'Urgency'];
+    console.log(`\n  Per-card sanity slice:`);
+    console.log(`  ${'Card'.padEnd(30)} ${'Plays'.padStart(6)} ${'Class'.padStart(14)}`);
+    console.log(`  ${'─'.repeat(30)} ${'─'.repeat(6)} ${'─'.repeat(14)}`);
+    for (const card of watchCards) {
+      const cardDecisions = allCcDecisions.filter(d => d.chosenCard === card);
+      const cls = (() => {
+        const t = (getCcEffect(card)?.timing || '').toLowerCase();
+        return OFFENSIVE_CC_TIMINGS.has(t) ? 'offensive' : 'non-offensive';
+      })();
+      console.log(`  ${card.padEnd(30)} ${String(cardDecisions.length).padStart(6)} ${cls.padStart(14)}`);
+    }
+
+    console.log('\n══════════════════════════════════════════════════');
+    console.log('  AUDIT: SURGE-ACCURACY');
+    console.log('══════════════════════════════════════════════════');
+    const accSurges = allSurges.filter(s => s.isAccSurge);
+    const nonAccSurges = allSurges.filter(s => !s.isAccSurge);
+    const accNeeded = accSurges.filter(s => !s.alreadyEnough);
+    const accWasted = accSurges.filter(s => s.alreadyEnough);
+    console.log(`  Total ranged surge decisions: ${allSurges.length}`);
+    console.log(`  Accuracy surges spent: ${accSurges.length}`);
+    console.log(`  Non-accuracy surges spent: ${nonAccSurges.length}`);
+    console.log(`  Accuracy spent when NEEDED: ${accNeeded.length}/${accSurges.length} (${accSurges.length > 0 ? (accNeeded.length/accSurges.length*100).toFixed(1) : 'N/A'}%)`);
+    console.log(`  Accuracy spent when WASTED: ${accWasted.length}/${accSurges.length} (${accSurges.length > 0 ? (accWasted.length/accSurges.length*100).toFixed(1) : 'N/A'}%)`);
+    if (accWasted.length > 0) {
+      console.log(`\n  Examples of accuracy waste (up to 10):`);
+      for (const s of accWasted.slice(0, 10)) {
+        console.log(`    dist=${s.distance} rolled=${s.rolledAcc} bonus=${s.bonusAcc} surgeAcc=${s.surgeAccSoFar} total=${s.totalAccBefore} (needed ${s.distance}) → spent "${s.surgeKey}" (+${s.accGain} acc, excess=${s.totalAccBefore - s.distance})`);
+      }
+    }
+    if (accNeeded.length > 0) {
+      console.log(`\n  Examples of accuracy correctly spent (up to 5):`);
+      for (const s of accNeeded.slice(0, 5)) {
+        console.log(`    dist=${s.distance} rolled=${s.rolledAcc} bonus=${s.bonusAcc} surgeAcc=${s.surgeAccSoFar} total=${s.totalAccBefore} (needed ${s.distance}) → spent "${s.surgeKey}" (+${s.accGain} acc, deficit=${s.distance - s.totalAccBefore})`);
+      }
+    }
+
+    // ── Residual-waste breakdown ──────────────────────────────────────────
+    if (accWasted.length > 0) {
+      console.log('\n══════════════════════════════════════════════════');
+      console.log('  RESIDUAL-WASTE BREAKDOWN');
+      console.log('══════════════════════════════════════════════════');
+
+      // Distance buckets
+      const buckets = { '1': [], '2-3': [], '4-5': [], '6+': [] };
+      for (const s of accWasted) {
+        if (s.distance <= 1) buckets['1'].push(s);
+        else if (s.distance <= 3) buckets['2-3'].push(s);
+        else if (s.distance <= 5) buckets['4-5'].push(s);
+        else buckets['6+'].push(s);
+      }
+      console.log('\n  By distance bucket:');
+      for (const [bucket, items] of Object.entries(buckets)) {
+        const pct = accWasted.length > 0 ? (items.length / accWasted.length * 100).toFixed(1) : '0.0';
+        console.log(`    dist=${bucket}: ${items.length}/${accWasted.length} (${pct}% of waste)`);
+      }
+
+      // Overkill severity: excess accuracy after surge
+      const tinyOverkill = accWasted.filter(s => (s.excess || 0) <= 2);
+      const midOverkill = accWasted.filter(s => (s.excess || 0) >= 3 && (s.excess || 0) <= 4);
+      const majorOverkill = accWasted.filter(s => (s.excess || 0) >= 5);
+      console.log('\n  Overkill severity (pre-surge excess over distance):');
+      console.log(`    Tiny (excess 0-2):  ${tinyOverkill.length}/${accWasted.length} (${(tinyOverkill.length/accWasted.length*100).toFixed(1)}%)`);
+      console.log(`    Mid (excess 3-4):   ${midOverkill.length}/${accWasted.length} (${(midOverkill.length/accWasted.length*100).toFixed(1)}%)`);
+      console.log(`    Major (excess 5+):  ${majorOverkill.length}/${accWasted.length} (${(majorOverkill.length/accWasted.length*100).toFixed(1)}%)`);
+
+      // Shot guaranteed before surge? (totalAccBefore already >= distance)
+      const guaranteedBefore = accWasted.filter(s => s.totalAccBefore >= s.distance);
+      const notGuaranteed = accWasted.filter(s => s.totalAccBefore < s.distance);
+      console.log('\n  Shot already guaranteed before this surge?');
+      console.log(`    Yes (already hit): ${guaranteedBefore.length}/${accWasted.length} (${(guaranteedBefore.length/accWasted.length*100).toFixed(1)}%)`);
+      console.log(`    No (still short):  ${notGuaranteed.length}/${accWasted.length} (${(notGuaranteed.length/accWasted.length*100).toFixed(1)}%)`);
+
+      // Non-accuracy alternative existed?
+      const withAlt = accWasted.filter(s => s.hadNonAccAlt);
+      const noAlt = accWasted.filter(s => !s.hadNonAccAlt);
+      console.log('\n  Non-accuracy surge alternative existed?');
+      console.log(`    Yes (had damage/other option): ${withAlt.length}/${accWasted.length} (${(withAlt.length/accWasted.length*100).toFixed(1)}%)`);
+      console.log(`    No (accuracy was only option):  ${noAlt.length}/${accWasted.length} (${(noAlt.length/accWasted.length*100).toFixed(1)}%)`);
+
+      // Classification summary
+      const structuralNoise = accWasted.filter(s => !s.hadNonAccAlt);
+      const scorerMistake = accWasted.filter(s => s.hadNonAccAlt && s.totalAccBefore >= s.distance);
+      const edgeCase = accWasted.filter(s => s.hadNonAccAlt && s.totalAccBefore < s.distance);
+      console.log('\n  Classification:');
+      console.log(`    A) Structural noise (no alternative):   ${structuralNoise.length}/${accWasted.length} (${(structuralNoise.length/accWasted.length*100).toFixed(1)}%)`);
+      console.log(`    B) Scorer mistake (had alt, was safe):  ${scorerMistake.length}/${accWasted.length} (${(scorerMistake.length/accWasted.length*100).toFixed(1)}%)`);
+      console.log(`    C) Edge case (had alt, wasn't safe):    ${edgeCase.length}/${accWasted.length} (${(edgeCase.length/accWasted.length*100).toFixed(1)}%)`);
     }
   }
 
