@@ -2676,7 +2676,15 @@ client.on('messageCreate', async (message) => {
   }
   // ── End MCP killgame trigger ──────────────────────────────────────────────
 
-  if (message.author.bot) return;
+  // Allow bot-authored selfplaymcp commands in the MCP bothelpers channel
+  // (enables remote triggering via Discord API without a human in the loop)
+  if (message.author.bot) {
+    if (message.content?.startsWith('selfplaymcp') && message.channel.id === '1481314970666008607') {
+      // Fall through to selfplaymcp handler below
+    } else {
+      return;
+    }
+  }
 
   // Forum post first message: set up lobby buttons (thread isn't messageable until author posts)
   try {
