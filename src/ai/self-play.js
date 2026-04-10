@@ -1200,6 +1200,21 @@ export async function runSelfPlayLoop(game, client, opts) {
         console.log(`[self-play] Banning stale action: ${stampedId}`);
       }
 
+      // Zero-movement detection: if move_pick_done was dispatched immediately after
+      // dc_move for the same figure (no intermediate move_pick_space), the figure
+      // moved zero spaces — it is boxed in or has no reachable tiles.  Ban dc_move
+      // for this figure to prevent idle-suppression from looping on it.
+      if (lci >= 2 && chosen.customId.endsWith('_done') && handlerKey === 'move_pick_') {
+        const prevStamped = lastCustomIds[lci - 2];
+        const prevCustomId = prevStamped.replace(/::P\d+$/, '');
+        // dc_move_{msgId}_f{idx} → move_pick_{msgId}_{idx}_done — match same msgId
+        if (prevCustomId.startsWith('dc_move_')) {
+          const dcMoveStamped = prevStamped;
+          bannedStaleActions.add(dcMoveStamped);
+          console.log(`[self-play] Banning zero-movement dc_move: ${dcMoveStamped}`);
+        }
+      }
+
       // Trace collection
       exercisedHandlers.add(handlerKey);
       actionTypeCounts.set(chosen.type, (actionTypeCounts.get(chosen.type) || 0) + 1);

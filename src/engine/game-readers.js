@@ -7,7 +7,12 @@ export function hasActionsRemainingInGame(game, gameId, dcMessageMeta) {
   for (const [mid, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId) continue;
     const data = game.dcActionsData?.[mid];
-    if (data?.remaining > 0) return true;
+    if (data?.remaining > 0) {
+      // Skip fully defeated DCs — stale remaining count on a dead group is not real
+      const figs = game.figurePositions?.[meta.playerNum] || {};
+      if (!Object.keys(figs).some(fk => fk.startsWith(meta.dcName + '-'))) continue;
+      return true;
+    }
   }
   return false;
 }
