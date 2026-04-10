@@ -2584,6 +2584,34 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
   if (absType === 'attack_close' || absType === 'attack_ranged') {
     const group = 'attack';
     const oppNum = actions[0].actingPlayer === 1 ? 2 : 1;
+
+    // Compute expected accuracy for the attacker's dice pool to prioritize
+    // targets within reliable hit range. Rule of thumb: distance ≤ expectedAccuracy
+    // gives >50% hit rate; beyond that, hits become increasingly unlikely.
+    const EXPECTED_ACC_PER_DIE = { blue: 3.17, green: 1.67, yellow: 1.17, red: 0 };
+    let attackerExpAcc = 0;
+    let isRangedAttack = false;
+    const dcName = actions[0]?.params?.dcName;
+    let dcEffects;
+    try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
+    if (dcEffects && dcName) {
+      const eff = dcEffects[dcName] || dcEffects[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      if (eff?.attack?.type === 'range') {
+        isRangedAttack = true;
+        for (const die of eff.attack.dice || []) attackerExpAcc += EXPECTED_ACC_PER_DIE[die] || 0;
+        // Add expected surge accuracy: surges rolled × probability of spending on accuracy
+        // Simplified: count surge faces across pool, multiply by max surge accuracy available
+        let maxSurgeAcc = 0;
+        for (const sa of eff.surgeAbilities || []) {
+          const m = sa.match(/^accuracy\s+(\d+)$/i);
+          if (m) maxSurgeAcc = Math.max(maxSurgeAcc, parseInt(m[1], 10));
+        }
+        // Expected surge count ≈ 0.5 per die on average; conservatively add half
+        // the best surge accuracy as a bonus (player would spend surge on acc if needed)
+        if (maxSurgeAcc > 0) attackerExpAcc += maxSurgeAcc * 0.5;
+      }
+    }
+
     const scored = actions.map(a => {
       const f = extractAttackFeatures(a, game, dcHealthState, dcMessageMeta);
       const targetFk = a.params?.targetFigureKey;
@@ -2608,9 +2636,14 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
       // Krykna (8 HP) always sort below player figures (3-6 HP) in focus-fire.
       const isKryknaTarget = targetFk?.startsWith('npc_krykna_');
       const missionTargetPriority = (game.npcKrykna && isKryknaTarget) ? 0 : 1;
+      // Hit viability: 0 = reliable (dist ≤ expected accuracy), 1 = marginal (beyond expected)
+      // Melee always reliable (accuracy not checked). This ensures the AI prefers
+      // targets it can actually hit over far-away targets, even if far target has lower HP.
+      const hitViability = (isRangedAttack && attackerExpAcc > 0 && dist > attackerExpAcc) ? 1 : 0;
       return {
         action: a, features: f,
         missionTargetPriority,
+        hitViability,
         currentHp: hp?.current ?? 99,
         maxHp: hp?.max ?? 99,
         dist,
@@ -2618,6 +2651,7 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     });
     scored.sort((a, b) => {
       if (a.missionTargetPriority !== b.missionTargetPriority) return a.missionTargetPriority - b.missionTargetPriority;
+      if (a.hitViability !== b.hitViability) return a.hitViability - b.hitViability;
       if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
       if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
       return a.dist - b.dist;

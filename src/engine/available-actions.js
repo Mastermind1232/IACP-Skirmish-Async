@@ -2121,9 +2121,25 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!attackerPos) return [];
 
-  // Range: melee = 1, ranged = accuracy-based (use generous max since accuracy is checked after roll)
+  // Range: melee = 1, ranged = capped by max possible accuracy from dice + surges.
+  // Previous default [1,20] allowed offering targets that could never be hit (e.g.
+  // blue+red pool has max accuracy 5 — attacking at distance 8 is guaranteed miss).
   const isRanged = attackInfo.type === 'range';
-  const [minRange, maxRange] = attackInfo.range || (isRanged ? [1, 20] : [1, 1]);
+  const MAX_ACC_PER_DIE = { blue: 5, green: 3, yellow: 2, red: 0 };
+  let maxDiceAcc = 0;
+  for (const die of attackInfo.dice || []) maxDiceAcc += MAX_ACC_PER_DIE[die] || 0;
+  // Check DC surge abilities for accuracy surges (e.g. "accuracy 2")
+  const _aaEff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  let maxSurgeAcc = 0;
+  for (const sa of _aaEff?.surgeAbilities || []) {
+    const m = sa.match(/^accuracy\s+(\d+)$/i);
+    if (m) maxSurgeAcc = Math.max(maxSurgeAcc, parseInt(m[1], 10));
+  }
+  const accuracyCeiling = maxDiceAcc + maxSurgeAcc;
+  let [minRange, maxRange] = attackInfo.range || (isRanged ? [1, Math.max(1, accuracyCeiling)] : [1, 1]);
+  // Even with explicit range, cap by accuracy ceiling for ranged attacks —
+  // a weapon with range [1,12] but max accuracy 5 can't hit past 5.
+  if (isRanged && accuracyCeiling > 0) maxRange = Math.min(maxRange, accuracyCeiling);
   const ms = getMapData(game.selectedMap.id);
   if (!ms) return [];
   const _aaMapId = game.selectedMap.id;
