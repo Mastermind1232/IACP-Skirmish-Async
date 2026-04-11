@@ -638,13 +638,13 @@ export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
  * @returns {{ rows: ActionRowBuilder[], available: string[] }}
  */
 export function buildRowPickerButtons(spaces, customIdPrefix, options = {}) {
-  const { style = ButtonStyle.Primary } = options;
+  const { style = ButtonStyle.Primary, rowDisplayOffset = 0 } = options;
   const normalized = (spaces || []).map((s) => normalizeCoord(s));
   const { sortedRows } = groupSpacesByRow(normalized);
   const btns = sortedRows.map((rowNum) =>
     new ButtonBuilder()
       .setCustomId(`${customIdPrefix}${rowNum}`)
-      .setLabel(`Row ${rowNum}`)
+      .setLabel(`Row ${rowNum + rowDisplayOffset}`)
       .setStyle(style)
   );
   const rows = [];

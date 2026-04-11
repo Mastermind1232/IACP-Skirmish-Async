@@ -10,7 +10,7 @@ import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getInitiativePlayerNum, opponentPlayerNum, getHandChannelId,
 } from '../game/player-helpers.js';
-import { bottomLeftCoord, normalizeCoord, getFootprintCells } from '../game/coords.js';
+import { bottomLeftCoord, normalizeCoord, getFootprintCells, parseSizeString } from '../game/coords.js';
 import { countSpaces } from '../game/spatial.js';
 import { edgeKey } from '../game/coords.js';
 import { getMapTokensData } from '../data-loader.js';
@@ -552,6 +552,7 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
     }
   }
   const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
+  const rowDisplayOffset = isMultiTile ? parseSizeString(profile.size).rows - 1 : 0;
   const minimapCells = isMultiTile
     ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
     : buttonSpaces;
@@ -576,8 +577,9 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
     labelMap,
     headerText: moveHeader,
     actionButtons: moveActionBtns,
+    rowDisplayOffset,
   };
-  const { rows: moveRowBtns } = buildRowPickerButtons(buttonSpaces, `space_row_${moveContextKey}_`);
+  const { rows: moveRowBtns } = buildRowPickerButtons(buttonSpaces, `space_row_${moveContextKey}_`, { rowDisplayOffset });
   const actionBtns = moveActionBtns.map(b =>
     new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
   );

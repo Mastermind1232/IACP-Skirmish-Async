@@ -5,7 +5,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapData } from '../data-loader.js';
-import { bottomLeftCoord, getFootprintCells, normalizeCoord } from '../game/coords.js';
+import { bottomLeftCoord, getFootprintCells, normalizeCoord, parseSizeString } from '../game/coords.js';
 import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens, grantPowerTokens } from '../game/index.js';
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum, pushFigure } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
@@ -201,6 +201,7 @@ export async function handleMoveMp(interaction, ctx) {
     }
   }
   const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
+  const rowDisplayOffset = isMultiTile ? parseSizeString(profile.size).rows - 1 : 0;
   const moveContextKey = `${meta.gameId}_${moveKey}`;
   const moveHeader = `**Move** — Pick destination (**${mp}** MP):${multiTileNote}`;
   const moveActionBtns = [
@@ -219,8 +220,9 @@ export async function handleMoveMp(interaction, ctx) {
     labelMap,
     headerText: moveHeader,
     actionButtons: moveActionBtns,
+    rowDisplayOffset,
   };
-  const { rows: moveRowBtns } = buildRowPickerButtons(buttonSpaces, `space_row_${moveContextKey}_`);
+  const { rows: moveRowBtns } = buildRowPickerButtons(buttonSpaces, `space_row_${moveContextKey}_`, { rowDisplayOffset });
   const actionBtns = moveActionBtns.map(b =>
     new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
   );

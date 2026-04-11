@@ -52,8 +52,9 @@ export async function handleSpaceRow(interaction, ctx) {
   }
 
   const filtered = filterSpacesToRow(pending.validSpaces, rowNum);
+  const displayRow = rowNum + (pending.rowDisplayOffset || 0);
   if (filtered.length === 0) {
-    await interaction.followUp({ content: `No spaces in Row ${rowNum}.`, ephemeral: true }).catch(discordCatch);
+    await interaction.followUp({ content: `No spaces in Row ${displayRow}.`, ephemeral: true }).catch(discordCatch);
     return;
   }
 
@@ -78,12 +79,12 @@ export async function handleSpaceRow(interaction, ctx) {
 
   try {
     await interaction.message.edit({
-      content: `${pending.headerText || 'Pick a space'} — **Row ${rowNum}** (${filtered.length} space${filtered.length !== 1 ? 's' : ''}):`,
+      content: `${pending.headerText || 'Pick a space'} — **Row ${displayRow}** (${filtered.length} space${filtered.length !== 1 ? 's' : ''}):`,
       components,
     });
   } catch {
     await interaction.followUp({
-      content: `**Row ${rowNum}** — pick a space:`,
+      content: `**Row ${displayRow}** — pick a space:`,
       components,
       ephemeral: false,
     }).catch(discordCatch);
@@ -115,7 +116,7 @@ export async function handleSpaceRowBack(interaction, ctx) {
   const { rows } = buildRowPickerButtons(
     pending.validSpaces,
     `space_row_${contextKey}_`,
-    { style: pending.style || ButtonStyle.Primary },
+    { style: pending.style || ButtonStyle.Primary, rowDisplayOffset: pending.rowDisplayOffset || 0 },
   );
 
   const maxRowBtns = pending.actionButtons?.length ? 4 : 5;

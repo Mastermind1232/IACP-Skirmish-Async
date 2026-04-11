@@ -850,12 +850,19 @@ export function getValidDisplacementSpaces(game, figureKey, playerNum, forbidden
   if (!mapId) return [];
   const mapData = getMapData(mapId);
   if (!mapData?.adjacency) return [];
-  const adjacent = mapData.adjacency[coord] || [];
+  const adjacent = mapData.adjacency[normalizeCoord(coord)] || [];
+  // Build occupiedSet from full footprints, excluding the figure being displaced
   const occupiedSet = new Set();
   for (const p of [1, 2]) {
-    for (const c of Object.values(game.figurePositions?.[p] || {})) {
-      if (c) occupiedSet.add(c);
+    for (const [k, c] of Object.entries(game.figurePositions?.[p] || {})) {
+      if (!c) continue;
+      if (p === playerNum && k === figureKey) continue;
+      const dcName = dcNameFromFigureKey(k);
+      const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+      for (const cell of getNormalizedFootprint(c, size)) {
+        occupiedSet.add(cell);
+      }
     }
   }
-  return adjacent.filter((s) => !occupiedSet.has(s) && !forbiddenSet.has(s));
+  return adjacent.filter((s) => !occupiedSet.has(normalizeCoord(s)) && !forbiddenSet.has(normalizeCoord(s)));
 }
