@@ -233,6 +233,7 @@ async function runOneGame(learnings, gameNum) {
   const auditCcOpportunities = {};  // ccName → count (offered but not necessarily chosen)
   const auditSurgeEvents = [];      // detailed surge decision log
   const auditCcDecisions = [];      // CC choice audit: mixed-choice + offensive tracking
+  const auditMoveDecisions = [];    // Move quality audit: chosen vs reference-best destination
 
   // Record DC appearances for this game (must be after auditDcAppearances decl)
   if (auditMode) {
@@ -535,6 +536,26 @@ async function runOneGame(learnings, gameNum) {
     // Track move_pick_space coord for fingerprint-based failure detection
     lastChosenMoveKey = (action.type === 'move_pick_space' && action.params?.coord)
       ? `${action.params.moveKey}_${action.params.coord}` : null;
+
+    // ── Audit: move quality tracking ──
+    if (auditMode && action.type === 'move_pick_space' && action.params?.coord && !action.params?.done) {
+      try {
+        const mc = pickSmartAction._lastMoveContrastive;
+        if (mc && mc.refBestQuality != null) {
+          const gap = mc.refBestQuality - mc.chosenQuality;
+          const chosenF = mc.chosen ? Array.from(mc.chosen) : null;
+          const bestF = mc.refBestFeatures ? Array.from(mc.refBestFeatures) : null;
+          auditMoveDecisions.push({
+            chosenQuality: mc.chosenQuality,
+            refBestQuality: mc.refBestQuality,
+            gap,
+            candidateCount: mc.candidateCount || 0,
+            chosenFeatures: chosenF,
+            refBestFeatures: bestF,
+          });
+        }
+      } catch { /* best-effort */ }
+    }
 
     // ── Audit: track CC opportunities (any time play_cc is in available actions) ──
     if (auditMode) {
@@ -1037,7 +1058,7 @@ async function runOneGame(learnings, gameNum) {
     turnDenialOpportunities, turnDenialChosen, turnDenialMissed,
     // Audit data
     auditDcAppearances, auditDcActivations, auditDcAttacks, auditDcDefeats,
-    auditCcPlays, auditCcOpportunities, auditSurgeEvents, auditCcDecisions,
+    auditCcPlays, auditCcOpportunities, auditSurgeEvents, auditCcDecisions, auditMoveDecisions,
   };
 }
 
@@ -1220,6 +1241,7 @@ async function main() {
       auditCcOpportunities: result.auditCcOpportunities || {},
       auditSurgeEvents: result.auditSurgeEvents || [],
       auditCcDecisions: result.auditCcDecisions || [],
+      auditMoveDecisions: result.auditMoveDecisions || [],
     });
 
     // Log runaway games immediately
@@ -1710,8 +1732,21 @@ async function main() {
     console.log(`    Chose offensive: ${mixedChoseOffensive.length} (${mixedChoices.length > 0 ? (mixedChoseOffensive.length/mixedChoices.length*100).toFixed(1) : 'N/A'}%)`);
     console.log(`    Chose non-offensive: ${mixedChoices.length - mixedChoseOffensive.length} (${mixedChoices.length > 0 ? ((mixedChoices.length - mixedChoseOffensive.length)/mixedChoices.length*100).toFixed(1) : 'N/A'}%)`);
 
+    // ── Leverage diagnosis: WG scorer decision surface ──
+    const multiOptCc = allCcDecisions.filter(d => d.optionCount > 1);
+    const homoOff = multiOptCc.filter(d => d.hasOffensive && !d.hasNonOffensive);
+    const homoNonOff = multiOptCc.filter(d => !d.hasOffensive && d.hasNonOffensive);
+    const mixedMulti = multiOptCc.filter(d => d.isMixedChoice);
+    const pct = (n, t) => t > 0 ? (n/t*100).toFixed(1) + '%' : 'N/A';
+    console.log(`\n  WG scorer decision surface (optionCount > 1):`);
+    console.log(`    Total multi-option CC decisions: ${multiOptCc.length}`);
+    console.log(`    Homogeneous offensive only:      ${homoOff.length} (${pct(homoOff.length, multiOptCc.length)})`);
+    console.log(`    Homogeneous non-offensive only:  ${homoNonOff.length} (${pct(homoNonOff.length, multiOptCc.length)})`);
+    console.log(`    Mixed (feature discriminative):  ${mixedMulti.length} (${pct(mixedMulti.length, multiOptCc.length)})`);
+    console.log(`    Multi-option + in-combat:        ${multiOptCc.filter(d => d.inCombat).length} (${pct(multiOptCc.filter(d => d.inCombat).length, multiOptCc.length)})`);
+
     // Per-card sanity slice
-    const watchCards = ['Element of Surprise', 'Deathblow', 'Targeting Network', 'Planning', 'Urgency'];
+    const watchCards = ['Element of Surprise', 'Deathblow', 'Targeting Network', 'Planning', 'Urgency', 'Parry'];
     console.log(`\n  Per-card sanity slice:`);
     console.log(`  ${'Card'.padEnd(30)} ${'Plays'.padStart(6)} ${'Class'.padStart(14)}`);
     console.log(`  ${'─'.repeat(30)} ${'─'.repeat(6)} ${'─'.repeat(14)}`);
@@ -1722,6 +1757,64 @@ async function main() {
         return OFFENSIVE_CC_TIMINGS.has(t) ? 'offensive' : 'non-offensive';
       })();
       console.log(`  ${card.padEnd(30)} ${String(cardDecisions.length).padStart(6)} ${cls.padStart(14)}`);
+    }
+
+    // ── Move Quality Audit ──────────────────────────────────────────────
+    const allMoveDecisions = [];
+    for (const r of perGameResults) allMoveDecisions.push(...(r.auditMoveDecisions || []));
+
+    console.log('\n══════════════════════════════════════════════════');
+    console.log('  AUDIT: MOVE DESTINATION QUALITY');
+    console.log('══════════════════════════════════════════════════');
+    console.log(`  Total scored move decisions: ${allMoveDecisions.length}`);
+    if (allMoveDecisions.length > 0) {
+      const avgCandidates = (allMoveDecisions.reduce((s, d) => s + d.candidateCount, 0) / allMoveDecisions.length).toFixed(1);
+      console.log(`  Avg candidate hexes/decision: ${avgCandidates}`);
+
+      // Quality-gap distribution
+      const gaps = allMoveDecisions.map(d => d.gap);
+      const nearZero = gaps.filter(g => g < 0.01);
+      const small = gaps.filter(g => g >= 0.01 && g < 0.05);
+      const moderate = gaps.filter(g => g >= 0.05 && g < 0.15);
+      const large = gaps.filter(g => g >= 0.15);
+      const optimal = allMoveDecisions.filter(d => d.gap < 0.001);
+      const fp = (n, t) => t > 0 ? (n/t*100).toFixed(1) + '%' : 'N/A';
+      console.log(`  Chose reference-optimal destination: ${optimal.length}/${allMoveDecisions.length} (${fp(optimal.length, allMoveDecisions.length)})`);
+      console.log(`\n  Quality-gap distribution (gap = refBest - chosen):`);
+      console.log(`    Near-zero (<0.01):  ${nearZero.length} (${fp(nearZero.length, allMoveDecisions.length)})`);
+      console.log(`    Small (0.01-0.05):  ${small.length} (${fp(small.length, allMoveDecisions.length)})`);
+      console.log(`    Moderate (0.05-0.15): ${moderate.length} (${fp(moderate.length, allMoveDecisions.length)})`);
+      console.log(`    Large (>0.15):      ${large.length} (${fp(large.length, allMoveDecisions.length)})`);
+      const avgGap = (gaps.reduce((s, g) => s + g, 0) / gaps.length).toFixed(4);
+      const maxGap = Math.max(...gaps).toFixed(4);
+      console.log(`  Avg gap: ${avgGap}  Max gap: ${maxGap}`);
+
+      // Per-feature gap breakdown (only for suboptimal moves with features available)
+      const suboptimal = allMoveDecisions.filter(d => d.gap >= 0.01 && d.chosenFeatures && d.refBestFeatures);
+      if (suboptimal.length > 0) {
+        const featureNames = ['distToNearestEnemy', 'threatAtDest', 'objectiveProximity', 'allySupport', 'mpEfficiency', 'bias', 'destInEnemyRange', 'destOnObjective', 'destAdjacentToAlly'];
+        const qualityW = [0.40, -0.15, 0.25, 0.10, 0.10, 0.0, -0.15, 0.30, 0.15];
+        console.log(`\n  Per-feature gap breakdown (${suboptimal.length} suboptimal moves):`);
+        console.log(`  ${'Feature'.padEnd(22)} ${'AvgChosen'.padStart(10)} ${'AvgRefBest'.padStart(10)} ${'AvgDiff'.padStart(10)} ${'QualW'.padStart(7)} ${'WtdGap'.padStart(10)}`);
+        console.log(`  ${'─'.repeat(22)} ${'─'.repeat(10)} ${'─'.repeat(10)} ${'─'.repeat(10)} ${'─'.repeat(7)} ${'─'.repeat(10)}`);
+        for (let i = 0; i < 9; i++) {
+          const avgChosen = suboptimal.reduce((s, d) => s + (d.chosenFeatures[i] || 0), 0) / suboptimal.length;
+          const avgBest = suboptimal.reduce((s, d) => s + (d.refBestFeatures[i] || 0), 0) / suboptimal.length;
+          const diff = avgBest - avgChosen;
+          const wtdGap = diff * qualityW[i];
+          console.log(`  ${featureNames[i].padEnd(22)} ${avgChosen.toFixed(4).padStart(10)} ${avgBest.toFixed(4).padStart(10)} ${(diff >= 0 ? '+' : '') + diff.toFixed(4).padStart(9)} ${qualityW[i].toFixed(2).padStart(7)} ${(wtdGap >= 0 ? '+' : '') + wtdGap.toFixed(4).padStart(9)}`);
+        }
+        // Which features contribute most to the gap
+        const contributions = featureNames.map((name, i) => {
+          const diff = suboptimal.reduce((s, d) => s + ((d.refBestFeatures[i] || 0) - (d.chosenFeatures[i] || 0)), 0) / suboptimal.length;
+          return { name, contribution: Math.abs(diff * qualityW[i]) };
+        });
+        contributions.sort((a, b) => b.contribution - a.contribution);
+        console.log(`\n  Top gap contributors (|weighted diff|):`);
+        for (const c of contributions.slice(0, 5)) {
+          console.log(`    ${c.name}: ${c.contribution.toFixed(4)}`);
+        }
+      }
     }
 
     console.log('\n══════════════════════════════════════════════════');

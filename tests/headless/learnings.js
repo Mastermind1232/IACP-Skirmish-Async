@@ -2259,7 +2259,7 @@ function _addDeploymentZoneCentroids(game, mapId, variant, coords) {
   } catch { /* data not available */ }
 }
 
-function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMeta) {
+function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMeta, wgMoveWeights) {
   // Only fire for within-activation decisions (not between-activation)
   if (absTypes.includes('activate')) return null;
   const hasWithinAct = absTypes.some(t => _WITHIN_ACT_TYPES.has(t));
@@ -2429,6 +2429,20 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
         }
       }
     }
+    // ── WG move scorer routing (replaces distance-greedy) ─────────────────
+    // Use learned within-group move weights when available. These weights
+    // encode objective proximity, ally adjacency, enemy proximity, and
+    // movement efficiency — strictly superior to min-distance heuristic.
+    if (wgMoveWeights && wgMoveWeights.length >= 9) {
+      let bestScore = -Infinity, bestAction = null;
+      for (const a of spaceActions) {
+        const f = extractMoveFeatures(a, game, playerNum);
+        const score = dotProductWg(wgMoveWeights, f);
+        if (score > bestScore) { bestScore = score; bestAction = a; }
+      }
+      if (bestAction) return bestAction;
+    }
+    // Fallback: distance-greedy (no learned weights available)
     if (oppFigs.length > 0 || objCoords.length > 0) {
       const scored = spaceActions.map(a => {
         const distEnemy = (!_preferObj && oppFigs.length > 0)
@@ -2504,7 +2518,16 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
           pickSmartAction._lastWgFeatures = feats;
           pickSmartAction._lastWgType = 'move';
           const hChosenQ = dotProductWg(MOVE_QUALITY_WEIGHTS, feats);
-          const hSpaceAlts = hGroup.filter(a => a !== hAction && a.params?.coord && !a.params?.done);
+          const hAllSpaces = hGroup.filter(a => a.params?.coord && !a.params?.done);
+          // Find reference-best by quality weights
+          let hRefBestQ = hChosenQ, hRefBestF = feats;
+          for (const a of hAllSpaces) {
+            if (a === hAction) continue;
+            const af = extractMoveFeatures(a, game, playerNum);
+            const q = dotProductWg(MOVE_QUALITY_WEIGHTS, af);
+            if (q > hRefBestQ) { hRefBestQ = q; hRefBestF = af; }
+          }
+          const hSpaceAlts = hAllSpaces.filter(a => a !== hAction);
           const hSampled = hSpaceAlts.length > MOVE_CONTRASTIVE_SAMPLES
             ? Array.from({ length: MOVE_CONTRASTIVE_SAMPLES }, () => hSpaceAlts.splice(Math.floor(Math.random() * hSpaceAlts.length), 1)[0])
             : hSpaceAlts;
@@ -2514,6 +2537,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
           });
           pickSmartAction._lastMoveContrastive = hAlternatives.length > 0 ? {
             chosen: feats, chosenQuality: hChosenQ, alternatives: hAlternatives,
+            refBestQuality: hRefBestQ, refBestFeatures: hRefBestF, candidateCount: hAllSpaces.length,
           } : null;
         } else {
           pickSmartAction._lastWgFeatures = null;
@@ -2549,7 +2573,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   // game states — aligning train/eval distributions for between-activation
   // decisions (which DC, CC, surges, reactive abilities).
   {
-    const planResult = oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMeta);
+    const planResult = oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMeta, learnings.withinGroupWeights?.move);
     if (planResult) {
       // Extract within-group features for the SPECIFIC action the planner chose.
       // Must match features to the executed action — calling pickWithinGroup would
@@ -2568,7 +2592,16 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
           // Build contrastive data with real quality scores (MOVE_QUALITY_WEIGHTS)
           // so the contrastive update has a non-zero gradient signal.
           const chosenQ = dotProductWg(MOVE_QUALITY_WEIGHTS, feats);
-          const spaceAlts = planGroup.filter(a => a !== planResult && a.params?.coord && !a.params?.done);
+          const allSpaces = planGroup.filter(a => a.params?.coord && !a.params?.done);
+          // Find reference-best by quality weights (independent of learned scorer)
+          let refBestQ = chosenQ, refBestF = feats;
+          for (const a of allSpaces) {
+            if (a === planResult) continue;
+            const af = extractMoveFeatures(a, game, playerNum);
+            const q = dotProductWg(MOVE_QUALITY_WEIGHTS, af);
+            if (q > refBestQ) { refBestQ = q; refBestF = af; }
+          }
+          const spaceAlts = allSpaces.filter(a => a !== planResult);
           const sampled = spaceAlts.length > MOVE_CONTRASTIVE_SAMPLES
             ? Array.from({ length: MOVE_CONTRASTIVE_SAMPLES }, () => spaceAlts.splice(Math.floor(Math.random() * spaceAlts.length), 1)[0])
             : spaceAlts;
@@ -2578,6 +2611,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
           });
           pickSmartAction._lastMoveContrastive = alternatives.length > 0 ? {
             chosen: feats, chosenQuality: chosenQ, alternatives,
+            refBestQuality: refBestQ, refBestFeatures: refBestF, candidateCount: allSpaces.length,
           } : null;
         } else {
           pickSmartAction._lastWgFeatures = null;
@@ -2894,6 +2928,9 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
       });
       allCandidates.sort((a, b) => b.learnedScore - a.learnedScore);
       const chosen = allCandidates[0];
+      // Find reference-best destination (by quality weights, independent of learned scorer)
+      const byQuality = [...allCandidates].sort((a, b) => b.qualityScore - a.qualityScore);
+      const refBest = byQuality[0];
       // Sample alternatives for contrastive update (up to MOVE_CONTRASTIVE_SAMPLES)
       const others = allCandidates.slice(1);
       const sampled = [];
@@ -2903,7 +2940,11 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
       }
       return {
         action: chosen.action, wgFeatures: chosen.features, wgType: group,
-        moveContrastive: { chosenQuality: chosen.qualityScore, chosen: chosen.features, alternatives: sampled },
+        moveContrastive: {
+          chosenQuality: chosen.qualityScore, chosen: chosen.features, alternatives: sampled,
+          refBestQuality: refBest.qualityScore, refBestFeatures: refBest.features,
+          candidateCount: allCandidates.length,
+        },
       };
     }
     // Fallback: heuristic (nearest enemy)
