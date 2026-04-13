@@ -131,6 +131,12 @@ function getWgDecay(wgType) {
 const MOVE_QUALITY_WEIGHTS = [                  0.40, -0.15,  0.25, 0.10,  0.10, 0.0, -0.15,   0.30,  0.15];
 // Number of random alternatives to sample for contrastive comparison.
 const MOVE_CONTRASTIVE_SAMPLES = 3;
+// Per-feature learning-rate boost for sparse binary features in the move scorer.
+// destOnObjective (index 7) fires in ~5-10% of candidate sets — its gradient
+// accumulates too slowly relative to frequent features like destAdjacentToAlly.
+// 3× boost breaks the attractor basin without overshooting.
+const MOVE_FEATURE_LR_BOOST_IDX = 7; // destOnObjective
+const MOVE_FEATURE_LR_BOOST = 3.0;
 
 const ATTACK_FEATURE_NAMES = [
   'targetHpRatio', 'targetDistNorm', 'targetIsolated',
@@ -1689,7 +1695,8 @@ function updateTraceNeural(learnings, trace) {
             const clampedAdv = Math.max(-1, Math.min(1, advantage));
             for (let fi = 0; fi < wgW.length; fi++) {
               const featDiff = (mc.chosen[fi] || 0) - (alt.features[fi] || 0);
-              wgW[fi] += ALPHA_WG_MOVE * clampedAdv * featDiff;
+              const lr = fi === MOVE_FEATURE_LR_BOOST_IDX ? ALPHA_WG_MOVE * MOVE_FEATURE_LR_BOOST : ALPHA_WG_MOVE;
+              wgW[fi] += lr * clampedAdv * featDiff;
               wgW[fi] = Math.max(-WG_WEIGHT_CLAMP, Math.min(WG_WEIGHT_CLAMP, wgW[fi]));
               if (!isFinite(wgW[fi])) wgW[fi] = 0;
             }
@@ -2665,7 +2672,13 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     const surgeSpendTypes = absTypes.filter(t =>
       t === 'surge_damage' || t === 'surge_special' || t === 'spend_surge');
     if (surgeSpendTypes.length > 0 && absTypes.includes('skip_surges')) {
-      bestType = surgeSpendTypes[0]; // within-group scorer picks which specific surge
+      // Candidate E: prefer surge_damage over surge_special so the within-group
+      // scorer sees damage options first. Without this, surge_special can win
+      // the [0] slot by filter order, funneling into accuracy-only groups where
+      // Candidate D's redundant-accuracy override has no non-accuracy fallback.
+      bestType = surgeSpendTypes.includes('surge_damage')
+        ? 'surge_damage'
+        : surgeSpendTypes[0];
     }
   }
 
