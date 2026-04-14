@@ -43,10 +43,12 @@ describe('random game (AI training skeleton)', () => {
     });
 
     assert.ok(actions.length > 0, 'P1 has available actions');
-    // Should include activate DC and pass
     const types = actions.map(a => a.type);
     assert.ok(types.includes('activate_dc'), 'can activate a DC');
-    assert.ok(types.includes('pass_activation_turn'), 'can pass');
+    // pass_activation_turn is only legal when opponent has strictly MORE activations
+    // remaining (engine rule). With 1 DC per player, activations are equal → no pass.
+    assert.ok(!types.includes('pass_activation_turn'),
+      'pass should NOT be offered when activations are equal (1 vs 1)');
   });
 
   it('damage reduces HP and defeat triggers win check', async () => {

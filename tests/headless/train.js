@@ -35,6 +35,7 @@ import {
 import { buildGraph, graphForwardPass, setAttentionPool, setRichEdges, setMoveQualitySignal } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
 import { TRAINING_MATCHUPS, TRAINING_WHITELIST_DCS, TRAINING_WHITELIST_CCS, TRAINING_MAPS } from '../../src/ai/training-config.js';
+import { assertPreActionInvariants, assertPostActionInvariants, snapshotPreAction } from './rules-invariants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -270,6 +271,10 @@ async function runOneGame(learnings, gameNum) {
   const auditMoveDecisions = [];    // Move quality audit: chosen vs reference-best destination
   const auditAttackDecisions = [];  // Attack target quality audit: per-decision target analysis
 
+  // ── Rules invariant tracking ────────────────────────────────────────────
+  const rulesViolations = [];       // all violations across the game
+  let handlerErrors = 0;            // count of handler exceptions (upgraded from silent catch)
+
   // Record DC appearances for this game (must be after auditDcAppearances decl)
   if (auditMode) {
     for (const msgId of [...(game.p1DcMessageIds || []), ...(game.p2DcMessageIds || [])]) {
@@ -461,6 +466,14 @@ async function runOneGame(learnings, gameNum) {
       }
       return true;
     });
+
+    // ── Pre-action rules invariant check ──────────────────────────────────
+    if (auditMode) {
+      try {
+        const preViolations = assertPreActionInvariants(g, allActions, { dcHealthState, dcMessageMeta });
+        for (const v of preViolations) rulesViolations.push(v);
+      } catch { /* invariant framework must not break training */ }
+    }
 
     if (allActions.length === 0) {
       consecutiveEmpty++;
@@ -1034,11 +1047,39 @@ async function runOneGame(learnings, gameNum) {
     const preP1fc = auditMode ? Object.keys(g.figurePositions?.[1] || {}).length : 0;
     const preP2fc = auditMode ? Object.keys(g.figurePositions?.[2] || {}).length : 0;
 
+    // ── Pre-action snapshot for post-action invariant comparison ──────────
+    const preSnap = auditMode ? snapshotPreAction(g) : null;
+
     try {
       await harness.submitAction(action.customId, userId);
       tracer.afterAction(harness.getGame(), action);
-    } catch {
+    } catch (err) {
       tracer.afterAction(harness.getGame(), action);
+      // ── Handler error instrumentation (RT-HE) ────────────────────────
+      if (auditMode) {
+        handlerErrors++;
+        rulesViolations.push({
+          id: 'RT-HE',
+          severity: 'high',
+          domain: 'handler_error',
+          message: `Handler threw on ${action.type}: ${(err?.message || String(err)).slice(0, 200)}`,
+          phase: g?.phase || '?',
+          roundPhase: g?.roundPhase || '?',
+          round: g?.currentRound || 0,
+          contextType: 'post_action',
+          actionType: action.type,
+          customId: (action.customId || '').slice(0, 80),
+        });
+      }
+    }
+
+    // ── Post-action rules invariant check ─────────────────────────────────
+    if (auditMode) {
+      try {
+        const postG = harness.getGame();
+        const postViolations = assertPostActionInvariants(postG, preSnap, action, { dcHealthState, dcMessageMeta });
+        for (const v of postViolations) rulesViolations.push(v);
+      } catch { /* invariant framework must not break training */ }
     }
 
     // ── Audit: detect defeats by figure count delta ───────────────────────
@@ -1161,6 +1202,8 @@ async function runOneGame(learnings, gameNum) {
     // Audit data
     auditDcAppearances, auditDcActivations, auditDcAttacks, auditDcDefeats,
     auditCcPlays, auditCcOpportunities, auditSurgeEvents, auditCcDecisions, auditMoveDecisions, auditAttackDecisions,
+    // Rules invariant data
+    rulesViolations, handlerErrors,
   };
 }
 
@@ -2335,6 +2378,81 @@ async function main() {
       console.log(`    A) Structural noise (no alternative):   ${structuralNoise.length}/${accWasted.length} (${(structuralNoise.length/accWasted.length*100).toFixed(1)}%)`);
       console.log(`    B) Scorer mistake (had alt, was safe):  ${scorerMistake.length}/${accWasted.length} (${(scorerMistake.length/accWasted.length*100).toFixed(1)}%)`);
       console.log(`    C) Edge case (had alt, wasn't safe):    ${edgeCase.length}/${accWasted.length} (${(edgeCase.length/accWasted.length*100).toFixed(1)}%)`);
+    }
+
+    // ── RULES INVARIANT VIOLATIONS ──────────────────────────────────────
+    const allRulesViolations = [];
+    let totalHandlerErrors = 0;
+    for (const r of perGameResults) {
+      allRulesViolations.push(...(r.rulesViolations || []));
+      totalHandlerErrors += r.handlerErrors || 0;
+    }
+
+    console.log('\n══════════════════════════════════════════════════');
+    console.log('  RULES INVARIANT VIOLATIONS');
+    console.log('══════════════════════════════════════════════════');
+    console.log(`  Total violations: ${allRulesViolations.length}`);
+    console.log(`  Handler errors (RT-HE): ${totalHandlerErrors}`);
+    console.log(`  Games with violations: ${perGameResults.filter(r => (r.rulesViolations || []).length > 0).length}/${perGameResults.length}`);
+
+    if (allRulesViolations.length > 0) {
+      // By invariant ID
+      const byId = {};
+      for (const v of allRulesViolations) {
+        byId[v.id] = (byId[v.id] || 0) + 1;
+      }
+      console.log('\n  By invariant ID:');
+      for (const [id, cnt] of Object.entries(byId).sort((a, b) => b[1] - a[1])) {
+        console.log(`    ${id}: ${cnt}`);
+      }
+
+      // By severity
+      const bySev = {};
+      for (const v of allRulesViolations) {
+        bySev[v.severity] = (bySev[v.severity] || 0) + 1;
+      }
+      console.log('\n  By severity:');
+      for (const sev of ['critical', 'high', 'medium', 'low']) {
+        if (bySev[sev]) console.log(`    ${sev}: ${bySev[sev]}`);
+      }
+
+      // By domain
+      const byDomain = {};
+      for (const v of allRulesViolations) {
+        byDomain[v.domain] = (byDomain[v.domain] || 0) + 1;
+      }
+      console.log('\n  By domain:');
+      for (const [domain, cnt] of Object.entries(byDomain).sort((a, b) => b[1] - a[1])) {
+        console.log(`    ${domain}: ${cnt}`);
+      }
+
+      // Pre-action vs post-action
+      const preCount = allRulesViolations.filter(v => v.contextType === 'pre_action').length;
+      const postCount = allRulesViolations.filter(v => v.contextType === 'post_action').length;
+      console.log(`\n  Pre-action violations: ${preCount}`);
+      console.log(`  Post-action violations: ${postCount}`);
+
+      // First occurrence context for each ID
+      console.log('\n  First occurrence per invariant ID:');
+      const seen = new Set();
+      for (const v of allRulesViolations) {
+        if (seen.has(v.id)) continue;
+        seen.add(v.id);
+        const ctx = [
+          `R${v.round}`,
+          v.phase,
+          v.roundPhase !== '?' ? v.roundPhase : null,
+          v.contextType,
+          v.actionType ? `action=${v.actionType}` : null,
+          v.figureKey ? `fig=${v.figureKey}` : null,
+          v.playerNum ? `P${v.playerNum}` : null,
+        ].filter(Boolean).join(', ');
+        console.log(`    ${v.id} [${v.severity}] ${v.domain}`);
+        console.log(`      ${v.message}`);
+        console.log(`      context: ${ctx}`);
+      }
+    } else {
+      console.log('  No rules violations detected.');
     }
   }
 
