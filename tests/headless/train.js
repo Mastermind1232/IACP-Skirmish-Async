@@ -28,11 +28,13 @@ import {
   extractFeatures, setEncoderType, getEncoderType, setWgWeightClamp, setMoveDecisionBonus,
   setMoveQualitySignalFlag, setBoundaryFix,
   getWgAuditCounters, resetWgAuditCounters,
+  getAtkAuditCounters, resetAtkAuditCounters, getAtkAuditTotals, resetAtkAuditTotals,
   OFFENSIVE_CC_TIMINGS,
+  COMBAT_CC_TIMINGS,
 } from './learnings.js';
 import { buildGraph, graphForwardPass, setAttentionPool, setRichEdges, setMoveQualitySignal } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
-import { TRAINING_MATCHUPS, TRAINING_WHITELIST_DCS, TRAINING_WHITELIST_CCS } from '../../src/ai/training-config.js';
+import { TRAINING_MATCHUPS, TRAINING_WHITELIST_DCS, TRAINING_WHITELIST_CCS, TRAINING_MAPS } from '../../src/ai/training-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,6 +52,33 @@ const TEST_DECKS = JSON.parse(readFileSync(TEST_DECKS_PATH, 'utf8'));
 let useTrainingMatchups = false;
 let auditMode = false;
 
+// ── CC Reference Standard ──────────────────────────────────────────────────
+// Static card-quality tiers for same-cost same-class tiebreak (1-5, higher = better).
+// Only matters when cost and offensive class are identical.
+const CC_CARD_QUALITY = {
+  'Take Initiative': 5,
+  'Element of Surprise': 4, 'Concentrated Fire': 4, 'Covering Fire': 4,
+  'Deflection': 3, 'Blitz': 3, 'Battlefield Awareness': 3, 'Brace Yourself': 3, 'Deadeye': 3,
+  'Lock On': 2, 'Parry': 2, 'Call the Vanguard': 2, 'Marksman': 2, 'Heart of Freedom': 2, 'Deadly Precision': 2,
+  'Focus': 1, 'Urgency': 1, 'Planning': 1, 'Fleet Footed': 1, 'Wookiee Rage': 1,
+  'Ready Weapons': 1, 'Expose Weakness': 1, 'Bodyguard': 1,
+};
+
+// Reference score for a CC option: combatTiming > offensive > cost > cardQuality
+function ccRefScore(cardName, inCombat) {
+  const ccData = getCcEffect(cardName);
+  const timing = (ccData?.timing || '').toLowerCase();
+  const isOffensive = OFFENSIVE_CC_TIMINGS.has(timing);
+  const isCombatTimed = COMBAT_CC_TIMINGS.has(timing);
+  const cost = ccData?.cost || 0;
+  let score = 0;
+  if (inCombat && isCombatTimed) score += 100;
+  if (isOffensive) score += 50;
+  score += (cost / 4) * 10;
+  score += (CC_CARD_QUALITY[cardName] || 0);
+  return score;
+}
+
 /**
  * Pick a random matchup: two different decks from the test deck pool.
  * Returns { p1Deck, p2Deck } each with { name, dcList, ccList }.
@@ -57,7 +86,7 @@ let auditMode = false;
 function pickMatchup(gameNum) {
   if (useTrainingMatchups) {
     const matchup = TRAINING_MATCHUPS[gameNum % TRAINING_MATCHUPS.length];
-    return { p1Deck: matchup.p1Deck, p2Deck: matchup.p2Deck };
+    return { p1Deck: matchup.p1Deck, p2Deck: matchup.p2Deck, label: matchup.label };
   }
   const i = gameNum % TEST_DECKS.length;
   // Offset by roughly half the pool + prime step to avoid repeated pairings
@@ -122,13 +151,18 @@ function distToNearestEnemy(coord, game, playerNum) {
 }
 
 async function runOneGame(learnings, gameNum) {
-  const { p1Deck, p2Deck } = pickMatchup(gameNum);
+  const { p1Deck, p2Deck, label } = pickMatchup(gameNum);
   const p1Army = p1Deck.dcList.map(n => ({ dcName: n }));
   const p2Army = p2Deck.dcList.map(n => ({ dcName: n }));
 
+  // Rotate maps across training set (use TRAINING_MAPS when in training mode)
+  const mapPool = (useTrainingMatchups && TRAINING_MAPS?.length > 0)
+    ? TRAINING_MAPS : ['mos-eisley-outskirts'];
+  const mapId = mapPool[gameNum % mapPool.length];
+
   const builder = createTestGame()
     .lightweight()
-    .withMap('mos-eisley-outskirts')
+    .withMap(mapId)
     .withMissionVariant('a')
     .withPlayer1Army(p1Army)
     .withPlayer2Army(p2Army);
@@ -234,6 +268,7 @@ async function runOneGame(learnings, gameNum) {
   const auditSurgeEvents = [];      // detailed surge decision log
   const auditCcDecisions = [];      // CC choice audit: mixed-choice + offensive tracking
   const auditMoveDecisions = [];    // Move quality audit: chosen vs reference-best destination
+  const auditAttackDecisions = [];  // Attack target quality audit: per-decision target analysis
 
   // Record DC appearances for this game (must be after auditDcAppearances decl)
   if (auditMode) {
@@ -564,30 +599,62 @@ async function runOneGame(learnings, gameNum) {
           if (a.params?.cardName) auditCcOpportunities[a.params.cardName] = (auditCcOpportunities[a.params.cardName] || 0) + 1;
         }
       }
-      // ── CC decision audit: mixed-choice tracking ──
+      // ── CC decision audit: enhanced per-decision quality tracking ──
       if (action.type === 'play_cc' || action.type === 'play_cc_special' || action.type === 'play_cc_double') {
         try {
           const ccActions = playerActions.filter(a =>
             (a.type === 'play_cc' || a.type === 'play_cc_special' || a.type === 'play_cc_double') && a.params?.cardName
           );
           if (ccActions.length >= 1) {
-            const classify = (cardName) => {
-              const t = (getCcEffect(cardName)?.timing || '').toLowerCase();
-              return OFFENSIVE_CC_TIMINGS.has(t) ? 'offensive' : 'non-offensive';
-            };
+            const inCombat = !!(g.pendingCombat || g.combat);
             const chosenCard = action.params?.cardName;
-            const chosenClass = classify(chosenCard);
-            const optionClasses = ccActions.map(a => ({ card: a.params.cardName, cls: classify(a.params.cardName) }));
-            const hasOffensive = optionClasses.some(o => o.cls === 'offensive');
-            const hasNonOffensive = optionClasses.some(o => o.cls === 'non-offensive');
+
+            // Build full option profile for all available CCs
+            const options = ccActions.map(a => {
+              const name = a.params.cardName;
+              const ccData = getCcEffect(name);
+              const timing = (ccData?.timing || '').toLowerCase();
+              const isOffensive = OFFENSIVE_CC_TIMINGS.has(timing);
+              const isCombatTimed = COMBAT_CC_TIMINGS.has(timing);
+              const cost = ccData?.cost || 0;
+              return { name, isOffensive, isCombatTimed, cost, refScore: ccRefScore(name, inCombat) };
+            });
+
+            const chosenOpt = options.find(o => o.name === chosenCard) || options[0];
+            const hasOffensive = options.some(o => o.isOffensive);
+            const hasNonOffensive = options.some(o => !o.isOffensive);
+
+            // Reference preferred: highest refScore
+            const refSorted = [...options].sort((a, b) => b.refScore - a.refScore);
+            const refPreferred = refSorted[0].name;
+            const matchesRef = chosenCard === refPreferred;
+
+            // Same-feature-vector detection: CCs with identical (cost, isOffensive, isCombatTimed) as chosen
+            const sameFeatureCount = options.filter(o =>
+              o.cost === chosenOpt.cost && o.isOffensive === chosenOpt.isOffensive && o.isCombatTimed === chosenOpt.isCombatTimed
+            ).length;
+
+            const ccPickPath = pickSmartAction._lastCcPickPath || 'unknown';
+            const hasFocusOption = options.some(o => o.name === 'Focus');
+
             auditCcDecisions.push({
               chosenCard,
-              chosenClass,
+              chosenClass: chosenOpt.isOffensive ? 'offensive' : 'non-offensive',
+              chosenCost: chosenOpt.cost,
+              chosenIsCombatTimed: chosenOpt.isCombatTimed,
+              chosenRefScore: chosenOpt.refScore,
               optionCount: ccActions.length,
               isMixedChoice: hasOffensive && hasNonOffensive,
               hasOffensive,
               hasNonOffensive,
-              inCombat: !!(g.pendingCombat || g.combat),
+              inCombat,
+              refPreferred,
+              refPreferredScore: refSorted[0].refScore,
+              matchesRef,
+              sameFeatureCount,
+              ccPickPath,
+              hasFocusOption,
+              options: options.map(o => ({ name: o.name, isOffensive: o.isOffensive, isCombatTimed: o.isCombatTimed, cost: o.cost, refScore: o.refScore })),
             });
           }
         } catch { /* best-effort */ }
@@ -601,38 +668,41 @@ async function runOneGame(learnings, gameNum) {
       attackActions++; currentActivationHadAttack = true;
       if (auditMode && action.params?.dcName) auditDcAttacks[action.params.dcName] = (auditDcAttacks[action.params.dcName] || 0) + 1;
 
-      // ── Turn-denial tracking (tightened: only counts actual attack options) ──
-      // Check if this attack was a true tiebreak: ≥2 attack_target actions with
-      // same currentHp, at least one targeting an unactivated DC and one activated.
+      // ── Enhanced attack target quality audit ──────────────────────────────
+      // Captures per-decision data: all targets' HP + activation status,
+      // focus-fire vs turn-denial tradeoffs, HP gap analysis.
       try {
         const targetFk = action.params?.targetFigureKey;
         if (targetFk && !targetFk.startsWith('npc_')) {
           const oppPN = actingPN === 1 ? 2 : 1;
           const oppActivated = new Set(oppPN === 1 ? (g.p1ActivatedDcIndices || []) : (g.p2ActivatedDcIndices || []));
           const oppMsgIds = oppPN === 1 ? (g.p1DcMessageIds || []) : (g.p2DcMessageIds || []);
-          // Only count targets that were actual available attack actions
           const atkActions = playerActions.filter(a => a.type === 'attack_target' && a.params?.targetFigureKey && !a.params.targetFigureKey.startsWith('npc_'));
-          if (atkActions.length >= 2) {
-            const targetInfo = atkActions.map(a => {
-              const fk = a.params.targetFigureKey;
-              let hp = null;
-              const _dcN = fk.replace(/-\d+-\d+$/, '');
-              const _fi = parseInt(fk.split('-').pop(), 10) || 0;
-              for (const [_mid, _harr] of dcHealthState) {
-                const _m = dcMessageMeta.get(_mid);
-                if (_m && _m.playerNum === oppPN && _m.dcName === _dcN && _harr?.[_fi]) {
-                  hp = { current: _harr[_fi][0], max: _harr[_fi][1] }; break;
-                }
+
+          // Build full target profile for all available targets
+          const targetInfo = atkActions.map(a => {
+            const fk = a.params.targetFigureKey;
+            let hp = null;
+            const _dcN = fk.replace(/-\d+-\d+$/, '');
+            const _fi = parseInt(fk.split('-').pop(), 10) || 0;
+            for (const [_mid, _harr] of dcHealthState) {
+              const _m = dcMessageMeta.get(_mid);
+              if (_m && _m.playerNum === oppPN && _m.dcName === _dcN && _harr?.[_fi]) {
+                hp = { current: _harr[_fi][0], max: _harr[_fi][1] }; break;
               }
-              let activated = false;
-              for (let i = 0; i < oppMsgIds.length; i++) {
-                const meta = dcMessageMeta.get(oppMsgIds[i]);
-                if (meta && meta.dcName === _dcN) { activated = oppActivated.has(i); break; }
-              }
-              return { fk, currentHp: hp?.current ?? 99, activated };
-            });
-            const chosenInfo = targetInfo.find(f => f.fk === targetFk);
-            if (chosenInfo) {
+            }
+            let activated = false;
+            for (let i = 0; i < oppMsgIds.length; i++) {
+              const meta = dcMessageMeta.get(oppMsgIds[i]);
+              if (meta && meta.dcName === _dcN) { activated = oppActivated.has(i); break; }
+            }
+            return { fk, dcName: _dcN, currentHp: hp?.current ?? 99, maxHp: hp?.max ?? 99, activated };
+          });
+
+          const chosenInfo = targetInfo.find(f => f.fk === targetFk);
+          if (chosenInfo) {
+            // Existing turn-denial tracking
+            if (atkActions.length >= 2) {
               const sameHp = targetInfo.filter(f => f.currentHp === chosenInfo.currentHp && f.fk !== targetFk);
               const hasUnactivated = sameHp.some(f => !f.activated) || !chosenInfo.activated;
               const hasActivated = sameHp.some(f => f.activated) || chosenInfo.activated;
@@ -641,6 +711,36 @@ async function runOneGame(learnings, gameNum) {
                 if (!chosenInfo.activated) turnDenialChosen++;
                 else turnDenialMissed++;
               }
+            }
+
+            // Enhanced per-decision audit
+            if (auditMode) {
+              const sortedByHp = [...targetInfo].sort((a, b) => a.currentHp - b.currentHp);
+              const lowestHp = sortedByHp[0].currentHp;
+              const secondHp = sortedByHp.length > 1 ? sortedByHp[1].currentHp : null;
+              const unactivatedTargets = targetInfo.filter(t => !t.activated);
+              const bestUnactivated = unactivatedTargets.length > 0
+                ? unactivatedTargets.sort((a, b) => a.currentHp - b.currentHp)[0] : null;
+
+              // Key question: focus-fire chose lowest HP, but was there an unactivated target close in HP?
+              // "Close" = within 2× the lowest HP (e.g., lowest=3, unactivated at 5 is "close")
+              const turnDenialTradeoff = (bestUnactivated && chosenInfo.activated && bestUnactivated.currentHp <= lowestHp * 2)
+                ? { unactivatedHp: bestUnactivated.currentHp, chosenHp: chosenInfo.currentHp, hpCost: bestUnactivated.currentHp - chosenInfo.currentHp }
+                : null;
+
+              auditAttackDecisions.push({
+                targetCount: atkActions.length,
+                chosenHp: chosenInfo.currentHp,
+                chosenMaxHp: chosenInfo.maxHp,
+                chosenActivated: chosenInfo.activated,
+                chosenDamaged: chosenInfo.currentHp < chosenInfo.maxHp,
+                lowestHp,
+                secondHp,
+                hpGapToSecond: secondHp != null ? secondHp - lowestHp : 0,
+                unactivatedCount: unactivatedTargets.length,
+                chosenIsLowestHp: chosenInfo.currentHp === lowestHp,
+                turnDenialTradeoff,
+              });
             }
           }
         }
@@ -1020,6 +1120,8 @@ async function runOneGame(learnings, gameNum) {
     winnerLabel,
     p1Army: p1Deck.name,
     p2Army: p2Deck.name,
+    matchupLabel: label || `${p1Deck.name} vs ${p2Deck.name}`,
+    mapId,
     p1VP: finalGame.player1VP?.total || 0,
     p2VP: finalGame.player2VP?.total || 0,
     finalRound,
@@ -1058,7 +1160,7 @@ async function runOneGame(learnings, gameNum) {
     turnDenialOpportunities, turnDenialChosen, turnDenialMissed,
     // Audit data
     auditDcAppearances, auditDcActivations, auditDcAttacks, auditDcDefeats,
-    auditCcPlays, auditCcOpportunities, auditSurgeEvents, auditCcDecisions, auditMoveDecisions,
+    auditCcPlays, auditCcOpportunities, auditSurgeEvents, auditCcDecisions, auditMoveDecisions, auditAttackDecisions,
   };
 }
 
@@ -1122,7 +1224,7 @@ async function main() {
   }
   if (args.includes('--training')) {
     useTrainingMatchups = true;
-    console.log(`  Training mode: LOCKED matchups (${TRAINING_MATCHUPS.length} matchups, ${TRAINING_WHITELIST_DCS.size} DCs, ${TRAINING_WHITELIST_CCS.size} CCs)`);
+    console.log(`  Training mode: LOCKED matchups (${TRAINING_MATCHUPS.length} matchups, ${TRAINING_WHITELIST_DCS.size} DCs, ${TRAINING_WHITELIST_CCS.size} CCs, ${TRAINING_MAPS.length} maps)`);
   }
   if (args.includes('--audit')) {
     auditMode = true;
@@ -1173,6 +1275,8 @@ async function main() {
   // Audit: snapshot attack weights at start for delta tracking
   const attackWeightsStart = learnings.withinGroupWeights?.attack ? learnings.withinGroupWeights.attack.map(w => w) : null;
   resetWgAuditCounters();
+  resetAtkAuditTotals();
+  resetAtkAuditCounters();
   const startTime = Date.now();
   const updatesBefore = learnings.trainingStats?.totalUpdates || 0;
   let lastCheckpointUpdates = updatesBefore;
@@ -1242,6 +1346,9 @@ async function main() {
       auditSurgeEvents: result.auditSurgeEvents || [],
       auditCcDecisions: result.auditCcDecisions || [],
       auditMoveDecisions: result.auditMoveDecisions || [],
+      auditAttackDecisions: result.auditAttackDecisions || [],
+      matchupLabel: result.matchupLabel || 'unknown',
+      mapId: result.mapId || 'unknown',
     });
 
     // Log runaway games immediately
@@ -1354,6 +1461,22 @@ async function main() {
       console.log(`  Figure defeats this window: ${cpFigureDefeats}`);
       if (atkWeightDelta) console.log(`  Attack weight delta: [${atkWeightDelta.map(d => d.toFixed(4)).join(', ')}]`);
 
+      // ── Attack Target Quality Audit ─────────────────────────────────────
+      const atkAudit = getAtkAuditCounters();
+      if (atkAudit.totalDecisions > 0) {
+        const multiPct = ((atkAudit.multiTargetDecisions / atkAudit.totalDecisions) * 100).toFixed(1);
+        const avgTargets = (atkAudit.totalTargets / atkAudit.totalDecisions).toFixed(1);
+        const avgChosenHp = (atkAudit.chosenHpSum / atkAudit.totalDecisions).toFixed(1);
+        const avgAltHp = atkAudit.multiTargetDecisions > 0 ? (atkAudit.altHpSum / atkAudit.multiTargetDecisions).toFixed(1) : 'n/a';
+        const reliablePct = ((atkAudit.reliableHits / atkAudit.totalDecisions) * 100).toFixed(1);
+        const tdRate = atkAudit.turnDenialRelevant > 0 ? ((atkAudit.turnDenialChosen / atkAudit.turnDenialRelevant) * 100).toFixed(1) : 'n/a';
+        console.log(`\n  ── ATTACK TARGET QUALITY ──`);
+        console.log(`    Total decisions: ${atkAudit.totalDecisions} (${multiPct}% multi-target, avg ${avgTargets} targets/decision)`);
+        console.log(`    Avg chosen HP: ${avgChosenHp}  Avg alt HP: ${avgAltHp} (lower chosen = better focus fire)`);
+        console.log(`    Hit reliability: ${reliablePct}% in-range (${atkAudit.reliableHits} reliable, ${atkAudit.marginalHits} marginal)`);
+        console.log(`    Turn-denial: ${atkAudit.turnDenialRelevant} opportunities, ${tdRate}% chose unactivated`);
+      }
+
       // Persist checkpoint to training history for plateau detection
       recordTrainingCheckpoint(learnings, {
         completed: cpCompleted, total: cpGames,
@@ -1367,6 +1490,7 @@ async function main() {
       cpRunawayGames = 0; cpRunawayWindows = 0; cpTotalIters = 0;
       cpFigureDefeats = 0;
       resetWgAuditCounters();
+      resetAtkAuditCounters();
       for (const k of Object.keys(cpStopReasons)) delete cpStopReasons[k];
       lastCheckpointUpdates = cpUpdatesNow;
     }
@@ -1546,7 +1670,7 @@ async function main() {
     const aN = ['targetHpRatio', 'targetDistNorm', 'targetIsolated', 'targetThreat', 'killPotential', 'bias'];
     const mN = ['distToNearestEnemy', 'threatAtDest', 'objectiveProximity', 'allySupport', 'mpEfficiency', 'bias'];
     const sN = ['damageValue', 'isAccuracy', 'isRecover', 'bias'];
-    const cN = ['ccCost', 'isAttachment', 'inCombat', 'bias'];
+    const cN = ['ccCost', 'isOffensive', 'inCombat', 'bias', 'isCombatTimed'];
     if (wg.attack) console.log(`  attack: ${fmtW(aN, wg.attack)}`);
     if (wg.move) console.log(`  move:   ${fmtW(mN, wg.move)}`);
     if (wg.surge) console.log(`  surge:  ${fmtW(sN, wg.surge)}`);
@@ -1656,6 +1780,26 @@ async function main() {
 
   // ── Audit report ────────────────────────────────────────────────────────────
   if (auditMode && perGameResults.length > 0) {
+    // ── Curriculum coverage ──────────────────────────────────────────────────
+    const matchupCounts = {}, mapCounts = {};
+    for (const r of perGameResults) {
+      const ml = r.matchupLabel || 'unknown';
+      matchupCounts[ml] = (matchupCounts[ml] || 0) + 1;
+      const mi = r.mapId || 'unknown';
+      mapCounts[mi] = (mapCounts[mi] || 0) + 1;
+    }
+    console.log('\n══════════════════════════════════════════════════');
+    console.log('  CURRICULUM COVERAGE');
+    console.log('══════════════════════════════════════════════════');
+    console.log(`  Matchup distribution (${Object.keys(matchupCounts).length} matchups):`);
+    for (const [ml, cnt] of Object.entries(matchupCounts).sort((a, b) => b[1] - a[1])) {
+      console.log(`    ${ml.padEnd(40)} ${cnt}`);
+    }
+    console.log(`\n  Map distribution (${Object.keys(mapCounts).length} maps):`);
+    for (const [mi, cnt] of Object.entries(mapCounts).sort((a, b) => b[1] - a[1])) {
+      console.log(`    ${mi.padEnd(40)} ${cnt}`);
+    }
+
     // Aggregate DC coverage
     const dcApp = {}, dcAct = {}, dcAtk = {}, dcDef = {};
     const ccPlays = {}, ccOps = {};
@@ -1707,56 +1851,354 @@ async function main() {
       console.log(`\n  ⚠ CCs with 0 plays: ${zeroCcPlays.join(', ')}`);
     }
 
-    // ── CC Quality: mixed-choice metric + offensive tracking ──────────
+    // ── CC Quality: enhanced per-decision quality audit ────────────────
     const allCcDecisions = [];
     for (const r of perGameResults) allCcDecisions.push(...(r.auditCcDecisions || []));
 
     console.log('\n══════════════════════════════════════════════════');
     console.log('  AUDIT: CC PLAY QUALITY');
     console.log('══════════════════════════════════════════════════');
+    const pct = (n, t) => t > 0 ? (n/t*100).toFixed(1) + '%' : 'N/A';
     console.log(`  Total CC play decisions: ${allCcDecisions.length}`);
 
-    // Broad class breakdown
-    const offensivePlays = allCcDecisions.filter(d => d.chosenClass === 'offensive');
-    const nonOffensivePlays = allCcDecisions.filter(d => d.chosenClass === 'non-offensive');
-    const inCombatPlays = allCcDecisions.filter(d => d.inCombat);
-    console.log(`  Chose offensive CC: ${offensivePlays.length} (${allCcDecisions.length > 0 ? (offensivePlays.length/allCcDecisions.length*100).toFixed(1) : 'N/A'}%)`);
-    console.log(`  Chose non-offensive CC: ${nonOffensivePlays.length} (${allCcDecisions.length > 0 ? (nonOffensivePlays.length/allCcDecisions.length*100).toFixed(1) : 'N/A'}%)`);
-    console.log(`  During active combat: ${inCombatPlays.length} (${allCcDecisions.length > 0 ? (inCombatPlays.length/allCcDecisions.length*100).toFixed(1) : 'N/A'}%)`);
+    if (allCcDecisions.length > 0) {
+      const n = allCcDecisions.length;
 
-    // Mixed-choice metric (the key discriminative signal)
-    const mixedChoices = allCcDecisions.filter(d => d.isMixedChoice);
-    const mixedChoseOffensive = mixedChoices.filter(d => d.chosenClass === 'offensive');
-    console.log(`\n  Mixed-choice opportunities (had both offensive + non-offensive):`);
-    console.log(`    Total: ${mixedChoices.length}`);
-    console.log(`    Chose offensive: ${mixedChoseOffensive.length} (${mixedChoices.length > 0 ? (mixedChoseOffensive.length/mixedChoices.length*100).toFixed(1) : 'N/A'}%)`);
-    console.log(`    Chose non-offensive: ${mixedChoices.length - mixedChoseOffensive.length} (${mixedChoices.length > 0 ? ((mixedChoices.length - mixedChoseOffensive.length)/mixedChoices.length*100).toFixed(1) : 'N/A'}%)`);
+      // ── Broad class breakdown ────────────────────────────────────────
+      const offensivePlays = allCcDecisions.filter(d => d.chosenClass === 'offensive');
+      const nonOffensivePlays = allCcDecisions.filter(d => d.chosenClass === 'non-offensive');
+      const inCombatPlays = allCcDecisions.filter(d => d.inCombat);
+      console.log(`  Chose offensive CC: ${offensivePlays.length} (${pct(offensivePlays.length, n)})`);
+      console.log(`  Chose non-offensive CC: ${nonOffensivePlays.length} (${pct(nonOffensivePlays.length, n)})`);
+      console.log(`  During active combat: ${inCombatPlays.length} (${pct(inCombatPlays.length, n)})`);
 
-    // ── Leverage diagnosis: WG scorer decision surface ──
-    const multiOptCc = allCcDecisions.filter(d => d.optionCount > 1);
-    const homoOff = multiOptCc.filter(d => d.hasOffensive && !d.hasNonOffensive);
-    const homoNonOff = multiOptCc.filter(d => !d.hasOffensive && d.hasNonOffensive);
-    const mixedMulti = multiOptCc.filter(d => d.isMixedChoice);
-    const pct = (n, t) => t > 0 ? (n/t*100).toFixed(1) + '%' : 'N/A';
-    console.log(`\n  WG scorer decision surface (optionCount > 1):`);
-    console.log(`    Total multi-option CC decisions: ${multiOptCc.length}`);
-    console.log(`    Homogeneous offensive only:      ${homoOff.length} (${pct(homoOff.length, multiOptCc.length)})`);
-    console.log(`    Homogeneous non-offensive only:  ${homoNonOff.length} (${pct(homoNonOff.length, multiOptCc.length)})`);
-    console.log(`    Mixed (feature discriminative):  ${mixedMulti.length} (${pct(mixedMulti.length, multiOptCc.length)})`);
-    console.log(`    Multi-option + in-combat:        ${multiOptCc.filter(d => d.inCombat).length} (${pct(multiOptCc.filter(d => d.inCombat).length, multiOptCc.length)})`);
+      // ── Mixed-choice metric (offensive vs non-offensive) ─────────────
+      const mixedChoices = allCcDecisions.filter(d => d.isMixedChoice);
+      const mixedChoseOffensive = mixedChoices.filter(d => d.chosenClass === 'offensive');
+      console.log(`\n  Mixed-choice opportunities (had both offensive + non-offensive):`);
+      console.log(`    Total: ${mixedChoices.length}`);
+      console.log(`    Chose offensive: ${mixedChoseOffensive.length} (${pct(mixedChoseOffensive.length, mixedChoices.length)})`);
+      console.log(`    Chose non-offensive: ${mixedChoices.length - mixedChoseOffensive.length} (${pct(mixedChoices.length - mixedChoseOffensive.length, mixedChoices.length)})`);
 
-    // Per-card sanity slice
-    const watchCards = ['Element of Surprise', 'Deathblow', 'Targeting Network', 'Planning', 'Urgency', 'Parry'];
-    console.log(`\n  Per-card sanity slice:`);
-    console.log(`  ${'Card'.padEnd(30)} ${'Plays'.padStart(6)} ${'Class'.padStart(14)}`);
-    console.log(`  ${'─'.repeat(30)} ${'─'.repeat(6)} ${'─'.repeat(14)}`);
-    for (const card of watchCards) {
-      const cardDecisions = allCcDecisions.filter(d => d.chosenCard === card);
-      const cls = (() => {
-        const t = (getCcEffect(card)?.timing || '').toLowerCase();
-        return OFFENSIVE_CC_TIMINGS.has(t) ? 'offensive' : 'non-offensive';
-      })();
-      console.log(`  ${card.padEnd(30)} ${String(cardDecisions.length).padStart(6)} ${cls.padStart(14)}`);
+      // ── Decision surface breakdown ───────────────────────────────────
+      const multiOptCc = allCcDecisions.filter(d => d.optionCount > 1);
+      const homoOff = multiOptCc.filter(d => d.hasOffensive && !d.hasNonOffensive);
+      const homoNonOff = multiOptCc.filter(d => !d.hasOffensive && d.hasNonOffensive);
+      const mixedMulti = multiOptCc.filter(d => d.isMixedChoice);
+      console.log(`\n  Decision surface (optionCount > 1):`);
+      console.log(`    Total multi-option CC decisions: ${multiOptCc.length}`);
+      console.log(`    Homogeneous offensive only:      ${homoOff.length} (${pct(homoOff.length, multiOptCc.length)})`);
+      console.log(`    Homogeneous non-offensive only:  ${homoNonOff.length} (${pct(homoNonOff.length, multiOptCc.length)})`);
+      console.log(`    Mixed (feature discriminative):  ${mixedMulti.length} (${pct(mixedMulti.length, multiOptCc.length)})`);
+      console.log(`    Multi-option + in-combat:        ${multiOptCc.filter(d => d.inCombat).length} (${pct(multiOptCc.filter(d => d.inCombat).length, multiOptCc.length)})`);
+
+      // ── REFERENCE AGREEMENT (the key new metric) ─────────────────────
+      const withRef = allCcDecisions.filter(d => d.refPreferred != null);
+      const multiWithRef = withRef.filter(d => d.optionCount > 1);
+      const multiRefMatch = multiWithRef.filter(d => d.matchesRef);
+      console.log(`\n  ── REFERENCE AGREEMENT ──`);
+      console.log(`  Multi-option decisions: ${multiWithRef.length}`);
+      console.log(`  Matches reference: ${multiRefMatch.length}/${multiWithRef.length} (${pct(multiRefMatch.length, multiWithRef.length)})`);
+      const multiRefMismatch = multiWithRef.filter(d => !d.matchesRef);
+      console.log(`  Disagrees with reference: ${multiRefMismatch.length}/${multiWithRef.length} (${pct(multiRefMismatch.length, multiWithRef.length)})`);
+
+      // Disagreement breakdown by context
+      if (multiRefMismatch.length > 0) {
+        const mismatchCombat = multiRefMismatch.filter(d => d.inCombat);
+        const mismatchNonCombat = multiRefMismatch.filter(d => !d.inCombat);
+        const mismatchMixed = multiRefMismatch.filter(d => d.isMixedChoice);
+        const mismatchHomoOff = multiRefMismatch.filter(d => d.hasOffensive && !d.hasNonOffensive);
+        const mismatchHomoNonOff = multiRefMismatch.filter(d => !d.hasOffensive && d.hasNonOffensive);
+        console.log(`\n  Disagreement breakdown:`);
+        console.log(`    During combat: ${mismatchCombat.length}  Non-combat: ${mismatchNonCombat.length}`);
+        console.log(`    In mixed choices: ${mismatchMixed.length}  In homo-offensive: ${mismatchHomoOff.length}  In homo-non-offensive: ${mismatchHomoNonOff.length}`);
+
+        // Avg reference score gap on mismatches (how costly are the errors?)
+        const refGaps = multiRefMismatch.map(d => d.refPreferredScore - d.chosenRefScore);
+        const avgGap = (refGaps.reduce((s, g) => s + g, 0) / refGaps.length).toFixed(1);
+        const smallGap = refGaps.filter(g => g <= 3).length;
+        const mediumGap = refGaps.filter(g => g > 3 && g <= 10).length;
+        const largeGap = refGaps.filter(g => g > 10).length;
+        console.log(`\n  Disagreement severity (ref score gap):`);
+        console.log(`    Avg gap: ${avgGap}`);
+        console.log(`    Small (≤3, tiebreak-level): ${smallGap} (${pct(smallGap, multiRefMismatch.length)})`);
+        console.log(`    Medium (4-10, cost/class): ${mediumGap} (${pct(mediumGap, multiRefMismatch.length)})`);
+        console.log(`    Large (>10, combat timing): ${largeGap} (${pct(largeGap, multiRefMismatch.length)})`);
+
+        // Top disagreement pairs (chosen → ref-preferred)
+        const pairCounts = {};
+        for (const d of multiRefMismatch) {
+          const key = `${d.chosenCard} → ${d.refPreferred}`;
+          pairCounts[key] = (pairCounts[key] || 0) + 1;
+        }
+        const topPairs = Object.entries(pairCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        console.log(`\n  Top disagreement pairs (scorer chose → ref preferred):`);
+        for (const [pair, cnt] of topPairs) {
+          console.log(`    ${pair}: ${cnt}`);
+        }
+      }
+
+      // ── SAME-FEATURE-VECTOR COMPETITION ──────────────────────────────
+      const sameFeatureDecisions = multiOptCc.filter(d => d.sameFeatureCount > 1);
+      console.log(`\n  ── SAME-FEATURE-VECTOR COMPETITION ──`);
+      console.log(`  Decisions where scorer CANNOT distinguish options: ${sameFeatureDecisions.length}/${multiOptCc.length} (${pct(sameFeatureDecisions.length, multiOptCc.length)})`);
+      if (sameFeatureDecisions.length > 0) {
+        const sfRefMatch = sameFeatureDecisions.filter(d => d.matchesRef);
+        console.log(`  Of those, matches reference anyway (lucky pick): ${sfRefMatch.length}/${sameFeatureDecisions.length} (${pct(sfRefMatch.length, sameFeatureDecisions.length)})`);
+        const sfAvgOptions = (sameFeatureDecisions.reduce((s, d) => s + d.sameFeatureCount, 0) / sameFeatureDecisions.length).toFixed(1);
+        console.log(`  Avg same-feature options per decision: ${sfAvgOptions}`);
+
+        // What cards compete in same-feature groups?
+        const sfCardPairs = {};
+        for (const d of sameFeatureDecisions) {
+          const sameGroup = d.options.filter(o => o.cost === d.chosenCost && o.isOffensive === (d.chosenClass === 'offensive') && o.isCombatTimed === d.chosenIsCombatTimed);
+          const names = sameGroup.map(o => o.name).sort().join(' vs ');
+          sfCardPairs[names] = (sfCardPairs[names] || 0) + 1;
+        }
+        const topSfPairs = Object.entries(sfCardPairs).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        console.log(`\n  Top same-feature competition groups:`);
+        for (const [group, cnt] of topSfPairs) {
+          console.log(`    ${group}: ${cnt} decisions`);
+        }
+      }
+
+      // ── PER-CARD QUALITY PROFILE ─────────────────────────────────────
+      const cardProfile = {};
+      for (const d of allCcDecisions) {
+        if (!cardProfile[d.chosenCard]) cardProfile[d.chosenCard] = { chosen: 0, refPreferred: 0, available: 0 };
+        cardProfile[d.chosenCard].chosen++;
+        // Count how often each card was available and ref-preferred
+        if (d.options) {
+          for (const o of d.options) {
+            if (!cardProfile[o.name]) cardProfile[o.name] = { chosen: 0, refPreferred: 0, available: 0 };
+            cardProfile[o.name].available++;
+          }
+        }
+        if (d.refPreferred && d.optionCount > 1) {
+          if (!cardProfile[d.refPreferred]) cardProfile[d.refPreferred] = { chosen: 0, refPreferred: 0, available: 0 };
+          cardProfile[d.refPreferred].refPreferred++;
+        }
+      }
+      const profileCards = Object.entries(cardProfile)
+        .filter(([, v]) => v.available > 0 || v.chosen > 0)
+        .sort((a, b) => b[1].available - a[1].available);
+      console.log(`\n  ── PER-CARD QUALITY PROFILE ──`);
+      console.log(`  ${'Card'.padEnd(30)} ${'Chosen'.padStart(7)} ${'Avail'.padStart(7)} ${'RefPref'.padStart(8)} ${'ChRate'.padStart(7)} ${'RefRate'.padStart(8)}`);
+      console.log(`  ${'─'.repeat(30)} ${'─'.repeat(7)} ${'─'.repeat(7)} ${'─'.repeat(8)} ${'─'.repeat(7)} ${'─'.repeat(8)}`);
+      for (const [card, v] of profileCards) {
+        const chRate = v.available > 0 ? (v.chosen / v.available * 100).toFixed(0) + '%' : 'N/A';
+        const refRate = v.available > 0 ? (v.refPreferred / v.available * 100).toFixed(0) + '%' : 'N/A';
+        console.log(`  ${card.padEnd(30)} ${String(v.chosen).padStart(7)} ${String(v.available).padStart(7)} ${String(v.refPreferred).padStart(8)} ${chRate.padStart(7)} ${refRate.padStart(8)}`);
+      }
+
+      // ── CC PICK PATH ANALYSIS ──────────────────────────────────────────
+      console.log(`\n  ── CC PICK PATH ANALYSIS ──`);
+
+      // Distribution across all CC decisions
+      const pathCounts = {};
+      for (const d of allCcDecisions) {
+        pathCounts[d.ccPickPath] = (pathCounts[d.ccPickPath] || 0) + 1;
+      }
+      console.log(`\n  All CC decisions by pick path:`);
+      for (const [path, cnt] of Object.entries(pathCounts).sort((a, b) => b[1] - a[1])) {
+        console.log(`    ${path.padEnd(16)} ${String(cnt).padStart(5)}  (${pct(cnt, allCcDecisions.length)})`);
+      }
+
+      // Distribution across multi-option CC decisions only
+      const multiOptAll = allCcDecisions.filter(d => d.optionCount > 1);
+      const multiPathCounts = {};
+      for (const d of multiOptAll) {
+        multiPathCounts[d.ccPickPath] = (multiPathCounts[d.ccPickPath] || 0) + 1;
+      }
+      console.log(`\n  Multi-option CC decisions by pick path:`);
+      for (const [path, cnt] of Object.entries(multiPathCounts).sort((a, b) => b[1] - a[1])) {
+        console.log(`    ${path.padEnd(16)} ${String(cnt).padStart(5)}  (${pct(cnt, multiOptAll.length)})`);
+      }
+
+      // Reference agreement by path
+      console.log(`\n  Reference agreement by pick path (multi-option only):`);
+      const paths = Object.keys(multiPathCounts).sort();
+      console.log(`  ${'Path'.padEnd(16)} ${'Total'.padStart(6)} ${'Match'.padStart(6)} ${'Agree%'.padStart(8)} ${'SameFV'.padStart(7)} ${'SFV%'.padStart(7)}`);
+      console.log(`  ${'─'.repeat(16)} ${'─'.repeat(6)} ${'─'.repeat(6)} ${'─'.repeat(8)} ${'─'.repeat(7)} ${'─'.repeat(7)}`);
+      for (const path of paths) {
+        const pathDecs = multiOptAll.filter(d => d.ccPickPath === path);
+        const pathMatch = pathDecs.filter(d => d.matchesRef).length;
+        const pathSFV = pathDecs.filter(d => d.sameFeatureCount > 1).length;
+        console.log(`  ${path.padEnd(16)} ${String(pathDecs.length).padStart(6)} ${String(pathMatch).padStart(6)} ${pct(pathMatch, pathDecs.length).padStart(8)} ${String(pathSFV).padStart(7)} ${pct(pathSFV, pathDecs.length).padStart(7)}`);
+      }
+
+      // Focus anomaly decomposition by path
+      const focusDecisions = multiOptAll.filter(d => d.hasFocusOption);
+      const focusRefPreferred = focusDecisions.filter(d => d.refPreferred === 'Focus');
+      console.log(`\n  ── FOCUS ANOMALY DECOMPOSITION ──`);
+      console.log(`  Multi-option decisions with Focus available: ${focusDecisions.length}`);
+      console.log(`  Decisions where Focus is reference-preferred: ${focusRefPreferred.length}`);
+
+      if (focusRefPreferred.length > 0) {
+        const focusRefWon = focusRefPreferred.filter(d => d.matchesRef);
+        const focusRefLost = focusRefPreferred.filter(d => !d.matchesRef);
+        console.log(`  Focus ref-preferred AND chosen (correct): ${focusRefWon.length} (${pct(focusRefWon.length, focusRefPreferred.length)})`);
+        console.log(`  Focus ref-preferred but NOT chosen (loss): ${focusRefLost.length} (${pct(focusRefLost.length, focusRefPreferred.length)})`);
+
+        if (focusRefLost.length > 0) {
+          console.log(`\n  Focus losses by pick path:`);
+          const focusLossPath = {};
+          for (const d of focusRefLost) {
+            focusLossPath[d.ccPickPath] = (focusLossPath[d.ccPickPath] || 0) + 1;
+          }
+          for (const [path, cnt] of Object.entries(focusLossPath).sort((a, b) => b[1] - a[1])) {
+            console.log(`    ${path.padEnd(16)} ${cnt} losses`);
+          }
+
+          // What was chosen instead of Focus, by path
+          console.log(`\n  What was chosen instead of Focus (by path):`);
+          for (const d of focusRefLost) {
+            console.log(`    [${d.ccPickPath}] chose ${d.chosenCard} over Focus (${d.optionCount} options, combat=${d.inCombat})`);
+          }
+        }
+      }
+
+      // Decisions where Focus is available but NOT ref-preferred (another card is better)
+      const focusAvailNotRef = focusDecisions.filter(d => d.refPreferred !== 'Focus');
+      if (focusAvailNotRef.length > 0) {
+        console.log(`\n  Decisions where Focus is available but NOT ref-preferred: ${focusAvailNotRef.length}`);
+        const focusPickedAnyway = focusAvailNotRef.filter(d => d.chosenCard === 'Focus');
+        console.log(`  Of those, Focus was picked anyway (over-selection): ${focusPickedAnyway.length} (${pct(focusPickedAnyway.length, focusAvailNotRef.length)})`);
+        if (focusPickedAnyway.length > 0) {
+          console.log(`\n  Focus over-selection by pick path:`);
+          const overSelPath = {};
+          for (const d of focusPickedAnyway) {
+            overSelPath[d.ccPickPath] = (overSelPath[d.ccPickPath] || 0) + 1;
+          }
+          for (const [path, cnt] of Object.entries(overSelPath).sort((a, b) => b[1] - a[1])) {
+            console.log(`    ${path.padEnd(16)} ${cnt} over-selections (ref wanted: ${focusPickedAnyway.filter(d => d.ccPickPath === path).map(d => d.refPreferred).join(', ')})`);
+          }
+        }
+      }
+    }
+
+    // ── Attack Target Quality Audit (enhanced, per-decision) ────────────
+    const allAtkDecisions = [];
+    for (const r of perGameResults) allAtkDecisions.push(...(r.auditAttackDecisions || []));
+
+    // Also flush module-level counters for basic stats
+    resetAtkAuditCounters();
+    const atkFinal = getAtkAuditTotals();
+
+    console.log('\n══════════════════════════════════════════════════');
+    console.log('  AUDIT: ATTACK TARGET QUALITY');
+    console.log('══════════════════════════════════════════════════');
+
+    if (allAtkDecisions.length > 0) {
+      const n = allAtkDecisions.length;
+      const multi = allAtkDecisions.filter(d => d.targetCount > 1);
+      const multiPct = ((multi.length / n) * 100).toFixed(1);
+      const avgTargets = (allAtkDecisions.reduce((s, d) => s + d.targetCount, 0) / n).toFixed(1);
+
+      console.log(`  Total attack decisions (with target data): ${n}`);
+      console.log(`  Multi-target decisions: ${multi.length}/${n} (${multiPct}%)`);
+      console.log(`  Avg targets per decision: ${avgTargets}`);
+
+      // ── Focus-fire analysis ─────────────────────────────────────────────
+      const lowestHpAlways = allAtkDecisions.filter(d => d.chosenIsLowestHp).length;
+      console.log(`\n  Focus-fire discipline:`);
+      console.log(`    Chose lowest-HP target: ${lowestHpAlways}/${n} (${((lowestHpAlways / n) * 100).toFixed(1)}%)`);
+
+      // HP bucket distribution of chosen targets
+      const hpBuckets = { '1-3': 0, '4-6': 0, '7-10': 0, '11-15': 0, '16+': 0 };
+      for (const d of allAtkDecisions) {
+        if (d.chosenHp <= 3) hpBuckets['1-3']++;
+        else if (d.chosenHp <= 6) hpBuckets['4-6']++;
+        else if (d.chosenHp <= 10) hpBuckets['7-10']++;
+        else if (d.chosenHp <= 15) hpBuckets['11-15']++;
+        else hpBuckets['16+']++;
+      }
+      console.log(`    Chosen target HP distribution:`);
+      for (const [bucket, cnt] of Object.entries(hpBuckets)) {
+        if (cnt > 0) console.log(`      HP ${bucket}: ${cnt} (${((cnt / n) * 100).toFixed(1)}%)`);
+      }
+
+      // Already-damaged analysis
+      const damaged = allAtkDecisions.filter(d => d.chosenDamaged).length;
+      console.log(`    Attacking already-damaged target: ${damaged}/${n} (${((damaged / n) * 100).toFixed(1)}%)`);
+
+      // ── Multi-target HP gap analysis ────────────────────────────────────
+      if (multi.length > 0) {
+        const avgGap = (multi.reduce((s, d) => s + d.hpGapToSecond, 0) / multi.length).toFixed(1);
+        const gapBuckets = { '0 (tied)': 0, '1-2': 0, '3-5': 0, '6-10': 0, '11+': 0 };
+        for (const d of multi) {
+          const g = d.hpGapToSecond;
+          if (g === 0) gapBuckets['0 (tied)']++;
+          else if (g <= 2) gapBuckets['1-2']++;
+          else if (g <= 5) gapBuckets['3-5']++;
+          else if (g <= 10) gapBuckets['6-10']++;
+          else gapBuckets['11+']++;
+        }
+        console.log(`\n  HP gap analysis (multi-target only, ${multi.length} decisions):`);
+        console.log(`    Avg HP gap (chosen vs 2nd-best): ${avgGap}`);
+        console.log(`    Gap distribution:`);
+        for (const [bucket, cnt] of Object.entries(gapBuckets)) {
+          if (cnt > 0) console.log(`      ${bucket} HP: ${cnt} (${((cnt / multi.length) * 100).toFixed(1)}%)`);
+        }
+      }
+
+      // ── Turn-denial tradeoff analysis (the key question) ───────────────
+      const tradeoffs = allAtkDecisions.filter(d => d.turnDenialTradeoff != null);
+      const unactivatedAvail = allAtkDecisions.filter(d => d.unactivatedCount > 0);
+      console.log(`\n  Turn-denial analysis:`);
+      console.log(`    Decisions with unactivated targets available: ${unactivatedAvail.length}/${n} (${((unactivatedAvail.length / n) * 100).toFixed(1)}%)`);
+      console.log(`    Chosen target was unactivated: ${allAtkDecisions.filter(d => !d.chosenActivated).length}/${n}`);
+
+      if (tradeoffs.length > 0) {
+        const avgHpCost = (tradeoffs.reduce((s, d) => s + d.turnDenialTradeoff.hpCost, 0) / tradeoffs.length).toFixed(1);
+        console.log(`\n  FOCUS-FIRE vs TURN-DENIAL TRADEOFFS:`);
+        console.log(`    Cases where focus-fire chose an ACTIVATED target over`);
+        console.log(`    a close-HP UNACTIVATED target (within 2x HP): ${tradeoffs.length}`);
+        console.log(`    Avg HP cost of switching to unactivated: ${avgHpCost}`);
+        const costBuckets = { '1-2': 0, '3-5': 0, '6-10': 0, '11+': 0 };
+        for (const d of tradeoffs) {
+          const c = d.turnDenialTradeoff.hpCost;
+          if (c <= 2) costBuckets['1-2']++;
+          else if (c <= 5) costBuckets['3-5']++;
+          else if (c <= 10) costBuckets['6-10']++;
+          else costBuckets['11+']++;
+        }
+        console.log(`    HP cost distribution:`);
+        for (const [bucket, cnt] of Object.entries(costBuckets)) {
+          if (cnt > 0) console.log(`      ${bucket} HP: ${cnt}`);
+        }
+        console.log(`    (These are potential training opportunities — cases where`);
+        console.log(`     denying a turn might be worth the HP cost)`);
+      } else {
+        console.log(`    Focus-fire vs turn-denial tradeoffs: 0 (focus-fire target was always unactivated or no close-HP alternative)`);
+      }
+
+      // ── Kill efficiency (from per-game data) ───────────────────────────
+      const totalAtks = perGameResults.reduce((s, r) => s + r.attackActions, 0);
+      const totalKills = perGameResults.reduce((s, r) => s + r.figureDefeats, 0);
+      if (totalAtks > 0) {
+        console.log(`\n  Kill efficiency:`);
+        console.log(`    Total attacks: ${totalAtks}  Total figure defeats: ${totalKills}`);
+        console.log(`    Attacks per kill: ${(totalAtks / Math.max(totalKills, 1)).toFixed(1)}`);
+        console.log(`    Kill rate: ${((totalKills / totalAtks) * 100).toFixed(1)}% of attacks result in a defeat`);
+
+        // Per-game damage spread: how many unique DCs attacked per game
+        const spreads = perGameResults.map(r => {
+          const dcs = Object.keys(r.auditDcAttacks || {});
+          return dcs.length;
+        }).filter(s => s > 0);
+        if (spreads.length > 0) {
+          const avgSpread = (spreads.reduce((s, v) => s + v, 0) / spreads.length).toFixed(1);
+          console.log(`    Avg unique DCs attacked per game: ${avgSpread} (lower = more focused)`);
+        }
+      }
+    } else if (atkFinal.totalDecisions > 0) {
+      // Fallback to module-level counters if per-decision data not available
+      console.log(`  Total attack target decisions: ${atkFinal.totalDecisions} (module-level counters only)`);
+      console.log(`  Multi-target: ${atkFinal.multiTargetDecisions}/${atkFinal.totalDecisions}`);
+      console.log(`  Hit reliability: ${((atkFinal.reliableHits / atkFinal.totalDecisions) * 100).toFixed(1)}%`);
+    } else {
+      console.log('  No attack target decisions recorded.');
     }
 
     // ── Move Quality Audit ──────────────────────────────────────────────

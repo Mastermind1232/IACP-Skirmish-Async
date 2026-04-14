@@ -11,7 +11,17 @@
       "WebFetch",
       "mcp__ide__getDiagnostics",
       "mcp__ide__executeCode",
-      "mcp__discord__read-messages"
+      "mcp__discord__read-messages",
+      "mcp__discord-mcp__list_channels",
+      "mcp__discord-mcp__get_messages",
+      "mcp__discord-mcp__list_threads",
+      "mcp__discord-mcp__get_thread_messages",
+      "mcp__discord-mcp__delete_message",
+      "mcp__discord-mcp__list_archived_threads",
+      "mcp__discord-mcp__get_message",
+      "mcp__discord-mcp__get_bot_info",
+      "mcp__discord-mcp__send_message",
+      "mcp__discord-mcp__delete_channel"
     ]
   }
 }

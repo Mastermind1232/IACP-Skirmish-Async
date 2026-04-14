@@ -98,6 +98,38 @@ let _wgAudit = { attackEntries: 0, attackUpdates: 0, moveEntries: 0, moveUpdates
 export function getWgAuditCounters() { return { ..._wgAudit }; }
 export function resetWgAuditCounters() { _wgAudit = { attackEntries: 0, attackUpdates: 0, moveEntries: 0, moveUpdates: 0, surgeEntries: 0, surgeUpdates: 0 }; }
 
+// ── Attack Target Quality Audit ─────────────────────────────────────────────
+// Tracks attack situation quality: multi-target decisions, HP profiles,
+// hit viability, and turn-denial opportunities.
+let _atkAudit = {
+  totalDecisions: 0,       // All attack target decisions
+  multiTargetDecisions: 0, // Decisions with >1 valid target
+  totalTargets: 0,         // Sum of targets across all decisions (for avg)
+  chosenHpSum: 0,          // Sum of chosen target's current HP
+  altHpSum: 0,             // Sum of second-best target's HP (when multi-target)
+  reliableHits: 0,         // Attacks within reliable accuracy range
+  marginalHits: 0,         // Attacks beyond reliable accuracy range
+  turnDenialRelevant: 0,   // Cases where equal-HP targets had different activation status
+  turnDenialChosen: 0,     // Of those, unactivated target was chosen (always, by sort)
+};
+let _atkAuditTotal = { totalDecisions: 0, multiTargetDecisions: 0, totalTargets: 0,
+  chosenHpSum: 0, altHpSum: 0, reliableHits: 0, marginalHits: 0,
+  turnDenialRelevant: 0, turnDenialChosen: 0 };
+export function getAtkAuditCounters() { return { ..._atkAudit }; }
+export function getAtkAuditTotals() { return { ..._atkAuditTotal }; }
+export function resetAtkAuditCounters() {
+  // Accumulate into totals before resetting window
+  for (const k of Object.keys(_atkAudit)) _atkAuditTotal[k] += _atkAudit[k];
+  _atkAudit = { totalDecisions: 0, multiTargetDecisions: 0, totalTargets: 0,
+    chosenHpSum: 0, altHpSum: 0, reliableHits: 0, marginalHits: 0,
+    turnDenialRelevant: 0, turnDenialChosen: 0 };
+}
+export function resetAtkAuditTotals() {
+  _atkAuditTotal = { totalDecisions: 0, multiTargetDecisions: 0, totalTargets: 0,
+    chosenHpSum: 0, altHpSum: 0, reliableHits: 0, marginalHits: 0,
+    turnDenialRelevant: 0, turnDenialChosen: 0 };
+}
+
 function getWgDecay(wgType) {
   switch (wgType) {
     case 'attack': return WG_DECAY_ATTACK;
@@ -151,7 +183,7 @@ const MOVE_FEATURE_NAMES = [
 
 const SURGE_FEATURE_NAMES = ['damageValue', 'isAccuracy', 'isRecover', 'bias', 'accuracyNeeded', 'accuracySurplusIfAcc'];
 
-const CC_FEATURE_NAMES = ['ccCost', 'ccIsOffensive', 'inCombat', 'bias'];
+const CC_FEATURE_NAMES = ['ccCost', 'ccIsOffensive', 'inCombat', 'bias', 'isCombatTimed'];
 
 function getGroupCategory(absType) {
   if (absType === 'attack_close' || absType === 'attack_ranged') return 'attack';
@@ -680,7 +712,7 @@ function extractSurgeFeatures(action, game) {
  * Scores each playable CC by cost, type, and game context.
  */
 function extractCcFeatures(action, game) {
-  const features = new Float64Array(4);
+  const features = new Float64Array(5);
   features[3] = 1.0; // bias
 
   const cardName = action.params?.cardName;
@@ -697,6 +729,10 @@ function extractCcFeatures(action, game) {
 
   // [2] inCombat — is there an active combat? Combat-timed CCs are more valuable then
   features[2] = game.pendingCombat ? 1.0 : 0.0;
+
+  // [4] isCombatTimed — is this CC's timing a combat interrupt (attacker or defender)?
+  // Separates combat-timed CCs (free interrupts) from non-combat-timed CCs.
+  features[4] = COMBAT_CC_TIMINGS.has(timing) ? 1.0 : 0.0;
 
   return features;
 }
@@ -2333,6 +2369,26 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
       if (a.targetActivated !== b.targetActivated) return a.targetActivated - b.targetActivated;
       return a.dist - b.dist;
     });
+
+    // ── Attack target quality audit (oracle path) ─────────────────────────
+    _atkAudit.totalDecisions++;
+    _atkAudit.totalTargets += scored.length;
+    _atkAudit.chosenHpSum += scored[0].currentHp;
+    _atkAudit.reliableHits++; // Oracle attacks are always in-range (oracle picks attack only when adjacent/in-range)
+    if (scored.length > 1) {
+      _atkAudit.multiTargetDecisions++;
+      _atkAudit.altHpSum += scored[1].currentHp;
+      const equalHpTargets = scored.filter(s => s.currentHp === scored[0].currentHp && s.maxHp === scored[0].maxHp);
+      if (equalHpTargets.length > 1) {
+        const hasUnactivated = equalHpTargets.some(s => s.targetActivated === 0);
+        const hasActivated = equalHpTargets.some(s => s.targetActivated === 1);
+        if (hasUnactivated && hasActivated) {
+          _atkAudit.turnDenialRelevant++;
+          if (scored[0].targetActivated === 0) _atkAudit.turnDenialChosen++;
+        }
+      }
+    }
+
     return scored[0].action;
   }
 
@@ -2484,6 +2540,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   pickSmartAction._lastWgFeatures = null;
   pickSmartAction._lastWgType = null;
   pickSmartAction._lastMoveContrastive = null;
+  pickSmartAction._lastCcPickPath = null;
   if (allActions.length === 0) return null;
   if (allActions.length === 1) return allActions[0];
 
@@ -2510,10 +2567,14 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   // Epsilon-greedy exploration
   const epsilon = getEpsilon(learnings.meta.totalGames);
   if (Math.random() < epsilon) {
-    const hAction = heuristicPick(strategicActions, game);
+    const hAction = heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc);
     // Extract WG features for the SPECIFIC action the heuristic chose.
     if (hAction) {
       const hAbsType = abstractActionType(hAction, game);
+      if (hAbsType === 'play_cc') {
+        const ccOpts = groups['play_cc'] || [];
+        pickSmartAction._lastCcPickPath = ccOpts.length > 1 ? 'heuristic_scored' : 'heuristic';
+      }
       const hGroup = groups[hAbsType];
       if (hGroup && hGroup.length > 1) {
         if (hAbsType === 'attack_close' || hAbsType === 'attack_ranged') {
@@ -2568,11 +2629,11 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   } else {
     const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
     const network = learnings.network;
-    if (!network) return heuristicPick(strategicActions, game);
+    if (!network) return heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc);
     Q = forwardPass(network, features).Q;
   }
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
-  if (absTypes.length === 0) return heuristicPick(strategicActions, game);
+  if (absTypes.length === 0) return heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc);
 
   // ── Within-activation planner (always-on) ──────────────────────────────────
   // Deterministic sequencing replaces per-action DQN during a DC's turn.
@@ -2635,6 +2696,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   }
 
   let bestType = null;
+  let ccForceReason = null;
   if (_greedyMode && _softmaxEvalEnabled && absTypes.length > 1) {
     // Softmax (Boltzmann) selection: sample proportionally to exp(Q/τ)
     const tau = _softmaxTau;
@@ -2711,6 +2773,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
       });
       if (hasCombatCc && bestType !== 'play_cc') {
         bestType = 'play_cc';
+        ccForceReason = 'combat_rule';
         _diag.combatCcOverrides = (_diag.combatCcOverrides || 0) + 1;
       }
     }
@@ -2725,6 +2788,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     // inflation. Keep training tranches to ~300 games for stability.
     if (absTypes.includes('play_cc')) {
       if (Math.random() < 0.15) {
+        if (bestType !== 'play_cc') ccForceReason = 'cc_explore';
         bestType = 'play_cc';
       }
     }
@@ -2739,12 +2803,34 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     if (bestType === 'end_activation' && hasAttackTypes) _diag.endActOverAttack++;
   }
 
-  if (bestType === null) return heuristicPick(strategicActions, game);
+  if (bestType === null) {
+    const fallback = heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc);
+    if (fallback) {
+      const fbType = abstractActionType(fallback, game);
+      if (fbType === 'play_cc') {
+        const fbCcOpts = groups['play_cc'] || [];
+        pickSmartAction._lastCcPickPath = fbCcOpts.length > 1 ? 'heuristic_scored' : 'heuristic';
+      }
+    }
+    return fallback;
+  }
   const wgResult = pickWithinGroup(groups[bestType], bestType, game,
     learnings.withinGroupWeights, dcHealthState, dcMessageMeta, learnings.meta.totalGames);
   pickSmartAction._lastWgFeatures = wgResult.wgFeatures;
   pickSmartAction._lastWgType = wgResult.wgType;
   pickSmartAction._lastMoveContrastive = wgResult.moveContrastive || null;
+
+  // CC pick path instrumentation: label how this CC decision was routed
+  if (bestType === 'play_cc') {
+    if (wgResult.wgType === null && groups[bestType].length > 1) {
+      pickSmartAction._lastCcPickPath = 'wg_epsilon';
+    } else if (ccForceReason) {
+      pickSmartAction._lastCcPickPath = ccForceReason;
+    } else {
+      pickSmartAction._lastCcPickPath = 'trained';
+    }
+  }
+
   return wgResult.action;
 }
 
@@ -2870,6 +2956,28 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
       return a.dist - b.dist;
     });
     const best = scored[0];
+
+    // ── Attack target quality audit ───────────────────────────────────────
+    _atkAudit.totalDecisions++;
+    _atkAudit.totalTargets += scored.length;
+    _atkAudit.chosenHpSum += best.currentHp;
+    if (best.hitViability === 0) _atkAudit.reliableHits++;
+    else _atkAudit.marginalHits++;
+    if (scored.length > 1) {
+      _atkAudit.multiTargetDecisions++;
+      _atkAudit.altHpSum += scored[1].currentHp;
+      // Turn-denial: was there an equal-HP pair with different activation status?
+      const equalHpTargets = scored.filter(s => s.currentHp === best.currentHp && s.maxHp === best.maxHp);
+      if (equalHpTargets.length > 1) {
+        const hasUnactivated = equalHpTargets.some(s => s.targetActivated === 0);
+        const hasActivated = equalHpTargets.some(s => s.targetActivated === 1);
+        if (hasUnactivated && hasActivated) {
+          _atkAudit.turnDenialRelevant++;
+          if (best.targetActivated === 0) _atkAudit.turnDenialChosen++;
+        }
+      }
+    }
+
     return { action: best.action, wgFeatures: best.features, wgType: group };
   }
 
@@ -3034,7 +3142,7 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
   return { action: pick(actions), wgFeatures: null, wgType: null };
 }
 
-function heuristicPick(allActions, game) {
+function heuristicPick(allActions, game, ccWeights) {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   const gates = allActions.filter(a => a.type === 'phase_gate_ready');
@@ -3078,7 +3186,18 @@ function heuristicPick(allActions, game) {
 
   // CC play — try before movement/activation
   const ccPlay = allActions.filter(a => a.type === 'play_cc' || a.type === 'play_cc_special' || a.type === 'play_cc_double');
-  if (ccPlay.length > 0) return pick(ccPlay);
+  if (ccPlay.length > 0) {
+    // Route multi-CC decisions through scorer instead of random pick
+    if (ccPlay.length > 1 && ccWeights) {
+      let bestScore = -Infinity, bestAction = null;
+      for (const a of ccPlay) {
+        const score = dotProductWg(ccWeights, extractCcFeatures(a, game));
+        if (score > bestScore) { bestScore = score; bestAction = a; }
+      }
+      return bestAction;
+    }
+    return pick(ccPlay);
+  }
 
   const specials = allActions.filter(a => a.type === 'dc_special');
   if (specials.length > 0) return pick(specials);
@@ -3408,7 +3527,7 @@ export function loadLearnings(filePath) {
       if (!data.withinGroupWeights) {
         data.withinGroupWeights = {
           attack: new Array(6).fill(0), move: new Array(9).fill(0),
-          surge: new Array(4).fill(0), cc: new Array(4).fill(0),
+          surge: new Array(4).fill(0), cc: new Array(5).fill(0),
         };
       }
       // Migrate move scorer from 6 → 9 features (Phase 5 move-feature upgrade)
@@ -3441,6 +3560,12 @@ export function loadLearnings(filePath) {
       if (data.withinGroupWeights?.surge && data.withinGroupWeights.surge.length === 5) {
         data.withinGroupWeights.surge.push(0.0);
         console.log('[learnings] Extended surge WG weights 5→6: appended accuracySurplus=0.0');
+      }
+
+      // One-time migration: extend CC WG weights from 4→5 for isCombatTimed feature.
+      if (data.withinGroupWeights?.cc && data.withinGroupWeights.cc.length === 4) {
+        data.withinGroupWeights.cc.push(0.0);
+        console.log('[learnings] Extended CC WG weights 4→5: appended isCombatTimed=0.0');
       }
 
       // One-time migration: reset inverted move WG weights to mild priors.
