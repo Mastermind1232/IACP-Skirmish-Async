@@ -2576,7 +2576,8 @@
         "applyCondition": "Weaken",
         "range": 1,
         "requiresLos": false
-      }
+      },
+      "wiredStatus": "wired"
     },
     "improved_smugglers_instincts": {
       "type": "dcSpecial",

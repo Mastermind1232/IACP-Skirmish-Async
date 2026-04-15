@@ -4658,7 +4658,8 @@
         "DROID"
       ],
       "specialAbilityIds": [
-        "medical_loadout"
+        "medical_loadout",
+        "improper_procedure"
       ],
       "cost": 5,
       "health": 7,
@@ -5874,7 +5875,8 @@
       "affiliation": "Imperial",
       "specialAbilityIds": [
         "targeting_computer_sentry_reg",
-        "charged_shot_reg"
+        "charged_shot_reg",
+        "multi_fire"
       ]
     },
     "Shoretrooper (Elite)": {
