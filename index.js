@@ -2489,7 +2489,7 @@ client.on('messageCreate', async (message) => {
           await reply(`Cleaned up ${staleIds.length} stale self-play game(s) before starting.`);
         }
 
-        const seedConfig = { mapId, p1Deck, p2Deck };
+        const seedConfig = { mapId, p1Deck, p2Deck, variant: forceVariant };
         const aiP1 = `${AI_USER_PREFIX}1`;
         const aiP2 = `${AI_USER_PREFIX}2`;
         const created = await createTestGame(client, message.guild, aiP1, null, message.channel, { player2Id: aiP2, seedConfig });
@@ -2498,7 +2498,6 @@ client.on('messageCreate', async (message) => {
         const game = getGame(gameId);
         if (!game) throw new Error('Game creation returned no game state');
         game.selfPlay = true;
-        if (forceVariant) game._forceVariant = forceVariant;
         game.guildId = message.guild.id;
         // Test flag: --test-overflow routes through PvP overflow prompt path
         if (seedTextRaw.includes('--test-overflow')) game.testPvpOverflowPath = true;

@@ -275,6 +275,7 @@ export async function createTestGame(client, guild, userId, scenarioId, feedback
     if (hasSeedConfig) {
       // Config-family replay: exact decks + map from headless explorer seed.
       // Bypasses scenario logic; initiative/zone/CC draw still randomized.
+      if (options.seedConfig.variant) game._forceVariant = options.seedConfig.variant;
       await runDraftRandom(game, client, { seedConfig: options.seedConfig });
       game.seedValidation = true;
       const p1Name = options.seedConfig.p1Deck.name || 'P1';
