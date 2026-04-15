@@ -80,10 +80,9 @@ function _addDeploymentZoneCentroids(game, mapId, variant, coords) {
   try {
     const missionCards = getMissionCardsData();
     const rules = missionCards?.[mapId]?.[variant]?.rules?.endOfRound;
-    // Zone-control missions: centroids pull figures toward zones they already
-    // control or can't reach (past CC doors). Only CC cells matter.
-    if (rules?.vpPerControlledDeploymentZone) return;
-    if (!rules?.vpPerContrabandInOpponentDeploymentZone) return;
+    // Add zone centroids when mission scores VP for zone control or contraband delivery.
+    // Matches the correct guard in learnings.js _addDeploymentZoneCentroids.
+    if (!rules?.vpPerControlledDeploymentZone && !rules?.vpPerContrabandInOpponentDeploymentZone) return;
     const zones = getDeploymentZones()?.[mapId];
     if (!zones) return;
     for (const color of ['red', 'blue']) {

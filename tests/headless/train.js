@@ -15,7 +15,8 @@ import { getDcStats, getMapData, getDcEffects, getCcEffect } from '../../src/dat
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
-import { parseCoord } from '../../src/game/coords.js';
+import { parseCoord, normalizeCoord } from '../../src/game/coords.js';
+import { getValidKryknaPlacementSpaces } from '../../src/game/mission-rules.js';
 import { getCcHand } from '../../src/game/player-helpers.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -52,6 +53,7 @@ const TEST_DECKS = JSON.parse(readFileSync(TEST_DECKS_PATH, 'utf8'));
 // Global flag: when true, use locked training matchups + whitelist validation
 let useTrainingMatchups = false;
 let auditMode = false;
+let mapOverride = null; // --map=<id> locks all games to a single map
 
 // ── CC Reference Standard ──────────────────────────────────────────────────
 // Static card-quality tiers for same-cost same-class tiebreak (1-5, higher = better).
@@ -157,8 +159,10 @@ async function runOneGame(learnings, gameNum) {
   const p2Army = p2Deck.dcList.map(n => ({ dcName: n }));
 
   // Rotate maps across training set (use TRAINING_MAPS when in training mode)
-  const mapPool = (useTrainingMatchups && TRAINING_MAPS?.length > 0)
-    ? TRAINING_MAPS : ['mos-eisley-outskirts'];
+  // --map= override locks to a single map for focused calibration runs.
+  const mapPool = mapOverride ? [mapOverride]
+    : (useTrainingMatchups && TRAINING_MAPS?.length > 0) ? TRAINING_MAPS
+    : ['mos-eisley-outskirts'];
   const mapId = mapPool[gameNum % mapPool.length];
 
   const builder = createTestGame()
@@ -208,10 +212,16 @@ async function runOneGame(learnings, gameNum) {
   let moveActions = 0;        // start_move, move_toward, move_away, move_lateral
   let endActivations = 0;     // dc_end_activation (how often AI ends without doing anything)
   let attackActions = 0;      // attack_target
+  let doorOpens = 0;          // open_door interacts
   let totalActivations = 0;   // activate_dc (total activation starts)
   let passActivations = 0;    // pass_activation_turn
   let activationsWithAttack = 0;  // activations that included at least one attack_target
   let currentActivationHadAttack = false;
+  let npcAttacks = 0;           // attacks targeting NPC figures (Krykna, Thugs)
+  let npcDefeats = 0;           // NPC figures defeated
+  let npcPushEvents = 0;        // Krykna push movements executed
+  let npcEorDamageEvents = 0;   // end-of-round Krykna damage instances
+  let npcRespawns = 0;          // Krykna respawned via claimed placement
 
   // ── Runaway-loop diagnostics ────────────────────────────────────────────
   // Track per-game action type histogram + detect runaway windows (>200 iterations
@@ -366,14 +376,133 @@ async function runOneGame(learnings, gameNum) {
       try { await harness.submitAction(`sor_mission_reveal_${g.gameId}`, g.player1Id); } catch {}
       continue;
     }
-    // Auto-skip Krykna push queue (Chopper Base A end-of-round interactive phase)
+    // Execute Krykna push + end-of-round damage (Chopper Base A)
     if (g.pendingKryknaPushQueue?.length > 0) {
+      const _kMapId = g.selectedMap?.id;
+      const _kRawMap = deps.getMapData?.(_kMapId) || getMapData(_kMapId);
+      const _kMapDef = deps.getMapRegistry?.()?.find?.(m => m.id === _kMapId);
+      const _kMapSpaces = deps.filterMapSpacesByBounds?.(_kRawMap, _kMapDef?.gridBounds) || _kRawMap;
+      const _kAdj = _kMapSpaces?.adjacency || {};
+
+      // Push each active Krykna toward nearest figure (BFS, up to 3 spaces)
+      const _kActive = (g.npcKrykna || []).filter(k => !k.defeated);
+      for (const krykna of _kActive) {
+        const startCoord = normalizeCoord(krykna.coord);
+        const allFigCoords = new Set();
+        for (const pn of [1, 2]) {
+          for (const coord of Object.values(g.figurePositions?.[pn] || {})) {
+            allFigCoords.add(normalizeCoord(coord));
+          }
+        }
+        if (allFigCoords.size === 0) continue;
+
+        // BFS from Krykna to nearest figure
+        const visited = new Map([[startCoord, null]]);
+        const bfsQueue = [startCoord];
+        let bfsTarget = null;
+        while (bfsQueue.length > 0 && !bfsTarget) {
+          const curr = bfsQueue.shift();
+          for (const neighbor of (_kAdj[curr] || [])) {
+            const n = normalizeCoord(neighbor);
+            if (visited.has(n)) continue;
+            visited.set(n, curr);
+            if (allFigCoords.has(n)) { bfsTarget = n; break; }
+            bfsQueue.push(n);
+          }
+        }
+        if (!bfsTarget) continue;
+
+        // Reconstruct path (spaces from start to target, excluding start)
+        const path = [];
+        let cur = bfsTarget;
+        while (cur && cur !== startCoord) {
+          path.unshift(cur);
+          cur = visited.get(cur);
+        }
+
+        // Move up to 3 steps, stopping 1 space short of figure (adjacent)
+        const maxSteps = Math.min(3, Math.max(0, path.length - 1));
+        if (maxSteps > 0) {
+          krykna.coord = path[maxSteps - 1];
+          npcPushEvents++;
+        }
+      }
+
+      // End-of-round damage: figures adjacent to Krykna take 2 damage
+      const { damageEvents: _kDmgEvts, claimedPlacementNeeded: _kClaimed } = deps.runNpcKryknaActivation(g, _kMapId, {
+        getMapTokensData: deps.getMapTokensData,
+        getMapData: deps.getMapData || getMapData,
+        getMapRegistry: deps.getMapRegistry,
+        filterMapSpacesByBounds: deps.filterMapSpacesByBounds,
+      });
+      for (const { figureKey, playerNum, damage } of (_kDmgEvts || [])) {
+        await deps.applyNpcDamageToFigure(g, playerNum, figureKey, damage, 'Krykna');
+        npcEorDamageEvents++;
+      }
+
+      // Build claimed-Krykna placement queue if any kills happened (mirrors index.js:4123-4133)
+      if (_kClaimed) {
+        const _kInitNum = g.initiativePlayerId === g.player1Id ? 1 : 2;
+        const _kOtherNum = _kInitNum === 1 ? 2 : 1;
+        const _kQueue = [];
+        if ((g.claimedKrykna?.[_kInitNum] || 0) > 0) _kQueue.push(_kInitNum);
+        if ((g.claimedKrykna?.[_kOtherNum] || 0) > 0) _kQueue.push(_kOtherNum);
+        if (_kQueue.length > 0) g.pendingClaimedKryknaQueue = _kQueue;
+      }
+
       g.pendingKryknaPushQueue = null;
       g.kryknaPushedIds = null;
       continue;
     }
-    // Auto-skip claimed Krykna placement (Chopper Base A post-push interactive phase)
+    // Execute claimed Krykna placement (Chopper Base A respawn)
     if (g.pendingClaimedKryknaQueue?.length > 0) {
+      const _rMapId = g.selectedMap?.id;
+      const _rAdj = (deps.getMapData?.(_rMapId) || getMapData(_rMapId))?.adjacency || {};
+      for (const playerNum of g.pendingClaimedKryknaQueue) {
+        const claimed = g.claimedKrykna?.[playerNum] || 0;
+        if (claimed <= 0) continue;
+        const validSpaces = getValidKryknaPlacementSpaces(g, playerNum, _rMapId);
+        if (validSpaces.length === 0) continue;
+
+        // Pick the valid space closest to the nearest enemy figure (BFS)
+        const oppNum = playerNum === 1 ? 2 : 1;
+        const enemyCoords = new Set(
+          Object.values(g.figurePositions?.[oppNum] || {}).map(c => normalizeCoord(c))
+        );
+        let bestSpace = validSpaces[0];
+        let bestDist = Infinity;
+        for (const space of validSpaces) {
+          // BFS from space to nearest enemy
+          const visited = new Set([space]);
+          const bfsQ = [space];
+          let dist = 0;
+          let found = false;
+          while (bfsQ.length > 0 && !found) {
+            const nextQ = [];
+            dist++;
+            for (const curr of bfsQ) {
+              for (const neighbor of (_rAdj[curr] || [])) {
+                const n = normalizeCoord(neighbor);
+                if (visited.has(n)) continue;
+                visited.add(n);
+                if (enemyCoords.has(n)) { found = true; break; }
+                nextQ.push(n);
+              }
+              if (found) break;
+            }
+            if (!found) bfsQ.length = 0;
+            for (const x of nextQ) bfsQ.push(x);
+          }
+          if (found && dist < bestDist) { bestDist = dist; bestSpace = space; }
+        }
+
+        // Place new Krykna at chosen space (mirrors handleKryknaPlacePick)
+        const nextId = `krykna-${(g.npcKrykna || []).length + 1}`;
+        g.npcKrykna = g.npcKrykna || [];
+        g.npcKrykna.push({ id: nextId, coord: normalizeCoord(bestSpace), hp: 8, maxHp: 8, defeated: false });
+        g.claimedKrykna[playerNum] = Math.max(0, claimed - 1);
+        npcRespawns++;
+      }
       g.pendingClaimedKryknaQueue = null;
       continue;
     }
@@ -679,6 +808,7 @@ async function runOneGame(learnings, gameNum) {
     else if (action.type === 'dc_end_activation') endActivations++;
     else if (action.type === 'attack_target') {
       attackActions++; currentActivationHadAttack = true;
+      if (action.params?.targetFigureKey?.startsWith('npc_')) npcAttacks++;
       if (auditMode && action.params?.dcName) auditDcAttacks[action.params.dcName] = (auditDcAttacks[action.params.dcName] || 0) + 1;
 
       // ── Enhanced attack target quality audit ──────────────────────────────
@@ -939,6 +1069,7 @@ async function runOneGame(learnings, gameNum) {
           for (const ek of edgeKeys) {
             if (!g.openedDoors.includes(ek)) g.openedDoors.push(ek);
           }
+          doorOpens++;
         }
         // use_terminal: no game state mutation needed (just costs an action)
       }
@@ -1133,6 +1264,10 @@ async function runOneGame(learnings, gameNum) {
     }
   }
 
+  // Count NPC defeats at game end
+  for (const npc of (preFinGame.npcKrykna || [])) { if (npc.defeated) npcDefeats++; }
+  for (const npc of (preFinGame.npcThugs || [])) { if (npc.defeated) npcDefeats++; }
+
   // Finalize — both tracers update Q-values
   const finalGame = harness.getGame();
   tracer1.finalize(finalGame, true);  // Only tracer1 updates meta
@@ -1169,6 +1304,12 @@ async function runOneGame(learnings, gameNum) {
     // Movement metrics
     moveActions,
     attackActions,
+    doorOpens,
+    npcAttacks,
+    npcDefeats,
+    npcPushEvents,
+    npcEorDamageEvents,
+    npcRespawns,
     endActivations,
     totalActivations,
     activationsWithAttack,
@@ -1265,6 +1406,11 @@ async function main() {
     setBoundaryFix(false);
     console.log(`  Boundary fix: DISABLED (A/B control arm)`);
   }
+  const mapArg = args.find(a => a.startsWith('--map='));
+  if (mapArg) {
+    mapOverride = mapArg.split('=')[1];
+    console.log(`  Map override: ${mapOverride} (all games on this map)`);
+  }
   if (args.includes('--training')) {
     useTrainingMatchups = true;
     console.log(`  Training mode: LOCKED matchups (${TRAINING_MATCHUPS.length} matchups, ${TRAINING_WHITELIST_DCS.size} DCs, ${TRAINING_WHITELIST_CCS.size} CCs, ${TRAINING_MAPS.length} maps)`);
@@ -1344,6 +1490,12 @@ async function main() {
       finalRound: result.finalRound || 1,
       moveActions: result.moveActions || 0,
       attackActions: result.attackActions || 0,
+      doorOpens: result.doorOpens || 0,
+      npcAttacks: result.npcAttacks || 0,
+      npcDefeats: result.npcDefeats || 0,
+      npcPushEvents: result.npcPushEvents || 0,
+      npcEorDamageEvents: result.npcEorDamageEvents || 0,
+      npcRespawns: result.npcRespawns || 0,
       endActivations: result.endActivations || 0,
       totalActivations: result.totalActivations || 0,
       activationsWithAttack: result.activationsWithAttack || 0,
@@ -1618,7 +1770,19 @@ async function main() {
     const totalPass = perGameResults.reduce((s, r) => s + r.passActivations, 0);
     const n = perGameResults.length;
     console.log('\n=== Movement Metrics ===');
-    console.log(`Avg moves/game: ${(totalMoves / n).toFixed(1)} | Avg attacks/game: ${(totalAttacks / n).toFixed(1)}`);
+    const totalDoors = perGameResults.reduce((s, r) => s + (r.doorOpens || 0), 0);
+    const totalNpcAtk = perGameResults.reduce((s, r) => s + (r.npcAttacks || 0), 0);
+    const totalNpcDef = perGameResults.reduce((s, r) => s + (r.npcDefeats || 0), 0);
+    console.log(`Avg moves/game: ${(totalMoves / n).toFixed(1)} | Avg attacks/game: ${(totalAttacks / n).toFixed(1)} | Avg door opens/game: ${(totalDoors / n).toFixed(1)}`);
+    if (totalNpcAtk > 0 || totalNpcDef > 0) {
+      console.log(`Avg NPC attacks/game: ${(totalNpcAtk / n).toFixed(1)} | Avg NPC defeats/game: ${(totalNpcDef / n).toFixed(1)} | NPC attack share: ${totalAttacks > 0 ? ((totalNpcAtk / totalAttacks) * 100).toFixed(1) : 0}%`);
+      const totalPush = perGameResults.reduce((s, r) => s + (r.npcPushEvents || 0), 0);
+      const totalEorDmg = perGameResults.reduce((s, r) => s + (r.npcEorDamageEvents || 0), 0);
+      const totalRespawn = perGameResults.reduce((s, r) => s + (r.npcRespawns || 0), 0);
+      if (totalPush > 0 || totalEorDmg > 0 || totalRespawn > 0) {
+        console.log(`Avg NPC push/game: ${(totalPush / n).toFixed(1)} | Avg EoR dmg/game: ${(totalEorDmg / n).toFixed(1)} | Avg respawns/game: ${(totalRespawn / n).toFixed(1)}`);
+      }
+    }
     console.log(`Avg activations/game: ${(totalAct / n).toFixed(1)} | Avg end_activation/game: ${(totalEndAct / n).toFixed(1)} | Avg pass/game: ${(totalPass / n).toFixed(1)}`);
     const moveRatio = totalAct > 0 ? (totalMoves / totalAct * 100).toFixed(1) : 'N/A';
     const idleRatio = totalAct > 0 ? ((totalEndAct + totalPass) / totalAct * 100).toFixed(1) : 'N/A';

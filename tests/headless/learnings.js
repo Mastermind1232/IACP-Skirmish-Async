@@ -460,23 +460,12 @@ function extractMoveFeatures(action, game, playerNum) {
   }
 
   // Gather objective coords once for [2] and [7]
-  let mapTokens;
-  try { mapTokens = getMapTokensData(); } catch { mapTokens = null; }
-  const mapId = game.selectedMap?.id;
-  const objCoords = [];
-  if (mapTokens && mapId && mapTokens[mapId]) {
-    const mapData = mapTokens[mapId];
-    if (Array.isArray(mapData.terminals)) objCoords.push(...mapData.terminals);
-    const variant = game.selectedMission?.variant;
-    const missionKey = variant ? `mission${variant.toUpperCase()}` : null;
-    if (missionKey && mapData[missionKey]?.positions) {
-      for (const coords of Object.values(mapData[missionKey].positions)) {
-        if (Array.isArray(coords)) objCoords.push(...coords);
-      }
-    }
-  }
+  // Uses getObjectiveCoords() — the same source as the distance-greedy heuristic —
+  // so WG move features see named areas (Command Center), deployment zone centroids,
+  // and mission tokens, not just terminals.
+  const objCoords = getObjectiveCoords(game);
 
-  // [2] objectiveProximity — distance to nearest objective (terminals + mission tokens)
+  // [2] objectiveProximity — distance to nearest objective
   if (objCoords.length > 0) {
     let minObjDist = 10;
     for (const oc of objCoords) {
@@ -2335,6 +2324,25 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
     }
   }
 
+  // ── Zone-control door override ─────────────────────────────────────────────
+  // On zone-control / named-area-control missions, force opening doors ahead of
+  // the normal attack-first priority.  Mirrors strategy.js:548-558.
+  // Without this, figures reach door cells but spend their first action attacking
+  // nearby enemies, delaying CC entry by one activation per door.
+  if (groups['interact']?.length > 0) {
+    try {
+      const mapId = game.selectedMap?.id;
+      const variant = game.selectedMission?.variant;
+      const rules = getMissionCardsData()?.[mapId]?.[variant]?.rules?.endOfRound;
+      if (rules?.vpPerControlledDeploymentZone || rules?.vpForControllingNamedArea) {
+        const doorAct = groups['interact'].find(
+          a => a.params?.optionId?.startsWith('open_door_')
+        );
+        if (doorAct) return doorAct;
+      }
+    } catch { /* mission data unavailable — fall through to normal priority */ }
+  }
+
   // Priority 1: Attack weakest target (focus-fire) — skip if carrying contraband
   // Turn-denial tiebreaker: among equal-HP targets, prefer unactivated ones
   // to remove an opponent activation from the round.
@@ -2346,10 +2354,25 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
     const oppMsgIds = oppNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
     const scored = actions.map(a => {
       const targetFk = a.params?.targetFigureKey;
-      const hp = targetFk ? lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta) : null;
-      const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+      // NPC targets (Krykna, Thugs) aren't in dcHealthState — read from game state
+      let hp = null;
+      let targetPos = null;
+      if (targetFk?.startsWith('npc_')) {
+        const parts = targetFk.split('_');
+        const npcType = parts[1];
+        const npcIndex = parseInt(parts[2], 10);
+        const npcArr = npcType === 'krykna' ? game.npcKrykna : game.npcThugs;
+        const npc = npcArr?.[npcIndex];
+        if (npc) { hp = { current: npc.hp, max: npc.maxHp }; targetPos = npc.coord; }
+      } else {
+        hp = targetFk ? lookupFigureHp(targetFk, oppNum, dcHealthState, dcMessageMeta) : null;
+        targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+      }
       const attackerPos = getAttackerPosition(a, game, dcMessageMeta);
       const dist = (targetPos && attackerPos) ? coordDistance(attackerPos, targetPos) : 99;
+      // Mission-target priority: Krykna kills are worth 2 VP each — prefer over player figures
+      const isKryknaTarget = targetFk?.startsWith('npc_krykna_');
+      const missionTargetPriority = (game.npcKrykna && isKryknaTarget) ? 0 : 1;
       let targetActivated = 0;
       if (targetFk && !targetFk.startsWith('npc_')) {
         const targetDcName = targetFk.replace(/-\d+-\d+$/, '');
@@ -2361,9 +2384,10 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
           }
         }
       }
-      return { action: a, currentHp: hp?.current ?? 99, maxHp: hp?.max ?? 99, targetActivated, dist };
+      return { action: a, missionTargetPriority, currentHp: hp?.current ?? 99, maxHp: hp?.max ?? 99, targetActivated, dist };
     });
     scored.sort((a, b) => {
+      if (a.missionTargetPriority !== b.missionTargetPriority) return a.missionTargetPriority - b.missionTargetPriority;
       if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
       if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
       if (a.targetActivated !== b.targetActivated) return a.targetActivated - b.targetActivated;
