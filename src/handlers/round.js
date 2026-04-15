@@ -967,6 +967,14 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
 
   // Chopper Base A: build Krykna push queue and post buttons (damage fires after all pushes in modal handler)
   if (mapId === 'chopper-base-atollon' && variant === 'a' && postKryknaPushButtons) {
+    // Lazy-init npcKrykna from missionA token positions (breaks chicken-and-egg with self-play.js)
+    if (!game.npcKrykna) {
+      const missionData = getMapTokensData()['chopper-base-atollon']?.missionA;
+      const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
+      if (positions.length > 0) {
+        game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: String(coord).toLowerCase().trim(), hp: 8, maxHp: 8, defeated: false }));
+      }
+    }
     const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated);
     if (activeKrykna.length > 0) {
       const _initNum = getInitiativePlayerNum(game);
