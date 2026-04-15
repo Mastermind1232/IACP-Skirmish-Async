@@ -70,6 +70,7 @@ const WG_DECAY_ATTACK = 0.0001;  // Matched to surge/CC — attack weights no lo
 const WG_DECAY_MOVE = 0.0005;    // Moderate: 4/9 saturated, some features still learning
 const WG_DECAY_SURGE = 0.0001;   // Light: preventive only — not currently saturated
 const WG_DECAY_CC = 0.0001;      // Light: preventive only — not currently saturated
+const WG_DECAY_ACTIVATE = 0.0001; // Light: new scorer, same baseline as attack/surge/CC
 
 /** Override WG weight clamp for experiments. */
 export function setWgWeightClamp(v) { WG_WEIGHT_CLAMP = v; }
@@ -94,9 +95,9 @@ export function setBoundaryFix(v) { BOUNDARY_FIX_ENABLED = !!v; }
 // applied once before the alternatives loop, matching all other scorers.
 
 // ── WG Audit Counters (per-checkpoint instrumentation) ──────────────────────
-let _wgAudit = { attackEntries: 0, attackUpdates: 0, moveEntries: 0, moveUpdates: 0, surgeEntries: 0, surgeUpdates: 0 };
+let _wgAudit = { attackEntries: 0, attackUpdates: 0, moveEntries: 0, moveUpdates: 0, surgeEntries: 0, surgeUpdates: 0, activateEntries: 0, activateUpdates: 0 };
 export function getWgAuditCounters() { return { ..._wgAudit }; }
-export function resetWgAuditCounters() { _wgAudit = { attackEntries: 0, attackUpdates: 0, moveEntries: 0, moveUpdates: 0, surgeEntries: 0, surgeUpdates: 0 }; }
+export function resetWgAuditCounters() { _wgAudit = { attackEntries: 0, attackUpdates: 0, moveEntries: 0, moveUpdates: 0, surgeEntries: 0, surgeUpdates: 0, activateEntries: 0, activateUpdates: 0 }; }
 
 // ── Attack Target Quality Audit ─────────────────────────────────────────────
 // Tracks attack situation quality: multi-target decisions, HP profiles,
@@ -130,12 +131,140 @@ export function resetAtkAuditTotals() {
     turnDenialRelevant: 0, turnDenialChosen: 0 };
 }
 
+// ── Activation-Order Audit ──────────────────────────────────────────────────
+const _actOrderAuditInit = () => ({
+  totalDecisions: 0,
+  multiChoiceDecisions: 0,
+  trivialDecisions: 0,
+  choiceHistogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+  tierCounts: { combat: 0, wounded: 0, positional: 0 },
+  sameTierDecisions: 0,
+  anyCombatReady: 0,
+  multiCombatReady: 0,
+  noCombatReady: 0,
+  anyWounded: 0,
+  multiWounded: 0,
+  positionalSpreadSum: 0,
+  positionalSpreadCount: 0,
+});
+let _actOrderAudit = _actOrderAuditInit();
+export function getActOrderAudit() { return { ..._actOrderAudit, choiceHistogram: { ..._actOrderAudit.choiceHistogram }, tierCounts: { ..._actOrderAudit.tierCounts } }; }
+export function resetActOrderAudit() { _actOrderAudit = _actOrderAuditInit(); }
+
+// ── Activation-Order Shadow Mode ───────────────────────────────────────────
+// Tracks scorer-vs-heuristic disagreement without handing over control.
+const _actShadowInit = () => ({
+  totalEligible: 0,       // decisions where gate allows learned scorer
+  totalGated: 0,          // decisions blocked by combat-ready gate
+  agreements: 0,
+  disagreements: 0,
+  // Disagreement by decision class (tier of #1 vs #2 in heuristic ranking)
+  byClass: {
+    woundedVsWounded:      { total: 0, agree: 0, disagree: 0 },
+    woundedVsPositional:   { total: 0, agree: 0, disagree: 0 },
+    positionalVsPositional:{ total: 0, agree: 0, disagree: 0 },
+  },
+  // Disagreement by round
+  byRound: { 1: { total: 0, agree: 0, disagree: 0 }, 2: { total: 0, agree: 0, disagree: 0 },
+             3: { total: 0, agree: 0, disagree: 0 }, 4: { total: 0, agree: 0, disagree: 0 } },
+  // Disagreement by activations-left bucket
+  byActivationsLeft: { early: { total: 0, agree: 0, disagree: 0 }, late: { total: 0, agree: 0, disagree: 0 } },
+  // Feature deltas on disagreement (for understanding WHAT the scorer sees differently)
+  disagreeFeatureDeltas: new Float64Array(8), // sum of (scorer_pick_features - heuristic_pick_features)
+  disagreeCount: 0,
+});
+let _actShadow = _actShadowInit();
+export function getActShadow() {
+  return {
+    ..._actShadow,
+    byClass: { woundedVsWounded: { ..._actShadow.byClass.woundedVsWounded },
+               woundedVsPositional: { ..._actShadow.byClass.woundedVsPositional },
+               positionalVsPositional: { ..._actShadow.byClass.positionalVsPositional } },
+    byRound: { 1: { ..._actShadow.byRound[1] }, 2: { ..._actShadow.byRound[2] },
+               3: { ..._actShadow.byRound[3] }, 4: { ..._actShadow.byRound[4] } },
+    byActivationsLeft: { early: { ..._actShadow.byActivationsLeft.early },
+                         late: { ..._actShadow.byActivationsLeft.late } },
+    disagreeFeatureDeltas: Array.from(_actShadow.disagreeFeatureDeltas),
+  };
+}
+export function resetActShadow() { _actShadow = _actShadowInit(); }
+
+// ── Activation Outcome Tracker ─────────────────────────────────────────────
+// Tracks what the heuristic's chosen DC actually did during its activation.
+// When shadow mode disagreed, links the outcome to the disagreement record.
+let _pendingActOutcome = null; // { dcName, shadowDisagreed, scorerPick, heuristicPick }
+const _actOutcomeInit = () => ({
+  // All activations (on eligible surface)
+  all: { attack: 0, interact: 0, moveOnly: 0, endOnly: 0, total: 0 },
+  // Activations where scorer agreed with heuristic
+  agree: { attack: 0, interact: 0, moveOnly: 0, endOnly: 0, total: 0 },
+  // Activations where scorer disagreed — what did the HEURISTIC's pick produce?
+  disagreeHeuristic: { attack: 0, interact: 0, moveOnly: 0, endOnly: 0, total: 0 },
+});
+let _actOutcome = _actOutcomeInit();
+export function getActOutcome() {
+  return { all: { ..._actOutcome.all }, agree: { ..._actOutcome.agree },
+           disagreeHeuristic: { ..._actOutcome.disagreeHeuristic } };
+}
+export function resetActOutcome() { _actOutcome = _actOutcomeInit(); _pendingActOutcome = null; }
+
+// Called from train.js when an activate_dc is chosen on the eligible surface
+export function markActivationStart(dcName, shadowDisagreed, scorerPick, heuristicPick, traceIdx) {
+  // Finalize any previous pending activation first
+  finalizeActivationOutcome('endOnly');
+  _pendingActOutcome = { dcName, shadowDisagreed, scorerPick, heuristicPick, bestOutcome: 'endOnly', traceIdx: traceIdx ?? -1 };
+}
+
+// Called from train.js for each action during the activation
+export function recordActivationAction(actionType) {
+  if (!_pendingActOutcome) return;
+  if (actionType === 'attack_target') _pendingActOutcome.bestOutcome = 'attack';
+  else if (actionType === 'interact' && _pendingActOutcome.bestOutcome !== 'attack') _pendingActOutcome.bestOutcome = 'interact';
+  else if ((actionType === 'move_figure' || actionType === 'move_pick_space') &&
+           _pendingActOutcome.bestOutcome === 'endOnly') _pendingActOutcome.bestOutcome = 'moveOnly';
+}
+
+// Called from train.js at end of activation or next activate_dc
+export function finalizeActivationOutcome(fallbackOutcome) {
+  if (!_pendingActOutcome) return;
+  const outcome = _pendingActOutcome.bestOutcome || fallbackOutcome || 'endOnly';
+  _actOutcome.all[outcome]++;
+  _actOutcome.all.total++;
+  if (_pendingActOutcome.shadowDisagreed) {
+    _actOutcome.disagreeHeuristic[outcome]++;
+    _actOutcome.disagreeHeuristic.total++;
+  } else {
+    _actOutcome.agree[outcome]++;
+    _actOutcome.agree.total++;
+  }
+  // Link outcome back to diagnostic trace entry
+  if (_pendingActOutcome.traceIdx >= 0 && _pendingActOutcome.traceIdx < _diagTrace.length) {
+    _diagTrace[_pendingActOutcome.traceIdx].outcome = outcome;
+  }
+  _pendingActOutcome = null;
+}
+
+// ── Diagnostic Trace (per-disagreement detail) ─────────────────────────────
+// Captures full context for each disagreement decision — used for map-specific
+// regression diagnosis (e.g., why does the scorer hurt Devaron?).
+const _diagTrace = [];
+export function getDiagTrace() { return _diagTrace; }
+export function resetDiagTrace() { _diagTrace.length = 0; }
+
+// ── Activate Scorer Control Mode ───────────────────────────────────────────
+// When true, the gated learned scorer CONTROLS activation order on the
+// eligible surface (no combat-ready DC, no pre-filter). When false (default),
+// the heuristic controls and the scorer runs in shadow mode only.
+let _activateScorerControl = false;
+export function setActivateScorerControl(v) { _activateScorerControl = !!v; }
+
 function getWgDecay(wgType) {
   switch (wgType) {
     case 'attack': return WG_DECAY_ATTACK;
     case 'move': return WG_DECAY_MOVE;
     case 'surge': return WG_DECAY_SURGE;
     case 'cc': return WG_DECAY_CC;
+    case 'activate': return WG_DECAY_ACTIVATE;
     default: return 0;
   }
 }
@@ -722,6 +851,105 @@ function extractCcFeatures(action, game) {
   // [4] isCombatTimed — is this CC's timing a combat interrupt (attacker or defender)?
   // Separates combat-timed CCs (free interrupts) from non-combat-timed CCs.
   features[4] = COMBAT_CC_TIMINGS.has(timing) ? 1.0 : 0.0;
+
+  return features;
+}
+
+/**
+ * Extract per-DC features for activation-order scoring (gated learned surface).
+ * Only called when no strategic prefilter fires and no combat-ready DC exists.
+ * 8 features: enemyThreat, hpFraction, figureCount, minEnemyNorm, minObjNorm,
+ *             attackRange, roundFraction, activationsLeft.
+ */
+function extractActivateFeatures(action, game, dcHealthState, dcMessageMeta) {
+  const features = new Float64Array(8);
+  features[7] = 1.0; // bias (activationsLeft slot doubles as bias when data unavailable)
+  const dcName = action.params?.dcName;
+  const msgId = action.params?.msgId;
+  if (!dcName) return features;
+  const playerNum = action.actingPlayer;
+  const oppNum = playerNum === 1 ? 2 : 1;
+
+  let dcEffects;
+  try { dcEffects = getDcEffects(); } catch { dcEffects = null; }
+
+  // Gather this DC's figures
+  const myFigs = Object.entries(game.figurePositions?.[playerNum] || {})
+    .filter(([fk]) => fk.startsWith(dcName + '-'));
+  const oppFigs = Object.entries(game.figurePositions?.[oppNum] || {});
+  const objCoords = getObjectiveCoords(game);
+
+  // [0] enemyThreat — how many enemy figures can attack this DC (defensive urgency)
+  // Counts enemies whose attack range covers any of this DC's figures, normalized
+  if (dcEffects && myFigs.length > 0) {
+    let threatCount = 0;
+    for (const [, myPos] of myFigs) {
+      for (const [oppFk, oppPos] of oppFigs) {
+        const oppDcName = oppFk.replace(/-\d+-\d+$/, '');
+        const oppRange = getAttackRange(dcEffects, oppDcName);
+        if (coordDistance(myPos, oppPos) <= oppRange) threatCount++;
+      }
+    }
+    features[0] = Math.min(1, threatCount / 4);
+  }
+
+  // [1] hpFraction — avg(currentHP / maxHP) across DC figures (wounded magnitude)
+  if (msgId && dcHealthState) {
+    const healthArr = dcHealthState.get(msgId);
+    if (healthArr) {
+      let hpSum = 0, hpCount = 0;
+      for (const h of healthArr) {
+        if (h && h[1] > 0) { hpSum += h[0] / h[1]; hpCount++; }
+      }
+      features[1] = hpCount > 0 ? hpSum / hpCount : 1.0;
+    } else {
+      features[1] = 1.0; // assume full HP if no data
+    }
+  } else {
+    features[1] = 1.0;
+  }
+
+  // [2] figureCount — nFigures / max(nFigures across all candidates), normalized 0-1
+  // Using raw count / 3 as normalization (most DCs have 1-3 figures)
+  features[2] = Math.min(1, myFigs.length / 3);
+
+  // [3] minEnemyNorm — min distance to nearest enemy, normalized (closer = higher)
+  let minEnemy = 10;
+  for (const [, myPos] of myFigs) {
+    for (const [, oppPos] of oppFigs) {
+      const d = coordDistance(myPos, oppPos);
+      if (d < minEnemy) minEnemy = d;
+    }
+  }
+  features[3] = 1 - Math.min(minEnemy, 10) / 10;
+
+  // [4] minObjNorm — min distance to nearest objective, normalized (closer = higher)
+  let minObj = 10;
+  for (const [, myPos] of myFigs) {
+    for (const oc of objCoords) {
+      try {
+        const d = coordDistance(myPos, oc);
+        if (d < minObj) minObj = d;
+      } catch { /* skip invalid coords */ }
+    }
+  }
+  features[4] = objCoords.length > 0 ? 1 - Math.min(minObj, 10) / 10 : 0;
+
+  // [5] attackRange — ranged (1) vs melee (0)
+  if (dcEffects) {
+    const range = getAttackRange(dcEffects, dcName);
+    features[5] = range > 1 ? 1.0 : 0.0;
+  }
+
+  // [6] roundFraction — currentRound / 4 (late-round = higher)
+  features[6] = Math.min(1, (game.currentRound || 1) / 4);
+
+  // [7] activationsLeft — remaining activations / total DCs
+  const myMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+  const myActivated = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+  const totalDcs = myMsgIds.length;
+  const remaining = totalDcs - myActivated.length;
+  features[7] = totalDcs > 0 ? remaining / totalDcs : 0.5;
 
   return features;
 }
@@ -1700,6 +1928,7 @@ function updateTraceNeural(learnings, trace) {
       if (entry.wgType === 'attack') _wgAudit.attackEntries++;
       else if (entry.wgType === 'move') _wgAudit.moveEntries++;
       else if (entry.wgType === 'surge') _wgAudit.surgeEntries++;
+      else if (entry.wgType === 'activate') _wgAudit.activateEntries++;
 
       const wgW = learnings.withinGroupWeights[entry.wgType];
       if (wgW) {
@@ -1730,6 +1959,7 @@ function updateTraceNeural(learnings, trace) {
           // Standard TD-delta-based WG update (attack, surge, CC)
           if (entry.wgType === 'attack') _wgAudit.attackUpdates++;
           else if (entry.wgType === 'surge') _wgAudit.surgeUpdates++;
+          else if (entry.wgType === 'activate') _wgAudit.activateUpdates++;
           const alpha = entry.wgType === 'surge' ? ALPHA_WG_SURGE : ALPHA_WG;
           for (let fi = 0; fi < wgW.length; fi++) {
             wgW[fi] *= (1 - wgDecay); // L2 decay before gradient step
@@ -2565,6 +2795,9 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   pickSmartAction._lastWgType = null;
   pickSmartAction._lastMoveContrastive = null;
   pickSmartAction._lastCcPickPath = null;
+  pickSmartAction._lastShadowData = null;
+  pickSmartAction._lastQ = null;
+  pickSmartAction._lastAbsTypes = null;
   if (allActions.length === 0) return null;
   if (allActions.length === 1) return allActions[0];
 
@@ -2658,6 +2891,10 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   }
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
   if (absTypes.length === 0) return heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc);
+
+  // Expose Q-values and available abstract types for pass-timing audit
+  pickSmartAction._lastQ = Q;
+  pickSmartAction._lastAbsTypes = absTypes;
 
   // ── Within-activation planner (always-on) ──────────────────────────────────
   // Deterministic sequencing replaces per-action DQN during a DC's turn.
@@ -2843,6 +3080,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   pickSmartAction._lastWgFeatures = wgResult.wgFeatures;
   pickSmartAction._lastWgType = wgResult.wgType;
   pickSmartAction._lastMoveContrastive = wgResult.moveContrastive || null;
+  pickSmartAction._lastShadowData = pickWithinGroup._lastShadowData || null;
 
   // CC pick path instrumentation: label how this CC decision was routed
   if (bestType === 'play_cc') {
@@ -2867,6 +3105,7 @@ function dotProductWg(weights, features) {
 }
 
 function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMessageMeta, totalGames) {
+  pickWithinGroup._lastShadowData = null; // reset per call
   if (actions.length <= 1) return { action: actions[0], wgFeatures: null, wgType: null };
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -3006,10 +3245,10 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
   }
 
   // Activation order — HP-aware, combat-ready, objective-aware.
-  // Always-on (train + eval): the previous _greedyMode gate meant training
-  // used random activation order, so the DQN never saw HP-aware sequencing.
+  // Heuristic sort is always-on; gated learned scorer runs in shadow mode
+  // on the non-combat-ready surface (wounded/positional decisions).
   // Sort priority:
-  //   1. Combat-ready (enemy within attack range) — get immediate value
+  //   1. Combat-ready (enemy within attack range) — HARD OVERRIDE, not learned
   //   2. Wounded (any figure below max HP) — act before they die
   //   3. Nearest to enemy or objective — positional tiebreaker
   if (absType === 'activate') {
@@ -3022,7 +3261,7 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     const scored = actions.map(a => {
       const dcName = a.params?.dcName;
       const msgId = a.params?.msgId;
-      if (!dcName) return { action: a, combatReady: false, wounded: false, minEnemy: 99, minCombined: 99 };
+      if (!dcName) return { action: a, dcName: '?', combatReady: false, wounded: false, minEnemy: 99, minCombined: 99 };
       const atkRange = dcEffects ? getAttackRange(dcEffects, dcName) : 1;
       const myFigs = Object.entries(game.figurePositions?.[playerNum] || {})
         .filter(([fk]) => fk.startsWith(dcName + '-'));
@@ -3039,23 +3278,128 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
           if (d < minObj) minObj = d;
         }
       }
-      // Check if any figure in this DC is wounded (below max HP)
       let wounded = false;
       if (msgId && dcHealthState) {
         const healthArr = dcHealthState.get(msgId);
         if (healthArr) wounded = healthArr.some(h => h && h[0] < h[1]);
       }
-      return { action: a, combatReady, wounded, minEnemy, minCombined: Math.min(minEnemy, minObj) };
+      return { action: a, dcName, combatReady, wounded, minEnemy, minCombined: Math.min(minEnemy, minObj) };
     });
     scored.sort((a, b) => {
-      // Tier 1: combat-ready first
       if (a.combatReady !== b.combatReady) return a.combatReady ? -1 : 1;
-      // Tier 2: wounded first (among same combat-ready tier)
       if (a.wounded !== b.wounded) return a.wounded ? -1 : 1;
-      // Tier 3: positional — nearest to enemy or objective
       return a.minCombined - b.minCombined;
     });
-    return { action: scored[0].action, wgFeatures: null, wgType: 'activate' };
+
+    // ── Activation-order audit (unchanged) ──────────────────────────────
+    _actOrderAudit.totalDecisions++;
+    _actOrderAudit.choiceHistogram[Math.min(actions.length, 6)]++;
+    if (actions.length >= 2) {
+      _actOrderAudit.multiChoiceDecisions++;
+      const chosen = scored[0];
+      const runner = scored[1];
+      const chosenTier = chosen.combatReady ? 'combat' : chosen.wounded ? 'wounded' : 'positional';
+      const runnerTier = runner.combatReady ? 'combat' : runner.wounded ? 'wounded' : 'positional';
+      _actOrderAudit.tierCounts[chosenTier]++;
+      if (chosenTier === runnerTier) _actOrderAudit.sameTierDecisions++;
+      const nCombatReady = scored.filter(s => s.combatReady).length;
+      if (nCombatReady > 0) _actOrderAudit.anyCombatReady++;
+      if (nCombatReady >= 2) _actOrderAudit.multiCombatReady++;
+      if (nCombatReady === 0) _actOrderAudit.noCombatReady++;
+      const nWounded = scored.filter(s => s.wounded).length;
+      if (nWounded > 0) _actOrderAudit.anyWounded++;
+      if (nWounded >= 2) _actOrderAudit.multiWounded++;
+      const distSpread = scored[scored.length - 1].minCombined - scored[0].minCombined;
+      if (distSpread > 0) _actOrderAudit.positionalSpreadSum += distSpread;
+      _actOrderAudit.positionalSpreadCount++;
+    } else {
+      _actOrderAudit.trivialDecisions++;
+    }
+
+    // ── Gated learned activation scorer ────────────────────────────────
+    // Gate: only eligible when NO combat-ready DC exists among candidates.
+    // When gated out, combat-ready hard override is correct; nothing to learn.
+    const anyCombatReady = scored.some(s => s.combatReady);
+    let _scorerChoiceIdx = 0; // default to heuristic's choice (scored[0])
+    let _scorerEligible = false;
+    let featuresByIdx = null; // hoisted for TD learning — null when gated out
+    if (anyCombatReady) {
+      _actShadow.totalGated++;
+    } else if (actions.length >= 2 && wgWeights) {
+      _actShadow.totalEligible++;
+      featuresByIdx = scored.map(s =>
+        extractActivateFeatures(s.action, game, dcHealthState, dcMessageMeta));
+      const activateW = wgWeights.activate;
+      if (activateW) {
+        _scorerEligible = true;
+        let bestScore = -Infinity;
+        for (let i = 0; i < featuresByIdx.length; i++) {
+          const s = dotProductWg(activateW, featuresByIdx[i]);
+          if (s > bestScore) { bestScore = s; _scorerChoiceIdx = i; }
+        }
+        const heuristicPick = scored[0].dcName;
+        const scorerPick = scored[_scorerChoiceIdx].dcName;
+        const agreed = heuristicPick === scorerPick;
+
+        // Classify the decision surface
+        const h1Tier = scored[0].wounded ? 'wounded' : 'positional';
+        const h2Tier = scored[1].wounded ? 'wounded' : 'positional';
+        let classKey;
+        if (h1Tier === 'wounded' && h2Tier === 'wounded') classKey = 'woundedVsWounded';
+        else if (h1Tier === 'wounded' || h2Tier === 'wounded') classKey = 'woundedVsPositional';
+        else classKey = 'positionalVsPositional';
+
+        const round = Math.min(4, Math.max(1, game.currentRound || 1));
+        const myMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+        const myActivated = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+        const actLeft = myMsgIds.length - myActivated.length;
+        const actBucket = actLeft > myMsgIds.length / 2 ? 'early' : 'late';
+
+        if (agreed) {
+          _actShadow.agreements++;
+          _actShadow.byClass[classKey].agree++;
+          _actShadow.byRound[round].agree++;
+          _actShadow.byActivationsLeft[actBucket].agree++;
+        } else {
+          _actShadow.disagreements++;
+          _actShadow.byClass[classKey].disagree++;
+          _actShadow.byRound[round].disagree++;
+          _actShadow.byActivationsLeft[actBucket].disagree++;
+          for (let fi = 0; fi < 8; fi++) {
+            _actShadow.disagreeFeatureDeltas[fi] += (featuresByIdx[_scorerChoiceIdx][fi] || 0) - (featuresByIdx[0][fi] || 0);
+          }
+          _actShadow.disagreeCount++;
+          // Diagnostic trace: record full context for each disagreement
+          _diagTrace.push({
+            round, classKey, actBucket,
+            heurPick: scored[0].dcName,
+            scorerPick: scored[_scorerChoiceIdx].dcName,
+            heurObjNorm: featuresByIdx[0][4],     // minObjNorm of heuristic's pick
+            scorerObjNorm: featuresByIdx[_scorerChoiceIdx][4], // minObjNorm of scorer's pick
+            heurEnemyNorm: featuresByIdx[0][3],
+            scorerEnemyNorm: featuresByIdx[_scorerChoiceIdx][3],
+            heurRoundFrac: featuresByIdx[0][6],
+            scorerRoundFrac: featuresByIdx[_scorerChoiceIdx][6],
+            heurScore: dotProductWg(activateW, featuresByIdx[0]),
+            scorerScore: dotProductWg(activateW, featuresByIdx[_scorerChoiceIdx]),
+            controlled: _activateScorerControl ? 'scorer' : 'heuristic',
+            outcome: null, // filled by finalizeActivationOutcome
+          });
+        }
+        _actShadow.byClass[classKey].total++;
+        _actShadow.byRound[round].total++;
+        _actShadow.byActivationsLeft[actBucket].total++;
+
+        const traceIdx = agreed ? -1 : _diagTrace.length - 1;
+        pickWithinGroup._lastShadowData = { heuristicPick, scorerPick, agreed, classKey, traceIdx };
+      }
+    }
+
+    // Control mode: scorer controls when eligible; otherwise heuristic controls
+    const chosenIdx = (_activateScorerControl && _scorerEligible) ? _scorerChoiceIdx : 0;
+    // Return features of the actually-chosen DC for TD learning (null when gated out)
+    const chosenFeatures = featuresByIdx ? featuresByIdx[chosenIdx] : null;
+    return { action: scored[chosenIdx].action, wgFeatures: chosenFeatures, wgType: 'activate' };
   }
 
   // Move scorer (Phase 5 Slice 2 — learned with contrastive signal)
@@ -3485,6 +3829,11 @@ export function loadLearnings(filePath) {
           nanResets: 0, tdErrorHistory: [],
         };
       }
+      // Migrate: ensure diversity-pilot telemetry fields exist
+      if (!data.deckStats) data.deckStats = {};
+      if (!data.mapStats) data.mapStats = {};
+      if (!data.whitelistAudit) data.whitelistAudit = { totalHits: 0, hitsByCard: {} };
+      if (!data.uniqueConfigs) data.uniqueConfigs = [];
       // Migrate network from fewer input features to current NUM_FEATURES
       // (e.g., 16 → N when new features are added)
       if (data.network && data.network.W1[0] && data.network.W1[0].length < NUM_FEATURES) {
@@ -3552,7 +3901,18 @@ export function loadLearnings(filePath) {
         data.withinGroupWeights = {
           attack: new Array(6).fill(0), move: new Array(9).fill(0),
           surge: new Array(4).fill(0), cc: new Array(5).fill(0),
+          activate: [0.3, -0.4, 0.2, 0.3, 0.2, 0.1, 0.1, 0.0],
         };
+      }
+      // One-time migration: add activate WG weights for gated activation-order scorer.
+      // Seeded with domain-aligned priors so shadow mode produces meaningful
+      // disagreement signal immediately (zero weights → 100% agreement → no data).
+      // Priors: prefer threatened DCs (+0.3), wounded DCs (-0.4 = lower hpFrac → higher priority),
+      // more figures (+0.2), closer to enemy (+0.3), closer to objective (+0.2),
+      // ranged slight bonus (+0.1), late-round slight bonus (+0.1), bias 0.
+      if (!data.withinGroupWeights.activate) {
+        data.withinGroupWeights.activate = [0.3, -0.4, 0.2, 0.3, 0.2, 0.1, 0.1, 0.0];
+        console.log('[learnings] Added activate WG weights (8 features, domain priors) for gated activation-order scorer');
       }
       // Migrate move scorer from 6 → 9 features (Phase 5 move-feature upgrade)
       if (data.withinGroupWeights?.move && data.withinGroupWeights.move.length === 6) {
@@ -3668,6 +4028,10 @@ export function saveLearnings(learnings, filePath) {
     withinGroupWeights: learnings.withinGroupWeights,
     _surgeWgResetV1: learnings._surgeWgResetV1 || false,
     _moveWgResetV1: learnings._moveWgResetV1 || false,
+    deckStats: learnings.deckStats || {},
+    mapStats: learnings.mapStats || {},
+    whitelistAudit: learnings.whitelistAudit || { totalHits: 0, hitsByCard: {} },
+    uniqueConfigs: learnings.uniqueConfigs || [],
   };
   // Persist graph network if present (target network rebuilt on load)
   if (learnings.graphNetwork) {
@@ -3706,7 +4070,7 @@ export function loadReplayBuffer(learnings, filePath) {
 
 // ── Per-DC / Affiliation Tracking ────────────────────────────────────────
 
-export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcStatsFunc, getDcEffectsFunc) {
+export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcStatsFunc, getDcEffectsFunc, opts = {}) {
   if (!learnings.dcStats) learnings.dcStats = {};
   if (!learnings.affiliationStats) learnings.affiliationStats = {};
   if (!learnings.matchups) learnings.matchups = [];
@@ -3766,6 +4130,33 @@ export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcS
     game: learnings.meta.totalGames,
   });
   if (learnings.matchups.length > 200) learnings.matchups = learnings.matchups.slice(-200);
+
+  // ── Deck-level tracking (diversity pilot) ─────────────────────────────
+  if (opts.p1DeckName || opts.p2DeckName) {
+    if (!learnings.deckStats) learnings.deckStats = {};
+    for (const [dn, isWinner] of [[opts.p1DeckName, winnerLabel === 'P1'], [opts.p2DeckName, winnerLabel === 'P2']]) {
+      if (!dn) continue;
+      if (!learnings.deckStats[dn]) learnings.deckStats[dn] = { wins: 0, losses: 0, games: 0 };
+      const s = learnings.deckStats[dn];
+      s.games++;
+      if (winnerLabel === 'P1' || winnerLabel === 'P2') {
+        if (isWinner) s.wins++; else s.losses++;
+      }
+    }
+  }
+
+  // ── Map-level tracking (diversity pilot) ──────────────────────────────
+  if (opts.mapId) {
+    if (!learnings.mapStats) learnings.mapStats = {};
+    const mid = opts.mapId;
+    if (!learnings.mapStats[mid]) learnings.mapStats[mid] = { wins: { P1: 0, P2: 0 }, games: 0, totalVP: 0, decisive: 0 };
+    const ms = learnings.mapStats[mid];
+    ms.games++;
+    if (winnerLabel === 'P1') ms.wins.P1++;
+    if (winnerLabel === 'P2') ms.wins.P2++;
+    if (typeof opts.totalVP === 'number') ms.totalVP += opts.totalVP;
+    if (typeof opts.vpDiff === 'number' && opts.vpDiff >= 10) ms.decisive++;
+  }
 }
 
 // ── Agent-Specific Action Selection (Arena) ─────────────────────────────────
@@ -3937,7 +4328,7 @@ export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessage
  */
 export function recordTrainingCheckpoint(learnings, checkpoint) {
   if (!learnings.meta.trainingHistory) learnings.meta.trainingHistory = [];
-  learnings.meta.trainingHistory.push({
+  const entry = {
     totalGames: learnings.meta.totalGames,
     completionRate: checkpoint.total > 0 ? checkpoint.completed / checkpoint.total : 0,
     completed: checkpoint.completed,
@@ -3948,7 +4339,16 @@ export function recordTrainingCheckpoint(learnings, checkpoint) {
     avgAbsDelta: checkpoint.avgAbsDelta || 0,
     epsilon: checkpoint.epsilon || 0,
     ts: Date.now(),
-  });
+  };
+  // Diversity pilot fields (only present when --mixed is active)
+  if (checkpoint.poolGames != null) entry.poolGames = checkpoint.poolGames;
+  if (checkpoint.fixedGames != null) entry.fixedGames = checkpoint.fixedGames;
+  if (checkpoint.uniqueConfigs != null) entry.uniqueConfigs = checkpoint.uniqueConfigs;
+  if (checkpoint.whitelistHits != null) entry.whitelistHits = checkpoint.whitelistHits;
+  if (checkpoint.poolAvgVP != null) entry.poolAvgVP = checkpoint.poolAvgVP;
+  if (checkpoint.fixedAvgVP != null) entry.fixedAvgVP = checkpoint.fixedAvgVP;
+  if (checkpoint.poolCompletionRate != null) entry.poolCompletionRate = checkpoint.poolCompletionRate;
+  learnings.meta.trainingHistory.push(entry);
   // Keep last 200 checkpoints (10,000 games at 50-game intervals)
   if (learnings.meta.trainingHistory.length > 200) {
     learnings.meta.trainingHistory.shift();
