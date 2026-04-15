@@ -83,6 +83,7 @@ const CONTEXT_GROUPS = {
     'getGame', 'dcMessageMeta', 'clearMoveGridMessages', 'getBoardStateForMovement',
     'getMovementProfile', 'ensureMovementCache', 'computeMovementCache',
     'normalizeCoord', 'getMovementTarget', 'getFigureSize', 'getNormalizedFootprint',
+    'initMassiveDisplacement', 'resolveNextDisplacements', 'applyDisplacementChoice',
     'resolveMassivePush', 'updateMovementBankMessage', 'getMovementPath',
     'pushUndo', 'logGameAction', 'countTerminalsControlledByPlayer',
     'getMovementMinimapAttachment', 'buildBoardMapPayload',

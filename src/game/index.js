@@ -49,6 +49,9 @@ export {
   getFiguresAdjacentToCoord,
   collectOverlappingFigures,
   pushFigureToNearestValid,
+  initMassiveDisplacement,
+  resolveNextDisplacements,
+  applyDisplacementChoice,
   resolveMassivePush,
   getEffectiveMapSpaces,
 } from './movement.js';

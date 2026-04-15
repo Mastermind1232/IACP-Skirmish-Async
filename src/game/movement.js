@@ -803,35 +803,147 @@ export function pushFigureToNearestValid(game, playerNum, figureKey, forbiddenSe
   return false;
 }
 
+// ── Iterative massive displacement engine ────────────────────────────────────
+// Shared by Discord interactive flow and headless non-interactive flow.
+// Rules source: RULES_REFERENCE.md lines 1906-1909
+//   - figures pushed least spaces (controller's choice if tied)
+//   - friendly figures first, then other players push their figures
+//   - valid destinations recalculated after each individual displacement
+
 /**
- * Handle collision resolution for massive figures that can end on occupied spaces.
- * Pushes each displaced figure to the nearest valid space. When multiple figures
- * overlap, they are pushed one at a time — the order matters because each push
- * changes the board state (freed spaces) for subsequent pushes.
- * @param {Function} logGameAction - Discord logging function passed from caller
+ * Initialize iterative massive displacement state. Pure — no side effects.
+ * @returns {object|null} pending state, or null if no overlaps
+ */
+export function initMassiveDisplacement(game, movingPlayerNum, movingFigureKey, footprintSet) {
+  const overlaps = collectOverlappingFigures(game, movingPlayerNum, movingFigureKey, footprintSet);
+  if (overlaps.length === 0) return null;
+  const friendly = overlaps.filter(e => e.playerNum === movingPlayerNum);
+  const enemy = overlaps.filter(e => e.playerNum !== movingPlayerNum);
+  return {
+    movingPlayerNum,
+    movingFigureKey,
+    footprint: [...footprintSet],
+    friendlyQueue: friendly,
+    enemyQueue: enemy,
+    phase: friendly.length > 0 ? 'friendly' : 'enemy',
+    currentIndex: 0,
+    totalDisplaced: overlaps.length,
+  };
+}
+
+/**
+ * Resolve displacements iteratively. Auto-resolves 0/1-space cases (mutates
+ * game.figurePositions), stops when a figure has 2+ valid spaces (needs choice).
+ *
+ * Each call recalculates valid spaces with CURRENT board state before resolving.
+ *
+ * @returns {object}
+ *   .autoResolved: [{entry, prevPos, newPos, bfs}] — figures auto-placed this call
+ *   .needsChoice: null | {entry, validSpaces, controllerPlayerNum}
+ *   .done: boolean — true when all figures in both queues resolved
+ */
+export function resolveNextDisplacements(game, pending) {
+  const forbiddenSet = new Set(pending.footprint);
+  const autoResolved = [];
+
+  while (true) {
+    const queue = pending.phase === 'friendly' ? pending.friendlyQueue : pending.enemyQueue;
+    if (pending.currentIndex >= queue.length) {
+      // Advance from friendly → enemy phase, or finish
+      if (pending.phase === 'friendly' && pending.enemyQueue.length > 0) {
+        pending.phase = 'enemy';
+        pending.currentIndex = 0;
+        continue;
+      }
+      return { autoResolved, needsChoice: null, done: true };
+    }
+
+    const entry = queue[pending.currentIndex];
+    // Recalculate valid spaces with current board state
+    const validSpaces = getValidDisplacementSpaces(game, entry.figureKey, entry.playerNum, forbiddenSet);
+
+    if (validSpaces.length === 0) {
+      // BFS fallback — no adjacent spaces
+      const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+      pushFigureToNearestValid(game, entry.playerNum, entry.figureKey, forbiddenSet);
+      const newPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+      autoResolved.push({ entry, prevPos, newPos, bfs: true });
+      pending.currentIndex++;
+      continue;
+    }
+
+    if (validSpaces.length === 1) {
+      // Single option — auto-place
+      const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+      pushFigure(game, entry.playerNum, entry.figureKey, validSpaces[0]);
+      autoResolved.push({ entry, prevPos, newPos: validSpaces[0], bfs: false });
+      pending.currentIndex++;
+      continue;
+    }
+
+    // 2+ valid spaces — caller must choose.
+    // Friendly phase: massive controller picks. Enemy phase: enemy player picks.
+    const controllerPlayerNum = pending.phase === 'friendly'
+      ? pending.movingPlayerNum
+      : entry.playerNum;
+    return { autoResolved, needsChoice: { entry, validSpaces, controllerPlayerNum }, done: false };
+  }
+}
+
+/**
+ * Apply a player's displacement choice for the current pending figure.
+ * Call after resolveNextDisplacements returns needsChoice.
+ */
+export function applyDisplacementChoice(game, pending, chosenSpace) {
+  const queue = pending.phase === 'friendly' ? pending.friendlyQueue : pending.enemyQueue;
+  const entry = queue[pending.currentIndex];
+  if (!entry) return null;
+  const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+  pushFigure(game, entry.playerNum, entry.figureKey, chosenSpace);
+  pending.currentIndex++;
+  return { entry, prevPos, newPos: chosenSpace };
+}
+
+/**
+ * Non-interactive massive displacement (headless / AI).
+ * Uses the iterative engine — when 2+ spaces, picks the first deterministically.
+ * Preserves the same iterative recalculation semantics as the interactive path.
  */
 export async function resolveMassivePush(game, profile, figureKey, playerNum, newFootprint, client, logGameAction) {
   if (!profile.canEndOnOccupied) return;
   const footprintSet = new Set(newFootprint);
-  const overlaps = collectOverlappingFigures(game, playerNum, figureKey, footprintSet);
-  if (overlaps.length === 0) return;
-  // Push each figure one at a time; earlier pushes free spaces for later ones
-  for (const entry of overlaps) {
-    const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
-    const success = pushFigureToNearestValid(game, entry.playerNum, entry.figureKey, footprintSet);
-    const newPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
-    if (!success) {
-      console.warn(`Failed to push ${entry.figureKey} away from massive figure ${figureKey}`);
-    } else if (logGameAction) {
-      const from = prevPos ? String(prevPos).toUpperCase() : '?';
-      const to = newPos ? String(newPos).toUpperCase() : '?';
-      await logGameAction(game, client, `**${entry.dcName}** displaced **${from}** → **${to}** by massive figure.`, { icon: 'move', phase: 'ROUND' });
+  const pending = initMassiveDisplacement(game, playerNum, figureKey, footprintSet);
+  if (!pending) return;
+
+  // Resolve all displacements iteratively
+  while (true) {
+    const result = resolveNextDisplacements(game, pending);
+    // Log auto-resolved figures
+    for (const r of result.autoResolved) {
+      const from = r.prevPos ? String(r.prevPos).toUpperCase() : '?';
+      const to = r.newPos ? String(r.newPos).toUpperCase() : '?';
+      const suffix = r.bfs ? ' (no adjacent spaces)' : '';
+      if (logGameAction) {
+        await logGameAction(game, client, `**${r.entry.dcName}** displaced **${from}** → **${to}** by massive figure${suffix}.`, { icon: 'move', phase: 'ROUND' });
+      }
+    }
+    if (result.done) break;
+    // Non-interactive: pick first valid space (deterministic)
+    const choice = result.needsChoice;
+    const applied = applyDisplacementChoice(game, pending, choice.validSpaces[0]);
+    if (applied && logGameAction) {
+      const from = applied.prevPos ? String(applied.prevPos).toUpperCase() : '?';
+      const to = String(choice.validSpaces[0]).toUpperCase();
+      await logGameAction(game, client, `**${choice.entry.dcName}** displaced **${from}** → **${to}** by massive figure.`, { icon: 'move', phase: 'ROUND' });
     }
   }
-  // G66-G68: After Massive ends on occupied space and pushes, lock voluntary movement for rest of phase
+
+  // G66-G68: lock voluntary movement for rest of phase
   game.massiveMovementLocked = game.massiveMovementLocked || {};
   game.massiveMovementLocked[figureKey] = true;
-  await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside. Movement locked for this phase.`, { icon: 'move', phase: 'ROUND' });
+  if (logGameAction) {
+    await logGameAction(game, client, `Massive figure pushed ${pending.totalDisplaced} figure(s) aside. Movement locked for this phase.`, { icon: 'move', phase: 'ROUND' });
+  }
 }
 
 /**
