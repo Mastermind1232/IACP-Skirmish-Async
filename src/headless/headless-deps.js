@@ -117,6 +117,7 @@ import {
   checkWinConditions as _realCheckWinConditions,
   checkNefariousGains as _realCheckNefariousGains,
   checkHuntDissent as _realCheckHuntDissent,
+  checkThisIsTheWay as _realCheckThisIsTheWay,
   decrementActivationIfGroupDefeated as _realDecrementActivation,
   postGameOver as _realPostGameOver,
 } from '../engine/win-conditions.js';
@@ -382,6 +383,11 @@ export function buildHeadlessDeps(options = {}) {
       getDcEffects, dcNameFromFigureKey, grantPowerTokens, getRange, logGameAction,
     });
   };
+  const checkThisIsTheWay = async (game, attackerPN, attackerFigKey, clientArg) => {
+    await _realCheckThisIsTheWay(game, attackerPN, attackerFigKey, clientArg || client, {
+      getDcEffects, dcNameFromFigureKey, grantPowerTokens, logGameAction,
+    });
+  };
   const decrementActivationIfGroupDefeated = async (game, playerNum, dcIdx, clientArg) => {
     await _realDecrementActivation(game, playerNum, dcIdx, clientArg || client, {
       isGroupDefeated: _isGroupDefeated,
@@ -405,6 +411,7 @@ export function buildHeadlessDeps(options = {}) {
       checkFriendlyDefeatedPassiveRedraws,
       checkNefariousGains,
       checkHuntDissent,
+      checkThisIsTheWay,
       checkWinConditions,
       findDcMessageIdForFigure: _findDcMessageIdForFigure,
       dcMessageMeta,
@@ -417,6 +424,7 @@ export function buildHeadlessDeps(options = {}) {
     combatDeps.checkNefariousGains = checkNefariousGains;
     combatDeps.checkWinConditions = checkWinConditions;
     combatDeps.checkHuntDissent = checkHuntDissent;
+    combatDeps.checkThisIsTheWay = checkThisIsTheWay;
     combatDeps.checkFriendlyDefeatedPassiveRedraws = checkFriendlyDefeatedPassiveRedraws;
     combatDeps.decrementActivationIfGroupDefeated = decrementActivationIfGroupDefeated;
     // Wire circular deps (combat bridge calls itself recursively for Blast/Cleave)
@@ -452,6 +460,7 @@ export function buildHeadlessDeps(options = {}) {
     combatDeps.checkNefariousGains = checkNefariousGains;
     combatDeps.checkWinConditions = checkWinConditions;
     combatDeps.checkHuntDissent = checkHuntDissent;
+    combatDeps.checkThisIsTheWay = checkThisIsTheWay;
     combatDeps.checkFriendlyDefeatedPassiveRedraws = checkFriendlyDefeatedPassiveRedraws;
     combatDeps.decrementActivationIfGroupDefeated = decrementActivationIfGroupDefeated;
     await _realApplyDirectDamageToFigure(game, playerNum, figKey, msgId, damage, clientArg || client, thread, sourceName, combatDeps);
@@ -463,6 +472,7 @@ export function buildHeadlessDeps(options = {}) {
     combatDeps.checkNefariousGains = checkNefariousGains;
     combatDeps.checkWinConditions = checkWinConditions;
     combatDeps.checkHuntDissent = checkHuntDissent;
+    combatDeps.checkThisIsTheWay = checkThisIsTheWay;
     combatDeps.checkFriendlyDefeatedPassiveRedraws = checkFriendlyDefeatedPassiveRedraws;
     combatDeps.decrementActivationIfGroupDefeated = decrementActivationIfGroupDefeated;
     await _realApplyNpcDamageToFigure(game, playerNum, figureKey, damage, sourceLabel, combatDeps);
@@ -593,7 +603,7 @@ export function buildHeadlessDeps(options = {}) {
     finishCombatResolution, checkPostCombatSurges,
     applyDirectDamageToFigure, applyNpcDamageToFigure,
     decrementActivationIfGroupDefeated,
-    checkNefariousGains, checkHuntDissent,
+    checkNefariousGains, checkHuntDissent, checkThisIsTheWay,
 
     // Setup/creation stubs
     createPlayAreaChannels, createBoardChannel, createHandThreads,

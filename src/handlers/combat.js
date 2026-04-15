@@ -5162,6 +5162,7 @@ export async function handleCleaveTarget(interaction, ctx) {
     client,
     calculateKillVp,
     checkHuntDissent,
+    checkThisIsTheWay,
     decrementActivationIfGroupDefeated,
     checkFriendlyDefeatedPassiveRedraws: ctxCheckFriendlyRedraws,
     checkNefariousGains: ctxCheckNefariousGains,
@@ -5244,6 +5245,7 @@ export async function handleCleaveTarget(interaction, ctx) {
           checkFriendlyDefeatedPassiveRedraws: ctxCheckFriendlyRedraws || checkFriendlyDefeatedPassiveRedraws,
           checkNefariousGains: ctxCheckNefariousGains || checkNefariousGains,
           checkHuntDissent,
+          checkThisIsTheWay,
           checkWinConditions,
         });
       }

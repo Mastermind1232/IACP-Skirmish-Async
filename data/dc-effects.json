@@ -6225,7 +6225,8 @@
         "Beskar Armor"
       ],
       "specialAbilityIds": [
-        "survival_is_strength_armorer"
+        "survival_is_strength_armorer",
+        "this_is_the_way_armorer"
       ],
       "figures": 1,
       "attack": {

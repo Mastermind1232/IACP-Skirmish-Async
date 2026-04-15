@@ -265,6 +265,35 @@ export async function checkHuntDissent(game, attackerPlayerNum, attackerFigureKe
 }
 
 /**
+ * This is the Way (The Armorer): When another friendly figure resolves an attack,
+ * if the defender was defeated, that figure gains 1 Block Token.
+ *
+ * @param {object} game
+ * @param {number} attackerPlayerNum - player who owns the attacker
+ * @param {string|null} attackerFigureKey - figureKey of the figure that did the defeating
+ * @param {object} client - Discord client (for logging)
+ * @param {object} deps
+ */
+export async function checkThisIsTheWay(game, attackerPlayerNum, attackerFigureKey, client, deps) {
+  if (!attackerFigureKey) return;
+  // Find all alive Armorer figures on the attacker's team
+  const armorerFigures = Object.keys(game.figurePositions?.[attackerPlayerNum] || {})
+    .filter(fk => fk.startsWith('The Armorer-'));
+  if (armorerFigures.length === 0) return;
+  // Verify The Armorer has this_is_the_way_armorer ability
+  const armorerEff = deps.getDcEffects()?.['The Armorer'];
+  if (!(armorerEff?.specialAbilityIds || []).includes('this_is_the_way_armorer')) return;
+  // "another friendly figure" — The Armorer herself does NOT trigger this
+  const attackerDcName = deps.dcNameFromFigureKey(attackerFigureKey);
+  if (attackerDcName === 'The Armorer') return;
+  // Grant 1 Block Token to the attacker (not to The Armorer)
+  const granted = deps.grantPowerTokens(game, attackerFigureKey, 'Block', 1);
+  if (granted > 0) {
+    await deps.logGameAction(game, client, `\uD83D\uDEE1\uFE0F **This is the Way** — **${attackerDcName}** gains 1 **Block Token** (defeated hostile figure while The Armorer is in play).`, { phase: 'ROUND', icon: 'card' });
+  }
+}
+
+/**
  * If a deployment group is fully defeated and hasn't activated yet,
  * decrement the owner's remaining activations.
  * @param {object} game

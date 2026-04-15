@@ -17,6 +17,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
  *  6. Check passive CC redraws (Shared Experience, etc.)
  *  7. Check Nefarious Gains (Jabba VP)
  *  8. Check Hunt Dissent (Kallus block token)
+ *  8d. Check This is the Way (Armorer: attacker gains block token)
  *  8b. Check Heroic Effort (draw/return CC on unique defeat)
  *  9. Check win conditions
  *
@@ -73,6 +74,7 @@ export async function processFigureDefeat(game, opts, deps) {
     checkFriendlyDefeatedPassiveRedraws,
     checkNefariousGains,
     checkHuntDissent,
+    checkThisIsTheWay,
     checkWinConditions,
     // Optional: for auto-resolving msgId/dcIdx when not provided
     findDcMessageIdForFigure: findMsgId,
@@ -168,6 +170,11 @@ export async function processFigureDefeat(game, opts, deps) {
   // 8. Hunt Dissent (Kallus: gain Block token when hostile defeated)
   if (attackerFigureKey && checkHuntDissent) {
     await checkHuntDissent(game, attackerPlayerNum, attackerFigureKey, client);
+  }
+
+  // 8d. This is the Way (The Armorer: another friendly defeats hostile → attacker gains Block token)
+  if (attackerFigureKey && checkThisIsTheWay) {
+    await checkThisIsTheWay(game, attackerPlayerNum, attackerFigureKey, client);
   }
 
   // 8b. Heroic Effort: when unique figure defeated, owner draws 1 CC + must return 1 to deck bottom

@@ -4797,6 +4797,13 @@
       "description": "While a friendly figure within 3 spaces is defending, if it spent a Block symbol during this attack, it may reroll 1 attack die.",
       "wiredStatus": "wired"
     },
+    "this_is_the_way_armorer": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "This is the Way",
+      "description": "When another friendly figure resolves an attack, if the defender was defeated, that figure gains 1 Block Token.",
+      "wiredStatus": "wired"
+    },
     "sustained_by_rage": {
       "type": "dcSpecial",
       "category": "passive-auto",

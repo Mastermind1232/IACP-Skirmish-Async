@@ -17,7 +17,7 @@ const COMBAT_DEPS = [
   'SURGE_LABELS', 'parseSurgeEffect', 'getAbility', 'resolveSurgeAbility',
   'getSurgeAbilityLabel', 'getRange', 'hasLineOfSight', 'getDiceData',
   'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons', 'getFiguresAdjacentToCoord',
-  'calculateKillVp', 'checkHuntDissent', 'decrementActivationIfGroupDefeated',
+  'calculateKillVp', 'checkHuntDissent', 'checkThisIsTheWay', 'decrementActivationIfGroupDefeated',
   'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
   'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage',
   'sendBleedingPrompt', 'processFigureDefeat',

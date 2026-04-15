@@ -204,6 +204,7 @@ describe('ORACLE-DEFEAT-003: processFigureDefeat covers all defeat side effects'
     { label: 'passive redraws', pattern: 'checkFriendlyDefeatedPassiveRedraws' },
     { label: 'Nefarious Gains', pattern: 'checkNefariousGains' },
     { label: 'Hunt Dissent', pattern: 'checkHuntDissent' },
+    { label: 'This is the Way', pattern: 'checkThisIsTheWay' },
     { label: 'Heroic Effort', pattern: 'Heroic Effort' },
     { label: 'Scavenged Weaponry', pattern: 'Scavenged Weaponry' },
     { label: 'win conditions', pattern: 'checkWinConditions' },
