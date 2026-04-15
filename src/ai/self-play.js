@@ -20,6 +20,7 @@ import { insertSelfPlayRun, batchIncrementCoverageDiscord, batchSetCoverageVerif
 import { computeTransitionKey } from '../exploration/transition-key.js';
 import { setPhase, PHASES, enableStrictPhaseTransitions } from '../game/phase.js';
 import { TRAINING_WHITELIST_DCS, TRAINING_WHITELIST_CCS } from './training-config.js';
+import { getValidKryknaPlacementSpaces } from '../game/mission-rules.js';
 
 // ── Concurrency guard ─────────────────────────────────────────────────────────
 
@@ -877,15 +878,136 @@ export async function runSelfPlayLoop(game, client, opts) {
         continue;
       }
 
-      // Auto-skip Krykna push queue (Chopper Base A end-of-round interactive phase)
+      // Execute Krykna push + end-of-round damage (Chopper Base A)
       if (g.pendingKryknaPushQueue?.length > 0) {
+        const _kDeps = buildAllDeps();
+        const _kMapId = g.selectedMap?.id;
+        const _kRawMap = _kDeps.getMapData(_kMapId);
+        const _kMapDef = _kDeps.getMapRegistry()?.find?.(m => m.id === _kMapId);
+        const _kMapSpaces = _kDeps.filterMapSpacesByBounds(_kRawMap, _kMapDef?.gridBounds) || _kRawMap;
+        const _kAdj = _kMapSpaces?.adjacency || {};
+        const _kNormalize = _kDeps.normalizeCoord;
+
+        // Push each active Krykna toward nearest figure (BFS, up to 3 spaces)
+        const _kActive = (g.npcKrykna || []).filter(k => !k.defeated);
+        for (const krykna of _kActive) {
+          const startCoord = _kNormalize(krykna.coord);
+          const allFigCoords = new Set();
+          for (const pn of [1, 2]) {
+            for (const coord of Object.values(g.figurePositions?.[pn] || {})) {
+              allFigCoords.add(_kNormalize(coord));
+            }
+          }
+          if (allFigCoords.size === 0) continue;
+
+          // BFS from Krykna to nearest figure
+          const visited = new Map([[startCoord, null]]);
+          const bfsQueue = [startCoord];
+          let bfsTarget = null;
+          while (bfsQueue.length > 0 && !bfsTarget) {
+            const curr = bfsQueue.shift();
+            for (const neighbor of (_kAdj[curr] || [])) {
+              const n = _kNormalize(neighbor);
+              if (visited.has(n)) continue;
+              visited.set(n, curr);
+              if (allFigCoords.has(n)) { bfsTarget = n; break; }
+              bfsQueue.push(n);
+            }
+          }
+          if (!bfsTarget) continue;
+
+          // Reconstruct path (spaces from start to target, excluding start)
+          const path = [];
+          let cur = bfsTarget;
+          while (cur && cur !== startCoord) {
+            path.unshift(cur);
+            cur = visited.get(cur);
+          }
+
+          // Move up to 3 steps, stopping 1 space short of figure (adjacent)
+          const maxSteps = Math.min(3, Math.max(0, path.length - 1));
+          if (maxSteps > 0) {
+            krykna.coord = path[maxSteps - 1];
+          }
+        }
+
+        // End-of-round damage: figures adjacent to Krykna take 2 damage
+        const { damageEvents: _kDmgEvts, claimedPlacementNeeded: _kClaimed } = _kDeps.runNpcKryknaActivation(g, _kMapId, {
+          getMapTokensData: _kDeps.getMapTokensData,
+          getMapData: _kDeps.getMapData,
+          getMapRegistry: _kDeps.getMapRegistry,
+          filterMapSpacesByBounds: _kDeps.filterMapSpacesByBounds,
+        });
+        for (const { figureKey, playerNum: pnDmg, damage } of (_kDmgEvts || [])) {
+          await _kDeps.applyNpcDamageToFigure(g, pnDmg, figureKey, damage, 'Krykna', _kDeps.logGameAction, client, actionDeps.dcHealthState, actionDeps.dcMessageMeta);
+        }
+        if ((_kDmgEvts || []).length > 0) await _kDeps.checkWinConditions(g, client);
+
+        // Build claimed-Krykna placement queue if any kills happened
+        if (_kClaimed) {
+          const _kInitNum = g.initiativePlayerId === g.player1Id ? 1 : 2;
+          const _kOtherNum = _kInitNum === 1 ? 2 : 1;
+          const _kQueue = [];
+          if ((g.claimedKrykna?.[_kInitNum] || 0) > 0) _kQueue.push(_kInitNum);
+          if ((g.claimedKrykna?.[_kOtherNum] || 0) > 0) _kQueue.push(_kOtherNum);
+          if (_kQueue.length > 0) g.pendingClaimedKryknaQueue = _kQueue;
+        }
+
         g.pendingKryknaPushQueue = null;
         g.kryknaPushedIds = null;
         continue;
       }
 
-      // Auto-skip claimed Krykna placement (Chopper Base A post-push interactive phase)
+      // Execute claimed Krykna placement / respawn (Chopper Base A)
       if (g.pendingClaimedKryknaQueue?.length > 0) {
+        const _rDeps = buildAllDeps();
+        const _rMapId = g.selectedMap?.id;
+        const _rAdj = (_rDeps.getMapData(_rMapId))?.adjacency || {};
+        const _rNormalize = _rDeps.normalizeCoord;
+
+        for (const playerNum of g.pendingClaimedKryknaQueue) {
+          const claimed = g.claimedKrykna?.[playerNum] || 0;
+          if (claimed <= 0) continue;
+          const validSpaces = getValidKryknaPlacementSpaces(g, playerNum, _rMapId);
+          if (validSpaces.length === 0) continue;
+
+          // Pick the valid space closest to the nearest enemy figure (BFS)
+          const oppNum = playerNum === 1 ? 2 : 1;
+          const enemyCoords = new Set(
+            Object.values(g.figurePositions?.[oppNum] || {}).map(c => _rNormalize(c))
+          );
+          let bestSpace = validSpaces[0];
+          let bestDist = Infinity;
+          for (const space of validSpaces) {
+            const visited = new Set([space]);
+            const bfsQ = [space];
+            let dist = 0;
+            let found = false;
+            while (bfsQ.length > 0 && !found) {
+              const nextQ = [];
+              dist++;
+              for (const curr of bfsQ) {
+                for (const neighbor of (_rAdj[curr] || [])) {
+                  const n = _rNormalize(neighbor);
+                  if (visited.has(n)) continue;
+                  visited.add(n);
+                  if (enemyCoords.has(n)) { found = true; break; }
+                  nextQ.push(n);
+                }
+                if (found) break;
+              }
+              if (!found) bfsQ.length = 0;
+              for (const x of nextQ) bfsQ.push(x);
+            }
+            if (found && dist < bestDist) { bestDist = dist; bestSpace = space; }
+          }
+
+          // Place new Krykna at chosen space
+          const nextId = `krykna-${(g.npcKrykna || []).length + 1}`;
+          g.npcKrykna = g.npcKrykna || [];
+          g.npcKrykna.push({ id: nextId, coord: _rNormalize(bestSpace), hp: 8, maxHp: 8, defeated: false });
+          g.claimedKrykna[playerNum] = Math.max(0, claimed - 1);
+        }
         g.pendingClaimedKryknaQueue = null;
         continue;
       }
