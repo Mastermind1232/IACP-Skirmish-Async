@@ -21,7 +21,8 @@ export function getPlayReadyMaps(deps) {
 export async function postMissionCardAfterMapSelection(game, client, map, deps) {
   const missions = deps.getMissionCardsData()[map.id];
   if (!missions?.a || !missions?.b) return;
-  const variant = Math.random() < 0.5 ? 'a' : 'b';
+  const variant = (game._forceVariant && missions[game._forceVariant]) ? game._forceVariant : (Math.random() < 0.5 ? 'a' : 'b');
+  delete game._forceVariant;
   const mission = missions[variant];
   const mapName = map.name || map.id;
   const fullName = `${mapName} — ${mission.name}`;

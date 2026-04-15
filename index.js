@@ -2422,8 +2422,15 @@ client.on('messageCreate', async (message) => {
       // Since deck names have spaces, use known map list to find the split point
       const maps = getPlayReadyMaps();
       const mapIds = maps.map(m => m.id);
-      let mapId = null, decksPart = null;
+      let mapId = null, decksPart = null, forceVariant = null;
       for (const mid of mapIds) {
+        // Check for variant suffix: mapId:a or mapId:b
+        if (seedText.endsWith(mid + ':a') || seedText.endsWith(mid + ':b')) {
+          mapId = mid;
+          forceVariant = seedText.slice(-1); // 'a' or 'b'
+          decksPart = seedText.slice(0, -(mid.length + 2)).trim();
+          break;
+        }
         if (seedText.endsWith(mid)) {
           mapId = mid;
           decksPart = seedText.slice(0, -(mid.length)).trim();
@@ -2431,7 +2438,7 @@ client.on('messageCreate', async (message) => {
         }
       }
       if (!mapId || !decksPart) {
-        await reply('Usage: `selfplaymcp seed <p1deck> <p2deck> <mapId>`\nExample: `selfplaymcp seed Imperial Hunters Double Lammy corellian-underground`');
+        await reply('Usage: `selfplaymcp seed <p1deck> <p2deck> <mapId[:variant]>`\nExample: `selfplaymcp seed Imperial Hunters Double Lammy chopper-base-atollon:a`');
         return;
       }
       // Split deck names: try all possible split points and match against known decks
@@ -2457,7 +2464,7 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      await reply(`**Seed game starting (MCP)**: ${p1Deck.name} vs ${p2Deck.name} @ ${mapId}`);
+      await reply(`**Seed game starting (MCP)**: ${p1Deck.name} vs ${p2Deck.name} @ ${mapId}${forceVariant ? ':' + forceVariant : ''}`);
 
       try {
         // Auto-cleanup stale SELF-PLAY games only (never touch human games)
@@ -2491,6 +2498,7 @@ client.on('messageCreate', async (message) => {
         const game = getGame(gameId);
         if (!game) throw new Error('Game creation returned no game state');
         game.selfPlay = true;
+        if (forceVariant) game._forceVariant = forceVariant;
         game.guildId = message.guild.id;
         // Test flag: --test-overflow routes through PvP overflow prompt path
         if (seedTextRaw.includes('--test-overflow')) game.testPvpOverflowPath = true;
