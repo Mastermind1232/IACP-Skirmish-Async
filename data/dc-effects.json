@@ -95,6 +95,7 @@
       ],
       "cost": 1,
       "attachment": true,
+      "companion": "The Child",
       "unique": true,
       "affiliation": "Scum"
     },
@@ -1120,6 +1121,9 @@
         ],
         "type": "range"
       },
+      "specialAbilityIds": [
+        "trample_bantha"
+      ],
       "surgeAbilities": [
         "accuracy 2",
         "pierce 2"
@@ -1907,6 +1911,9 @@
       },
       "defense": [
         "black"
+      ],
+      "specialAbilityIds": [
+        "barrage_ct1701"
       ],
       "surgeAbilities": [
         "damage 1",
@@ -6214,7 +6221,11 @@
       "health": 10,
       "speed": 4,
       "passives": [
-        "Mobile"
+        "Mobile",
+        "Beskar Armor"
+      ],
+      "specialAbilityIds": [
+        "survival_is_strength_armorer"
       ],
       "figures": 1,
       "attack": {
@@ -6248,6 +6259,9 @@
       "speed": 3,
       "defense": [
         "white"
+      ],
+      "specialAbilityIds": [
+        "force_heal"
       ],
       "attachment": false,
       "companion": true,
@@ -6984,6 +6998,12 @@
       "figures": 1,
       "defense": [
         "white"
+      ],
+      "specialAbilityIds": [
+        "calming_presence_yoda",
+        "wisdom_yoda",
+        "do_or_do_not_yoda",
+        "force_deflection_yoda"
       ],
       "attachment": false,
       "elite": true,

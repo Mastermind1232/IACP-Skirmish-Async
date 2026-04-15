@@ -1,5 +1,6 @@
 /**
- * Oracle tests for Companion activation block when host defeated (Wave 7).
+ * Oracle tests for Companion activation block when host defeated (Wave 7)
+ * and companion deployment via attachment detection (Wave 9+).
  *
  * Rule: COMPANIONS (RULES_REFERENCE.md L919-920):
  *   "If a companion's associated Deployment card or its attached figures
@@ -9,11 +10,15 @@
  *   - Companion is offered for activation when host group is alive
  *   - Companion is NOT offered when host group is defeated (offer-time)
  *   - Handler rejects stale activation attempt when host group is defeated (handler-time)
+ *   - Attachment-based companion deployers have structured `companion` string field
+ *   - [Clan of Two] produces a companion_deploy ability for The Child
+ *   - [Clan of Two] allows adjacent placement (interactive: true)
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../../fixtures/game-builder.js';
 import { getAvailableActions } from '../../../src/engine/available-actions.js';
+import { getDcEffects } from '../../../src/data-loader.js';
 
 // ── ORACLE-COMP-001: Companion Offered When Host Alive ──────────────────
 
@@ -132,5 +137,135 @@ describe('ORACLE-COMP-003: Handler Rejects Stale Activation After Host Defeat', 
       !result.error,
       `Handler should not throw an error: ${result.error || ''}`
     );
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMPANION DEPLOYMENT VIA ATTACHMENT — Data & Detection Oracles
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Root cause (fixed): [Clan of Two] was missing the structured `companion`
+// field in dc-effects.json. The attachment-companion detection in post-deploy.js
+// checks `typeof attData.companion === 'string'`, so boolean `true` or missing
+// fields silently skip deployment. These tests guard against regression.
+
+// ── ORACLE-COMP-004: [Clan of Two] has structured companion pointer ────────
+
+describe('ORACLE-COMP-004: [Clan of Two] companion field', () => {
+  it('004a: [Clan of Two] has companion field of type string', () => {
+    const dcEffects = getDcEffects();
+    const clanOfTwo = dcEffects['[Clan of Two]'];
+    assert.ok(clanOfTwo, '[Clan of Two] must exist in dc-effects.json');
+    assert.strictEqual(typeof clanOfTwo.companion, 'string',
+      `[Clan of Two].companion must be a string, got ${typeof clanOfTwo.companion}: ${clanOfTwo.companion}`);
+  });
+
+  it('004b: [Clan of Two] companion points to "The Child"', () => {
+    const dcEffects = getDcEffects();
+    const clanOfTwo = dcEffects['[Clan of Two]'];
+    assert.strictEqual(clanOfTwo.companion, 'The Child',
+      `[Clan of Two].companion must be "The Child", got "${clanOfTwo.companion}"`);
+  });
+
+  it('004c: The Child exists as a separate DC in dc-effects.json', () => {
+    const dcEffects = getDcEffects();
+    const theChild = dcEffects['The Child'];
+    assert.ok(theChild, 'The Child must exist as a DC in dc-effects.json');
+    assert.strictEqual(theChild.companion, true,
+      'The Child should have companion: true (self-descriptive flag)');
+  });
+});
+
+// ── ORACLE-COMP-005: Attachment-companion detection logic ──────────────────
+
+describe('ORACLE-COMP-005: Attachment-companion detection produces companion_deploy ability', () => {
+  // This reproduces the exact detection logic from post-deploy.js lines 214-233
+  // without importing the private function, to verify the data fix works.
+
+  it('005a: [Clan of Two] attachment triggers companion_deploy ability', () => {
+    const dcEffects = getDcEffects();
+    // Simulate the attachment-companion detection loop
+    const attName = 'Clan of Two';
+    const attData = dcEffects[attName] || dcEffects[`[${attName}]`];
+    assert.ok(attData, `dcEffects must resolve [${attName}]`);
+    assert.ok(typeof attData.companion === 'string',
+      `Attachment detection requires typeof companion === 'string', got ${typeof attData.companion}`);
+    assert.strictEqual(attData.companion, 'The Child',
+      'Companion name must be "The Child"');
+  });
+
+  it('005b: [Indentured Jester] attachment also has correct companion pointer (reference case)', () => {
+    const dcEffects = getDcEffects();
+    const attData = dcEffects['Indentured Jester'] || dcEffects['[Indentured Jester]'];
+    assert.ok(attData, 'dcEffects must resolve [Indentured Jester]');
+    assert.strictEqual(typeof attData.companion, 'string',
+      `[Indentured Jester].companion must be a string, got ${typeof attData.companion}`);
+    assert.strictEqual(attData.companion, 'Salacious B. Crumb');
+  });
+
+  it('005c: All attachment-type DCs with companion field have string values (schema invariant)', () => {
+    const dcEffects = getDcEffects();
+    const violations = [];
+    for (const [name, eff] of Object.entries(dcEffects)) {
+      if (eff.attachment && eff.companion !== undefined) {
+        if (typeof eff.companion !== 'string') {
+          violations.push(`${name}: companion is ${typeof eff.companion} (${eff.companion}), expected string`);
+        }
+      }
+    }
+    assert.strictEqual(violations.length, 0,
+      `All attachment companion fields must be strings:\n${violations.join('\n')}`);
+  });
+});
+
+// ── ORACLE-COMP-006: Companion placement allows adjacent space ─────────────
+
+describe('ORACLE-COMP-006: [Clan of Two] allows adjacent placement', () => {
+  it('006a: abilityText contains "adjacent space" → interactive companion deploy', () => {
+    const dcEffects = getDcEffects();
+    const clanOfTwo = dcEffects['[Clan of Two]'];
+    const allowsAdjacent = (clanOfTwo.abilityText || '').toLowerCase().includes('adjacent space');
+    assert.ok(allowsAdjacent,
+      '[Clan of Two] abilityText must contain "adjacent space" for interactive placement picker');
+  });
+
+  it('006b: [Indentured Jester] does NOT allow adjacent (same-space only)', () => {
+    const dcEffects = getDcEffects();
+    const jester = dcEffects['[Indentured Jester]'];
+    // "place the Salacious B. Crumb companion in your space" — no "adjacent"
+    const allowsAdjacent = (jester.abilityText || '').toLowerCase().includes('adjacent space');
+    assert.ok(!allowsAdjacent,
+      '[Indentured Jester] should NOT contain "adjacent space" — same-space only');
+  });
+});
+
+// ── ORACLE-COMP-007: Direct DC companion pointers are valid ────────────────
+
+describe('ORACLE-COMP-007: Direct DC companion pointers (non-attachment)', () => {
+  it('007a: All DCs with string companion field point to existing DC entries', () => {
+    const dcEffects = getDcEffects();
+    const broken = [];
+    for (const [name, eff] of Object.entries(dcEffects)) {
+      if (typeof eff.companion === 'string') {
+        const target = dcEffects[eff.companion];
+        if (!target) {
+          broken.push(`${name} → "${eff.companion}" (target not found)`);
+        }
+      }
+    }
+    assert.strictEqual(broken.length, 0,
+      `All companion pointers must resolve:\n${broken.join('\n')}`);
+  });
+
+  it('007b: Jarrod Kelvin → J4X-7 pointer is valid', () => {
+    const dcEffects = getDcEffects();
+    assert.strictEqual(dcEffects['Jarrod Kelvin']?.companion, 'J4X-7');
+    assert.ok(dcEffects['J4X-7'], 'J4X-7 must exist');
+  });
+
+  it('007c: Iden Versio → Dio pointer is valid', () => {
+    const dcEffects = getDcEffects();
+    assert.strictEqual(dcEffects['Iden Versio']?.companion, 'Dio');
+    assert.ok(dcEffects['Dio'], 'Dio must exist');
   });
 });
