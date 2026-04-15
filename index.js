@@ -186,6 +186,7 @@ import {
   postGameOver as _postGameOverPure,
   checkNefariousGains as _checkNefariousGainsPure,
   checkHuntDissent as _checkHuntDissentPure,
+  checkThisIsTheWay as _checkThisIsTheWayPure,
   decrementActivationIfGroupDefeated as _decrementActivationIfGroupDefeatedPure,
 } from './src/engine/win-conditions.js';
 import {
@@ -1306,6 +1307,13 @@ async function checkHuntDissent(game, attackerPlayerNum, attackerFigureKey, clie
   });
 }
 
+/** This is the Way (The Armorer): on hostile defeat by another friendly, attacker gains Block Token. */
+async function checkThisIsTheWay(game, attackerPlayerNum, attackerFigureKey, client) {
+  return _checkThisIsTheWayPure(game, attackerPlayerNum, attackerFigureKey, client, {
+    getDcEffects, dcNameFromFigureKey, grantPowerTokens, logGameAction,
+  });
+}
+
 /** If a deployment group is fully defeated and hasn't activated yet, decrement remaining activations. */
 async function decrementActivationIfGroupDefeated(game, playerNum, dcIdx, client) {
   return _decrementActivationIfGroupDefeatedPure(game, playerNum, dcIdx, client, {
@@ -1354,7 +1362,7 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
     dcNameFromFigureKey, parseFigureKey, reduceHp, removeFigurePosition,
     opponentPlayerNum, calculateKillVp, awardKillVp, checkNefariousGains,
     getDcMessageIds, getDcList,
-    checkHuntDissent, checkWinConditions, checkFriendlyDefeatedPassiveRedraws,
+    checkHuntDissent, checkThisIsTheWay, checkWinConditions, checkFriendlyDefeatedPassiveRedraws,
     decrementActivationIfGroupDefeated, ccAttachmentsKey, updateAttachmentMessageForDc,
   });
 }
@@ -1377,7 +1385,7 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
     getDcMessageIds, getDcList, removeFigurePosition, opponentPlayerNum,
     calculateKillVp, awardKillVp, checkNefariousGains, checkWinConditions,
     logGameAction, client,
-    checkHuntDissent, checkFriendlyDefeatedPassiveRedraws,
+    checkHuntDissent, checkThisIsTheWay, checkFriendlyDefeatedPassiveRedraws,
     decrementActivationIfGroupDefeated, ccAttachmentsKey, updateAttachmentMessageForDc,
   });
 }
@@ -1433,7 +1441,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     _applyCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS,
     isDcUnique, getActivatedDcIndices,
     isDbConfigured, achievementsChannelId, checkAndGrantAchievements, checkAndPostAchievements, postAchievementNotification,
-    checkNefariousGains, checkWinConditions, checkHuntDissent,
+    checkNefariousGains, checkWinConditions, checkHuntDissent, checkThisIsTheWay,
     checkFriendlyDefeatedPassiveRedraws,
     decrementActivationIfGroupDefeated, updateAttachmentMessageForDc,
     grantMovementBank, grantPowerTokens, getDiceData,
@@ -3094,6 +3102,7 @@ async function processFigureDefeat(game, opts) {
     checkFriendlyDefeatedPassiveRedraws,
     checkNefariousGains,
     checkHuntDissent,
+    checkThisIsTheWay,
     checkWinConditions,
     findDcMessageIdForFigure,
     dcMessageMeta,
@@ -3192,7 +3201,7 @@ function buildAllDeps() {
     getDeploymentZones,
     // Combat special effects deps
     calculateKillVp, decrementActivationIfGroupDefeated,
-    checkHuntDissent, checkFriendlyDefeatedPassiveRedraws, checkNefariousGains,
+    checkHuntDissent, checkThisIsTheWay, checkFriendlyDefeatedPassiveRedraws, checkNefariousGains,
     ccAttachmentsKey,
     getDcUpgradeAttachments, getTokensForDcMessage, getFigureLabel,
     renderDcEmbed, buildDcDisplayState,
