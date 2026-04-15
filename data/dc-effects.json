@@ -5841,7 +5841,8 @@
       "affiliation": "Imperial",
       "specialAbilityIds": [
         "targeting_computer_sentry_elite",
-        "charged_shot_elite"
+        "charged_shot_elite",
+        "multi_fire"
       ]
     },
     "Sentry Droid (Regular)": {

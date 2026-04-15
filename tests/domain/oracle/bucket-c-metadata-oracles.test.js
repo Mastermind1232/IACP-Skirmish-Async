@@ -4,7 +4,7 @@
  *   - Sentry Droid (Regular): multi_fire added to specialAbilityIds
  *
  * Also verifies invariants:
- *   - Sentry Droid (Elite) is NOT modified in this patch
+ *   - Sentry Droid (Elite): multi_fire added to specialAbilityIds
  *   - Tauntaun Rider is NOT modified in this patch
  */
 import { describe, it } from 'node:test';
@@ -136,22 +136,46 @@ describe('ORACLE-BC-004: Sentry Droid (Regular) UI reachability', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ORACLE-BC-005: Invariant — Sentry Droid (Elite) NOT modified
+// ORACLE-BC-005: Sentry Droid (Elite) multi_fire metadata
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('ORACLE-BC-005: Invariant — Sentry Droid (Elite) unchanged', () => {
-  it('005a: Sentry Droid (Elite) does NOT have multi_fire in specialAbilityIds', () => {
+describe('ORACLE-BC-005: Sentry Droid (Elite) multi_fire metadata', () => {
+  it('005a: Sentry Droid (Elite) has multi_fire in specialAbilityIds', () => {
     const eff = dcEffects['Sentry Droid (Elite)'];
     assert.ok(eff, 'Sentry Droid (Elite) must exist');
     const sIds = eff.specialAbilityIds || [];
-    assert.ok(!sIds.includes('multi_fire'),
-      `Sentry Droid (Elite) must NOT include "multi_fire" in this patch (pending rules confirmation). Got: [${sIds}]`);
+    assert.ok(sIds.includes('multi_fire'),
+      `Sentry Droid (Elite).specialAbilityIds must include "multi_fire". Got: [${sIds}]`);
   });
 
-  it('005b: Sentry Droid (Elite) retains only targeting_computer_sentry_elite and charged_shot_elite', () => {
+  it('005b: Sentry Droid (Elite) still has targeting_computer_sentry_elite and charged_shot_elite', () => {
     const sIds = dcEffects['Sentry Droid (Elite)'].specialAbilityIds || [];
-    assert.deepStrictEqual(sIds, ['targeting_computer_sentry_elite', 'charged_shot_elite'],
-      `Sentry Droid (Elite) specialAbilityIds must be exactly the pre-patch set. Got: [${sIds}]`);
+    assert.ok(sIds.includes('targeting_computer_sentry_elite'),
+      'targeting_computer_sentry_elite must not be displaced');
+    assert.ok(sIds.includes('charged_shot_elite'),
+      'charged_shot_elite must not be displaced');
+  });
+
+  it('005c: getDcStats resolves Sentry Droid (Elite) specials to include "Multi-Fire"', () => {
+    const stats = getDcStats('Sentry Droid (Elite)');
+    assert.ok(stats, 'getDcStats must return stats for Sentry Droid (Elite)');
+    assert.ok(stats.specials.includes('Multi-Fire'),
+      `Sentry Droid (Elite) specials should include "Multi-Fire". Got: [${stats.specials}]`);
+  });
+
+  it('005d: Elite and Regular share the same multi_fire ability entry', () => {
+    const regIds = dcEffects['Sentry Droid (Regular)'].specialAbilityIds || [];
+    const eliteIds = dcEffects['Sentry Droid (Elite)'].specialAbilityIds || [];
+    assert.ok(regIds.includes('multi_fire'), 'Regular must have multi_fire');
+    assert.ok(eliteIds.includes('multi_fire'), 'Elite must have multi_fire');
+  });
+
+  it('005e: multi_fire description says "-1 Damage" (not "-1 Hit")', () => {
+    const entry = abilityLib.abilities['multi_fire'];
+    assert.ok(entry.description.includes('-1 Damage'),
+      `multi_fire description must say "-1 Damage". Got: "${entry.description}"`);
+    assert.ok(!entry.description.includes('-1 Hit'),
+      `multi_fire description must NOT say "-1 Hit". Got: "${entry.description}"`);
   });
 });
 

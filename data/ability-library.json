@@ -3205,7 +3205,7 @@
     "multi_fire": {
       "type": "dcSpecial",
       "label": "Multi-Fire",
-      "description": "Perform 2 attacks. Each attack must have a different target. Apply -1 Hit to each attack's results.",
+      "description": "Perform 2 attacks. Each attack must have a different target. Apply -1 Damage to each attack's results.",
       "multiFireDoubleAttack": true,
       "wiredStatus": "wired"
     },
