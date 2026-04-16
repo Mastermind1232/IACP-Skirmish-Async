@@ -370,7 +370,7 @@ test('resolveAbility Primary Target applies Focus and attackBonusHits', () => {
   const dcMessageMeta = new Map([['msg-pt', { gameId: 'g-pt', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [Group 1]' }]]);
   const result = resolveAbility('Primary Target', { game, playerNum: 1, combat, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.ok(result.logMessage?.includes('Damage'));
+  assert.ok(result.logMessage?.includes('Hit'));
   assert.strictEqual(combat.bonusHits, 1);
   assert.strictEqual(game.figureConditions['Boba Fett-1-0']?.includes('Focus'), true);
 });
@@ -770,7 +770,14 @@ test('resolveAbility Trandoshan Terror adds 1 yellow attack die', () => {
 
 test('resolveAbility Concentrated Fire adds 1 red attack die', () => {
   const combat = { attackerPlayerNum: 1, attackerDcName: 'Stormtroopers' };
-  const game = { gameId: 'g-cf', pendingCombat: combat };
+  // Concentrated Fire card text: the CC-player ("you") is a friendly Ranged
+  // TROOPER other than the attacker. The requireRangedAttackType gate only
+  // grants the die bonus if such a figure exists on the board.
+  const game = {
+    gameId: 'g-cf',
+    pendingCombat: combat,
+    figurePositions: { 1: { 'Stormtrooper (Regular)-2-0': 'a1' } },
+  };
   const result = resolveAbility('Concentrated Fire', { game, playerNum: 1, combat });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(combat.attackBonusDice, 1);
@@ -838,14 +845,15 @@ test('resolveAbility Hour of Need recovers round number damage', () => {
   assert.ok(result.logMessage?.includes('3'));
 });
 
-test('resolveAbility Take Cover sets roundDefenseBonusBlock and Evade', () => {
+test('resolveAbility Take Cover sets roundDefenseBonusBlock and accuracy penalty', () => {
   const msgId = 'msg-tc';
   const game = { gameId: 'g-tc', dcActionsData: { [msgId]: {} } };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-tc', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 1]' }]]);
   const result = resolveAbility('Take Cover', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
+  // Card text: "apply +1 Block and -2 Accuracy to the results."
   assert.strictEqual(game.roundDefenseBonusBlock?.[1], 1);
-  assert.strictEqual(game.roundDefenseBonusEvade?.[1], 2);
+  assert.strictEqual(game.roundDefenseAccuracyPenalty?.[1], 2);
 });
 
 test('resolveAbility Emergency Aid recovers to adjacent figure', () => {
@@ -990,7 +998,7 @@ test('resolveAbility Out of Time applies strain = round number via scaleStrainTo
   const dcHealthState = new Map([[hostileMsgId, healthState]]);
   const game = {
     gameId: 'g-oot',
-    round: 4,
+    currentRound: 4,
     selectedMap: { id: 'mos-eisley-outskirts' },
     figurePositions: { 1: { 'Obi-Wan-1-0': 'o8' }, 2: { 'Stormtroopers-2-0': 'p8' } },
     dcActionsData: { [msgId]: {} },
@@ -1261,7 +1269,13 @@ test('resolveAbility Lightbow returns informational logMessage', () => {
 });
 
 test('resolveAbility Celebration grants VP', () => {
-  const game = { gameId: 'g-cel', player1VP: { total: 2, kills: 0, objectives: 0 } };
+  const game = {
+    gameId: 'g-cel',
+    player1VP: { total: 2, kills: 0, objectives: 0 },
+    // Card text: "Use after a unique hostile figure is defeated." Code gates on
+    // activationKills having at least one kill before applying the VP grant.
+    activationKills: { 'defeated-fk': 1 },
+  };
   const result = resolveAbility('Celebration', { game, playerNum: 1 });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.player1VP.total, 6); // 2 + 4
