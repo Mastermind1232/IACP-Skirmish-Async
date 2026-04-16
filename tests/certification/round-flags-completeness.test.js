@@ -74,8 +74,8 @@ const BUCKETS = {
 // reference anywhere in src/. These are genuine dead bookkeeping — either
 // the feature was removed and the flag was forgotten, or the flag was added
 // speculatively and never wired up.
-const BASELINE_DUPLICATES = [];
-const BASELINE_UNUSED = [
+export const BASELINE_DUPLICATES = [];
+export const BASELINE_UNUSED = [
   'deviceRerollGranted',
   'drivenByHatredForceChoke',
 ];
@@ -84,7 +84,7 @@ const BASELINE_UNUSED = [
 // primitive scalars (playerNum ints, booleans) that the regex-based detector
 // can't disambiguate from real type mismatches without a fuller parser.
 // Accept as-is; growth beyond this list fails the build.
-const BASELINE_TYPE_MISMATCH = [
+export const BASELINE_TYPE_MISMATCH = [
   'overdriveUsedThisActivation',
   'diplomaticMissionEvade',
   'sitTightPlayerNum',

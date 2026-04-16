@@ -37,7 +37,7 @@ import { buildHeadlessDeps } from '../../src/headless/headless-deps.js';
 // button builders, channel/message managers, and embed renderers that have
 // no meaning in a headless simulation. Handlers that touch them either guard
 // with optional chaining or are not exercised on the headless code path.
-const ALLOWED_OMISSIONS = {
+export const ALLOWED_OMISSIONS = {
   buildSquadConfirmText:            'Discord text builder for squad-confirmation messages; no Discord messages in headless',
   channelDeleteGuard:               'Discord channel-delete safeguard; headless never deletes real channels',
   getDetermineInitiativeButtons:    'Discord button builder for initiative prompts; headless has no Discord UI',

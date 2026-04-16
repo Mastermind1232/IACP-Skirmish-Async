@@ -174,7 +174,7 @@ function enableAttackFor(game, msgId) {
 
 // ── Scenarios (5) ────────────────────────────────────────────────────────────
 
-const SCENARIOS = [
+export const SCENARIOS = [
   // 1. Baseline sanity — expect exact agreement
   {
     name: 'baseline — ranged attacker vs single target, no special flags',

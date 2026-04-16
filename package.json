@@ -19,7 +19,7 @@
     "normalize-cc-images": "node scripts/normalize-cc-images.js",
     "test-db": "node scripts/test-db-connection.js",
     "test-movement": "node index.js --test-movement",
-    "test": "node --test src/game/*.test.js tests/domain/oracle/*.test.js tests/certification/crr-coverage-consistency.test.js tests/certification/direct-detection-census.test.js tests/certification/ability-text-snapshot.test.js tests/certification/round-flags-completeness.test.js tests/certification/dep-bag-parity.test.js tests/certification/handler-parity-reporting.test.js",
+    "test": "node --test src/game/*.test.js tests/domain/oracle/*.test.js tests/certification/crr-coverage-consistency.test.js tests/certification/direct-detection-census.test.js tests/certification/ability-text-snapshot.test.js tests/certification/round-flags-completeness.test.js tests/certification/dep-bag-parity.test.js tests/certification/handler-parity-reporting.test.js tests/certification/crr-status-consistency.test.js",
     "test:oracle": "node --test 'tests/domain/oracle/*.test.js'",
     "certify": "node tests/certification/certify-catalog.js",
     "test:regression": "node --test tests/certification/regression.test.js",

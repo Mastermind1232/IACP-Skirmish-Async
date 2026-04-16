@@ -32,7 +32,7 @@ const srcDir = resolve(repoRoot, 'src');
 
 // Pattern families. Each is a named regex. The total baseline is the sum
 // across families on the current commit.
-const PATTERNS = {
+export const PATTERNS = {
   // dcName === 'X' / dcName !== 'X' — matches `dc.dcName`, `meta.dcName`, etc.
   dcName_equality: /\bdcName\s*(?:===|!==)\s*['"]/g,
   // dcName.includes('X')
@@ -57,13 +57,13 @@ const PATTERNS = {
 // fallback in src/game/dc-helpers.js (bracket-name resolution). Those are
 // defensive, not hardcoded card-name detection, and can be exempted if
 // consolidation ever brings the count to 0 outside dc-helpers.js.
-const BASELINE = {
+export const BASELINE = {
   dcName_equality: 55,
   dcName_includes: 5,
   dcName_startsWith: 4,
   cardNameIncludes: 82,
 };
-const BASELINE_TOTAL = Object.values(BASELINE).reduce((a, b) => a + b, 0);
+export const BASELINE_TOTAL = Object.values(BASELINE).reduce((a, b) => a + b, 0);
 
 // ── Walk ────────────────────────────────────────────────────────────────────
 function walkJsFiles(dir, out = []) {
