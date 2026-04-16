@@ -1,9 +1,9 @@
 # CRR Coverage Heat Map — Skirbo First-Pass Audit
 
-**Date:** 2026-04-14 (initial), updated after Tier A + Tier B passes
+**Date:** 2026-04-14 (initial), 2026-04-16 (v1.2 — heat-map expanded 35 → 55 entries)
 **Scope:** All engine subsystems against the Consolidated Rules Reference
 **Test inventory:** 1,092 assertions via `npm test` (72 oracle files + engine unit tests)
-**Campaign status:** CLOSED. All 5 original top risks resolved.
+**Campaign status:** CLOSED. All 5 original top risks resolved. v1.2 is measurement-only: parity scenarios broken out per-row and honest uncovered rows added.
 
 ---
 
@@ -30,18 +30,19 @@ This audit partitions the CRR into 10 domains (D1-D10) and assesses each rule cl
 ### D1: Action Economy and Surfacing (6 subdomains)
 **Overall: STRONG.** 10 oracle probes across 3 batches pin all major gates: action budget, movement blockers (stun, massive-lock), attack gate (one-per-activation + 5 bypass flags), interact gates (Non-Sentient, companion, Beast Tamer, Alter Mind), DC special cost, CC special/double cost.
 
-### D2: Movement (4 subdomains)
+### D2: Movement (4 subdomains + 3 LOS uncovered rows as of v1.2)
 **Overall: STRONG.** The most heavily oracle-tested subsystem (~200 probes). Core pathfinding, terrain costs, large figure movement, blocking, doors, and movement triggers all have dedicated oracle files.
 
 **Partial gap:** Difficult + hostile terrain stacking on same cell is untested. Low real-world risk (rare map occurrence).
 
-### D3: Combat (7 subdomains)
-**Overall: MIXED.** Damage formula, accuracy/range, LOS, rerolls, blast/cleave are all well-tested. However, three high-risk areas are **inferred_only**:
-- Surge spending legality (no test validates illegal surges are rejected)
-- Power token application timing (tokens tested in isolation, not in combat flow)
-- Attack type validation (isRanged flag never checked against card data)
+**v1.2 honest uncovered.** Three LOS rows were added as `uncovered` to stop inferring coverage: LOS-06 Energy Shield exception (open P2 from the 2026-04-01 LOS audit), LOS Slice 2 doors (open/closed state), and LOS Slice 2 multi-cell-figure LOS. Slice 1 (figure-blocking LOS) remains closed.
 
-Condition immunity exists as a unit test but has no integration path through combat resolution.
+### D3: Combat (7 subdomains + 13 parity subdomains as of v1.2)
+**Overall: MIXED.** Damage formula, accuracy/range, LOS, rerolls, blast/cleave are all well-tested. The original three high-risk areas are now **resolved** (surge legality, power-token timing, attack-type validation — see §5).
+
+**v1.2 parity breakout.** The handler-vs-engine target-enumeration scoreboard is now one direct_oracle row per scenario (13 total): 2 positive controls (default, Insignificant/Dio), 3 Reach-family rows (permanent Reach and nextAttackReach flag landed in parity 2026-04-16; Fury of Kashyyyk and Electrostaff loadout are known engine-side gaps), 3 LOS-bypass rows (Priority Target, Marksman CC, Clawdite Scout form — all engine-side gaps), and 4 divergences of different shape (I Must Go Alone distance cap, Fire Mission group-LOS, Vanish immunity, Hide no-longer-a-filter). See `tests/certification/handler-parity-reporting.test.js` and `tests/certification/_crr-baselines.js`.
+
+Two combat-adjacent rows were also added as **uncovered**: post-target-select gating (pendingFiringSquad / pendingCoordinatedRaid / pendingFieldTactics) and loadout-card passives beyond Reach.
 
 ### D4: Conditions (2 subdomains)
 **Overall: STRONG.** Individual condition application/removal well-tested. Multi-condition interaction is inferred_only but low risk since conditions use independent flag tracking.
@@ -86,18 +87,38 @@ These areas have high-confidence direct oracle coverage and require no further a
 
 ## 4. Where Coverage Is Partial or Weak
 
+### 4a. Legacy gaps (pre-v1.2)
+
 | Area | Coverage Type | Risk |
 |------|--------------|------|
-| Surge spending legality | inferred_only | **Critical** — illegal surges inflate damage silently |
-| Power token timing in combat | inferred_only | **High** — wrong phase = wrong dice pool |
-| Attack type validation (melee/ranged) | inferred_only | **High** — wrong isRanged corrupts target filtering |
-| Condition immunity in combat flow | unit_test | **Medium** — isolated test, no integration path |
-| Multi-figure group defeat activation | inferred_only | **Medium** — wrong count breaks round structure |
 | Map topology correctness | inferred_only | **Critical foundational** — silent corruption vector |
-| Deployment zone legality | headless_selfplay | **Low** — exercised but never asserted |
 | SoR effect sequencing | inferred_only | **Medium** — rare but critical when it fires |
 | CC playability per card | unit_test | **Medium** — timing tested, not all cards probed |
+| Multi-figure group defeat activation | inferred_only | **Medium** — wrong count breaks round structure |
+| Deployment zone legality | headless_selfplay | **Low** — exercised but never asserted |
 | Difficult+hostile terrain combo | inferred_only | **Low** — rare map occurrence |
+
+Note: Surge spending legality, power-token timing, attack-type validation, and condition immunity — all previously in this table — were closed during Tier A + rules-audit campaign (see §5).
+
+### 4b. Surfaced by v1.2 expansion
+
+| Area | Coverage Type | Risk |
+|------|--------------|------|
+| Handler-engine parity: Priority Target LOS bypass | direct_oracle (baselined handler_only) | **Medium** — engine offers fewer legal targets |
+| Handler-engine parity: Marksman CC LOS bypass | direct_oracle (baselined handler_only) | **Medium** — same shape |
+| Handler-engine parity: Clawdite Scout form | direct_oracle (baselined handler_only) | **Low** — rare line |
+| Handler-engine parity: Fury of Kashyyyk Reach | direct_oracle (baselined handler_only) | **Medium** — engine undercounts WOOKIEE melee range |
+| Handler-engine parity: Electrostaff loadout Reach | direct_oracle (baselined handler_only) | **Medium** — engine never reads loadout cards |
+| Handler-engine parity: I Must Go Alone | direct_oracle (baselined engine_only) | **Medium** — engine offers illegal distant targets |
+| Handler-engine parity: Fire Mission group-LOS | direct_oracle (baselined handler_only) | **Low** — Mortar rare in self-play |
+| Handler-engine parity: Vanish immunity | direct_oracle (baselined engine_only) | **Medium** — engine offers immune targets |
+| LOS-06 Energy Shield exception | uncovered | **Low** — rare in current maps |
+| LOS Slice 2 — Doors | uncovered | **Medium** — deferred from 2026-04-02 slice work |
+| LOS Slice 2 — Multi-cell figures | uncovered | **Medium** — deferred alongside doors |
+| Post-target-select combat gating | uncovered | **Medium** — pending-free-attack flags untested directly |
+| Loadout-card passives beyond Reach | uncovered | **Low** — Reach is the only wired passive today |
+| Mission-specific scoring variants | inferred_only | **Medium** — selfplay exercises but nothing asserts per-mission VP math |
+| Free-attack window mutex | inferred_only | **Medium** — individual flags tested, mutex isn't |
 
 ---
 
@@ -152,20 +173,24 @@ These areas have high-confidence direct oracle coverage and require no further a
 
 ## 7. Structured Coverage Artifact
 
-The machine-readable coverage map is at: `docs/crr-coverage-heat-map.json`
+The machine-readable coverage map is at: `docs/crr-coverage-heat-map.json` (v1.2, 2026-04-16).
 
-It contains 35 coverage entries across 10 domains with fields: domain, subdomain, crr_rule_or_claim, engine_location, current_coverage_type, evidence, training_blast_radius, confidence, recommended_next_audit_type, notes. Plus the top 5 risks with recommended actions.
+It contains **55** coverage entries across 10 domains with fields: domain, subdomain, crr_rule_or_claim, engine_location, current_coverage_type, evidence, training_blast_radius, confidence, recommended_next_audit_type, notes. Plus the top 5 risks with recommended actions.
 
-### Coverage Distribution Summary (post Tier A + Tier B)
+### Coverage Distribution Summary (v1.2, post-expansion)
 
 | Coverage Type | Count | % |
 |--------------|-------|---|
-| direct_oracle | 24 | 69% |
-| certification | 2 | 6% |
-| runtime_invariant | 1 | 3% |
-| unit_test | 2 | 6% |
-| headless_selfplay | 1 | 3% |
-| inferred_only | 5 | 14% |
-| uncovered | 0 | 0% |
+| direct_oracle | 39 | 70.9% |
+| inferred_only | 6 | 10.9% |
+| uncovered | 5 | 9.1% |
+| certification | 2 | 3.6% |
+| unit_test | 1 | 1.8% |
+| runtime_invariant | 1 | 1.8% |
+| headless_selfplay | 1 | 1.8% |
 
-**69% of audited rules have direct oracle coverage. All 5 original top risks resolved. Remaining 14% inferred_only are low/medium risk — not the best next investment.**
+**Change vs v1.1 (35 entries):** +13 direct_oracle (handler-engine parity scenarios broken out per-row), +2 inferred_only (mission-specific scoring, free-attack window mutex), +5 uncovered (LOS-06, LOS Slice 2 doors, LOS Slice 2 multi-cell, post-target-select gating, loadout passives). No entries removed, no reclassifications.
+
+**71% of audited rules have direct oracle coverage.** All 5 original top risks remain resolved; v1.2 is a measurement-only expansion that makes the known weak areas visible on the map instead of hidden behind inferred coverage.
+
+**Still weak after v1.2:** Map topology (inferred_only, critical foundational), LOS Slice 2 doors + multi-cell (uncovered, medium), parity gaps for loadout/attachment-driven Reach and LOS bypass (known-and-baselined engine-side drift), and mission-specific VP math (inferred_only). The rollup at `docs/crr-status.json` makes the distribution a one-file PR review target.
