@@ -1186,6 +1186,9 @@ async function refreshAllGameComponents(game, client) {
     // Prompt reconciler deps: render helpers for walker/post-deploy prompts
     // need logGameAction to post; saveGames persists newly-recorded msgIds.
     logGameAction, saveGames,
+    // CC-draw safety net: re-posts shuffle/draw prompts if post-deploy finished
+    // but they never got sent (e.g. restart dropped the in-memory callback).
+    getCcShuffleDrawButton, getInitiativePlayerZoneLabel,
   });
 }
 
@@ -1223,36 +1226,10 @@ async function finishSetupAttachments(game, client) {
 
 /** Send CC shuffle/draw prompts to both players' hand channels. */
 async function _sendCcShuffleDrawPrompts(game, client) {
-  const generalChannel = await client.channels.fetch(game.generalId);
-  const initPlayerNum = getInitiativePlayerNum(game);
-  const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
-  await generalChannel.send(sanitizeMentions({
-    content: deployContent,
-    allowedMentions: { users: [game.initiativePlayerId] },
-  }));
-  const p1CcList = game.player1Squad?.ccList || [];
-  const p2CcList = game.player2Squad?.ccList || [];
-  const p1Placed = (game.p1CcAttachments && Object.values(game.p1CcAttachments).flat()) || [];
-  const p2Placed = (game.p2CcAttachments && Object.values(game.p2CcAttachments).flat()) || [];
-  const p1DeckCount = p1CcList.length - p1Placed.length;
-  const p2DeckCount = p2CcList.length - p2Placed.length;
-  const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
-  try {
-    const p1HandChannel = await client.channels.fetch(game.p1HandId);
-    const p2HandChannel = await client.channels.fetch(game.p2HandId);
-    const p1DeckList = p1CcList.filter((c) => !p1Placed.includes(c));
-    const p2DeckList = p2CcList.filter((c) => !p2Placed.includes(c));
-    await p1HandChannel.send({
-      content: `**Your Command Card deck** (${p1DeckCount} cards):\n${ccDeckText(p1DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
-      components: [getCcShuffleDrawButton(game.gameId)],
-    });
-    await p2HandChannel.send({
-      content: `**Your Command Card deck** (${p2DeckCount} cards):\n${ccDeckText(p2DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
-      components: [getCcShuffleDrawButton(game.gameId)],
-    });
-  } catch (err) {
-    console.error('Failed to send CC deck prompt after setup attachments:', err);
-  }
+  const { sendCcShuffleDrawPrompts } = await import('./src/engine/cc-draw-prompts.js');
+  return sendCcShuffleDrawPrompts(game, client, {
+    getCcShuffleDrawButton, getInitiativePlayerZoneLabel, saveGames,
+  });
 }
 
 /**

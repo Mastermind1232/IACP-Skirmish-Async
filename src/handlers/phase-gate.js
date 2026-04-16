@@ -8,7 +8,7 @@ import {
   clearPhaseGate, PHASE_GATE_LABELS, playerNumFromId,
 } from '../game/phase-gate.js';
 import {
-  getPlayerId, getHandChannelId, getInitiativePlayerNum,
+  getPlayerId, getHandChannelId,
 } from '../game/player-helpers.js';
 import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
@@ -16,6 +16,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { getDcEffects } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
+import { sendCcShuffleDrawPrompts } from '../engine/cc-draw-prompts.js';
 
 // ── Message builders ────────────────────────────────────────────────────────
 
@@ -375,47 +376,15 @@ async function advanceFromDeployment(game, ctx) {
   } = ctx;
   const gameId = game.gameId;
 
-  const p1CcList = game.player1Squad?.ccList || [];
-  const p2CcList = game.player2Squad?.ccList || [];
-
   game.currentRound = 1;
   setPhase(game, PHASES.CC_DRAW);
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   if (clearPreGameSetup) await clearPreGameSetup(game, client);
 
   const _sendCcPrompts = async () => {
-    const generalChannel = await fetchGameChannel(client, game.generalId);
-    const initPlayerNum = getInitiativePlayerNum(game);
-    const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
-    await generalChannel.send({
-      content: deployContent,
-      allowedMentions: { users: [game.initiativePlayerId] },
+    await sendCcShuffleDrawPrompts(game, client, {
+      getCcShuffleDrawButton, getInitiativePlayerZoneLabel, saveGames,
     });
-    // Filter out attached CCs from deck lists
-    const p1Placed = (game.p1CcAttachments && Object.values(game.p1CcAttachments).flat()) || [];
-    const p2Placed = (game.p2CcAttachments && Object.values(game.p2CcAttachments).flat()) || [];
-    const p1DeckList = p1CcList.filter((c) => !p1Placed.includes(c));
-    const p2DeckList = p2CcList.filter((c) => !p2Placed.includes(c));
-    try {
-      const p1HandChannel = await fetchGameChannel(client, game.p1HandId);
-      const p2HandChannel = await fetchGameChannel(client, game.p2HandId);
-      const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
-      const p1Id = getPlayerId(game, 1);
-      const p2Id = getPlayerId(game, 2);
-      await p1HandChannel.send({
-        content: `${p1Id ? `<@${p1Id}> ` : ''}**Your Command Card deck** (${p1DeckList.length} cards):\n${ccDeckText(p1DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
-        components: [getCcShuffleDrawButton(gameId)],
-        ...(p1Id && { allowedMentions: { users: [p1Id] } }),
-      });
-      await p2HandChannel.send({
-        content: `${p2Id ? `<@${p2Id}> ` : ''}**Your Command Card deck** (${p2DeckList.length} cards):\n${ccDeckText(p2DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
-        components: [getCcShuffleDrawButton(gameId)],
-        ...(p2Id && { allowedMentions: { users: [p2Id] } }),
-      });
-    } catch (err) {
-      console.error('Failed to send CC deck prompt:', err);
-    }
-    if (saveGames) saveGames();
   };
 
   let postDeployActive = false;

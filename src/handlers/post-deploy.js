@@ -26,6 +26,13 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 // cleaned up in finishPostDeploy.
 const _companionEmbedDeps = new Map();
 
+// Module-level storage for the post-deploy completion callback (keyed by gameId).
+// Stored here instead of on `game` because callbacks are functions — JSON.stringify
+// would silently strip them on save, stranding the game post-restart. If this map
+// is empty on finishPostDeploy (e.g. process restart), the refresh safety net in
+// refreshAllGameComponents re-posts CC draw prompts from pure state.
+const _postDeployCallbacks = new Map();
+
 /**
  * Stash pending button customIds on the postDeployQueue so getAvailableActions
  * can surface them for the AI / selfplay without duplicating button-generation logic.
@@ -1151,10 +1158,31 @@ async function finishPostDeploy(game, gameId, client, logGameAction) {
   delete game.postDeployQueue;
   game.postDeployEffectsFired = true;
   _companionEmbedDeps.delete(gameId);
-  if (game._postDeployCallback) {
-    const cb = game._postDeployCallback;
-    delete game._postDeployCallback;
+  const cb = _postDeployCallbacks.get(gameId);
+  _postDeployCallbacks.delete(gameId);
+  // Legacy migration: drop stale serialized callback artifact so DB doesn't keep it.
+  if (game._postDeployCallback) delete game._postDeployCallback;
+  if (cb) {
     await cb();
+    return;
+  }
+  // Callback missing (process restarted between runPostDeployPhase and
+  // finishPostDeploy). For the cc_draw transition, post shuffle/draw prompts
+  // directly from pure state so the game can still advance without a manual
+  // Refresh. Refresh path has its own safety net for the belt-and-suspenders case.
+  if (game.phase === 'cc_draw' && !game.ccShuffleDrawPromptsPosted) {
+    try {
+      const [{ sendCcShuffleDrawPrompts }, { getCcShuffleDrawButton }, { getInitiativePlayerZoneLabel }] = await Promise.all([
+        import('../engine/cc-draw-prompts.js'),
+        import('../discord/components.js'),
+        import('../discord/embeds.js'),
+      ]);
+      await sendCcShuffleDrawPrompts(game, client, {
+        getCcShuffleDrawButton, getInitiativePlayerZoneLabel,
+      });
+    } catch (err) {
+      console.error('finishPostDeploy: CC prompt auto-recovery failed', err);
+    }
   }
 }
 
@@ -1164,6 +1192,7 @@ async function finishPostDeploy(game, gameId, client, logGameAction) {
  */
 export function cleanupCompanionEmbedDeps(gameId) {
   _companionEmbedDeps.delete(gameId);
+  _postDeployCallbacks.delete(gameId);
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
@@ -1232,8 +1261,10 @@ export async function runPostDeployPhase(game, gameId, client, ctx, onComplete) 
     activeAbility: null,
   };
 
-  // Store callback for when everything completes
-  if (onComplete) game._postDeployCallback = onComplete;
+  // Store callback in module-level map (NOT on game — functions don't survive JSON.stringify).
+  // If this process restarts before finishPostDeploy, the callback is lost; the CC-draw
+  // safety net in refreshAllGameComponents will re-post prompts from state.
+  if (onComplete) _postDeployCallbacks.set(gameId, onComplete);
 
   await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   if (saveGames) saveGames();

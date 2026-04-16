@@ -417,4 +417,27 @@ export async function refreshAllGameComponents(game, client, deps) {
   } catch (err) {
     console.error('Refresh All: prompt reconcile failed', err);
   }
+
+  // CC-draw safety net: if post-deploy finished but CC shuffle/draw prompts were
+  // never posted (e.g. bot restart dropped the in-memory completion callback),
+  // post them now from pure game state. Idempotent via ccShuffleDrawPromptsPosted.
+  try {
+    if (
+      game.phase === 'cc_draw'
+      && game.postDeployEffectsFired
+      && !game.ccShuffleDrawPromptsPosted
+      && !(game.player1CcDrawn && game.player2CcDrawn)
+      && deps.getCcShuffleDrawButton
+      && deps.getInitiativePlayerZoneLabel
+    ) {
+      const { sendCcShuffleDrawPrompts } = await import('./cc-draw-prompts.js');
+      await sendCcShuffleDrawPrompts(game, client, {
+        getCcShuffleDrawButton: deps.getCcShuffleDrawButton,
+        getInitiativePlayerZoneLabel: deps.getInitiativePlayerZoneLabel,
+        saveGames: deps.saveGames,
+      });
+    }
+  } catch (err) {
+    console.error('Refresh All: CC-draw safety net failed', err);
+  }
 }

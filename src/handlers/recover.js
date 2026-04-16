@@ -584,6 +584,7 @@ async function recoverCcDrawPhase(game, gameId, ctx) {
   const { getCcShuffleDrawButton } = await import('../discord/components.js');
   const results = [];
 
+  let posted = false;
   for (const pn of [1, 2]) {
     const drawnKey = pn === 1 ? 'player1CcDrawn' : 'player2CcDrawn';
     if (game[drawnKey]) continue;
@@ -597,7 +598,10 @@ async function recoverCcDrawPhase(game, gameId, ctx) {
       components: [getCcShuffleDrawButton(gameId)],
     });
     results.push(`Re-sent shuffle/draw button for P${pn}`);
+    posted = true;
   }
+  // Suppress the refresh-path safety net so a later auto-refresh doesn't double-post.
+  if (posted) game.ccShuffleDrawPromptsPosted = true;
   return results;
 }
 
