@@ -75,9 +75,10 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps) {
 
   for (const [fk, coord] of Object.entries(enemies)) {
     if (!coord) continue;
-    // Hide filter — handler side only; engine does not filter Hide
-    const conds = game.figureConditions?.[fk] || [];
-    if (conds.includes('Hide')) continue;
+    // Hide is not a target-filter per CRR — handler previously filtered it
+    // (removed 2026-04-16). Shadow now mirrors the post-fix handler, which
+    // includes Hidden targets and relies on combat.js:221–224 to apply
+    // the -2 accuracy penalty.
     // Distance filter (includes Reach expansion)
     const dist = countSpaces(ms, attackerPos, coord);
     if (dist < minRange || dist > effMax) continue;
@@ -202,8 +203,8 @@ const SCENARIOS = [
       };
     },
     expectedHandlerOnly: [],
-    expectedEngineOnly: ['Greedo-1-0'],
-    reason: 'CRR-verified: Hide is a -2 accuracy condition, not a targeting block. Handler filters (incorrectly per CRR); engine includes (correctly per CRR).',
+    expectedEngineOnly: [],
+    reason: 'Handler no longer filters Hidden targets (fixed 2026-04-16; dc-play-area.js target enumeration loop). Both sides now correctly include the Hidden target; combat resolution applies the -2 accuracy penalty per CRR (combat.js:221–224 + PROBE-TOKEN-001..003).',
   },
 
   // 4. nextAttackReach flag — same outcome shape as #2 but triggered by a flag

@@ -984,8 +984,9 @@ async function buildAndSendAttackTargets(
   const totals = {};
   for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
   for (const [k, coord] of Object.entries(poses)) {
-    const targetCondsList = game.figureConditions?.[k] || [];
-    if (targetCondsList.includes('Hide')) continue;
+    // Hide is a -2 accuracy condition per CRR (RULES_REFERENCE.md:1586), not a
+    // targeting block. Hidden targets remain selectable; the -2 penalty is
+    // applied at combat resolution (src/game/combat.js:221–224).
     // Insignificant (Dio): can't be targeted if in same space as a friendly figure
     {
       const _insigDcName = dcNameFromFigureKey(k);
