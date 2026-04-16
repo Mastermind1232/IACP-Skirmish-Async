@@ -27,27 +27,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getAllRequiredDepKeys, CONTEXT_GROUPS } from '../../src/context-factory.js';
 import { buildHeadlessDeps } from '../../src/headless/headless-deps.js';
+import { DEP_BAG_ALLOWED_OMISSIONS as ALLOWED_OMISSIONS } from './_crr-baselines.js';
 
-// ── Allowlist (explicit, not a vague baseline) ───────────────────────────────
-// Each entry names a handler-group dep that `buildHeadlessDeps` is known to
-// *intentionally* not provide. Reason is required. Remove entries when the
-// provider starts supplying the key; the test will tighten automatically.
-//
-// Captured 2026-04-16. All 9 current omissions are Discord-UI-surface deps:
-// button builders, channel/message managers, and embed renderers that have
-// no meaning in a headless simulation. Handlers that touch them either guard
-// with optional chaining or are not exercised on the headless code path.
-export const ALLOWED_OMISSIONS = {
-  buildSquadConfirmText:            'Discord text builder for squad-confirmation messages; no Discord messages in headless',
-  channelDeleteGuard:               'Discord channel-delete safeguard; headless never deletes real channels',
-  getDetermineInitiativeButtons:    'Discord button builder for initiative prompts; headless has no Discord UI',
-  populatePlayAreas:                'Creates Discord play-area channel messages; headless uses no Discord channels',
-  postFluctuationSwapButtons:       'Discord button post for mission fluctuation-swap UI; no Discord UI in headless',
-  postGameOver:                     'Discord game-over message poster; headless uses an inline wrapper inside checkWinConditions (see headless-deps.js line ~363)',
-  postKryknaPlaceButtons:           'Discord button post for Krykna NPC placement prompts; headless resolves Krykna via auto-queue (self-play.js)',
-  renderDcEmbed:                    'Discord embed renderer for DC cards; Discord-side callers guard with optional chaining',
-  reorderPlayAreaAfterAttachments:  'Reorders Discord channels after setup-attachments phase; headless has no channels to reorder',
-};
+// ALLOWED_OMISSIONS lives in `_crr-baselines.js` so the status-rollup test
+// can read it without re-registering this file's tests. Each entry there has
+// a one-line reason explaining why `buildHeadlessDeps` intentionally does
+// not provide the key. Remove entries when the provider starts supplying the
+// key; the "allowlist is clean" test below will tighten automatically.
 
 // ── Build the bag with minimal test args ─────────────────────────────────────
 const allDeps = buildHeadlessDeps({});

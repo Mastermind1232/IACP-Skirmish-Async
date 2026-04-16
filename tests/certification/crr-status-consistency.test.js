@@ -37,16 +37,14 @@ import {
 import { getAllRequiredDepKeys } from '../../src/context-factory.js';
 
 import {
-  BASELINE as DD_BASELINE,
-  BASELINE_TOTAL as DD_BASELINE_TOTAL,
-} from './direct-detection-census.test.js';
-import {
-  BASELINE_DUPLICATES,
-  BASELINE_UNUSED,
-  BASELINE_TYPE_MISMATCH,
-} from './round-flags-completeness.test.js';
-import { ALLOWED_OMISSIONS as DEP_BAG_ALLOWLIST } from './dep-bag-parity.test.js';
-import { SCENARIOS as PARITY_SCENARIOS } from './handler-parity-reporting.test.js';
+  DD_BASELINE,
+  DD_BASELINE_TOTAL,
+  RF_BASELINE_DUPLICATES as BASELINE_DUPLICATES,
+  RF_BASELINE_UNUSED as BASELINE_UNUSED,
+  RF_BASELINE_TYPE_MISMATCH as BASELINE_TYPE_MISMATCH,
+  DEP_BAG_ALLOWED_OMISSIONS as DEP_BAG_ALLOWLIST,
+  PARITY_SCENARIOS,
+} from './_crr-baselines.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..', '..');

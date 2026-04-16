@@ -25,14 +25,20 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import {
+  DD_BASELINE as BASELINE,
+  DD_BASELINE_TOTAL as BASELINE_TOTAL,
+} from './_crr-baselines.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..', '..');
 const srcDir = resolve(repoRoot, 'src');
 
 // Pattern families. Each is a named regex. The total baseline is the sum
-// across families on the current commit.
-export const PATTERNS = {
+// across families on the current commit. BASELINE (per-family caps) lives in
+// `_crr-baselines.js` so the status-rollup test can read it without
+// re-registering this file's tests.
+const PATTERNS = {
   // dcName === 'X' / dcName !== 'X' — matches `dc.dcName`, `meta.dcName`, etc.
   dcName_equality: /\bdcName\s*(?:===|!==)\s*['"]/g,
   // dcName.includes('X')
@@ -42,28 +48,6 @@ export const PATTERNS = {
   // cardNameIncludes(x, 'Y')
   cardNameIncludes: /\bcardNameIncludes\s*\(/g,
 };
-
-// ── Baseline ────────────────────────────────────────────────────────────────
-// Captured empirically on 2026-04-16 after the range-fix + coord-label
-// commits. Represents the full current debt — every entry here is a known
-// direct-detection site that future consolidation work should chip away at.
-//
-// Top concentrations (informational, from the on-run census):
-//   src/handlers/combat.js ..................... 40 sites
-//   src/engine/activation-setup.js ............. 23 sites
-//   src/engine/combat-bridge.js ................ 15 sites
-//
-// `dcName_startsWith` counts include the legitimate attachment-stripping
-// fallback in src/game/dc-helpers.js (bracket-name resolution). Those are
-// defensive, not hardcoded card-name detection, and can be exempted if
-// consolidation ever brings the count to 0 outside dc-helpers.js.
-export const BASELINE = {
-  dcName_equality: 55,
-  dcName_includes: 5,
-  dcName_startsWith: 4,
-  cardNameIncludes: 82,
-};
-export const BASELINE_TOTAL = Object.values(BASELINE).reduce((a, b) => a + b, 0);
 
 // ── Walk ────────────────────────────────────────────────────────────────────
 function walkJsFiles(dir, out = []) {

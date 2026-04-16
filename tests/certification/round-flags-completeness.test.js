@@ -49,6 +49,11 @@ import {
   ROUND_FALSE_FLAGS,
   ROUND_DELETE_FLAGS,
 } from '../../src/game/activation-state.js';
+import {
+  RF_BASELINE_DUPLICATES as BASELINE_DUPLICATES,
+  RF_BASELINE_UNUSED as BASELINE_UNUSED,
+  RF_BASELINE_TYPE_MISMATCH as BASELINE_TYPE_MISMATCH,
+} from './_crr-baselines.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..', '..');
@@ -63,50 +68,9 @@ const BUCKETS = {
   delete: ROUND_DELETE_FLAGS,
 };
 
-// ── Baselines (captured 2026-04-16 on commit after d610d62) ─────────────────
-// These are the pre-existing violations on the day this layer was added.
-// New violations beyond these lists fail the build. Remove entries from the
-// appropriate baseline when fixed.
-//
-// Inv 1 (duplicates): clean — no entries needed.
-//
-// Inv 2 (unused registrations): 2 flags are registered but have no `game.X`
-// reference anywhere in src/. These are genuine dead bookkeeping — either
-// the feature was removed and the flag was forgotten, or the flag was added
-// speculatively and never wired up.
-export const BASELINE_DUPLICATES = [];
-export const BASELINE_UNUSED = [
-  'deviceRerollGranted',
-  'drivenByHatredForceChoke',
-];
-// Inv 3 (type mismatches): 21 flags where the registered bucket's expected
-// write shape was not found in src/. Most are null-slot flags holding
-// primitive scalars (playerNum ints, booleans) that the regex-based detector
-// can't disambiguate from real type mismatches without a fuller parser.
-// Accept as-is; growth beyond this list fails the build.
-export const BASELINE_TYPE_MISMATCH = [
-  'overdriveUsedThisActivation',
-  'diplomaticMissionEvade',
-  'sitTightPlayerNum',
-  'roundInTheShadowsPlayerNum',
-  'roundUtinniJawaBuffs',
-  'roundSmugglersTricksPlayerNum',
-  'squadSwarmPlayerNum',
-  'squadSwarmCumulativeCost',
-  'pendingFiringSquad',
-  'holdGroundPlayerNum',
-  'toughLuckPlayerNum',
-  'thereIsNoTryPlayerNum',
-  'mandaAsteelPlayerNum',
-  'stillFasterPlayerNum',
-  'terminalControlPlayerNum',
-  'shadowOpsBlockedPlayer',
-  'criticalHitBlockedPlayer',
-  'powerfulInfluencePlayerNum',
-  'restInPeaceActive',
-  'extraProtectionTriggeredThisCombat',
-  'pendingMissionSorReveal',
-];
+// BASELINE_DUPLICATES / BASELINE_UNUSED / BASELINE_TYPE_MISMATCH live in
+// `_crr-baselines.js` so the status-rollup test can read them without
+// re-registering this file's tests. Reason lives with the constants there.
 
 // ── File walker ──────────────────────────────────────────────────────────────
 function walkJsFiles(dir, out = []) {
