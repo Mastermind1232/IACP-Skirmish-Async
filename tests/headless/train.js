@@ -13,6 +13,7 @@
  *   node tests/headless/train.js 500 --mixed --pool-ratio=0.4 --balanced  # Tier-matched pool
  */
 import { createTestGame } from '../fixtures/game-builder.js';
+import { setKryknaPlacementMode, getKryknaPlacementMode } from '../../src/ai/self-play.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { getDcStats, getMapData, getDcEffects, getCcEffect } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
@@ -28,11 +29,15 @@ import {
   loadLearnings, saveLearnings, createGameTracer,
   pickSmartAction, abstractActionType, getLearningsStats,
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
-  recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, getEffectiveAlpha, getQValues,
+  recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, setWgFrozen, setAttackTrace, getEffectiveAlpha, getQValues,
   extractFeatures, setEncoderType, getEncoderType, setWgWeightClamp, setMoveDecisionBonus,
   setMoveQualitySignalFlag, setBoundaryFix,
   getWgAuditCounters, resetWgAuditCounters,
   getAtkAuditCounters, resetAtkAuditCounters, getAtkAuditTotals, resetAtkAuditTotals,
+  getCandAudit, resetCandAudit,
+  getPremEndAudit, recordPremEnd, resetPremEndAudit,
+  getPremEndFrames, recordPremEndFrame, resetPremEndFrames,
+  getObjectiveCoords,
   getActOrderAudit, resetActOrderAudit,
   getActShadow, resetActShadow,
   getActOutcome, resetActOutcome,
@@ -42,6 +47,12 @@ import {
   OFFENSIVE_CC_TIMINGS,
   COMBAT_CC_TIMINGS,
   ABSTRACT_TYPES,
+  extractPassFeatures,
+  passTimingShadowEval,
+  getPassShadow,
+  resetPassShadow,
+  PASS_FEATURE_NAMES,
+  getAbilityGateAudit, resetAbilityGateAudit,
 } from './learnings.js';
 import { buildGraph, graphForwardPass, setAttentionPool, setRichEdges, setMoveQualitySignal } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
@@ -65,6 +76,12 @@ let useTrainingMatchups = false;
 let auditMode = false;
 let mapOverride = null; // --map=<id> locks all games to a single map
 let useMixedCurriculum = false; // --mixed: majority fixed, minority pool
+let passAbMode = false; // --passab: shadow scorer takes control on pass-legal surface (treatment arm)
+let _passAbTreatment = false; // per-game: true = treatment (shadow controls), false = control (DQN controls)
+let moveAuditMode = false; // --move-audit: detailed move destination quality diagnostic
+let premendProbe = false;  // --premend-probe: rich per-frame capture at premature dc_end_activation
+let abilityAudit = false;  // --ability-audit: capture every dc_special play with context for post-fix ability-selection audit
+const _abilityPlays = [];
 let poolRatio = 0.2; // fraction of games that are random-pool matchups
 let useBalancedPool = false; // --balanced: tier-matched pool pairing instead of random
 
@@ -441,6 +458,7 @@ async function runOneGame(learnings, gameNum) {
   let passActivatedTotal = 0;       // total times DC was activated instead of passing
   // Track activation outcome when a DC was activated instead of pass
   let _pendingPassAuditIdx = -1;    // index into passAuditTrace for pending activation outcome
+  let _pendingAbilityIdx = -1;      // index into _abilityPlays awaiting post-state capture
 
   // ── Audit counters (coverage + surge accuracy) ──────────────────────────────
   const auditDcAppearances = {};    // dcName → count (games appeared)
@@ -452,6 +470,8 @@ async function runOneGame(learnings, gameNum) {
   const auditSurgeEvents = [];      // detailed surge decision log
   const auditCcDecisions = [];      // CC choice audit: mixed-choice + offensive tracking
   const auditMoveDecisions = [];    // Move quality audit: chosen vs reference-best destination
+  const moveAuditTrace = [];         // Move-quality diagnostic: per-decision trace with outcome linkage
+  let _pendingMoveAuditIdxs = [];    // indices into moveAuditTrace awaiting activation outcome
   const auditAttackDecisions = [];  // Attack target quality audit: per-decision target analysis
 
   // ── Rules invariant tracking ────────────────────────────────────────────
@@ -637,36 +657,48 @@ async function runOneGame(learnings, gameNum) {
         const validSpaces = getValidKryknaPlacementSpaces(g, playerNum, _rMapId);
         if (validSpaces.length === 0) continue;
 
-        // Pick the valid space closest to the nearest enemy figure (BFS)
-        const oppNum = playerNum === 1 ? 2 : 1;
-        const enemyCoords = new Set(
-          Object.values(g.figurePositions?.[oppNum] || {}).map(c => normalizeCoord(c))
-        );
+        // Pick a valid space per the active KRYKNA_PLACEMENT_MODE.
+        // Authored mission rule (placement must be in opponent's zone) is
+        // preserved by validSpaces; we only choose WHICH valid space here.
+        //   'min'    — BFS-closest to nearest enemy figure (aggressive, default)
+        //   'max'    — BFS-farthest from nearest enemy figure
+        //   'random' — uniform random over validSpaces
+        const placeMode = getKryknaPlacementMode();
         let bestSpace = validSpaces[0];
-        let bestDist = Infinity;
-        for (const space of validSpaces) {
-          // BFS from space to nearest enemy
-          const visited = new Set([space]);
-          const bfsQ = [space];
-          let dist = 0;
-          let found = false;
-          while (bfsQ.length > 0 && !found) {
-            const nextQ = [];
-            dist++;
-            for (const curr of bfsQ) {
-              for (const neighbor of (_rAdj[curr] || [])) {
-                const n = normalizeCoord(neighbor);
-                if (visited.has(n)) continue;
-                visited.add(n);
-                if (enemyCoords.has(n)) { found = true; break; }
-                nextQ.push(n);
+        if (placeMode === 'random') {
+          bestSpace = validSpaces[Math.floor(Math.random() * validSpaces.length)];
+        } else {
+          const oppNum = playerNum === 1 ? 2 : 1;
+          const enemyCoords = new Set(
+            Object.values(g.figurePositions?.[oppNum] || {}).map(c => normalizeCoord(c))
+          );
+          let bestDist = (placeMode === 'max') ? -Infinity : Infinity;
+          for (const space of validSpaces) {
+            const visited = new Set([space]);
+            const bfsQ = [space];
+            let dist = 0;
+            let found = false;
+            while (bfsQ.length > 0 && !found) {
+              const nextQ = [];
+              dist++;
+              for (const curr of bfsQ) {
+                for (const neighbor of (_rAdj[curr] || [])) {
+                  const n = normalizeCoord(neighbor);
+                  if (visited.has(n)) continue;
+                  visited.add(n);
+                  if (enemyCoords.has(n)) { found = true; break; }
+                  nextQ.push(n);
+                }
+                if (found) break;
               }
-              if (found) break;
+              if (!found) bfsQ.length = 0;
+              for (const x of nextQ) bfsQ.push(x);
             }
-            if (!found) bfsQ.length = 0;
-            for (const x of nextQ) bfsQ.push(x);
+            if (found) {
+              if (placeMode === 'max' && dist > bestDist) { bestDist = dist; bestSpace = space; }
+              else if (placeMode === 'min' && dist < bestDist) { bestDist = dist; bestSpace = space; }
+            }
           }
-          if (found && dist < bestDist) { bestDist = dist; bestSpace = space; }
         }
 
         // Place new Krykna at chosen space (mirrors handleKryknaPlacePick)
@@ -883,12 +915,12 @@ async function runOneGame(learnings, gameNum) {
       if (escape) action = escape;
     }
 
-    // ── Pass-timing audit: record every decision where pass was legal ──────
+    // ── Pass-timing audit + shadow scorer ──────────────────────────────────
     {
       const passLegal = playerActions.some(a => a.type === 'pass_activation_turn');
       if (passLegal) {
         passLegalTotal++;
-        const chose = action.type === 'pass_activation_turn' ? 'pass' : 'activate';
+        let chose = action.type === 'pass_activation_turn' ? 'pass' : 'activate';
         if (chose === 'pass') passChosenTotal++;
         else passActivatedTotal++;
 
@@ -901,7 +933,6 @@ async function runOneGame(learnings, gameNum) {
           const actIdx = ABSTRACT_TYPES.indexOf('activate');
           if (passIdx >= 0) qPass = Q[passIdx];
           if (actIdx >= 0) qActivate = Q[actIdx];
-          // Find best Q among available types
           let maxQ = -Infinity;
           for (const t of lastAbsTypes) {
             const idx = ABSTRACT_TYPES.indexOf(t);
@@ -916,7 +947,7 @@ async function runOneGame(learnings, gameNum) {
         const myRem = actingPN === 1 ? (g.p1ActivationsRemaining ?? 0) : (g.p2ActivationsRemaining ?? 0);
         const oppRem = actingPN === 1 ? (g.p2ActivationsRemaining ?? 0) : (g.p1ActivationsRemaining ?? 0);
 
-        // Board context: wounded DCs, opponent unactivated DCs
+        // Board context
         let myWounded = 0, oppUnactivated = 0;
         try {
           const oppPN = actingPN === 1 ? 2 : 1;
@@ -925,8 +956,7 @@ async function runOneGame(learnings, gameNum) {
           for (const mid of oppMsgIds) {
             const meta = dcMessageMeta.get(mid);
             if (!meta) continue;
-            const idx = meta.dcIndex ?? -1;
-            if (!oppActivated.has(idx)) oppUnactivated++;
+            if (!oppActivated.has(meta.dcIndex ?? -1)) oppUnactivated++;
           }
           const myMsgIds = g[`p${actingPN}DcMessageIds`] || [];
           for (const mid of myMsgIds) {
@@ -951,6 +981,81 @@ async function runOneGame(learnings, gameNum) {
           } catch { /* best-effort */ }
         }
 
+        // ── Shadow scorer: extract features and evaluate ──
+        let shadowResult = null;
+        let bestDcCanAttack = 0;
+        const activatableActions = playerActions.filter(a => a.type === 'activate_dc');
+        try {
+          const passFeatures = extractPassFeatures(g, actingPN, dcHealthState, dcMessageMeta, activatableActions);
+          bestDcCanAttack = passFeatures[4]; // binary: any DC in attack range?
+          const hasProductive = bestDcCanAttack > 0;
+          shadowResult = passTimingShadowEval(passFeatures, chose, {
+            mapId: g.selectedMap?.id || mapId,
+            round: g.currentRound || currentRound,
+            vpDelta: myVP - oppVP,
+            gap: oppRem - myRem,
+            hasWounded: myWounded > 0,
+            hasProductive,
+          });
+        } catch { /* best-effort */ }
+
+        // ── A/B override: shadow takes control in treatment games ──
+        let overridden = false;
+        if (_passAbTreatment && shadowResult && !shadowResult.agreed) {
+          if (shadowResult.shadowChoice === 'pass' && chose === 'activate') {
+            // Shadow says pass, DQN chose activate → override to pass
+            const passAction = playerActions.find(a => a.type === 'pass_activation_turn');
+            if (passAction) {
+              action = passAction;
+              chose = 'pass';
+              activatedDc = null;
+              passChosenTotal++; passActivatedTotal--;
+              overridden = true;
+            }
+          } else if (shadowResult.shadowChoice === 'activate' && chose === 'pass') {
+            // Shadow says activate, DQN chose pass → pick best DC to activate
+            // Prefer DC in attack range (matches bestDcCanAttack logic), else first available
+            let bestAct = null;
+            if (activatableActions.length > 0) {
+              const oppPN = actingPN === 1 ? 2 : 1;
+              const oppFigCoords = Object.values(g.figurePositions?.[oppPN] || {});
+              for (const act of activatableActions) {
+                const msgId = act.params?.msgId;
+                if (!msgId) continue;
+                const meta = dcMessageMeta?.get(msgId);
+                if (!meta) continue;
+                let dcEffectsData;
+                try { dcEffectsData = getDcEffects(); } catch { dcEffectsData = {}; }
+                const lower = meta.dcName.toLowerCase();
+                const ciKey = dcEffectsData ? Object.keys(dcEffectsData).find(k => k.toLowerCase() === lower) : null;
+                const eff = dcEffectsData?.[meta.dcName] || (ciKey ? dcEffectsData[ciKey] : null);
+                const attackRange = eff?.attack?.type === 'range' ? 12 : 2;
+                const myFigKeys = Object.keys(g.figurePositions?.[actingPN] || {})
+                  .filter(fk => fk.startsWith(meta.dcName + '-'));
+                let inRange = false;
+                for (const fk of myFigKeys) {
+                  const myPos = g.figurePositions?.[actingPN]?.[fk];
+                  if (!myPos) continue;
+                  for (const oppPos of oppFigCoords) {
+                    if (coordDistance(myPos, oppPos) <= attackRange) { inRange = true; break; }
+                  }
+                  if (inRange) break;
+                }
+                if (inRange) { bestAct = act; break; }
+              }
+              if (!bestAct) bestAct = activatableActions[0]; // fallback: first available
+              action = bestAct;
+              chose = 'activate';
+              try {
+                const meta = dcMessageMeta?.get(bestAct.params?.msgId);
+                activatedDc = meta?.dcName || null;
+              } catch { activatedDc = null; }
+              passChosenTotal--; passActivatedTotal++;
+              overridden = true;
+            }
+          }
+        }
+
         const traceEntry = {
           round: g.currentRound || currentRound,
           actIdx: roundActivationIndex,
@@ -965,6 +1070,13 @@ async function runOneGame(learnings, gameNum) {
           activationOutcome: null, // filled in when activation ends
           myWounded,
           oppUnactivated,
+          bestDcCanAttack: bestDcCanAttack > 0 ? 1 : 0,
+          // Shadow scorer data
+          shadowChoice: shadowResult?.shadowChoice || null,
+          shadowScore: shadowResult?.score != null ? +shadowResult.score.toFixed(3) : null,
+          shadowAgreed: shadowResult?.agreed ?? null,
+          overridden,
+          passAbGroup: _passAbTreatment ? 'treatment' : 'control',
         };
         passAuditTrace.push(traceEntry);
         if (chose === 'activate') _pendingPassAuditIdx = passAuditTrace.length - 1;
@@ -991,6 +1103,32 @@ async function runOneGame(learnings, gameNum) {
             chosenFeatures: chosenF,
             refBestFeatures: bestF,
           });
+        }
+      } catch { /* best-effort */ }
+    }
+
+    // ── Move-quality diagnostic trace ──
+    if (moveAuditMode && action.type === 'move_pick_space' && action.params?.coord && !action.params?.done) {
+      try {
+        const mc = pickSmartAction._lastMoveContrastive;
+        if (mc) {
+          const gap = (mc.refBestQuality != null && mc.chosenQuality != null)
+            ? mc.refBestQuality - mc.chosenQuality : null;
+          const chosenF = mc.chosen ? Array.from(mc.chosen) : null;
+          const bestF = mc.refBestFeatures ? Array.from(mc.refBestFeatures) : null;
+          moveAuditTrace.push({
+            round: currentRound,
+            chosenQuality: mc.chosenQuality ?? null,
+            refBestQuality: mc.refBestQuality ?? null,
+            gap,
+            candidateCount: mc.candidateCount || 0,
+            chosenFeatures: chosenF,
+            refBestFeatures: bestF,
+            coord: action.params.coord,
+            // Outcome linkage: filled at dc_end_activation
+            activationOutcome: null,
+          });
+          _pendingMoveAuditIdxs.push(moveAuditTrace.length - 1);
         }
       } catch { /* best-effort */ }
     }
@@ -1269,6 +1407,13 @@ async function runOneGame(learnings, gameNum) {
         passAuditTrace[_pendingPassAuditIdx].activationOutcome = actOutcome;
         _pendingPassAuditIdx = -1;
       }
+      // Link activation outcome to all move-audit trace entries from this activation
+      for (const idx of _pendingMoveAuditIdxs) {
+        if (idx >= 0 && idx < moveAuditTrace.length) {
+          moveAuditTrace[idx].activationOutcome = actOutcome;
+        }
+      }
+      _pendingMoveAuditIdxs = [];
       currentActHadAttack = false; currentActHadInteract = false; currentActHadMove = false;
     } else if (action.type === 'activate_dc') {
       // Track decision class from shadow data
@@ -1285,6 +1430,82 @@ async function runOneGame(learnings, gameNum) {
     if (action.type === 'attack_target') currentActHadAttack = true;
     else if (action.type === 'interact') currentActHadInteract = true;
     else if (action.type === 'move_figure' || action.type === 'move_pick_space') currentActHadMove = true;
+
+    // ── Ability-play audit capture ────────────────────────────────────────
+    // Records every dc_special action with pre-state context. Post-state
+    // correlation (VP / figure-defeat delta) is recorded on the NEXT loop
+    // iteration via _pendingAbilityIdx.
+    if (abilityAudit && action.type === 'dc_special') {
+      const myVP = actingPN === 1 ? (g.player1VP?.total || 0) : (g.player2VP?.total || 0);
+      const oppVP = actingPN === 1 ? (g.player2VP?.total || 0) : (g.player1VP?.total || 0);
+      // Count wounded on both sides
+      let myWounded = 0, oppWounded = 0, myAlive = 0, oppAlive = 0;
+      for (const [, healthArr] of dcHealthState) {
+        if (!healthArr) continue;
+        for (const h of healthArr) {
+          if (!h) continue;
+          if (h[0] > 0) {
+            // This msgId belongs to one side — approximate via iteration
+          }
+        }
+      }
+      // Nearest enemy distance from acting figure (if available)
+      let distToEnemy = null;
+      try {
+        const msgId = action.params?.msgId;
+        const dcName = action.params?.dcName;
+        const actionsData = msgId ? g.dcActionsData?.[msgId] : null;
+        const figIdx = actionsData?.selectedFigure ?? 0;
+        if (dcName) {
+          const dgMatch = (dcMessageMeta.get(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+          const dgIndex = dgMatch ? dgMatch[1] : '1';
+          const fk = `${dcName}-${dgIndex}-${figIdx}`;
+          const pos = g.figurePositions?.[actingPN]?.[fk];
+          const oppNum = actingPN === 1 ? 2 : 1;
+          const oppFigs = Object.values(g.figurePositions?.[oppNum] || {});
+          if (pos && oppFigs.length > 0) {
+            let best = Infinity;
+            for (const op of oppFigs) {
+              try {
+                const pa = parseCoord(pos), pb = parseCoord(op);
+                const d = Math.abs(pa.col - pb.col) + Math.abs(pa.row - pb.row);
+                if (d < best) best = d;
+              } catch {}
+            }
+            if (best < Infinity) distToEnemy = best;
+          }
+        }
+      } catch {}
+      _abilityPlays.push({
+        idx: _abilityPlays.length,
+        game: gameNum,
+        round: g.currentRound || currentRound,
+        side: actingPN,
+        dcName: action.params?.dcName || null,
+        specialName: action.params?.specialName || null,
+        specialId: action.params?.specialId || null,
+        myVP,
+        oppVP,
+        distToEnemy,
+        abilityCandidates: (playerActions || []).filter(a => a.type === 'dc_special').length,
+        priorAttack: currentActHadAttack,
+        priorMove: currentActHadMove,
+        // Post-state filled in on the NEXT action by this side in this activation.
+        postVP: null,
+        postDefeats: null,
+      });
+      _pendingAbilityIdx = _abilityPlays.length - 1;
+    }
+    // Fill in post-state on any subsequent action (captures delta from the ability)
+    if (abilityAudit && _pendingAbilityIdx >= 0 && action.type !== 'dc_special') {
+      const entry = _abilityPlays[_pendingAbilityIdx];
+      const myVP = entry.side === 1 ? (g.player1VP?.total || 0) : (g.player2VP?.total || 0);
+      const oppVP = entry.side === 1 ? (g.player2VP?.total || 0) : (g.player1VP?.total || 0);
+      entry.postVP = myVP;
+      entry.postOppVP = oppVP;
+      entry.nextActionType = action.type;
+      _pendingAbilityIdx = -1;
+    }
 
     // ── A/B per-round VP tracking ───────────────────────────────────────
     if (action.type === 'end_activation_phase' || action.type === 'end_end_of_round') {
@@ -1339,9 +1560,200 @@ async function runOneGame(learnings, gameNum) {
 
     // Premature end-activation detection: ended when productive actions existed
     if (action.type === 'dc_end_activation') {
-      const hadProductive = playerActions.some(a =>
-        a.type === 'move_figure' || a.type === 'attack_target' || a.type === 'dc_special' || a.type === 'interact');
+      const attackLegal = playerActions.some(a => a.type === 'attack_target');
+      // Accept any interact (including use_terminal) to match the original broader detector;
+      // use_terminal is load-bearing on missions like Devaron-B where it opens doors.
+      const interactLegal = playerActions.some(a => a.type === 'interact');
+      const specialLegal = playerActions.some(a => a.type === 'dc_special');
+      const moveLegal = playerActions.some(a => a.type === 'move_figure' || a.type === 'move_pick_space');
+      const hadProductive = attackLegal || interactLegal || specialLegal || moveLegal;
       if (hadProductive) prematureEndAct++;
+
+      // Forensic classification for Devaron / premature-end diagnostic.
+      // Captures priority-bucketed legal-action state, activation history so far,
+      // action-economy remaining, and distance-to-nearest-mission-objective.
+      try {
+        const msgId = action.params?.msgId;
+        const actionsData = msgId ? g.dcActionsData?.[msgId] : null;
+        const actionsRemaining = actionsData?.remaining ?? 0;
+        // Distance from acting figure to nearest objective token (Manhattan).
+        // Used to disambiguate "camping on objective" (distToObj ≤ 1) from
+        // "giving up" (distToObj > 3).
+        let distToObj = null;
+        try {
+          const objCoords = getObjectiveCoords(g);
+          if (objCoords && objCoords.length > 0 && msgId) {
+            const dgMatch = (dcMessageMeta.get(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+            const dgIndex = dgMatch ? dgMatch[1] : '1';
+            const figIdx = actionsData?.selectedFigure ?? 0;
+            const dcName = action.params?.dcName;
+            if (dcName) {
+              const fk = `${dcName}-${dgIndex}-${figIdx}`;
+              const pos = g.figurePositions?.[actingPN]?.[fk];
+              if (pos) {
+                let best = Infinity;
+                for (const oc of objCoords) {
+                  try {
+                    const pa = parseCoord(pos), pb = parseCoord(oc);
+                    const d = Math.abs(pa.col - pb.col) + Math.abs(pa.row - pb.row);
+                    if (d < best) best = d;
+                  } catch {}
+                }
+                if (best < Infinity) distToObj = best;
+              }
+            }
+          }
+        } catch {}
+        recordPremEnd({
+          isPremature: hadProductive,
+          round: g.currentRound || currentRound,
+          side: actingPN,
+          attackLegal, interactLegal, specialLegal, moveLegal,
+          priorAttack: currentActHadAttack,
+          priorInteract: currentActHadInteract,
+          priorMove: currentActHadMove,
+          actionsRemaining,
+          distToObj,
+        });
+
+        // Rich per-frame capture (only when --premend-probe is set + the end is
+        // actually premature). Captures legal specials, move candidate count,
+        // Q-values at state, and effectfulness hints so we can answer
+        // "why did end beat its alternatives at this exact frame".
+        if (premendProbe && hadProductive) {
+          const specialActs = playerActions.filter(a => a.type === 'dc_special');
+          const moveActs = playerActions.filter(a => a.type === 'move_figure' || a.type === 'move_pick_space');
+          const interactActs = playerActions.filter(a => a.type === 'interact');
+          const startMoveActs = playerActions.filter(a => a.type === 'start_move');
+          // Name-based effectfulness tag. Classifies each special by whether it would
+          // change board state (damage, stun, push, pull, free attack, etc.) vs be
+          // purely technical (reposition tokens, add strain, etc.).
+          const OFFENSIVE_SPECIALS = new Set([
+            'pounce', 'slam', 'brutality', 'force choke', 'force lightning',
+            'defensive fire', 'dual-wield pistols', 'missile salvo',
+            'trample', 'tempt', 'invasive procedure', 'emperor',
+          ]);
+          const ALLY_SUPPORT_SPECIALS = new Set([
+            'battlefield leadership', 'military efficiency', 'survival is strength',
+            'calming presence', 'wisdom', 'do or do not', 'force deflection', 'inform',
+          ]);
+          const effTag = (s) => {
+            const n = (s.name || '').toLowerCase();
+            if (OFFENSIVE_SPECIALS.has(n)) return 'offensive';
+            if (ALLY_SUPPORT_SPECIALS.has(n)) return 'ally-support';
+            return 'other';
+          };
+          const specials = specialActs.map(a => {
+            const s = { name: a.params?.specialName || null, id: a.params?.specialId || null, cost: a.params?.cost ?? null };
+            s.effect = effTag(s);
+            return s;
+          });
+          const interacts = interactActs.map(a => ({
+            label: a.params?.optionLabel || null,
+            optionId: a.params?.optionId || null,
+          }));
+          // Full absTypes list for this frame (from playerActions) — proves planner
+          // has no productive priority matching the legal set.
+          const absTypeCounts = {};
+          try {
+            for (const pa of playerActions) {
+              const at = abstractActionType(pa, g);
+              absTypeCounts[at] = (absTypeCounts[at] || 0) + 1;
+            }
+          } catch {}
+          // Movement-bank state: is moveInProgress active for this activator?
+          let mipActive = false;
+          let mipMpRemaining = null;
+          try {
+            if (g.moveInProgress && action.params?.msgId) {
+              for (const [k, v] of Object.entries(g.moveInProgress)) {
+                if (k.startsWith(action.params.msgId + '_')) {
+                  mipActive = true;
+                  mipMpRemaining = v?.movementPointsRemaining ?? v?.mp ?? null;
+                  break;
+                }
+              }
+            }
+          } catch {}
+          // Simulated planner priority walk — mirrors oracleActivationPlan()'s
+          // attack → interact → move → move_done → end fall-through. Records the
+          // priority at which the planner would fire. For premature-end frames
+          // this will almost always be 'priority5_end_fallthrough' when the only
+          // legal productive abstract is 'ability' (dc_special).
+          let plannerPath = 'n/a';
+          try {
+            const has = (k) => absTypeCounts[k] > 0;
+            if (has('attack_close') || has('attack_ranged')) plannerPath = 'priority1_attack';
+            else if (has('interact')) {
+              const missionI = interactActs.find(a => a.params?.optionId && a.params.optionId !== 'use_terminal');
+              plannerPath = missionI ? 'priority2_mission_interact' : 'priority5_end_fallthrough';
+            }
+            else if (has('start_move')) plannerPath = 'priority3a_start_move';
+            else if (has('move_toward') || has('move_away') || has('move_lateral')) plannerPath = 'priority3b_move_space';
+            else if (has('move_done')) plannerPath = 'priority4_move_done';
+            else plannerPath = 'priority5_end_fallthrough';
+          } catch {}
+          // Effectfulness hints
+          let woundedAllies = 0, allyCount = 0;
+          try {
+            const myMsgIds = actingPN === 1 ? (g.p1DcMessageIds || []) : (g.p2DcMessageIds || []);
+            for (const mid of myMsgIds) {
+              const h = dcHealthState.get(mid);
+              if (!h) continue;
+              for (const fh of h) {
+                if (!fh) continue;
+                allyCount++;
+                if (fh[0] < fh[1]) woundedAllies++;
+              }
+            }
+          } catch {}
+          let hasTargetsInRange = null;
+          let qValues = null, features = null;
+          try {
+            features = extractFeatures(g, actingPN, dcHealthState, dcMessageMeta);
+            if (features && features.length > 42) hasTargetsInRange = features[42];
+            const q = getQValues(learnings, features);
+            if (q) {
+              qValues = {
+                attack_close: q[0] ?? null,
+                attack_ranged: q[1] ?? null,
+                move_toward: q[2] ?? null,
+                move_away: q[3] ?? null,
+                move_lateral: q[4] ?? null,
+                activate: q[7] ?? null,
+                end_activation: q[8] ?? null,
+                pass: q[9] ?? null,
+                ability: q[10] ?? null,
+                interact: q[22] ?? null,
+              };
+            }
+          } catch {}
+          recordPremEndFrame({
+            gameId: game.gameId || null,
+            mapId: g.selectedMap?.id || g.selectedMap?.mapId || null,
+            side: actingPN,
+            round: g.currentRound || currentRound,
+            dcName: action.params?.dcName || null,
+            msgId: action.params?.msgId || null,
+            actionsRemaining,
+            specialCount: specialActs.length,
+            specials,
+            moveCandidateCount: moveActs.length,
+            startMoveCount: startMoveActs.length,
+            interactCount: interactActs.length,
+            interacts,
+            attackLegal, interactLegal, specialLegal, moveLegal,
+            absTypeCounts,
+            mipActive, mipMpRemaining,
+            plannerPath,
+            woundedAllies, allyCount,
+            hasTargetsInRange,
+            distToObj,
+            qValues,
+            chosen: 'dc_end_activation',
+          });
+        }
+      } catch { /* best-effort */ }
     }
 
     // Conditioning on activeDcHasTargetsInRange (feature index 42)
@@ -1666,7 +2078,7 @@ async function runOneGame(learnings, gameNum) {
     turnDenialOpportunities, turnDenialChosen, turnDenialMissed,
     // Audit data
     auditDcAppearances, auditDcActivations, auditDcAttacks, auditDcDefeats,
-    auditCcPlays, auditCcOpportunities, auditSurgeEvents, auditCcDecisions, auditMoveDecisions, auditAttackDecisions,
+    auditCcPlays, auditCcOpportunities, auditSurgeEvents, auditCcDecisions, auditMoveDecisions, auditAttackDecisions, moveAuditTrace,
     // Rules invariant data
     rulesViolations, handlerErrors,
     // Diversity pilot
@@ -1677,6 +2089,8 @@ async function runOneGame(learnings, gameNum) {
     classWW, classWP, classPP, classGated,
     // Pass-timing audit
     passAuditTrace, passLegalTotal, passChosenTotal, passActivatedTotal,
+    // Pass-timing A/B
+    passAbGroup: _passAbTreatment ? 'treatment' : 'control',
   };
 }
 
@@ -1766,6 +2180,41 @@ async function main() {
     setActivateScorerControl(true);
     console.log(`  Activation scorer: CONTROL MODE (scorer decides on gated surface)`);
   }
+  if (args.includes('--passab')) {
+    passAbMode = true;
+    console.log(`  Pass-timing A/B: ENABLED (alternating control/treatment, shadow takes control in treatment)`);
+  }
+  if (args.includes('--move-audit')) {
+    moveAuditMode = true;
+    console.log(`  Move-quality audit: ENABLED (destination quality gap + activation outcome linkage)`);
+  }
+  const diagnosticMode = args.includes('--diagnostic');
+  if (diagnosticMode) {
+    setAlpha(0);            // freeze main Q-network
+    setWgFrozen(true);      // freeze within-group scorer weights
+    resetAbilityGateAudit(); // clear ability gate counters for this run
+    console.log(`  Diagnostic eval: WEIGHTS FROZEN (alpha=0, WG updates skipped); per-map/matchup/side/stop-reason breakdown will be printed at end of run`);
+  }
+  if (args.includes('--premend-probe')) {
+    premendProbe = true;
+    resetPremEndFrames();
+    console.log(`  Premature-end forensic probe: ENABLED (captures per-frame Q-values, legal specials, move candidates, objective proximity)`);
+  }
+  if (args.includes('--ability-audit')) {
+    abilityAudit = true;
+    _abilityPlays.length = 0;
+    console.log(`  Ability-play audit: ENABLED (captures every dc_special action with pre/post state for selection-quality analysis)`);
+  }
+  if (args.includes('--attack-trace')) {
+    setAttackTrace(true);
+    console.log(`  Attack trace: ENABLED (every multi-candidate attack decision logged to stderr as ATK_TRACE lines)`);
+  }
+  const kpArg = args.find(a => a.startsWith('--krykna-placement='));
+  if (kpArg) {
+    const mode = kpArg.split('=')[1];
+    setKryknaPlacementMode(mode);
+    console.log(`  Krykna placement mode: ${getKryknaPlacementMode()} (valid: min | max | random; default min)`);
+  }
 
   // A/B experiment: custom checkpoint load / save paths
   const checkpointArg = args.find(a => a.startsWith('--checkpoint='));
@@ -1820,6 +2269,8 @@ async function main() {
   let lastCheckpointUpdates = updatesBefore;
 
   for (let i = 0; i < numGames; i++) {
+    // Pass-timing A/B: alternate control (even) / treatment (odd)
+    _passAbTreatment = passAbMode && (i % 2 === 1);
     const gameNum = learnings.meta.totalGames; // Use total for army rotation
     const updatesBeforeGame = learnings.trainingStats?.totalUpdates || 0;
     const result = await runOneGame(learnings, gameNum);
@@ -1891,6 +2342,7 @@ async function main() {
       auditCcDecisions: result.auditCcDecisions || [],
       auditMoveDecisions: result.auditMoveDecisions || [],
       auditAttackDecisions: result.auditAttackDecisions || [],
+      moveAuditTrace: result.moveAuditTrace || [],
       matchupLabel: result.matchupLabel || 'unknown',
       mapId: result.mapId || 'unknown',
       isPoolGame: result.isPoolGame || false,
@@ -1899,6 +2351,7 @@ async function main() {
       passLegalTotal: result.passLegalTotal || 0,
       passChosenTotal: result.passChosenTotal || 0,
       passActivatedTotal: result.passActivatedTotal || 0,
+      passAbGroup: passAbMode ? (result.passAbGroup || 'control') : null,
     });
 
     // Log runaway games immediately
@@ -2272,6 +2725,202 @@ async function main() {
     console.log(`Decisive wins (VP diff >= 10): ${decisive}/${completedGames.length} (${(decisive/completedGames.length*100).toFixed(0)}%)`);
     const totalDefeats = completedGames.reduce((s, r) => s + (r.figureDefeats || 0), 0);
     console.log(`Avg figure defeats/game: ${(totalDefeats / completedGames.length).toFixed(1)}`);
+  }
+
+  // ── Diagnostic breakdowns (per-map / per-matchup / per-side / per-stop-reason) ──
+  // Only prints when --diagnostic is set, to avoid cluttering normal training runs.
+  if (diagnosticMode && perGameResults.length > 0) {
+    const fmtPct = (n, d) => d > 0 ? ((n / d) * 100).toFixed(1) + '%' : 'n/a';
+    const groupBy = (key) => {
+      const g = {};
+      for (const r of perGameResults) {
+        const k = r[key] || 'unknown';
+        (g[k] = g[k] || []).push(r);
+      }
+      return g;
+    };
+    const summarize = (rows) => {
+      const n = rows.length;
+      if (n === 0) return null;
+      const vp = rows.reduce((s, r) => s + (r.p1VP || 0) + (r.p2VP || 0), 0) / n;
+      const vpDiff = rows.reduce((s, r) => s + Math.abs((r.p1VP || 0) - (r.p2VP || 0)), 0) / n;
+      const p1VP = rows.reduce((s, r) => s + (r.p1VP || 0), 0) / n;
+      const p2VP = rows.reduce((s, r) => s + (r.p2VP || 0), 0) / n;
+      const p1Wins = rows.filter(r => r.winner === 'P1').length;
+      const p2Wins = rows.filter(r => r.winner === 'P2').length;
+      const draws = n - p1Wins - p2Wins;
+      const decisive = rows.filter(r => Math.abs((r.p1VP || 0) - (r.p2VP || 0)) >= 10).length;
+      const rounds = rows.reduce((s, r) => s + (r.finalRound || 0), 0) / n;
+      const ended = rows.filter(r => r.ended).length;
+      const stops = rows.reduce((acc, r) => { acc[r.stopReason || 'normal'] = (acc[r.stopReason || 'normal'] || 0) + 1; return acc; }, {});
+      return { n, vp, vpDiff, p1VP, p2VP, p1Wins, p2Wins, draws, decisive, rounds, ended, stops };
+    };
+
+    console.log('\n╔══════════════════════════════════════════════════════════════════╗');
+    console.log('║          COMPETITIVE-SET CEILING DIAGNOSTIC                      ║');
+    console.log('╚══════════════════════════════════════════════════════════════════╝');
+
+    // Per-map
+    console.log('\n=== Per-map breakdown ===');
+    const byMap = groupBy('mapId');
+    const mapNames = Object.keys(byMap).sort();
+    console.log(`  ${'map'.padEnd(26)} ${'N'.padStart(4)} ${'VP/g'.padStart(6)} ${'VPdiff'.padStart(7)} ${'P1 VP'.padStart(6)} ${'P2 VP'.padStart(6)} ${'P1 W'.padStart(5)} ${'P2 W'.padStart(5)} ${'decsv'.padStart(5)} ${'rnds'.padStart(5)}`);
+    for (const m of mapNames) {
+      const s = summarize(byMap[m]);
+      console.log(`  ${m.padEnd(26)} ${String(s.n).padStart(4)} ${s.vp.toFixed(1).padStart(6)} ${s.vpDiff.toFixed(1).padStart(7)} ${s.p1VP.toFixed(1).padStart(6)} ${s.p2VP.toFixed(1).padStart(6)} ${String(s.p1Wins).padStart(5)} ${String(s.p2Wins).padStart(5)} ${fmtPct(s.decisive, s.n).padStart(5)} ${s.rounds.toFixed(1).padStart(5)}`);
+    }
+
+    // Per-matchup
+    console.log('\n=== Per-matchup breakdown ===');
+    const byMatchup = groupBy('matchupLabel');
+    const matchupNames = Object.keys(byMatchup).sort();
+    console.log(`  ${'matchup'.padEnd(38)} ${'N'.padStart(4)} ${'VP/g'.padStart(6)} ${'VPdiff'.padStart(7)} ${'P1 VP'.padStart(6)} ${'P2 VP'.padStart(6)} ${'P1 W'.padStart(5)} ${'P2 W'.padStart(5)} ${'decsv'.padStart(5)}`);
+    for (const mu of matchupNames) {
+      const s = summarize(byMatchup[mu]);
+      const label = mu.length > 36 ? mu.slice(0, 35) + '…' : mu;
+      console.log(`  ${label.padEnd(38)} ${String(s.n).padStart(4)} ${s.vp.toFixed(1).padStart(6)} ${s.vpDiff.toFixed(1).padStart(7)} ${s.p1VP.toFixed(1).padStart(6)} ${s.p2VP.toFixed(1).padStart(6)} ${String(s.p1Wins).padStart(5)} ${String(s.p2Wins).padStart(5)} ${fmtPct(s.decisive, s.n).padStart(5)}`);
+    }
+
+    // Per-side (overall)
+    console.log('\n=== Side breakdown (overall) ===');
+    const sAll = summarize(perGameResults);
+    console.log(`  P1 avg VP: ${sAll.p1VP.toFixed(2)}  wins ${sAll.p1Wins}/${sAll.n} (${fmtPct(sAll.p1Wins, sAll.n)})`);
+    console.log(`  P2 avg VP: ${sAll.p2VP.toFixed(2)}  wins ${sAll.p2Wins}/${sAll.n} (${fmtPct(sAll.p2Wins, sAll.n)})`);
+    console.log(`  Draws: ${sAll.draws}/${sAll.n}`);
+    console.log(`  Side asymmetry: P2VP − P1VP = ${(sAll.p2VP - sAll.p1VP).toFixed(2)} VP/game; P2 win advantage = ${sAll.p2Wins - sAll.p1Wins} games`);
+
+    // Per-stop-reason
+    console.log('\n=== Stop reasons ===');
+    for (const [reason, count] of Object.entries(sAll.stops).sort((a, b) => b[1] - a[1])) {
+      const rows = perGameResults.filter(r => (r.stopReason || 'normal') === reason);
+      const s = summarize(rows);
+      console.log(`  ${reason.padEnd(22)} ${String(count).padStart(4)} (${fmtPct(count, sAll.n)})  VP/g=${s.vp.toFixed(1)}  P1W=${s.p1Wins}  P2W=${s.p2Wins}  rnds=${s.rounds.toFixed(1)}`);
+    }
+
+    // Attack-candidate-generation breakdown (accumulated across the full run)
+    const ca = getCandAudit();
+    console.log('\n=== Attack candidate-generation breakdown ===');
+    console.log(`  Total attack decisions: ${ca.totalDecisions}`);
+    if (ca.totalDecisions > 0) {
+      const pct = (n) => ((n / ca.totalDecisions) * 100).toFixed(1) + '%';
+      console.log(`    NPC-only legal:      ${ca.npcOnly} (${pct(ca.npcOnly)})`);
+      console.log(`    Figure-only legal:   ${ca.figureOnly} (${pct(ca.figureOnly)})`);
+      console.log(`    Mixed (NPC+figure):  ${ca.mixed} (${pct(ca.mixed)})`);
+      if (ca.empty > 0) console.log(`    Empty (neither):     ${ca.empty}`);
+      const avgNpc = (ca.totalNpcCandidates / ca.totalDecisions).toFixed(2);
+      const avgFig = (ca.totalFigureCandidates / ca.totalDecisions).toFixed(2);
+      const avgEnPop = (ca.totalEnemyFiguresOnBoard / ca.totalDecisions).toFixed(2);
+      console.log(`  Avg candidates per decision: NPC=${avgNpc}, enemy-fig=${avgFig} (total enemy figures on board avg=${avgEnPop})`);
+      if (ca.npcOnly > 0 && ca.npcOnlyExcludedFigTotal > 0) {
+        const t = ca.npcOnlyExcludedFigTotal;
+        const r = ca.npcOnlyExcludedByRange;
+        const lOs = ca.npcOnlyExcludedByLos;
+        const pd = ca.npcOnlyExcludedByPathDist;
+        const fb = ca.npcOnlyExcludedByFigureBlock;
+        const ot = ca.npcOnlyExcludedByOther;
+        console.log('\n  In NPC-only decisions, excluded enemy-figure reasons (refined):');
+        console.log(`    Out of Manhattan range:  ${r} (${((r/t)*100).toFixed(1)}%)`);
+        console.log(`    Path-distance > range:   ${pd} (${((pd/t)*100).toFixed(1)}%)   (walls/doors add detour)`);
+        console.log(`    Bare-LoS blocked:        ${lOs} (${((lOs/t)*100).toFixed(1)}%)`);
+        console.log(`    Figure-blocked LoS:      ${fb} (${((fb/t)*100).toFixed(1)}%)`);
+        console.log(`    Other:                   ${ot} (${((ot/t)*100).toFixed(1)}%)`);
+        const avgExcluded = (t / ca.npcOnly).toFixed(2);
+        console.log(`    Avg excluded enemy-figures per NPC-only decision: ${avgExcluded}`);
+      }
+      // Spatial distributions + density
+      const quant = (arr, q) => { if (arr.length === 0) return 'n/a'; const s = [...arr].sort((a,b) => a-b); return s[Math.max(0, Math.min(s.length - 1, Math.floor(q * s.length)))]; };
+      const mean = (arr) => arr.length === 0 ? 'n/a' : (arr.reduce((s,v) => s+v, 0) / arr.length).toFixed(2);
+      if (ca.distToNearestEnemyFig.length > 0) {
+        const ef = ca.distToNearestEnemyFig;
+        console.log('\n  Distance to nearest enemy figure at attack decision time (Manhattan):');
+        console.log(`    N=${ef.length}, mean=${mean(ef)}, min=${quant(ef,0)}, q10=${quant(ef,0.1)}, q25=${quant(ef,0.25)}, median=${quant(ef,0.5)}, q75=${quant(ef,0.75)}, q90=${quant(ef,0.9)}, max=${quant(ef,1.0)}`);
+      }
+      if (ca.distToNearestKrykna.length > 0) {
+        const kd = ca.distToNearestKrykna;
+        console.log('\n  Distance to nearest active Krykna at attack decision time (Manhattan):');
+        console.log(`    N=${kd.length}, mean=${mean(kd)}, min=${quant(kd,0)}, q10=${quant(kd,0.1)}, q25=${quant(kd,0.25)}, median=${quant(kd,0.5)}, q75=${quant(kd,0.75)}, q90=${quant(kd,0.9)}, max=${quant(kd,1.0)}`);
+      }
+      if (ca.attackerRanges.length > 0) {
+        const ar = ca.attackerRanges;
+        console.log('\n  Attacker practical range at attack decision time:');
+        console.log(`    N=${ar.length}, mean=${mean(ar)}, min=${quant(ar,0)}, median=${quant(ar,0.5)}, q90=${quant(ar,0.9)}, max=${quant(ar,1.0)}`);
+      }
+      if (ca.totalDecisions > 0) {
+        console.log('\n  Density rings around attacker (summed across decisions):');
+        console.log(`    within 3 spaces: enemy-fig=${ca.figCountWithin3} (avg ${(ca.figCountWithin3/ca.totalDecisions).toFixed(2)}/dec), Krykna=${ca.kryCountWithin3} (avg ${(ca.kryCountWithin3/ca.totalDecisions).toFixed(2)}/dec)`);
+        console.log(`    within 5 spaces: enemy-fig=${ca.figCountWithin5} (avg ${(ca.figCountWithin5/ca.totalDecisions).toFixed(2)}/dec), Krykna=${ca.kryCountWithin5} (avg ${(ca.kryCountWithin5/ca.totalDecisions).toFixed(2)}/dec)`);
+        console.log(`    within 7 spaces: enemy-fig=${ca.figCountWithin7} (avg ${(ca.figCountWithin7/ca.totalDecisions).toFixed(2)}/dec), Krykna=${ca.kryCountWithin7} (avg ${(ca.kryCountWithin7/ca.totalDecisions).toFixed(2)}/dec)`);
+        console.log(`  Avg active Krykna on board at decision time: ${(ca.totalActiveKryknaSum/ca.totalDecisions).toFixed(2)}`);
+        console.log(`  Respawn events observed (population growth between decisions): ${ca.respawnEvents}`);
+      }
+    }
+
+    // Premature-end-activation breakdown (per-round / per-side / per-bucket / objective-proximity)
+    const pe = getPremEndAudit();
+    console.log('\n=== Premature end-activation breakdown ===');
+    console.log(`  Total dc_end_activation events: ${pe.totalDcEnd}`);
+    console.log(`  Premature (productive-action-was-legal): ${pe.premature} (${pe.totalDcEnd > 0 ? ((pe.premature/pe.totalDcEnd)*100).toFixed(1) + '%' : 'n/a'})`);
+    if (pe.premature > 0) {
+      const pt = pe.premature;
+      console.log(`\n  Classification (priority attack > interact > special > move):`);
+      console.log(`    attack legal, declined:   ${pe.attackLegalDeclined} (${((pe.attackLegalDeclined/pt)*100).toFixed(1)}%)   P1:${pe.attackLegalDeclinedP1} P2:${pe.attackLegalDeclinedP2}`);
+      console.log(`    interact legal, declined: ${pe.interactLegalDeclined} (${((pe.interactLegalDeclined/pt)*100).toFixed(1)}%)   P1:${pe.interactLegalDeclinedP1} P2:${pe.interactLegalDeclinedP2}`);
+      console.log(`    special legal, declined:  ${pe.specialLegalDeclined} (${((pe.specialLegalDeclined/pt)*100).toFixed(1)}%)   P1:${pe.specialLegalDeclinedP1} P2:${pe.specialLegalDeclinedP2}`);
+      console.log(`    move-only available:      ${pe.moveOnlyAvailable} (${((pe.moveOnlyAvailable/pt)*100).toFixed(1)}%)   P1:${pe.moveOnlyAvailableP1} P2:${pe.moveOnlyAvailableP2}`);
+      if (pe.noLegalProductive > 0) console.log(`    no-legal-productive:      ${pe.noLegalProductive}`);
+      console.log(`\n  By round: ${pe.byRound.map((n, i) => i === 0 ? null : `R${i}:${n}`).filter(x => x).join(' ')}`);
+      console.log(`  By side:  P1:${pe.bySide[1]} P2:${pe.bySide[2]}  (ratio P2/P1 = ${pe.bySide[1] > 0 ? (pe.bySide[2]/pe.bySide[1]).toFixed(2) : 'n/a'})`);
+      console.log(`\n  Activation history of the premature activations:`);
+      console.log(`    prior attack this act: ${pe.alreadyAttackedThisAct} (${((pe.alreadyAttackedThisAct/pt)*100).toFixed(1)}%)`);
+      console.log(`    prior interact this act: ${pe.alreadyInteractedThisAct} (${((pe.alreadyInteractedThisAct/pt)*100).toFixed(1)}%)`);
+      console.log(`    prior move this act:   ${pe.alreadyMovedThisAct} (${((pe.alreadyMovedThisAct/pt)*100).toFixed(1)}%)`);
+      console.log(`    no prior productive:   ${pe.noPriorProductiveAction} (${((pe.noPriorProductiveAction/pt)*100).toFixed(1)}%)`);
+      const avgActRem = (pe.actionsRemainingSum / pt).toFixed(2);
+      console.log(`  Avg actions remaining at end: ${avgActRem}`);
+      const obj = pe.endedOnObjective + pe.endedAdjacentObjective + pe.endedNearObjective + pe.endedFarFromObjective;
+      if (obj > 0) {
+        console.log(`\n  Proximity to nearest mission-token/objective at premature-end:`);
+        console.log(`    ON objective (dist=0):       ${pe.endedOnObjective} (${((pe.endedOnObjective/obj)*100).toFixed(1)}%)`);
+        console.log(`    adjacent (dist ≤ 1):         ${pe.endedAdjacentObjective} (${((pe.endedAdjacentObjective/obj)*100).toFixed(1)}%)`);
+        console.log(`    near (dist ≤ 3):             ${pe.endedNearObjective} (${((pe.endedNearObjective/obj)*100).toFixed(1)}%)`);
+        console.log(`    far (dist > 3):              ${pe.endedFarFromObjective} (${((pe.endedFarFromObjective/obj)*100).toFixed(1)}%)`);
+        console.log(`  "ON objective" by side: P1:${pe.onObjectiveAtEndP1} P2:${pe.onObjectiveAtEndP2}`);
+      }
+    }
+
+    // VP-distribution / saturation check
+    console.log('\n=== VP distribution ===');
+    const totals = perGameResults.map(r => (r.p1VP || 0) + (r.p2VP || 0)).sort((a, b) => a - b);
+    const quantile = (q) => totals[Math.max(0, Math.min(totals.length - 1, Math.floor(q * totals.length)))];
+    console.log(`  min=${totals[0]}  q10=${quantile(0.1)}  q25=${quantile(0.25)}  median=${quantile(0.5)}  q75=${quantile(0.75)}  q90=${quantile(0.9)}  max=${totals[totals.length-1]}`);
+    const sameVpBuckets = {};
+    for (const t of totals) { const b = Math.floor(t / 10) * 10; sameVpBuckets[b] = (sameVpBuckets[b] || 0) + 1; }
+    console.log(`  10-VP buckets: ${Object.entries(sameVpBuckets).sort((a, b) => Number(a[0]) - Number(b[0])).map(([b, c]) => `${b}+:${c}`).join(' ')}`);
+
+    // Save perGameResults for offline analysis
+    const dumpPath = savePath.replace(/\.json$/, '-diagnostic-games.json');
+    try {
+      writeFileSync(dumpPath, JSON.stringify(perGameResults.map(r => ({
+        game: r.game, mapId: r.mapId, matchupLabel: r.matchupLabel, winner: r.winner,
+        p1VP: r.p1VP, p2VP: r.p2VP, finalRound: r.finalRound, stopReason: r.stopReason,
+        ended: r.ended, figureDefeats: r.figureDefeats,
+        attackActions: r.attackActions, moveActions: r.moveActions,
+        activationsWithAttack: r.activationsWithAttack, totalActivations: r.totalActivations,
+        passActivations: r.passActivations, endActivations: r.endActivations,
+        doorOpens: r.doorOpens, productiveActions: r.productiveActions,
+        prematureEndAct: r.prematureEndAct,
+        attackWhenTargetsInRange: r.attackWhenTargetsInRange,
+        moveWhenTargetsInRange: r.moveWhenTargetsInRange,
+        endWhenTargetsInRange: r.endWhenTargetsInRange,
+        decisionsWithTargets: r.decisionsWithTargets,
+        decisionsWithoutTargets: r.decisionsWithoutTargets,
+        npcAttacks: r.npcAttacks, npcDefeats: r.npcDefeats,
+        totalIterations: r.totalIterations,
+        runawayWindowCount: r.runawayWindowCount,
+        round1DistClosed: r.round1DistClosed,
+      })), null, 2));
+      console.log(`\nPer-game diagnostic data dumped to ${dumpPath}`);
+    } catch (e) { console.log('  (could not dump per-game data: ' + e.message + ')'); }
   }
 
   // Movement metrics
@@ -2775,6 +3424,246 @@ async function main() {
       } else {
         console.log('  (no games with pass-legal decisions)');
       }
+
+      // ── Shadow Scorer Report ──────────────────────────────────────────────
+      const shadow = getPassShadow();
+      if (shadow.total > 0) {
+        console.log('\n╔══════════════════════════════════════════════════╗');
+        console.log('║       PASS-TIMING SHADOW SCORER                  ║');
+        console.log('╚══════════════════════════════════════════════════╝');
+
+        console.log('\n=== Shadow Overview ===');
+        console.log(`  Total pass-legal decisions: ${shadow.total}`);
+        console.log(`  Shadow says activate: ${shadow.shadowActivate} (${pct(shadow.shadowActivate, shadow.total)})`);
+        console.log(`  Shadow says pass:     ${shadow.shadowPass} (${pct(shadow.shadowPass, shadow.total)})`);
+        console.log(`  Agree with DQN: ${shadow.agree} (${pct(shadow.agree, shadow.total)})`);
+        console.log(`  Disagree:       ${shadow.disagree} (${pct(shadow.disagree, shadow.total)})`);
+
+        console.log('\n=== Disagreement by Map ===');
+        for (const [mapKey, d] of Object.entries(shadow.byMap).sort((a, b) => b[1].total - a[1].total)) {
+          const shortMap = mapKey.replace(/-/g, ' ').slice(0, 25);
+          const disagPct = pct(d.disagree, d.total);
+          console.log(`  ${shortMap}: ${d.total} total, ${d.disagree} disagree (${disagPct}) | shadow→act,DQN→pass: ${d.shadowActivateDqnPass} | shadow→pass,DQN→act: ${d.shadowPassDqnActivate}`);
+        }
+
+        console.log('\n=== Disagreement by Round ===');
+        for (let r = 1; r <= 4; r++) {
+          const d = shadow.byRound[r];
+          if (d && d.total > 0) {
+            console.log(`  R${r}: ${d.total} total, ${d.disagree} disagree (${pct(d.disagree, d.total)})`);
+          }
+        }
+
+        console.log('\n=== Disagreement by VP State ===');
+        for (const [label, d] of Object.entries(shadow.byVP)) {
+          if (d.total > 0) console.log(`  ${label}: ${d.total} total, ${d.disagree} disagree (${pct(d.disagree, d.total)})`);
+        }
+
+        console.log('\n=== Disagreement by Activation Gap ===');
+        for (const [gap, d] of Object.entries(shadow.byGap).sort((a, b) => +a - +b)) {
+          console.log(`  Gap ${gap}: ${d.total} total, ${d.disagree} disagree (${pct(d.disagree, d.total)})`);
+        }
+
+        console.log('\n=== Disagreement by Wounded State ===');
+        for (const [label, d] of Object.entries(shadow.byWounded)) {
+          if (d.total > 0) console.log(`  ${label === 'yes' ? 'Has wounded DCs' : 'No wounded DCs'}: ${d.total} total, ${d.disagree} disagree (${pct(d.disagree, d.total)})`);
+        }
+
+        console.log('\n=== Disagreement by Productive Availability ===');
+        for (const [label, d] of Object.entries(shadow.byProductive)) {
+          if (d.total > 0) console.log(`  ${label === 'yes' ? 'Can attack' : 'No attack available'}: ${d.total} total, ${d.disagree} disagree (${pct(d.disagree, d.total)})`);
+        }
+
+        console.log('\n=== Feature Averages (Agree vs Disagree) ===');
+        if (shadow.agreeCount > 0 && shadow.disagreeCount > 0) {
+          for (let i = 0; i < PASS_FEATURE_NAMES.length; i++) {
+            const agreeAvg = (shadow.agreeFeatureSum[i] / shadow.agreeCount).toFixed(3);
+            const disagreeAvg = (shadow.disagreeFeatureSum[i] / shadow.disagreeCount).toFixed(3);
+            const delta = (shadow.disagreeFeatureSum[i] / shadow.disagreeCount - shadow.agreeFeatureSum[i] / shadow.agreeCount).toFixed(3);
+            console.log(`  ${PASS_FEATURE_NAMES[i].padEnd(18)} agree=${agreeAvg}  disagree=${disagreeAvg}  delta=${delta}`);
+          }
+        }
+
+        // Outcome proxy: for traces where shadow and DQN disagreed, what happened?
+        console.log('\n=== Outcome Proxy: Shadow-Activate, DQN-Pass ===');
+        const shadowActDqnPass = allTraces.filter(t => t.shadowChoice === 'activate' && t.chose === 'pass');
+        console.log(`  Count: ${shadowActDqnPass.length}`);
+        if (shadowActDqnPass.length > 0) {
+          const withAttack = shadowActDqnPass.filter(t => t.myWounded > 0 || t.oppUnactivated <= 1);
+          console.log(`  Context: ${withAttack.length} had wounded DCs or few opp unactivated (likely good to activate)`);
+          // Can't know outcome since DQN passed — estimate via "was productive activation available"
+          // Use shadow features: bestDcCanAttack was set
+          const couldAttack = shadowActDqnPass.filter(t => {
+            // We stored shadow score — if bestDcCanAttack contributed, score would be higher
+            // Rough proxy: shadow score > 0.5 means strong activate signal
+            return t.shadowScore != null && t.shadowScore > 0.5;
+          });
+          console.log(`  Strong activate signal (score>0.5): ${couldAttack.length} (${pct(couldAttack.length, shadowActDqnPass.length)})`);
+        }
+
+        console.log('\n=== Outcome Proxy: Shadow-Pass, DQN-Activate ===');
+        const shadowPassDqnAct = allTraces.filter(t => t.shadowChoice === 'pass' && t.chose === 'activate');
+        console.log(`  Count: ${shadowPassDqnAct.length}`);
+        if (shadowPassDqnAct.length > 0) {
+          const outcomes = { attack: 0, interact: 0, moveOnly: 0, endOnly: 0, null: 0 };
+          for (const t of shadowPassDqnAct) outcomes[t.activationOutcome || 'null']++;
+          console.log(`  Activation outcomes: attack=${pct(outcomes.attack, shadowPassDqnAct.length)} interact=${pct(outcomes.interact, shadowPassDqnAct.length)} moveOnly=${pct(outcomes.moveOnly, shadowPassDqnAct.length)} endOnly=${pct(outcomes.endOnly + outcomes.null, shadowPassDqnAct.length)}`);
+          console.log(`  Wasted (endOnly): ${outcomes.endOnly + outcomes.null}/${shadowPassDqnAct.length} — shadow was RIGHT to prefer pass`);
+        }
+      }
+    }
+
+    // ── Pass-Timing A/B Report ──────────────────────────────────────────────
+    if (passAbMode) {
+      const pct = (num, den) => den > 0 ? ((num / den) * 100).toFixed(1) + '%' : 'N/A';
+      const controlGames = perGameResults.filter(r => r.passAbGroup === 'control');
+      const treatmentGames = perGameResults.filter(r => r.passAbGroup === 'treatment');
+      console.log('\n╔══════════════════════════════════════════════════╗');
+      console.log('║       PASS-TIMING A/B CONTROL TEST               ║');
+      console.log('╚══════════════════════════════════════════════════╝');
+
+      const grpStats = (games, label) => {
+        const n = games.length;
+        if (n === 0) return null;
+        const vps = games.map(g => (g.p1VP || 0) + (g.p2VP || 0));
+        const avgVP = vps.reduce((a, b) => a + b, 0) / n;
+        const completed = games.filter(g => g.ended).length;
+        const decisive = games.filter(g => Math.abs((g.p1VP || 0) - (g.p2VP || 0)) >= 8).length;
+        const roundCap = games.filter(g => (g.finalRound || 1) >= 4 && g.ended).length;
+        const traces = games.flatMap(g => (g.passAuditTrace || []).map(t => ({ ...t, mapId: g.mapId, gameVP: (g.p1VP || 0) + (g.p2VP || 0) })));
+        const passLegal = traces.length;
+        const passChosen = traces.filter(t => t.chose === 'pass').length;
+        const activated = traces.filter(t => t.chose === 'activate');
+        const nonProd = activated.filter(t => t.activationOutcome === 'moveOnly' || t.activationOutcome === 'endOnly' || !t.activationOutcome);
+        const attacks = activated.filter(t => t.activationOutcome === 'attack');
+        const interacts = activated.filter(t => t.activationOutcome === 'interact');
+        const overrideCount = traces.filter(t => t.overridden).length;
+        return { label, n, avgVP, completed, decisive, roundCap, passLegal, passChosen, activated: activated.length, nonProd: nonProd.length, attacks: attacks.length, interacts: interacts.length, overrideCount, traces, vps };
+      };
+
+      const c = grpStats(controlGames, 'Control');
+      const t = grpStats(treatmentGames, 'Treatment');
+
+      if (c && t) {
+        console.log('\n=== Aggregate: Control vs Treatment ===');
+        console.log(`  ${' '.padEnd(22)} ${'Control'.padEnd(16)} ${'Treatment'.padEnd(16)} Delta`);
+        console.log(`  ${'Games'.padEnd(22)} ${String(c.n).padEnd(16)} ${String(t.n).padEnd(16)}`);
+        console.log(`  ${'Avg VP/game'.padEnd(22)} ${c.avgVP.toFixed(1).padEnd(16)} ${t.avgVP.toFixed(1).padEnd(16)} ${(t.avgVP - c.avgVP) >= 0 ? '+' : ''}${(t.avgVP - c.avgVP).toFixed(1)}`);
+        const cVPperRound = c.avgVP / 4; const tVPperRound = t.avgVP / 4;
+        console.log(`  ${'Avg VP/round'.padEnd(22)} ${cVPperRound.toFixed(2).padEnd(16)} ${tVPperRound.toFixed(2).padEnd(16)} ${(tVPperRound - cVPperRound) >= 0 ? '+' : ''}${(tVPperRound - cVPperRound).toFixed(2)}`);
+        console.log(`  ${'Completion'.padEnd(22)} ${pct(c.completed, c.n).padEnd(16)} ${pct(t.completed, t.n).padEnd(16)}`);
+        console.log(`  ${'Decisive rate'.padEnd(22)} ${pct(c.decisive, c.n).padEnd(16)} ${pct(t.decisive, t.n).padEnd(16)}`);
+        console.log(`  ${'Round-cap rate'.padEnd(22)} ${pct(c.roundCap, c.completed).padEnd(16)} ${pct(t.roundCap, t.completed).padEnd(16)}`);
+        console.log(`  ${'Pass-legal decisions'.padEnd(22)} ${String(c.passLegal).padEnd(16)} ${String(t.passLegal).padEnd(16)}`);
+        console.log(`  ${'Pass rate'.padEnd(22)} ${pct(c.passChosen, c.passLegal).padEnd(16)} ${pct(t.passChosen, t.passLegal).padEnd(16)}`);
+        console.log(`  ${'Activated rate'.padEnd(22)} ${pct(c.activated, c.passLegal).padEnd(16)} ${pct(t.activated, t.passLegal).padEnd(16)}`);
+        console.log(`  ${'Non-productive rate'.padEnd(22)} ${pct(c.nonProd, c.activated).padEnd(16)} ${pct(t.nonProd, t.activated).padEnd(16)}`);
+        console.log(`  ${'Attack rate'.padEnd(22)} ${pct(c.attacks, c.activated).padEnd(16)} ${pct(t.attacks, t.activated).padEnd(16)}`);
+        console.log(`  ${'Interact rate'.padEnd(22)} ${pct(c.interacts, c.activated).padEnd(16)} ${pct(t.interacts, t.activated).padEnd(16)}`);
+        console.log(`  ${'Overrides'.padEnd(22)} ${String(c.overrideCount).padEnd(16)} ${String(t.overrideCount).padEnd(16)}`);
+
+        // ── bestDcCanAttack validation ──
+        console.log('\n=== bestDcCanAttack Validation ===');
+        const allT = [...c.traces, ...t.traces];
+        const canAtkActivated = allT.filter(tr => tr.bestDcCanAttack && tr.chose === 'activate');
+        const cantAtkActivated = allT.filter(tr => !tr.bestDcCanAttack && tr.chose === 'activate');
+        if (canAtkActivated.length > 0) {
+          const atkWhenCan = canAtkActivated.filter(tr => tr.activationOutcome === 'attack').length;
+          console.log(`  bestDcCanAttack=true  → activated ${canAtkActivated.length}, actually attacked: ${atkWhenCan} (${pct(atkWhenCan, canAtkActivated.length)})`);
+        }
+        if (cantAtkActivated.length > 0) {
+          const atkWhenCant = cantAtkActivated.filter(tr => tr.activationOutcome === 'attack').length;
+          console.log(`  bestDcCanAttack=false → activated ${cantAtkActivated.length}, actually attacked: ${atkWhenCant} (${pct(atkWhenCant, cantAtkActivated.length)})`);
+        }
+        // Outcome breakdown for bestDcCanAttack=true activations
+        if (canAtkActivated.length > 0) {
+          const o = { attack: 0, interact: 0, moveOnly: 0, endOnly: 0, null: 0 };
+          for (const tr of canAtkActivated) o[tr.activationOutcome || 'null']++;
+          console.log(`  canAttack=true outcomes: attack=${pct(o.attack, canAtkActivated.length)} interact=${pct(o.interact, canAtkActivated.length)} moveOnly=${pct(o.moveOnly, canAtkActivated.length)} endOnly=${pct(o.endOnly + o.null, canAtkActivated.length)}`);
+        }
+
+        // ── Breakdown by map ──
+        console.log('\n=== Results by Map ===');
+        const mapNames = [...new Set(perGameResults.map(r => r.mapId))].sort();
+        for (const m of mapNames) {
+          const cMap = controlGames.filter(g => g.mapId === m);
+          const tMap = treatmentGames.filter(g => g.mapId === m);
+          const cVP = cMap.length > 0 ? cMap.reduce((s, g) => s + (g.p1VP || 0) + (g.p2VP || 0), 0) / cMap.length : 0;
+          const tVP = tMap.length > 0 ? tMap.reduce((s, g) => s + (g.p1VP || 0) + (g.p2VP || 0), 0) / tMap.length : 0;
+          const shortMap = m.replace(/-/g, ' ').slice(0, 22);
+          console.log(`  ${shortMap.padEnd(24)} C: ${cMap.length}g, VP=${cVP.toFixed(1)} | T: ${tMap.length}g, VP=${tVP.toFixed(1)} | delta=${(tVP - cVP) >= 0 ? '+' : ''}${(tVP - cVP).toFixed(1)}`);
+        }
+
+        // ── Breakdown by round ──
+        console.log('\n=== Results by Round ===');
+        for (let r = 1; r <= 4; r++) {
+          const cRound = c.traces.filter(tr => tr.round === r);
+          const tRound = t.traces.filter(tr => tr.round === r);
+          const cPassR = cRound.filter(tr => tr.chose === 'pass').length;
+          const tPassR = tRound.filter(tr => tr.chose === 'pass').length;
+          const cActR = cRound.filter(tr => tr.chose === 'activate');
+          const tActR = tRound.filter(tr => tr.chose === 'activate');
+          const cNonProdR = cActR.filter(tr => tr.activationOutcome === 'moveOnly' || tr.activationOutcome === 'endOnly' || !tr.activationOutcome).length;
+          const tNonProdR = tActR.filter(tr => tr.activationOutcome === 'moveOnly' || tr.activationOutcome === 'endOnly' || !tr.activationOutcome).length;
+          console.log(`  R${r}: C pass=${pct(cPassR, cRound.length)} nonProd=${pct(cNonProdR, cActR.length)} (N=${cRound.length}) | T pass=${pct(tPassR, tRound.length)} nonProd=${pct(tNonProdR, tActR.length)} (N=${tRound.length})`);
+        }
+
+        // ── Breakdown by VP state ──
+        console.log('\n=== Results by VP State ===');
+        for (const vpLabel of ['ahead', 'behind', 'tied']) {
+          const vpFilter = (tr) => vpLabel === 'ahead' ? tr.vpDelta > 0 : vpLabel === 'behind' ? tr.vpDelta < 0 : tr.vpDelta === 0;
+          const cVP2 = c.traces.filter(vpFilter);
+          const tVP2 = t.traces.filter(vpFilter);
+          const cPassVP = cVP2.filter(tr => tr.chose === 'pass').length;
+          const tPassVP = tVP2.filter(tr => tr.chose === 'pass').length;
+          console.log(`  ${vpLabel.padEnd(8)} C: pass=${pct(cPassVP, cVP2.length)} (N=${cVP2.length}) | T: pass=${pct(tPassVP, tVP2.length)} (N=${tVP2.length})`);
+        }
+
+        // ── Breakdown by wounded state ──
+        console.log('\n=== Results by Wounded State ===');
+        for (const wLabel of ['wounded', 'not_wounded']) {
+          const wFilter = (tr) => wLabel === 'wounded' ? tr.myWounded > 0 : tr.myWounded === 0;
+          const cW = c.traces.filter(wFilter);
+          const tW = t.traces.filter(wFilter);
+          const cPassW = cW.filter(tr => tr.chose === 'pass').length;
+          const tPassW = tW.filter(tr => tr.chose === 'pass').length;
+          const cActW = cW.filter(tr => tr.chose === 'activate');
+          const tActW = tW.filter(tr => tr.chose === 'activate');
+          const cAtkW = cActW.filter(tr => tr.activationOutcome === 'attack').length;
+          const tAtkW = tActW.filter(tr => tr.activationOutcome === 'attack').length;
+          console.log(`  ${wLabel.padEnd(14)} C: pass=${pct(cPassW, cW.length)}, atk=${pct(cAtkW, cActW.length)} (N=${cW.length}) | T: pass=${pct(tPassW, tW.length)}, atk=${pct(tAtkW, tActW.length)} (N=${tW.length})`);
+        }
+
+        // ── Breakdown by bestDcCanAttack ──
+        console.log('\n=== Results by Attack Readiness ===');
+        for (const atkLabel of ['can_attack', 'no_attack']) {
+          const aFilter = (tr) => atkLabel === 'can_attack' ? tr.bestDcCanAttack : !tr.bestDcCanAttack;
+          const cA = c.traces.filter(aFilter);
+          const tA = t.traces.filter(aFilter);
+          const cPassA = cA.filter(tr => tr.chose === 'pass').length;
+          const tPassA = tA.filter(tr => tr.chose === 'pass').length;
+          const cActA = cA.filter(tr => tr.chose === 'activate');
+          const tActA = tA.filter(tr => tr.chose === 'activate');
+          const cAtkA = cActA.filter(tr => tr.activationOutcome === 'attack').length;
+          const tAtkA = tActA.filter(tr => tr.activationOutcome === 'attack').length;
+          const cNProdA = cActA.filter(tr => tr.activationOutcome === 'moveOnly' || tr.activationOutcome === 'endOnly' || !tr.activationOutcome).length;
+          const tNProdA = tActA.filter(tr => tr.activationOutcome === 'moveOnly' || tr.activationOutcome === 'endOnly' || !tr.activationOutcome).length;
+          console.log(`  ${atkLabel.padEnd(14)} C: pass=${pct(cPassA, cA.length)}, act=${cActA.length}, atk=${pct(cAtkA, cActA.length)}, nonProd=${pct(cNProdA, cActA.length)} (N=${cA.length}) | T: pass=${pct(tPassA, tA.length)}, act=${tActA.length}, atk=${pct(tAtkA, tActA.length)}, nonProd=${pct(tNProdA, tActA.length)} (N=${tA.length})`);
+        }
+
+        // ── Statistical significance hint ──
+        console.log('\n=== Statistical Significance ===');
+        const cMean = c.avgVP, tMean = t.avgVP;
+        const cVar = c.vps.reduce((s, v) => s + (v - cMean) ** 2, 0) / (c.n - 1);
+        const tVar = t.vps.reduce((s, v) => s + (v - tMean) ** 2, 0) / (t.n - 1);
+        const pooledSE = Math.sqrt(cVar / c.n + tVar / t.n);
+        const tStat = pooledSE > 0 ? (tMean - cMean) / pooledSE : 0;
+        console.log(`  VP difference: ${(tMean - cMean).toFixed(1)} (treatment - control)`);
+        console.log(`  Control: mean=${cMean.toFixed(1)}, std=${Math.sqrt(cVar).toFixed(1)}, N=${c.n}`);
+        console.log(`  Treatment: mean=${tMean.toFixed(1)}, std=${Math.sqrt(tVar).toFixed(1)}, N=${t.n}`);
+        console.log(`  t-statistic: ${tStat.toFixed(2)} (pooled SE=${pooledSE.toFixed(2)})`);
+        console.log(`  |t| > 1.96 → p < 0.05: ${Math.abs(tStat) > 1.96 ? 'YES' : 'NO'}`);
+      }
     }
   }
 
@@ -3234,12 +4123,12 @@ async function main() {
       // Per-feature gap breakdown (only for suboptimal moves with features available)
       const suboptimal = allMoveDecisions.filter(d => d.gap >= 0.01 && d.chosenFeatures && d.refBestFeatures);
       if (suboptimal.length > 0) {
-        const featureNames = ['distToNearestEnemy', 'threatAtDest', 'objectiveProximity', 'allySupport', 'mpEfficiency', 'bias', 'destInEnemyRange', 'destOnObjective', 'destAdjacentToAlly'];
-        const qualityW = [0.40, -0.15, 0.25, 0.10, 0.10, 0.0, -0.15, 0.30, 0.15];
+        const featureNames = ['distToNearestEnemy', 'threatAtDest', 'objectiveProximity', 'allySupport', 'mpEfficiency', 'bias', 'destInEnemyRange', 'destOnObjective', 'destAdjacentToAlly', 'canAttackFromDest', 'bestReachableKillFraction', 'reachableUnactivatedFraction', 'netDamageDelta', 'attackActionFeasibleAfterMove', 'losTargetCountNorm'];
+        const qualityW = [0.40, 0.10, 0.25, -0.05, 0.10, 0.0, 0.10, 0.30, -0.10, 0.20, 0.30, 0.10, 0.20, 0.15, 0.10];
         console.log(`\n  Per-feature gap breakdown (${suboptimal.length} suboptimal moves):`);
         console.log(`  ${'Feature'.padEnd(22)} ${'AvgChosen'.padStart(10)} ${'AvgRefBest'.padStart(10)} ${'AvgDiff'.padStart(10)} ${'QualW'.padStart(7)} ${'WtdGap'.padStart(10)}`);
         console.log(`  ${'─'.repeat(22)} ${'─'.repeat(10)} ${'─'.repeat(10)} ${'─'.repeat(10)} ${'─'.repeat(7)} ${'─'.repeat(10)}`);
-        for (let i = 0; i < 9; i++) {
+        for (let i = 0; i < 15; i++) {
           const avgChosen = suboptimal.reduce((s, d) => s + (d.chosenFeatures[i] || 0), 0) / suboptimal.length;
           const avgBest = suboptimal.reduce((s, d) => s + (d.refBestFeatures[i] || 0), 0) / suboptimal.length;
           const diff = avgBest - avgChosen;
@@ -3413,6 +4302,348 @@ async function main() {
     }
   }
 
+  // ── Move-Quality Diagnostic Report ──────────────────────────────────────────
+  if (moveAuditMode) {
+    const allMoves = perGameResults.flatMap(r => (r.moveAuditTrace || []).map(t => ({ ...t, mapId: r.mapId, gameVP: (r.p1VP || 0) + (r.p2VP || 0) })));
+    const pct = (num, den) => den > 0 ? ((num / den) * 100).toFixed(1) + '%' : 'N/A';
+    const avg = (arr) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+    const FEAT_NAMES = ['distToNearestEnemy', 'threatAtDest', 'objectiveProximity', 'allySupport', 'mpEfficiency', 'bias', 'destInEnemyRange', 'destOnObjective', 'destAdjacentToAlly', 'canAttackFromDest', 'bestReachableKillFraction', 'reachableUnactivatedFraction', 'netDamageDelta', 'attackActionFeasibleAfterMove', 'losTargetCountNorm'];
+    const QUALITY_W = [0.40, 0.10, 0.25, -0.05, 0.10, 0.0, 0.10, 0.30, -0.10, 0.20, 0.30, 0.10, 0.20, 0.15, 0.10];
+
+    console.log('\n╔══════════════════════════════════════════════════════════════════╗');
+    console.log('║              MOVE-QUALITY DIAGNOSTIC AUDIT                       ║');
+    console.log('╚══════════════════════════════════════════════════════════════════╝');
+
+    // ── Section 1: Why move quality is now the highest-ROI lane ──
+    console.log('\n=== 1. Move Decision Surface ===');
+    console.log(`  Total move decisions traced: ${allMoves.length} across ${perGameResults.length} games`);
+    console.log(`  Avg moves/game: ${(allMoves.length / Math.max(1, perGameResults.length)).toFixed(1)}`);
+    const withGap = allMoves.filter(m => m.gap != null);
+    const withOutcome = allMoves.filter(m => m.activationOutcome != null);
+    console.log(`  With quality gap data: ${withGap.length} (${pct(withGap.length, allMoves.length)})`);
+    console.log(`  With activation outcome: ${withOutcome.length} (${pct(withOutcome.length, allMoves.length)})`);
+    const avgCandidates = avg(allMoves.map(m => m.candidateCount));
+    console.log(`  Avg candidate spaces/decision: ${avgCandidates.toFixed(1)}`);
+
+    // ── Section 2: Current move-scorer state ──
+    console.log('\n=== 2. Current Move-Scorer Weights ===');
+    try {
+      // Read from the active run's checkpoint (savePath), not the live file, so
+      // the displayed weights match the audit the report is summarizing.
+      const mw = JSON.parse(readFileSync(savePath, 'utf8')).withinGroupWeights?.move;
+      if (mw) {
+        for (let i = 0; i < FEAT_NAMES.length; i++) {
+          const w = mw[i] ?? 0;
+          const saturated = Math.abs(w) >= 9.5 ? ' *** SATURATED ***' : '';
+          const dead = Math.abs(w) < 0.1 ? ' (dead)' : '';
+          console.log(`    ${FEAT_NAMES[i].padEnd(22)} w=${w.toFixed(4).padStart(8)}  qualityW=${QUALITY_W[i].toFixed(2).padStart(6)}${saturated}${dead}`);
+        }
+      }
+    } catch { console.log('  (could not load weights)'); }
+
+    // ── Section 3: Quality-gap results ──
+    console.log('\n=== 3. Quality-Gap Distribution ===');
+    if (withGap.length > 0) {
+      const gaps = withGap.map(m => m.gap);
+      const optimal = withGap.filter(m => m.gap < 0.001);
+      const nearZero = gaps.filter(g => g >= 0 && g < 0.01);
+      const small = gaps.filter(g => g >= 0.01 && g < 0.05);
+      const moderate = gaps.filter(g => g >= 0.05 && g < 0.15);
+      const large = gaps.filter(g => g >= 0.15);
+      console.log(`  Chose reference-optimal destination: ${optimal.length}/${withGap.length} (${pct(optimal.length, withGap.length)})`);
+      console.log(`  Quality-gap buckets:`);
+      console.log(`    Near-zero (<0.01):   ${nearZero.length} (${pct(nearZero.length, withGap.length)})`);
+      console.log(`    Small (0.01-0.05):   ${small.length} (${pct(small.length, withGap.length)})`);
+      console.log(`    Moderate (0.05-0.15): ${moderate.length} (${pct(moderate.length, withGap.length)})`);
+      console.log(`    Large (>0.15):       ${large.length} (${pct(large.length, withGap.length)})`);
+      console.log(`  Avg gap: ${avg(gaps).toFixed(4)}  Median gap: ${gaps.sort((a, b) => a - b)[Math.floor(gaps.length / 2)].toFixed(4)}  Max gap: ${Math.max(...gaps).toFixed(4)}`);
+
+      // Quality gap by round
+      console.log('\n  Quality gap by round:');
+      for (let r = 1; r <= 4; r++) {
+        const rMoves = withGap.filter(m => m.round === r);
+        if (rMoves.length === 0) continue;
+        const rGaps = rMoves.map(m => m.gap);
+        const rOptimal = rMoves.filter(m => m.gap < 0.001);
+        console.log(`    R${r}: ${rMoves.length} moves, avg gap=${avg(rGaps).toFixed(4)}, optimal=${pct(rOptimal.length, rMoves.length)} (N=${rMoves.length})`);
+      }
+
+      // Per-feature gap breakdown (suboptimal moves only)
+      const subopt = withGap.filter(m => m.gap >= 0.01 && m.chosenFeatures && m.refBestFeatures);
+      if (subopt.length > 0) {
+        console.log(`\n  Per-feature gap (${subopt.length} suboptimal moves):`);
+        console.log(`  ${'Feature'.padEnd(22)} ${'AvgChosen'.padStart(10)} ${'AvgRefBest'.padStart(10)} ${'Diff'.padStart(10)} ${'QualW'.padStart(7)} ${'WtdGap'.padStart(10)}`);
+        const contribs = [];
+        for (let i = 0; i < 15; i++) {
+          const ac = avg(subopt.map(m => m.chosenFeatures[i] || 0));
+          const ab = avg(subopt.map(m => m.refBestFeatures[i] || 0));
+          const diff = ab - ac;
+          const wtd = diff * QUALITY_W[i];
+          contribs.push({ name: FEAT_NAMES[i], absWtd: Math.abs(wtd) });
+          console.log(`  ${FEAT_NAMES[i].padEnd(22)} ${ac.toFixed(4).padStart(10)} ${ab.toFixed(4).padStart(10)} ${(diff >= 0 ? '+' : '') + diff.toFixed(4).padStart(9)} ${QUALITY_W[i].toFixed(2).padStart(7)} ${(wtd >= 0 ? '+' : '') + wtd.toFixed(4).padStart(9)}`);
+        }
+        contribs.sort((a, b) => b.absWtd - a.absWtd);
+        console.log(`\n  Top gap contributors: ${contribs.slice(0, 3).map(c => `${c.name}(${c.absWtd.toFixed(4)})`).join(', ')}`);
+      }
+    } else {
+      console.log('  No quality-gap data available.');
+    }
+
+    // ── Section 4: Action-conversion results ──
+    console.log('\n=== 4. Action Conversion After Move ===');
+    if (withOutcome.length > 0) {
+      const atkAfter = withOutcome.filter(m => m.activationOutcome === 'attack');
+      const intAfter = withOutcome.filter(m => m.activationOutcome === 'interact');
+      const moveOnlyAfter = withOutcome.filter(m => m.activationOutcome === 'moveOnly');
+      const endOnlyAfter = withOutcome.filter(m => m.activationOutcome === 'endOnly');
+      console.log(`  Activation outcomes for moves with traces:`);
+      console.log(`    attack:    ${atkAfter.length} (${pct(atkAfter.length, withOutcome.length)})`);
+      console.log(`    interact:  ${intAfter.length} (${pct(intAfter.length, withOutcome.length)})`);
+      console.log(`    moveOnly:  ${moveOnlyAfter.length} (${pct(moveOnlyAfter.length, withOutcome.length)})`);
+      console.log(`    endOnly:   ${endOnlyAfter.length} (${pct(endOnlyAfter.length, withOutcome.length)})`);
+      const productive = atkAfter.length + intAfter.length;
+      console.log(`  Productive conversion rate (attack+interact): ${pct(productive, withOutcome.length)}`);
+
+      // Quality gap correlated with outcome
+      const withGapAndOutcome = withOutcome.filter(m => m.gap != null);
+      if (withGapAndOutcome.length > 0) {
+        console.log('\n  Avg quality gap by outcome:');
+        for (const outcome of ['attack', 'interact', 'moveOnly', 'endOnly']) {
+          const subset = withGapAndOutcome.filter(m => m.activationOutcome === outcome);
+          if (subset.length > 0) {
+            console.log(`    ${outcome.padEnd(12)} avg gap=${avg(subset.map(m => m.gap)).toFixed(4)}, avg chosenQ=${avg(subset.map(m => m.chosenQuality)).toFixed(4)}, avg refBestQ=${avg(subset.map(m => m.refBestQuality)).toFixed(4)} (N=${subset.length})`);
+          }
+        }
+      }
+
+      // Conversion rate by round
+      console.log('\n  Conversion rate by round:');
+      for (let r = 1; r <= 4; r++) {
+        const rMoves = withOutcome.filter(m => m.round === r);
+        if (rMoves.length === 0) continue;
+        const rAtk = rMoves.filter(m => m.activationOutcome === 'attack').length;
+        const rInt = rMoves.filter(m => m.activationOutcome === 'interact').length;
+        const rProd = rAtk + rInt;
+        console.log(`    R${r}: ${pct(rProd, rMoves.length)} productive (atk=${pct(rAtk, rMoves.length)}, int=${pct(rInt, rMoves.length)}) N=${rMoves.length}`);
+      }
+    } else {
+      console.log('  No outcome data available.');
+    }
+
+    // ── Section 5: Saturation/pathology slices ──
+    console.log('\n=== 5. Saturation & Pathology Slices ===');
+    const withFeatsAndOutcome = allMoves.filter(m => m.chosenFeatures && m.activationOutcome);
+    if (withFeatsAndOutcome.length > 0) {
+      // destOnObjective=1 slice
+      const onObj = withFeatsAndOutcome.filter(m => m.chosenFeatures[7] >= 0.5);
+      const offObj = withFeatsAndOutcome.filter(m => m.chosenFeatures[7] < 0.5);
+      console.log(`\n  destOnObjective=1 (${onObj.length} moves):`);
+      if (onObj.length > 0) {
+        const onObjAtk = onObj.filter(m => m.activationOutcome === 'attack').length;
+        const onObjInt = onObj.filter(m => m.activationOutcome === 'interact').length;
+        const onObjProd = onObjAtk + onObjInt;
+        console.log(`    Conversion: ${pct(onObjProd, onObj.length)} productive (atk=${pct(onObjAtk, onObj.length)}, int=${pct(onObjInt, onObj.length)})`);
+        const onObjGaps = onObj.filter(m => m.gap != null);
+        if (onObjGaps.length > 0) console.log(`    Avg gap: ${avg(onObjGaps.map(m => m.gap)).toFixed(4)}`);
+      }
+      console.log(`  destOnObjective=0 (${offObj.length} moves):`);
+      if (offObj.length > 0) {
+        const offObjAtk = offObj.filter(m => m.activationOutcome === 'attack').length;
+        const offObjInt = offObj.filter(m => m.activationOutcome === 'interact').length;
+        const offObjProd = offObjAtk + offObjInt;
+        console.log(`    Conversion: ${pct(offObjProd, offObj.length)} productive (atk=${pct(offObjAtk, offObj.length)}, int=${pct(offObjInt, offObj.length)})`);
+        const offObjGaps = offObj.filter(m => m.gap != null);
+        if (offObjGaps.length > 0) console.log(`    Avg gap: ${avg(offObjGaps.map(m => m.gap)).toFixed(4)}`);
+      }
+
+      // destInEnemyRange slice
+      const inRange = withFeatsAndOutcome.filter(m => m.chosenFeatures[6] > 0);
+      const notInRange = withFeatsAndOutcome.filter(m => m.chosenFeatures[6] === 0);
+      console.log(`\n  destInEnemyRange>0 (${inRange.length} moves):`);
+      if (inRange.length > 0) {
+        const irAtk = inRange.filter(m => m.activationOutcome === 'attack').length;
+        console.log(`    Attack conversion: ${pct(irAtk, inRange.length)}`);
+      }
+      console.log(`  destInEnemyRange=0 (${notInRange.length} moves):`);
+      if (notInRange.length > 0) {
+        const nirAtk = notInRange.filter(m => m.activationOutcome === 'attack').length;
+        console.log(`    Attack conversion: ${pct(nirAtk, notInRange.length)}`);
+      }
+
+      // threatAtDest slice
+      const highThreat = withFeatsAndOutcome.filter(m => m.chosenFeatures[1] > 0.1);
+      const lowThreat = withFeatsAndOutcome.filter(m => m.chosenFeatures[1] <= 0.1);
+      console.log(`\n  threatAtDest>0.1 (${highThreat.length} moves):`);
+      if (highThreat.length > 0) {
+        const htAtk = highThreat.filter(m => m.activationOutcome === 'attack').length;
+        console.log(`    Attack conversion: ${pct(htAtk, highThreat.length)}`);
+      }
+      console.log(`  threatAtDest<=0.1 (${lowThreat.length} moves):`);
+      if (lowThreat.length > 0) {
+        const ltAtk = lowThreat.filter(m => m.activationOutcome === 'attack').length;
+        console.log(`    Attack conversion: ${pct(ltAtk, lowThreat.length)}`);
+      }
+
+      // allySupport slice
+      const hasAlly = withFeatsAndOutcome.filter(m => m.chosenFeatures[8] >= 0.5);
+      const noAlly = withFeatsAndOutcome.filter(m => m.chosenFeatures[8] < 0.5);
+      console.log(`\n  destAdjacentToAlly=1 (${hasAlly.length} moves):`);
+      if (hasAlly.length > 0) {
+        const allyAtk = hasAlly.filter(m => m.activationOutcome === 'attack').length;
+        console.log(`    Attack conversion: ${pct(allyAtk, hasAlly.length)}`);
+      }
+      console.log(`  destAdjacentToAlly=0 (${noAlly.length} moves):`);
+      if (noAlly.length > 0) {
+        const noAllyAtk = noAlly.filter(m => m.activationOutcome === 'attack').length;
+        console.log(`    Attack conversion: ${pct(noAllyAtk, noAlly.length)}`);
+      }
+
+      // distToNearestEnemy high vs low
+      const closeEnemy = withFeatsAndOutcome.filter(m => m.chosenFeatures[0] >= 0.7);
+      const farEnemy = withFeatsAndOutcome.filter(m => m.chosenFeatures[0] < 0.3);
+      console.log(`\n  distToNearestEnemy>=0.7 (close, ${closeEnemy.length} moves):`);
+      if (closeEnemy.length > 0) {
+        const ceAtk = closeEnemy.filter(m => m.activationOutcome === 'attack').length;
+        console.log(`    Attack conversion: ${pct(ceAtk, closeEnemy.length)}`);
+      }
+      console.log(`  distToNearestEnemy<0.3 (far, ${farEnemy.length} moves):`);
+      if (farEnemy.length > 0) {
+        const feAtk = farEnemy.filter(m => m.activationOutcome === 'attack').length;
+        console.log(`    Attack conversion: ${pct(feAtk, farEnemy.length)}`);
+      }
+
+      // Per-map breakdown
+      const mapNames = [...new Set(allMoves.map(m => m.mapId))].sort();
+      if (mapNames.length > 1) {
+        console.log('\n  Per-map move quality:');
+        for (const m of mapNames) {
+          const mm = withFeatsAndOutcome.filter(t => t.mapId === m);
+          const mmGap = mm.filter(t => t.gap != null);
+          const mmAtk = mm.filter(t => t.activationOutcome === 'attack').length;
+          const shortMap = m.replace(/-/g, ' ').slice(0, 22);
+          console.log(`    ${shortMap.padEnd(24)} N=${mm.length}, avgGap=${mmGap.length > 0 ? avg(mmGap.map(t => t.gap)).toFixed(4) : 'N/A'}, atkConv=${pct(mmAtk, mm.length)}`);
+        }
+      }
+    } else {
+      console.log('  No feature+outcome data available.');
+    }
+
+    // ── Section 6: Where the scorer is clearly misbehaving ──
+    console.log('\n=== 6. Scorer Pathology Analysis ===');
+    if (withGap.length > 0) {
+      // Large-gap analysis: what features distinguish large-gap decisions?
+      const largeGap = withGap.filter(m => m.gap >= 0.15 && m.chosenFeatures && m.refBestFeatures);
+      const smallGap = withGap.filter(m => m.gap < 0.01 && m.chosenFeatures);
+      if (largeGap.length > 0 && smallGap.length > 0) {
+        console.log(`  Comparing large-gap (${largeGap.length}) vs optimal (${smallGap.length}) moves:`);
+        console.log(`  ${'Feature'.padEnd(22)} ${'Optimal(avg)'.padStart(12)} ${'LargeGap(avg)'.padStart(14)} ${'Delta'.padStart(10)}`);
+        for (let i = 0; i < 15; i++) {
+          const optAvg = avg(smallGap.map(m => m.chosenFeatures[i] || 0));
+          const lgAvg = avg(largeGap.map(m => m.chosenFeatures[i] || 0));
+          const delta = lgAvg - optAvg;
+          const flag = Math.abs(delta) > 0.1 ? ' ←' : '';
+          console.log(`  ${FEAT_NAMES[i].padEnd(22)} ${optAvg.toFixed(4).padStart(12)} ${lgAvg.toFixed(4).padStart(14)} ${(delta >= 0 ? '+' : '') + delta.toFixed(4).padStart(9)}${flag}`);
+        }
+      }
+
+      // Saturation diagnostic: when destOnObjective=1 in chosen but not in refBest
+      const objOverride = withGap.filter(m =>
+        m.chosenFeatures && m.refBestFeatures &&
+        m.chosenFeatures[7] >= 0.5 && m.refBestFeatures[7] < 0.5 && m.gap >= 0.01
+      );
+      const objMissed = withGap.filter(m =>
+        m.chosenFeatures && m.refBestFeatures &&
+        m.chosenFeatures[7] < 0.5 && m.refBestFeatures[7] >= 0.5 && m.gap >= 0.01
+      );
+      console.log(`\n  destOnObjective saturation check:`);
+      console.log(`    Scorer chose obj dest when oracle didn't: ${objOverride.length} (scorer over-routes to objectives)`);
+      console.log(`    Scorer missed obj dest when oracle wanted it: ${objMissed.length} (scorer under-routes)`);
+      if (objOverride.length > 0) {
+        const orOutcomes = objOverride.filter(m => m.activationOutcome);
+        if (orOutcomes.length > 0) {
+          const orAtk = orOutcomes.filter(m => m.activationOutcome === 'attack').length;
+          console.log(`    Over-routed moves → attack conversion: ${pct(orAtk, orOutcomes.length)} (N=${orOutcomes.length})`);
+        }
+      }
+    }
+
+    // ── Section 7: Oracle sanity check ──
+    console.log('\n=== 7. Oracle Sanity Check: Is the Learner Wrong or the Oracle Wrong? ===');
+    if (withGap.length > 0 && withOutcome.length > 0) {
+      const withAll = allMoves.filter(m => m.gap != null && m.activationOutcome && m.refBestQuality != null);
+      // Key question: when the learner picks the oracle-best destination, does it convert?
+      const oracleChosen = withAll.filter(m => m.gap < 0.001);
+      const oracleNotChosen = withAll.filter(m => m.gap >= 0.01);
+
+      console.log(`  Oracle-optimal moves (gap<0.001): ${oracleChosen.length}`);
+      if (oracleChosen.length > 0) {
+        const ocAtk = oracleChosen.filter(m => m.activationOutcome === 'attack').length;
+        const ocInt = oracleChosen.filter(m => m.activationOutcome === 'interact').length;
+        const ocProd = ocAtk + ocInt;
+        console.log(`    Productive conversion: ${pct(ocProd, oracleChosen.length)} (atk=${pct(ocAtk, oracleChosen.length)}, int=${pct(ocInt, oracleChosen.length)})`);
+        console.log(`    moveOnly: ${pct(oracleChosen.filter(m => m.activationOutcome === 'moveOnly').length, oracleChosen.length)}`);
+      }
+
+      console.log(`  Learner-suboptimal moves (gap>=0.01): ${oracleNotChosen.length}`);
+      if (oracleNotChosen.length > 0) {
+        const ncAtk = oracleNotChosen.filter(m => m.activationOutcome === 'attack').length;
+        const ncInt = oracleNotChosen.filter(m => m.activationOutcome === 'interact').length;
+        const ncProd = ncAtk + ncInt;
+        console.log(`    Productive conversion: ${pct(ncProd, oracleNotChosen.length)} (atk=${pct(ncAtk, oracleNotChosen.length)}, int=${pct(ncInt, oracleNotChosen.length)})`);
+        console.log(`    moveOnly: ${pct(oracleNotChosen.filter(m => m.activationOutcome === 'moveOnly').length, oracleNotChosen.length)}`);
+      }
+
+      // Verdict
+      const oracleConv = oracleChosen.length > 0
+        ? (oracleChosen.filter(m => m.activationOutcome === 'attack' || m.activationOutcome === 'interact').length / oracleChosen.length) : 0;
+      const learnerConv = oracleNotChosen.length > 0
+        ? (oracleNotChosen.filter(m => m.activationOutcome === 'attack' || m.activationOutcome === 'interact').length / oracleNotChosen.length) : 0;
+      const convDelta = oracleConv - learnerConv;
+      console.log(`\n  Oracle productive conversion: ${(oracleConv * 100).toFixed(1)}%`);
+      console.log(`  Learner-miss productive conversion: ${(learnerConv * 100).toFixed(1)}%`);
+      console.log(`  Delta: ${(convDelta >= 0 ? '+' : '')}${(convDelta * 100).toFixed(1)}pp`);
+      if (oracleConv < 0.30) {
+        console.log(`  ⚠ ORACLE SUSPECT: Even oracle-best destinations convert to attack <30% of the time.`);
+        console.log(`    The reference oracle (MOVE_QUALITY_WEIGHTS) may be miscalibrated.`);
+      } else if (convDelta > 0.05) {
+        console.log(`  → LEARNER IS THE BOTTLENECK: Oracle-best destinations convert ${(convDelta * 100).toFixed(1)}pp better.`);
+        console.log(`    Fixing learner training (weight saturation, decay) should recover VP.`);
+      } else {
+        console.log(`  → ORACLE AND LEARNER SIMILAR: Both have similar conversion rates.`);
+        console.log(`    The quality weights themselves may need recalibration, or destination features need expansion.`);
+      }
+
+      // Reference-best feature profile when it DOES convert vs when it doesn't
+      const refBestConverted = withAll.filter(m => m.gap < 0.001 && (m.activationOutcome === 'attack' || m.activationOutcome === 'interact') && m.chosenFeatures);
+      const refBestNotConverted = withAll.filter(m => m.gap < 0.001 && m.activationOutcome === 'moveOnly' && m.chosenFeatures);
+      if (refBestConverted.length > 10 && refBestNotConverted.length > 10) {
+        console.log(`\n  Oracle-optimal feature profile: converted (${refBestConverted.length}) vs not (${refBestNotConverted.length}):`);
+        console.log(`  ${'Feature'.padEnd(22)} ${'Converted'.padStart(10)} ${'NotConvert'.padStart(10)} ${'Delta'.padStart(10)}`);
+        for (let i = 0; i < 15; i++) {
+          const cAvg = avg(refBestConverted.map(m => m.chosenFeatures[i] || 0));
+          const nAvg = avg(refBestNotConverted.map(m => m.chosenFeatures[i] || 0));
+          const d = cAvg - nAvg;
+          const flag = Math.abs(d) > 0.1 ? ' ←' : '';
+          console.log(`  ${FEAT_NAMES[i].padEnd(22)} ${cAvg.toFixed(4).padStart(10)} ${nAvg.toFixed(4).padStart(10)} ${(d >= 0 ? '+' : '') + d.toFixed(4).padStart(9)}${flag}`);
+        }
+      }
+    } else {
+      console.log('  Insufficient data for oracle sanity check.');
+    }
+
+    // ── Section 8: Summary statistics ──
+    console.log('\n=== 8. Summary ===');
+    if (withGap.length > 0 && withOutcome.length > 0) {
+      const optRate = withGap.filter(m => m.gap < 0.001).length / withGap.length;
+      const avgGapVal = avg(withGap.map(m => m.gap));
+      const convAll = withOutcome.filter(m => m.activationOutcome === 'attack' || m.activationOutcome === 'interact').length / withOutcome.length;
+      console.log(`  Optimal destination rate: ${(optRate * 100).toFixed(1)}%`);
+      console.log(`  Avg quality gap: ${avgGapVal.toFixed(4)}`);
+      console.log(`  Overall productive conversion: ${(convAll * 100).toFixed(1)}%`);
+      console.log(`  Total moves traced: ${allMoves.length} across ${perGameResults.length} games`);
+    }
+  }
+
   console.log(`\nLearnings saved to ${savePath}`);
 
   // Save diagnostic trace if non-empty (for map-specific regression diagnosis)
@@ -3421,6 +4652,34 @@ async function main() {
     const tracePath = savePath.replace(/\.json$/, '-diag-trace.json');
     writeFileSync(tracePath, JSON.stringify(diagTrace));
     console.log(`Diagnostic trace saved to ${tracePath} (${diagTrace.length} disagreements)`);
+  }
+
+  // Save premature-end forensic frames if any were captured
+  const premFrames = getPremEndFrames();
+  if (premFrames.length > 0) {
+    const framesPath = savePath.replace(/\.json$/, '-premend-frames.json');
+    writeFileSync(framesPath, JSON.stringify(premFrames));
+    console.log(`Premature-end forensic frames saved to ${framesPath} (${premFrames.length} frames)`);
+  }
+
+  // Save ability-play audit frames if any were captured
+  if (abilityAudit && _abilityPlays.length > 0) {
+    const abilityPath = savePath.replace(/\.json$/, '-ability-plays.json');
+    writeFileSync(abilityPath, JSON.stringify(_abilityPlays));
+    console.log(`Ability-play audit saved to ${abilityPath} (${_abilityPlays.length} plays)`);
+  }
+
+  // Ability distance-gate audit (always printed in diagnostic mode)
+  if (diagnosticMode) {
+    const ga = getAbilityGateAudit();
+    const decisions = ga.gateHit + ga.gatePass;
+    if (decisions > 0) {
+      const gateHitPct = (ga.gateHit / decisions * 100).toFixed(1);
+      console.log(`\n=== Ability distance-gate audit ===`);
+      console.log(`  Decisions: ${decisions} (gate-hit ${ga.gateHit} [${gateHitPct}%] / gate-pass ${ga.gatePass})`);
+      console.log(`  Skipped by category: offensive=${ga.skippedByCat.offensive} off_move=${ga.skippedByCat.off_move} defense=${ga.skippedByCat.defense} support=${ga.skippedByCat.support} other=${ga.skippedByCat.other}`);
+      console.log(`  Played  by category: offensive=${ga.playedByCat.offensive}  off_move=${ga.playedByCat.off_move}  defense=${ga.playedByCat.defense}  support=${ga.playedByCat.support}  other=${ga.playedByCat.other}`);
+    }
   }
 }
 

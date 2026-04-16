@@ -5,7 +5,8 @@
  * Q(s,a) = V(s) + (A(s,a) - mean(A(s,*)))
  */
 import { parseCoord } from '../../src/game/coords.js';
-import { getDcEffects, getMapTokensData, getCcEffect, getDeploymentZones, getMissionCardsData } from '../../src/data-loader.js';
+import { getDcEffects, getMapTokensData, getMapData, getCcEffect, getDeploymentZones, getMissionCardsData } from '../../src/data-loader.js';
+import { hasLineOfSight, countSpaces } from '../../src/game/spatial.js';
 import { parseSurgeEffect } from '../../src/game/combat.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import {
@@ -40,29 +41,37 @@ export function getEncoderType() { return ENCODER_TYPE; }
 export function setWeightDecay(v) { WEIGHT_DECAY = v; }
 /** Override base learning rate for controlled experiments. Call before training. */
 export function setAlpha(v) { ALPHA = v; }
-/** Inverse-sqrt LR schedule: ALPHA / sqrt(1 + totalGames/TAU), floored. */
-export function getEffectiveAlpha(totalGames) {
-  return Math.max(ALPHA_FLOOR, ALPHA / Math.sqrt(1 + (totalGames || 0) / ALPHA_TAU));
-}
+
+// Diagnostic-eval flag: when true, the per-game WG update block in
+// updateTraceNeural short-circuits so all WG weights stay frozen at their
+// loaded values for the duration of the run. Complements setAlpha(0), which
+// only freezes the main Q-network.
+let WG_FROZEN = false;
+export function setWgFrozen(v) { WG_FROZEN = !!v; }
+export function getWgFrozen() { return WG_FROZEN; }
+
+// Forensic attack-target trace. When true, every multi-candidate attack decision
+// in pickWithinGroup prints a candidate breakdown to stderr. Designed for short
+// trace runs (1–5 games); noise level scales with attack frequency.
+let ATTACK_TRACE = false;
+export function setAttackTrace(v) { ATTACK_TRACE = !!v; }
 
 // Shared attack-target comparator. Used by both oracleActivationPlan and
 // pickWithinGroup so the ranking can't silently drift between them.
 //
 // Tier order (lower value → preferred):
 //   1. hitViability             — reliable hits beat marginal hits
-//   2. currentHp                — focus-fire: finish weakest first
+//   2. currentHp                — focus-fire: finish weakest first (permanent kill priority)
 //   3. maxHp                    — smaller baseline beats larger baseline at equal current HP
 //   4. targetActivated          — turn-denial: prefer unactivated
 //   5. missionTargetPriority    — mission-VP tiebreaker (Krykna on Krykna Infestation)
 //   6. dist                     — proximity (final tiebreaker)
 //
-// Earlier versions placed missionTargetPriority as tier-1, which caused every
-// mixed-candidate attack decision on Chopper to pick a Krykna over the enemy
-// figure — confirmed in the Chopper forensic trace as 9/9 NPC-preference cases
-// regardless of HP or hit viability. The mission term now participates only
-// after hit viability, focus-fire HP, and turn-denial; Krykna still win when
-// they're legitimately the most finishable target (lower current HP) or when
-// every other signal ties.
+// Earlier versions placed missionTargetPriority as tier-1, which caused the
+// Krykna-beats-every-enemy-figure failure mode on Chopper. The mission term now
+// participates only after hit viability, focus-fire HP, and turn-denial — which
+// preserves the "Krykna are valuable" intent as a late tiebreaker without
+// overriding any of the signals we know matter more.
 export function compareAttackTargets(a, b) {
   if (a.hitViability !== b.hitViability) return a.hitViability - b.hitViability;
   if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
@@ -70,6 +79,10 @@ export function compareAttackTargets(a, b) {
   if (a.targetActivated !== b.targetActivated) return a.targetActivated - b.targetActivated;
   if (a.missionTargetPriority !== b.missionTargetPriority) return a.missionTargetPriority - b.missionTargetPriority;
   return a.dist - b.dist;
+}
+/** Inverse-sqrt LR schedule: ALPHA / sqrt(1 + totalGames/TAU), floored. */
+export function getEffectiveAlpha(totalGames) {
+  return Math.max(ALPHA_FLOOR, ALPHA / Math.sqrt(1 + (totalGames || 0) / ALPHA_TAU));
 }
 
 const REPLAY_BUFFER_SIZE = 10000;   // Max transitions in ring buffer
@@ -156,6 +169,249 @@ export function resetAtkAuditTotals() {
   _atkAuditTotal = { totalDecisions: 0, multiTargetDecisions: 0, totalTargets: 0,
     chosenHpSum: 0, altHpSum: 0, reliableHits: 0, marginalHits: 0,
     turnDenialRelevant: 0, turnDenialChosen: 0 };
+}
+
+// ── Attack-candidate-generation audit ───────────────────────────────────────
+// Classifies each attack decision's legal candidate set: npc-only,
+// figure-only, mixed, or empty. For npc-only decisions, further classifies
+// why each enemy figure was excluded from the candidate list (range gate,
+// LoS gate, or other). This is the diagnostic primitive for the Chopper
+// NPC-geometry question — post-scorer-fix, the remaining Chopper VP gap is
+// driven by candidate generation rather than ranking.
+let _candAudit = {
+  totalDecisions: 0,
+  npcOnly: 0,
+  figureOnly: 0,
+  mixed: 0,
+  empty: 0,
+  // Refined excluded-figure reasons for npc-only decisions:
+  npcOnlyExcludedFigTotal: 0,
+  npcOnlyExcludedByRange: 0,        // Manhattan dist > attackerRange
+  npcOnlyExcludedByLos: 0,          // in range, bare LoS fails
+  npcOnlyExcludedByPathDist: 0,     // Manhattan ≤ range but path distance (around walls/doors) > range
+  npcOnlyExcludedByFigureBlock: 0,  // bare LoS passes; figure-blocking LoS fails
+  npcOnlyExcludedByOther: 0,        // residual (missing positions, exotic filters)
+  // Global aggregates (for context):
+  totalNpcCandidates: 0,
+  totalFigureCandidates: 0,
+  totalEnemyFiguresOnBoard: 0,
+  // Spatial distribution samples (pushed per decision):
+  distToNearestEnemyFig: [],        // Manhattan dist from attacker to nearest enemy figure
+  distToNearestKrykna: [],          // Manhattan dist from attacker to nearest active Krykna
+  attackerRanges: [],               // attacker's practical range at decision time
+  // Density counts at concentric radii (per decision):
+  figCountWithin3: 0, figCountWithin5: 0, figCountWithin7: 0,
+  kryCountWithin3: 0, kryCountWithin5: 0, kryCountWithin7: 0,
+  // Total active Krykna at each decision (for population tracking):
+  totalActiveKryknaSum: 0,
+  // Respawn tracking (population changes decision-to-decision):
+  respawnEvents: 0,                 // count of times Krykna population grew between decisions
+  lastKryknaPop: 0,
+};
+export function getCandAudit() {
+  // Return a reference to the arrays so caller can quantile without copying huge arrays.
+  return { ..._candAudit };
+}
+export function resetCandAudit() {
+  _candAudit = {
+    totalDecisions: 0, npcOnly: 0, figureOnly: 0, mixed: 0, empty: 0,
+    npcOnlyExcludedFigTotal: 0,
+    npcOnlyExcludedByRange: 0, npcOnlyExcludedByLos: 0,
+    npcOnlyExcludedByPathDist: 0, npcOnlyExcludedByFigureBlock: 0, npcOnlyExcludedByOther: 0,
+    totalNpcCandidates: 0, totalFigureCandidates: 0, totalEnemyFiguresOnBoard: 0,
+    distToNearestEnemyFig: [], distToNearestKrykna: [], attackerRanges: [],
+    figCountWithin3: 0, figCountWithin5: 0, figCountWithin7: 0,
+    kryCountWithin3: 0, kryCountWithin5: 0, kryCountWithin7: 0,
+    totalActiveKryknaSum: 0,
+    respawnEvents: 0, lastKryknaPop: 0,
+  };
+}
+
+// ── Premature-end-activation audit ──────────────────────────────────────────
+// Classifies every dc_end_activation event: was a "productive" action legal
+// at end time? If so, what type (attack / interact / move-only / special)?
+// Breaks down by round + side. Optional crate-proximity context: at each
+// premature end, records whether the acting figure is on/adjacent to a
+// crate/objective — for disambiguating "correct camping" from "scorer gives up".
+let _premEndAudit = {
+  totalDcEnd: 0,
+  premature: 0,
+  byRound: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],   // index 0 unused; rounds 1..11 covered
+  bySide: { 1: 0, 2: 0 },
+  // Classification of premature subset (priority: attack > interact > special > move):
+  attackLegalDeclined: 0,    attackLegalDeclinedP1: 0, attackLegalDeclinedP2: 0,
+  interactLegalDeclined: 0,  interactLegalDeclinedP1: 0, interactLegalDeclinedP2: 0,
+  specialLegalDeclined: 0,   specialLegalDeclinedP1: 0, specialLegalDeclinedP2: 0,
+  moveOnlyAvailable: 0,      moveOnlyAvailableP1: 0, moveOnlyAvailableP2: 0,
+  noLegalProductive: 0,      // shouldn't be flagged premature but count defensively
+  // Activation-state context for premature events:
+  alreadyAttackedThisAct: 0,
+  alreadyInteractedThisAct: 0,
+  alreadyMovedThisAct: 0,
+  noPriorProductiveAction: 0,
+  // Action-economy state at time of end:
+  actionsRemainingSum: 0,    // cumulative "remaining" field of dcActionsData[msgId]
+  // Crate/objective proximity (for zone-control missions):
+  endedOnObjective: 0,       // acting figure was on-objective (dist=0 to mission token)
+  endedAdjacentObjective: 0, // on-or-adjacent (dist ≤ 1)
+  endedNearObjective: 0,     // within 3
+  endedFarFromObjective: 0,  // > 3
+  // Baseline total counts (for normalization):
+  onObjectiveAtEndP1: 0, onObjectiveAtEndP2: 0,
+};
+export function getPremEndAudit() { return { ..._premEndAudit, byRound: [..._premEndAudit.byRound], bySide: { ..._premEndAudit.bySide } }; }
+export function recordPremEnd(fields) {
+  // Update counters from an object captured at dc_end_activation time.
+  _premEndAudit.totalDcEnd++;
+  if (!fields.isPremature) return;
+  _premEndAudit.premature++;
+  const r = Math.max(1, Math.min(11, fields.round || 1));
+  _premEndAudit.byRound[r]++;
+  const side = fields.side === 1 ? 1 : 2;
+  _premEndAudit.bySide[side]++;
+  // Classify the "available-but-declined" bucket
+  if (fields.attackLegal) {
+    _premEndAudit.attackLegalDeclined++;
+    if (side === 1) _premEndAudit.attackLegalDeclinedP1++;
+    else _premEndAudit.attackLegalDeclinedP2++;
+  } else if (fields.interactLegal) {
+    _premEndAudit.interactLegalDeclined++;
+    if (side === 1) _premEndAudit.interactLegalDeclinedP1++;
+    else _premEndAudit.interactLegalDeclinedP2++;
+  } else if (fields.specialLegal) {
+    _premEndAudit.specialLegalDeclined++;
+    if (side === 1) _premEndAudit.specialLegalDeclinedP1++;
+    else _premEndAudit.specialLegalDeclinedP2++;
+  } else if (fields.moveLegal) {
+    _premEndAudit.moveOnlyAvailable++;
+    if (side === 1) _premEndAudit.moveOnlyAvailableP1++;
+    else _premEndAudit.moveOnlyAvailableP2++;
+  } else {
+    _premEndAudit.noLegalProductive++;
+  }
+  // Activation-history context
+  const hadAtk = !!fields.priorAttack, hadInt = !!fields.priorInteract, hadMov = !!fields.priorMove;
+  if (hadAtk) _premEndAudit.alreadyAttackedThisAct++;
+  if (hadInt) _premEndAudit.alreadyInteractedThisAct++;
+  if (hadMov) _premEndAudit.alreadyMovedThisAct++;
+  if (!hadAtk && !hadInt && !hadMov) _premEndAudit.noPriorProductiveAction++;
+  // Action economy
+  _premEndAudit.actionsRemainingSum += (fields.actionsRemaining || 0);
+  // Objective proximity (fields.distToObj provided if caller computed it)
+  const d = fields.distToObj;
+  if (d != null) {
+    if (d === 0) _premEndAudit.endedOnObjective++;
+    if (d <= 1) _premEndAudit.endedAdjacentObjective++;
+    if (d <= 3) _premEndAudit.endedNearObjective++;
+    if (d > 3) _premEndAudit.endedFarFromObjective++;
+    if (d === 0) {
+      if (side === 1) _premEndAudit.onObjectiveAtEndP1++;
+      else _premEndAudit.onObjectiveAtEndP2++;
+    }
+  }
+}
+export function resetPremEndAudit() {
+  _premEndAudit = {
+    totalDcEnd: 0, premature: 0,
+    byRound: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], bySide: { 1: 0, 2: 0 },
+    attackLegalDeclined: 0, attackLegalDeclinedP1: 0, attackLegalDeclinedP2: 0,
+    interactLegalDeclined: 0, interactLegalDeclinedP1: 0, interactLegalDeclinedP2: 0,
+    specialLegalDeclined: 0, specialLegalDeclinedP1: 0, specialLegalDeclinedP2: 0,
+    moveOnlyAvailable: 0, moveOnlyAvailableP1: 0, moveOnlyAvailableP2: 0,
+    noLegalProductive: 0,
+    alreadyAttackedThisAct: 0, alreadyInteractedThisAct: 0, alreadyMovedThisAct: 0,
+    noPriorProductiveAction: 0,
+    actionsRemainingSum: 0,
+    endedOnObjective: 0, endedAdjacentObjective: 0, endedNearObjective: 0, endedFarFromObjective: 0,
+    onObjectiveAtEndP1: 0, onObjectiveAtEndP2: 0,
+  };
+}
+
+// ── Premature-end forensic frames ───────────────────────────────────────────
+// Rich per-frame capture for premature dc_end_activation decisions.
+// Used by the Devaron forensic probe to answer "why did end_activation beat
+// dc_special / movement at this exact state". Capped to keep memory bounded.
+const _PREM_END_FRAMES_CAP = 5000;
+let _premEndFrames = [];
+export function recordPremEndFrame(frame) {
+  if (_premEndFrames.length >= _PREM_END_FRAMES_CAP) return;
+  _premEndFrames.push(frame);
+}
+export function getPremEndFrames() { return _premEndFrames.slice(); }
+export function resetPremEndFrames() { _premEndFrames = []; }
+
+// ── Ability-selection heuristic (2026-04-16) ────────────────────────────────
+// After the priority-2.5 ability clause was added, 50g audit showed 58% of
+// offensive and 80% of support abilities firing at d≥7 from any enemy, with
+// only 1.4% of offensive plays followed by an attack — random selection was
+// burning action-economy on out-of-range triggers.
+//
+// Heuristic (narrow, deterministic, reversible):
+//   1) Distance gate: if acting figure > ABILITY_DIST_GATE (Manhattan) from
+//      nearest enemy, skip the ability branch → fall through to start_move.
+//   2) Category order within gate-passing set: offensive > off+move > defense
+//      > support > other, random tie-break within the winning category.
+const ABILITY_DIST_GATE = 6;
+const ABILITY_CAT_PRIORITY = { offensive: 0, off_move: 1, defense: 2, support: 3, other: 4 };
+// Category map built from 30 unique abilities seen in the 50g Devaron audit.
+// Unknown names default to 'other'. Add entries only when probed in a real run.
+const ABILITY_CATEGORY = {
+  // Offensive (direct damage / bonus-to-attack / reroll triggers)
+  'Force Choke': 'offensive',
+  'Brutality': 'offensive',
+  'Defensive Fire': 'offensive',
+  'Dual-Wield Pistols': 'offensive',
+  'Saber Strike': 'offensive',
+  'Invasive Procedure': 'offensive',
+  'Missile Salvo': 'offensive',
+  'Slam': 'offensive',
+  'Force Lightning': 'offensive',
+  'Emperor': 'offensive',
+  'Tempt': 'offensive',
+  'Wrist Cord': 'offensive',
+  'Wrist Flamethrower': 'offensive',
+  'Brutal Cleave': 'offensive',
+  'Barrage': 'offensive',
+  // Offensive + movement (close distance while dealing damage — important
+  // edge case: these are valuable even at d>6 because they shrink the gap)
+  'Trample': 'off_move',
+  'Pounce': 'off_move',
+  'Charge': 'off_move',
+  // Defense (heals, shields, evasion)
+  'Survival is Strength': 'defense',
+  'Calming Presence': 'defense',
+  'Force Deflection': 'defense',
+  // Support (ally buffs, rerolls, planning)
+  'Military Efficiency': 'support',
+  'Battlefield Leadership': 'support',
+  'Long-Laid Plans': 'support',
+  'Strategize': 'support',
+  'Wisdom': 'support',
+  'Do or Do Not': 'support',
+  'Inform': 'support',
+  'On My Mark': 'support',
+  'Tactical Maneuver': 'support',
+};
+export function abilityCategory(name) {
+  if (!name) return 'other';
+  return ABILITY_CATEGORY[name] || 'other';
+}
+// Gate-hit audit — counts each ability's category at the moment the gate fires,
+// so the off+move suppression rate is visible. Reset per diagnostic run.
+let _abilityGateAudit = {
+  gateHit: 0,      // decisions where distToEnemy > ABILITY_DIST_GATE
+  gatePass: 0,     // decisions where distToEnemy ≤ gate (or null)
+  skippedByCat: { offensive: 0, off_move: 0, defense: 0, support: 0, other: 0 },
+  playedByCat:  { offensive: 0, off_move: 0, defense: 0, support: 0, other: 0 },
+};
+export function getAbilityGateAudit() { return JSON.parse(JSON.stringify(_abilityGateAudit)); }
+export function resetAbilityGateAudit() {
+  _abilityGateAudit = {
+    gateHit: 0,
+    gatePass: 0,
+    skippedByCat: { offensive: 0, off_move: 0, defense: 0, support: 0, other: 0 },
+    playedByCat:  { offensive: 0, off_move: 0, defense: 0, support: 0, other: 0 },
+  };
 }
 
 // ── Activation-Order Audit ──────────────────────────────────────────────────
@@ -278,6 +534,234 @@ const _diagTrace = [];
 export function getDiagTrace() { return _diagTrace; }
 export function resetDiagTrace() { _diagTrace.length = 0; }
 
+// ── Pass-Timing Shadow Scorer ───────────────────────────────────────────────
+// Linear scorer for the pass-vs-activate decision on the pass-legal surface.
+// Shadow mode only: computes a recommendation, compares to the DQN's live
+// decision, and logs disagreements by context bucket. No control handoff.
+//
+// Features (7):
+//   0: gapNorm        — (oppRem-myRem)/max(total,1)   how asymmetric activations are
+//   1: vpDeltaNorm    — (myVP-oppVP)/40               am I ahead or behind?
+//   2: roundFraction  — round/4                        how late in the game
+//   3: myWoundedRatio — wounded/totalMyDcs             urgency to use fragile pieces
+//   4: bestDcCanAttack— 1 if any activatable DC has enemy in attack range
+//   5: bestDcNearObj  — 1 - min(nearestObjDist,10)/10  objective urgency
+//   6: oppUnactRatio  — oppUnactivated/totalOppDcs     info gain from forcing opponent
+const PASS_FEATURE_NAMES = [
+  'gapNorm', 'vpDeltaNorm', 'roundFraction', 'myWoundedRatio',
+  'bestDcCanAttack', 'bestDcNearObj', 'myExhaustedFrac',
+];
+const PASS_NUM_FEATURES = PASS_FEATURE_NAMES.length;
+
+// Initial weights: hand-tuned prior expressing "pass when gap is large, activate
+// when wounded or can attack". Shadow mode only — weights are fixed, not learned.
+// Positive weight = favors ACTIVATE. Negative weight = favors PASS.
+// Score > 0 → shadow says activate. Score ≤ 0 → shadow says pass.
+const PASS_SHADOW_WEIGHTS = [
+  -0.5,   // gapNorm: bigger gap → favor pass (let opponent burn activations)
+   0.3,   // vpDeltaNorm: ahead → slightly favor activate (close out), behind → pass
+  -0.1,   // roundFraction: later rounds → slightly favor pass (let opp commit first)
+   0.8,   // myWoundedRatio: wounded DCs → strongly favor activate (use them or lose them)
+   1.2,   // bestDcCanAttack: can attack → strongly favor activate (don't waste the opening)
+   0.4,   // bestDcNearObj: near objective → favor activate (interact/score)
+   0.3,   // myExhaustedFrac: deep into round → favor activate (last chance to salvage value)
+];
+const PASS_SHADOW_BIAS = -0.2; // slight bias toward pass (the DQN's 86% rate suggests pass-heavy is correct)
+
+// Disagreement tracker
+const _passShadow = {
+  total: 0, agree: 0, disagree: 0,
+  shadowActivate: 0, shadowPass: 0,
+  // By context bucket
+  byMap: {},        // mapId → { total, disagree, shadowActivateDqnPass, shadowPassDqnActivate }
+  byRound: {},      // round → { total, disagree }
+  byVP: { ahead: { total: 0, disagree: 0 }, behind: { total: 0, disagree: 0 }, tied: { total: 0, disagree: 0 } },
+  byGap: {},        // gap → { total, disagree }
+  byWounded: { yes: { total: 0, disagree: 0 }, no: { total: 0, disagree: 0 } },
+  byProductive: { yes: { total: 0, disagree: 0 }, no: { total: 0, disagree: 0 } },
+  // Feature averages for disagree vs agree
+  agreeFeatureSum: new Float64Array(PASS_NUM_FEATURES),
+  disagreeFeatureSum: new Float64Array(PASS_NUM_FEATURES),
+  agreeCount: 0, disagreeCount: 0,
+};
+export function getPassShadow() { return _passShadow; }
+export function resetPassShadow() {
+  _passShadow.total = 0; _passShadow.agree = 0; _passShadow.disagree = 0;
+  _passShadow.shadowActivate = 0; _passShadow.shadowPass = 0;
+  _passShadow.byMap = {}; _passShadow.byRound = {};
+  _passShadow.byVP = { ahead: { total: 0, disagree: 0 }, behind: { total: 0, disagree: 0 }, tied: { total: 0, disagree: 0 } };
+  _passShadow.byGap = {}; _passShadow.byWounded = { yes: { total: 0, disagree: 0 }, no: { total: 0, disagree: 0 } };
+  _passShadow.byProductive = { yes: { total: 0, disagree: 0 }, no: { total: 0, disagree: 0 } };
+  _passShadow.agreeFeatureSum = new Float64Array(PASS_NUM_FEATURES);
+  _passShadow.disagreeFeatureSum = new Float64Array(PASS_NUM_FEATURES);
+  _passShadow.agreeCount = 0; _passShadow.disagreeCount = 0;
+}
+
+/**
+ * Extract pass-timing features for a pass-legal decision.
+ * @param {object} game - current game state
+ * @param {number} playerNum - acting player
+ * @param {Map} dcHealthState - DC health data
+ * @param {Map} dcMessageMeta - DC metadata
+ * @param {Array} activatableActions - the activate_dc actions available
+ * @returns {Float64Array} 7 features
+ */
+export function extractPassFeatures(game, playerNum, dcHealthState, dcMessageMeta, activatableActions) {
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const myRem = playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+  const oppRem = oppNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+  const totalRem = myRem + oppRem;
+
+  // Feature 0: gapNorm
+  const gapNorm = totalRem > 0 ? (oppRem - myRem) / totalRem : 0;
+
+  // Feature 1: vpDeltaNorm
+  const myVP = (playerNum === 1 ? game.player1VP : game.player2VP)?.total || 0;
+  const oppVP = (oppNum === 1 ? game.player1VP : game.player2VP)?.total || 0;
+  const vpDeltaNorm = (myVP - oppVP) / 40;
+
+  // Feature 2: roundFraction
+  const round = game.currentRound || 1;
+  const roundFraction = Math.min(round, 4) / 4;
+
+  // Feature 3: myWoundedRatio — count DCs with any wounded figure
+  let myWounded = 0, myTotalDcs = 0;
+  const myMsgIds = game[`p${playerNum}DcMessageIds`] || [];
+  for (const mid of myMsgIds) {
+    const h = dcHealthState?.get(mid);
+    if (!h) continue;
+    myTotalDcs++;
+    for (const fig of h) {
+      if (fig && fig[0] < fig[1] && fig[0] > 0) { myWounded++; break; }
+    }
+  }
+  const myWoundedRatio = myTotalDcs > 0 ? myWounded / myTotalDcs : 0;
+
+  // Feature 4: bestDcCanAttack — can any activatable DC attack an enemy?
+  let bestDcCanAttack = 0;
+  const oppFigPositions = game.figurePositions?.[oppNum] || {};
+  const oppFigCoords = Object.values(oppFigPositions);
+  if (oppFigCoords.length > 0 && activatableActions) {
+    for (const act of activatableActions) {
+      const msgId = act.params?.msgId;
+      if (!msgId) continue;
+      const meta = dcMessageMeta?.get(msgId);
+      if (!meta) continue;
+      // Get attack range for this DC
+      let dcEffectsData;
+      try { dcEffectsData = getDcEffects(); } catch { dcEffectsData = {}; }
+      const lower = meta.dcName.toLowerCase();
+      const ciKey = dcEffectsData ? Object.keys(dcEffectsData).find(k => k.toLowerCase() === lower) : null;
+      const eff = dcEffectsData?.[meta.dcName] || (ciKey ? dcEffectsData[ciKey] : null);
+      const attackRange = eff?.attack?.type === 'range' ? 12 : 2; // ranged≈12, melee≈2 (adjacent)
+      // Check if any figure of this DC is within attack range of an enemy
+      const myFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+        .filter(fk => fk.startsWith(meta.dcName + '-'));
+      for (const fk of myFigKeys) {
+        const myPos = game.figurePositions?.[playerNum]?.[fk];
+        if (!myPos) continue;
+        for (const oppPos of oppFigCoords) {
+          if (coordDistance(myPos, oppPos) <= attackRange) {
+            bestDcCanAttack = 1;
+            break;
+          }
+        }
+        if (bestDcCanAttack) break;
+      }
+      if (bestDcCanAttack) break;
+    }
+  }
+
+  // Feature 5: bestDcNearObj — proximity of activatable DCs to objectives
+  // Use objectivePotential as proxy (already computed in extractFeatures)
+  const bestDcNearObj = getObjectivePotential(game, playerNum);
+
+  // Feature 6: myExhaustedFrac — fraction of my DCs already activated this round
+  let myActivated = 0;
+  const myActivatedSet = new Set(playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []));
+  for (const mid of myMsgIds) {
+    const meta = dcMessageMeta?.get(mid);
+    if (!meta) continue;
+    const idx = meta.dcIndex ?? -1;
+    if (myActivatedSet.has(idx)) myActivated++;
+  }
+  const myExhaustedFrac = myTotalDcs > 0 ? myActivated / myTotalDcs : 0;
+
+  const features = new Float64Array(PASS_NUM_FEATURES);
+  features[0] = gapNorm;
+  features[1] = vpDeltaNorm;
+  features[2] = roundFraction;
+  features[3] = myWoundedRatio;
+  features[4] = bestDcCanAttack;
+  features[5] = bestDcNearObj;
+  features[6] = myExhaustedFrac;
+  return features;
+}
+
+/**
+ * Run pass-timing shadow scorer. Computes score, compares to DQN decision,
+ * records disagreement. Call this at every pass-legal decision point.
+ *
+ * @param {Float64Array} features - from extractPassFeatures
+ * @param {string} dqnChoice - 'pass' or 'activate' (what the DQN actually chose)
+ * @param {object} context - { mapId, round, vpDelta, gap, hasWounded, hasProductive }
+ */
+export function passTimingShadowEval(features, dqnChoice, context) {
+  // Compute shadow score: positive → activate, non-positive → pass
+  let score = PASS_SHADOW_BIAS;
+  for (let i = 0; i < PASS_NUM_FEATURES; i++) {
+    score += PASS_SHADOW_WEIGHTS[i] * features[i];
+  }
+  const shadowChoice = score > 0 ? 'activate' : 'pass';
+  const agreed = shadowChoice === dqnChoice;
+
+  _passShadow.total++;
+  if (agreed) _passShadow.agree++;
+  else _passShadow.disagree++;
+  if (shadowChoice === 'activate') _passShadow.shadowActivate++;
+  else _passShadow.shadowPass++;
+
+  // Feature averages
+  const sumArr = agreed ? _passShadow.agreeFeatureSum : _passShadow.disagreeFeatureSum;
+  for (let i = 0; i < PASS_NUM_FEATURES; i++) sumArr[i] += features[i];
+  if (agreed) _passShadow.agreeCount++;
+  else _passShadow.disagreeCount++;
+
+  // Context buckets
+  const mapId = context.mapId || 'unknown';
+  if (!_passShadow.byMap[mapId]) _passShadow.byMap[mapId] = { total: 0, disagree: 0, shadowActivateDqnPass: 0, shadowPassDqnActivate: 0 };
+  _passShadow.byMap[mapId].total++;
+  if (!agreed) {
+    _passShadow.byMap[mapId].disagree++;
+    if (shadowChoice === 'activate') _passShadow.byMap[mapId].shadowActivateDqnPass++;
+    else _passShadow.byMap[mapId].shadowPassDqnActivate++;
+  }
+
+  const r = context.round || 1;
+  if (!_passShadow.byRound[r]) _passShadow.byRound[r] = { total: 0, disagree: 0 };
+  _passShadow.byRound[r].total++;
+  if (!agreed) _passShadow.byRound[r].disagree++;
+
+  const vpBucket = context.vpDelta > 0 ? 'ahead' : context.vpDelta < 0 ? 'behind' : 'tied';
+  _passShadow.byVP[vpBucket].total++;
+  if (!agreed) _passShadow.byVP[vpBucket].disagree++;
+
+  const gap = context.gap || 1;
+  if (!_passShadow.byGap[gap]) _passShadow.byGap[gap] = { total: 0, disagree: 0 };
+  _passShadow.byGap[gap].total++;
+  if (!agreed) _passShadow.byGap[gap].disagree++;
+
+  const wBucket = context.hasWounded ? 'yes' : 'no';
+  _passShadow.byWounded[wBucket].total++;
+  if (!agreed) _passShadow.byWounded[wBucket].disagree++;
+
+  const pBucket = context.hasProductive ? 'yes' : 'no';
+  _passShadow.byProductive[pBucket].total++;
+  if (!agreed) _passShadow.byProductive[pBucket].disagree++;
+
+  return { score, shadowChoice, agreed };
+}
+
 // ── Activate Scorer Control Mode ───────────────────────────────────────────
 // When true, the gated learned scorer CONTROLS activation order on the
 // eligible surface (no combat-ready DC, no pre-filter). When false (default),
@@ -315,8 +799,8 @@ function getWgDecay(wgType) {
 // These are the TRUE domain-aligned quality weights, not learned — they define
 // what a "good destination" means. The learned WG weights should converge toward
 // something like these if learning works.
-//                                              enemy  threat  obj   ally   eff   bias  exposed  onObj  adjAlly
-const MOVE_QUALITY_WEIGHTS = [                  0.40, -0.15,  0.25, 0.10,  0.10, 0.0, -0.15,   0.30,  0.15];
+//                                              enemy  threat  obj   ally   eff   bias  exposed  onObj  adjAlly  canAtk  killFrac  unactFrac  netDmg  actFeas  losCnt
+const MOVE_QUALITY_WEIGHTS = [                  0.40,  0.10,  0.25,-0.05,  0.10, 0.0,  0.10,   0.30, -0.10,   0.20,    0.30,     0.10,      0.20,   0.15,    0.10];
 // Number of random alternatives to sample for contrastive comparison.
 const MOVE_CONTRASTIVE_SAMPLES = 3;
 // Per-feature learning-rate boost for sparse binary features in the move scorer.
@@ -331,10 +815,12 @@ const ATTACK_FEATURE_NAMES = [
   'targetThreat', 'killPotential', 'bias',
 ];
 
-const MOVE_FEATURE_NAMES = [
+export const MOVE_FEATURE_NAMES = [
   'distToNearestEnemy', 'threatAtDest', 'objectiveProximity',
   'allySupport', 'mpEfficiency', 'bias',
   'destInEnemyRange', 'destOnObjective', 'destAdjacentToAlly',
+  'canAttackFromDest', 'bestReachableKillFraction', 'reachableUnactivatedFraction',
+  'netDamageDelta', 'attackActionFeasibleAfterMove', 'losTargetCountNorm',
 ];
 
 const SURGE_FEATURE_NAMES = ['damageValue', 'isAccuracy', 'isRecover', 'bias', 'accuracyNeeded', 'accuracySurplusIfAcc'];
@@ -580,8 +1066,8 @@ function extractAttackFeatures(action, game, dcHealthState, dcMessageMeta) {
  * Extract per-space features for move scoring (Phase 5 Slice 2).
  * Precomputes shared data (enemy positions, objectives) once, then scores each coord.
  */
-function extractMoveFeatures(action, game, playerNum) {
-  const features = new Float64Array(9);
+export function extractMoveFeatures(action, game, playerNum, dcHealthState = null, dcMessageMeta = null) {
+  const features = new Float64Array(15);
   features[5] = 1.0; // bias
 
   const coord = action.params?.coord;
@@ -668,6 +1154,110 @@ function extractMoveFeatures(action, game, playerNum) {
   // [8] destAdjacentToAlly — 1 if destination is adjacent (dist ≤ 1) to a friendly figure
   for (const pos of myFigs) {
     if (coordDistance(coord, pos) <= 1) { features[8] = 1.0; break; }
+  }
+
+  // ── Representation expansion (Option 1 features 9–14) ─────────────────────
+  // Resolve actor context; features 9–13 need to know WHICH figure is moving
+  // to compute my-attack-reachability, not just destination exposure.
+  // Reuse `moveKey` and `moveState` declared above for feature [4].
+  const myFigureKey = moveState?.figureKey || null;
+  const myDcName = myFigureKey ? myFigureKey.replace(/-\d+-\d+$/, '') : null;
+  // Use practical (accuracy-ceiling) range for MY attack surface in the new features —
+  // matches src/engine/available-actions.js:computeAttackTargets. Enemy ranges below
+  // still use getAttackRange() for backward compat of features [1]/[6].
+  const myRange = (myDcName && dcEffects) ? getPracticalAttackRange(dcEffects, myDcName) : 0;
+  const myExpDmg = (myDcName && dcEffects) ? getExpectedDamage(dcEffects, myDcName) : 0;
+
+  // Resolve map spaces for LoS (fail-open: if unavailable, skip LoS gate).
+  const mapId = game.selectedMap?.id;
+  let mapSpaces = null;
+  if (mapId) {
+    try {
+      const md = getMapData(mapId);
+      if (md) mapSpaces = { blocking: md.blocking, impassableEdges: md.impassableEdges };
+    } catch { /* fail open */ }
+  }
+
+  // Reachable-from-dest: Manhattan range gate + LoS gate (LoS skipped if mapSpaces null).
+  // Builds [{ fk, pos }] so downstream features (10, 11) don't re-scan.
+  const reachable = [];
+  if (myRange > 0 && oppFigs.length > 0) {
+    for (const [fk, pos] of oppFigs) {
+      if (coordDistance(coord, pos) > myRange) continue;
+      if (mapSpaces && !hasLineOfSight(coord, pos, mapSpaces)) continue;
+      reachable.push({ fk, pos });
+    }
+  }
+
+  // [9] canAttackFromDest — binary: at least one reachable target
+  features[9] = reachable.length > 0 ? 1.0 : 0.0;
+
+  // [10] bestReachableKillFraction — max(myExpDmg / targetHp), clipped at 1, over reachable
+  if (reachable.length > 0 && myExpDmg > 0 && dcHealthState && dcMessageMeta) {
+    let best = 0;
+    for (const { fk } of reachable) {
+      const hp = lookupFigureHp(fk, oppNum, dcHealthState, dcMessageMeta);
+      if (!hp || hp.current <= 0) continue;
+      const frac = Math.min(1, myExpDmg / hp.current);
+      if (frac > best) best = frac;
+    }
+    features[10] = best;
+  }
+
+  // [11] reachableUnactivatedFraction — fraction of reachable targets whose DC has not yet
+  // activated this round. Fail-open: missing activated-index state treats all as unactivated.
+  if (reachable.length > 0) {
+    const oppDcList = oppNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const activatedIdx = oppNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+    const activatedSet = new Set(activatedIdx);
+    let unactivated = 0;
+    for (const { fk } of reachable) {
+      const enemyDcName = fk.replace(/-\d+-\d+$/, '');
+      const idx = oppDcList.indexOf(enemyDcName);
+      // idx < 0 (not found) → treat as unactivated (fail-open); matches user spec.
+      if (idx < 0 || !activatedSet.has(idx)) unactivated++;
+    }
+    features[11] = unactivated / reachable.length;
+  }
+
+  // [12] netDamageDelta — (my expected outgoing this turn − sum of incoming expected damage)/10,
+  // clipped to [-1, 1]. Matches feature [1]'s denominator so the scale is comparable.
+  // Outgoing = myExpDmg if any reachable target exists (one attack/activation), else 0.
+  // Incoming = sum over enemies that can hit `coord` (range-only, no LoS filter — matches [1]).
+  if (dcEffects && oppFigs.length > 0) {
+    const outDmg = (reachable.length > 0) ? myExpDmg : 0;
+    let inDmg = 0;
+    for (const [fk, pos] of oppFigs) {
+      const eDc = fk.replace(/-\d+-\d+$/, '');
+      const eRange = getAttackRange(dcEffects, eDc);
+      if (coordDistance(pos, coord) <= eRange) inDmg += getExpectedDamage(dcEffects, eDc);
+    }
+    features[12] = Math.max(-1, Math.min(1, (outDmg - inDmg) / 10));
+  }
+
+  // [13] attackActionFeasibleAfterMove — 1 if the acting figure still has actions AND hasn't
+  // attacked yet this activation. Largely activation-scoped (same value across candidate dests
+  // within one activation); varies across activations.
+  if (moveKey) {
+    const msgId = String(moveKey).split('_')[0];
+    const actionsData = game.dcActionsData?.[msgId];
+    const actionsRemaining = actionsData?.remaining ?? 2;
+    const alreadyAttacked = !!game.attackPerformedThisActivation?.[msgId];
+    features[13] = (actionsRemaining >= 1 && !alreadyAttacked) ? 1.0 : 0.0;
+  }
+
+  // [14] losTargetCountNorm — count of enemies with LoS from this destination (no range gate),
+  // normalized by 4 (same denominator as [3], [6]).
+  if (oppFigs.length > 0) {
+    let losCount = 0;
+    if (mapSpaces) {
+      for (const [, pos] of oppFigs) {
+        if (hasLineOfSight(coord, pos, mapSpaces)) losCount++;
+      }
+    } else {
+      losCount = oppFigs.length; // fail-open
+    }
+    features[14] = Math.min(1, losCount / 4);
   }
 
   return features;
@@ -1052,6 +1642,32 @@ function getAttackRange(dcEffects, dcName) {
   const eff = dcEffects[dcName] || (ciKey ? dcEffects[ciKey] : null);
   if (!eff?.attack) return 1; // default melee
   return eff.attack.range || 1;
+}
+
+// Practical range used by the new move features [9–12, 14]. Mirrors the accuracy-ceiling
+// logic in computeAttackTargets (src/engine/available-actions.js:2128–2142): for ranged
+// attacks lacking an explicit `attack.range`, use the max accuracy the dice pool could roll.
+// For melee, range is 1. Kept separate from getAttackRange() so existing feature semantics
+// (features [1] threatAtDest, [6] destInEnemyRange) remain comparable across audit baselines.
+const MAX_ACC_PER_DIE = { blue: 5, green: 3, yellow: 2, red: 0 };
+export function getPracticalAttackRange(dcEffects, dcName) {
+  const lower = dcName.toLowerCase();
+  const ciKey = Object.keys(dcEffects).find(k => k.toLowerCase() === lower);
+  const eff = dcEffects[dcName] || (ciKey ? dcEffects[ciKey] : null);
+  if (!eff?.attack) return 1;
+  const atk = eff.attack;
+  if (Array.isArray(atk.range)) return atk.range[1] || 1;
+  if (typeof atk.range === 'number') return atk.range;
+  if (atk.type === 'range' && Array.isArray(atk.dice)) {
+    let acc = 0;
+    for (const die of atk.dice) acc += (MAX_ACC_PER_DIE[die] || 0);
+    for (const sa of (eff.surgeAbilities || [])) {
+      const m = String(sa).match(/^accuracy\s+(\d+)$/i);
+      if (m) acc += parseInt(m[1], 10);
+    }
+    return Math.max(1, acc);
+  }
+  return 1; // melee / unknown
 }
 
 // ── New Feature Helpers ─────────────────────────────────────────────────────
@@ -1950,7 +2566,8 @@ function updateTraceNeural(learnings, trace) {
     }
 
     // Within-group scorer update (Phase 5) — now with per-scorer L2 decay
-    if (entry.wgFeatures && entry.wgType && learnings.withinGroupWeights) {
+    // Skip entirely in frozen-eval mode so diagnostic runs don't drift WG weights.
+    if (!WG_FROZEN && entry.wgFeatures && entry.wgType && learnings.withinGroupWeights) {
       // Audit: count WG entries by type
       if (entry.wgType === 'attack') _wgAudit.attackEntries++;
       else if (entry.wgType === 'move') _wgAudit.moveEntries++;
@@ -2493,7 +3110,7 @@ const _WITHIN_ACT_TYPES = new Set([
 ]);
 
 /** Extract all mission-relevant objective coordinates from map/mission data. */
-function getObjectiveCoords(game) {
+export function getObjectiveCoords(game) {
   const mapId = game.selectedMap?.id;
   if (!mapId) return [];
   const mapData = getMapTokensData()?.[mapId];
@@ -2609,6 +3226,132 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
     const oppNum = actions[0].actingPlayer === 1 ? 2 : 1;
     const oppActivated = new Set(oppNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []));
     const oppMsgIds = oppNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+
+    // ── Candidate-generation + spatial audit ──────────────────────────────
+    // Classifies this attack decision's legal set and measures spatial
+    // distributions (nearest-enemy, nearest-Krykna, density rings, refined
+    // exclusion reasons). Safe no-op when not in diagnostic mode (just updates
+    // counters). Wrapped in try/catch so never breaks gameplay.
+    try {
+      const candNpcCount = actions.filter(a => a.params?.targetFigureKey?.startsWith('npc_')).length;
+      const candFigCount = actions.length - candNpcCount;
+      const enemyPop = Object.entries(game.figurePositions?.[oppNum] || {});
+      const activeKrykna = (game.npcKrykna || []).filter(k => !k.defeated);
+
+      // Shared spatial context for this decision:
+      const attackerPos = getAttackerPosition(actions[0], game, dcMessageMeta);
+      const attackerDcName = actions[0].params?.dcName;
+      let dcEff; try { dcEff = getDcEffects(); } catch { dcEff = null; }
+      const attackerRange = (dcEff && attackerDcName) ? getPracticalAttackRange(dcEff, attackerDcName) : 1;
+      const mapId = game.selectedMap?.id;
+      let mapSpaces = null;
+      let mapAdjacency = null;
+      if (mapId) {
+        try {
+          const md = getMapData(mapId);
+          if (md) {
+            mapSpaces = { blocking: md.blocking, impassableEdges: md.impassableEdges };
+            mapAdjacency = md;
+          }
+        } catch {}
+      }
+
+      _candAudit.totalDecisions++;
+      _candAudit.totalNpcCandidates += candNpcCount;
+      _candAudit.totalFigureCandidates += candFigCount;
+      _candAudit.totalEnemyFiguresOnBoard += enemyPop.length;
+      _candAudit.totalActiveKryknaSum += activeKrykna.length;
+      // Respawn tracking (population increased since last decision)
+      if (activeKrykna.length > _candAudit.lastKryknaPop) _candAudit.respawnEvents += (activeKrykna.length - _candAudit.lastKryknaPop);
+      _candAudit.lastKryknaPop = activeKrykna.length;
+
+      // Spatial distributions (only if we can compute distances)
+      if (attackerPos) {
+        _candAudit.attackerRanges.push(attackerRange);
+        // Nearest enemy figure
+        let minEnemyDist = Infinity;
+        for (const [, figPos] of enemyPop) {
+          if (!figPos) continue;
+          const d = coordDistance(attackerPos, figPos);
+          if (d < minEnemyDist) minEnemyDist = d;
+          if (d <= 3) _candAudit.figCountWithin3++;
+          if (d <= 5) _candAudit.figCountWithin5++;
+          if (d <= 7) _candAudit.figCountWithin7++;
+        }
+        if (minEnemyDist < Infinity) _candAudit.distToNearestEnemyFig.push(minEnemyDist);
+        // Nearest Krykna
+        let minKryDist = Infinity;
+        for (const k of activeKrykna) {
+          if (!k.coord) continue;
+          const d = coordDistance(attackerPos, k.coord);
+          if (d < minKryDist) minKryDist = d;
+          if (d <= 3) _candAudit.kryCountWithin3++;
+          if (d <= 5) _candAudit.kryCountWithin5++;
+          if (d <= 7) _candAudit.kryCountWithin7++;
+        }
+        if (minKryDist < Infinity) _candAudit.distToNearestKrykna.push(minKryDist);
+      }
+
+      // Decision classification
+      if (candNpcCount === 0 && candFigCount === 0) {
+        _candAudit.empty++;
+      } else if (candNpcCount > 0 && candFigCount === 0) {
+        _candAudit.npcOnly++;
+        // Refined excluded-enemy-figure classification
+        for (const [, figPos] of enemyPop) {
+          if (!attackerPos || !figPos) { _candAudit.npcOnlyExcludedByOther++; _candAudit.npcOnlyExcludedFigTotal++; continue; }
+          _candAudit.npcOnlyExcludedFigTotal++;
+          const manDist = coordDistance(attackerPos, figPos);
+          if (manDist > attackerRange) {
+            _candAudit.npcOnlyExcludedByRange++;
+            continue;
+          }
+          // In Manhattan range. Check bare LoS.
+          if (mapSpaces && !hasLineOfSight(attackerPos, figPos, mapSpaces)) {
+            _candAudit.npcOnlyExcludedByLos++;
+            continue;
+          }
+          // In range AND bare-LoS passes. Try to distinguish path-distance vs figure-block vs other.
+          // Path-distance: countSpaces (BFS through adjacency, respecting impassable edges) > range
+          if (mapAdjacency) {
+            try {
+              const pathDist = countSpaces(mapAdjacency, attackerPos, figPos, null, Math.max(20, attackerRange * 3));
+              if (pathDist > attackerRange) {
+                _candAudit.npcOnlyExcludedByPathDist++;
+                continue;
+              }
+            } catch {}
+          }
+          // Figure-blocking LoS: include all figures as blockers (simplified)
+          if (mapSpaces) {
+            const figureBlockingCoords = new Set();
+            for (const pn of [1, 2]) {
+              for (const [, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+                if (pos && String(pos).toLowerCase() !== String(attackerPos).toLowerCase() && String(pos).toLowerCase() !== String(figPos).toLowerCase()) {
+                  figureBlockingCoords.add(String(pos).toLowerCase());
+                }
+              }
+              for (const k of (game.npcKrykna || [])) {
+                if (k.coord && !k.defeated && String(k.coord).toLowerCase() !== String(figPos).toLowerCase()) {
+                  figureBlockingCoords.add(String(k.coord).toLowerCase());
+                }
+              }
+            }
+            if (!hasLineOfSight(attackerPos, figPos, mapSpaces, figureBlockingCoords)) {
+              _candAudit.npcOnlyExcludedByFigureBlock++;
+              continue;
+            }
+          }
+          // Residual
+          _candAudit.npcOnlyExcludedByOther++;
+        }
+      } else if (candNpcCount === 0 && candFigCount > 0) {
+        _candAudit.figureOnly++;
+      } else {
+        _candAudit.mixed++;
+      }
+    } catch { /* best-effort — never break gameplay */ }
+
     const scored = actions.map(a => {
       const targetFk = a.params?.targetFigureKey;
       // NPC targets (Krykna, Thugs) aren't in dcHealthState — read from game state
@@ -2647,6 +3390,29 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
     });
     scored.sort(compareAttackTargets);
 
+    // ── Forensic attack-target trace (oracle path) ────────────────────────
+    // Mirrors the pickWithinGroup trace so decisions routed through the planner
+    // (the majority of non-exploration attacks) are also captured.
+    if (ATTACK_TRACE && scored.length > 1) {
+      const acting = actions[0].actingPlayer;
+      const round = game.currentRound ?? '?';
+      const npcCount = scored.filter(s => s.action.params?.targetFigureKey?.startsWith('npc_')).length;
+      const figCount = scored.length - npcCount;
+      const chosenKey = scored[0].action.params?.targetFigureKey;
+      const chosenType = chosenKey?.startsWith('npc_') ? 'NPC' : 'FIG';
+      const actingDc = actions[0].params?.dcName || '?';
+      const fmtCand = (s) => {
+        const fk = s.action.params?.targetFigureKey || '?';
+        const type = fk.startsWith('npc_') ? 'NPC' : 'FIG';
+        return `${type}:${fk}|hp=${s.currentHp}/${s.maxHp}|mtp=${s.missionTargetPriority}|act=${s.targetActivated}|d=${s.dist}`;
+      };
+      process.stderr.write(
+        `ATK_TRACE_ORACLE P${acting} dc=${actingDc} r=${round} nCand=${scored.length} nNPC=${npcCount} nFIG=${figCount} `
+        + `chosen=${chosenType}:${chosenKey} hp=${scored[0].currentHp}/${scored[0].maxHp} mtp=${scored[0].missionTargetPriority} `
+        + `| ${scored.map(fmtCand).join(' ; ')}\n`
+      );
+    }
+
     // ── Attack target quality audit (oracle path) ─────────────────────────
     _atkAudit.totalDecisions++;
     _atkAudit.totalTargets += scored.length;
@@ -2677,6 +3443,77 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
       a => a.params?.optionId && a.params.optionId !== 'use_terminal'
     );
     if (missionInteracts.length > 0) return missionInteracts[0];
+  }
+
+  // Priority 2.5: Play a dc_special (ability) when no higher-priority productive
+  // type fires. Without this branch, the chain fell through to end_activation
+  // (priority 5) whenever 'ability' was the only productive legal type. Devaron
+  // 50g forensic probe (2026-04-16): 321/330 premature-ends matched exactly
+  // this pattern; Q(ability) − Q(end) median +1.78 across all 330 frames.
+  //
+  // Selection heuristic (2026-04-16):
+  //   1) Distance gate — if the acting figure is >ABILITY_DIST_GATE (Manhattan)
+  //      from every enemy (DC figure + live NPC), the ability is almost certainly
+  //      firing out-of-range. Skip and fall through to start_move. Audit counts
+  //      the category of each skipped ability so over-gating of off+move is
+  //      visible.
+  //   2) Category order — rank the gate-passing abilities by
+  //      offensive > off+move > defense > support > other; random tie-break
+  //      within the winning category.
+  if (groups['ability']?.length > 0) {
+    const abilities = groups['ability'];
+    let distToNearestEnemy = Infinity;
+    const actingPN = abilities[0].actingPlayer;
+    const oppNum = actingPN === 1 ? 2 : 1;
+    const actorPos = getAttackerPosition(abilities[0], game, dcMessageMeta);
+    if (actorPos) {
+      const oppFigs = game.figurePositions?.[oppNum] || {};
+      for (const pos of Object.values(oppFigs)) {
+        if (!pos) continue;
+        const d = coordDistance(actorPos, pos);
+        if (d < distToNearestEnemy) distToNearestEnemy = d;
+      }
+      for (const k of (game.npcKrykna || [])) {
+        if (!k?.coord || k.defeated) continue;
+        const d = coordDistance(actorPos, k.coord);
+        if (d < distToNearestEnemy) distToNearestEnemy = d;
+      }
+      for (const t of (game.npcThugs || [])) {
+        if (!t?.coord || t.defeated) continue;
+        const d = coordDistance(actorPos, t.coord);
+        if (d < distToNearestEnemy) distToNearestEnemy = d;
+      }
+    }
+
+    // Distance gate — actor is too far to use abilities productively
+    if (actorPos && distToNearestEnemy > ABILITY_DIST_GATE) {
+      _abilityGateAudit.gateHit++;
+      for (const a of abilities) {
+        const cat = abilityCategory(a.params?.specialName);
+        _abilityGateAudit.skippedByCat[cat] = (_abilityGateAudit.skippedByCat[cat] || 0) + 1;
+      }
+      // fall through to movement
+    } else {
+      _abilityGateAudit.gatePass++;
+      // Category-ranked within-group pick
+      let bestRank = Infinity;
+      const byRank = [];
+      for (const a of abilities) {
+        const cat = abilityCategory(a.params?.specialName);
+        const rank = ABILITY_CAT_PRIORITY[cat] ?? 4;
+        if (rank < bestRank) {
+          bestRank = rank;
+          byRank.length = 0;
+          byRank.push(a);
+        } else if (rank === bestRank) {
+          byRank.push(a);
+        }
+      }
+      const chosen = byRank[Math.floor(Math.random() * byRank.length)];
+      const chosenCat = abilityCategory(chosen.params?.specialName);
+      _abilityGateAudit.playedByCat[chosenCat] = (_abilityGateAudit.playedByCat[chosenCat] || 0) + 1;
+      return chosen;
+    }
   }
 
   // Priority 3: Start movement if haven't started yet
@@ -2776,7 +3613,7 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
     if (wgMoveWeights && wgMoveWeights.length >= 9) {
       let bestScore = -Infinity, bestAction = null;
       for (const a of spaceActions) {
-        const f = extractMoveFeatures(a, game, playerNum);
+        const f = extractMoveFeatures(a, game, playerNum, dcHealthState, dcMessageMeta);
         const score = dotProductWg(wgMoveWeights, f);
         if (score > bestScore) { bestScore = score; bestAction = a; }
       }
@@ -2862,7 +3699,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
           pickSmartAction._lastWgType = 'attack';
           pickSmartAction._lastMoveContrastive = null;
         } else if (hAbsType === 'move_toward' || hAbsType === 'move_away' || hAbsType === 'move_lateral') {
-          const feats = extractMoveFeatures(hAction, game, playerNum);
+          const feats = extractMoveFeatures(hAction, game, playerNum, dcHealthState, dcMessageMeta);
           pickSmartAction._lastWgFeatures = feats;
           pickSmartAction._lastWgType = 'move';
           const hChosenQ = dotProductWg(MOVE_QUALITY_WEIGHTS, feats);
@@ -2871,7 +3708,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
           let hRefBestQ = hChosenQ, hRefBestF = feats;
           for (const a of hAllSpaces) {
             if (a === hAction) continue;
-            const af = extractMoveFeatures(a, game, playerNum);
+            const af = extractMoveFeatures(a, game, playerNum, dcHealthState, dcMessageMeta);
             const q = dotProductWg(MOVE_QUALITY_WEIGHTS, af);
             if (q > hRefBestQ) { hRefBestQ = q; hRefBestF = af; }
           }
@@ -2880,7 +3717,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
             ? Array.from({ length: MOVE_CONTRASTIVE_SAMPLES }, () => hSpaceAlts.splice(Math.floor(Math.random() * hSpaceAlts.length), 1)[0])
             : hSpaceAlts;
           const hAlternatives = hSampled.map(a => {
-            const af = extractMoveFeatures(a, game, playerNum);
+            const af = extractMoveFeatures(a, game, playerNum, dcHealthState, dcMessageMeta);
             return { features: af, qualityScore: dotProductWg(MOVE_QUALITY_WEIGHTS, af) };
           });
           pickSmartAction._lastMoveContrastive = hAlternatives.length > 0 ? {
@@ -2938,7 +3775,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
           pickSmartAction._lastWgFeatures = feats;
           pickSmartAction._lastWgType = 'attack';
         } else if (planAbsType === 'move_toward' || planAbsType === 'move_away' || planAbsType === 'move_lateral') {
-          const feats = extractMoveFeatures(planResult, game, playerNum);
+          const feats = extractMoveFeatures(planResult, game, playerNum, dcHealthState, dcMessageMeta);
           pickSmartAction._lastWgFeatures = feats;
           pickSmartAction._lastWgType = 'move';
           // Build contrastive data with real quality scores (MOVE_QUALITY_WEIGHTS)
@@ -2949,7 +3786,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
           let refBestQ = chosenQ, refBestF = feats;
           for (const a of allSpaces) {
             if (a === planResult) continue;
-            const af = extractMoveFeatures(a, game, playerNum);
+            const af = extractMoveFeatures(a, game, playerNum, dcHealthState, dcMessageMeta);
             const q = dotProductWg(MOVE_QUALITY_WEIGHTS, af);
             if (q > refBestQ) { refBestQ = q; refBestF = af; }
           }
@@ -2958,7 +3795,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
             ? Array.from({ length: MOVE_CONTRASTIVE_SAMPLES }, () => spaceAlts.splice(Math.floor(Math.random() * spaceAlts.length), 1)[0])
             : spaceAlts;
           const alternatives = sampled.map(a => {
-            const af = extractMoveFeatures(a, game, playerNum);
+            const af = extractMoveFeatures(a, game, playerNum, dcHealthState, dcMessageMeta);
             return { features: af, qualityScore: dotProductWg(MOVE_QUALITY_WEIGHTS, af) };
           });
           pickSmartAction._lastMoveContrastive = alternatives.length > 0 ? {
@@ -3235,6 +4072,30 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     scored.sort(compareAttackTargets);
     const best = scored[0];
 
+    // ── Forensic attack-target trace ──────────────────────────────────────
+    // Emits one structured line per multi-candidate attack decision.
+    // Fields: side, dc, round, #cand, #npc, #enemyFig, chosenKey, chosenHp,
+    //         chosenMTP, chosenViab, candidates=[(type,fk,hp,mtp,viab,act,dist)...]
+    if (ATTACK_TRACE && scored.length > 1) {
+      const acting = actions[0].actingPlayer;
+      const round = game.currentRound ?? '?';
+      const npcCount = scored.filter(s => s.action.params?.targetFigureKey?.startsWith('npc_')).length;
+      const figCount = scored.length - npcCount;
+      const chosenKey = best.action.params?.targetFigureKey;
+      const chosenType = chosenKey?.startsWith('npc_') ? 'NPC' : 'FIG';
+      const fmtCand = (s) => {
+        const fk = s.action.params?.targetFigureKey || '?';
+        const type = fk.startsWith('npc_') ? 'NPC' : 'FIG';
+        return `${type}:${fk}|hp=${s.currentHp}/${s.maxHp}|mtp=${s.missionTargetPriority}|viab=${s.hitViability}|act=${s.targetActivated}|d=${s.dist}`;
+      };
+      const cands = scored.map(fmtCand).join(' ; ');
+      process.stderr.write(
+        `ATK_TRACE P${acting} dc=${dcName} r=${round} nCand=${scored.length} nNPC=${npcCount} nFIG=${figCount} `
+        + `chosen=${chosenType}:${chosenKey} hp=${best.currentHp}/${best.maxHp} mtp=${best.missionTargetPriority} `
+        + `viab=${best.hitViability} | ${cands}\n`
+      );
+    }
+
     // ── Attack target quality audit ───────────────────────────────────────
     _atkAudit.totalDecisions++;
     _atkAudit.totalTargets += scored.length;
@@ -3427,7 +4288,7 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     if (weights && spaceActions.length > 0 && Math.random() >= getWgEpsilon(totalGames || 0)) {
       // Score all candidates with both learned weights and quality weights
       const allCandidates = spaceActions.map(a => {
-        const f = extractMoveFeatures(a, game, playerNum);
+        const f = extractMoveFeatures(a, game, playerNum, dcHealthState, dcMessageMeta);
         return { action: a, features: f, learnedScore: dotProductWg(weights, f), qualityScore: dotProductWg(MOVE_QUALITY_WEIGHTS, f) };
       });
       allCandidates.sort((a, b) => b.learnedScore - a.learnedScore);
@@ -3933,6 +4794,14 @@ export function loadLearnings(filePath) {
       if (data.withinGroupWeights?.move && data.withinGroupWeights.move.length === 6) {
         data.withinGroupWeights.move.push(0, 0, 0); // destInEnemyRange, destOnObjective, destAdjacentToAlly
         console.log('[learnings] Migrated move WG weights 6 → 9 features (added destInEnemyRange, destOnObjective, destAdjacentToAlly)');
+      }
+      // Migrate move scorer from 9 → 15 features (representation expansion)
+      // Pads with zeros so previously-trained learners continue to behave identically
+      // on the original 9 features; the 6 new features start with no learned weight and
+      // acquire signal via the contrastive loss against the new 15-dim teacher.
+      if (data.withinGroupWeights?.move && data.withinGroupWeights.move.length === 9) {
+        data.withinGroupWeights.move.push(0, 0, 0, 0, 0, 0);
+        console.log('[learnings] Migrated move WG weights 9 → 15 features (added canAttackFromDest, bestReachableKillFraction, reachableUnactivatedFraction, netDamageDelta, attackActionFeasibleAfterMove, losTargetCountNorm)');
       }
       // One-time migration: reset inverted surge WG weights to positive priors.
       // The surge scorer drifted into a negative basin under the old reward signal,
@@ -4598,4 +5467,4 @@ export function getQValues(learnings, features) {
   return forwardPass(learnings.network, features).Q;
 }
 
-export { ABSTRACT_TYPES, FEATURE_NAMES, NUM_FEATURES };
+export { ABSTRACT_TYPES, FEATURE_NAMES, NUM_FEATURES, PASS_FEATURE_NAMES, oracleActivationPlan };
