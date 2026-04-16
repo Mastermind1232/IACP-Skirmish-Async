@@ -30,6 +30,7 @@ import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { defaultAttackRange } from '../../src/handlers/dc-play-area.js';
 import { countSpaces } from '../../src/game/spatial.js';
 import { dcNameFromFigureKey } from '../../src/game/dc-helpers.js';
+import { getDcList } from '../../src/game/player-helpers.js';
 
 // ── Shadow: narrow mirror of handler's target enumeration ───────────────────
 // Covers only the rules exercised by the scenarios below. Expand carefully
@@ -63,10 +64,17 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
     || {};
   const kws = (eff.keywords || []).map(k => String(k).toUpperCase());
   const passives = (eff.passives || []).map(p => String(p).toUpperCase());
+  // Fury of Kashyyyk: conditional Reach grant for WOOKIEE attackers when
+  // the [Fury of Kashyyyk] attachment is in the player's dcList. Mirrors
+  // handler's _hasFuryReach at dc-play-area.js:35-39.
+  const _furyReach =
+    kws.includes('WOOKIEE') &&
+    (getDcList(game, playerNum) || []).some(dc => dc.dcName === '[Fury of Kashyyyk]');
   const hasReach =
     kws.includes('REACH') ||
     passives.includes('REACH') ||
-    !!game.nextAttackReach?.[playerNum];
+    !!game.nextAttackReach?.[playerNum] ||
+    _furyReach;
   const effMax = hasReach && maxRange < 2 ? 2 : maxRange;
 
   const ms = deps.getMapData(game.selectedMap.id);
@@ -512,6 +520,40 @@ const SCENARIOS = [
     expectedHandlerOnly: [],
     expectedEngineOnly: ['Greedo-1-0'],
     reason: 'engine has no reference to game.vanishImmunityUntilNextActivation; handler filters targets whose figureKey starts with the vanished DC\'s dcName (Vanish CC).',
+  },
+
+  // 12. Fury of Kashyyyk — attachment-granted Reach for WOOKIEE attackers
+  {
+    name: 'Fury of Kashyyyk — WOOKIEE melee attacker with [Fury of Kashyyyk] attachment gains Reach in handler only',
+    setup() {
+      const built = createTestGame()
+        .withPlayer1Army([
+          { dcName: 'Wookiee Warrior (Regular)' },   // melee, WOOKIEE, no permanent Reach
+          { dcName: '[Fury of Kashyyyk]' },          // figureless attachment
+        ])
+        .withPlayer2Army([{ dcName: 'Greedo' }])
+        .inRound(1)
+        .build();
+      const { game, dcMessageMeta } = built;
+      game.figurePositions = {
+        1: { 'Wookiee Warrior (Regular)-1-0': 'a1' },
+        2: { 'Greedo-1-0': 'a3' },                   // distance 2
+      };
+      const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'Wookiee Warrior (Regular)');
+      enableAttackFor(game, attackerMsgId);
+      return {
+        ...built,
+        attacker: {
+          playerNum: 1,
+          figureKey: 'Wookiee Warrior (Regular)-1-0',
+          msgId: attackerMsgId,
+          figureIndex: 0,
+        },
+      };
+    },
+    expectedHandlerOnly: ['Greedo-1-0'],
+    expectedEngineOnly: [],
+    reason: 'handler grants Reach to any WOOKIEE attacker whose player has [Fury of Kashyyyk] in the dcList (dc-play-area.js:35-39 _hasFuryReach). Engine does not check for the attachment — WOOKIEE melee attackers are treated as 1-space-only even when Fury is in play.',
   },
 ];
 
