@@ -1189,6 +1189,9 @@ async function refreshAllGameComponents(game, client) {
     // CC-draw safety net: re-posts shuffle/draw prompts if post-deploy finished
     // but they never got sent (e.g. restart dropped the in-memory callback).
     getCcShuffleDrawButton, getInitiativePlayerZoneLabel,
+    // Activation-phase safety net: re-posts round activation message if Draft
+    // Random's post-deploy→activation callback was dropped by a restart.
+    sendRoundActivationPhaseMessage, setRoundPhase, ROUND_PHASES,
   });
 }
 

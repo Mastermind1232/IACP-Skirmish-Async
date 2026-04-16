@@ -590,5 +590,9 @@ export async function sendRoundActivationPhaseMessage(game, client, deps) {
   game.roundActivationMessageId = sent.id;
   game.roundActivationButtonShown = showBtn;
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
+  // Pure-state flag for restart-strand recovery: once this function has posted
+  // the round activation message, the safety net in refreshAllGameComponents
+  // and finishPostDeploy must not re-post it. Monotonically true after first set.
+  game.activationPhaseMessagePosted = true;
   await deps.updateHandChannelMessages(game, client);
 }

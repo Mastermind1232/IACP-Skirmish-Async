@@ -440,4 +440,28 @@ export async function refreshAllGameComponents(game, client, deps) {
   } catch (err) {
     console.error('Refresh All: CC-draw safety net failed', err);
   }
+
+  // Draft Random activation-phase safety net: Draft Random enters
+  // ROUND_ACTIVE/START_OF_ROUND, then runs post-deploy and (via an in-memory
+  // callback) transitions to ACTIVATION + posts the round activation message.
+  // If a restart dropped that callback after post-deploy effects fired, the
+  // game stalls here. Re-post the activation message from pure state.
+  // Idempotent via activationPhaseMessagePosted.
+  try {
+    if (
+      game.phase === 'round_active'
+      && game.roundPhase === 'start_of_round'
+      && game.postDeployEffectsFired
+      && !game.activationPhaseMessagePosted
+      && deps.sendRoundActivationPhaseMessage
+      && deps.setRoundPhase
+      && deps.ROUND_PHASES
+    ) {
+      deps.setRoundPhase(game, deps.ROUND_PHASES.ACTIVATION);
+      await deps.sendRoundActivationPhaseMessage(game, client);
+      if (deps.saveGames) deps.saveGames();
+    }
+  } catch (err) {
+    console.error('Refresh All: activation-phase safety net failed', err);
+  }
 }

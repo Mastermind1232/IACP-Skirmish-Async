@@ -3,6 +3,48 @@
  * Handles post-attachment setup, play area reordering, draft-random flow, and play area population.
  */
 import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
+import { getDcStats } from '../data-loader.js';
+import { isFigurelessDc } from '../game/dc-helpers.js';
+import { cardNameEquals } from '../game/card-names.js';
+
+/**
+ * Parity with setup.js applySetupAttachment's Lie in Ambush branch.
+ * Scans a player's CC attachments (dcMsgId -> [cardNames]) for any Lie in Ambush
+ * attachment and populates game.lieInAmbushSetAside[playerNum] with the figureKeys
+ * that must be skipped during auto-deploy. dgIndex computation mirrors
+ * setup.js:262-286 (count same-name figure DCs up to dcIdx).
+ *
+ * Safe to call repeatedly — rebuilds the per-player set-aside from current state.
+ */
+function populateLieInAmbushSetAsideFromAttachments(game, playerNum) {
+  const squadKey = playerNum === 1 ? 'player1Squad' : 'player2Squad';
+  const dcList = game[squadKey]?.dcList || [];
+  const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+  const ccAttachments = playerNum === 1 ? (game.p1CcAttachments || {}) : (game.p2CcAttachments || {});
+  const figureKeys = [];
+  for (const [dcMsgId, cards] of Object.entries(ccAttachments)) {
+    if (!Array.isArray(cards)) continue;
+    if (!cards.some((c) => cardNameEquals(c, 'Lie in Ambush'))) continue;
+    const dcIdx = dcMsgIds.indexOf(dcMsgId);
+    if (dcIdx < 0 || !dcList[dcIdx]) continue;
+    const resolveName = (d) => (typeof d === 'string' ? d : (d?.dcName || d?.displayName));
+    const dcName = resolveName(dcList[dcIdx]);
+    if (!dcName) continue;
+    let dgIndex = 0;
+    for (let i = 0; i < dcList.length; i++) {
+      const n = resolveName(dcList[i]);
+      if (!n || isFigurelessDc(n)) continue;
+      if (n === dcName) dgIndex++;
+      if (i === dcIdx) break;
+    }
+    const figures = getDcStats(dcName)?.figures ?? 1;
+    for (let f = 0; f < figures; f++) figureKeys.push(`${dcName}-${dgIndex}-${f}`);
+  }
+  if (figureKeys.length > 0) {
+    game.lieInAmbushSetAside = game.lieInAmbushSetAside || {};
+    game.lieInAmbushSetAside[playerNum] = figureKeys;
+  }
+}
 
 /**
  * Reorder play area messages so attachments appear right after their parent DCs.
@@ -216,6 +258,14 @@ export async function runDraftRandom(game, client, deps, options = {}) {
   await deps.applySquadSubmission(game, true, p1Deck, client);
   await deps.applySquadSubmission(game, false, p2Deck, client);
 
+  // Parity with interactive setup (setup.js applySetupAttachment): any existing
+  // "Lie in Ambush" CC attachments must populate game.lieInAmbushSetAside so
+  // those figures are skipped during auto-deploy. Interactive attach-UI already
+  // populates this field; Draft Random never hit that path, so the figures
+  // would deploy and show an Activate button despite being attached.
+  populateLieInAmbushSetAsideFromAttachments(game, 1);
+  populateLieInAmbushSetAsideFromAttachments(game, 2);
+
   // Initiative + deployment zone
   if (!game.initiativeDetermined) {
     const winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
@@ -265,8 +315,11 @@ export async function runDraftRandom(game, client, deps, options = {}) {
     const oppZoneCoords = (zones?.[opponentZone] || []).map((s) => deps.parseCoord(String(s).toLowerCase()));
     const oppCx = oppZoneCoords.length ? oppZoneCoords.reduce((s, c) => s + c.col, 0) / oppZoneCoords.length : 0;
     const oppCy = oppZoneCoords.length ? oppZoneCoords.reduce((s, c) => s + c.row, 0) / oppZoneCoords.length : 0;
+    // Parity with setup.js deploy path: skip Lie in Ambush set-aside figures
+    const setAsideKeys = new Set(game.lieInAmbushSetAside?.[playerNum] || []);
     for (const meta of metadata) {
       const figureKey = `${meta.dcName}-${meta.dgIndex}-${meta.figureIndex}`;
+      if (setAsideKeys.has(figureKey)) continue; // Lie in Ambush — deploys later
       const occupied = [];
       for (const p of [1, 2]) {
         for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {

@@ -1184,6 +1184,24 @@ async function finishPostDeploy(game, gameId, client, logGameAction) {
       console.error('finishPostDeploy: CC prompt auto-recovery failed', err);
     }
   }
+  // Draft Random restart-strand fallback: post-deploy finished but callback
+  // (which sets ACTIVATION phase + posts the round message) was dropped. Pure
+  // state says we're in ROUND_ACTIVE/START_OF_ROUND with no activation message
+  // posted — advance to ACTIVATION. Message posting itself relies on the
+  // refresh safety net (which has the full dep graph); bot auto-refresh on
+  // startup means this state is visible before user interactions fire.
+  if (
+    game.phase === 'round_active'
+    && game.roundPhase === 'start_of_round'
+    && !game.activationPhaseMessagePosted
+  ) {
+    try {
+      const { setRoundPhase, ROUND_PHASES } = await import('../game/phase.js');
+      setRoundPhase(game, ROUND_PHASES.ACTIVATION);
+    } catch (err) {
+      console.error('finishPostDeploy: activation phase auto-recovery failed', err);
+    }
+  }
 }
 
 /**
