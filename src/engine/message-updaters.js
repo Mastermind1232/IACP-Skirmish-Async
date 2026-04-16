@@ -408,4 +408,13 @@ export async function refreshAllGameComponents(game, client, deps) {
     await updateHandVisualMessage(game, pn, client, deps);
     await updateDiscardPileMessage(game, pn, client, deps);
   }
+
+  // Reconcile narrow set of tracked prompts (Walker/massive-push recovery path).
+  // Deletes stale tracked prompts and re-posts missing ones from game state.
+  try {
+    const { reconcilePrompts } = await import('./prompt-reconciler.js');
+    await reconcilePrompts(game, gameId, client, deps);
+  } catch (err) {
+    console.error('Refresh All: prompt reconcile failed', err);
+  }
 }

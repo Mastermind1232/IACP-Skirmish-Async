@@ -1183,6 +1183,9 @@ async function refreshAllGameComponents(game, client) {
     buildAttachmentEmbedsAndFiles, getTokensForDcMessage,
     getDcList, getActivatedDcIndices,
     recomputeActivationCounts, updateActivationsMessage,
+    // Prompt reconciler deps: render helpers for walker/post-deploy prompts
+    // need logGameAction to post; saveGames persists newly-recorded msgIds.
+    logGameAction, saveGames,
   });
 }
 

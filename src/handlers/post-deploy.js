@@ -959,18 +959,10 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         moveFigures: [{ figureKey: ability.figureKey, dcName: ability.dcName, mp: walkerMp }],
         currentFigureIdx: 0,
         playerNum: ability.playerNum,
+        msgId: ability.msgId,
         optional: true,
       };
-      // Show move/skip choice before starting movement
-      const btns = [
-        new ButtonBuilder().setCustomId(`pd_walker_move_${gameId}_${ability.playerNum}_${ability.msgId}`).setLabel('Perform Move').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`pd_walker_skip_${gameId}_${ability.playerNum}_${ability.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      ];
-      _stashPendingActions(game, btns, 'Scavenged Walker');
-      await logGameAction(game, client, `🚶 **Scavenged Walker** — <@${ownerId}>, **${ability.dcName}** may perform a move after deployment:`, {
-        components: [new ActionRowBuilder().addComponents(btns)],
-        allowedMentions: { users: [ownerId] },
-      });
+      await renderWalkerMovePrompt(game, gameId, client, { logGameAction });
       break;
     }
   }
@@ -1074,17 +1066,67 @@ async function postAbilityPicker(game, gameId, client, logGameAction, saveGames)
   }
 
   q.awaitingOrder = true;
-  const btns = interactiveAbilities.map((ab, idx) => {
-    return new ButtonBuilder()
+  await renderPostDeployChooserPrompt(game, gameId, client, { logGameAction });
+}
+
+/**
+ * Render-from-state: post the "After Deployment" ability chooser from pure
+ * game state (postDeployQueue.abilities, already filtered to interactive).
+ * Records the resulting msg into game.promptMessageIds.postDeployChooser.
+ */
+export async function renderPostDeployChooserPrompt(game, gameId, client, ctx) {
+  const q = game.postDeployQueue;
+  if (!q) return;
+  const interactiveAbilities = (q.abilities || []).filter((a) => a.interactive);
+  if (interactiveAbilities.length === 0) return;
+  const ownerId = getPlayerId(game, q.currentPlayerNum);
+  const playerLabel = `Player ${q.currentPlayerNum}`;
+  const btns = interactiveAbilities.map((ab, idx) =>
+    new ButtonBuilder()
       .setCustomId(`pd_pick_${gameId}_${q.currentPlayerNum}_${idx}`)
       .setLabel(`${ab.label} — ${ab.dcName}`)
-      .setStyle(ButtonStyle.Primary);
-  });
+      .setStyle(ButtonStyle.Primary)
+  );
   const rows = chunkButtonsToRows(btns);
-  await logGameAction(game, client, `📋 **After Deployment** — <@${ownerId}> (${playerLabel}), choose which ability to resolve next (${interactiveAbilities.length} remaining):`, {
+  const logGameAction = ctx?.logGameAction;
+  if (!logGameAction) return;
+  const sent = await logGameAction(game, client, `📋 **After Deployment** — <@${ownerId}> (${playerLabel}), choose which ability to resolve next (${interactiveAbilities.length} remaining):`, {
     components: rows,
     allowedMentions: { users: [ownerId] },
   });
+  if (sent?.id) {
+    const { recordPromptMessage, signatureFor } = await import('../engine/prompt-reconciler.js');
+    recordPromptMessage(game, 'postDeployChooser', sent.channelId || sent.channel?.id, sent.id, signatureFor('postDeployChooser', game));
+  }
+}
+
+/**
+ * Render-from-state: post the Scavenged Walker "Perform Move / Skip" prompt
+ * from game.postDeployQueue.activeAbility. Records msg into
+ * game.promptMessageIds.walkerMove.
+ */
+export async function renderWalkerMovePrompt(game, gameId, client, ctx) {
+  const active = game.postDeployQueue?.activeAbility;
+  if (!active || active.abilityId !== 'scavenged_walker_move') return;
+  const fig = active.moveFigures?.[0];
+  if (!fig) return;
+  const msgId = active.msgId || '';
+  const ownerId = getPlayerId(game, active.playerNum);
+  const btns = [
+    new ButtonBuilder().setCustomId(`pd_walker_move_${gameId}_${active.playerNum}_${msgId}`).setLabel('Perform Move').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`pd_walker_skip_${gameId}_${active.playerNum}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+  ];
+  _stashPendingActions(game, btns, 'Scavenged Walker');
+  const logGameAction = ctx?.logGameAction;
+  if (!logGameAction) return;
+  const sent = await logGameAction(game, client, `🚶 **Scavenged Walker** — <@${ownerId}>, **${fig.dcName}** may perform a move after deployment:`, {
+    components: [new ActionRowBuilder().addComponents(btns)],
+    allowedMentions: { users: [ownerId] },
+  });
+  if (sent?.id) {
+    const { recordPromptMessage, signatureFor } = await import('../engine/prompt-reconciler.js');
+    recordPromptMessage(game, 'walkerMove', sent.channelId || sent.channel?.id, sent.id, signatureFor('walkerMove', game));
+  }
 }
 
 // ── Player advancement ──────────────────────────────────────────────────────
@@ -1247,6 +1289,8 @@ export async function handlePostDeployPick(interaction, ctx) {
 
   // Disable buttons on the picker message
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const { clearPromptRecord } = await import('../engine/prompt-reconciler.js');
+  clearPromptRecord(game, 'postDeployChooser');
 
   if (!ability.interactive) {
     await resolveAutoAbility(game, ability, client, logGameAction);
@@ -1504,6 +1548,8 @@ export async function handleWalkerMove(interaction, ctx) {
   }
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const { clearPromptRecord } = await import('../engine/prompt-reconciler.js');
+  clearPromptRecord(game, 'walkerMove');
 
   const active = game.postDeployQueue?.activeAbility;
   if (!active || active.abilityId !== 'scavenged_walker_move') return;
@@ -1530,6 +1576,8 @@ export async function handleWalkerSkip(interaction, ctx) {
   }
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const { clearPromptRecord } = await import('../engine/prompt-reconciler.js');
+  clearPromptRecord(game, 'walkerMove');
 
   const q = game.postDeployQueue;
   if (q) {

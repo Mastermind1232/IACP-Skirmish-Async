@@ -25,42 +25,26 @@ function _cleanupMoveState(game, moveKey, msgId) {
 
 /**
  * Show space picker buttons for a massive-push displaced figure.
+ * Stores controller + validSpaces on pending, then delegates rendering to
+ * renderMassivePushSpacePrompt so the reconciler can re-post from state alone.
  * @param {object} choice - { entry, validSpaces, controllerPlayerNum } from resolveNextDisplacements
  */
 async function _showMassivePushPicker(game, choice, interaction, client, logGameAction, buildBoardMapPayload, saveGames) {
   const pending = game.pendingMassivePush;
   if (!pending || !choice) { delete game.pendingMassivePush; return; }
-  const { entry, validSpaces, controllerPlayerNum } = choice;
-  // Store controllerPlayerNum so handleMassivePushSpace can enforce it
+  const { validSpaces, controllerPlayerNum } = choice;
   pending._currentControllerPlayerNum = controllerPlayerNum;
   pending._currentValidSpaces = validSpaces;
-  const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
-  const btns = validSpaces.map((space) =>
-    new ButtonBuilder()
-      .setCustomId(`massive_push_space_${pending.gameId}_${space}`)
-      .setLabel(space.toUpperCase())
-      .setStyle(ButtonStyle.Primary)
-  );
-  const rows = [];
-  while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
-  const from = prevPos ? String(prevPos).toUpperCase() : '?';
-  const controllerTag = pending.phase === 'friendly' ? 'your figure' : 'opponent\'s figure';
-  const threadId = game.dcActionsData ? Object.values(game.dcActionsData).find(d => d.threadId)?.threadId : null;
-  const channel = threadId ? await fetchGameChannel(client, threadId) : interaction.channel;
-  if (channel) {
-    await channel.send({
-      content: `**Massive Displacement** — Place **${entry.dcName}** (${controllerTag}, currently at **${from}**) to which space?`,
-      components: rows.slice(0, 5),
-    }).catch(discordCatch);
-  }
-  saveGames();
+  await renderMassivePushSpacePrompt(game, client, { fallbackChannel: interaction?.channel });
+  if (saveGames) saveGames();
 }
 
 /**
  * Show figure-order picker: when 2+ displaced figures remain in the active phase,
- * the controller chooses which one to place next.
- * Figures are encoded by index into pending._currentPickable (figure keys can contain
- * spaces / dashes and don't round-trip cleanly through a customId).
+ * the controller chooses which one to place next. Figures are encoded by index
+ * into pending._currentPickable (figure keys can contain spaces / dashes and
+ * don't round-trip cleanly through a customId).
+ * Delegates rendering to renderMassivePushFigurePrompt.
  * @param {object} figurePick - { pickable, controllerPlayerNum } from resolveNextDisplacements
  */
 async function _showMassivePushFigurePicker(game, figurePick, interaction, client, saveGames) {
@@ -74,6 +58,57 @@ async function _showMassivePushFigurePicker(game, figurePick, interaction, clien
     playerNum: e.playerNum,
   }));
   pending._currentValidSpaces = null;
+  await renderMassivePushFigurePrompt(game, client, { fallbackChannel: interaction?.channel });
+  if (saveGames) saveGames();
+}
+
+/**
+ * Render-from-state: post the massive-push space picker using only game state
+ * and client. Used by _showMassivePushPicker (after it caches
+ * _currentValidSpaces on pending) and by the prompt reconciler on refresh.
+ * Records the resulting msg into game.promptMessageIds.massivePushSpace.
+ */
+export async function renderMassivePushSpacePrompt(game, client, opts = {}) {
+  const pending = game.pendingMassivePush;
+  if (!pending) return;
+  const validSpaces = pending._currentValidSpaces || [];
+  if (validSpaces.length === 0) return;
+  const queue = pending.phase === 'friendly' ? pending.friendlyQueue : pending.enemyQueue;
+  const entry = queue?.[pending.currentIndex];
+  if (!entry) return;
+  const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+  const btns = validSpaces.map((space) =>
+    new ButtonBuilder()
+      .setCustomId(`massive_push_space_${pending.gameId}_${space}`)
+      .setLabel(String(space).toUpperCase())
+      .setStyle(ButtonStyle.Primary)
+  );
+  const rows = [];
+  while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
+  const from = prevPos ? String(prevPos).toUpperCase() : '?';
+  const controllerTag = pending.phase === 'friendly' ? 'your figure' : 'opponent\'s figure';
+  const threadId = game.dcActionsData ? Object.values(game.dcActionsData).find((d) => d.threadId)?.threadId : null;
+  const channel = threadId ? await fetchGameChannel(client, threadId) : (opts.fallbackChannel || null);
+  if (!channel) return;
+  const sent = await channel.send({
+    content: `**Massive Displacement** — Place **${entry.dcName}** (${controllerTag}, currently at **${from}**) to which space?`,
+    components: rows.slice(0, 5),
+  }).catch(discordCatch);
+  if (sent?.id) {
+    const { recordPromptMessage, signatureFor } = await import('../engine/prompt-reconciler.js');
+    recordPromptMessage(game, 'massivePushSpace', sent.channelId || channel.id, sent.id, signatureFor('massivePushSpace', game));
+  }
+}
+
+/**
+ * Render-from-state: post the massive-push figure-order picker using only
+ * game state and client. Records msg into game.promptMessageIds.massivePushFigure.
+ */
+export async function renderMassivePushFigurePrompt(game, client, opts = {}) {
+  const pending = game.pendingMassivePush;
+  if (!pending) return;
+  const pickable = pending._currentPickable || [];
+  if (pickable.length === 0) return;
   const btns = pickable.map((entry, idx) => {
     const pos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
     const label = `${entry.dcName}${pos ? ` @ ${String(pos).toUpperCase()}` : ''}`.slice(0, 80);
@@ -85,15 +120,17 @@ async function _showMassivePushFigurePicker(game, figurePick, interaction, clien
   const rows = [];
   while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
   const phaseLabel = pending.phase === 'friendly' ? 'your figures' : 'opponent\'s figures';
-  const threadId = game.dcActionsData ? Object.values(game.dcActionsData).find(d => d.threadId)?.threadId : null;
-  const channel = threadId ? await fetchGameChannel(client, threadId) : interaction.channel;
-  if (channel) {
-    await channel.send({
-      content: `**Massive Displacement** — Pick which of **${phaseLabel}** to place next.`,
-      components: rows.slice(0, 5),
-    }).catch(discordCatch);
+  const threadId = game.dcActionsData ? Object.values(game.dcActionsData).find((d) => d.threadId)?.threadId : null;
+  const channel = threadId ? await fetchGameChannel(client, threadId) : (opts.fallbackChannel || null);
+  if (!channel) return;
+  const sent = await channel.send({
+    content: `**Massive Displacement** — Pick which of **${phaseLabel}** to place next.`,
+    components: rows.slice(0, 5),
+  }).catch(discordCatch);
+  if (sent?.id) {
+    const { recordPromptMessage, signatureFor } = await import('../engine/prompt-reconciler.js');
+    recordPromptMessage(game, 'massivePushFigure', sent.channelId || channel.id, sent.id, signatureFor('massivePushFigure', game));
   }
-  saveGames();
 }
 
 /**
@@ -170,6 +207,8 @@ export async function handleMassivePushSpace(interaction, ctx) {
     await logGameAction(game, client, `**${applied.entry.dcName}** displaced **${from}** → **${chosenSpace.toUpperCase()}** by massive figure (controller choice).`, { icon: 'move', phase: 'ROUND' });
   }
   try { await interaction.message.edit({ content: `Placed **${applied?.entry?.dcName || 'figure'}** at **${chosenSpace.toUpperCase()}**.`, components: [] }).catch(discordCatch); } catch {}
+  const { clearPromptRecord } = await import('../engine/prompt-reconciler.js');
+  clearPromptRecord(game, 'massivePushSpace');
   // Continue iterative resolution — may auto-resolve more figures before next choice
   const result = resolveNextDisplacements(game, pending);
   for (const r of result.autoResolved) {
@@ -218,6 +257,8 @@ export async function handleMassivePushFigure(interaction, ctx) {
     return;
   }
   try { await interaction.message.edit({ content: `Order set: **${choice.dcName}** placed next.`, components: [] }).catch(discordCatch); } catch {}
+  const { clearPromptRecord } = await import('../engine/prompt-reconciler.js');
+  clearPromptRecord(game, 'massivePushFigure');
   // Drive one more resolution step — with the order locked in, it will either
   // auto-drain (0/1-space edge cases) or return needsChoice for this figure.
   const result = resolveNextDisplacements(game, pending);
