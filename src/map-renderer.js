@@ -151,7 +151,33 @@ export async function renderMap(mapId, options = {}) {
   const numCols = Math.floor((w - sx0) / sdx);
   const numRows = Math.floor((h - sy0) / sdy);
 
-  // Grid coordinate labels are drawn later (after figures) so they render on top.
+  // Grid coordinate labels: drawn early so figures/tokens render on top of them.
+  if (showGrid) {
+    const useBlackGrid = gridStyle === 'black';
+    const onMapCoords = getOnMapCoordSet(mapId);
+    const coordFilter = showGridOnlyOnCoords
+      ? new Set((Array.isArray(showGridOnlyOnCoords) ? showGridOnlyOnCoords : []).map((c) => String(c).toLowerCase()))
+      : null;
+    ctx.fillStyle = useBlackGrid ? '#8B35C8' : 'rgba(107,33,168,0.85)';
+    ctx.strokeStyle = useBlackGrid ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = useBlackGrid ? 2.5 : 2;
+    ctx.font = `bold ${Math.max(8, Math.round(10 * scale))}px "${FONT_FAMILY}"`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (let row = 0; row < numRows; row++) {
+      for (let col = 0; col < numCols; col++) {
+        const label = colToLetter(col) + (row + 1);
+        const coordKey = label.toLowerCase();
+        if (!onMapCoords.has(coordKey)) continue;
+        if (coordFilter && !coordFilter.has(coordKey)) continue;
+        const gx = sx0 + col * sdx + sdx / 2;
+        const gy = sy0 + row * sdy + sdy / 2;
+        ctx.strokeText(label, gx, gy);
+        ctx.fillText(label, gx, gy);
+      }
+    }
+  }
 
   // Draw named area labels (room names like "Command Center")
   for (const area of tokens.namedAreas || []) {
@@ -755,34 +781,6 @@ export async function renderMap(mapId, options = {}) {
     ctx.strokeText(displayLabel, cx, cy);
     ctx.fillStyle = '#FFE033';
     ctx.fillText(displayLabel, cx, cy);
-  }
-
-  // Grid coordinate labels: drawn LAST so they render on top of figures/tokens
-  if (showGrid) {
-    const useBlackGrid = gridStyle === 'black';
-    const onMapCoords = getOnMapCoordSet(mapId);
-    const coordFilter = showGridOnlyOnCoords
-      ? new Set((Array.isArray(showGridOnlyOnCoords) ? showGridOnlyOnCoords : []).map((c) => String(c).toLowerCase()))
-      : null;
-    ctx.fillStyle = useBlackGrid ? '#8B35C8' : 'rgba(107,33,168,0.85)';
-    ctx.strokeStyle = useBlackGrid ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = useBlackGrid ? 2.5 : 2;
-    ctx.font = `bold ${Math.max(8, Math.round(10 * scale))}px "${FONT_FAMILY}"`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    for (let row = 0; row < numRows; row++) {
-      for (let col = 0; col < numCols; col++) {
-        const label = colToLetter(col) + (row + 1);
-        const coordKey = label.toLowerCase();
-        if (!onMapCoords.has(coordKey)) continue;
-        if (coordFilter && !coordFilter.has(coordKey)) continue;
-        const gx = sx0 + col * sdx + sdx / 2;
-        const gy = sy0 + row * sdy + sdy / 2;
-        ctx.strokeText(label, gx, gy);
-        ctx.fillText(label, gx, gy);
-      }
-    }
   }
 
   // Optionally crop to deployment zone for zoomed-in view

@@ -38,6 +38,14 @@ function _hasFuryReach(game, playerNum, dcKws) {
   return dcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
 }
 
+// Ranged attacks are bounded by accuracy roll (see combat.js:~240 — totalAccuracy < distanceToTarget miss),
+// not by a hard targeting pre-filter. DC data rarely sets attack.range, so the default must not cap ranged
+// targets at 3 spaces. Melee stays adjacent-only; Reach is applied downstream at each call site.
+export function defaultAttackRange(attackInfo) {
+  if (Array.isArray(attackInfo?.range)) return attackInfo.range;
+  return attackInfo?.type === 'melee' ? [1, 1] : [1, 99];
+}
+
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx
@@ -1521,8 +1529,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       return;
     }
     const stats = getDcStats(meta.dcName);
-    const attackInfo = stats.attack || { dice: ['red'], range: [1, 3] };
-    const [minRange, maxRange] = attackInfo.range || [1, 3];
+    const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
+    const [minRange, maxRange] = defaultAttackRange(attackInfo);
     // Reach: melee figure can target 1–2 spaces away; no accuracy check (still counts as melee)
     const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
@@ -2578,8 +2586,8 @@ export async function handleArsenalPick(interaction, ctx) {
   saveGames();
 
   const stats = getDcStats(meta.dcName);
-  const attackInfo = stats.attack || { dice: ['red'], range: [1, 3] };
-  const [minRange, maxRange] = attackInfo.range || [1, 3];
+  const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
+  const [minRange, maxRange] = defaultAttackRange(attackInfo);
   const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _hasFuryReach(game, meta.playerNum, attackerKws);
@@ -2642,8 +2650,8 @@ export async function handleEe3DiePick(interaction, ctx) {
 
   // Proceed to attack target selection
   const stats = getDcStats(meta.dcName);
-  const attackInfo = stats.attack || { dice: ['red'], range: [1, 3] };
-  const [minRange, maxRange] = attackInfo.range || [1, 3];
+  const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
+  const [minRange, maxRange] = defaultAttackRange(attackInfo);
   const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _hasFuryReach(game, meta.playerNum, attackerKws);
@@ -2700,8 +2708,8 @@ export async function handleBoRiflePick(interaction, ctx) {
   saveGames();
 
   const stats = getDcStats(meta.dcName);
-  const attackInfo = stats.attack || { dice: ['red'], range: [1, 3] };
-  const [minRange, maxRange] = attackInfo.range || [1, 3];
+  const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
+  const [minRange, maxRange] = defaultAttackRange(attackInfo);
   const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
@@ -2831,8 +2839,8 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     await interaction.followUp({ content: `${controlledName} has no position — resolve manually.`, ephemeral: false }).catch(discordCatch);
     return;
   }
-  const controlledAttackInfo = controlledStats?.attack || { dice: ['red'], range: [1, 3] };
-  const [foMinRange, foMaxRange] = controlledAttackInfo.range || [1, 3];
+  const controlledAttackInfo = controlledStats?.attack || { dice: ['red'], type: 'range' };
+  const [foMinRange, foMaxRange] = defaultAttackRange(controlledAttackInfo);
   const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
   const controlledKws = (controlledEff?.keywords || []).map((k) => String(k).toUpperCase());
   const foHasReach = controlledKws.includes('REACH') || (controlledEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || _hasFuryReach(game, controlledPlayerNum, controlledKws);
