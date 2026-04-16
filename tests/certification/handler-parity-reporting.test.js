@@ -30,21 +30,27 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { defaultAttackRange } from '../../src/handlers/dc-play-area.js';
-import { countSpaces } from '../../src/game/spatial.js';
+import { countSpaces, hasLineOfSight } from '../../src/game/spatial.js';
+import { edgeKey, getFootprintCells } from '../../src/game/coords.js';
 import { dcNameFromFigureKey } from '../../src/game/dc-helpers.js';
 import { getDcList } from '../../src/game/player-helpers.js';
-import { getLoadoutCards } from '../../src/data-loader.js';
+import { getLoadoutCards, getMapTokensData, getFigureSize } from '../../src/data-loader.js';
 import { PARITY_SCENARIOS as SCENARIOS } from './_crr-baselines.js';
 
 // ── Shadow: narrow mirror of handler's target enumeration ───────────────────
 // Covers only the rules exercised by the scenarios below. Expand carefully
 // when scenarios are added; otherwise the shadow drifts from the real handler.
 //
-// Scoped LOS policy: the shadow does NOT model figure-blocking LOS. Scenarios
-// are constructed so this is either trivially correct (open-terrain scenarios)
-// or matches the real handler's bypass behavior (Marksman, Priority Target,
-// Clawdite Scout, Fire Mission — all flag-active scenarios where the real
-// handler also bypasses figure-blocking LOS).
+// Scoped LOS policy:
+//   * wall-based LOS IS modeled. The shadow merges closed-door edges into
+//     mapSpaces.impassableEdges (parity with dc-play-area.js:940–970) and
+//     iterates attacker-footprint × target-footprint (multi-cell LOS) before
+//     calling hasLineOfSight. Figure-blocking LOS is passed as null.
+//   * figure-blocking LOS is NOT modeled. Scenarios are constructed so this
+//     is either trivially correct (open-terrain scenarios) or matches the
+//     real handler's bypass behavior (Marksman, Priority Target, Clawdite
+//     Scout, Fire Mission — all flag-active scenarios where the real handler
+//     also bypasses figure-blocking LOS).
 function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMessageMeta) {
   const attackerPos = game.figurePositions?.[playerNum]?.[attackerFigureKey];
   if (!attackerPos) return [];
@@ -88,6 +94,27 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
   const effMax = hasReach && maxRange < 2 ? 2 : maxRange;
 
   const ms = deps.getMapData(game.selectedMap.id);
+
+  // Door-merged LOS: mirrors dc-play-area.js:940–970 (closed-door edges
+  // merged into mapSpaces.impassableEdges for LOS; closedDoorEdges passed
+  // to countSpaces for distance). Shield/smoke merging is NOT modeled —
+  // no scenario exercises those layers yet.
+  const mapId = game.selectedMap.id;
+  const allDoors = getMapTokensData()?.[mapId]?.doors || [];
+  const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+  const closedDoorsRaw = allDoors.filter(e => {
+    const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase();
+    return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`);
+  });
+  const closedDoorEdges = new Set(closedDoorsRaw.map(e => edgeKey(e[0], e[1])));
+  const effectiveMs = closedDoorsRaw.length > 0
+    ? { ...ms, impassableEdges: [...(ms.impassableEdges || []), ...closedDoorsRaw] }
+    : ms;
+
+  // Attacker footprint (multi-cell LOS)
+  const attackerSize = game.figureOrientations?.[attackerFigureKey] || getFigureSize(attackerDcName);
+  const attackerFpCells = getFootprintCells(attackerPos, attackerSize);
+
   const enemyPn = playerNum === 1 ? 2 : 1;
   const enemies = game.figurePositions?.[enemyPn] || {};
 
@@ -111,8 +138,16 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
     // vanished DC's dcName.
     if (vanishedDcPrefix && fk.startsWith(vanishedDcPrefix)) continue;
 
-    // Distance filter (includes Reach expansion)
-    const dist = countSpaces(ms, attackerPos, coord);
+    // Target footprint (multi-cell LOS)
+    const targetDcName = dcNameFromFigureKey(fk);
+    const targetSize = game.figureOrientations?.[fk] || getFigureSize(targetDcName);
+    const targetFpCells = getFootprintCells(coord, targetSize);
+
+    // Distance filter (includes Reach expansion, multi-cell attacker-fp ×
+    // target-fp minimum, closed-door edges for BFS — mirrors handler).
+    const dist = Math.min(...attackerFpCells.flatMap(ac =>
+      targetFpCells.map(tc => countSpaces(effectiveMs, ac, tc, closedDoorEdges))
+    ));
     if (dist < minRange || dist > effMax) continue;
 
     // I Must Go Alone (handler-only): cap distance further
@@ -120,7 +155,6 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
 
     // Insignificant (Dio): skip if target shares space with another
     // friendly-to-target figure. Implemented identically on both sides.
-    const targetDcName = dcNameFromFigureKey(fk);
     const targetEff = deps.getDcEffects()[targetDcName]
       || deps.getDcEffects()[targetDcName.replace(/\s*\[.*\]\s*$/, '')]
       || {};
@@ -132,12 +166,21 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
       if (hasFriendlyInSpace) continue;
     }
 
+    // Wall-based LOS (includes closed doors via effectiveMs). Iterates
+    // attacker footprint × target footprint — handler grants LOS if any
+    // cell-to-cell sightline is clear. Figure-blocking LOS is passed as
+    // null (shadow does not model figure blocking; see policy comment).
+    let hasLos = false;
+    for (const ac of attackerFpCells) {
+      for (const tc of targetFpCells) {
+        if (hasLineOfSight(ac, tc, effectiveMs, null)) { hasLos = true; break; }
+      }
+      if (hasLos) break;
+    }
+    if (!hasLos) continue;
+
     // Hide is NOT a target-filter per CRR (removed 2026-04-16). Shadow
     // matches the post-fix handler.
-    // LOS: shadow does not apply figure-blocking. Scenarios are authored
-    // to either use open terrain OR set a flag that causes the real handler
-    // to bypass figure-blocking LOS (Marksman, Priority Target, Clawdite
-    // Scout form, Fire Mission).
     targets.push(fk);
   }
   return targets;

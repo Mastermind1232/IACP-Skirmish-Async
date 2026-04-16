@@ -525,4 +525,71 @@ export const PARITY_SCENARIOS = [
     expectedEngineOnly: [],
     reason: 'handler reads figureConfig.loadout, looks up the loadout card in data/loadout-cards.json, and treats loadout.passive === "Reach" as an attacker-side Reach grant (dc-play-area.js:1539-1540). Engine never reads loadout cards — Purge Trooper with Electrostaff is treated as 1-space melee only.',
   },
+
+  // 14. Closed door — engine does not merge closed-door edges into mapSpaces
+  //    before calling hasLineOfSight. Handler merges them into effectiveMs so
+  //    the door becomes a wall for LOS purposes.
+  {
+    name: 'Closed door — engine ignores door edges in LOS; handler merges them as walls',
+    setup() {
+      const built = createTestGame()
+        .withMap('mos-eisley-outskirts')      // doors: r11|r12 and s11|s12
+        .withPlayer1Army([{ dcName: 'Bossk' }])
+        .withPlayer2Army([{ dcName: 'Greedo' }])
+        .inRound(1)
+        .build();
+      const { game, dcMessageMeta } = built;
+      // Bossk (1x1) at r11, Greedo (1x1) at r12 — straight across closed door.
+      // Both doors default-closed (game.openedDoors unset).
+      game.figurePositions = {
+        1: { 'Bossk-1-0': 'r11' },
+        2: { 'Greedo-1-0': 'r12' },
+      };
+      const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'Bossk');
+      enableAttackFor(game, attackerMsgId);
+      return {
+        ...built,
+        attacker: { playerNum: 1, figureKey: 'Bossk-1-0', msgId: attackerMsgId, figureIndex: 0 },
+      };
+    },
+    expectedHandlerOnly: [],
+    expectedEngineOnly: ['Greedo-1-0'],
+    reason: 'Engine passes raw mapSpaces to hasLineOfSight (available-actions.js:2223), so closed-door edges never enter the impassableEdges list for LOS. Handler builds effectiveMs with closedEdges merged into impassableEdges (dc-play-area.js:940-970). Engine includes Greedo behind a closed door; handler excludes. countSpaces is gated by doors on BOTH sides, so the distance check does not hide this divergence.',
+  },
+
+  // 15. Multi-cell attacker — engine only calls hasLineOfSight with the
+  //    attacker's top-left cell; handler iterates attacker footprint × target
+  //    footprint. Scenario uses the static p14|q14 impassable edge in
+  //    mos-eisley-outskirts: the wall blocks sightlines from the top row of
+  //    the 2x2 attacker (o14, p14) but not from the back row (o15, p15).
+  {
+    name: 'Multi-cell attacker — engine checks top-left only; handler iterates footprint',
+    setup() {
+      const built = createTestGame()
+        .withMap('mos-eisley-outskirts')
+        .withPlayer1Army([{ dcName: 'AT-RT' }])      // 2x2 ranged attacker
+        .withPlayer2Army([{ dcName: 'Greedo' }])
+        .inRound(1)
+        .build();
+      const { game, dcMessageMeta } = built;
+      // AT-RT top-left at o14 occupies {o14, p14, o15, p15}. Static wall
+      // p14|q14 (vertical edge at x=15.5 across row 13) blocks sightlines
+      // from o14 and p14 to r14. Back-row cells o15/p15 are at row 14 — their
+      // sightlines to r14 clear the wall. No doors involved; purely static
+      // impassableEdges, so the engine sees the wall too.
+      game.figurePositions = {
+        1: { 'AT-RT-1-0': 'o14' },
+        2: { 'Greedo-1-0': 'r14' },
+      };
+      const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'AT-RT');
+      enableAttackFor(game, attackerMsgId);
+      return {
+        ...built,
+        attacker: { playerNum: 1, figureKey: 'AT-RT-1-0', msgId: attackerMsgId, figureIndex: 0 },
+      };
+    },
+    expectedHandlerOnly: ['Greedo-1-0'],
+    expectedEngineOnly: [],
+    reason: 'Engine calls hasLineOfSight(attackerPosLc, coordLc, ...) with only the attacker\'s top-left cell (available-actions.js:2223). Handler iterates getFootprintCells(attackerPos, size) × getFootprintCells(targetPos, size) (dc-play-area.js:1026-1048). With AT-RT top-left at o14, engine\'s o14 → r14 sightline is blocked by static wall p14|q14 so engine excludes Greedo. Handler finds a clear line from the back-row cells o15 or p15 to r14 and includes Greedo.',
+  },
 ];

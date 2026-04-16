@@ -1,11 +1,12 @@
 {
   "metadata": {
     "title": "CRR Coverage Heat Map — IACP Skirmish Async (Skirbo)",
-    "version": "1.3",
+    "version": "1.4",
     "date": "2026-04-16",
     "tier_a_update": "2026-04-14: Tier A probes added (surge-legality-probes.test.js, combat-token-timing-probes.test.js). Condition immunity reclassified from unit_test to direct_oracle (ORACLE-HANDLER-003 already covers it).",
     "v1_2_expansion": "2026-04-16: Heat-map expanded 35 → 55 entries. Handler-vs-engine parity broken out into 13 per-scenario D3 entries (Reach family: permanent/nextAttackReach/Fury/Electrostaff; Hide non-filter; Priority Target/Marksman/Clawdite LOS bypass; Insignificant/Dio; I Must Go Alone; Fire Mission group-LOS; Vanish immunity; default-agreement positive control). Five honest uncovered entries added (LOS-06 Energy Shield, LOS Slice 2 door, LOS Slice 2 multi-cell figure, post-target-select combat gating, loadout-card passives beyond Reach). Two inferred_only additions (mission-specific scoring variants, free-attack window mutex). No new direct_oracle test files authored in this pass — measurement only.",
     "v1_3_update": "2026-04-16: Post-Target-Select Combat Gating row reclassified uncovered → direct_oracle. tests/certification/post-select-gating.test.js v2 now pins all 12 flag-gated branches of combat.js:869–969 (4 block gates + 8 consumption windows + 1 positive control) via a narrow shadow. Side effects and combat resolution explicitly out of scope; engine-blindness (11-of-12) tracked as report-only number. Distribution: direct_oracle 39 → 40, uncovered 5 → 4.",
+    "v1_4_update": "2026-04-16: LOS Slice 2 lane — both LOS Slice 2 rows (Doors + Multi-cell figures) reclassified uncovered → direct_oracle. tests/domain/oracle/los-slice2-probes.test.js pins the CRR-required LOS behaviors via 4 probes (closed-door block, open-door no-block, multi-cell attacker any-cell LOS, multi-cell target any-cell reachability). Two new handler-parity scenarios (14 closed door, 15 multi-cell attacker top-left-only) surface the engine's drift; shadow expanded to merge closed-door edges into effectiveMs and iterate attacker-fp × target-fp. Parity scenario 14 engine_only=['Greedo-1-0'], scenario 15 handler_only=['Greedo-1-0']. Stale engine_location pointers from src/game/los.js (never existed) → src/game/spatial.js (actual file). LOS-06 Energy Shield still uncovered (intentionally out of scope). Distribution: direct_oracle 40 → 42, uncovered 4 → 2.",
     "methodology": "Four-domain audit of engine source against Consolidated Rules Reference. Coverage classified as: direct_oracle (pure-function oracle probe), runtime_invariant (RT-1..RT-12 checked in training loop), certification (card catalog regression), unit_test (co-located or tests/domain unit), headless_selfplay (end-to-end headless game), inferred_only (exercised by selfplay but never explicitly asserted), uncovered (no test or runtime check).",
     "test_inventory": {
       "oracle_tests": { "files": 68, "assertions": 994 },
@@ -597,37 +598,37 @@
       "domain": "D2",
       "subdomain": "LOS-06 Energy Shield exception",
       "crr_rule_or_claim": "An energy shield blocks LOS in general but not for attacks by figures on its shielded-side designator",
-      "engine_location": "src/game/los.js energy-shield logic (not currently under test)",
+      "engine_location": "src/game/spatial.js hasLineOfSight + dc-play-area.js effectiveMs merging (energy-shield side-designator branch not currently under test)",
       "current_coverage_type": "uncovered",
       "evidence": "No oracle probe or certification test. Tracked as open P2 in the 2026-04-01 LOS audit.",
       "training_blast_radius": "low",
       "confidence": "low",
       "recommended_next_audit_type": "oracle_probe",
-      "notes": "Low impact: energy-shield scenarios are rare in current competitive maps."
+      "notes": "Low impact: energy-shield scenarios are rare in current competitive maps. Explicitly out of scope for the 2026-04-16 LOS Slice 2 lane."
     },
     {
       "domain": "D2",
       "subdomain": "LOS Slice 2 — Doors",
       "crr_rule_or_claim": "Door state affects LOS: closed doors block; open doors do not",
-      "engine_location": "src/game/los.js, src/game/door-helpers.js",
-      "current_coverage_type": "uncovered",
-      "evidence": "Deferred from the 2026-04-02 headless/Discord parity remediation. Slice 1 (figure-blocking LOS) closed; door handling is explicitly open.",
+      "engine_location": "src/game/spatial.js hasLineOfSight (reads mapSpaces.impassableEdges); handler merges closed-door edges at src/handlers/dc-play-area.js:940-970; engine does NOT merge doors (src/engine/available-actions.js:2223)",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "tests/domain/oracle/los-slice2-probes.test.js: PROBE-LOS-SLICE2-001 (closed door blocks LOS) and PROBE-LOS-SLICE2-002 (open/unrelated door does not block) hard-fail on CRR violations. Parity scenario 14 in _crr-baselines.js (handler-parity-reporting.test.js) baselines the engine-only drift: engine_only=['Greedo-1-0'] for Bossk r11 → Greedo r12 across closed door r11|r12.",
       "training_blast_radius": "medium",
-      "confidence": "low",
-      "recommended_next_audit_type": "oracle_probe",
-      "notes": "No oracle coverage today. Self-play maps with doors exercise this incidentally but nothing asserts correctness."
+      "confidence": "high",
+      "recommended_next_audit_type": "covered",
+      "notes": "v1.4 (2026-04-16): reclassified uncovered → direct_oracle. Engine drift is baselined and fails on growth; fixing the engine to merge doors is a separate gameplay lane (tracked via parity scenario 14)."
     },
     {
       "domain": "D2",
       "subdomain": "LOS Slice 2 — Multi-cell figures",
       "crr_rule_or_claim": "Large figures occupy multiple cells; LOS to a multi-cell figure must check each cell (any clear sightline legalises the shot)",
-      "engine_location": "src/game/los.js, src/game/spatial.js multi-cell enumeration",
-      "current_coverage_type": "uncovered",
-      "evidence": "Deferred from the 2026-04-02 headless/Discord parity remediation (Slice 2). No oracle probe or certification test.",
+      "engine_location": "src/game/spatial.js hasLineOfSight + getFootprintCells (src/game/coords.js); handler iterates attacker-fp × target-fp at src/handlers/dc-play-area.js:1026-1048; engine calls hasLineOfSight with top-left cell only (src/engine/available-actions.js:2223)",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "tests/domain/oracle/los-slice2-probes.test.js: PROBE-LOS-SLICE2-003 (multi-cell attacker any-cell LOS) and PROBE-LOS-SLICE2-004 (multi-cell target any-cell reachability) hard-fail on CRR violations. Parity scenario 15 in _crr-baselines.js baselines the engine-only drift: handler_only=['Greedo-1-0'] for AT-RT (2x2) at o14 → Greedo at r14 across static wall p14|q14 (top-row cells blocked, back-row cells clear).",
       "training_blast_radius": "medium",
-      "confidence": "low",
-      "recommended_next_audit_type": "oracle_probe",
-      "notes": "Large-figure LOS is exercised only incidentally in self-play; no explicit assertion."
+      "confidence": "high",
+      "recommended_next_audit_type": "covered",
+      "notes": "v1.4 (2026-04-16): reclassified uncovered → direct_oracle. Engine's top-left-only LOS is baselined and fails on growth; fixing the engine to iterate attacker footprint is a separate gameplay lane (tracked via parity scenario 15)."
     },
     {
       "domain": "D3",
