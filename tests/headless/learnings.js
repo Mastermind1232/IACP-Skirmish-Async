@@ -45,6 +45,33 @@ export function getEffectiveAlpha(totalGames) {
   return Math.max(ALPHA_FLOOR, ALPHA / Math.sqrt(1 + (totalGames || 0) / ALPHA_TAU));
 }
 
+// Shared attack-target comparator. Used by both oracleActivationPlan and
+// pickWithinGroup so the ranking can't silently drift between them.
+//
+// Tier order (lower value → preferred):
+//   1. hitViability             — reliable hits beat marginal hits
+//   2. currentHp                — focus-fire: finish weakest first
+//   3. maxHp                    — smaller baseline beats larger baseline at equal current HP
+//   4. targetActivated          — turn-denial: prefer unactivated
+//   5. missionTargetPriority    — mission-VP tiebreaker (Krykna on Krykna Infestation)
+//   6. dist                     — proximity (final tiebreaker)
+//
+// Earlier versions placed missionTargetPriority as tier-1, which caused every
+// mixed-candidate attack decision on Chopper to pick a Krykna over the enemy
+// figure — confirmed in the Chopper forensic trace as 9/9 NPC-preference cases
+// regardless of HP or hit viability. The mission term now participates only
+// after hit viability, focus-fire HP, and turn-denial; Krykna still win when
+// they're legitimately the most finishable target (lower current HP) or when
+// every other signal ties.
+export function compareAttackTargets(a, b) {
+  if (a.hitViability !== b.hitViability) return a.hitViability - b.hitViability;
+  if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
+  if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
+  if (a.targetActivated !== b.targetActivated) return a.targetActivated - b.targetActivated;
+  if (a.missionTargetPriority !== b.missionTargetPriority) return a.missionTargetPriority - b.missionTargetPriority;
+  return a.dist - b.dist;
+}
+
 const REPLAY_BUFFER_SIZE = 10000;   // Max transitions in ring buffer
 const REPLAY_BATCH_SIZE = 32;       // Transitions per mini-batch
 const REPLAY_UPDATES_PER_GAME = 4;  // Mini-batch updates after each game
@@ -2614,15 +2641,11 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
           }
         }
       }
-      return { action: a, missionTargetPriority, currentHp: hp?.current ?? 99, maxHp: hp?.max ?? 99, targetActivated, dist };
+      // hitViability defaults to 0 (reliable) on the oracle path — the planner
+      // only fires attacks against in-range targets, so viability is implicit.
+      return { action: a, missionTargetPriority, hitViability: 0, currentHp: hp?.current ?? 99, maxHp: hp?.max ?? 99, targetActivated, dist };
     });
-    scored.sort((a, b) => {
-      if (a.missionTargetPriority !== b.missionTargetPriority) return a.missionTargetPriority - b.missionTargetPriority;
-      if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
-      if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
-      if (a.targetActivated !== b.targetActivated) return a.targetActivated - b.targetActivated;
-      return a.dist - b.dist;
-    });
+    scored.sort(compareAttackTargets);
 
     // ── Attack target quality audit (oracle path) ─────────────────────────
     _atkAudit.totalDecisions++;
@@ -3209,15 +3232,7 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
         dist,
       };
     });
-    scored.sort((a, b) => {
-      if (a.missionTargetPriority !== b.missionTargetPriority) return a.missionTargetPriority - b.missionTargetPriority;
-      if (a.hitViability !== b.hitViability) return a.hitViability - b.hitViability;
-      if (a.currentHp !== b.currentHp) return a.currentHp - b.currentHp;
-      if (a.maxHp !== b.maxHp) return a.maxHp - b.maxHp;
-      // Turn-denial: among equal-HP targets, prefer unactivated (deny their turn)
-      if (a.targetActivated !== b.targetActivated) return a.targetActivated - b.targetActivated;
-      return a.dist - b.dist;
-    });
+    scored.sort(compareAttackTargets);
     const best = scored[0];
 
     // ── Attack target quality audit ───────────────────────────────────────
