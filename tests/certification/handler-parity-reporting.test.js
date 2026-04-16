@@ -208,9 +208,9 @@ const SCENARIOS = [
         attacker: { playerNum: 1, figureKey: 'Royal Guard (Regular)-1-0', msgId: attackerMsgId, figureIndex: 0 },
       };
     },
-    expectedHandlerOnly: ['Greedo-1-0'],
+    expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'engine does not apply Reach; handler expands melee to 2 spaces when attacker has REACH (keyword or passive).',
+    reason: 'Engine now applies permanent Reach (fixed 2026-04-16; available-actions.js:2144 extends melee maxRange to 2 when attacker has REACH keyword or passive). Both sides agree. Per-attack Reach grants (nextAttackReach flag, Fury of Kashyyyk) remain engine-only gaps — see scenario 4.',
   },
 
   // 3. Hide — handler filters Hidden targets, engine does not
