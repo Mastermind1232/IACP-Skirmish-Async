@@ -2140,17 +2140,22 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   // Even with explicit range, cap by accuracy ceiling for ranged attacks —
   // a weapon with range [1,12] but max accuracy 5 can't hit past 5.
   if (isRanged && accuracyCeiling > 0) maxRange = Math.min(maxRange, accuracyCeiling);
-  // Reach (permanent): melee attackers with REACH keyword or passive extend
-  // maxRange from 1 to 2 per CRR (RULES_REFERENCE.md:1933, 2401, 2404).
-  // Per-attack flags (game.nextAttackReach) and conditional grants (Fury of
-  // Kashyyyk) are intentionally NOT handled here — scope is permanent
-  // attacker-side Reach only. Parity scenarios 4 (nextAttackReach) and any
-  // future Fury scenario remain baselined as handler-only divergences.
+  // Reach: melee attackers extend maxRange from 1 to 2 when any of these
+  // are true — REACH keyword, REACH passive, or game.nextAttackReach flag
+  // set for this player (per-attack grant via CC/ability). Per CRR
+  // (RULES_REFERENCE.md:1933, 2401, 2404), Reach melee can target within
+  // 2 spaces.
+  // NOT handled here: Fury of Kashyyyk conditional WOOKIEE grant and
+  // Electrostaff loadout-card Reach. Those remain handler-only divergences
+  // until their own scoreboard scenarios and fixes land.
   if (!isRanged) {
     const _reachKws = (_aaEff?.keywords || []).map(k => String(k).toUpperCase());
     const _reachPassives = (_aaEff?.passives || []).map(p => String(p).toUpperCase());
-    const _hasPermanentReach = _reachKws.includes('REACH') || _reachPassives.includes('REACH');
-    if (_hasPermanentReach && maxRange < 2) maxRange = 2;
+    const _hasReach =
+      _reachKws.includes('REACH') ||
+      _reachPassives.includes('REACH') ||
+      !!game.nextAttackReach?.[playerNum];
+    if (_hasReach && maxRange < 2) maxRange = 2;
   }
   const ms = getMapData(game.selectedMap.id);
   if (!ms) return [];

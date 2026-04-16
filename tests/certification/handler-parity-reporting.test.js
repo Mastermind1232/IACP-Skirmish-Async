@@ -210,7 +210,7 @@ const SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Engine now applies permanent Reach (fixed 2026-04-16; available-actions.js:2144 extends melee maxRange to 2 when attacker has REACH keyword or passive). Both sides agree. Per-attack Reach grants (nextAttackReach flag, Fury of Kashyyyk) remain engine-only gaps — see scenario 4.',
+    reason: 'Engine now applies permanent Reach (fixed 2026-04-16; available-actions.js extends melee maxRange to 2 when attacker has REACH keyword or passive). Both sides agree. Fury of Kashyyyk conditional WOOKIEE Reach and Electrostaff loadout-card Reach remain engine-only gaps.',
   },
 
   // 3. Hide — handler filters Hidden targets, engine does not
@@ -266,9 +266,9 @@ const SCENARIOS = [
         attacker: { playerNum: 1, figureKey: 'Kanan Jarrus-1-0', msgId: attackerMsgId, figureIndex: 0 },
       };
     },
-    expectedHandlerOnly: ['Greedo-1-0'],
+    expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'engine ignores game.nextAttackReach; handler checks it and extends melee to 2 spaces.',
+    reason: 'Engine now reads game.nextAttackReach[playerNum] and extends melee maxRange to 2 when set (fixed 2026-04-16; available-actions.js:2149-2157). Both sides agree. Fury of Kashyyyk conditional WOOKIEE Reach and Electrostaff loadout-card Reach remain engine-only gaps.',
   },
 
   // 5. Priority Target — handler ignores figure-blocking LOS via abilityText
