@@ -57,12 +57,89 @@ async function _showMassivePushPicker(game, choice, interaction, client, logGame
 }
 
 /**
+ * Show figure-order picker: when 2+ displaced figures remain in the active phase,
+ * the controller chooses which one to place next.
+ * Figures are encoded by index into pending._currentPickable (figure keys can contain
+ * spaces / dashes and don't round-trip cleanly through a customId).
+ * @param {object} figurePick - { pickable, controllerPlayerNum } from resolveNextDisplacements
+ */
+async function _showMassivePushFigurePicker(game, figurePick, interaction, client, saveGames) {
+  const pending = game.pendingMassivePush;
+  if (!pending || !figurePick) { delete game.pendingMassivePush; return; }
+  const { pickable, controllerPlayerNum } = figurePick;
+  pending._currentControllerPlayerNum = controllerPlayerNum;
+  pending._currentPickable = pickable.map((e) => ({
+    figureKey: e.figureKey,
+    dcName: e.dcName,
+    playerNum: e.playerNum,
+  }));
+  pending._currentValidSpaces = null;
+  const btns = pickable.map((entry, idx) => {
+    const pos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+    const label = `${entry.dcName}${pos ? ` @ ${String(pos).toUpperCase()}` : ''}`.slice(0, 80);
+    return new ButtonBuilder()
+      .setCustomId(`massive_push_figure_${pending.gameId}_${idx}`)
+      .setLabel(label)
+      .setStyle(ButtonStyle.Primary);
+  });
+  const rows = [];
+  while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
+  const phaseLabel = pending.phase === 'friendly' ? 'your figures' : 'opponent\'s figures';
+  const threadId = game.dcActionsData ? Object.values(game.dcActionsData).find(d => d.threadId)?.threadId : null;
+  const channel = threadId ? await fetchGameChannel(client, threadId) : interaction.channel;
+  if (channel) {
+    await channel.send({
+      content: `**Massive Displacement** — Pick which of **${phaseLabel}** to place next.`,
+      components: rows.slice(0, 5),
+    }).catch(discordCatch);
+  }
+  saveGames();
+}
+
+/**
+ * Dispatcher: after resolveNextDisplacements returns a result, either:
+ *   - result.done        → cleanup pendingMassivePush, refresh board, resume any
+ *                          deferred post-deploy movement-complete callback.
+ *   - result.needsFigurePick → post figure-order picker.
+ *   - result.needsChoice → post space picker for the current figure.
+ */
+async function _dispatchNextMassivePush(game, result, interaction, ctx) {
+  const { client, logGameAction, buildBoardMapPayload, saveGames } = ctx;
+  if (result.done) {
+    const gameId = game.pendingMassivePush?.gameId || game.gameId;
+    delete game.pendingMassivePush;
+    if (game.boardId && game.selectedMap && buildBoardMapPayload) {
+      try {
+        const boardChannel = await fetchGameChannel(client, game.boardId);
+        if (boardChannel) {
+          const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        }
+      } catch (err) { console.error('Massive push: board refresh failed', err); }
+    }
+    // Resume any deferred post-deploy movement-complete callback gated on
+    // pendingMassivePush. No-op if nothing was deferred.
+    const { resumeDeferredPostDeployMove } = await import('./post-deploy.js');
+    await resumeDeferredPostDeployMove(game, gameId, client, ctx);
+    if (saveGames) saveGames();
+    return;
+  }
+  if (result.needsFigurePick) {
+    await _showMassivePushFigurePicker(game, result.needsFigurePick, interaction, client, saveGames);
+    return;
+  }
+  if (result.needsChoice) {
+    await _showMassivePushPicker(game, result.needsChoice, interaction, client, logGameAction, buildBoardMapPayload, saveGames);
+  }
+}
+
+/**
  * Handle massive push space pick button (massive_push_space_).
  * Places the displaced figure, then continues iterative resolution.
  * Push authority: friendly phase → massive controller, enemy phase → enemy player.
  */
 export async function handleMassivePushSpace(interaction, ctx) {
-  const { getGame, logGameAction, buildBoardMapPayload, saveGames, client } = ctx;
+  const { getGame, logGameAction, saveGames, client } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const match = interaction.customId.match(/^massive_push_space_([^_]+)_(.+)$/);
   if (!match) { await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch); return; }
@@ -101,22 +178,57 @@ export async function handleMassivePushSpace(interaction, ctx) {
     const suffix = r.bfs ? ' (no adjacent spaces)' : '';
     await logGameAction(game, client, `**${r.entry.dcName}** displaced **${from}** → **${to}** by massive figure${suffix}.`, { icon: 'move', phase: 'ROUND' });
   }
-  if (result.done) {
-    delete game.pendingMassivePush;
-    // Final board refresh
-    if (game.boardId && game.selectedMap && buildBoardMapPayload) {
-      try {
-        const boardChannel = await fetchGameChannel(client, game.boardId);
-        if (boardChannel) {
-          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-          await boardChannel.send(payload);
-        }
-      } catch (err) { console.error('Massive push: board refresh failed', err); }
-    }
-  } else {
-    await _showMassivePushPicker(game, result.needsChoice, interaction, client, logGameAction, buildBoardMapPayload, saveGames);
+  await _dispatchNextMassivePush(game, result, interaction, ctx);
+  if (saveGames) saveGames();
+}
+
+/**
+ * Handle massive push figure-order pick (massive_push_figure_).
+ * Controller chooses WHICH displaced figure to place next (when 2+ remain in phase).
+ * Authority matches space-pick: friendly phase → massive controller; enemy phase → enemy player.
+ */
+export async function handleMassivePushFigure(interaction, ctx) {
+  const { getGame, logGameAction, saveGames, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const match = interaction.customId.match(/^massive_push_figure_([^_]+)_(\d+)$/);
+  if (!match) { await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch); return; }
+  const [, gameId, idxStr] = match;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingMassivePush;
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending displacement.', ephemeral: true }).catch(discordCatch);
+    return;
   }
-  saveGames();
+  const controllerPlayerNum = pending._currentControllerPlayerNum ?? pending.movingPlayerNum;
+  const authorityLabel = pending.phase === 'friendly'
+    ? 'Only the massive figure\'s controller can pick placement order.'
+    : 'Only the displaced figure\'s controller can pick placement order.';
+  if (!await requirePlayer(interaction, game, interaction.user.id, controllerPlayerNum, canActAsPlayer, authorityLabel)) return;
+  const idx = parseInt(idxStr, 10);
+  const pickable = pending._currentPickable || [];
+  const choice = pickable[idx];
+  if (!choice) {
+    await interaction.followUp({ content: 'Invalid pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const { applyFigurePick, resolveNextDisplacements } = await import('../game/movement.js');
+  if (!applyFigurePick(pending, choice.figureKey)) {
+    await interaction.followUp({ content: 'Invalid pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  try { await interaction.message.edit({ content: `Order set: **${choice.dcName}** placed next.`, components: [] }).catch(discordCatch); } catch {}
+  // Drive one more resolution step — with the order locked in, it will either
+  // auto-drain (0/1-space edge cases) or return needsChoice for this figure.
+  const result = resolveNextDisplacements(game, pending);
+  for (const r of result.autoResolved) {
+    const from = r.prevPos ? String(r.prevPos).toUpperCase() : '?';
+    const to = r.newPos ? String(r.newPos).toUpperCase() : '?';
+    const suffix = r.bfs ? ' (no adjacent spaces)' : '';
+    await logGameAction(game, client, `**${r.entry.dcName}** displaced **${from}** → **${to}** by massive figure${suffix}.`, { icon: 'move', phase: 'ROUND' });
+  }
+  await _dispatchNextMassivePush(game, result, interaction, ctx);
+  if (saveGames) saveGames();
 }
 
 /**
@@ -646,7 +758,7 @@ export async function handleMovePick(interaction, ctx) {
       if (!result.done) {
         // Store pending state for interactive resolution
         game.pendingMassivePush = { ...pending, gameId: game.gameId };
-        await _showMassivePushPicker(game, result.needsChoice, interaction, client, logGameAction, buildBoardMapPayload, saveGames);
+        await _dispatchNextMassivePush(game, result, interaction, ctx);
       }
     }
   }
@@ -821,10 +933,8 @@ export async function handleMovePick(interaction, ctx) {
       console.error('Failed to update activation minimap after move:', err);
     }
   }
-  // Interactive massive push: show first picker if any figures need placement
-  if (game.pendingMassivePush?.queue?.length > 0 && game.pendingMassivePush.currentIndex === 0) {
-    await _showMassivePushPicker(game, interaction, client, logGameAction, buildBoardMapPayload, saveGames);
-  }
+  // (Interactive massive-push prompts are posted directly from the init block
+  // above via _dispatchNextMassivePush. No post-hoc branch needed here.)
   // Bleeding: trigger once after first space moved (pendingBleed set when Move action declared)
   if (moveState.pendingBleed && ctx.sendBleedingPrompt) {
     moveState.pendingBleed = false;

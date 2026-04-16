@@ -835,10 +835,16 @@ export function initMassiveDisplacement(game, movingPlayerNum, movingFigureKey, 
  * Resolve displacements iteratively. Auto-resolves 0/1-space cases (mutates
  * game.figurePositions), stops when a figure has 2+ valid spaces (needs choice).
  *
+ * When multiple unresolved entries remain in the active phase and the current
+ * entry requires a space choice, first returns needsFigurePick so the controller
+ * can choose displacement ORDER. Once applyFigurePick locks in the ordering for
+ * the current index, a subsequent call returns needsChoice for that figure.
+ *
  * Each call recalculates valid spaces with CURRENT board state before resolving.
  *
  * @returns {object}
  *   .autoResolved: [{entry, prevPos, newPos, bfs}] — figures auto-placed this call
+ *   .needsFigurePick: null | {pickable:Entry[], controllerPlayerNum}
  *   .needsChoice: null | {entry, validSpaces, controllerPlayerNum}
  *   .done: boolean — true when all figures in both queues resolved
  */
@@ -853,9 +859,10 @@ export function resolveNextDisplacements(game, pending) {
       if (pending.phase === 'friendly' && pending.enemyQueue.length > 0) {
         pending.phase = 'enemy';
         pending.currentIndex = 0;
+        pending._figurePickLockedIdx = -1;
         continue;
       }
-      return { autoResolved, needsChoice: null, done: true };
+      return { autoResolved, needsFigurePick: null, needsChoice: null, done: true };
     }
 
     const entry = queue[pending.currentIndex];
@@ -883,11 +890,55 @@ export function resolveNextDisplacements(game, pending) {
 
     // 2+ valid spaces — caller must choose.
     // Friendly phase: massive controller picks. Enemy phase: enemy player picks.
+    // In 2-player Skirmish all entries in the enemy queue share the same
+    // playerNum, so using the current entry's playerNum is safe.
     const controllerPlayerNum = pending.phase === 'friendly'
       ? pending.movingPlayerNum
       : entry.playerNum;
-    return { autoResolved, needsChoice: { entry, validSpaces, controllerPlayerNum }, done: false };
+
+    const unresolvedCount = queue.length - pending.currentIndex;
+    const orderLocked = pending._figurePickLockedIdx === pending.currentIndex;
+    if (unresolvedCount >= 2 && !orderLocked) {
+      // Ask the controller which figure to displace next before picking a space.
+      const pickable = queue.slice(pending.currentIndex);
+      return {
+        autoResolved,
+        needsFigurePick: { pickable, controllerPlayerNum },
+        needsChoice: null,
+        done: false,
+      };
+    }
+
+    return {
+      autoResolved,
+      needsFigurePick: null,
+      needsChoice: { entry, validSpaces, controllerPlayerNum },
+      done: false,
+    };
   }
+}
+
+/**
+ * Lock in the controller's chosen figure ORDER for the current index by
+ * swapping the chosen entry into queue[currentIndex]. Does NOT advance the
+ * index — a subsequent resolveNextDisplacements call returns needsChoice for
+ * that figure so the controller can then pick its destination space.
+ * @returns {boolean} true if pick applied, false if figureKey not pickable
+ */
+export function applyFigurePick(pending, figureKey) {
+  const queue = pending.phase === 'friendly' ? pending.friendlyQueue : pending.enemyQueue;
+  let targetIdx = -1;
+  for (let i = pending.currentIndex; i < queue.length; i++) {
+    if (queue[i].figureKey === figureKey) { targetIdx = i; break; }
+  }
+  if (targetIdx < 0) return false;
+  if (targetIdx !== pending.currentIndex) {
+    const tmp = queue[pending.currentIndex];
+    queue[pending.currentIndex] = queue[targetIdx];
+    queue[targetIdx] = tmp;
+  }
+  pending._figurePickLockedIdx = pending.currentIndex;
+  return true;
 }
 
 /**
@@ -901,6 +952,7 @@ export function applyDisplacementChoice(game, pending, chosenSpace) {
   const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
   pushFigure(game, entry.playerNum, entry.figureKey, chosenSpace);
   pending.currentIndex++;
+  pending._figurePickLockedIdx = -1;
   return { entry, prevPos, newPos: chosenSpace };
 }
 
@@ -928,6 +980,11 @@ export async function resolveMassivePush(game, profile, figureKey, playerNum, ne
       }
     }
     if (result.done) break;
+    // Non-interactive: when order matters, pick first pickable deterministically.
+    if (result.needsFigurePick) {
+      applyFigurePick(pending, result.needsFigurePick.pickable[0].figureKey);
+      continue;
+    }
     // Non-interactive: pick first valid space (deterministic)
     const choice = result.needsChoice;
     const applied = applyDisplacementChoice(game, pending, choice.validSpaces[0]);

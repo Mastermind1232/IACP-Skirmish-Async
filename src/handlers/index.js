@@ -24,7 +24,7 @@ import {
   handleArmsDistFigPick, handleArmsDistTokenPick,
   handleCompanionDeployPick,
 } from './post-deploy.js';
-import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace } from './movement.js';
+import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCrossTrainingReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleCombatGateReady } from './combat.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
@@ -228,6 +228,7 @@ register('move_mp_', handleMoveMp, 'move');
 register('move_adjust_mp_', handleMoveAdjustMp, 'moveAdjust');
 register('move_pick_', handleMovePick, 'movePick');
 register('massive_push_space_', handleMassivePushSpace, 'movePick');
+register('massive_push_figure_', handleMassivePushFigure, 'movePick');
 register('mvint_play_', handleMoveInterruptPlay, 'movePick');
 register('mvint_skip_', handleMoveInterruptSkip, 'movePick');
 register('ow_interrupt_use_', handleOverwatchInterruptUse, 'movePick');

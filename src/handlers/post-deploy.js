@@ -1596,12 +1596,38 @@ export async function handlePostDeployMoveStay(interaction, ctx) {
 
 /**
  * Called from movement.js handleMovePick when a postDeployReturn move finishes.
- * Delegates to _advanceAfterFigure which handles all ability types.
- * @param {string} completedFigureKey — REQUIRED: the figure that just finished moving.
+ * If massive displacement is still unresolved, record a lightweight descriptor
+ * on game state and defer. The massive-push dispatcher resumes by calling
+ * resumeDeferredPostDeployMove with its own ctx (movePick group) once the
+ * displacement queue drains.
+ *
+ * The descriptor is pure state — no in-memory closures — so refresh and
+ * restart paths can reconstruct the resume action from game alone.
  */
 export async function onPostDeployMovementComplete(game, gameId, client, ctx, completedFigureKey) {
   const { saveGames } = ctx;
+  if (game.pendingMassivePush) {
+    game._postDeployMoveDeferred = { figureKey: completedFigureKey, at: Date.now() };
+    if (saveGames) saveGames();
+    return;
+  }
   await _advanceAfterFigure(game, gameId, client, ctx, completedFigureKey);
+  if (saveGames) saveGames();
+}
+
+/**
+ * Resume a deferred post-deploy movement-complete advance. Called by the
+ * massive-push dispatcher once the queue drains. Caller supplies the ctx
+ * (movePick group) which is a superset of what _advanceAfterFigure needs.
+ * No-op if nothing was deferred.
+ */
+export async function resumeDeferredPostDeployMove(game, gameId, client, ctx) {
+  const deferred = game._postDeployMoveDeferred;
+  if (!deferred) return;
+  const figureKey = deferred.figureKey;
+  delete game._postDeployMoveDeferred;
+  await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
+  const saveGames = ctx?.saveGames;
   if (saveGames) saveGames();
 }
 

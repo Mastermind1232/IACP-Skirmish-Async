@@ -39,6 +39,7 @@ import {
   initMassiveDisplacement,
   resolveNextDisplacements,
   applyDisplacementChoice,
+  applyFigurePick,
   resolveMassivePush,
 } from '../../../src/game/movement.js';
 import { pushFigure } from '../../../src/game/player-helpers.js';
@@ -529,9 +530,12 @@ describe('B-MVDISP-004: resolveNextDisplacements iterative recalc', () => {
 
     // Resolve iteratively
     const r1 = resolveNextDisplacements(game, pending);
-    // First figure should auto-resolve (b1 adj → a1, a2 available, but may need choice or auto)
-    // Either way, at least one figure processed
-    assert.ok(r1.autoResolved.length > 0 || r1.needsChoice, 'at least one figure processed');
+    // First figure should either auto-resolve, need a space choice, or (with
+    // 2+ unresolved entries remaining) need a figure-order choice first.
+    assert.ok(
+      r1.autoResolved.length > 0 || r1.needsChoice || r1.needsFigurePick,
+      'at least one figure processed or prompt returned'
+    );
 
     // If both auto-resolved, verify they ended in different spaces
     if (r1.done) {
@@ -583,8 +587,9 @@ describe('B-MVDISP-004: resolveNextDisplacements iterative recalc', () => {
     let result = resolveNextDisplacements(game, pending);
     allAuto.push(...result.autoResolved);
     while (!result.done) {
-      if (result.needsChoice) {
-        // Pick first valid space
+      if (result.needsFigurePick) {
+        applyFigurePick(pending, result.needsFigurePick.pickable[0].figureKey);
+      } else if (result.needsChoice) {
         applyDisplacementChoice(game, pending, result.needsChoice.validSpaces[0]);
       }
       result = resolveNextDisplacements(game, pending);
@@ -843,5 +848,209 @@ describe('B-MVDISP-008: full-contract certification (anchorhead-cantina-bar)', (
     const enemyPos = game.figurePositions[2]['Stormtrooper (Regular)-1-0'];
     assert.ok(!footprint.has(enemyPos), 'enemy displaced out of footprint');
     assert.ok(friendlyPos !== enemyPos, 'friendly and enemy in different spaces');
+  });
+});
+
+// ── B-MVDISP-009: Controller picks displacement ORDER when ≥2 need choice ──
+// When the massive-push engine has 2+ unresolved entries in the active phase
+// and the current entry requires a space choice, the controller picks which
+// figure to place next before being prompted for a destination. This matches
+// RULES_REFERENCE.md:1906-1909 ("controller's choice if tied") applied to the
+// ordering of multiple displacements within a phase.
+
+describe('B-MVDISP-009: figure-order pick when multiple displacements need choice', () => {
+
+  it('009a: friendly phase with 2 overlaps + choice needed → needsFigurePick', () => {
+    // Two friendly figures both in the footprint, each with ≥2 valid adjacent spaces.
+    // Engine should ask the controller which one to place first.
+    const game = makeGame({
+      figurePositions: {
+        1: {
+          'MASSIVE-1-0': 'a4',
+          'Rebel Trooper-1-0': 'b1',  // adj non-forbidden: a1, a2 (c1 occupied by T-2)
+          'Rebel Trooper-2-0': 'c1',  // adj non-forbidden: d1, d2 (b1 occupied by T-1)
+        },
+        2: {},
+      },
+    });
+    const footprint = new Set(['b1', 'c1', 'b2', 'c2']);
+    const pending = initMassiveDisplacement(game, 1, 'MASSIVE-1-0', footprint);
+    assert.ok(pending);
+    assert.strictEqual(pending.friendlyQueue.length, 2, 'two friendly overlaps');
+
+    const r1 = resolveNextDisplacements(game, pending);
+    assert.strictEqual(r1.autoResolved.length, 0, 'nothing auto-resolved — both need choices');
+    assert.ok(r1.needsFigurePick, 'needsFigurePick returned');
+    assert.strictEqual(r1.needsChoice, null, 'needsChoice NOT returned yet');
+    assert.strictEqual(r1.needsFigurePick.pickable.length, 2, '2 pickable figures');
+    assert.strictEqual(r1.needsFigurePick.controllerPlayerNum, 1,
+      'friendly phase → massive controller (P1) picks order');
+
+    const keys = r1.needsFigurePick.pickable.map(e => e.figureKey).sort();
+    assert.deepStrictEqual(keys, ['Rebel Trooper-1-0', 'Rebel Trooper-2-0']);
+
+    // No figures moved yet — only prompt returned.
+    assert.strictEqual(game.figurePositions[1]['Rebel Trooper-1-0'], 'b1');
+    assert.strictEqual(game.figurePositions[1]['Rebel Trooper-2-0'], 'c1');
+  });
+
+  it('009b: single unresolved entry → needsChoice directly (no figure-pick)', () => {
+    // One figure in phase → controller has nothing to re-order; engine skips the pick.
+    const game = makeGame({
+      figurePositions: {
+        1: {
+          'MASSIVE-1-0': 'a4',
+          'Rebel Trooper-1-0': 'b1',
+        },
+        2: {},
+      },
+    });
+    const footprint = new Set(['b1', 'c1', 'b2', 'c2']);
+    const pending = initMassiveDisplacement(game, 1, 'MASSIVE-1-0', footprint);
+    assert.strictEqual(pending.friendlyQueue.length, 1);
+
+    const r1 = resolveNextDisplacements(game, pending);
+    assert.strictEqual(r1.needsFigurePick, null, 'no figure-pick for solo entry');
+    assert.ok(r1.needsChoice, 'needsChoice returned directly');
+  });
+
+  it('009c: applyFigurePick swaps chosen entry into currentIndex and unblocks choice', () => {
+    const game = makeGame({
+      figurePositions: {
+        1: {
+          'MASSIVE-1-0': 'a4',
+          'Rebel Trooper-1-0': 'b1',
+          'Rebel Trooper-2-0': 'c1',
+        },
+        2: {},
+      },
+    });
+    const footprint = new Set(['b1', 'c1', 'b2', 'c2']);
+    const pending = initMassiveDisplacement(game, 1, 'MASSIVE-1-0', footprint);
+    // Initial FIFO order: friendlyQueue[0]=Trooper-1, friendlyQueue[1]=Trooper-2
+    const initialFirstKey = pending.friendlyQueue[0].figureKey;
+    assert.strictEqual(initialFirstKey, 'Rebel Trooper-1-0');
+
+    const r1 = resolveNextDisplacements(game, pending);
+    assert.ok(r1.needsFigurePick);
+
+    // Controller picks Trooper-2 (NOT the FIFO-first figure).
+    const ok = applyFigurePick(pending, 'Rebel Trooper-2-0');
+    assert.strictEqual(ok, true, 'applyFigurePick returned true');
+    assert.strictEqual(pending.friendlyQueue[0].figureKey, 'Rebel Trooper-2-0',
+      'chosen figure swapped into currentIndex slot');
+    assert.strictEqual(pending.friendlyQueue[1].figureKey, 'Rebel Trooper-1-0',
+      'displaced figure moved to the other slot');
+
+    // Next resolve call must NOT re-ask figure-pick (order is locked); it should
+    // return needsChoice for the figure we picked.
+    const r2 = resolveNextDisplacements(game, pending);
+    assert.strictEqual(r2.needsFigurePick, null, 'no re-prompt for figure-pick');
+    assert.ok(r2.needsChoice, 'needsChoice returned for picked figure');
+    assert.strictEqual(r2.needsChoice.entry.figureKey, 'Rebel Trooper-2-0');
+  });
+
+  it('009d: enemy-phase figure-pick → controllerPlayerNum = enemy player', () => {
+    // Massive = P1. Two enemy (P2) figures overlap. P2 chooses the order.
+    const game = makeGame({
+      figurePositions: {
+        1: { 'MASSIVE-1-0': 'a4' },
+        2: {
+          'Stormtrooper (Regular)-1-0': 'b1',
+          'Stormtrooper (Regular)-2-0': 'c1',
+        },
+      },
+    });
+    const footprint = new Set(['b1', 'c1', 'b2', 'c2']);
+    const pending = initMassiveDisplacement(game, 1, 'MASSIVE-1-0', footprint);
+    assert.strictEqual(pending.phase, 'enemy', 'no friendlies → starts in enemy phase');
+    assert.strictEqual(pending.enemyQueue.length, 2);
+
+    const r1 = resolveNextDisplacements(game, pending);
+    assert.ok(r1.needsFigurePick, 'needsFigurePick in enemy phase with ≥2 entries');
+    assert.strictEqual(r1.needsFigurePick.controllerPlayerNum, 2,
+      'enemy phase → displaced figure owner (P2) picks order');
+  });
+
+  it('009e: full figure-pick + space-pick cycle produces valid end state', () => {
+    // Drive the entire engine: figure-pick, space-pick, figure-pick (or auto),
+    // space-pick, etc. — ensure both figures end outside the footprint.
+    const game = makeGame({
+      figurePositions: {
+        1: {
+          'MASSIVE-1-0': 'a4',
+          'Rebel Trooper-1-0': 'b1',
+          'Rebel Trooper-2-0': 'c1',
+        },
+        2: {},
+      },
+    });
+    const footprint = new Set(['b1', 'c1', 'b2', 'c2']);
+    const pending = initMassiveDisplacement(game, 1, 'MASSIVE-1-0', footprint);
+
+    let safety = 0;
+    let result = resolveNextDisplacements(game, pending);
+    while (!result.done) {
+      if (++safety > 20) throw new Error('engine loop did not terminate');
+      if (result.needsFigurePick) {
+        applyFigurePick(pending, result.needsFigurePick.pickable[0].figureKey);
+      } else if (result.needsChoice) {
+        applyDisplacementChoice(game, pending, result.needsChoice.validSpaces[0]);
+      }
+      result = resolveNextDisplacements(game, pending);
+    }
+
+    const posA = game.figurePositions[1]['Rebel Trooper-1-0'];
+    const posB = game.figurePositions[1]['Rebel Trooper-2-0'];
+    assert.ok(!footprint.has(posA), 'Trooper-1 not in footprint');
+    assert.ok(!footprint.has(posB), 'Trooper-2 not in footprint');
+    assert.notStrictEqual(posA, posB, 'Troopers in different spaces');
+  });
+
+  it('009f: applyFigurePick returns false for unknown / already-resolved figure', () => {
+    const game = makeGame({
+      figurePositions: {
+        1: {
+          'MASSIVE-1-0': 'a4',
+          'Rebel Trooper-1-0': 'b1',
+          'Rebel Trooper-2-0': 'c1',
+        },
+        2: {},
+      },
+    });
+    const footprint = new Set(['b1', 'c1', 'b2', 'c2']);
+    const pending = initMassiveDisplacement(game, 1, 'MASSIVE-1-0', footprint);
+    resolveNextDisplacements(game, pending);
+    assert.strictEqual(applyFigurePick(pending, 'Does-Not-Exist-0-0'), false,
+      'unknown figure rejected');
+  });
+
+  it('009g: resolveMassivePush (non-interactive) handles needsFigurePick deterministically', async () => {
+    // Two friendly overlaps — interactive path would ask for order; non-interactive
+    // must auto-pick first pickable without infinite-looping.
+    const game = makeGame({
+      figurePositions: {
+        1: {
+          'MASSIVE-1-0': 'a4',
+          'Rebel Trooper-1-0': 'b1',
+          'Rebel Trooper-2-0': 'c1',
+        },
+        2: {},
+      },
+    });
+    const footprint = ['b1', 'c1', 'b2', 'c2'];
+    const profile = { canEndOnOccupied: true };
+    const logs = [];
+    const mockLog = async (_g, _c, msg) => logs.push(msg);
+
+    await resolveMassivePush(game, profile, 'MASSIVE-1-0', 1, footprint, null, mockLog);
+
+    const fpSet = new Set(footprint);
+    const posA = game.figurePositions[1]['Rebel Trooper-1-0'];
+    const posB = game.figurePositions[1]['Rebel Trooper-2-0'];
+    assert.ok(!fpSet.has(posA), 'Trooper-1 not in footprint');
+    assert.ok(!fpSet.has(posB), 'Trooper-2 not in footprint');
+    assert.notStrictEqual(posA, posB, 'Troopers in different spaces');
+    assert.ok(game.massiveMovementLocked?.['MASSIVE-1-0'], 'movement locked');
   });
 });
