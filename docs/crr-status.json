@@ -12,17 +12,17 @@
     }
   },
   "heatMap": {
-    "version": "1.2",
+    "version": "1.3",
     "date": "2026-04-16",
     "totalEntries": 55,
     "coverageDistribution": {
-      "direct_oracle": 39,
+      "direct_oracle": 40,
       "inferred_only": 6,
       "certification": 2,
       "headless_selfplay": 1,
       "runtime_invariant": 1,
       "unit_test": 1,
-      "uncovered": 5
+      "uncovered": 4
     }
   },
   "abilityTextSnapshot": {

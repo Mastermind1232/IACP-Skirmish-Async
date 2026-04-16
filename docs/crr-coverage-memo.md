@@ -1,9 +1,9 @@
 # CRR Coverage Heat Map — Skirbo First-Pass Audit
 
-**Date:** 2026-04-14 (initial), 2026-04-16 (v1.2 — heat-map expanded 35 → 55 entries)
+**Date:** 2026-04-14 (initial), 2026-04-16 (v1.2 — heat-map expanded 35 → 55 entries; v1.3 — post-target-select gating reclassified uncovered → direct_oracle)
 **Scope:** All engine subsystems against the Consolidated Rules Reference
 **Test inventory:** 1,092 assertions via `npm test` (72 oracle files + engine unit tests)
-**Campaign status:** CLOSED. All 5 original top risks resolved. v1.2 is measurement-only: parity scenarios broken out per-row and honest uncovered rows added.
+**Campaign status:** CLOSED. All 5 original top risks resolved. v1.2 is measurement-only: parity scenarios broken out per-row and honest uncovered rows added. v1.3 closes one of the v1.2 uncovered rows with a new 13-scenario certification lane.
 
 ---
 
@@ -42,7 +42,9 @@ This audit partitions the CRR into 10 domains (D1-D10) and assesses each rule cl
 
 **v1.2 parity breakout.** The handler-vs-engine target-enumeration scoreboard is now one direct_oracle row per scenario (13 total): 2 positive controls (default, Insignificant/Dio), 3 Reach-family rows (permanent Reach and nextAttackReach flag landed in parity 2026-04-16; Fury of Kashyyyk and Electrostaff loadout are known engine-side gaps), 3 LOS-bypass rows (Priority Target, Marksman CC, Clawdite Scout form — all engine-side gaps), and 4 divergences of different shape (I Must Go Alone distance cap, Fire Mission group-LOS, Vanish immunity, Hide no-longer-a-filter). See `tests/certification/handler-parity-reporting.test.js` and `tests/certification/_crr-baselines.js`.
 
-Two combat-adjacent rows were also added as **uncovered**: post-target-select gating (pendingFiringSquad / pendingCoordinatedRaid / pendingFieldTactics) and loadout-card passives beyond Reach.
+**v1.3 post-target-select gating lane.** A second direct_oracle lane now pins the post-target-select decision block in `src/handlers/combat.js:869–969`. `tests/certification/post-select-gating.test.js` runs 13 scenarios through a narrow shadow `decideAfterTargetSelect` that mirrors the handler's first-match ordering across 4 block gates (etiquette, Still Faster Than You, forced-target, multi-fire same-target) and 8 consumption windows (Battlefield Leadership, Fell Swoop, Emperor Interrupt, Executive Order, Bombardment Sorin, Firing Squad, Coordinated Raid, Field Tactics), plus a positive-control baseline. Engine-blindness is tracked as a report-only counter (currently 11-of-12 gated scenarios — the engine is unaware of these post-select flags). Side effects (flag cleanup, token deduction, arcing-shot / ballistics-matrix clears) and combat resolution itself are deliberately out of scope.
+
+One combat-adjacent row remains **uncovered**: loadout-card passives beyond Reach.
 
 ### D4: Conditions (2 subdomains)
 **Overall: STRONG.** Individual condition application/removal well-tested. Multi-condition interaction is inferred_only but low risk since conditions use independent flag tracking.
@@ -115,7 +117,7 @@ Note: Surge spending legality, power-token timing, attack-type validation, and c
 | LOS-06 Energy Shield exception | uncovered | **Low** — rare in current maps |
 | LOS Slice 2 — Doors | uncovered | **Medium** — deferred from 2026-04-02 slice work |
 | LOS Slice 2 — Multi-cell figures | uncovered | **Medium** — deferred alongside doors |
-| Post-target-select combat gating | uncovered | **Medium** — pending-free-attack flags untested directly |
+| Post-target-select combat gating | direct_oracle (v1.3) | **Closed** — 13-scenario certification lane, engine-blindness 11-of-12 tracked |
 | Loadout-card passives beyond Reach | uncovered | **Low** — Reach is the only wired passive today |
 | Mission-specific scoring variants | inferred_only | **Medium** — selfplay exercises but nothing asserts per-mission VP math |
 | Free-attack window mutex | inferred_only | **Medium** — individual flags tested, mutex isn't |
@@ -173,24 +175,26 @@ Note: Surge spending legality, power-token timing, attack-type validation, and c
 
 ## 7. Structured Coverage Artifact
 
-The machine-readable coverage map is at: `docs/crr-coverage-heat-map.json` (v1.2, 2026-04-16).
+The machine-readable coverage map is at: `docs/crr-coverage-heat-map.json` (v1.3, 2026-04-16).
 
 It contains **55** coverage entries across 10 domains with fields: domain, subdomain, crr_rule_or_claim, engine_location, current_coverage_type, evidence, training_blast_radius, confidence, recommended_next_audit_type, notes. Plus the top 5 risks with recommended actions.
 
-### Coverage Distribution Summary (v1.2, post-expansion)
+### Coverage Distribution Summary (v1.3, post-reclassification)
 
 | Coverage Type | Count | % |
 |--------------|-------|---|
-| direct_oracle | 39 | 70.9% |
+| direct_oracle | 40 | 72.7% |
 | inferred_only | 6 | 10.9% |
-| uncovered | 5 | 9.1% |
+| uncovered | 4 | 7.3% |
 | certification | 2 | 3.6% |
 | unit_test | 1 | 1.8% |
 | runtime_invariant | 1 | 1.8% |
 | headless_selfplay | 1 | 1.8% |
 
-**Change vs v1.1 (35 entries):** +13 direct_oracle (handler-engine parity scenarios broken out per-row), +2 inferred_only (mission-specific scoring, free-attack window mutex), +5 uncovered (LOS-06, LOS Slice 2 doors, LOS Slice 2 multi-cell, post-target-select gating, loadout passives). No entries removed, no reclassifications.
+**Change vs v1.2 (55 entries, same total):** +1 direct_oracle (post-target-select combat gating), −1 uncovered (same row reclassified). No new entries; total count unchanged.
 
-**71% of audited rules have direct oracle coverage.** All 5 original top risks remain resolved; v1.2 is a measurement-only expansion that makes the known weak areas visible on the map instead of hidden behind inferred coverage.
+**Change vs v1.1 (35 entries):** +14 direct_oracle (13 parity scenarios broken out per-row in v1.2 + post-select gating reclassified in v1.3), +2 inferred_only (mission-specific scoring, free-attack window mutex), +4 uncovered (LOS-06, LOS Slice 2 doors, LOS Slice 2 multi-cell, loadout passives). No entries removed.
 
-**Still weak after v1.2:** Map topology (inferred_only, critical foundational), LOS Slice 2 doors + multi-cell (uncovered, medium), parity gaps for loadout/attachment-driven Reach and LOS bypass (known-and-baselined engine-side drift), and mission-specific VP math (inferred_only). The rollup at `docs/crr-status.json` makes the distribution a one-file PR review target.
+**73% of audited rules have direct oracle coverage.** All 5 original top risks remain resolved; post-target-select combat gating is now the second certification-backed direct_oracle lane alongside the handler-engine parity scoreboard.
+
+**Still weak after v1.3:** Map topology (inferred_only, critical foundational), LOS Slice 2 doors + multi-cell (uncovered, medium), parity gaps for loadout/attachment-driven Reach and LOS bypass (known-and-baselined engine-side drift), and mission-specific VP math (inferred_only). The rollup at `docs/crr-status.json` makes the distribution a one-file PR review target.

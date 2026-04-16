@@ -1,10 +1,11 @@
 {
   "metadata": {
     "title": "CRR Coverage Heat Map — IACP Skirmish Async (Skirbo)",
-    "version": "1.2",
+    "version": "1.3",
     "date": "2026-04-16",
     "tier_a_update": "2026-04-14: Tier A probes added (surge-legality-probes.test.js, combat-token-timing-probes.test.js). Condition immunity reclassified from unit_test to direct_oracle (ORACLE-HANDLER-003 already covers it).",
     "v1_2_expansion": "2026-04-16: Heat-map expanded 35 → 55 entries. Handler-vs-engine parity broken out into 13 per-scenario D3 entries (Reach family: permanent/nextAttackReach/Fury/Electrostaff; Hide non-filter; Priority Target/Marksman/Clawdite LOS bypass; Insignificant/Dio; I Must Go Alone; Fire Mission group-LOS; Vanish immunity; default-agreement positive control). Five honest uncovered entries added (LOS-06 Energy Shield, LOS Slice 2 door, LOS Slice 2 multi-cell figure, post-target-select combat gating, loadout-card passives beyond Reach). Two inferred_only additions (mission-specific scoring variants, free-attack window mutex). No new direct_oracle test files authored in this pass — measurement only.",
+    "v1_3_update": "2026-04-16: Post-Target-Select Combat Gating row reclassified uncovered → direct_oracle. tests/certification/post-select-gating.test.js v2 now pins all 12 flag-gated branches of combat.js:869–969 (4 block gates + 8 consumption windows + 1 positive control) via a narrow shadow. Side effects and combat resolution explicitly out of scope; engine-blindness (11-of-12) tracked as report-only number. Distribution: direct_oracle 39 → 40, uncovered 5 → 4.",
     "methodology": "Four-domain audit of engine source against Consolidated Rules Reference. Coverage classified as: direct_oracle (pure-function oracle probe), runtime_invariant (RT-1..RT-12 checked in training loop), certification (card catalog regression), unit_test (co-located or tests/domain unit), headless_selfplay (end-to-end headless game), inferred_only (exercised by selfplay but never explicitly asserted), uncovered (no test or runtime check).",
     "test_inventory": {
       "oracle_tests": { "files": 68, "assertions": 994 },
@@ -631,14 +632,14 @@
     {
       "domain": "D3",
       "subdomain": "Post-Target-Select Combat Gating",
-      "crr_rule_or_claim": "Once a target is selected, normal attacks are blocked while pendingFiringSquad / pendingCoordinatedRaid / pendingFieldTactics windows are active",
-      "engine_location": "src/game/combat.js pending-free-attack gating",
-      "current_coverage_type": "uncovered",
-      "evidence": "The shadow function in handler-parity-reporting.test.js notes the real gate lives in combat.js, not in buildAndSendAttackTargets. No oracle probe covers the combat-side gate.",
+      "crr_rule_or_claim": "Once a target is selected, the handler decides proceed-normal vs block (etiquette / Still Faster Than You / forced-target / multi-fire same-target) vs consume-free-attack-window (Battlefield Leadership, Fell Swoop, Emperor Interrupt, Executive Order, Bombardment Sorin, Firing Squad, Coordinated Raid, Field Tactics)",
+      "engine_location": "src/handlers/combat.js post-target-select gate block (lines 869–969)",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "tests/certification/post-select-gating.test.js — 13 scenarios pin every flag-gated branch of the handler via a narrow shadow that mirrors handler first-match ordering (4 block gates + 8 consumption windows + 1 positive control). Engine-blindness (11 of 12 gated scenarios) is tracked as a report-only number.",
       "training_blast_radius": "medium",
-      "confidence": "low",
-      "recommended_next_audit_type": "oracle_probe",
-      "notes": "Parity-test shadow short-circuits on these flags as a scenario-level fact. Real combat.js gating is untested directly."
+      "confidence": "high",
+      "recommended_next_audit_type": "covered",
+      "notes": "v2 (2026-04-16) reclassified from uncovered → direct_oracle. Side effects (flag cleanup, token deduction, arcing-shot / ballistics-matrix clears) and combat resolution itself remain out of scope — tracked separately from the gate decision. LOS pre-check at combat.js:869–872 owned by the LOS lane."
     },
     {
       "domain": "D9",
