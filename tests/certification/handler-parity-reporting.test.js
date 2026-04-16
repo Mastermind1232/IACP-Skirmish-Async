@@ -31,6 +31,7 @@ import { defaultAttackRange } from '../../src/handlers/dc-play-area.js';
 import { countSpaces } from '../../src/game/spatial.js';
 import { dcNameFromFigureKey } from '../../src/game/dc-helpers.js';
 import { getDcList } from '../../src/game/player-helpers.js';
+import { getLoadoutCards } from '../../src/data-loader.js';
 
 // ── Shadow: narrow mirror of handler's target enumeration ───────────────────
 // Covers only the rules exercised by the scenarios below. Expand carefully
@@ -70,11 +71,17 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
   const _furyReach =
     kws.includes('WOOKIEE') &&
     (getDcList(game, playerNum) || []).some(dc => dc.dcName === '[Fury of Kashyyyk]');
+  // Electrostaff: loadout-card Reach. Handler reads
+  // getLoadoutCards()[figureConfig[fk].loadout]?.passive === 'Reach'.
+  const _loadoutName = game.figureConfig?.[attackerFigureKey]?.loadout;
+  const _loadoutReach = _loadoutName
+    && getLoadoutCards()?.[_loadoutName]?.passive === 'Reach';
   const hasReach =
     kws.includes('REACH') ||
     passives.includes('REACH') ||
     !!game.nextAttackReach?.[playerNum] ||
-    _furyReach;
+    _furyReach ||
+    _loadoutReach;
   const effMax = hasReach && maxRange < 2 ? 2 : maxRange;
 
   const ms = deps.getMapData(game.selectedMap.id);
@@ -554,6 +561,43 @@ const SCENARIOS = [
     expectedHandlerOnly: ['Greedo-1-0'],
     expectedEngineOnly: [],
     reason: 'handler grants Reach to any WOOKIEE attacker whose player has [Fury of Kashyyyk] in the dcList (dc-play-area.js:35-39 _hasFuryReach). Engine does not check for the attachment — WOOKIEE melee attackers are treated as 1-space-only even when Fury is in play.',
+  },
+
+  // 13. Electrostaff loadout-card Reach — handler reads loadout-card passive
+  {
+    name: 'Electrostaff loadout — Purge Trooper (Elite) with Electrostaff loadout gains Reach in handler only',
+    setup() {
+      const built = createTestGame()
+        .withPlayer1Army([{ dcName: 'Purge Trooper (Elite)' }])
+        .withPlayer2Army([{ dcName: 'Greedo' }])
+        .inRound(1)
+        .build();
+      const { game, dcMessageMeta } = built;
+      game.figurePositions = {
+        1: { 'Purge Trooper (Elite)-1-0': 'a1' },
+        2: { 'Greedo-1-0': 'a3' },                     // distance 2
+      };
+      const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'Purge Trooper (Elite)');
+      enableAttackFor(game, attackerMsgId);
+      // Simulate the loadout selection (normally chosen via the Imperial
+      // Loadout picker after deployment). Electrostaff's passive is 'Reach'
+      // in data/loadout-cards.json.
+      game.figureConfig = {
+        'Purge Trooper (Elite)-1-0': { loadout: 'Electrostaff' },
+      };
+      return {
+        ...built,
+        attacker: {
+          playerNum: 1,
+          figureKey: 'Purge Trooper (Elite)-1-0',
+          msgId: attackerMsgId,
+          figureIndex: 0,
+        },
+      };
+    },
+    expectedHandlerOnly: ['Greedo-1-0'],
+    expectedEngineOnly: [],
+    reason: 'handler reads figureConfig.loadout, looks up the loadout card in data/loadout-cards.json, and treats loadout.passive === "Reach" as an attacker-side Reach grant (dc-play-area.js:1539-1540). Engine never reads loadout cards — Purge Trooper with Electrostaff is treated as 1-space melee only.',
   },
 ];
 
