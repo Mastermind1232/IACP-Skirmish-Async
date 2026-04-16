@@ -164,7 +164,7 @@ test('resolveAbility Urgency (Speed+2) with active activation applies MP', () =>
   const dcMessageMeta = new Map([[msgId, { gameId: 'g3', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Urgency', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.strictEqual(result.logMessage, 'Gained 7 movement points.');
+  assert.strictEqual(result.logMessage, 'Gained 7 movement points (must spend all at once).');
   assert.strictEqual(game.movementBank[msgId].remaining, 9);
   assert.strictEqual(game.movementBank[msgId].total, 11);
 });
@@ -355,7 +355,7 @@ test('resolveAbility Rally discards HARMFUL conditions from activating figures',
   const result = resolveAbility('Rally', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(game.figureConditions['Stormtroopers-1-0'], ['Focus']);
-  assert.strictEqual(game.figureConditions['Stormtroopers-1-1']?.length, 0);
+  assert.deepStrictEqual(game.figureConditions['Stormtroopers-1-1'] ?? [], []);
 });
 
 test('resolveAbility Primary Target applies Focus and attackBonusHits', () => {
@@ -461,7 +461,7 @@ test('resolveAbility Price of Glory applies discard 1 HARMFUL and gain 2 MP', ()
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('HARMFUL'));
   assert.ok(result.logMessage?.includes('MP'));
-  assert.deepStrictEqual(game.figureConditions['Stormtroopers-1-0'], []);
+  assert.deepStrictEqual(game.figureConditions['Stormtroopers-1-0'] ?? [], []);
   assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
 });
 
@@ -478,7 +478,7 @@ test('resolveAbility Worth Every Credit applies discard 1 HARMFUL and gain 2 MP'
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('HARMFUL'));
   assert.ok(result.logMessage?.includes('MP'));
-  assert.deepStrictEqual(game.figureConditions['Bossk-1-0'], []);
+  assert.deepStrictEqual(game.figureConditions['Bossk-1-0'] ?? [], []);
   assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
 });
 
@@ -798,7 +798,7 @@ test('resolveAbility Regroup discards HARMFUL from adjacent figures', () => {
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-r', playerNum: 1, dcName: 'Leader', displayName: 'Leader [Group 1]' }]]);
   const result = resolveAbility('Regroup', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.deepStrictEqual(game.figureConditions['Trooper-1-0'], []);
+  assert.deepStrictEqual(game.figureConditions['Trooper-1-0'] ?? [], []);
 });
 
 test('resolveAbility Take Position sets roundDefenseBonusBlock', () => {

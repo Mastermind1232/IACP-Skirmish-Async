@@ -16,35 +16,29 @@ describe('getClosedDoorEdges', () => {
   it('returns all door edges when no doors are opened', () => {
     const game = { selectedMap: { id: 'mos-eisley-outskirts' } };
     const edges = getClosedDoorEdges(game);
-    // mos-eisley-outskirts has 4 doors: m17|m16, l16|l17, p13|o13, p14|o14
-    assert.strictEqual(edges.size, 4);
-    assert.ok(edges.has(edgeKey('m17', 'm16')));
-    assert.ok(edges.has(edgeKey('l16', 'l17')));
-    assert.ok(edges.has(edgeKey('p13', 'o13')));
-    assert.ok(edges.has(edgeKey('p14', 'o14')));
+    // mos-eisley-outskirts current door set: r11|r12, s11|s12
+    assert.strictEqual(edges.size, 2);
+    assert.ok(edges.has(edgeKey('r11', 'r12')));
+    assert.ok(edges.has(edgeKey('s11', 's12')));
   });
 
   it('excludes opened doors', () => {
     const game = {
       selectedMap: { id: 'mos-eisley-outskirts' },
-      openedDoors: [edgeKey('m17', 'm16'), edgeKey('p13', 'o13')],
+      openedDoors: [edgeKey('r11', 'r12')],
     };
     const edges = getClosedDoorEdges(game);
-    assert.strictEqual(edges.size, 2);
-    assert.ok(!edges.has(edgeKey('m17', 'm16')));
-    assert.ok(!edges.has(edgeKey('p13', 'o13')));
-    assert.ok(edges.has(edgeKey('l16', 'l17')));
-    assert.ok(edges.has(edgeKey('p14', 'o14')));
+    assert.strictEqual(edges.size, 1);
+    assert.ok(!edges.has(edgeKey('r11', 'r12')));
+    assert.ok(edges.has(edgeKey('s11', 's12')));
   });
 
   it('returns empty set when all doors are opened', () => {
     const game = {
       selectedMap: { id: 'mos-eisley-outskirts' },
       openedDoors: [
-        edgeKey('m17', 'm16'),
-        edgeKey('l16', 'l17'),
-        edgeKey('p13', 'o13'),
-        edgeKey('p14', 'o14'),
+        edgeKey('r11', 'r12'),
+        edgeKey('s11', 's12'),
       ],
     };
     assert.strictEqual(getClosedDoorEdges(game).size, 0);

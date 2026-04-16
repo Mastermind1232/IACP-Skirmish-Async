@@ -206,7 +206,7 @@ test('computeCombatResult surge conditions in text', () => {
 
 test('SURGE_LABELS has expected keys', () => {
   assert.ok(Object.keys(SURGE_LABELS).length > 0);
-  assert.strictEqual(SURGE_LABELS['damage 1'], '+1 Hit');
+  assert.strictEqual(SURGE_LABELS['damage 1'], '+1 Damage');
   assert.strictEqual(SURGE_LABELS['stun'], 'Stun');
 });
 
