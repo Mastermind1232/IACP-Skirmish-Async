@@ -517,6 +517,40 @@ export async function handleLiaDeployZone(interaction, ctx) {
 
   saveGames();
   await updateActivationsMessage?.(game, playerNum, client);
+
+  // Refresh round activation message buttons — LiA deployment changes the activation balance
+  if (placed > 0 && game.roundActivationMessageId && game.generalId) {
+    try {
+      const ch = await fetchGameChannel(client, game.generalId);
+      const msg = await ch.messages.fetch(game.roundActivationMessageId);
+      const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+      const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
+      const otherNum = opponentPlayerNum(turnPlayerNum);
+      const myRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
+      const otherRem = getActivationsRemaining(game, otherNum) ?? 0;
+      const round = game.currentRound || 1;
+      const passRows = [];
+      if (otherRem > myRem && myRem > 0) {
+        passRows.push(new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`pass_activation_turn_${gameId}`)
+            .setLabel(`Pass (opponent has ${otherRem - myRem} more activation${otherRem - myRem !== 1 ? 's' : ''} than you)`)
+            .setStyle(ButtonStyle.Secondary)
+        ));
+      }
+      const turnZone = turnPlayerId === game.player1Id ? 'red' : 'blue';
+      const playAreaId = getPlayAreaId(game, turnPlayerNum);
+      const passHint = passRows.length ? ' You may pass (opponent has more activations).' : '';
+      await msg.edit({
+        content: `<@${turnPlayerId}> **Round ${round}** — Your turn! Activate DCs in <#${playAreaId}>.${passHint}`,
+        components: passRows,
+        allowedMentions: { users: [turnPlayerId] },
+      }).catch(discordCatch);
+    } catch (err) {
+      console.error('Failed to refresh round message after LiA deployment:', err);
+    }
+  }
+
   await interaction.followUp({ content: `Deployed **${dcName}** (${placed} figure(s)) to the **${zone}** zone.`, ephemeral: true }).catch(discordCatch);
 }
 

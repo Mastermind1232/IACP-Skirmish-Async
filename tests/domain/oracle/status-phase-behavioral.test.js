@@ -522,7 +522,7 @@ describe('B-STATUS-005: runStatusPhaseAfterEndOfRound representative e2e path', 
       p2DcList: [{ dcName: 'Stormtrooper' }],
       figurePositions: {
         1: { 'Rebel Trooper-1-0': 'a1', 'Han Solo-1-0': 'b2' },
-        2: { 'Stormtrooper-2-0': 'c3' },
+        2: { 'Stormtrooper-1-0': 'c3' },
       },
       p1ActivatedDcIndices: [0, 1], // both activated
       p2ActivatedDcIndices: [0],

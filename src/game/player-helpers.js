@@ -64,13 +64,17 @@ export function recomputeActivationCounts(game, pn) {
 
   let total = 0;
   let activated = 0;
+  const dgCounts = {};
 
   for (let i = 0; i < dcList.length; i++) {
     const dcName = dcList[i]?.dcName || dcList[i];
     // Skip figureless DCs (skirmish upgrades like [Extra Armor])
     if (/^\[.+\]$/.test(dcName)) continue;
 
-    const hasFigures = figKeys.some(fk => fk.startsWith(dcName + '-') && figs[fk]);
+    dgCounts[dcName] = (dgCounts[dcName] || 0) + 1;
+    const dgIndex = dgCounts[dcName];
+    const prefix = `${dcName}-${dgIndex}-`;
+    const hasFigures = figKeys.some(fk => fk.startsWith(prefix) && figs[fk]);
 
     if (hasFigures) {
       total++;
