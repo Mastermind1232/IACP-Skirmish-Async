@@ -53,6 +53,7 @@ import {
   resetPassShadow,
   PASS_FEATURE_NAMES,
   getAbilityGateAudit, resetAbilityGateAudit,
+  getDecisionClassAudit, resetDecisionClassAudit,
 } from './learnings.js';
 import { buildGraph, graphForwardPass, setAttentionPool, setRichEdges, setMoveQualitySignal } from './graph-encoder.js';
 import { unlinkSync } from 'fs';
@@ -2570,6 +2571,7 @@ async function main() {
         avgVP: cpGames > 0 ? cpVP / cpGames : 0,
         avgAbsDelta: parseFloat(cp.avgAbsDelta),
         epsilon: parseFloat(cp.epsilon),
+        decisionClass: getDecisionClassAudit(),
       };
       if (useMixedCurriculum) {
         cpPayload.poolGames = cpPoolGames;
@@ -2588,6 +2590,7 @@ async function main() {
       cpFigureDefeats = 0;
       resetWgAuditCounters();
       resetAtkAuditCounters();
+      resetDecisionClassAudit();
       for (const k of Object.keys(cpStopReasons)) delete cpStopReasons[k];
       lastCheckpointUpdates = cpUpdatesNow;
     }

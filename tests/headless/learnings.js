@@ -414,6 +414,29 @@ export function resetAbilityGateAudit() {
   };
 }
 
+// Decision-class tracer — counts which branch of pickSmartAction produced the
+// final action. Used to measure how often the DQN argmax actually decides vs
+// gets bypassed by mandatory flows, planner overrides, ε-exploration, or
+// heuristic fallbacks. wgResolved is keyed off the final action's abstract
+// class so we can see the action-mix orthogonal to how it was chosen.
+//
+// Sums: mandatoryFlow + epsilonExplore + plannerDominated + dqnArgmax +
+// heuristicFallback === calls (one bucket per pickSmartAction invocation).
+function _buildDecisionClassAudit() {
+  return {
+    calls: 0,
+    mandatoryFlow: 0,
+    epsilonExplore: 0,
+    plannerDominated: 0,
+    dqnArgmax: 0,
+    heuristicFallback: 0,
+    wgResolved: { attack: 0, move: 0, cc: 0, activate: 0, surge: 0, ability: 0, other: 0 },
+  };
+}
+let _decisionClassAudit = _buildDecisionClassAudit();
+export function getDecisionClassAudit() { return JSON.parse(JSON.stringify(_decisionClassAudit)); }
+export function resetDecisionClassAudit() { _decisionClassAudit = _buildDecisionClassAudit(); }
+
 // Minimum Manhattan distance from the ability's acting figure to any enemy
 // (DC figures + live NPCs). Returns null if actor position can't be resolved
 // — gate callers treat null as "don't suppress" (conservative).
@@ -3682,6 +3705,26 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
   return null; // not a within-activation context — let DQN handle
 }
 
+// Classify an abstract action type into the coarse wgResolved bucket used by
+// the decision-class tracer. Only called when tracer instrumentation fires.
+function _wgResolvedClass(absType) {
+  if (absType === 'attack_close' || absType === 'attack_ranged') return 'attack';
+  if (absType === 'move_toward' || absType === 'move_away' || absType === 'move_lateral' || absType === 'start_move') return 'move';
+  if (absType === 'play_cc') return 'cc';
+  if (absType === 'activate') return 'activate';
+  if (absType === 'surge_damage' || absType === 'surge_special' || absType === 'spend_surge' || absType === 'skip_surges') return 'surge';
+  if (absType === 'ability') return 'ability';
+  return 'other';
+}
+function _recordDecisionClass(bucket, finalAction, game) {
+  _decisionClassAudit.calls++;
+  _decisionClassAudit[bucket]++;
+  if (finalAction) {
+    const cls = _wgResolvedClass(abstractActionType(finalAction, game));
+    _decisionClassAudit.wgResolved[cls]++;
+  }
+}
+
 export function pickSmartAction(allActions, game, learnings, playerNum, dcHealthState, dcMessageMeta) {
   pickSmartAction._lastWgFeatures = null;
   pickSmartAction._lastWgType = null;
@@ -3706,12 +3749,24 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   // Mandatory actions — always use heuristic (no strategic choice)
   const mandatoryTypes = ['gate', 'combat_flow'];
   const mandatoryActions = allActions.filter(a => mandatoryTypes.includes(abstractActionType(a, game)));
-  if (mandatoryActions.length === allActions.length) return pick(mandatoryActions);
-  if (mandatoryActions.length > 0) return pick(mandatoryActions);
+  if (mandatoryActions.length === allActions.length) {
+    const chosen = pick(mandatoryActions);
+    _recordDecisionClass('mandatoryFlow', chosen, game);
+    return chosen;
+  }
+  if (mandatoryActions.length > 0) {
+    const chosen = pick(mandatoryActions);
+    _recordDecisionClass('mandatoryFlow', chosen, game);
+    return chosen;
+  }
 
   // Strategic actions only from here
   const strategicActions = allActions.filter(a => !mandatoryTypes.includes(abstractActionType(a, game)));
-  if (strategicActions.length === 0) return pick(allActions);
+  if (strategicActions.length === 0) {
+    const chosen = pick(allActions);
+    _recordDecisionClass('heuristicFallback', chosen, game);
+    return chosen;
+  }
 
   // Epsilon-greedy exploration
   const epsilon = getEpsilon(learnings.meta.totalGames);
@@ -3763,6 +3818,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
         }
       }
     }
+    _recordDecisionClass('epsilonExplore', hAction, game);
     return hAction;
   }
 
@@ -3778,11 +3834,19 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   } else {
     const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
     const network = learnings.network;
-    if (!network) return heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc, dcMessageMeta);
+    if (!network) {
+      const chosen = heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc, dcMessageMeta);
+      _recordDecisionClass('heuristicFallback', chosen, game);
+      return chosen;
+    }
     Q = forwardPass(network, features).Q;
   }
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
-  if (absTypes.length === 0) return heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc, dcMessageMeta);
+  if (absTypes.length === 0) {
+    const chosen = heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc, dcMessageMeta);
+    _recordDecisionClass('heuristicFallback', chosen, game);
+    return chosen;
+  }
 
   // Expose Q-values and available abstract types for pass-timing audit
   pickSmartAction._lastQ = Q;
@@ -3844,6 +3908,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
         pickSmartAction._lastWgType = null;
         pickSmartAction._lastMoveContrastive = null;
       }
+      _recordDecisionClass('plannerDominated', planResult, game);
       return planResult;
     }
   }
@@ -3980,6 +4045,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
         pickSmartAction._lastCcPickPath = fbCcOpts.length > 1 ? 'heuristic_scored' : 'heuristic';
       }
     }
+    _recordDecisionClass('heuristicFallback', fallback, game);
     return fallback;
   }
   const wgResult = pickWithinGroup(groups[bestType], bestType, game,
@@ -4000,6 +4066,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     }
   }
 
+  _recordDecisionClass('dqnArgmax', wgResult.action, game);
   return wgResult.action;
 }
 
@@ -5294,6 +5361,10 @@ export function recordTrainingCheckpoint(learnings, checkpoint) {
   if (checkpoint.poolAvgVP != null) entry.poolAvgVP = checkpoint.poolAvgVP;
   if (checkpoint.fixedAvgVP != null) entry.fixedAvgVP = checkpoint.fixedAvgVP;
   if (checkpoint.poolCompletionRate != null) entry.poolCompletionRate = checkpoint.poolCompletionRate;
+  // Decision-class tracer snapshot (see _decisionClassAudit) — how many calls
+  // took each path across this checkpoint window. Present only when the caller
+  // plumbs it in (train.js does; ad-hoc scripts may omit).
+  if (checkpoint.decisionClass) entry.decisionClass = checkpoint.decisionClass;
   learnings.meta.trainingHistory.push(entry);
   // Keep last 200 checkpoints (10,000 games at 50-game intervals)
   if (learnings.meta.trainingHistory.length > 200) {
