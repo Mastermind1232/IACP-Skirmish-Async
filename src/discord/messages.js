@@ -17,6 +17,7 @@ export const GAME_PHASES = {
   INITIATIVE: { name: 'INITIATIVE', emoji: '🎲', color: PHASE_COLOR },
   DEPLOYMENT: { name: 'DEPLOYMENT', emoji: '📍', color: PHASE_COLOR },
   ROUND: { name: 'ROUND', emoji: '⚔️', color: PHASE_COLOR },
+  ACTIVATION: { name: 'ACTIVATION', emoji: '🎴', color: PHASE_COLOR },
   ACTION: { name: 'ACTION', emoji: '🎴', color: PHASE_COLOR },
 };
 
@@ -118,6 +119,11 @@ const BOT_LOGS_CHANNEL_ID = '1467647184542634005';
 
 /** Post a phase header to the game log (only when phase changes) */
 export async function logPhaseHeader(game, client, phase, roundNum = null) {
+  // Guard against unknown phase keys (e.g., typos like 'ACTIVATION' when only
+  // 'ROUND' existed). Without this, a missing GAME_PHASES[key] makes `phase`
+  // undefined and `phase.name` crashes logGameAction's try/catch, silently
+  // swallowing the entire log message (content and all).
+  if (!phase) return;
   const phaseKey = 'currentPhase';
   const phaseName = roundNum ? `${phase.name} ${roundNum}` : phase.name;
   const fullKey = roundNum ? `${phase.name}_${roundNum}` : phase.name;
