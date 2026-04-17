@@ -74,7 +74,22 @@
         "setup": "",
         "persistent": "",
         "startOfRound": "The player with the Initiative places 1 token next to the Cantina for each Command card in their hand.",
-        "endOfRound": "Until the end of the next round, the player who controls the Sabacc table is considered to have 1 additional VP for each token next to the Cantina."
+        "endOfRound": "Until the end of the next round, the player who controls the Sabacc table is considered to have 1 additional VP for each token next to the Cantina.",
+        "rules": {
+          "startOfRound": {
+            "setTokenCountFromInitiativeHand": {
+              "gameKey": "sabaccTokenCount"
+            }
+          },
+          "endOfRound": {
+            "vpPerTokenForControllingCell": {
+              "controlCell": "m14",
+              "tokenCountKey": "sabaccTokenCount",
+              "vpPerToken": 1,
+              "vpMessage": "controlling the Sabacc table ({count} Cantina token(s) at 1 VP each)"
+            }
+          }
+        }
       }
     },
     "chopper-base-atollon": {

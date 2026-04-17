@@ -26,6 +26,7 @@ import { resolveAssetPath } from '../asset-paths.js';
 import {
   getFiguresForRender,
   getMapTokensForRender,
+  buildLabelCountsFromGame,
 } from '../rendering.js';
 import {
   getInitiativePlayerNum,
@@ -83,7 +84,8 @@ export async function renderBoardState(game, opts = {}) {
     game?.ancillaryTokens,
     game?.selectedMission?.tokenLabel || 'Token',
     game?.signalMarkerStrain,
-    game?.fluctuationPositions
+    game?.fluctuationPositions,
+    buildLabelCountsFromGame(game)
   );
 
   // Player labels over deployment zones

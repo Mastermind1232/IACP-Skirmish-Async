@@ -88,6 +88,7 @@ import {
   getFiguresForRender,
   buildMissionTokens,
   getMapTokensForRender,
+  buildLabelCountsFromGame,
   getActivationMinimapAttachment,
   getMovementMinimapAttachment,
   getDeploymentMapAttachment,
@@ -1049,7 +1050,7 @@ async function updateDeployPromptMessages(game, playerNum, client) {
 
 /** Returns AttachmentBuilder for CC/DC space choice (zoomed to validSpaces, labels on those coords). */
 async function getMapAttachmentForSpaces(game, validSpaces) {
-  return _getMapAttachmentForSpacesPure(game, validSpaces, { getFiguresForRender, getMapTokensForRender, renderMap, AttachmentBuilder });
+  return _getMapAttachmentForSpacesPure(game, validSpaces, { getFiguresForRender, getMapTokensForRender, buildLabelCountsFromGame, renderMap, AttachmentBuilder });
 }
 
 // getDeploymentMapAttachment — imported from src/rendering.js

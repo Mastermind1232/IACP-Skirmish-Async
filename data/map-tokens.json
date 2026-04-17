@@ -203,17 +203,17 @@
         "tokenTypes": [
           {
             "id": "0",
-            "label": "Signal Marker",
+            "label": "Signal: Red",
             "image": "Mission Token--Neutral Red.gif"
           },
           {
             "id": "1",
-            "label": "Signal Marker",
+            "label": "Signal: Green",
             "image": "Mission Token--Neutral Green.gif"
           },
           {
             "id": "2",
-            "label": "Signal Marker",
+            "label": "Signal: Blue",
             "image": "Mission Token--Neutral Blue.gif"
           }
         ],
