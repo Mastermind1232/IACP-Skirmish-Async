@@ -1,21 +1,22 @@
 {
   "metadata": {
     "title": "CRR Coverage Heat Map — IACP Skirmish Async (Skirbo)",
-    "version": "1.5",
+    "version": "1.6",
     "date": "2026-04-16",
     "tier_a_update": "2026-04-14: Tier A probes added (surge-legality-probes.test.js, combat-token-timing-probes.test.js). Condition immunity reclassified from unit_test to direct_oracle (ORACLE-HANDLER-003 already covers it).",
     "v1_2_expansion": "2026-04-16: Heat-map expanded 35 → 55 entries. Handler-vs-engine parity broken out into 13 per-scenario D3 entries (Reach family: permanent/nextAttackReach/Fury/Electrostaff; Hide non-filter; Priority Target/Marksman/Clawdite LOS bypass; Insignificant/Dio; I Must Go Alone; Fire Mission group-LOS; Vanish immunity; default-agreement positive control). Five honest uncovered entries added (LOS-06 Energy Shield, LOS Slice 2 door, LOS Slice 2 multi-cell figure, post-target-select combat gating, loadout-card passives beyond Reach). Two inferred_only additions (mission-specific scoring variants, free-attack window mutex). No new direct_oracle test files authored in this pass — measurement only.",
     "v1_3_update": "2026-04-16: Post-Target-Select Combat Gating row reclassified uncovered → direct_oracle. tests/certification/post-select-gating.test.js v2 now pins all 12 flag-gated branches of combat.js:869–969 (4 block gates + 8 consumption windows + 1 positive control) via a narrow shadow. Side effects and combat resolution explicitly out of scope; engine-blindness (11-of-12) tracked as report-only number. Distribution: direct_oracle 39 → 40, uncovered 5 → 4.",
     "v1_4_update": "2026-04-16: LOS Slice 2 lane — both LOS Slice 2 rows (Doors + Multi-cell figures) reclassified uncovered → direct_oracle. tests/domain/oracle/los-slice2-probes.test.js pins the CRR-required LOS behaviors via 4 probes (closed-door block, open-door no-block, multi-cell attacker any-cell LOS, multi-cell target any-cell reachability). Two new handler-parity scenarios (14 closed door, 15 multi-cell attacker top-left-only) surface the engine's drift; shadow expanded to merge closed-door edges into effectiveMs and iterate attacker-fp × target-fp. Parity scenario 14 engine_only=['Greedo-1-0'], scenario 15 handler_only=['Greedo-1-0']. Stale engine_location pointers from src/game/los.js (never existed) → src/game/spatial.js (actual file). LOS-06 Energy Shield still uncovered (intentionally out of scope). Distribution: direct_oracle 40 → 42, uncovered 4 → 2.",
     "v1_5_update": "2026-04-16: LOS-06 Energy Shield lane — reclassified uncovered → direct_oracle. tests/domain/oracle/los-06-energy-shield-probes.test.js pins the three CRR p.28 carve-outs via 4 probes (LOS out of shield, LOS into shield, LOS not through shield, multi-cell attacker + shield self-exclusion). One new handler-parity scenario (16 — shield between attacker and target on open terrain) baselines the engine's shield-blindness: engine never consults game.ancillaryTokens.energyShield; handler merges shields into effectiveMs.blocking at dc-play-area.js:951-968. Shadow expanded to merge shield spaces into blocking. Parity scenario 16 engine_only=['Greedo-1-0']. Diagonal-corner shield rule (p.28/p.40 intersection) deferred as a separate follow-up mini-lane. Distribution: direct_oracle 42 → 43, uncovered 2 → 1.",
+    "v1_6_update": "2026-04-16: Loadout-card lane — reclassified uncovered → direct_oracle. tests/domain/oracle/loadout-card-probes.test.js adds 12 probes across three layers: (1) data integrity (exactly one loadout passive = Electrostaff/Reach; every card carries surgeKeys + postAttack); (2) handler injection shadow for all 3 cards (Electrostaff/Electrohammer/Electrobatons) plus a source-pin on combat.js:1203-1208 that catches refactors of the injection lines; (3) combat-bridge postAttack side-effect probes for quick_strike (defender-modified-dice → 1 damage, with negative control) and flurry_of_blows (free 1-green melee override queued, once-per-activation lock). DISCOVERED BUG: electro_pulse is a silent no-op in production — combat-bridge.js:1470 msgId lookup does `_epDcL[idx].dgIndex === _epDgIdx` but setup-bridge.js:480-491 never emits dgIndex on dcList entries, so the lookup always returns undefined. PROBE-LOADOUT-05 honestly measures the broken behavior (no adjacency damage applied) and source-pins the buggy line + dcList shape so any fix trips the pin and forces a probe rewrite. Fixing the bug is a separate gameplay lane, out of scope here. Last uncovered row closed. Distribution: direct_oracle 43 → 44, uncovered 1 → 0.",
     "methodology": "Four-domain audit of engine source against Consolidated Rules Reference. Coverage classified as: direct_oracle (pure-function oracle probe), runtime_invariant (RT-1..RT-12 checked in training loop), certification (card catalog regression), unit_test (co-located or tests/domain unit), headless_selfplay (end-to-end headless game), inferred_only (exercised by selfplay but never explicitly asserted), uncovered (no test or runtime check).",
     "test_inventory": {
-      "oracle_tests": { "files": 68, "assertions": 994 },
+      "oracle_tests": { "files": 69, "assertions": 1023 },
       "headless_tests": { "files": 74, "assertions": 1756 },
       "engine_unit_tests": { "files": 14, "assertions": 225 },
       "reducer_tests": { "files": 8, "assertions": 40 },
       "certification_tests": { "files": 1, "assertions": 7 },
-      "total_assertions": 3022
+      "total_assertions": 3051
     }
   },
   "coverage": [
@@ -646,14 +647,14 @@
     {
       "domain": "D9",
       "subdomain": "Loadout-card passives beyond Reach",
-      "crr_rule_or_claim": "Loadout cards may grant passives beyond Reach (attack-die modifiers, movement bonuses, etc.); engine should honour them",
-      "engine_location": "data/loadout-cards.json; src/handlers/dc-play-area.js reads loadout passive only for Reach today",
-      "current_coverage_type": "uncovered",
-      "evidence": "No certification test asserts the full shape of loadout-card passives. The Electrostaff parity entry confirms engine ignores loadout cards entirely.",
+      "crr_rule_or_claim": "Loadout cards grant passives + surgeKeys + a postAttack hook. Only Electrostaff carries a `passive` today (Reach); all three cards (Electrostaff, Electrohammer, Electrobatons) carry surgeKeys and postAttack hooks (quick_strike, electro_pulse, flurry_of_blows respectively).",
+      "engine_location": "data/loadout-cards.json; src/handlers/combat.js:1203-1208 injects loadoutCard.surgeKeys onto pendingCombat.bonusSurgeAbilities + loadoutCard.postAttack onto pendingCombat.loadoutPostAttack; src/engine/combat-bridge.js:1454-1503 dispatches quick_strike/electro_pulse/flurry_of_blows; engine side of dc-play-area.js reads loadout only for Reach (tracked separately by Electrostaff parity row).",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "tests/domain/oracle/loadout-card-probes.test.js — 12 probes across 3 layers: PROBE-LOADOUT-01 (data integrity: passives-beyond-Reach is empty + every card has surgeKeys+postAttack), PROBE-LOADOUT-02/03/04 (handler injection shadow for all 3 cards + source-pin on combat.js:1203-1208), PROBE-LOADOUT-05 (electro_pulse — DOCUMENTS latent bug: combat-bridge.js:1470 msgId lookup fails because setup-bridge.js dcList entries lack dgIndex, so adjacency damage silently no-ops + source-pin on the broken lookup line and dcList shape), PROBE-LOADOUT-06 (quick_strike — defender-modified dice adds 1 damage, paired positive/negative), PROBE-LOADOUT-07 (flurry_of_blows — free 1-green melee override + once-per-activation lock).",
       "training_blast_radius": "low",
-      "confidence": "low",
-      "recommended_next_audit_type": "certification",
-      "notes": "Not a high-priority gap — Electrostaff Reach is the only loadout passive currently wired on the handler side."
+      "confidence": "high",
+      "recommended_next_audit_type": "covered",
+      "notes": "v1.6 (2026-04-16): reclassified uncovered → direct_oracle. Data integrity, handler injection, and two of three postAttack hooks verified against real code paths. Electro-pulse is honestly measured as broken (latent production bug in combat-bridge.js:1470; fixing it is a separate gameplay lane — scope was measurement only). Source-pins on the injection lines AND on the broken Electro-pulse lookup ensure any refactor or fix trips the probes."
     },
     {
       "domain": "D8",
