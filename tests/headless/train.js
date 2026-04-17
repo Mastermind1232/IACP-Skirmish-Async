@@ -58,6 +58,7 @@ import { buildGraph, graphForwardPass, setAttentionPool, setRichEdges, setMoveQu
 import { unlinkSync } from 'fs';
 import { TRAINING_MATCHUPS, TRAINING_WHITELIST_DCS, TRAINING_WHITELIST_CCS, TRAINING_MAPS } from '../../src/ai/training-config.js';
 import { assertPreActionInvariants, assertPostActionInvariants, snapshotPreAction } from './rules-invariants.js';
+import { distToNearestEnemy } from './analyzer-helpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -294,16 +295,9 @@ function coordDistance(a, b) {
   return Math.abs(pa.col - pb.col) + Math.abs(pa.row - pb.row);
 }
 
-function distToNearestEnemy(coord, game, playerNum) {
-  const oppNum = playerNum === 1 ? 2 : 1;
-  const oppFigs = game.figurePositions?.[oppNum] || {};
-  let minDist = Infinity;
-  for (const pos of Object.values(oppFigs)) {
-    const d = coordDistance(coord, pos);
-    if (d < minDist) minDist = d;
-  }
-  return minDist;
-}
+// distToNearestEnemy now imported from ./analyzer-helpers.js — unions opponent
+// DC figures with live npcKrykna + npcThugs so Atollon / Corellian reports
+// match the live ability gate's nearest-enemy view.
 
 async function runOneGame(learnings, gameNum) {
   const { p1Deck, p2Deck, label, isPoolGame } = pickMatchup(gameNum);
@@ -1461,19 +1455,7 @@ async function runOneGame(learnings, gameNum) {
           const dgIndex = dgMatch ? dgMatch[1] : '1';
           const fk = `${dcName}-${dgIndex}-${figIdx}`;
           const pos = g.figurePositions?.[actingPN]?.[fk];
-          const oppNum = actingPN === 1 ? 2 : 1;
-          const oppFigs = Object.values(g.figurePositions?.[oppNum] || {});
-          if (pos && oppFigs.length > 0) {
-            let best = Infinity;
-            for (const op of oppFigs) {
-              try {
-                const pa = parseCoord(pos), pb = parseCoord(op);
-                const d = Math.abs(pa.col - pb.col) + Math.abs(pa.row - pb.row);
-                if (d < best) best = d;
-              } catch {}
-            }
-            if (best < Infinity) distToEnemy = best;
-          }
+          if (pos) distToEnemy = distToNearestEnemy(pos, g, actingPN);
         }
       } catch {}
       _abilityPlays.push({
