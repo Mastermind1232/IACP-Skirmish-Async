@@ -85,6 +85,38 @@ function getCellsAlongLine(x1, y1, x2, y2) {
   return result;
 }
 
+// Grid corners are at half-integer coordinates (col+0.5, row+0.5).
+// Returns every corner the open segment threads (excludes endpoints themselves).
+// Only diagonal-slope rays thread corners; axis-aligned rays never do.
+function getThreadedCorners(x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const EPS = 1e-9;
+  const corners = [];
+  const xMin = Math.min(x1, x2), xMax = Math.max(x1, x2);
+  const yMin = Math.min(y1, y2), yMax = Math.max(y1, y2);
+  const kMin = Math.ceil(xMin - 0.5 - EPS);
+  const kMax = Math.floor(xMax - 0.5 + EPS);
+  const lMin = Math.ceil(yMin - 0.5 - EPS);
+  const lMax = Math.floor(yMax - 0.5 + EPS);
+  for (let k = kMin; k <= kMax; k++) {
+    for (let l = lMin; l <= lMax; l++) {
+      const cx = k + 0.5, cy = l + 0.5;
+      let t;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        if (Math.abs(dx) < EPS) continue;
+        t = (cx - x1) / dx;
+      } else {
+        t = (cy - y1) / dy;
+      }
+      if (t <= EPS || t >= 1 - EPS) continue;
+      const px = x1 + t * dx, py = y1 + t * dy;
+      if (Math.abs(px - cx) > 1e-6 || Math.abs(py - cy) > 1e-6) continue;
+      corners.push([cx, cy]);
+    }
+  }
+  return corners;
+}
+
 // ── LOS (public) ────────────────────────────────────────────────────────────
 
 /**
@@ -144,7 +176,28 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
         if (blockingSet.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
         if (figureBlockingCoords?.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
       }
-      if (!spaceBlocked) visibleTargetCorners++;
+      if (!spaceBlocked) {
+        // CRR p.22 / p.28: LOS cannot trace through a corner where
+        // ≥2 obstacles (walls, blocking terrain, energy shields) intersect.
+        // Only diagonal-slope rays thread half-integer grid corners.
+        let cornerBlocked = false;
+        for (const [cx, cy] of getThreadedCorners(ax, ay, bx, by)) {
+          let count = 0;
+          const k = Math.round(cx - 0.5), l = Math.round(cy - 0.5);
+          for (const [cc, cr] of [[k, l], [k + 1, l], [k, l + 1], [k + 1, l + 1]]) {
+            if (cc === a.col && cr === a.row) continue;
+            if (cc === b.col && cr === b.row) continue;
+            const coord = colRowToCoord(cc, cr);
+            if (blockingSet.has(coord) || figureBlockingCoords?.has(coord)) count++;
+          }
+          for (const w of walls) {
+            if ((Math.abs(w.x1 - cx) < 1e-6 && Math.abs(w.y1 - cy) < 1e-6) ||
+                (Math.abs(w.x2 - cx) < 1e-6 && Math.abs(w.y2 - cy) < 1e-6)) count++;
+          }
+          if (count >= 2) { cornerBlocked = true; break; }
+        }
+        if (!cornerBlocked) visibleTargetCorners++;
+      }
       if (visibleTargetCorners >= 2) return true;
     }
   }

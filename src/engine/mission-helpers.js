@@ -17,7 +17,7 @@ export function getMissionTokenLabel(game, deps) {
 
 /** Compute persistent VP bonus from crates in deployment zones (Devaron Garrison B). */
 export function getCrateDeploymentVpBonus(game, deps) {
-  if (game.selectedMap !== 'devaron-garrison' || game.selectedMission?.variant !== 'b') return { p1: 0, p2: 0 };
+  if (game.selectedMap?.id !== 'devaron-garrison' || game.selectedMission?.variant !== 'b') return { p1: 0, p2: 0 };
   const mapData = deps.getMapTokensData()['devaron-garrison'];
   const allCrateCoords = Object.values(mapData?.missionB?.positions || {}).flat().filter(Boolean);
   const cratePositions = allCrateCoords.map((c) => deps.normalizeCoord(game.cratePositions?.[deps.normalizeCoord(c)] || c));

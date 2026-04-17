@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rules Coverage — IACP Skirmish Bot</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --panel: #ffffff;
+    --ink: #1d2229;
+    --muted: #6a737d;
+    --line: #e5e7eb;
+    --accent: #0969da;
+    --good: #2da44e;
+    --warn: #bf8700;
+    --bad:  #cf222e;
+    --strong: #2da44e;
+    --weak:   #d29922;
+    --missing:#8b0000;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header.hero { padding: 28px 32px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header.hero h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; }
+  header.hero .sub { color: var(--muted); font-size: 13px; }
+
+  nav.toc { padding: 10px 32px; background: #fafbfc; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  nav.toc a { margin-right: 20px; font-size: 14px; color: var(--accent); }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 28px 32px 80px; }
+  section { margin-bottom: 36px; }
+  section > h2 { font-size: 18px; margin: 0 0 6px; }
+  section > .section-blurb { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+
+  .headline { display: flex; gap: 16px; padding: 20px 22px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 18px; align-items: center; }
+  .headline.good { border-left: 5px solid var(--good); }
+  .headline.warn { border-left: 5px solid var(--warn); }
+  .headline.bad  { border-left: 5px solid var(--bad); }
+  .headline .num { font-size: 34px; font-weight: 700; margin-right: 6px; }
+  .headline.good .num { color: var(--good); }
+  .headline.warn .num { color: var(--warn); }
+  .headline.bad  .num { color: var(--bad); }
+  .headline .txt { font-size: 15px; }
+  .headline .txt .fine { color: var(--muted); font-size: 13px; display:block; margin-top: 4px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi { padding: 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .kpi .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; }
+  .kpi .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .kpi .value small { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .kpi.good  .value { color: var(--good); }
+  .kpi.warn  .value { color: var(--warn); }
+  .kpi.bad   .value { color: var(--bad); }
+
+  .bar { width: 100%; background: var(--line); border-radius: 2px; overflow: hidden; display: flex; height: 14px; }
+  .bar span { display: block; height: 100%; }
+  .seg-strong  { background: var(--strong); }
+  .seg-weak    { background: var(--weak); }
+  .seg-missing { background: var(--missing); }
+
+  .legend { display: flex; gap: 18px; font-size: 12px; color: var(--muted); margin: 8px 0 18px; }
+  .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+
+  details.area { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; }
+  details.area[open] { box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  details.area > summary { list-style: none; cursor: pointer; }
+  details.area > summary::-webkit-details-marker { display: none; }
+
+  .area-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 10px; }
+  .area-title { font-size: 16px; font-weight: 700; }
+  .area-blurb { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .area-stat { text-align: right; white-space: nowrap; }
+  .area-stat .pct { font-size: 13px; font-weight: 600; margin-top: 6px; color: var(--ink); }
+  .area-stat .fine { font-weight: 400; color: var(--muted); }
+
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+  .pill-good { background: #e8f5ee; color: var(--good); }
+  .pill-warn { background: #fdf5d7; color: var(--warn); }
+  .pill-bad  { background: #fce8ea; color: var(--bad); }
+
+  .area-body { padding-top: 10px; }
+  table.rules { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.rules th { text-align: left; padding: 8px 10px; background: #fafbfc; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid var(--line); }
+  table.rules td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.rules tr:last-child td { border-bottom: none; }
+
+  .cov { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .blast { font-size: 12px; font-weight: 600; }
+
+  .open-issue { padding: 14px 18px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 6px; margin-bottom: 10px; }
+  .open-issue .label { font-size: 11px; text-transform: uppercase; color: var(--warn); font-weight: 700; letter-spacing: 0.5px; }
+  .open-issue .name { font-size: 15px; font-weight: 600; margin: 4px 0; }
+  .open-issue .desc { font-size: 13px; color: var(--ink); }
+
+  details.log { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; margin-bottom: 8px; }
+  details.log summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+  details.log p { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+
+  .foot { color: var(--muted); font-size: 12px; text-align: center; padding-top: 18px; border-top: 1px solid var(--line); }
+
+  .overview-bar { margin: 6px 0 4px; }
+  .filter { display: flex; gap: 10px; margin-bottom: 12px; }
+  .filter input { flex: 1; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Rules Coverage Dashboard</h1>
+  <div class="sub">How thoroughly the bot's rules are tested — plain-English view. Last updated 2026-04-17 19:09 UTC.</div>
+</header>
+
+<nav class="toc">
+  <a href="#health">Health</a>
+  <a href="#areas">Game Areas</a>
+  <a href="#issues">Open Issues</a>
+  <a href="#history">Recent Changes</a>
+</nav>
+
+<main>
+
+<section id="health">
+  <h2>At a glance</h2>
+  <div class="section-blurb">A snapshot of how well the rulebook is covered by automated tests right now.</div>
+
+  <div class="headline warn">
+    <div class="num">98%</div>
+    <div class="txt">
+      of rule areas are <strong>directly tested</strong>.
+      <span class="fine">All rules have some coverage; 1 rely on indirect testing only.</span>
+    </div>
+  </div>
+
+  <div class="headline good">
+    <div class="num">16/16</div>
+    <div class="txt">
+      scenarios where the Discord bot and the internal simulation <strong>agree exactly</strong>.
+      <span class="fine">The Discord bot and the simulation agree on every measured scenario.</span>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi good">
+      <div class="label">Rules well tested</div>
+      <div class="value">54<small> / 55</small></div>
+    </div>
+    <div class="kpi warn">
+      <div class="label">Rules weakly tested</div>
+      <div class="value">1<small> need stronger tests</small></div>
+    </div>
+    <div class="kpi good">
+      <div class="label">Rules with no test</div>
+      <div class="value">0</div>
+    </div>
+    <div class="kpi good">
+      <div class="label">Open bot-vs-simulation gaps</div>
+      <div class="value">0<small> of 16</small></div>
+    </div>
+  </div>
+
+  <h3 style="font-size:14px;margin:8px 0 4px;">Overall coverage mix</h3>
+  <div class="overview-bar">
+    <div class="bar" title="54 well tested · 1 weakly tested · 0 not tested" style="height:16px;">
+      <span class="seg-strong" style="width:98%"></span>
+      <span class="seg-weak"   style="width:2%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div></div>
+  <div class="legend">
+    <span><span class="dot seg-strong"></span>Well tested: 54</span>
+    <span><span class="dot seg-weak"></span>Weakly tested: 1</span>
+    <span><span class="dot seg-missing"></span>Not tested: 0</span>
+  </div>
+</section>
+
+<section id="areas">
+  <h2>Game areas</h2>
+  <div class="section-blurb">Each area groups related rules. Click an area to see individual rules inside it.</div>
+  <div class="filter">
+    <input id="ruleFilter" type="text" placeholder="Search for a rule (e.g. “line of sight”, “surge”, “deployment”)…">
+  </div>
+
+  <details class="area area-good">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Taking Actions</div>
+          <div class="area-blurb">What a figure can do on its turn — move, attack, interact, use specials.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-good">Fully covered</div>
+          <div class="pct">100% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="6 well tested · 0 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:100%"></span>
+      <span class="seg-weak"   style="width:0%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Action Economy</strong></td>
+            <td>Each activation grants exactly 2 actions; specials/moves/attacks each cost 1 unless modified</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Movement Surfacing</strong></td>
+            <td>Move action offered when remaining &gt;= 1 and not blocked by stun/massive-lock</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Attack Surfacing</strong></td>
+            <td>Attack offered once per activation unless Assault or free-attack flag set</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Interact Surfacing</strong></td>
+            <td>Interact offered only to sentient non-companion figures at valid interact targets; blocked by Non-Sentient trait, companion status, Alter Mind</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>DC Special Surfacing</strong></td>
+            <td>DC special actions offered when remaining actions &gt;= cost (all currently cost 1)</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>CC Special / CC Double Surfacing</strong></td>
+            <td>CC special actions require remaining &gt;= 1; CC Double (On the Lam) requires remaining &gt;= 2</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="area area-good">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Moving Figures</div>
+          <div class="area-blurb">Walking across the map: distance, terrain, doors, large figures.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-good">Fully covered</div>
+          <div class="pct">100% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="7 well tested · 0 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:100%"></span>
+      <span class="seg-weak"   style="width:0%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Core Pathfinding</strong></td>
+            <td>Movement uses BFS on adjacency graph; terrain modifiers apply per edge (difficult = +1, impassable = blocked)</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Large Figure Movement</strong></td>
+            <td>Large (2x2) figures occupy 4 cells; all 4 must be legal; rotation allowed during movement</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Movement Triggers and Interrupts</strong></td>
+            <td>Abilities like Deference Protocol, Parting Blow trigger on movement through specific spaces</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Difficult + Hostile Terrain Stacking</strong></td>
+            <td>Difficult terrain costs +1 movement; hostile terrain is separate effect. Combined cost should be movement+1 with hostile damage.</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#3fb950;">Low</span></td>
+          </tr>
+          <tr>
+            <td><strong>LOS-06 Energy Shield exception</strong></td>
+            <td>A space containing an energy shield blocks LOS, except LOS can be drawn into or out of the shielded space (CRR p.28). Engine is shield-blind; handler merges shields into effectiveMs.blocking.</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#3fb950;">Low</span></td>
+          </tr>
+          <tr>
+            <td><strong>LOS Slice 2 — Doors</strong></td>
+            <td>Door state affects LOS: closed doors block; open doors do not</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>LOS Slice 2 — Multi-cell figures</strong></td>
+            <td>Large figures occupy multiple cells; LOS to a multi-cell figure must check each cell (any clear sightline legalises the shot)</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="area area-good">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Attacking &amp; Combat</div>
+          <div class="area-blurb">Dice rolls, line of sight, damage, surges, targeting.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-good">Fully covered</div>
+          <div class="pct">100% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="24 well tested · 0 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:100%"></span>
+      <span class="seg-weak"   style="width:0%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Damage Formula</strong></td>
+            <td>Damage = attack_damage - defense_evades - defense_blocks, minimum 0. Pierce reduces blocks.</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Accuracy and Range</strong></td>
+            <td>Ranged attacks require accuracy &gt;= distance; melee attacks always hit if adjacent</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Line of Sight</strong></td>
+            <td>LOS requires unblocked corner-to-corner line between attacker and target cells; figures, walls, doors block</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Reroll Window</strong></td>
+            <td>Each player may reroll once per attack (attacker then defender); reroll replaces original result</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Surge Spending Legality</strong></td>
+            <td>Surges can only be spent on available surge abilities; each surge ability used at most once per attack</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Power Token Application Timing</strong></td>
+            <td>Power tokens (focus, hidden) must be applied at correct combat phase; focus adds attack die, hidden subtracts accuracy; both consumed after resolution</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Blast and Cleave</strong></td>
+            <td>Blast N deals N damage to all figures adjacent to target; Cleave N deals N damage to all adjacent hostile figures</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Attack Type Validation (Melee vs Ranged)</strong></td>
+            <td>Melee attacks require adjacency; ranged attacks require LOS and accuracy &gt;= distance. isRanged flag must match weapon profile.</td>
+            <td><span class="cov" style="background:#39c5cf22;color:#39c5cf;border:1px solid #39c5cf55;">Data validated</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Condition Immunity in Combat</strong></td>
+            <td>Some figures are immune to specific conditions; immunity should prevent condition application during combat resolution</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Default Attack Target Enumeration</strong></td>
+            <td>Handler and engine agree on legal attack targets for a ranged attacker with no special flags</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Permanent Reach (keyword/passive)</strong></td>
+            <td>A melee attacker with the REACH keyword or passive can target distance-2 figures (maxRange expanded from 1 to 2)</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: nextAttackReach flag</strong></td>
+            <td>Single-attack Reach grant via game.nextAttackReach[playerNum] extends melee maxRange for next attack</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Fury of Kashyyyk conditional Reach</strong></td>
+            <td>WOOKIEE attackers gain Reach while [Fury of Kashyyyk] is in the player's dcList</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Electrostaff loadout Reach</strong></td>
+            <td>A loadout card with passive 'Reach' grants Reach to the equipping figure (e.g. Purge Trooper Elite with Electrostaff)</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Hide is not a target filter</strong></td>
+            <td>Hidden is a -2 accuracy modifier applied at combat resolution, not a pre-enumeration filter on target legality</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Priority Target LOS bypass</strong></td>
+            <td>A figure with the 'Priority Target' ability may ignore figure-blocking LOS</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Marksman CC LOS bypass</strong></td>
+            <td>Marksman CC sets game.nextAttackIgnoreFigureLOS so the next attack bypasses figure-blocking LOS</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Clawdite Scout form LOS bypass</strong></td>
+            <td>Clawdite in 'Scout' form is treated as having Priority Target (figure-blocking LOS bypass)</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#3fb950;">Low</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Insignificant (Dio) filter</strong></td>
+            <td>Dio is untargetable while sharing a space with another friendly figure</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: I Must Go Alone distance cap</strong></td>
+            <td>I Must Go Alone CC limits valid defenders to figures within a specified number of spaces</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Fire Mission group-LOS</strong></td>
+            <td>Fire Mission uses LOS from any figure in the attacker's group and adds Blast 1</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#3fb950;">Low</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parity: Vanish immunity</strong></td>
+            <td>Vanish grants immunity-by-name to the next attack: figures whose key matches the vanished DC name are untargetable until activation resolves</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>Post-Target-Select Combat Gating</strong></td>
+            <td>Once a target is selected, the handler decides proceed-normal vs block (etiquette / Still Faster Than You / forced-target / multi-fire same-target) vs consume-free-attack-window (Battlefield Leadership, Fell Swoop, Emperor Interrupt, Executive Order, Bombardment Sorin, Firing Squad, Coordinated Raid, Field Tactics)</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+          <tr>
+            <td><strong>Free-attack window mutex</strong></td>
+            <td>Only one free-attack window (pendingFiringSquad / pendingCoordinatedRaid / pendingFieldTactics) can be active at a time; first-match routing is FiringSquad &gt; CoordinatedRaid &gt; FieldTactics</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="area area-good">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Status Effects &amp; Tokens</div>
+          <div class="area-blurb">Stun, Bleed, Hide, Focus, Strain and other conditions.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-good">Fully covered</div>
+          <div class="pct">100% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="2 well tested · 0 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:100%"></span>
+      <span class="seg-weak"   style="width:0%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Condition Application and Removal</strong></td>
+            <td>Conditions (stun, bleed, weaken, focus, hidden) apply/remove according to specific timing rules</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Multi-Condition Interaction</strong></td>
+            <td>Multiple conditions can co-exist; each resolves independently</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#3fb950;">Low</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="area area-good">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Armies &amp; Deployment</div>
+          <div class="area-blurb">Building a squad, deploying figures, group lifecycle.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-good">Fully covered</div>
+          <div class="pct">100% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="2 well tested · 0 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:100%"></span>
+      <span class="seg-weak"   style="width:0%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Figure Defeat and VP Award</strong></td>
+            <td>When a figure is defeated, opponent gains VP equal to deployment cost; figure removed from board</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Multi-Figure Group Defeat</strong></td>
+            <td>When all figures in a deployment group are defeated, the group's activation is removed from the round; partial defeat does not remove activation</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="area area-warn">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Scoring &amp; Objectives</div>
+          <div class="area-blurb">Victory points, mission objectives, round-end scoring.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-warn">Mostly covered</div>
+          <div class="pct">0% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="0 well tested · 1 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:0%"></span>
+      <span class="seg-weak"   style="width:100%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Deployment</strong></td>
+            <td>Figures deploy into friendly deployment zone; reinforcements deploy at start of round into valid spaces</td>
+            <td><span class="cov" style="background:#db6d2822;color:#db6d28;border:1px solid #db6d2855;">Seen in simulation</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="area area-good">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Command Cards</div>
+          <div class="area-blurb">When cards can be played, what they do, how they stack.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-good">Fully covered</div>
+          <div class="pct">100% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="3 well tested · 0 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:100%"></span>
+      <span class="seg-weak"   style="width:0%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Round Structure and Phase Transitions</strong></td>
+            <td>Round: Status Phase → Activation Phase (alternating activations) → End of Round. Initiative swaps each round.</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Round Cleanup (Flag Reset)</strong></td>
+            <td>Per-round flags (attackPerformed, movement locks, etc.) reset at round boundary</td>
+            <td><span class="cov" style="background:#d2992222;color:#d29922;border:1px solid #d2992255;">Checked during play</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>Start-of-Round DC Effects Sequencing</strong></td>
+            <td>Some DCs have start-of-round effects that must resolve before activation phase begins; Block A (DC passives) resolves initiative-first per IA rules; Block B (Skirmish Upgrades) fires once per game for round-1 effects via global/per-player flags</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="area area-good">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Figure Abilities</div>
+          <div class="area-blurb">Per-figure special abilities printed on deployment cards.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-good">Fully covered</div>
+          <div class="pct">100% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="6 well tested · 0 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:100%"></span>
+      <span class="seg-weak"   style="width:0%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>VP Per Controlled Space</strong></td>
+            <td>End-of-round VP awarded for controlling specific map spaces (objective tokens, terminals)</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>VP Per Deployment Zone Control</strong></td>
+            <td>VP awarded for strict majority in a deployment zone (more figures than opponent)</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>VP Per Contraband in Opponent Zone</strong></td>
+            <td>VP awarded for figure carrying contraband in opponent's deployment zone; contraband consumed on scoring</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Space Control (Alter Mind Exclusion)</strong></td>
+            <td>Alter Mind (Obi-Wan): opponent's cost&lt;=9 figures within 3 spaces don't count for space control</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Space Control (Powerful Influence Exclusion)</strong></td>
+            <td>Powerful Influence: opponent figures within 3 spaces of friendly Rebel Force User don't count for control</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Mission-specific scoring variants</strong></td>
+            <td>Individual missions may override default VP rules (objective scoring, kill bonuses, time-based VP); 11-effect-type dispatcher at runEndOfRoundRules + two persistent-bonus helpers wired into every scorecard render</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#d29922;">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="area area-good">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Round Flow</div>
+          <div class="area-blurb">The sequence of steps inside one round — start, activations, end.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-good">Fully covered</div>
+          <div class="pct">100% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="3 well tested · 0 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:100%"></span>
+      <span class="seg-weak"   style="width:0%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Card Data Integrity</strong></td>
+            <td>All DC/CC cards have valid data: correct costs, abilities, figure counts, surge charts, etc.</td>
+            <td><span class="cov" style="background:#39c5cf22;color:#39c5cf;border:1px solid #39c5cf55;">Data validated</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+          <tr>
+            <td><strong>CC Timing and Playability</strong></td>
+            <td>Command cards have specific timing windows (start of activation, during attack, etc.) and playability conditions</td>
+            <td><span class="cov" style="background:#bc8cff22;color:#bc8cff;border:1px solid #bc8cff55;">Covered by unit test</span></td>
+            <td><span class="blast" style="color:#db6d28;">High</span></td>
+          </tr>
+          <tr>
+            <td><strong>Loadout-card passives beyond Reach</strong></td>
+            <td>Loadout cards grant passives + surgeKeys + a postAttack hook. Only Electrostaff carries a `passive` today (Reach); all three cards (Electrostaff, Electrohammer, Electrobatons) carry surgeKeys and postAttack hooks (quick_strike, electro_pulse, flurry_of_blows respectively).</td>
+            <td><span class="cov" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95055;">Directly tested</span></td>
+            <td><span class="blast" style="color:#3fb950;">Low</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="area area-good">
+    <summary>
+      <div class="area-head">
+        <div>
+          <div class="area-title">Map &amp; Board</div>
+          <div class="area-blurb">Map spaces, adjacency, walls, doors, terminals, shields.</div>
+        </div>
+        <div class="area-stat">
+          <div class="pill pill-good">Fully covered</div>
+          <div class="pct">100% <span class="fine">directly tested</span></div>
+        </div>
+      </div>
+      
+    <div class="bar" title="1 well tested · 0 weakly tested · 0 not tested" style="height:8px;">
+      <span class="seg-strong" style="width:100%"></span>
+      <span class="seg-weak"   style="width:0%"></span>
+      <span class="seg-missing"style="width:0%"></span>
+    </div>
+    </summary>
+    <div class="area-body">
+      <table class="rules">
+        <thead><tr><th style="width:22%;">Rule area</th><th>What is tested</th><th style="width:18%;">How it's tested</th><th style="width:10%;">Impact if broken</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Map Topology and Adjacency</strong></td>
+            <td>Map adjacency graph is correct; spaces, walls, doors, terrain types match physical map layout; adjacency is symmetric and king-move-constrained</td>
+            <td><span class="cov" style="background:#39c5cf22;color:#39c5cf;border:1px solid #39c5cf55;">Data validated</span></td>
+            <td><span class="blast" style="color:#f85149;">Critical</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+
+<section id="issues">
+  <h2>Open issues worth attention</h2>
+  <div class="section-blurb">Places where tests already detect a disagreement between the Discord bot and the internal simulation. Each one is measured, not guessed.</div>
+<div class="headline good"><div class="num">0</div><div class="txt">No open issues.<span class="fine">Every measured scenario currently agrees on both sides.</span></div></div>
+</section>
+
+<section id="history">
+  <h2>Recent changes</h2>
+  <div class="section-blurb">What was fixed or added lately. Newest first.</div>
+  <details class="log" open>
+    <summary>Version 1.7 — 2026-04-17</summary>
+    <p>2026-04-17: B4 + B5 closure pass — the last two inferred_only rows reclassified → direct_oracle. D2 Difficult+Hostile Terrain Stacking: the test suite (PROBE-TERRAIN-001..008, 11 assertions) pins additive cost shape (base 1, +1 difficult, +1 hostile, stack = 3) using a 3-cell synthetic corridor fed through buildTempBoardState + computeMovementCache, plus separate ignoreDifficult / ignoreFigureCost suppression lanes and a source-pin on evaluateMovementStep cost lines. D4 Multi-Condition Interaction: the test suite (PROBE-COND-001..008, 17 assertions) pins co-existence of 3+ conditions, dedup-on-reapply, independent removal, per-figure isolation, empty-array cleanup (delete key), Disarm-permanent-Weaken cross-condition guard (the sole non-independent rule), resetCondition idempotency, and a source-pin on conditions.js mutators. No production bugs surfaced during the pass. Distribution after closure: direct_oracle 47 → 49, certification 3, inferred_only 2 → 0, uncovered 0. Full CRR heat-map now covered by direct_oracle or certification — no inferred_only or uncovered rows remain.</p>
+  </details>
+  <details class="log" >
+    <summary>Version 1.3 — 2026-04-16</summary>
+    <p>2026-04-16: Post-Target-Select Combat Gating row reclassified uncovered → direct_oracle. the test suite v2 now pins all 12 flag-gated branches of combat.js:869–969 (4 block gates + 8 consumption windows + 1 positive control) via a narrow shadow. Side effects and combat resolution explicitly out of scope; engine-blindness (11-of-12) tracked as report-only number. Distribution: direct_oracle 39 → 40, uncovered 5 → 4.</p>
+  </details>
+  <details class="log" >
+    <summary>Version 1.4 — 2026-04-16</summary>
+    <p>2026-04-16: LOS Slice 2 lane — both LOS Slice 2 rows (Doors + Multi-cell figures) reclassified uncovered → direct_oracle. the test suite pins the CRR-required LOS behaviors via 4 probes (closed-door block, open-door no-block, multi-cell attacker any-cell LOS, multi-cell target any-cell reachability). Two new handler-parity scenarios (14 closed door, 15 multi-cell attacker top-left-only) surface the engine's drift; shadow expanded to merge closed-door edges into effectiveMs and iterate attacker-fp × target-fp. Parity scenario 14 engine_only=['Greedo-1-0'], scenario 15 handler_only=['Greedo-1-0']. Stale engine_location pointers from the code (never existed) → the code (actual file). LOS-06 Energy Shield still uncovered (intentionally out of scope). Distribution: direct_oracle 40 → 42, uncovered 4 → 2.</p>
+  </details>
+  <details class="log" >
+    <summary>Version 1.5 — 2026-04-16</summary>
+    <p>2026-04-16: LOS-06 Energy Shield lane — reclassified uncovered → direct_oracle. the test suite pins the three CRR p.28 carve-outs via 4 probes (LOS out of shield, LOS into shield, LOS not through shield, multi-cell attacker + shield self-exclusion). One new handler-parity scenario (16 — shield between attacker and target on open terrain) baselines the engine's shield-blindness: engine never consults game.ancillaryTokens.energyShield; handler merges shields into effectiveMs.blocking at dc-play-area.js:951-968. Shadow expanded to merge shield spaces into blocking. Parity scenario 16 engine_only=['Greedo-1-0']. Diagonal-corner shield rule (p.28/p.40 intersection) deferred as a separate follow-up mini-lane. Distribution: direct_oracle 42 → 43, uncovered 2 → 1.</p>
+  </details>
+  <details class="log" >
+    <summary>Version 1.6 — 2026-04-16</summary>
+    <p>2026-04-16: Loadout-card lane — reclassified uncovered → direct_oracle. the test suite adds 12 probes across three layers: (1) data integrity (exactly one loadout passive = Electrostaff/Reach; every card carries surgeKeys + postAttack); (2) handler injection shadow for all 3 cards (Electrostaff/Electrohammer/Electrobatons) plus a source-pin on combat.js:1203-1208 that catches refactors of the injection lines; (3) combat-bridge postAttack side-effect probes for quick_strike (defender-modified-dice → 1 damage, with negative control) and flurry_of_blows (free 1-green melee override queued, once-per-activation lock). DISCOVERED BUG: electro_pulse is a silent no-op in production — combat-bridge.js:1470 msgId lookup does `_epDcL[idx].dgIndex === _epDgIdx` but setup-bridge.js:480-491 never emits dgIndex on dcList entries, so the lookup always returns undefined. PROBE-LOADOUT-05 honestly measures the broken behavior (no adjacency damage applied) and source-pins the buggy line + dcList shape so any fix trips the pin and forces a probe rewrite. Fixing the bug is a separate gameplay lane, out of scope here. Last uncovered row closed. Distribution: direct_oracle 43 → 44, uncovered 1 → 0.</p>
+  </details>
+</section>
+
+<div class="foot">
+  Regenerate this page any time with <code>npm run dashboard</code>.
+  55 rules · 16 parity scenarios · data refreshed 2026-04-17 19:09 UTC.
+</div>
+
+</main>
+
+<script>
+(function(){
+  const input = document.getElementById('ruleFilter');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    document.querySelectorAll('details.area').forEach(area => {
+      let anyMatch = false;
+      area.querySelectorAll('table.rules tbody tr').forEach(row => {
+        const match = !q || row.textContent.toLowerCase().includes(q);
+        row.style.display = match ? '' : 'none';
+        if (match) anyMatch = true;
+      });
+      area.style.display = (anyMatch || !q) ? '' : 'none';
+      if (q) area.open = anyMatch;
+    });
+  });
+})();
+</script>
+</body>
+</html>

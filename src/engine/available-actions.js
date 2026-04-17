@@ -11,10 +11,12 @@ import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum, getCcHand, getD
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
 import { hasLineOfSight, countSpaces } from '../game/spatial.js';
 import { edgeKey, getFootprintCells } from '../game/coords.js';
+import { getBrokenWallEdges } from '../game/movement.js';
 import { dcNameFromFigureKey, isCompanionHostDefeated } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 import { getLegalInteractOptions } from '../game/board-helpers.js';
-import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize } from '../data-loader.js';
+import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards } from '../data-loader.js';
+import { getConfig } from '../game/figure-config.js';
 
 /**
  * Get all available actions for a player in the current game state.
@@ -2141,20 +2143,24 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   // a weapon with range [1,12] but max accuracy 5 can't hit past 5.
   if (isRanged && accuracyCeiling > 0) maxRange = Math.min(maxRange, accuracyCeiling);
   // Reach: melee attackers extend maxRange from 1 to 2 when any of these
-  // are true — REACH keyword, REACH passive, or game.nextAttackReach flag
-  // set for this player (per-attack grant via CC/ability). Per CRR
+  // are true — REACH keyword, REACH passive, game.nextAttackReach flag,
+  // [Fury of Kashyyyk] attachment for WOOKIEE attackers, or a loadout card
+  // whose passive === 'Reach' (e.g. Electrostaff). Per CRR
   // (RULES_REFERENCE.md:1933, 2401, 2404), Reach melee can target within
   // 2 spaces.
-  // NOT handled here: Fury of Kashyyyk conditional WOOKIEE grant and
-  // Electrostaff loadout-card Reach. Those remain handler-only divergences
-  // until their own scoreboard scenarios and fixes land.
   if (!isRanged) {
     const _reachKws = (_aaEff?.keywords || []).map(k => String(k).toUpperCase());
     const _reachPassives = (_aaEff?.passives || []).map(p => String(p).toUpperCase());
+    const _hasFury = _reachKws.includes('WOOKIEE')
+      && (getDcList(game, playerNum) || []).some(dc => dc.dcName === '[Fury of Kashyyyk]');
+    const _loadoutName = getConfig(game, figureKey)?.loadout;
+    const _loadoutReach = _loadoutName ? getLoadoutCards()?.[_loadoutName]?.passive === 'Reach' : false;
     const _hasReach =
       _reachKws.includes('REACH') ||
       _reachPassives.includes('REACH') ||
-      !!game.nextAttackReach?.[playerNum];
+      !!game.nextAttackReach?.[playerNum] ||
+      _hasFury ||
+      _loadoutReach;
     if (_hasReach && maxRange < 2) maxRange = 2;
   }
   const ms = getMapData(game.selectedMap.id);
@@ -2162,11 +2168,37 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   const _aaMapId = game.selectedMap.id;
   const _aaAllDoors = getMapTokensData()?.[_aaMapId]?.doors || [];
   const _aaOpenedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
-  const _aaClosedDoorEdges = new Set(
-    _aaAllDoors
-      .filter(e => { const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase(); return !_aaOpenedSet.has(`${a}|${b}`) && !_aaOpenedSet.has(`${b}|${a}`); })
-      .map(e => edgeKey(e[0], e[1]))
-  );
+  const _aaClosedEdgePairs = _aaAllDoors.filter(e => {
+    const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase();
+    return !_aaOpenedSet.has(`${a}|${b}`) && !_aaOpenedSet.has(`${b}|${a}`);
+  });
+  const _aaClosedDoorEdges = new Set(_aaClosedEdgePairs.map(e => edgeKey(e[0], e[1])));
+  // LOS effectiveMs (parity with dc-play-area.js:937-970): merge closed-door
+  // edges into impassableEdges so doors block LOS, merge energy-shield and
+  // smoke spaces into blocking (CRR p.28 + C54 Smoke Grenade), and subtract
+  // currently-broken Wasskah walls from the base impassableEdges so LOS can
+  // pass through them (mission rule — wall between two difficult-terrain
+  // spaces does not block LOS).
+  const _aaShieldSpaces = (game.ancillaryTokens?.energyShield || []).map(s => String(s).toLowerCase());
+  const _aaSmokeSpaces = (game.ancillaryTokens?.smoke || []).map(s => String(s).toLowerCase());
+  const _aaExtraBlocking = [..._aaShieldSpaces, ..._aaSmokeSpaces];
+  const _aaBrokenWalls = getBrokenWallEdges(game, ms);
+  const _aaBaseImpassable = ms.impassableEdges || [];
+  const _aaFilteredImpassable = _aaBrokenWalls.size > 0
+    ? _aaBaseImpassable.filter(e => !_aaBrokenWalls.has(edgeKey(e[0], e[1])))
+    : _aaBaseImpassable;
+  const _aaNeedsEffective = _aaClosedEdgePairs.length > 0 || _aaExtraBlocking.length > 0 || _aaBrokenWalls.size > 0;
+  const _aaEffectiveMs = _aaNeedsEffective
+    ? {
+        ...ms,
+        impassableEdges: _aaClosedEdgePairs.length > 0
+          ? [..._aaFilteredImpassable, ..._aaClosedEdgePairs]
+          : _aaFilteredImpassable,
+        blocking: _aaExtraBlocking.length > 0
+          ? [...(ms.blocking || []), ..._aaExtraBlocking]
+          : ms.blocking,
+      }
+    : ms;
 
   const enemyPn = opponentPlayerNum(playerNum);
   const enemyPositions = game.figurePositions?.[enemyPn] || {};
@@ -2180,37 +2212,94 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     for (const cell of getFootprintCells(attackerPos, attackerSize)) attackerFpSet.add(String(cell).toLowerCase());
   }
 
-  const figureBlockingCoords = new Set();
-  for (const poses of [game.figurePositions?.[playerNum] || {}, enemyPositions]) {
-    for (const [fk, pos] of Object.entries(poses)) {
-      if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
-      const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = getDcEffects()?.[fkDcName] || getDcEffects()?.[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
-      if (fkEff?.companion === true) continue;
-      if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
-      const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
-      for (const cell of getFootprintCells(pos, fkSize)) figureBlockingCoords.add(String(cell).toLowerCase());
+  // Attacker-side figure-blocking bypass (parity with dc-play-area.js:925-936 + 975).
+  // Any one of these nulls the figure-blocking set for the rest of this call:
+  //   - Priority Target: abilityText contains "priority target" AND "line of sight"
+  //   - MASSIVE attacker keyword
+  //   - Clawdite Scout form: figureConfig.form === 'Scout' grants Priority Target
+  //   - Marksman CC: game.nextAttackIgnoreFigureLOS[msgId] bypasses for one attack
+  // Handler consumes the Marksman flag (delete-on-read); engine is read-only here —
+  // consumption is the mutator's responsibility at attack resolution, not at
+  // target enumeration.
+  const _attackerAbilityText = (_aaEff?.abilityText || '').toLowerCase();
+  const _attackerKws = (_aaEff?.keywords || []).map(k => String(k).toUpperCase());
+  const _clawditeForm = getConfig(game, figureKey)?.form;
+  const _attackerIgnoresFigureBlocking =
+    (_attackerAbilityText.includes('priority target') && _attackerAbilityText.includes('line of sight')) ||
+    _attackerKws.includes('MASSIVE') ||
+    _clawditeForm === 'Scout' ||
+    !!game.nextAttackIgnoreFigureLOS?.[msgId];
+
+  const figureBlockingCoords = _attackerIgnoresFigureBlocking ? null : new Set();
+  if (figureBlockingCoords) {
+    for (const poses of [game.figurePositions?.[playerNum] || {}, enemyPositions]) {
+      for (const [fk, pos] of Object.entries(poses)) {
+        if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
+        const fkDcName = dcNameFromFigureKey(fk);
+        const fkEff = getDcEffects()?.[fkDcName] || getDcEffects()?.[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
+        if (fkEff?.companion === true) continue;
+        if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
+        const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
+        for (const cell of getFootprintCells(pos, fkSize)) figureBlockingCoords.add(String(cell).toLowerCase());
+      }
     }
   }
 
   const targets = [];
 
+  // Attacker footprint cells for multi-cell LOS origin iteration.
+  const _aaAttackerFpCells = [...attackerFpSet];
+
   for (const [fk, coord] of Object.entries(enemyPositions)) {
     if (!coord) continue;
     const coordLc = String(coord).toLowerCase();
-    const dist = countSpaces(ms, attackerPosLc, coordLc, _aaClosedDoorEdges);
+
+    // Target footprint (for multi-cell targets, LOS/distance may be
+    // traced to any occupied cell).
+    const targetDcName = dcNameFromFigureKey(fk);
+    const targetSize = game.figureOrientations?.[fk] || getFigureSize(targetDcName);
+    const _aaTargetFpCells = (targetSize && targetSize !== '1x1')
+      ? getFootprintCells(coord, targetSize).map(c => String(c).toLowerCase())
+      : [coordLc];
+
+    // Distance: minimum over attacker-footprint × target-footprint
+    // (parity with dc-play-area.js:1010). countSpaces still gates by
+    // closed doors via _aaClosedDoorEdges.
+    let dist = Infinity;
+    for (const ac of _aaAttackerFpCells) {
+      for (const tc of _aaTargetFpCells) {
+        const d = countSpaces(ms, ac, tc, _aaClosedDoorEdges);
+        if (d < dist) dist = d;
+      }
+    }
     if (dist < minRange || dist > maxRange) continue;
+
+    // Vanish immunity (parity with dc-play-area.js:1002-1006): if the enemy
+    // player has just used Vanish, filter targets whose figureKey starts with
+    // the protected DC's dcName (covers all group/figure indices of that DC)
+    // until the vanisher's next activation.
+    const _vanish = game.vanishImmunityUntilNextActivation?.[enemyPn];
+    if (_vanish) {
+      const _vanishMeta = deps.dcMessageMeta?.get(_vanish.msgId);
+      if (_vanishMeta && fk.startsWith(`${_vanishMeta.dcName}-`)) continue;
+    }
+
+    // I Must Go Alone CC (parity with dc-play-area.js:1012-1013):
+    // when game.roundDefenderCannotBeTargetedUnlessWithinSpaces protects the
+    // enemy player, targets beyond the spaces cap are filtered.
+    const _iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
+    if (_iMustGoAlone?.playerNum === enemyPn && dist > _iMustGoAlone.spaces) continue;
 
     // LOS check with figure blocking (parity with dc-play-area.js)
     // Remove target's own footprint from blocking set (target doesn't block LOS to itself)
-    const targetDcName = dcNameFromFigureKey(fk);
-    const targetSize = game.figureOrientations?.[fk] || getFigureSize(targetDcName);
     let losBlockingCoords = figureBlockingCoords;
     const targetEff = getDcEffects()?.[targetDcName] || getDcEffects()?.[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
-    if ((targetEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {
+    if (figureBlockingCoords === null) {
+      losBlockingCoords = null; // attacker-side bypass active (Priority Target / MASSIVE / Scout form / Marksman)
+    } else if ((targetEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {
       losBlockingCoords = null; // MASSIVE targets: no figure blocking
     } else if (targetSize && targetSize !== '1x1') {
-      const targetFp = new Set(getFootprintCells(coord, targetSize).map(c => String(c).toLowerCase()));
+      const targetFp = new Set(_aaTargetFpCells);
       losBlockingCoords = new Set([...figureBlockingCoords].filter(c => !targetFp.has(c)));
     } else {
       // Single-cell target: remove its own coord from blocking
@@ -2220,7 +2309,43 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
       }
     }
 
-    const los = hasLineOfSight(attackerPosLc, coordLc, ms, losBlockingCoords);
+    // Multi-cell LOS: try attacker-fp × target-fp corner pairs (parity with
+    // dc-play-area.js:1025-1030). Uses _aaEffectiveMs so closed doors and
+    // energy shields block LOS.
+    let los = false;
+    outer: for (const ac of _aaAttackerFpCells) {
+      for (const tc of _aaTargetFpCells) {
+        if (hasLineOfSight(ac, tc, _aaEffectiveMs, losBlockingCoords)) { los = true; break outer; }
+      }
+    }
+
+    // Fire Mission (parity with dc-play-area.js:1032-1050): if primary LOS
+    // failed and the attacker group is in Fire Mission mode, retry LOS from
+    // every other figure in the same group. Uses the same _aaEffectiveMs and
+    // losBlockingCoords as the primary check. Attachment-aware figure count
+    // covers Z-6 / Mortar / Riot Trooper squad upgrades that bump the group
+    // size by 1. Blast 1 is a combat-resolution concern, not target
+    // enumeration, so out of scope here.
+    if (!los && game.fireMissionActive?.[msgId]) {
+      const _fmDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _fmFigCount = getDcStats(meta.dcName)?.figures ?? 1;
+      const _fmSuAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      const _fmTotalFigs = _fmFigCount + (_fmSuAtts.some(a => ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'].includes(a)) ? 1 : 0);
+      fmRetry: for (let fi2 = 0; fi2 < _fmTotalFigs; fi2++) {
+        if (fi2 === figureIndex) continue;
+        const otherFk = `${meta.dcName}-${_fmDgIdx}-${fi2}`;
+        const otherPos = game.figurePositions?.[playerNum]?.[otherFk];
+        if (!otherPos) continue;
+        const otherSize = game.figureOrientations?.[otherFk] || getFigureSize(meta.dcName);
+        const otherFpCells = getFootprintCells(otherPos, otherSize);
+        for (const oac of otherFpCells) {
+          for (const tc of _aaTargetFpCells) {
+            if (hasLineOfSight(oac, tc, _aaEffectiveMs, losBlockingCoords)) { los = true; break fmRetry; }
+          }
+        }
+      }
+    }
+
     if (!los) continue;
 
     // Insignificant (Dio): can't be targeted if in same space as a friendly figure
@@ -2242,15 +2367,23 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
       const npc = npcArray[i];
       if (npc.defeated) continue;
       const npcCoord = String(npc.coord).toLowerCase();
-      const npcDist = countSpaces(ms, attackerPosLc, npcCoord, _aaClosedDoorEdges);
+      // Distance/LOS use attacker footprint iteration for multi-cell parity
+      // and _aaEffectiveMs for door/shield LOS correctness.
+      let npcDist = Infinity;
+      for (const ac of _aaAttackerFpCells) {
+        const d = countSpaces(ms, ac, npcCoord, _aaClosedDoorEdges);
+        if (d < npcDist) npcDist = d;
+      }
       if (npcDist < minRange || npcDist > maxRange) continue;
-      // LOS check — remove NPC's own coord from blocking set
       let npcLosBlocking = figureBlockingCoords;
-      if (figureBlockingCoords.has(npcCoord)) {
+      if (figureBlockingCoords && figureBlockingCoords.has(npcCoord)) {
         npcLosBlocking = new Set(figureBlockingCoords);
         npcLosBlocking.delete(npcCoord);
       }
-      const npcLos = hasLineOfSight(attackerPosLc, npcCoord, ms, npcLosBlocking);
+      let npcLos = false;
+      for (const ac of _aaAttackerFpCells) {
+        if (hasLineOfSight(ac, npcCoord, _aaEffectiveMs, npcLosBlocking)) { npcLos = true; break; }
+      }
       if (!npcLos) continue;
       const npcLabel = npcType === 'thug' ? `Thug ${i + 1}` : `Krykna ${i + 1}`;
       targets.push({ figureKey: `npc_${npcType}_${i}`, coord: npcCoord, label: npcLabel, hasLOS: npcLos, dist: npcDist, isNpc: true, npcType, npcIndex: i });

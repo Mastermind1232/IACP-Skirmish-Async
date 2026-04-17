@@ -1,8 +1,10 @@
 {
   "metadata": {
     "title": "CRR Coverage Heat Map — IACP Skirmish Async (Skirbo)",
-    "version": "1.6",
-    "date": "2026-04-16",
+    "version": "1.7",
+    "date": "2026-04-17",
+    "v1_7_update": "2026-04-17: B4 + B5 closure pass — the last two inferred_only rows reclassified → direct_oracle. D2 Difficult+Hostile Terrain Stacking: tests/domain/oracle/terrain-stacking-probes.test.js (PROBE-TERRAIN-001..008, 11 assertions) pins additive cost shape (base 1, +1 difficult, +1 hostile, stack = 3) using a 3-cell synthetic corridor fed through buildTempBoardState + computeMovementCache, plus separate ignoreDifficult / ignoreFigureCost suppression lanes and a source-pin on evaluateMovementStep cost lines. D4 Multi-Condition Interaction: tests/domain/oracle/multi-condition-probes.test.js (PROBE-COND-001..008, 17 assertions) pins co-existence of 3+ conditions, dedup-on-reapply, independent removal, per-figure isolation, empty-array cleanup (delete key), Disarm-permanent-Weaken cross-condition guard (the sole non-independent rule), resetCondition idempotency, and a source-pin on conditions.js mutators. No production bugs surfaced during the pass. Distribution after closure: direct_oracle 47 → 49, certification 3, inferred_only 2 → 0, uncovered 0. Full CRR heat-map now covered by direct_oracle or certification — no inferred_only or uncovered rows remain.",
+    "v1_6_1_repair": "2026-04-17: Artifact-repair pass. The narrative was rolled back to v1.6 but four closure-supporting test files remained on disk (tests/certification/map-topology-certification.test.js, tests/domain/oracle/sor-sequencing-probes.test.js, tests/domain/oracle/mission-scoring-probes3.test.js, tests/domain/oracle/free-attack-mutex-probes.test.js) and all 4 pass (105/105 when run together). Row classifications restored based on repo reality, not old narrative labels: D3 Free-attack window mutex inferred_only → direct_oracle (free-attack-mutex-probes.test.js — 13 assertions); D7 Start-of-Round DC Effects Sequencing inferred_only → direct_oracle (sor-sequencing-probes.test.js — 17 assertions, real [First Strike] ReferenceError bug fixed in round.js:1072/923/941 + setup-bridge.js:459 still in place); D8 Mission-specific scoring variants inferred_only → direct_oracle (mission-scoring-probes3.test.js — 15 assertions, includes VP-015b-i honest-measurement pair for the reverted getCrateDeploymentVpBonus selectedMap-object-vs-string comparison bug); D10 Map Topology and Adjacency inferred_only → certification (map-topology-certification.test.js — 60 test cases). VP-015b-i probe rewritten from CRR-correct-assertion to honest-measurement-pair (mirrors PROBE-LOADOUT-05 electro_pulse pattern) because the production-side mission-helpers.js fix was intentionally reverted; companion notDeepStrictEqual trips the moment the fix lands. Distribution after repair: direct_oracle 44 → 47, certification 2 → 3, inferred_only 6 → 2, totals unchanged. Remaining inferred_only: D2 Difficult+Hostile terrain stacking and D4 Multi-condition interaction — the true B4+B5 pair.",
     "tier_a_update": "2026-04-14: Tier A probes added (surge-legality-probes.test.js, combat-token-timing-probes.test.js). Condition immunity reclassified from unit_test to direct_oracle (ORACLE-HANDLER-003 already covers it).",
     "v1_2_expansion": "2026-04-16: Heat-map expanded 35 → 55 entries. Handler-vs-engine parity broken out into 13 per-scenario D3 entries (Reach family: permanent/nextAttackReach/Fury/Electrostaff; Hide non-filter; Priority Target/Marksman/Clawdite LOS bypass; Insignificant/Dio; I Must Go Alone; Fire Mission group-LOS; Vanish immunity; default-agreement positive control). Five honest uncovered entries added (LOS-06 Energy Shield, LOS Slice 2 door, LOS Slice 2 multi-cell figure, post-target-select combat gating, loadout-card passives beyond Reach). Two inferred_only additions (mission-specific scoring variants, free-attack window mutex). No new direct_oracle test files authored in this pass — measurement only.",
     "v1_3_update": "2026-04-16: Post-Target-Select Combat Gating row reclassified uncovered → direct_oracle. tests/certification/post-select-gating.test.js v2 now pins all 12 flag-gated branches of combat.js:869–969 (4 block gates + 8 consumption windows + 1 positive control) via a narrow shadow. Side effects and combat resolution explicitly out of scope; engine-blindness (11-of-12) tracked as report-only number. Distribution: direct_oracle 39 → 40, uncovered 5 → 4.",
@@ -133,12 +135,12 @@
       "subdomain": "Difficult + Hostile Terrain Stacking",
       "crr_rule_or_claim": "Difficult terrain costs +1 movement; hostile terrain is separate effect. Combined cost should be movement+1 with hostile damage.",
       "engine_location": "src/game/movement.js (terrain cost calculation)",
-      "current_coverage_type": "inferred_only",
-      "evidence": "Difficult terrain tested individually; hostile terrain tested individually; no test combines both on same space",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "tests/domain/oracle/terrain-stacking-probes.test.js — PROBE-TERRAIN-001..008 pin additive stacking (base 1, +1 difficult, +1 hostile, stack = 3) + ignoreDifficult/ignoreFigureCost suppression shape + source-pin on evaluateMovementStep cost lines",
       "training_blast_radius": "low",
-      "confidence": "medium",
-      "recommended_next_audit_type": "oracle_probe",
-      "notes": "Low risk — terrain types rarely co-occur on same cell in real maps."
+      "confidence": "high",
+      "recommended_next_audit_type": "none",
+      "notes": "Phase-2 B4 closure (2026-04-17). Pure-function probe uses buildTempBoardState + computeMovementCache on a 3-cell synthetic corridor; additive-sum assertion pins shape against future max/clamp/multiplicative drift."
     },
     {
       "domain": "D3",
@@ -265,12 +267,12 @@
       "subdomain": "Multi-Condition Interaction",
       "crr_rule_or_claim": "Multiple conditions can co-exist; each resolves independently",
       "engine_location": "src/game/conditions.js, src/game/activation-state.js",
-      "current_coverage_type": "inferred_only",
-      "evidence": "Each condition tested individually. No test applies 2+ conditions simultaneously and verifies independent resolution.",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "tests/domain/oracle/multi-condition-probes.test.js — PROBE-COND-001..008 pin co-existence of 3+ conditions, dedup-on-reapply, independent removal, per-figure isolation, empty-array cleanup, Disarm-permanent-Weaken cross-condition guard, resetCondition idempotency, source-pin on conditions.js mutators",
       "training_blast_radius": "low",
-      "confidence": "medium",
-      "recommended_next_audit_type": "oracle_probe",
-      "notes": "Low risk since conditions use independent flag-based tracking."
+      "confidence": "high",
+      "recommended_next_audit_type": "none",
+      "notes": "Phase-2 B5 closure (2026-04-17). Disarm-Weaken is the single cross-condition rule in conditions.js; all other conditions resolve independently via per-figure string array. Probe pins both the independence shape and the Disarm guard."
     },
     {
       "domain": "D5",
@@ -335,14 +337,14 @@
     {
       "domain": "D7",
       "subdomain": "Start-of-Round DC Effects Sequencing",
-      "crr_rule_or_claim": "Some DCs have start-of-round effects that must resolve before activation phase begins",
-      "engine_location": "src/handlers/round.js:runStartOfRoundDcEffects()",
-      "current_coverage_type": "inferred_only",
-      "evidence": "runStartOfRoundDcEffects returns boolean (async effects pending). Exercised in selfplay. No test asserts correct sequencing when multiple SoR effects fire.",
+      "crr_rule_or_claim": "Some DCs have start-of-round effects that must resolve before activation phase begins; Block A (DC passives) resolves initiative-first per IA rules; Block B (Skirmish Upgrades) fires once per game for round-1 effects via global/per-player flags",
+      "engine_location": "src/handlers/round.js:1071 runStartOfRoundDcEffects (Block A DC passives 1078-1158, Block B Skirmish Upgrades 1160-1262); src/handlers/round.js:1272 resolveStartOfRoundEffect (counter decrement + pre_activation gate)",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "PROBE-SOR-001..006 (tests/domain/oracle/sor-sequencing-probes.test.js — 17 assertions across 6 probe groups): return-value semantics, First Strike round-1 guard + owner-agnostic + once-per-game flag, Ezra Brush every-round sync + defeated-skip, Block A initiative-first ordering via Ezra×2 log-order probe, resolveStartOfRoundEffect counter decrement + pre_activation phase-gate open + pendingSorActions clear, source pin on _sorPlayerOrder / Block B [1,2] / round-1 guards / return expression / pre_activation gate call.",
       "training_blast_radius": "medium",
-      "confidence": "medium",
-      "recommended_next_audit_type": "oracle_probe",
-      "notes": "SoR effects are relatively rare in training armies but critical when they fire."
+      "confidence": "high",
+      "recommended_next_audit_type": "none",
+      "notes": "Real bug surfaced + fixed during probe authoring: runStartOfRoundDcEffects called checkWinConditions at round.js:1179 but only destructured logGameAction + updateHandChannelMessages from ctx — ReferenceError on round 1 whenever either player owned [First Strike]. Fix added checkWinConditions to the destructure + propagated through both call sites (round.js:923 _continueAfterMissionSor and setup-bridge.js:459 fallback). Block B uses hardcoded [1,2] order rather than initiative-first — functionally fine for current effects (all self-contained VP or CC hand ops), latent invariant-drift risk for future order-sensitive upgrades; flagged as INFERRED risk, not patched. Picker paths (Rule by Fear, Rogue One, Imperial Citadel, Programming Override, Clawdite Shape/Shift) covered only by counter-increment contract + source pin — full picker→resolve→next-effect end-to-end is a separate mini-lane."
     },
     {
       "domain": "D8",
@@ -431,14 +433,14 @@
     {
       "domain": "D10",
       "subdomain": "Map Topology and Adjacency",
-      "crr_rule_or_claim": "Map adjacency graph is correct; spaces, walls, doors, terrain types match physical map layout",
-      "engine_location": "data/maps/, src/game/board-helpers.js",
-      "current_coverage_type": "inferred_only",
-      "evidence": "Movement and LOS tests use real map data and pass. BFS distances verified manually (e.g., d1↔a1=3, e21↔h21=3). No dedicated map topology validation suite.",
+      "crr_rule_or_claim": "Map adjacency graph is correct; spaces, walls, doors, terrain types match physical map layout; adjacency is symmetric and king-move-constrained",
+      "engine_location": "data/map-spaces.json, src/game/spatial.js, src/game/coords.js",
+      "current_coverage_type": "certification",
+      "evidence": "tests/certification/map-topology-certification.test.js — 60 test cases across 8 invariants × 8 playable maps + 3 handcrafted BFS anchors on mos-eisley-outskirts (d1↔a1=3, e21↔h21=3, b1↔a1=1). Invariants: adjacency keys ⊆ spaces, no phantom neighbors, no self-loops, no duplicate neighbors, symmetric adjacency, king-move constraint (Chebyshev ≤ 1), impassable/movement-blocking edges are king-move pairs touching spaces.",
       "training_blast_radius": "critical",
-      "confidence": "medium",
-      "recommended_next_audit_type": "certification",
-      "notes": "Map correctness is foundational — an adjacency error silently corrupts movement, LOS, control."
+      "confidence": "high",
+      "recommended_next_audit_type": "none",
+      "notes": "No topology defects found across all 8 playable maps."
     },
     {
       "domain": "D3",
@@ -659,26 +661,26 @@
     {
       "domain": "D8",
       "subdomain": "Mission-specific scoring variants",
-      "crr_rule_or_claim": "Individual missions may override default VP rules (objective scoring, kill bonuses, time-based VP)",
-      "engine_location": "src/game/round.js end-of-round scoring; mission-specific branches",
-      "current_coverage_type": "inferred_only",
-      "evidence": "Self-play runs exercise mission-specific scoring variants indirectly via end-of-game VP. No explicit oracle probe or assertion covers the per-mission VP math.",
+      "crr_rule_or_claim": "Individual missions may override default VP rules (objective scoring, kill bonuses, time-based VP); 11-effect-type dispatcher at runEndOfRoundRules + two persistent-bonus helpers wired into every scorecard render",
+      "engine_location": "src/game/mission-rules.js runEndOfRoundRules (dispatcher over 11 effect types keyed off data/mission-cards.json); src/engine/mission-helpers.js getCrateDeploymentVpBonus + getAnchorheadPatronVpBonus (persistent bonuses)",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "PROBE-VP-012..015 (tests/domain/oracle/mission-scoring-probes3.test.js — 15 assertions across 10 sub-suites): VP-012 vpForControllingNamedArea including Salacious B. Crumb exclusion + Dio/Iden-alive interaction; VP-013 vpPerControlledFluctuation including yellow→Surge power-token grant; VP-014 vpPerStrainOnControlledSpaces with strain-clear-on-score and retained-strain-on-uncontrolled; VP-015a Anchorhead patron VP-table 0/2/5/10/20 with cap at 4; VP-015b Devaron crate-in-deployment-zone (honest-measurement pair — current production short-circuits to 0/0 because selectedMap object is compared to string, companion notDeepStrictEqual flags any future fix). Existing VP-004..011 (mission-scoring-probes.test.js + mission-scoring-probes2.test.js) cover the other 7 end-of-round effect types.",
       "training_blast_radius": "medium",
-      "confidence": "medium",
-      "recommended_next_audit_type": "certification",
-      "notes": "Default space-control VP is well-covered (D8). Mission-specific scoring is exercised but not asserted."
+      "confidence": "high",
+      "recommended_next_audit_type": "none",
+      "notes": "Representative-per-effect-type probes sufficient because the dispatcher is data-driven from data/mission-cards.json — per-mission rows share a single execution path. Latent production bug in getCrateDeploymentVpBonus (selectedMap object!==string comparison) is honestly measured in VP-015b-i, not patched in this pass; fix is a separate gameplay lane."
     },
     {
       "domain": "D3",
       "subdomain": "Free-attack window mutex",
-      "crr_rule_or_claim": "Only one free-attack window (pendingFiringSquad / pendingCoordinatedRaid / pendingFieldTactics) can be active at a time",
-      "engine_location": "src/game/combat.js free-attack gating; src/game/activation-state.js ROUND_NULL_FLAGS",
-      "current_coverage_type": "inferred_only",
-      "evidence": "Self-play exercises these flags individually. No explicit oracle probe asserts the mutex — two active windows at once would show up only as a symptom.",
+      "crr_rule_or_claim": "Only one free-attack window (pendingFiringSquad / pendingCoordinatedRaid / pendingFieldTactics) can be active at a time; first-match routing is FiringSquad > CoordinatedRaid > FieldTactics",
+      "engine_location": "src/handlers/combat.js:937-965 free-attack consumption chain; src/game/activation-state.js ROUND_NULL_FLAGS (all three fields present)",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "PROBE-FA-MUTEX-001..005 (tests/domain/oracle/free-attack-mutex-probes.test.js — 13 assertions across 5 probe groups): pure-function shadow of the consumption chain proves a given msgId routes to at most one branch; first-match ordering pinned; ROUND_NULL_FLAGS confirmed to carry all three fields; source pin on the three isXxxFreeAttack locals catches 4th-mutex-member refactors.",
       "training_blast_radius": "medium",
-      "confidence": "medium",
-      "recommended_next_audit_type": "oracle_probe",
-      "notes": "Inferred from ROUND_NULL_FLAGS cleanup plus the parity-test scenario short-circuit. Not directly asserted."
+      "confidence": "high",
+      "recommended_next_audit_type": "none",
+      "notes": "No mutex violation surfaced. No engine changes."
     }
   ],
   "top_5_risks": [
