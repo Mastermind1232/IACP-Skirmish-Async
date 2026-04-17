@@ -414,6 +414,84 @@ export function resetAbilityGateAudit() {
   };
 }
 
+// Minimum Manhattan distance from the ability's acting figure to any enemy
+// (DC figures + live NPCs). Returns null if actor position can't be resolved
+// — gate callers treat null as "don't suppress" (conservative).
+function _distToEnemyForAbility(actingAction, game, dcMessageMeta) {
+  const actingPN = actingAction.actingPlayer;
+  const oppNum = actingPN === 1 ? 2 : 1;
+  const actorPos = getAttackerPosition(actingAction, game, dcMessageMeta);
+  if (!actorPos) return null;
+  let d = Infinity;
+  const oppFigs = game.figurePositions?.[oppNum] || {};
+  for (const pos of Object.values(oppFigs)) {
+    if (!pos) continue;
+    const dd = coordDistance(actorPos, pos);
+    if (dd < d) d = dd;
+  }
+  for (const k of (game.npcKrykna || [])) {
+    if (!k?.coord || k.defeated) continue;
+    const dd = coordDistance(actorPos, k.coord);
+    if (dd < d) d = dd;
+  }
+  for (const t of (game.npcThugs || [])) {
+    if (!t?.coord || t.defeated) continue;
+    const dd = coordDistance(actorPos, t.coord);
+    if (dd < d) d = dd;
+  }
+  return d;
+}
+
+// Pure: true iff the acting figure is farther than ABILITY_DIST_GATE from
+// every enemy. Returns false for empty lists or unresolvable positions so
+// callers don't accidentally gate legal plays. Only triggers on concrete
+// dc_special actions with a named ability — reaction sub-states (missile
+// salvo die, force-vision pick, etc.) are forced choices where distance is
+// meaningless and suppression could skip required resolution.
+export function abilityGateSuppresses(abilities, game, dcMessageMeta) {
+  if (!abilities || abilities.length === 0) return false;
+  const first = abilities[0];
+  if (first?.type !== 'dc_special') return false;
+  if (!first?.params?.specialName) return false;
+  const d = _distToEnemyForAbility(first, game, dcMessageMeta);
+  if (d == null) return false;
+  return d > ABILITY_DIST_GATE;
+}
+
+// Audit-only side effect: caller invokes when it's actually suppressing the
+// ability branch, so the category breakdown matches real decisions.
+export function auditAbilitySuppressed(abilities) {
+  _abilityGateAudit.gateHit++;
+  for (const a of abilities || []) {
+    const cat = abilityCategory(a.params?.specialName);
+    _abilityGateAudit.skippedByCat[cat] = (_abilityGateAudit.skippedByCat[cat] || 0) + 1;
+  }
+}
+
+// Pick-and-audit: category-rank (offensive > off_move > defense > support >
+// other), random tie-break inside the winning bucket. Increments gatePass +
+// playedByCat. Callers must only invoke after confirming gate passes.
+export function pickAndAuditAbility(abilities) {
+  let bestRank = Infinity;
+  const byRank = [];
+  for (const a of abilities) {
+    const cat = abilityCategory(a.params?.specialName);
+    const rank = ABILITY_CAT_PRIORITY[cat] ?? 4;
+    if (rank < bestRank) {
+      bestRank = rank;
+      byRank.length = 0;
+      byRank.push(a);
+    } else if (rank === bestRank) {
+      byRank.push(a);
+    }
+  }
+  const chosen = byRank[Math.floor(Math.random() * byRank.length)];
+  _abilityGateAudit.gatePass++;
+  const chosenCat = abilityCategory(chosen.params?.specialName);
+  _abilityGateAudit.playedByCat[chosenCat] = (_abilityGateAudit.playedByCat[chosenCat] || 0) + 1;
+  return chosen;
+}
+
 // ── Activation-Order Audit ──────────────────────────────────────────────────
 const _actOrderAuditInit = () => ({
   totalDecisions: 0,
@@ -3462,57 +3540,11 @@ function oracleActivationPlan(absTypes, groups, game, dcHealthState, dcMessageMe
   //      within the winning category.
   if (groups['ability']?.length > 0) {
     const abilities = groups['ability'];
-    let distToNearestEnemy = Infinity;
-    const actingPN = abilities[0].actingPlayer;
-    const oppNum = actingPN === 1 ? 2 : 1;
-    const actorPos = getAttackerPosition(abilities[0], game, dcMessageMeta);
-    if (actorPos) {
-      const oppFigs = game.figurePositions?.[oppNum] || {};
-      for (const pos of Object.values(oppFigs)) {
-        if (!pos) continue;
-        const d = coordDistance(actorPos, pos);
-        if (d < distToNearestEnemy) distToNearestEnemy = d;
-      }
-      for (const k of (game.npcKrykna || [])) {
-        if (!k?.coord || k.defeated) continue;
-        const d = coordDistance(actorPos, k.coord);
-        if (d < distToNearestEnemy) distToNearestEnemy = d;
-      }
-      for (const t of (game.npcThugs || [])) {
-        if (!t?.coord || t.defeated) continue;
-        const d = coordDistance(actorPos, t.coord);
-        if (d < distToNearestEnemy) distToNearestEnemy = d;
-      }
-    }
-
-    // Distance gate — actor is too far to use abilities productively
-    if (actorPos && distToNearestEnemy > ABILITY_DIST_GATE) {
-      _abilityGateAudit.gateHit++;
-      for (const a of abilities) {
-        const cat = abilityCategory(a.params?.specialName);
-        _abilityGateAudit.skippedByCat[cat] = (_abilityGateAudit.skippedByCat[cat] || 0) + 1;
-      }
+    if (abilityGateSuppresses(abilities, game, dcMessageMeta)) {
+      auditAbilitySuppressed(abilities);
       // fall through to movement
     } else {
-      _abilityGateAudit.gatePass++;
-      // Category-ranked within-group pick
-      let bestRank = Infinity;
-      const byRank = [];
-      for (const a of abilities) {
-        const cat = abilityCategory(a.params?.specialName);
-        const rank = ABILITY_CAT_PRIORITY[cat] ?? 4;
-        if (rank < bestRank) {
-          bestRank = rank;
-          byRank.length = 0;
-          byRank.push(a);
-        } else if (rank === bestRank) {
-          byRank.push(a);
-        }
-      }
-      const chosen = byRank[Math.floor(Math.random() * byRank.length)];
-      const chosenCat = abilityCategory(chosen.params?.specialName);
-      _abilityGateAudit.playedByCat[chosenCat] = (_abilityGateAudit.playedByCat[chosenCat] || 0) + 1;
-      return chosen;
+      return pickAndAuditAbility(abilities);
     }
   }
 
@@ -3684,7 +3716,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   // Epsilon-greedy exploration
   const epsilon = getEpsilon(learnings.meta.totalGames);
   if (Math.random() < epsilon) {
-    const hAction = heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc);
+    const hAction = heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc, dcMessageMeta);
     // Extract WG features for the SPECIFIC action the heuristic chose.
     if (hAction) {
       const hAbsType = abstractActionType(hAction, game);
@@ -3746,11 +3778,11 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   } else {
     const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
     const network = learnings.network;
-    if (!network) return heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc);
+    if (!network) return heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc, dcMessageMeta);
     Q = forwardPass(network, features).Q;
   }
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
-  if (absTypes.length === 0) return heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc);
+  if (absTypes.length === 0) return heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc, dcMessageMeta);
 
   // Expose Q-values and available abstract types for pass-timing audit
   pickSmartAction._lastQ = Q;
@@ -3816,12 +3848,27 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     }
   }
 
+  // Pre-filter ability from the DQN argmax when the gate says suppress.
+  // Planner priority 2.5 covers within-activation frames; this handles the
+  // between-activation / planner-null path where ability is still a candidate
+  // but uniform random would burn action-economy on out-of-range triggers.
+  // Keep original absTypes for post-argmax overrides (surge/attack/CC).
+  let argmaxAbsTypes = absTypes;
+  if (absTypes.includes('ability')) {
+    const abilities = groups['ability'];
+    if (abilityGateSuppresses(abilities, game, dcMessageMeta)) {
+      auditAbilitySuppressed(abilities);
+      const filtered = absTypes.filter(t => t !== 'ability');
+      if (filtered.length > 0) argmaxAbsTypes = filtered;
+    }
+  }
+
   let bestType = null;
   let ccForceReason = null;
-  if (_greedyMode && _softmaxEvalEnabled && absTypes.length > 1) {
+  if (_greedyMode && _softmaxEvalEnabled && argmaxAbsTypes.length > 1) {
     // Softmax (Boltzmann) selection: sample proportionally to exp(Q/τ)
     const tau = _softmaxTau;
-    const qVals = absTypes.map(t => {
+    const qVals = argmaxAbsTypes.map(t => {
       const idx = ABSTRACT_TYPES.indexOf(t);
       return idx >= 0 ? Q[idx] / tau : -Infinity;
     });
@@ -3830,15 +3877,15 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
     const sumExp = expQ.reduce((s, e) => s + e, 0);
     const r = Math.random() * sumExp;
     let cumSum = 0;
-    for (let i = 0; i < absTypes.length; i++) {
+    for (let i = 0; i < argmaxAbsTypes.length; i++) {
       cumSum += expQ[i];
-      if (r <= cumSum) { bestType = absTypes[i]; break; }
+      if (r <= cumSum) { bestType = argmaxAbsTypes[i]; break; }
     }
-    if (!bestType) bestType = absTypes[absTypes.length - 1];
+    if (!bestType) bestType = argmaxAbsTypes[argmaxAbsTypes.length - 1];
   } else {
     // Argmax selection (training exploitation + non-softmax greedy)
     let bestQ = -Infinity;
-    for (const absType of absTypes) {
+    for (const absType of argmaxAbsTypes) {
       const idx = ABSTRACT_TYPES.indexOf(absType);
       if (idx < 0) continue;
       if (Q[idx] > bestQ) {
@@ -3925,7 +3972,7 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   }
 
   if (bestType === null) {
-    const fallback = heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc);
+    const fallback = heuristicPick(strategicActions, game, learnings.withinGroupWeights?.cc, dcMessageMeta);
     if (fallback) {
       const fbType = abstractActionType(fallback, game);
       if (fbType === 'play_cc') {
@@ -4383,10 +4430,17 @@ function pickWithinGroup(actions, absType, game, wgWeights, dcHealthState, dcMes
     return { action: pick(actions), wgFeatures: null, wgType: null };
   }
 
+  // Ability category ranker — reached when the DQN argmax picked 'ability'
+  // (the pre-filter left it in argmaxAbsTypes because the gate passed).
+  // Deterministic category rank with random tie-break replaces uniform pick.
+  if (absType === 'ability') {
+    return { action: pickAndAuditAbility(actions), wgFeatures: null, wgType: null };
+  }
+
   return { action: pick(actions), wgFeatures: null, wgType: null };
 }
 
-function heuristicPick(allActions, game, ccWeights) {
+function heuristicPick(allActions, game, ccWeights, dcMessageMeta) {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   const gates = allActions.filter(a => a.type === 'phase_gate_ready');
@@ -4444,7 +4498,15 @@ function heuristicPick(allActions, game, ccWeights) {
   }
 
   const specials = allActions.filter(a => a.type === 'dc_special');
-  if (specials.length > 0) return pick(specials);
+  if (specials.length > 0) {
+    if (abilityGateSuppresses(specials, game, dcMessageMeta)) {
+      auditAbilitySuppressed(specials);
+      // fall through to moves / end_act — out-of-range ability plays are the
+      // uniform random fingerprint this fix targets
+    } else {
+      return pickAndAuditAbility(specials);
+    }
+  }
 
   const moveSpaces = allActions.filter(a => a.type === 'move_pick_space' && !a.params?.done);
   if (moveSpaces.length > 0) return pickWithinGroup(moveSpaces, 'move_toward', game, null, null, null, 0).action;
@@ -5071,17 +5133,17 @@ export function pickAgentAction(agent, allActions, game, learnings, playerNum, d
   // Agent-specific epsilon
   const epsilon = agent.strategy.epsilon;
   if (Math.random() < epsilon) {
-    return heuristicPick(strategicActions, game);
+    return heuristicPick(strategicActions, game, null, dcMessageMeta);
   }
 
   // Exploitation: Q via dueling neural network + agent preferences
   const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
   const network = learnings.network;
-  if (!network) return heuristicPick(strategicActions, game);
+  if (!network) return heuristicPick(strategicActions, game, null, dcMessageMeta);
 
   const { Q } = forwardPass(network, features);
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
-  if (absTypes.length === 0) return heuristicPick(strategicActions, game);
+  if (absTypes.length === 0) return heuristicPick(strategicActions, game, null, dcMessageMeta);
 
   let bestType = null;
   let bestQ = -Infinity;
@@ -5096,7 +5158,7 @@ export function pickAgentAction(agent, allActions, game, learnings, playerNum, d
     }
   }
 
-  if (bestType === null) return heuristicPick(strategicActions, game);
+  if (bestType === null) return heuristicPick(strategicActions, game, null, dcMessageMeta);
   const wgResult = pickWithinGroup(groups[bestType], bestType, game,
     learnings.withinGroupWeights, dcHealthState, dcMessageMeta, learnings.meta.totalGames);
   pickAgentAction._lastWgFeatures = wgResult.wgFeatures;
