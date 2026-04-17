@@ -895,6 +895,28 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
 }
 
 /**
+ * Shared start-of-round continuation helper. Runs every effect that must fire
+ * after mission SOR rules are in place:
+ *   - CC passive start-of-round redraws (Rebel Graffiti / Sabine)
+ *   - DC start-of-round passives (Brush, Force Slow, Excavation, etc.)
+ *   - Hand visual refresh + hand-channel message rebuild
+ *   - Phase gate → pre_activation (unless a DC SOR effect is pending)
+ *   - Mission-specific round-start prompts (Devaron B doors/crates, Chopper A Krykna push)
+ *
+ * Called from round.js:_runInitiativeSwapAndContinue (round 2+), handleSorMissionReveal
+ * (reveal-button completion), phase-gate.js cc_drawn (round 1 normal), and
+ * setup-bridge.js runDraftRandom (round 1 Draft Random).
+ *
+ * @param {object} game
+ * @param {string} gameId
+ * @param {?import('discord.js').ButtonInteraction} interaction - May be null (non-button entry)
+ * @param {object} ctx - Must include all deps consumed by the body below
+ */
+export async function runStartOfRoundContinuation(game, gameId, interaction, ctx) {
+  return _continueAfterMissionSor(game, gameId, interaction, ctx);
+}
+
+/**
  * Continuation after mission SOR rules have fired (or been skipped).
  * Runs CC passive redraws, DC SOR effects, hand updates, phase gate, mission-specific prompts.
  */
@@ -903,7 +925,7 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
     logGameAction, client, updateHandChannelMessages, updateHandVisualMessage,
     buildHandDisplayPayload, sendPhaseGateMessages, countTerminalsControlledByPlayer,
     getMapTokensData, postDevaronDoorButtons, postDevaronCratePushPrompts,
-    postKryknaPushButtons, saveGames,
+    postKryknaPushButtons, saveGames, checkWinConditions,
   } = ctx;
   const mapId = game.selectedMap?.id;
   const variant = game.selectedMission?.variant;
@@ -916,7 +938,7 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
     }
   }
   // Run start-of-round DC effects (post-deploy for R1, DC abilities every round)
-  const hasPendingSor = await runStartOfRoundDcEffects(game, gameId, client, { logGameAction, updateHandChannelMessages });
+  const hasPendingSor = await runStartOfRoundDcEffects(game, gameId, client, { logGameAction, updateHandChannelMessages, checkWinConditions });
   await updateHandVisualMessage(game, 1, client);
   await updateHandVisualMessage(game, 2, client);
   for (const pn of [1, 2]) {
@@ -1047,7 +1069,7 @@ export async function handleSorMissionReveal(interaction, ctx) {
  * @param {object} ctx - { logGameAction, dcHealthState?, dcMessageMeta? }
  */
 export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
-  const { logGameAction, updateHandChannelMessages } = ctx;
+  const { logGameAction, updateHandChannelMessages, checkWinConditions } = ctx;
 
   // Post-deploy effects now handled by runPostDeployPhase() in post-deploy.js
   // (called from the appropriate trigger points: cc-hand.js, index.js Draft Random, etc.)

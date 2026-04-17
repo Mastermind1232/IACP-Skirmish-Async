@@ -292,7 +292,7 @@ const CONTEXT_GROUPS = {
 
   phaseGate: [
     'getGame', 'saveGames', 'client', 'logGameAction',
-    'finishSetupAttachments', 'runStartOfRoundDcEffects', 'sendRoundActivationPhaseMessage',
+    'finishSetupAttachments', 'runStartOfRoundDcEffects', 'runStartOfRoundContinuation', 'sendRoundActivationPhaseMessage',
     'sendPhaseGateMessages', 'runStatusPhaseAfterEndOfRound',
     'updateHandChannelMessages',
     // Gate 1 (deploy_done) deps:

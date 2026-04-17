@@ -263,6 +263,7 @@ import {
   buildFavoritesListPayload,
   // Used in allDeps
   runStartOfRoundDcEffects,
+  runStartOfRoundContinuation,
   runStatusPhaseAfterEndOfRound,
   runPostDeployPhase,
   handlePreReroll,
@@ -1254,6 +1255,12 @@ async function runDraftRandom(game, client, options = {}) {
     getHandChannelId, getHandTooltipEmbed, buildHandDisplayPayload, updateHandVisualMessage,
     updatePlayAreaDcButtons, runStartOfRoundDcEffects, runPostDeployPhase, setRoundPhase,
     sendRoundActivationPhaseMessage, clearPreGameSetup, saveGames,
+    // Mission start-of-round rule deps (Sabacc setTokenCountFromInitiativeHand, etc.)
+    getMissionRules, runStartOfRoundRules, getMapTokensData,
+    // Shared SOR continuation: CC passives, hand refresh, phase gate, mission prompts
+    runStartOfRoundContinuation, updateHandChannelMessages, sendPhaseGateMessages,
+    countTerminalsControlledByPlayer,
+    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons,
     // Companion DC embed deps (threaded to runPostDeployPhase → resolveAutoAbility)
     buildDcEmbedAndFiles, dcMessageMeta, dcExhaustedState, dcHealthState,
     getDcPlayAreaComponents, getNicknamesForDcMessage,
@@ -3154,7 +3161,7 @@ function buildAllDeps() {
     // Locally defined helpers
     applySquadSubmission, shuffleArray, buildHandDisplayPayload,
     updateHandVisualMessage, updatePlayAreaDcButtons,
-    sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, runPostDeployPhase, sendPhaseGateMessages,
+    sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, runPostDeployPhase, sendPhaseGateMessages,
     buildDiscardPileDisplayPayload, updateDiscardPileMessage,
     updateAttachmentMessageForDc, updateDcActionsMessage,
     buildDcEmbedAndFiles, getConditionsForDcMessage, getNicknamesForDcMessage, getDcPlayAreaComponents,

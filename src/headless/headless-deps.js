@@ -170,6 +170,7 @@ import {
 
 import {
   runStartOfRoundDcEffects,
+  runStartOfRoundContinuation,
   runPostDeployPhase,
   sendRerollUI,
   proceedAfterRerolls,
@@ -614,7 +615,7 @@ export function buildHeadlessDeps(options = {}) {
 
     // Phase gate / round (real)
     sendPhaseGateMessages,
-    runStartOfRoundDcEffects, runPostDeployPhase, runStatusPhaseAfterEndOfRound,
+    runStartOfRoundDcEffects, runStartOfRoundContinuation, runPostDeployPhase, runStatusPhaseAfterEndOfRound,
 
     // Conditions (real)
     filterCondition, isConditionImmune, applyCondition, HARMFUL_CONDITIONS,

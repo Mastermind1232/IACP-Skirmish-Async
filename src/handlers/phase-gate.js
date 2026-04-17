@@ -274,13 +274,37 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
 
     case 'cc_drawn': {
       setPhase(game, PHASES.ROUND_ACTIVE, ROUND_PHASES.START_OF_ROUND);
-      const { runStartOfRoundDcEffects, sendPhaseGateMessages: sendGate, updateHandChannelMessages } = ctx;
-      const hasPendingSor = runStartOfRoundDcEffects
-        ? await runStartOfRoundDcEffects(game, gameId, client, { logGameAction, updateHandChannelMessages })
-        : false;
-      if (!hasPendingSor) {
-        const gateFn = sendGate || sendPhaseGateMessages;
-        await gateFn(game, 'pre_activation', ctx);
+      const { getMissionRules, getMapTokensData, runStartOfRoundRules, runStartOfRoundContinuation } = ctx;
+
+      // Round 1 enters start-of-round here (Round 2+ uses _runInitiativeSwapAndContinue).
+      // Run the same mission SOR gate + shared continuation so every start-of-round
+      // effect (mission rules, CC passives, DC passives, hand refresh, phase gate,
+      // mission-specific prompts) fires identically in both paths.
+      const mapId = game.selectedMap?.id;
+      const variant = game.selectedMission?.variant;
+      const missionRules = getMissionRules?.(mapId, variant) ?? {};
+      if (missionRules?.startOfRound?.randomRevealAndPlaceStrain) {
+        const missionName = game.selectedMission?.name || 'Mission Effect';
+        const generalChannel = await fetchGameChannel(client, game.generalId);
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`sor_mission_reveal_${gameId}`)
+            .setLabel('Reveal Mission Tokens')
+            .setStyle(ButtonStyle.Primary)
+        );
+        await generalChannel.send({
+          content: `⚡ **Round ${game.currentRound || 1} — ${missionName}** — Each player randomly reveals 1 set-aside mission token. Either player: press to reveal.`,
+          components: [row],
+        });
+        game.pendingMissionSorReveal = true;
+        saveGames();
+        return;
+      }
+      if (runStartOfRoundRules && missionRules?.startOfRound) {
+        await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
+      }
+      if (runStartOfRoundContinuation) {
+        await runStartOfRoundContinuation(game, gameId, null, ctx);
       }
       break;
     }

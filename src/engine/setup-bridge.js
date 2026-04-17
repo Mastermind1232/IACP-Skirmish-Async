@@ -433,8 +433,37 @@ export async function runDraftRandom(game, client, deps, options = {}) {
   await deps.logGameAction(game, client, '**Draft Random** — Auto-deployed all figures and drew starting CCs.', { phase: 'DEPLOYMENT', icon: 'deployed' });
 
   await deps.updatePlayAreaDcButtons(game, client);
-  const hasPendingSor = await deps.runStartOfRoundDcEffects(game, game.gameId, client, { logGameAction: deps.logGameAction });
-  // Run post-deploy phase (interactive queue); if active, activation phase is deferred
+
+  // Round 1 start-of-round: run the same mission SOR gate and shared continuation
+  // that phase-gate.js cc_drawn + round.js _runInitiativeSwapAndContinue use,
+  // so every start-of-round effect fires identically across all entry paths.
+  // Draft Random skips the Chopper B reveal-button gate (it's a Discord-only flow
+  // and Draft Random is only ever used when no players need to press buttons).
+  const sorMissionRules = deps.getMissionRules?.(game.selectedMap?.id, game.selectedMission?.variant) ?? {};
+  if (deps.runStartOfRoundRules && sorMissionRules?.startOfRound && !sorMissionRules.startOfRound.randomRevealAndPlaceStrain) {
+    await deps.runStartOfRoundRules(game, game.selectedMap?.id, game.selectedMission?.variant, sorMissionRules.startOfRound, {
+      logGameAction: deps.logGameAction, client, getMapTokensData: deps.getMapTokensData,
+    });
+  }
+
+  // Run post-deploy phase (interactive queue); if active, the rest of start-of-round
+  // is deferred to its onComplete callback. Otherwise, run the shared continuation now.
+  const runSorContinuation = async () => {
+    if (deps.runStartOfRoundContinuation) {
+      await deps.runStartOfRoundContinuation(game, game.gameId, null, {
+        ...deps,
+        client,
+      });
+    } else {
+      // Fallback: minimal DC-only path (legacy behavior)
+      const hasPendingSor = await deps.runStartOfRoundDcEffects(game, game.gameId, client, { logGameAction: deps.logGameAction, checkWinConditions: deps.checkWinConditions });
+      if (!hasPendingSor) {
+        deps.setRoundPhase(game, deps.ROUND_PHASES.ACTIVATION);
+        await deps.sendRoundActivationPhaseMessage(game, client);
+      }
+    }
+  };
+
   let postDeployActive = false;
   if (game.currentRound === 1) {
     postDeployActive = await deps.runPostDeployPhase(game, game.gameId, client, {
@@ -443,16 +472,12 @@ export async function runDraftRandom(game, client, deps, options = {}) {
       dcExhaustedState: deps.dcExhaustedState, dcHealthState: deps.dcHealthState,
       getDcPlayAreaComponents: deps.getDcPlayAreaComponents, getNicknamesForDcMessage: deps.getNicknamesForDcMessage,
     }, async () => {
-      if (!hasPendingSor) {
-        deps.setRoundPhase(game, deps.ROUND_PHASES.ACTIVATION);
-        await deps.sendRoundActivationPhaseMessage(game, client);
-      }
+      await runSorContinuation();
       deps.saveGames();
     });
   }
-  if (!postDeployActive && !hasPendingSor) {
-    deps.setRoundPhase(game, deps.ROUND_PHASES.ACTIVATION);
-    await deps.sendRoundActivationPhaseMessage(game, client);
+  if (!postDeployActive) {
+    await runSorContinuation();
   }
   deps.saveGames();
 }
