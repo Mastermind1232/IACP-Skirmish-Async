@@ -12,17 +12,17 @@
     }
   },
   "heatMap": {
-    "version": "1.4",
+    "version": "1.5",
     "date": "2026-04-16",
     "totalEntries": 55,
     "coverageDistribution": {
-      "direct_oracle": 42,
+      "direct_oracle": 43,
       "inferred_only": 6,
       "certification": 2,
       "headless_selfplay": 1,
       "runtime_invariant": 1,
       "unit_test": 1,
-      "uncovered": 2
+      "uncovered": 1
     }
   },
   "abilityTextSnapshot": {
@@ -70,9 +70,9 @@
     ]
   },
   "parityScoreboard": {
-    "totalScenarios": 15,
+    "totalScenarios": 16,
     "exactAgreementCount": 5,
-    "openDivergenceCount": 10,
+    "openDivergenceCount": 11,
     "openDivergences": [
       {
         "scenario": 5,
@@ -123,6 +123,11 @@
         "scenario": 15,
         "name": "Multi-cell attacker — engine checks top-left only; handler iterates footprint",
         "shape": "handler_only"
+      },
+      {
+        "scenario": 16,
+        "name": "Energy shield — engine ignores shield spaces; handler merges them into blocking",
+        "shape": "engine_only"
       }
     ]
   }

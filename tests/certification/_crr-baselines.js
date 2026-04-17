@@ -592,4 +592,40 @@ export const PARITY_SCENARIOS = [
     expectedEngineOnly: [],
     reason: 'Engine calls hasLineOfSight(attackerPosLc, coordLc, ...) with only the attacker\'s top-left cell (available-actions.js:2223). Handler iterates getFootprintCells(attackerPos, size) × getFootprintCells(targetPos, size) (dc-play-area.js:1026-1048). With AT-RT top-left at o14, engine\'s o14 → r14 sightline is blocked by static wall p14|q14 so engine excludes Greedo. Handler finds a clear line from the back-row cells o15 or p15 to r14 and includes Greedo.',
   },
+
+  // 16. Energy shield — engine is shield-blind; handler merges shield spaces
+  //    into mapSpaces.blocking. Open row 3 in mos-eisley-outskirts has no
+  //    static walls or doors, so the shield placed at e3 is the ONLY LOS
+  //    blocker between attacker at d3 and target at f3. CRR p.28: "A space
+  //    containing an energy shield blocks LOS" but "LOS can be traced to"
+  //    and "drawn out of" the shielded space. Here the shield is between
+  //    (not on either endpoint), so LOS must be blocked — only the handler
+  //    enforces this. Distance d3 → f3 = 2, within Bossk's 3-acc ceiling
+  //    so the range gate does not confound the LOS signal.
+  {
+    name: 'Energy shield — engine ignores shield spaces; handler merges them into blocking',
+    setup() {
+      const built = createTestGame()
+        .withMap('mos-eisley-outskirts')
+        .withPlayer1Army([{ dcName: 'Bossk' }])
+        .withPlayer2Army([{ dcName: 'Greedo' }])
+        .inRound(1)
+        .build();
+      const { game, dcMessageMeta } = built;
+      game.figurePositions = {
+        1: { 'Bossk-1-0': 'd3' },
+        2: { 'Greedo-1-0': 'f3' },
+      };
+      game.ancillaryTokens = { energyShield: ['e3'] };
+      const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'Bossk');
+      enableAttackFor(game, attackerMsgId);
+      return {
+        ...built,
+        attacker: { playerNum: 1, figureKey: 'Bossk-1-0', msgId: attackerMsgId, figureIndex: 0 },
+      };
+    },
+    expectedHandlerOnly: [],
+    expectedEngineOnly: ['Greedo-1-0'],
+    reason: 'Engine reads raw mapSpaces from getMapData; it never consults game.ancillaryTokens.energyShield (grep src/engine/ energyShield = zero matches). Handler merges shield spaces into effectiveMs.blocking (dc-play-area.js:951-968). With shield at e3 between d3 and f3 on open row 3, engine\'s hasLineOfSight returns true (no blocker in raw ms) and includes Greedo. Handler\'s hasLineOfSight sees e3 in blocking (neither endpoint — self-exclusion does not apply) and returns false, excluding Greedo.',
+  },
 ];

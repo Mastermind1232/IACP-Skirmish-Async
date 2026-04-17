@@ -1,9 +1,9 @@
 # CRR Coverage Heat Map — Skirbo First-Pass Audit
 
-**Date:** 2026-04-14 (initial), 2026-04-16 (v1.2 — heat-map expanded 35 → 55 entries; v1.3 — post-target-select gating reclassified uncovered → direct_oracle; v1.4 — LOS Slice 2 doors + multi-cell reclassified uncovered → direct_oracle)
+**Date:** 2026-04-14 (initial), 2026-04-16 (v1.2 — heat-map expanded 35 → 55 entries; v1.3 — post-target-select gating reclassified uncovered → direct_oracle; v1.4 — LOS Slice 2 doors + multi-cell reclassified uncovered → direct_oracle; v1.5 — LOS-06 Energy Shield reclassified uncovered → direct_oracle)
 **Scope:** All engine subsystems against the Consolidated Rules Reference
 **Test inventory:** 1,092 assertions via `npm test` (72 oracle files + engine unit tests)
-**Campaign status:** CLOSED. All 5 original top risks resolved. v1.2 is measurement-only: parity scenarios broken out per-row and honest uncovered rows added. v1.3 closes one of the v1.2 uncovered rows with a new 13-scenario certification lane. v1.4 closes the two LOS Slice 2 rows with a new direct-oracle probe file plus two parity scenarios.
+**Campaign status:** CLOSED. All 5 original top risks resolved. v1.2 is measurement-only: parity scenarios broken out per-row and honest uncovered rows added. v1.3 closes one of the v1.2 uncovered rows with a new 13-scenario certification lane. v1.4 closes the two LOS Slice 2 rows with a new direct-oracle probe file plus two parity scenarios. v1.5 closes the LOS-06 Energy Shield row with a 4-probe file and one more parity scenario; diagonal-corner shield rule deferred as a separate mini-lane.
 
 ---
 
@@ -30,7 +30,7 @@ This audit partitions the CRR into 10 domains (D1-D10) and assesses each rule cl
 ### D1: Action Economy and Surfacing (6 subdomains)
 **Overall: STRONG.** 10 oracle probes across 3 batches pin all major gates: action budget, movement blockers (stun, massive-lock), attack gate (one-per-activation + 5 bypass flags), interact gates (Non-Sentient, companion, Beast Tamer, Alter Mind), DC special cost, CC special/double cost.
 
-### D2: Movement (4 subdomains + 3 LOS rows tracked as of v1.2; 2 closed in v1.4)
+### D2: Movement (4 subdomains + 3 LOS rows tracked as of v1.2; 2 closed in v1.4, final 1 closed in v1.5)
 **Overall: STRONG.** The most heavily oracle-tested subsystem (~200 probes). Core pathfinding, terrain costs, large figure movement, blocking, doors, and movement triggers all have dedicated oracle files.
 
 **Partial gap:** Difficult + hostile terrain stacking on same cell is untested. Low real-world risk (rare map occurrence).
@@ -38,6 +38,8 @@ This audit partitions the CRR into 10 domains (D1-D10) and assesses each rule cl
 **v1.2 honest uncovered.** Three LOS rows were added as `uncovered` to stop inferring coverage: LOS-06 Energy Shield exception (open P2 from the 2026-04-01 LOS audit), LOS Slice 2 doors (open/closed state), and LOS Slice 2 multi-cell-figure LOS. Slice 1 (figure-blocking LOS) remains closed.
 
 **v1.4 LOS Slice 2 lane.** `tests/domain/oracle/los-slice2-probes.test.js` adds 4 direct oracle probes that hard-fail on CRR violations of the `hasLineOfSight` pure function: PROBE-LOS-SLICE2-001 (closed-door block), PROBE-LOS-SLICE2-002 (open/unrelated door does not block), PROBE-LOS-SLICE2-003 (multi-cell attacker any-cell LOS), PROBE-LOS-SLICE2-004 (multi-cell target any-cell reachability). Two new handler-parity scenarios (14 closed door, 15 multi-cell attacker top-left-only LOS, both in `tests/certification/_crr-baselines.js`) baseline the engine's drift: the engine calls `hasLineOfSight` with raw `mapSpaces` (no door merging) and the attacker's top-left cell only (no footprint iteration). The shadow in `handler-parity-reporting.test.js` was expanded to merge closed-door edges into `effectiveMs` and iterate attacker-fp × target-fp so the parity test surfaces the engine drift rather than masking it. LOS-06 Energy Shield remains uncovered (intentionally out of scope for this lane).
+
+**v1.5 LOS-06 Energy Shield lane.** `tests/domain/oracle/los-06-energy-shield-probes.test.js` adds 4 direct oracle probes pinning the three CRR p.28 carve-outs: PROBE-LOS-06-001 (LOS can be drawn OUT of a shielded space when the attacker is on the shield), PROBE-LOS-06-002 (LOS can be traced INTO a shielded space when the target is on the shield), PROBE-LOS-06-003 (LOS cannot be traced THROUGH a shielded space when the shield is between endpoints), and PROBE-LOS-06-004 (multi-cell attacker with a shield on one footprint cell still has LOS via the shield cell's own self-exclusion). Rules "in" and "out" rely on the existing `spatial.js:141-143` source/dest self-exclusion. One new handler-parity scenario (16 in `_crr-baselines.js`) baselines the engine's shield-blindness: engine reads raw `ms` from `getMapData` and never consults `game.ancillaryTokens.energyShield` (zero matches across `src/engine/`); handler merges shield spaces into `effectiveMs.blocking` at `dc-play-area.js:951-968`. Shadow expanded to merge shield spaces into blocking alongside closed-door edges. Diagonal corner-intersection rule (p.28/p.40: LOS cannot pass through a corner where a shield meets wall/door/blocker/another shield) explicitly deferred as a separate follow-up mini-lane.
 
 ### D3: Combat (7 subdomains + 13 parity subdomains as of v1.2)
 **Overall: MIXED.** Damage formula, accuracy/range, LOS, rerolls, blast/cleave are all well-tested. The original three high-risk areas are now **resolved** (surge legality, power-token timing, attack-type validation — see §5).
@@ -116,7 +118,7 @@ Note: Surge spending legality, power-token timing, attack-type validation, and c
 | Handler-engine parity: I Must Go Alone | direct_oracle (baselined engine_only) | **Medium** — engine offers illegal distant targets |
 | Handler-engine parity: Fire Mission group-LOS | direct_oracle (baselined handler_only) | **Low** — Mortar rare in self-play |
 | Handler-engine parity: Vanish immunity | direct_oracle (baselined engine_only) | **Medium** — engine offers immune targets |
-| LOS-06 Energy Shield exception | uncovered | **Low** — rare in current maps |
+| LOS-06 Energy Shield exception | direct_oracle (v1.5) | **Closed** — three p.28 carve-outs pinned by PROBE-LOS-06-001/002/003/004 + parity scenario 16; diagonal-corner subrule deferred |
 | LOS Slice 2 — Doors | direct_oracle (v1.4) | **Closed** — closed doors as walls pinned by PROBE-LOS-SLICE2-001/002 + parity scenario 14 |
 | LOS Slice 2 — Multi-cell figures | direct_oracle (v1.4) | **Closed** — any-cell LOS rule pinned by PROBE-LOS-SLICE2-003/004 + parity scenario 15 |
 | Post-target-select combat gating | direct_oracle (v1.3) | **Closed** — 13-scenario certification lane, engine-blindness 11-of-12 tracked |
@@ -177,28 +179,28 @@ Note: Surge spending legality, power-token timing, attack-type validation, and c
 
 ## 7. Structured Coverage Artifact
 
-The machine-readable coverage map is at: `docs/crr-coverage-heat-map.json` (v1.4, 2026-04-16).
+The machine-readable coverage map is at: `docs/crr-coverage-heat-map.json` (v1.5, 2026-04-16).
 
 It contains **55** coverage entries across 10 domains with fields: domain, subdomain, crr_rule_or_claim, engine_location, current_coverage_type, evidence, training_blast_radius, confidence, recommended_next_audit_type, notes. Plus the top 5 risks with recommended actions.
 
-### Coverage Distribution Summary (v1.4, post-reclassification)
+### Coverage Distribution Summary (v1.5, post-reclassification)
 
 | Coverage Type | Count | % |
 |--------------|-------|---|
-| direct_oracle | 42 | 76.4% |
+| direct_oracle | 43 | 78.2% |
 | inferred_only | 6 | 10.9% |
-| uncovered | 2 | 3.6% |
+| uncovered | 1 | 1.8% |
 | certification | 2 | 3.6% |
 | unit_test | 1 | 1.8% |
 | runtime_invariant | 1 | 1.8% |
 | headless_selfplay | 1 | 1.8% |
 
-**Change vs v1.3 (55 entries, same total):** +2 direct_oracle (LOS Slice 2 doors, LOS Slice 2 multi-cell figures), −2 uncovered (same rows reclassified). No new entries; total count unchanged.
+**Change vs v1.4 (55 entries, same total):** +1 direct_oracle (LOS-06 Energy Shield), −1 uncovered (same row reclassified). No new entries; total count unchanged.
 
-**Change vs v1.2 (55 entries, same total):** +3 direct_oracle (post-target-select gating in v1.3; LOS Slice 2 doors + multi-cell in v1.4), −3 uncovered (same rows reclassified). No new entries; total count unchanged.
+**Change vs v1.2 (55 entries, same total):** +4 direct_oracle (post-target-select gating in v1.3; LOS Slice 2 doors + multi-cell in v1.4; LOS-06 Energy Shield in v1.5), −4 uncovered (same rows reclassified). No new entries; total count unchanged.
 
-**Change vs v1.1 (35 entries):** +16 direct_oracle (13 parity scenarios broken out per-row in v1.2 + post-select gating reclassified in v1.3 + LOS Slice 2 doors & multi-cell reclassified in v1.4), +2 inferred_only (mission-specific scoring, free-attack window mutex), +2 uncovered (LOS-06, loadout passives). No entries removed.
+**Change vs v1.1 (35 entries):** +17 direct_oracle (13 parity scenarios broken out per-row in v1.2 + post-select gating reclassified in v1.3 + LOS Slice 2 doors & multi-cell reclassified in v1.4 + LOS-06 Energy Shield reclassified in v1.5), +2 inferred_only (mission-specific scoring, free-attack window mutex), +1 uncovered (loadout passives). No entries removed.
 
-**76% of audited rules have direct oracle coverage.** All 5 original top risks remain resolved; post-target-select combat gating is the second certification-backed direct_oracle lane alongside the handler-engine parity scoreboard, and LOS Slice 2 (doors + multi-cell figures) adds a third pure-function oracle lane.
+**78% of audited rules have direct oracle coverage.** All 5 original top risks remain resolved; post-target-select combat gating is the second certification-backed direct_oracle lane alongside the handler-engine parity scoreboard, LOS Slice 2 (doors + multi-cell figures) adds a third pure-function oracle lane, and LOS-06 Energy Shield adds a fourth. Only one uncovered row remains (loadout-card passives beyond Reach).
 
-**Still weak after v1.4:** Map topology (inferred_only, critical foundational), LOS-06 Energy Shield exception (uncovered, low), parity gaps for loadout/attachment-driven Reach and LOS bypass (known-and-baselined engine-side drift), and mission-specific VP math (inferred_only). The rollup at `docs/crr-status.json` makes the distribution a one-file PR review target.
+**Still weak after v1.5:** Map topology (inferred_only, critical foundational), loadout-card passives beyond Reach (uncovered, low), parity gaps for loadout/attachment-driven Reach and LOS bypass (known-and-baselined engine-side drift), mission-specific VP math (inferred_only), and the diagonal-corner Energy-Shield intersection subrule (explicitly deferred from v1.5, separate follow-up mini-lane). The rollup at `docs/crr-status.json` makes the distribution a one-file PR review target.

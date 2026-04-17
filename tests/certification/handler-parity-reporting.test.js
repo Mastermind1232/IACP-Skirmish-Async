@@ -43,9 +43,10 @@ import { PARITY_SCENARIOS as SCENARIOS } from './_crr-baselines.js';
 //
 // Scoped LOS policy:
 //   * wall-based LOS IS modeled. The shadow merges closed-door edges into
-//     mapSpaces.impassableEdges (parity with dc-play-area.js:940–970) and
-//     iterates attacker-footprint × target-footprint (multi-cell LOS) before
-//     calling hasLineOfSight. Figure-blocking LOS is passed as null.
+//     mapSpaces.impassableEdges and energy-shield spaces into
+//     mapSpaces.blocking (parity with dc-play-area.js:940–970), and iterates
+//     attacker-footprint × target-footprint (multi-cell LOS) before calling
+//     hasLineOfSight. Figure-blocking LOS is passed as null.
 //   * figure-blocking LOS is NOT modeled. Scenarios are constructed so this
 //     is either trivially correct (open-terrain scenarios) or matches the
 //     real handler's bypass behavior (Marksman, Priority Target, Clawdite
@@ -95,10 +96,12 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
 
   const ms = deps.getMapData(game.selectedMap.id);
 
-  // Door-merged LOS: mirrors dc-play-area.js:940–970 (closed-door edges
-  // merged into mapSpaces.impassableEdges for LOS; closedDoorEdges passed
-  // to countSpaces for distance). Shield/smoke merging is NOT modeled —
-  // no scenario exercises those layers yet.
+  // Door + energy-shield merged LOS: mirrors dc-play-area.js:940–970.
+  // Closed-door edges merge into mapSpaces.impassableEdges (and
+  // closedDoorEdges passes to countSpaces for distance gating).
+  // Energy-shield spaces merge into mapSpaces.blocking per CRR p.28
+  // ("A space containing an energy shield blocks line of sight"). Smoke is
+  // not yet modeled — no scenario exercises that layer.
   const mapId = game.selectedMap.id;
   const allDoors = getMapTokensData()?.[mapId]?.doors || [];
   const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
@@ -107,8 +110,18 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
     return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`);
   });
   const closedDoorEdges = new Set(closedDoorsRaw.map(e => edgeKey(e[0], e[1])));
-  const effectiveMs = closedDoorsRaw.length > 0
-    ? { ...ms, impassableEdges: [...(ms.impassableEdges || []), ...closedDoorsRaw] }
+  const shieldSpaces = (game.ancillaryTokens?.energyShield || []).map(s => String(s).toLowerCase());
+  const needsOverride = closedDoorsRaw.length > 0 || shieldSpaces.length > 0;
+  const effectiveMs = needsOverride
+    ? {
+        ...ms,
+        impassableEdges: closedDoorsRaw.length > 0
+          ? [...(ms.impassableEdges || []), ...closedDoorsRaw]
+          : (ms.impassableEdges || []),
+        blocking: shieldSpaces.length > 0
+          ? [...(ms.blocking || []), ...shieldSpaces]
+          : ms.blocking,
+      }
     : ms;
 
   // Attacker footprint (multi-cell LOS)

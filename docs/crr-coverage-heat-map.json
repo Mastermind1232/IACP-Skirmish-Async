@@ -1,12 +1,13 @@
 {
   "metadata": {
     "title": "CRR Coverage Heat Map — IACP Skirmish Async (Skirbo)",
-    "version": "1.4",
+    "version": "1.5",
     "date": "2026-04-16",
     "tier_a_update": "2026-04-14: Tier A probes added (surge-legality-probes.test.js, combat-token-timing-probes.test.js). Condition immunity reclassified from unit_test to direct_oracle (ORACLE-HANDLER-003 already covers it).",
     "v1_2_expansion": "2026-04-16: Heat-map expanded 35 → 55 entries. Handler-vs-engine parity broken out into 13 per-scenario D3 entries (Reach family: permanent/nextAttackReach/Fury/Electrostaff; Hide non-filter; Priority Target/Marksman/Clawdite LOS bypass; Insignificant/Dio; I Must Go Alone; Fire Mission group-LOS; Vanish immunity; default-agreement positive control). Five honest uncovered entries added (LOS-06 Energy Shield, LOS Slice 2 door, LOS Slice 2 multi-cell figure, post-target-select combat gating, loadout-card passives beyond Reach). Two inferred_only additions (mission-specific scoring variants, free-attack window mutex). No new direct_oracle test files authored in this pass — measurement only.",
     "v1_3_update": "2026-04-16: Post-Target-Select Combat Gating row reclassified uncovered → direct_oracle. tests/certification/post-select-gating.test.js v2 now pins all 12 flag-gated branches of combat.js:869–969 (4 block gates + 8 consumption windows + 1 positive control) via a narrow shadow. Side effects and combat resolution explicitly out of scope; engine-blindness (11-of-12) tracked as report-only number. Distribution: direct_oracle 39 → 40, uncovered 5 → 4.",
     "v1_4_update": "2026-04-16: LOS Slice 2 lane — both LOS Slice 2 rows (Doors + Multi-cell figures) reclassified uncovered → direct_oracle. tests/domain/oracle/los-slice2-probes.test.js pins the CRR-required LOS behaviors via 4 probes (closed-door block, open-door no-block, multi-cell attacker any-cell LOS, multi-cell target any-cell reachability). Two new handler-parity scenarios (14 closed door, 15 multi-cell attacker top-left-only) surface the engine's drift; shadow expanded to merge closed-door edges into effectiveMs and iterate attacker-fp × target-fp. Parity scenario 14 engine_only=['Greedo-1-0'], scenario 15 handler_only=['Greedo-1-0']. Stale engine_location pointers from src/game/los.js (never existed) → src/game/spatial.js (actual file). LOS-06 Energy Shield still uncovered (intentionally out of scope). Distribution: direct_oracle 40 → 42, uncovered 4 → 2.",
+    "v1_5_update": "2026-04-16: LOS-06 Energy Shield lane — reclassified uncovered → direct_oracle. tests/domain/oracle/los-06-energy-shield-probes.test.js pins the three CRR p.28 carve-outs via 4 probes (LOS out of shield, LOS into shield, LOS not through shield, multi-cell attacker + shield self-exclusion). One new handler-parity scenario (16 — shield between attacker and target on open terrain) baselines the engine's shield-blindness: engine never consults game.ancillaryTokens.energyShield; handler merges shields into effectiveMs.blocking at dc-play-area.js:951-968. Shadow expanded to merge shield spaces into blocking. Parity scenario 16 engine_only=['Greedo-1-0']. Diagonal-corner shield rule (p.28/p.40 intersection) deferred as a separate follow-up mini-lane. Distribution: direct_oracle 42 → 43, uncovered 2 → 1.",
     "methodology": "Four-domain audit of engine source against Consolidated Rules Reference. Coverage classified as: direct_oracle (pure-function oracle probe), runtime_invariant (RT-1..RT-12 checked in training loop), certification (card catalog regression), unit_test (co-located or tests/domain unit), headless_selfplay (end-to-end headless game), inferred_only (exercised by selfplay but never explicitly asserted), uncovered (no test or runtime check).",
     "test_inventory": {
       "oracle_tests": { "files": 68, "assertions": 994 },
@@ -597,14 +598,14 @@
     {
       "domain": "D2",
       "subdomain": "LOS-06 Energy Shield exception",
-      "crr_rule_or_claim": "An energy shield blocks LOS in general but not for attacks by figures on its shielded-side designator",
-      "engine_location": "src/game/spatial.js hasLineOfSight + dc-play-area.js effectiveMs merging (energy-shield side-designator branch not currently under test)",
-      "current_coverage_type": "uncovered",
-      "evidence": "No oracle probe or certification test. Tracked as open P2 in the 2026-04-01 LOS audit.",
+      "crr_rule_or_claim": "A space containing an energy shield blocks LOS, except LOS can be drawn into or out of the shielded space (CRR p.28). Engine is shield-blind; handler merges shields into effectiveMs.blocking.",
+      "engine_location": "src/game/spatial.js hasLineOfSight (self-exclusion at lines 141-143 covers the into/out-of rules); src/handlers/dc-play-area.js:951-968 merges ancillaryTokens.energyShield into effectiveMs.blocking; src/engine/available-actions.js:2223 reads raw ms (never consults ancillaryTokens.energyShield — grep src/engine/ energyShield = zero matches).",
+      "current_coverage_type": "direct_oracle",
+      "evidence": "tests/domain/oracle/los-06-energy-shield-probes.test.js: PROBE-LOS-06-001 (LOS out of shield), PROBE-LOS-06-002 (LOS into shield), PROBE-LOS-06-003 (LOS not through shield), PROBE-LOS-06-004 (multi-cell attacker + shield self-exclusion) hard-fail on CRR violations. Parity scenario 16 in _crr-baselines.js baselines the engine drift: engine_only=['Greedo-1-0'] for Bossk d3 → Greedo f3 across shield at e3.",
       "training_blast_radius": "low",
-      "confidence": "low",
-      "recommended_next_audit_type": "oracle_probe",
-      "notes": "Low impact: energy-shield scenarios are rare in current competitive maps. Explicitly out of scope for the 2026-04-16 LOS Slice 2 lane."
+      "confidence": "high",
+      "recommended_next_audit_type": "covered",
+      "notes": "v1.5 (2026-04-16): reclassified uncovered → direct_oracle. The three p.28 carve-outs (LOS blocked in general, LOS in, LOS out) plus the multi-cell self-exclusion interaction are pinned; engine shield-blindness is baselined and fails on growth. Diagonal corner-intersection rule (p.28/p.40: LOS cannot pass through a corner where shield meets wall/door/blocker/another shield) explicitly deferred as a separate follow-up mini-lane. Fixing the engine to read shield tokens is a separate gameplay lane (tracked via parity scenario 16)."
     },
     {
       "domain": "D2",
