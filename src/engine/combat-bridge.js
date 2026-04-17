@@ -1461,7 +1461,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const _epLines = [];
         for (const [pNum, poses] of [[1, game.figurePositions?.[1] || {}], [2, game.figurePositions?.[2] || {}]]) {
           for (const [fk, pos] of Object.entries(poses)) {
-            if (fk === combat.target.figureKey) continue;
+            // Exclude the target itself — figureKey alone isn't unique across
+            // players since the same dcName can appear on both sides.
+            if (pNum === defenderPlayerNum && fk === combat.target.figureKey) continue;
             if (countGameSpaces(game, pos, _epTargetPos) !== 1) continue;
             const _epFkDcName = dcNameFromFigureKey(fk);
             const _epMid = getDcMessageIds(game, pNum) || [];

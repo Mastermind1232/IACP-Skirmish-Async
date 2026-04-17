@@ -96,12 +96,15 @@ class GameBuilder {
 
   _buildDcList(army) {
     const dcList = [];
+    const counts = {};
     for (const entry of army) {
       const dcName = entry.dcName || entry;
       const count = entry.count || 1;
       for (let dg = 0; dg < count; dg++) {
+        counts[dcName] = (counts[dcName] || 0) + 1;
+        const dgIndex = counts[dcName];
         const stats = getDcStats(dcName);
-        const displayName = count > 1 ? `${dcName} [Group ${dg + 1}]` : dcName;
+        const displayName = count > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
         const figureCount = stats?.figures ?? 1;
         const maxHp = stats?.health ?? 1;
         const healthState = [];
@@ -112,6 +115,7 @@ class GameBuilder {
           dcName,
           displayName,
           healthState,
+          dgIndex,
           cost: stats?.cost ?? 0,
         });
       }

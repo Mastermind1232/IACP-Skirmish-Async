@@ -18,27 +18,23 @@
  *
  *   Layer 3 — combat-bridge postAttack:
  *     `src/engine/combat-bridge.js:1454-1503` dispatches three hooks:
- *       electro_pulse   → adjacent figures *intended* to take 1 damage, but
- *                         currently a no-op in production (see LOADOUT-05)
+ *       electro_pulse   → each other figure adjacent to the target takes 1 damage
  *       quick_strike    → defender takes 1 damage if they rerolled/modified
  *       flurry_of_blows → free 1-green melee attack queued (+1 Hit)
- *     Quick Strike and Flurry probes invoke the real `resolveCombatAfterRolls`
- *     pipeline and assert the documented side effects. Electro-pulse measures
- *     the latent bug rather than the intended behavior.
+ *     Each probe invokes the real `resolveCombatAfterRolls` pipeline and
+ *     asserts the documented side effects.
  *
  *   Deferred (out of scope for this lane):
  *     - Form cards (Clawdite Streetrat/Scout) — separate family, separate row.
  *     - Imperial Loadout picker UI flow — setup-time, already handler-gated.
  *     - Engine-side Reach parity for Electrostaff — baselined by scenario 13
  *       in tests/certification/_crr-baselines.js.
- *     - Fixing the Electro-pulse msgId lookup (combat-bridge.js:1470). This
- *       is a discovered production bug; the fix is a separate gameplay lane.
  *
  * PROBE-LOADOUT-01: data-integrity oracle (passives beyond Reach → empty)
  * PROBE-LOADOUT-02: Electrostaff injection (quick_strike + [damage 1, pierce 2])
  * PROBE-LOADOUT-03: Electrohammer injection (electro_pulse + [damage 2, pierce 2])
  * PROBE-LOADOUT-04: Electrobatons injection (flurry_of_blows + [damage 1, pierce 2, deadly])
- * PROBE-LOADOUT-05: electro_pulse — documents latent msgId-lookup bug (no-op)
+ * PROBE-LOADOUT-05: electro_pulse — adjacent figures each take 1 damage
  * PROBE-LOADOUT-06: quick_strike on defender-modified dice
  * PROBE-LOADOUT-07: flurry_of_blows queues free melee override
  */
@@ -259,49 +255,29 @@ function buildLoadoutCombat(game, dcMessageMeta, opts) {
 
 // ── PROBE-LOADOUT-05: Electro-pulse adjacency damage ──────────────────────────
 //
-// DISCOVERED BUG — documented, not fixed in this lane (user scope: measurement
-// only, no gameplay fixes).
+// CRR (Electrohammer): "After you resolve an attack, each other figure
+// adjacent to the target suffers 1 Damage."
 //
-// Intended CRR behavior: on a successful Electrohammer attack, each OTHER
-// figure adjacent to the target suffers 1 Damage.
-//
-// Actual current behavior: Electro-pulse is a silent no-op for every figure.
-// Root cause lives in `src/engine/combat-bridge.js:1470`:
-//
-//   const _epMsgId = _epMid.find((mid, idx) =>
-//     _epDcL?.[idx]?.dcName === _epFkDcName &&
-//     _epDcL?.[idx]?.dgIndex === _epDgIdx);
-//
-// dcList entries are built by `src/engine/setup-bridge.js:480-491` as
-// `{ dcName, displayName, healthState }` — no `dgIndex` field. So the
-// strict-equality check `_epDcL[idx].dgIndex === _epDgIdx` always compares
-// `undefined === <number>` → false. `_epMsgId` resolves to `undefined`
-// for every adjacent figure, and the `if (_epMsgId)` guard then skips the
-// `reduceHp` call.
-//
-// This probe:
-//   1) Measures the actual (broken) behavior — no HP deltas post-attack.
-//   2) Source-pins the broken lookup line so any refactor or fix trips the
-//      pin and forces the author to re-anchor this probe to the intended
-//      CRR behavior in the same commit.
-//
-// When the bug is fixed: expect this probe to fail on the HP-delta assertions.
-// Rewrite it to assert the CRR-intended behavior (attacker + any other
-// figure adjacent to the target each lose 1 HP; target and non-adjacent
-// figures untouched), and delete the source-pin test or rewrite it to pin
-// the new (correct) lookup pattern.
+// Every figure (friend or foe) within 1 space of the target loses 1 HP,
+// EXCEPT the target itself. Non-adjacent figures are untouched. The target
+// receives normal combat damage only — Electro-pulse is additive on adjacent
+// OTHER figures, not on the target.
 
-describe('PROBE-LOADOUT-05: electro_pulse — currently a no-op (latent msgId-lookup bug)', () => {
-  it('no adjacency damage is applied (documents broken behavior in combat-bridge.js:1470)', async () => {
+describe('PROBE-LOADOUT-05: electro_pulse — each other figure adjacent to target takes 1 damage', () => {
+  it('adjacent figures (attacker + P2 neighbor) lose 1 HP; non-adjacent untouched; target takes only combat damage', async () => {
     const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])
       .withPlayer2Army([{ dcName: 'Stormtrooper (Elite)' }])
       .inRound(1)
       .build();
 
-    // Positions on mos-eisley-outskirts row 3 (fully open). Under the
-    // *intended* rule, electro_pulse would damage the P1 attacker at c3
-    // and the P2 figure at e3 (both adjacent to target d3).
+    // Positions on mos-eisley-outskirts row 3 (fully open):
+    //   P1 attacker at c3 (adjacent to target d3) → 1 Electro-pulse damage
+    //   P1 fig at a3 (non-adjacent)               → unchanged
+    //   P1 fig at g3 (non-adjacent)               → unchanged
+    //   P2 target at d3                           → 2 combat damage ONLY
+    //   P2 fig at e3 (adjacent to target d3)      → 1 Electro-pulse damage
+    //   P2 fig at h3 (non-adjacent)               → unchanged
     game.figurePositions = {
       1: {
         'Stormtrooper (Elite)-1-0': 'c3',
@@ -336,60 +312,30 @@ describe('PROBE-LOADOUT-05: electro_pulse — currently a no-op (latent msgId-lo
     const p1HpAfter = (dcHealthState.get(p1MsgId) || []).map(([cur]) => cur);
     const p2HpAfter = (dcHealthState.get(p2MsgId) || []).map(([cur]) => cur);
 
-    // P1 side: attacker at c3 IS adjacent to target, but the broken lookup
-    // means no damage is applied. a3/g3 were never adjacent. All 3 P1
-    // figures retain full HP.
-    assert.deepStrictEqual(p1HpAfter, p1HpBefore,
-      `P1 HP must be unchanged by Electro-pulse under current (broken) behavior. ` +
-      `Before: ${JSON.stringify(p1HpBefore)}, after: ${JSON.stringify(p1HpAfter)}. ` +
-      `If this trips, the combat-bridge.js:1470 lookup may have been fixed — ` +
-      `rewrite this probe to assert the intended CRR behavior.`);
-    // P2 side: target at d3 takes normal combat damage (2 = 3 dmg - 1 block).
-    // e3 is adjacent (would take 1 under intended rule) but broken lookup → no damage.
-    // h3 is non-adjacent — no change regardless.
+    // Attacker (P1 fig 0 at c3) is adjacent to target → 1 Electro-pulse damage.
+    assert.strictEqual(p1HpAfter[0], p1HpBefore[0] - 1,
+      `P1 attacker at c3 (adjacent to target) must lose 1 HP from Electro-pulse. ` +
+      `Before: ${p1HpBefore[0]}, after: ${p1HpAfter[0]}`);
+    // P1 figs at a3 and g3 are not adjacent — untouched.
+    assert.strictEqual(p1HpAfter[1], p1HpBefore[1],
+      `P1 fig at a3 (non-adjacent) must NOT take Electro-pulse damage. ` +
+      `Before: ${p1HpBefore[1]}, after: ${p1HpAfter[1]}`);
+    assert.strictEqual(p1HpAfter[2], p1HpBefore[2],
+      `P1 fig at g3 (non-adjacent) must NOT take Electro-pulse damage. ` +
+      `Before: ${p1HpBefore[2]}, after: ${p1HpAfter[2]}`);
+    // P2 target at d3: combat damage only (2 = 3 dmg - 1 block). Electro-pulse
+    // excludes the target itself ("each OTHER figure adjacent to the target").
     assert.strictEqual(p2HpAfter[0], p2HpBefore[0] - 2,
-      `P2 target at d3 must take the normal 2 combat damage. ` +
+      `P2 target at d3 must take only 2 combat damage, NOT Electro-pulse on top. ` +
       `Before: ${p2HpBefore[0]}, after: ${p2HpAfter[0]}`);
-    assert.strictEqual(p2HpAfter[1], p2HpBefore[1],
-      `P2 fig at e3 (adjacent to target) currently takes NO Electro-pulse damage ` +
-      `because of the broken msgId lookup. If this trips, the bug was fixed — ` +
-      `update this probe to assert the intended 1-HP loss. ` +
+    // P2 fig 1 at e3 is adjacent to target → 1 Electro-pulse damage.
+    assert.strictEqual(p2HpAfter[1], p2HpBefore[1] - 1,
+      `P2 fig at e3 (adjacent to target) must lose 1 HP from Electro-pulse. ` +
       `Before: ${p2HpBefore[1]}, after: ${p2HpAfter[1]}`);
+    // P2 fig 2 at h3 is not adjacent — untouched.
     assert.strictEqual(p2HpAfter[2], p2HpBefore[2],
-      `P2 fig at h3 (non-adjacent) must remain untouched. ` +
+      `P2 fig at h3 (non-adjacent) must NOT take Electro-pulse damage. ` +
       `Before: ${p2HpBefore[2]}, after: ${p2HpAfter[2]}`);
-  });
-
-  it('source-pins the broken combat-bridge lookup so any fix forces a probe rewrite', () => {
-    // Pin the exact text of the msgId-resolution line that fails. If this
-    // line is touched (a fix, a refactor, or a deletion), the pin trips and
-    // the author must re-evaluate PROBE-LOADOUT-05's HP-delta assertions.
-    const src = fs.readFileSync(
-      new URL('../../../src/engine/combat-bridge.js', import.meta.url),
-      'utf8'
-    );
-    assert.match(
-      src,
-      /_epDcL\?\.\[idx\]\?\.dcName === _epFkDcName && _epDcL\?\.\[idx\]\?\.dgIndex === _epDgIdx/,
-      `combat-bridge.js electro_pulse msgId lookup has changed. ` +
-      `If this is a fix for the dgIndex-undefined bug, rewrite the LOADOUT-05 ` +
-      `HP-delta assertions to match the intended CRR behavior (attacker + ` +
-      `adjacent non-target figures each take 1 damage).`
-    );
-    // Also pin the dcList shape that causes the bug. If setup-bridge starts
-    // emitting `dgIndex` on dcList entries, the lookup above might start
-    // working, which would also invalidate PROBE-LOADOUT-05.
-    const setupSrc = fs.readFileSync(
-      new URL('../../../src/engine/setup-bridge.js', import.meta.url),
-      'utf8'
-    );
-    assert.match(
-      setupSrc,
-      /return \{ dcName, displayName, healthState \};/,
-      `setup-bridge dcList entry shape has changed. If dgIndex is now emitted ` +
-      `on dcList entries, re-check PROBE-LOADOUT-05 — the Electro-pulse lookup ` +
-      `may now succeed and damage may actually apply.`
-    );
   });
 });
 

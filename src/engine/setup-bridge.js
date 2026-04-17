@@ -487,7 +487,7 @@ export async function populatePlayAreas(game, client, deps) {
       const health = figureless ? null : (stats.health ?? '?');
       const figures = figureless ? 0 : (stats.figures ?? 1);
       const healthState = figureless ? [] : Array.from({ length: figures }, () => [health, health]);
-      return { dcName, displayName, healthState };
+      return { dcName, displayName, healthState, dgIndex };
     });
   };
 
