@@ -129,6 +129,18 @@ export function setMoveQualitySignalFlag(v) { USE_MOVE_QUALITY_SIGNAL = v; }
 let BOUNDARY_FIX_ENABLED = true;
 export function setBoundaryFix(v) { BOUNDARY_FIX_ENABLED = !!v; }
 
+// MC-return default target (2026-04-17). updateTraceNeural uses a pure
+// discounted Monte-Carlo return from the current step to the last valid
+// trace entry (no figure-boundary truncation, no target-network bootstrap).
+// Replay transitions are stored with done=true / nextFeatures=null so replay
+// updates use the MC target. Made default after the fork test vs matched
+// n-step control (final-250 avgVP 56.51 vs 53.89, +2.62) established a
+// credit-assignment ceiling. Flip to false via --no-mc-returns for
+// regression checks against the n-step path.
+let USE_MC_RETURNS = true;
+export function setUseMcReturns(v) { USE_MC_RETURNS = !!v; }
+export function getUseMcReturns() { return USE_MC_RETURNS; }
+
 // ── WG Move Decay Fix (permanent) ────────────────────────────────────────────
 // Fixed: contrastive move update was applying L2 decay once PER ALTERNATIVE
 // (3x per update). Attack/surge/CC apply L2 once per update. Fix: L2 is now
@@ -2587,7 +2599,9 @@ function updateTraceNeural(learnings, trace) {
       h = result.h;
     }
 
-    // Compute n-step return with figure-boundary awareness
+    // Compute n-step return with figure-boundary awareness.
+    // Under USE_MC_RETURNS, extend to the end of the valid trace and skip
+    // both figure-boundary truncation and bootstrap — target is pure MC.
     let nStepReturn = 0;
     let gammaK = 1.0;
     let bootstrapFeatures = null;
@@ -2595,7 +2609,9 @@ function updateTraceNeural(learnings, trace) {
     let hitTerminal = false;
     let hitBoundary = false;
     let effectiveSteps = 0;
-    const stepsToUse = Math.min(N_STEP, validIdxs.length - vi);
+    const stepsToUse = USE_MC_RETURNS
+      ? (validIdxs.length - vi)
+      : Math.min(N_STEP, validIdxs.length - vi);
 
     for (let k = 0; k < stepsToUse; k++) {
       const futureEntry = trace[validIdxs[vi + k]];
@@ -2604,8 +2620,8 @@ function updateTraceNeural(learnings, trace) {
       // then STOP with no bootstrap. prevEntry.nextFeatures is unsafe
       // because end_activation dispatch deletes dcActionsData before
       // afterAction captures nextFeatures — graph active-figure readout
-      // would be null/wrong.
-      if (BOUNDARY_FIX_ENABLED && k > 0 && futureEntry.activeDcMsgId !== entry.activeDcMsgId) {
+      // would be null/wrong. Skipped under MC mode by design.
+      if (!USE_MC_RETURNS && BOUNDARY_FIX_ENABLED && k > 0 && futureEntry.activeDcMsgId !== entry.activeDcMsgId) {
         hitBoundary = true;
         boundaryTruncations++;
         break;
@@ -2618,12 +2634,19 @@ function updateTraceNeural(learnings, trace) {
         break;
       }
       // The bootstrap state is the nextFeatures of the last step we accumulated
-      if (k === stepsToUse - 1) {
+      if (!USE_MC_RETURNS && k === stepsToUse - 1) {
         bootstrapFeatures = futureEntry.nextFeatures;
         bootstrapActionIdxs = futureEntry.nextActionIdxs;
       }
     }
     nStepLengthSum += effectiveSteps;
+    // MC mode: treat trace-end as pseudo-terminal so the downstream branch
+    // takes the no-bootstrap path (target = nStepReturn = pure MC return).
+    if (USE_MC_RETURNS) {
+      hitTerminal = true;
+      bootstrapFeatures = null;
+      bootstrapActionIdxs = null;
+    }
 
     // ── Per-chain-type tracking ──────────────────────────────────────
     const chainLen = chainLenByVi[vi] || 1;

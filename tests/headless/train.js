@@ -31,7 +31,7 @@ import {
   recordMatchResult, replayUpdate, loadReplayBuffer, saveReplayBuffer,
   recordTrainingCheckpoint, checkDivergence, setWeightDecay, setAlpha, setWgFrozen, setAttackTrace, getEffectiveAlpha, getQValues,
   extractFeatures, setEncoderType, getEncoderType, setWgWeightClamp, setMoveDecisionBonus,
-  setMoveQualitySignalFlag, setBoundaryFix,
+  setMoveQualitySignalFlag, setBoundaryFix, setUseMcReturns,
   getWgAuditCounters, resetWgAuditCounters,
   getAtkAuditCounters, resetAtkAuditCounters, getAtkAuditTotals, resetAtkAuditTotals,
   getCandAudit, resetCandAudit,
@@ -2134,6 +2134,12 @@ async function main() {
   if (args.includes('--no-boundary-fix')) {
     setBoundaryFix(false);
     console.log(`  Boundary fix: DISABLED (A/B control arm)`);
+  }
+  if (args.includes('--no-mc-returns')) {
+    setUseMcReturns(false);
+    console.log(`  Target mode: n-step returns (override) — bounded n-step + bootstrap, boundary truncation on`);
+  } else {
+    console.log(`  Target mode: MC returns (default) — pure Monte-Carlo target, no bootstrap, no boundary truncation`);
   }
   const mapArg = args.find(a => a.startsWith('--map='));
   if (mapArg) {
