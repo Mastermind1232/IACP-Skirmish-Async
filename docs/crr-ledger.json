@@ -4795,12 +4795,29 @@
         "lines": [
           1033,
           1048
-        ]
+        ],
+        "sha256": "c1263694329d2a9371859173ad53f187acb33751d6d5e7419e617bcc9c419768"
       },
       "summary": "When a game effect mentions the amount of damage a figure 'has suffered,' it refers to the total value of damage tokens currently on the figure.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "'Damage suffered' accessor semantics has no named assertion pin distinct from general damage tracking. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/abilities.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/wookiee-rage-oracles.test.js"
+        ],
+        "assertions": [
+          "ORACLE-WRAGE-002: Damage scales with damage suffered",
+          "3 damage suffered → 3 damage to target",
+          "1 damage suffered → 1 damage to target",
+          "ORACLE-WRAGE-003: 0 damage suffered → no damage"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-DMG-007",
