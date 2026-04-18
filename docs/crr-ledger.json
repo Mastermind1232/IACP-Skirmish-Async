@@ -217,13 +217,28 @@
         "lines": [
           2059,
           2059
-        ]
+        ],
+        "sha256": "17f146589e6be80bb45fc842708d41737aff0258d63616826e2bdf42c21d8a4e"
       },
       "summary": "Performing a Move action grants MP equal to the figure's Speed attribute.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "No named assertion pins the Speed→MP equality for a basic Move action. src/engine/activation-effects.js:123 does compute this via getDcStats(...).speed for Beast Tamer, but the common path needs a direct probe. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/dc-play-area.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-move-action-mp-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-MOVE-004: Move-action grants MP equal to Speed",
+          "dc-play-area Move branch computes speed = getEffectiveSpeed and seeds movementBank.total with it",
+          "getEffectiveSpeed returns the DC stat-line speed when no modifiers apply"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MOVE-005",
