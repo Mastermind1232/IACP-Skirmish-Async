@@ -4057,12 +4057,28 @@
         "lines": [
           2238,
           2250
-        ]
+        ],
+        "sha256": "a2c7ab02baffc6b229f1d34d13ac4bf622a819a9f6481b654f5c9a69fc7bba11"
       },
       "summary": "A pushed figure can move in any direction; it does not need to move directly away from the pusher.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Push-direction-freedom rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "notes": "Canonical pushFigure(game, playerNum, figureKey, newSpace) takes no pusher position, so the API cannot enforce any directional constraint relative to the pusher. Body pin ensures no trig/vector math against a pusher sneaks in.",
+      "implementationArea": "src/game/player-helpers.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-push-invariant-probes.test.js"
+        ],
+        "assertions": [
+          "002a: pushFigure signature takes no pusher position, so direction cannot be enforced",
+          "002c: pushFigure accepts an arbitrary destination (any-direction round-trip)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-PSH-003",
@@ -4085,12 +4101,28 @@
         "lines": [
           2238,
           2250
-        ]
+        ],
+        "sha256": "a2c7ab02baffc6b229f1d34d13ac4bf622a819a9f6481b654f5c9a69fc7bba11"
       },
       "summary": "Pushing a figure requires no movement points and ignores additional movement costs (other than what move X spaces already accounts for).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Push-no-MP-cost rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "notes": "Canonical pushFigure body never references movementBank/mpRemaining; push write-path is independent of the MP spender where terrain/figure costs live.",
+      "implementationArea": "src/game/player-helpers.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-push-invariant-probes.test.js"
+        ],
+        "assertions": [
+          "004a: pushFigure source never touches movementBank or mpRemaining",
+          "004b: pushing a figure with zero MP still succeeds"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-PSH-005",
