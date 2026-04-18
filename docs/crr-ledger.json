@@ -9082,13 +9082,28 @@
         "lines": [
           501,
           505
-        ]
+        ],
+        "sha256": "2b30e7d1eec00ebf33a72ba5e23f7bde1515359e2f92cdcbc2860b7f9fac25d1"
       },
       "summary": "A non-hero figure with a Deployment card can use only one of its actions to attack per activation; special actions involving attacks count against this limit.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/combat.js",
-      "notes": "Attack-per-activation limit is enforced inline in combat.js via attacksPerformed tracking; no dedicated oracle pins the \"one attack per activation for DC figures\" invariant in isolation."
+      "status": "covered",
+      "implementationArea": "src/engine/available-actions.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/action-surfacing-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-AS-001: No second attack after already attacked (without Assault/free-attack)",
+          "attack_target not offered when attackPerformedThisActivation is set",
+          "No attack_target should be offered after already attacking"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-SSA-002",
