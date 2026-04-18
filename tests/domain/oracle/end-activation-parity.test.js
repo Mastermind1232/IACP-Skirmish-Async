@@ -193,6 +193,70 @@ describe('B-ENDACT-005: Son of Skywalker re-readies Luke after other activation'
   });
 });
 
+describe('B-ENDACT-006: Weakened auto-discards at end of activation (CRR-WKN-002)', () => {
+  it('discards Weaken on all activating-DC figures', async () => {
+    const { applyEndOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+    const game = {
+      figurePositions: { 1: { 'Stormtrooper-1-0': 'a1', 'Stormtrooper-1-1': 'a2' } },
+      figureConditions: {
+        'Stormtrooper-1-0': ['Weaken'],
+        'Stormtrooper-1-1': ['Weaken', 'Focus'],
+      },
+    };
+    const { applied } = applyEndOfActivationEffects(game, {
+      dcName: 'Stormtrooper',
+      playerNum: 1,
+      displayName: 'Stormtrooper [DG 1]',
+      msgId: 'st-msg-1',
+    });
+    const wknEffects = applied.filter(e => e.effect === 'Weaken discard');
+    assert.strictEqual(wknEffects.length, 2, 'Weaken discard fired for both figures');
+    assert.ok(!game.figureConditions['Stormtrooper-1-0']?.includes('Weaken'),
+      'Figure 0 Weaken cleared');
+    assert.ok(!game.figureConditions['Stormtrooper-1-1']?.includes('Weaken'),
+      'Figure 1 Weaken cleared');
+    assert.ok(game.figureConditions['Stormtrooper-1-1']?.includes('Focus'),
+      'Figure 1 Focus preserved (only Weaken auto-discards)');
+  });
+
+  it('respects disarmPermanentWeakened lock (Weaken stays)', async () => {
+    const { applyEndOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+    const game = {
+      figurePositions: { 1: { 'Stormtrooper-1-0': 'a1' } },
+      figureConditions: { 'Stormtrooper-1-0': ['Weaken'] },
+      disarmPermanentWeakened: { 'Stormtrooper-1-0': true },
+    };
+    const { applied } = applyEndOfActivationEffects(game, {
+      dcName: 'Stormtrooper',
+      playerNum: 1,
+      displayName: 'Stormtrooper [DG 1]',
+      msgId: 'st-msg-2',
+    });
+    const wknEffects = applied.filter(e => e.effect === 'Weaken discard');
+    assert.strictEqual(wknEffects.length, 0, 'No Weaken discard effect fired (locked)');
+    assert.ok(game.figureConditions['Stormtrooper-1-0']?.includes('Weaken'),
+      'Weaken persists under disarmPermanentWeakened lock');
+  });
+
+  it('does not touch Stun (only Weaken auto-discards)', async () => {
+    const { applyEndOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+    const game = {
+      figurePositions: { 1: { 'Stormtrooper-1-0': 'a1' } },
+      figureConditions: { 'Stormtrooper-1-0': ['Stun', 'Bleed'] },
+    };
+    applyEndOfActivationEffects(game, {
+      dcName: 'Stormtrooper',
+      playerNum: 1,
+      displayName: 'Stormtrooper [DG 1]',
+      msgId: 'st-msg-3',
+    });
+    assert.ok(game.figureConditions['Stormtrooper-1-0']?.includes('Stun'),
+      'Stun preserved (must be removed via dc_remove_stun_ action)');
+    assert.ok(game.figureConditions['Stormtrooper-1-0']?.includes('Bleed'),
+      'Bleed preserved (removed via surge-to-discard, not auto)');
+  });
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // STRUCTURAL ORACLES — wiring verification
 // ══════════════════════════════════════════════════════════════════════════════

@@ -3,7 +3,7 @@
  * No Discord dependency. Uses only game-state primitives.
  */
 import { getDcEffects, getDcStats, getMapData } from '../data-loader.js';
-import { applyCondition, isConditionImmune } from '../game/conditions.js';
+import { applyCondition, isConditionImmune, filterCondition } from '../game/conditions.js';
 import { grantPowerTokens, grantMovementBank } from '../game/game-helpers.js';
 import { opponentPlayerNum, getActivatedDcIndices, setActivatedDcIndices, getCcHand, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
@@ -191,6 +191,15 @@ export function applyEndOfActivationEffects(game, { dcName, playerNum, displayNa
   const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const prefix = `${dcName}-${dgIndex}-`;
   const figureKeys = Object.keys(game.figurePositions?.[playerNum] || {}).filter(k => k.startsWith(prefix));
+
+  // Weakened auto-discards at end of activation (CRR-WKN-002: WEAKENED L2772-2775).
+  // Disarm permanent Weakened lock (filterCondition) keeps the condition through the filter.
+  for (const fk of figureKeys) {
+    if (!game.figureConditions?.[fk]?.includes('Weaken')) continue;
+    if (game.disarmPermanentWeakened?.[fk]) continue;
+    filterCondition(game, fk, 'Weaken');
+    applied.push({ effect: 'Weaken discard', message: `**Weakened** — **${dcNameFromFigureKey(fk)}** discarded Weaken at end of activation.` });
+  }
 
   // Shield (Riot Trooper E/R): if no Block tokens, gain 1 Block Token
   if ((dcEff?.passives || []).includes('Shield')) {

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iacp-skirmish-async/schemas/crr-ledger.json",
+  "title": "CRR Atomic-Rule Ledger",
+  "description": "Atomic rules extracted from docs/consolidated-rules-raw.txt. Every in-scope skirmish rule has an atom; evidence bar is enforced by tests/certification/crr-ledger-completeness.test.js.",
+  "type": "object",
+  "required": ["_meta", "atoms"],
+  "additionalProperties": false,
+  "properties": {
+    "_meta": {
+      "type": "object",
+      "required": ["scope", "seededSections", "generatedFrom"],
+      "additionalProperties": true,
+      "properties": {
+        "scope": {
+          "type": "string",
+          "const": "skirmish",
+          "description": "This bot is skirmish-only. Campaign/app/team-battle rules are out-of-scope by design."
+        },
+        "seededSections": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "CRR section names that have been atomized. Completeness test runs only against these during the pilot phase."
+        },
+        "generatedFrom": {
+          "type": "string",
+          "const": "docs/consolidated-rules-raw.txt"
+        },
+        "date": { "type": "string" },
+        "pilot": { "type": "boolean" }
+      }
+    },
+    "atoms": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/atom" }
+    }
+  },
+  "$defs": {
+    "atom": {
+      "type": "object",
+      "required": ["id", "crr", "summary", "scope", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^CRR-[A-Z]{2,6}-[0-9]{3}$",
+          "description": "Stable ID: CRR-<SECTION-PREFIX>-<NNN>. Never renumbered."
+        },
+        "crr": {
+          "type": "object",
+          "required": ["section", "lines"],
+          "additionalProperties": false,
+          "properties": {
+            "section": { "type": "string" },
+            "lines": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": { "type": "integer", "minimum": 1 }
+            },
+            "sha256": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 10,
+          "description": "One-sentence restatement of the atom's rule in our words."
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["skirmish", "definitional"],
+          "description": "Pilot allows only skirmish + definitional. Campaign/app/team-battle scoped atoms are excluded by Phase-A decision."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["covered", "gap", "exempt", "covered_by_ref"]
+        },
+        "implementationArea": { "type": "string" },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["direct_oracle", "certification", "invariant_pin", "data_validation", "headless_selfplay", "unit_test"]
+            },
+            "files": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1
+            },
+            "assertions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Substrings that must be grep-findable inside the evidence files."
+            }
+          }
+        },
+        "reviewedBy": {
+          "type": "object",
+          "required": ["name", "date"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+          }
+        },
+        "seeAlso": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^CRR-[A-Z]{2,6}-[0-9]{3}$" }
+        },
+        "notes": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "description": "If status is covered, require evidence + sha256 + reviewedBy.",
+          "if": { "properties": { "status": { "const": "covered" } } },
+          "then": {
+            "required": ["evidence", "reviewedBy"],
+            "properties": {
+              "crr": { "required": ["section", "lines", "sha256"], "properties": { "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } } },
+              "evidence": { "required": ["type", "files", "assertions"] }
+            }
+          }
+        },
+        {
+          "description": "If status is covered_by_ref, require seeAlso.",
+          "if": { "properties": { "status": { "const": "covered_by_ref" } } },
+          "then": { "required": ["seeAlso"] }
+        }
+      ]
+    }
+  }
+}

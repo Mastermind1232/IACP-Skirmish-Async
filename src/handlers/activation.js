@@ -817,19 +817,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     figureKeys.push(`${meta.dcName}-${dgIndex}-${fi}`);
   }
   cleanupActivation(game, msgId, meta.playerNum, figureKeys);
-  // Weakened: discarded at end of activation (rules: WEAKENED L2967-2968).
-  // Stun is NOT auto-cleared — figure must spend 1 action (dc_remove_stun_) per rules: STUNNED L2759-2762.
-  if (game.figureConditions && ctx.getDcStats) {
-    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-    const figures = ctx.getDcStats(meta.dcName).figures ?? 1;
-    for (let f = 0; f < figures; f++) {
-      const fk = `${meta.dcName}-${dgIndex}-${f}`;
-      if (!game.disarmPermanentWeakened?.[fk]) {
-        filterCondition(game, fk, 'Weaken');
-      }
-    }
-  }
-
+  // Weakened discard + Stun persistence now handled by applyEndOfActivationEffects().
   // End-of-activation deterministic effects (shared with headless)
   const { applied: _endEffects } = applyEndOfActivationEffects(game, {
     dcName: meta.dcName,
