@@ -8252,13 +8252,28 @@
         "lines": [
           2803,
           2804
-        ]
+        ],
+        "sha256": "cd321606c874d51773179693e6abd6ced990f089bd246612cbaca787f409da0d"
       },
       "summary": "If both players have the same VP total at game end, the player with the most VPs from defeating hostile figures wins.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/engine/win-conditions.js",
-      "notes": "Tie-breaker chain is not exercised by the skirmish-bot because game-end currently fires at >= 40 VP (not at a formal round-limit tie). No dedicated oracle pins the kill-VP tie-break. Phase-D gap — low-priority (rarely reachable in bot-played skirmishes)."
+      "notes": "resolveVpTiebreaker step 1 compares player{1,2}VP.kills; higher-kills player wins.",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-vp-tiebreaker-probes.test.js"
+        ],
+        "assertions": [
+          "001a: P1 has more kill VP → P1 wins",
+          "001b: P2 has more kill VP → P2 wins"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-TIE-002",
@@ -8267,13 +8282,28 @@
         "lines": [
           2805,
           2807
-        ]
+        ],
+        "sha256": "3c59740118ca0cb21b3e390c8ec2a934ff47081355686d282fd4c9c8ece85236"
       },
       "summary": "If still tied, the player with the lowest sum of damage tokens on remaining figures plus Health of defeated DCs still in play wins.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/engine/win-conditions.js",
-      "notes": "Second-tier tie-breaker not wired into the engine. Phase-D gap — same reasoning as TIE-001."
+      "notes": "resolveVpTiebreaker step 2 compares totalDamageReceived (equivalent to CRR sum of: damage tokens on remaining figures + Health of defeated DCs); lower-damage player wins.",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-vp-tiebreaker-probes.test.js"
+        ],
+        "assertions": [
+          "002a: kills tied, P1 has less damage → P1 wins",
+          "002b: kills tied, P2 has less damage → P2 wins"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-TIE-003",
@@ -8282,13 +8312,27 @@
         "lines": [
           2808,
           2809
-        ]
+        ],
+        "sha256": "62557b0a2dc9343e795455930236aee4e213c62967d2561df826f6b8bc021925"
       },
       "summary": "If still tied, each player rolls one blue die; the player with the highest Accuracy rolled wins.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/engine/win-conditions.js",
-      "notes": "Third-tier tie-breaker not wired. Phase-D gap."
+      "notes": "resolveVpTiebreaker step 3 rolls a blue die per player and compares Accuracy; re-rolls on tie until a winner emerges (bounded random fallback at maxAttempts).",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-vp-tiebreaker-probes.test.js"
+        ],
+        "assertions": [
+          "003: kills + damage tied → blue-die roll eventually picks a winner"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-SKR-001",
