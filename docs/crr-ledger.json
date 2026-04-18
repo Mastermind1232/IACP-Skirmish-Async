@@ -6470,8 +6470,11 @@
       },
       "summary": "Mission tokens do not block line of sight or affect figure movement; figures can enter and end their movement in the same space as a mission token.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Mission-token-as-transparent-for-LOS-and-movement has no named oracle pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-OBJ-002"
+      ],
+      "notes": "Mission tokens are objects (per CRR-MSN-001); OBJ-002 pins the 'non-door objects are transparent to LOS and do not block movement' rule for all object subtypes."
     },
     {
       "id": "CRR-MSN-004",
