@@ -2006,13 +2006,27 @@
         "lines": [
           145,
           146
-        ]
+        ],
+        "sha256": "cf552af79cd3ed8eea86560458543ef9060059863473916d174d987e3eb710c0"
       },
       "summary": "A ranged attack against an adjacent figure or object requires at least 1 Accuracy to avoid a miss.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/game/combat.js",
-      "notes": "The accuracy check at distance 1 is exercised by the engine, but no named assertion explicitly pins the 'adjacent ranged ≥ 1 Accuracy or miss' corner rule. Phase-D gap."
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-ranged-adjacent-probes.test.js"
+        ],
+        "assertions": [
+          "003a: ranged attack with acc=0 vs distance-1 (adjacent) target → miss",
+          "ranged-adjacent acc=0 must miss — CRR-ACC-003/RNG-003 violation"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ACC-004",
@@ -2315,12 +2329,28 @@
         "lines": [
           640,
           641
-        ]
+        ],
+        "sha256": "3af62233c26189597d0f6863945a21fa9f315c79d8053f36c6d8f4165aec73a1"
       },
       "summary": "If an attack inflicts a condition (e.g., Stunned, Bleeding), the condition is applied only to the target and not to figures damaged by Blast.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Condition-does-not-propagate-via-Blast rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/combat.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/dc-ability-shapes-behavioral.test.js"
+        ],
+        "assertions": [
+          "primary target has Weaken",
+          "adjacent figure does NOT gain Weaken — only splashDamage, not splashConditions"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      },
+      "notes": "Engine splashDamage mechanism (shared by Blast and force_lightning) pins the 'condition applies to primary only' invariant — adjacent figures take damage but not conditions."
     },
     {
       "id": "CRR-BLED-001",
@@ -2494,8 +2524,11 @@
       },
       "summary": "If an attack inflicts a condition, the condition applies only to the target and not to figures damaged by Cleave.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Condition-does-not-propagate-via-Cleave rule has no named assertion pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-BLST-006"
+      ],
+      "notes": "Same splashCondition-vs-splashDamage invariant as CRR-BLST-006 — engine treats Blast and Cleave identically for condition propagation; one pin covers both."
     },
     {
       "id": "CRR-CLV-007",
@@ -3723,8 +3756,11 @@
       },
       "summary": "A ranged attack targeting an adjacent figure or object requires at least 1 Accuracy or the attack misses.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Adjacent-ranged ≥ 1 Accuracy rule has no named assertion pin (mirrors CRR-ACC-003). Phase-D gap."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ACC-003"
+      ],
+      "notes": "Same adjacent-ranged accuracy rule as CRR-ACC-003; single engine gate pins both."
     },
     {
       "id": "CRR-DIS-001",
