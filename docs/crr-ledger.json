@@ -5349,12 +5349,28 @@
         "lines": [
           1722,
           1724
-        ]
+        ],
+        "sha256": "065bd5aceb0c12c7fb29acf3932d1337b04f46eb2a7a701a9f9e993e8cac4fa9"
       },
       "summary": "When a large figure attacks, line of sight may be traced from any of the spaces it occupies.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Multi-cell attacker LOS (any-occupied-cell OR) has no named oracle pin specifically asserting choice over all occupied cells. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/los.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/los-slice2-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-LOS-SLICE2-003: multi-cell attacker — any cell has LOS",
+          "2x2 attacker at a3 — all four cells have LOS to open target f3",
+          "2x2 attacker — only back cell has LOS past a blocker"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-LF-003",
@@ -5363,12 +5379,27 @@
         "lines": [
           1723,
           1724
-        ]
+        ],
+        "sha256": "9bd35dcf81e151b139db8b3605e67881ab3ae5fd29025d8da635efce275b2391"
       },
       "summary": "When a large figure is targeted by an attack, the figure performing the attack must choose one of the spaces the large figure occupies as the target space.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Multi-cell target choice has no named oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/los.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/los-slice2-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-LOS-SLICE2-004: multi-cell target — any cell reachable",
+          "1x1 attacker at a3 — has LOS to at least one cell of 2x2 target at f3"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-LF-004",
