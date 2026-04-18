@@ -7644,13 +7644,31 @@
         "lines": [
           215,
           216
-        ]
+        ],
+        "sha256": "9cd2cced482b31de5d6d2eca0f22d1ad468c1f857276c0380be960346359a6aa"
       },
       "summary": "During a skirmish, if a player has fewer ready Deployment cards than any of their opponents, that player may choose not to activate a group and pass play back to their opponent.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/handlers/activation.js",
-      "notes": "Voluntary-pass-when-behind rule has no named assertion pin. Engine does not currently offer this pass-option UI; implicit 'force-alternation' behavior likely diverges from CRR here. Phase-D gap (may surface as a future divergence)."
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-aph-pass-when-fewer-ready-probe.test.js"
+        ],
+        "assertions": [
+          "handlePassActivationTurn must be the exported pass handler — CRR-APH-006",
+          "pass handler must read the current player activations remaining — CRR-APH-006",
+          "pass handler must read the opponent activations remaining — CRR-APH-006",
+          "pass must be rejected when otherRem <= myRem — CRR-APH-006",
+          "legal pass must flip turn to otherPlayerId — CRR-APH-006",
+          "pass button must render only when current player is strictly behind — CRR-APH-006"
+        ]
+      },
+      "reviewedBy": {
+        "name": "phase-d-batch-45",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-CNF-001",
