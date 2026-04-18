@@ -5840,12 +5840,30 @@
         "lines": [
           1731,
           1732
-        ]
+        ],
+        "sha256": "7143982f7557507414b236e522dcc80d54a022d161fb47cb3cbfc231f426ad71"
       },
       "summary": "When a large figure is pushed or moves a set number of spaces, its base cannot rotate and must retain its current orientation.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Push-no-rotate rule for large figures has no oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/player-helpers.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-lf-push-no-rotate-probe.test.js"
+        ],
+        "assertions": [
+          "pushFigure must write the new space to positions[figureKey] — CRR-LF-007",
+          "pushFigure body must not reference figureOrientations — CRR-LF-007",
+          "pushFigureToNearestValid must write via pushFigure — CRR-LF-007",
+          "orientation must NOT change on push — CRR-LF-007",
+          "rotated orientation must persist across push — CRR-LF-007"
+        ]
+      },
+      "reviewedBy": {
+        "name": "phase-d-batch-43",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-OBJ-001",
