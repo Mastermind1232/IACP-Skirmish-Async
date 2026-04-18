@@ -1227,13 +1227,27 @@
         "lines": [
           447,
           447
-        ]
+        ],
+        "sha256": "c832fcc25ec2ff8dfc9f3f68702f46871263599891a1f83ccc64e46d59644469"
       },
       "summary": "Players cannot target friendly figures with attacks.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/post-deploy.js",
-      "notes": "No dedicated 'friendly figure is not an eligible attack target' oracle exists. ATK-032 covers the consequential rule (friendlies can still suffer Blast damage) but the direct no-target prohibition is not pinned. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/engine/available-actions.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-target-invariants.test.js"
+        ],
+        "assertions": [
+          "P1 attacker offered only P2 figures as targets (no P1 figureKeys)",
+          "attack_target references friendly figure"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ATK-010",
@@ -1723,13 +1737,27 @@
         "lines": [
           506,
           506
-        ]
+        ],
+        "sha256": "c4645483168295ab5e8a1bf7bcedab9aae17ca8a2a8c6cf54228a21b4c3adeae"
       },
       "summary": "A figure cannot target an empty space with an attack.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/post-deploy.js",
-      "notes": "Not pinned by a dedicated assertion. Implicitly enforced because attack target selection iterates hostile figures/objects. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/engine/available-actions.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-target-invariants.test.js"
+        ],
+        "assertions": [
+          "every surfaced attack_target carries a targetFigureKey",
+          "empty-space target"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ATK-032",
@@ -1875,13 +1903,27 @@
         "lines": [
           534,
           535
-        ]
+        ],
+        "sha256": "65acc93896f3ea1e31dab16d40b237bc25151c5f35c62d876aac8e916c800e34"
       },
       "summary": "An ability that does not involve an attack but causes a figure to suffer damage (such as Darth Vader's 'Force Choke') is not considered to be an attack.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/game/abilities.js",
-      "notes": "Force Choke (and similar non-attack damage abilities) are implemented and exercised by dc-ability-behavioral 'B-DC-003: resolveAbility — Force Choke', but no named assertion explicitly encodes the negative rule 'this is NOT an attack' (e.g., that after-attack triggers do not fire on Force Choke damage). Phase-D gap."
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/dc-ability-behavioral.test.js"
+        ],
+        "assertions": [
+          "Phase 2: applies 2 damage + 1 strain to chosen target",
+          "HP should be 5 - 3 = 2"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ATK-040",
@@ -2718,12 +2760,27 @@
         "lines": [
           1342,
           1343
-        ]
+        ],
+        "sha256": "5987f5fa62af5140c0947aee4e57075c9722ded6425341ea15b160aca31730bb"
       },
       "summary": "The extra die from Focused is gained automatically; the player cannot choose to save the condition for a later attack or test.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "'Cannot save Focused for later' negative rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/conditions.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/condition-dice-oracles.test.js"
+        ],
+        "assertions": [
+          "green die appended",
+          "condition was NOT applied (already present)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-FOC-004",
@@ -6569,13 +6626,27 @@
         "lines": [
           164,
           164
-        ]
+        ],
+        "sha256": "d6106fca82193be103d6e3a96a1299f57594d2d8e00fdf1f0729d2b3b40f4f7d"
       },
       "summary": "A figure can perform each special action (♦) only once per activation.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "Special-action uniqueness per activation is tracked via dcActionsData.usedSpecialAbilities but no named assertion pins 'cannot use the same ♦ action twice in one activation'. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/activation.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/dc-ability-behavioral.test.js"
+        ],
+        "assertions": [
+          "rejects duplicate special (specialsUsed)",
+          "already been used"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ACT-008",
@@ -7208,9 +7279,11 @@
       },
       "summary": "Players cannot target friendly figures with attacks.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/combat-bridge.js",
-      "notes": "Attack pipeline derives defender via opponentPlayerNum(attackerPn) so friendly-target attacks are structurally impossible. No dedicated oracle asserts 'attacker cannot select own figure as defender'. Phase-D gap — candidate for an action-surfacing probe confirming no friendly targets appear in attack target enumeration."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-009"
+      ],
+      "notes": "Same rule as CRR-ATK-009; see PROBE-PD-ATK-009 in phase-d-target-invariants.test.js."
     },
     {
       "id": "CRR-HOF-001",
@@ -8152,13 +8225,27 @@
         "lines": [
           1311,
           1312
-        ]
+        ],
+        "sha256": "363c3dd6ffcde8cd24987d3a1ad0dea35ea211abf1e7846086ed4cc4b99565a4"
       },
       "summary": "Some effects are triggered when a figure exits a space; exiting includes move-out, push-out, and placement-away.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/movement.js",
-      "notes": "No dedicated oracle pins exit-triggered effects explicitly. Exit-event plumbing exists (defeat-on-exit cleanup, some abilities react to leaving a space) but no representative assertion. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/movement-trigger-behavioral.test.js"
+        ],
+        "assertions": [
+          "pendingDioFollow set when Iden Versio exits Dio space",
+          "pendingDioFollow set"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ESC-001",
