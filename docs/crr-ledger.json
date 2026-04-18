@@ -2292,12 +2292,35 @@
         "lines": [
           235,
           236
-        ]
+        ],
+        "sha256": "b3a0a8bd60be242c4db2b78beb7dca2dbe189b0612cbbde2c425ce84dd58ebd6"
       },
       "summary": "Spaces on opposite sides of a diagonal intersection of walls, doors, or blocking terrain are not adjacent.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Diagonal-corner adjacency carve-out belongs to the LOS-06 family; not pinned by a named assertion yet. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "scripts/generate-map-spaces.js (adjacency graph builder) + data/map-spaces.json (precomputed per-map adjacency)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-adj-diagonal-wall-probe.test.js"
+        ],
+        "assertions": [
+          "005a: source — generator names the CRR rule verbatim in its header doc",
+          "005b: source — both-paths-open predicate: diagonal open iff pathC OR pathD",
+          "005c: source — each right-angle path requires: edge open + intermediate not blocking + exit edge open",
+          "005d: source — blocking terrain space has empty adjacency list",
+          "005e: data — lothal-wastes i7↔j8 diagonal is excluded (walls on i7|i8 AND j7|j8)",
+          "005f: data — lothal-wastes n4↔m5 diagonal is preserved (only C-path walled; D-path open)",
+          "005g: behavior — a pure-JS replica of the diagonal predicate matches CRR semantics",
+          "i7 must NOT list j8 as adjacent (both right-angle paths blocked) — CRR-ADJ-005",
+          "n4 must list m5 as adjacent when at least one right-angle path is open — CRR-ADJ-005",
+          "one wall on each path (X-intersection) → NOT adjacent — CRR-ADJ-005"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude-opus-4-7",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ADJ-006",
