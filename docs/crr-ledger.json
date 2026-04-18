@@ -7997,13 +7997,28 @@
         "lines": [
           2756,
           2757
-        ]
+        ],
+        "sha256": "9436a6c6880175e65535739934a48bbe152cadc394ad7e3d8667ea73879808d7"
       },
       "summary": "If a player's ability requires an opponent to pay more VPs than they have, that opponent pays all of their remaining VPs.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/vp-math.js",
-      "notes": "Partial-pay-all-remaining semantics (clamp payment to available) has no dedicated oracle. Covered tangentially by ORACLE-VP-004b (deduct clamps to 0) but not pinned as a transfer case. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/vp-helpers.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-vp-deduct-clamp-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-VPS-005: deducting more VP than a player has drains to 0",
+          "deducting 99 from a 3-VP player clamps total/kills/objectives to 0",
+          "deducting from 0-VP player is a no-op, not an error"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-WIN-001",
