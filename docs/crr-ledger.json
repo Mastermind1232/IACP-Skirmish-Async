@@ -456,13 +456,30 @@
         "lines": [
           2071,
           2071
-        ]
+        ],
+        "sha256": "d1f244c76c9b13c1adc1a012066b6d21bea232ea57b30a9954a3770de3e0fc52"
       },
       "summary": "Figures may move diagonally past the corner of a single wall, door, blocking terrain, or impassable terrain.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/game/movement.js",
-      "notes": "tests/domain/oracle/los-06-diagonal-corner-probes.test.js covers the LOS side. The movement-side 'may move diagonally past single corner' is not confidently pinned. Phase-D gap."
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-move-diagonal-corner-probes.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "013a: source — canMoveDiagonally returns the OR of two flanking corner paths (not AND)",
+          "return aSecondOpen || bSecondOpen;",
+          "013d: behavior — single wall on one flank (a1 to b1): diagonal a1 to b2 still succeeds via a2",
+          "013e: behavior — single wall on the other flank (a1 to a2): diagonal a1 to b2 still succeeds via b1"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MOVE-014",
@@ -471,13 +488,29 @@
         "lines": [
           2071,
           2073
-        ]
+        ],
+        "sha256": "752868eb9c8eb1b425ad3be0c5a61078ab82bd9c1e5278ed86b4d6e162dbaf08"
       },
       "summary": "A figure cannot move through the diagonal intersection of any combination of wall, door, blocking terrain, or impassable terrain (two-corner rule).",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/game/movement.js",
-      "notes": "Movement-side two-corner rule not confidently pinned by a named assertion. LOS-06 probes cover the LOS angle. Phase-D gap."
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-move-diagonal-corner-probes.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "014a: behavior — two walls sealing both flanks at the start corner blocks diagonal a1 to b2",
+          "014b: behavior — walls on both second-halves (b1 to b2 and a2 to b2) also block diagonal",
+          "014c: behavior — mixed wall combination (start to b1 AND a2 to b2) seals both flank paths"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MOVE-015",
