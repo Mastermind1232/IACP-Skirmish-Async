@@ -8530,13 +8530,33 @@
         "lines": [
           2800,
           2801
-        ]
+        ],
+        "sha256": "c1811bb657156b4688f0def474e25321f1c79c4e284a48c11b8d62fdb6e85b3c"
       },
       "summary": "When the last figure in a group is defeated, if that group had an attachment, the opposing player scores VPs equal to that attachment's cost.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/engine/defeat-handler.js",
-      "notes": "Attachment-cost bonus VP on final-figure defeat has no named oracle. B-DEFEAT-005 pins CC-attachment cleanup on group defeat but does not assert the attachment-cost VP credit. Phase-D gap — candidate dedicated probe using a DC with a skirmish Attachment."
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-win-attachment-vp-probe.test.js"
+        ],
+        "assertions": [
+          "processFigureDefeat must be the exported defeat handler — CRR-WIN-005",
+          "groupAlive must scan figurePositions for `${dcName}-*` survivors — CRR-WIN-005",
+          "attachment-VP branch must require !groupAlive AND read attachments by msgId — CRR-WIN-005",
+          "attachment-VP branch must read attStats.cost — CRR-WIN-005",
+          "attachment-VP branch must accumulate attCost — CRR-WIN-005",
+          "attachment VP must be awarded to attackerPlayerNum via awardKillVp — CRR-WIN-005",
+          "last-figure defeat with cost-3 attachment must award 3 VP — CRR-WIN-005",
+          "multiple attachments must sum costs — CRR-WIN-005"
+        ]
+      },
+      "reviewedBy": {
+        "name": "phase-d-batch-46",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-WIN-006",
