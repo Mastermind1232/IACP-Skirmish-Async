@@ -5992,12 +5992,32 @@
         "lines": [
           1457,
           1458
-        ]
+        ],
+        "sha256": "4e1472e5b3f8589e8d02df3caf2eb47e8d0a96707970d6183bff5caf51e6cdb1"
       },
       "summary": "Each Deployment card shows a number of bars below its deployment cost — that is the starting group size. This number of figures is placed when deploying this group.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Starting-group-size rule (bars count) has no named data_validation pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/headless/init-dc-state.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-group-size-probe.test.js",
+          "src/headless/init-dc-state.js",
+          "src/engine/game-readers.js",
+          "data/dc-effects.json"
+        ],
+        "assertions": [
+          "002a: source — init-dc-state.js reads figureCount from stats.figures (default 1)",
+          "002b: source — init-dc-state.js loops figureCount times to create one slot per figure",
+          "002c: source — game-readers.js reads the same stats.figures field at runtime",
+          "002d: data — multi-figure groups carry figures >= 2 in dc-effects.json"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-GRP-003",
