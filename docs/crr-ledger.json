@@ -2082,12 +2082,27 @@
         "lines": [
           147,
           147
-        ]
+        ],
+        "sha256": "070be84f9dbcfdde2c04a741d9efaa140fc31a4c9ac26b5555b136df94775014"
       },
       "summary": "Attacking an object in the same space requires 0 Accuracy.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Same-space object-target 0-accuracy rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/combat.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-combat-math-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-ACC-004: ranged attack vs distance-0 (same space) passes acc gate",
+          "same-space attack with acc=0 must hit"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ACC-005",
@@ -3132,12 +3147,27 @@
         "lines": [
           2199,
           2199
-        ]
+        ],
+        "sha256": "dcb68c1647e0a59e45536a0073f265a5c8f4101ab172ed9a7db87c20d0b3641c"
       },
       "summary": "If multiple Pierce abilities are applied to one attack, their values are added together.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Pierce-value-summation rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/combat.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-combat-math-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-PRC-003: multiple Pierce sources add together on one attack",
+          "surgePierce=1 + bonusPierce=2 → total 3 pierce reduces 3 block"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-WKN-001",
