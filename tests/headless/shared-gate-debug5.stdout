@@ -1,0 +1,313 @@
+  Map override: corellian-underground (all games on this map)
+  Training mode: LOCKED matchups (13 matchups, 25 DCs, 35 CCs, 6 maps)
+  Diagnostic eval: WEIGHTS FROZEN (alpha=0, WG updates skipped); per-map/matchup/side/stop-reason breakdown will be printed at end of run
+  Ability-play audit: ENABLED (captures every dc_special action with pre/post state for selection-quality analysis)
+Training 5 games (starting from 9838 prior games)
+  Deck pool: 13 locked matchups, 25 unique DCs
+  Save output: /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-corellian-debug5.json
+  [5/5] 5.3s | completed: 5/5 | P1: 4 P2: 1 | weights: 4824 | avgW: 0.0219 | epsilon: 0.050
+
+=== Training Complete ===
+Mode: WITH REPLAY (Phase 4)
+Total games trained: 9843
+Wall time: 5.3s
+Weights: 4824 | Avg |w|: 0.0219
+Total updates: 6877901 | This batch: 2114
+Avg |delta|: 4.4874
+NaN resets: 0
+This batch — completed: 5/5 (100.0%)
+Win split — P1: 4, P2: 1
+Avg total VP per game: 47.80
+Exploration rate: 5.0%
+Replay buffer size: 10000
+Replay total stored: 9104970
+
+=== Quality Metrics ===
+Avg VP differential: 35.8 (higher = more decisive wins)
+Avg rounds to finish: 5.8 (lower = faster resolution)
+Avg updates per game: 423 (lower = fewer iterations)
+Decisive wins (VP diff >= 10): 5/5 (100%)
+Avg figure defeats/game: 1.6
+
+╔══════════════════════════════════════════════════════════════════╗
+║          COMPETITIVE-SET CEILING DIAGNOSTIC                      ║
+╚══════════════════════════════════════════════════════════════════╝
+
+=== Per-map breakdown ===
+  map                           N   VP/g  VPdiff  P1 VP  P2 VP  P1 W  P2 W decsv  rnds
+  corellian-underground         5   47.8    35.8   35.0   12.8     4     1 100.0%   5.8
+
+=== Per-matchup breakdown ===
+  matchup                                   N   VP/g  VPdiff  P1 VP  P2 VP  P1 W  P2 W decsv
+  Bodyguard Formation vs Assassins          1   46.0    34.0    6.0   40.0     0     1 100.0%
+  Droid Coalition vs Force Council          1   49.0    33.0   41.0    8.0     1     0 100.0%
+  Imperial Doctrine vs Scum Muscle          1   48.0    36.0   42.0    6.0     1     0 100.0%
+  Rebels vs Imperial                        1   47.0    35.0   41.0    6.0     1     0 100.0%
+  Rebels vs Scum                            1   49.0    41.0   45.0    4.0     1     0 100.0%
+
+=== Side breakdown (overall) ===
+  P1 avg VP: 35.00  wins 4/5 (80.0%)
+  P2 avg VP: 12.80  wins 1/5 (20.0%)
+  Draws: 0/5
+  Side asymmetry: P2VP − P1VP = -22.20 VP/game; P2 win advantage = -3 games
+
+=== Stop reasons ===
+  normal                    5 (100.0%)  VP/g=47.8  P1W=4  P2W=1  rnds=5.8
+
+=== Attack candidate-generation breakdown ===
+  Total attack decisions: 69
+    NPC-only legal:      25 (36.2%)
+    Figure-only legal:   41 (59.4%)
+    Mixed (NPC+figure):  3 (4.3%)
+  Avg candidates per decision: NPC=0.52, enemy-fig=0.74 (total enemy figures on board avg=3.07)
+
+  In NPC-only decisions, excluded enemy-figure reasons (refined):
+    Out of Manhattan range:  36 (46.2%)
+    Path-distance > range:   0 (0.0%)   (walls/doors add detour)
+    Bare-LoS blocked:        27 (34.6%)
+    Figure-blocked LoS:      3 (3.8%)
+    Other:                   12 (15.4%)
+    Avg excluded enemy-figures per NPC-only decision: 3.12
+
+  Distance to nearest enemy figure at attack decision time (Manhattan):
+    N=69, mean=4.70, min=1, q10=1, q25=2, median=4, q75=7, q90=9, max=12
+
+  Attacker practical range at attack decision time:
+    N=69, mean=7.22, min=1, median=9, q90=12, max=12
+
+  Density rings around attacker (summed across decisions):
+    within 3 spaces: enemy-fig=34 (avg 0.49/dec), Krykna=0 (avg 0.00/dec)
+    within 5 spaces: enemy-fig=76 (avg 1.10/dec), Krykna=0 (avg 0.00/dec)
+    within 7 spaces: enemy-fig=113 (avg 1.64/dec), Krykna=0 (avg 0.00/dec)
+  Avg active Krykna on board at decision time: 0.00
+  Respawn events observed (population growth between decisions): 0
+
+=== Premature end-activation breakdown ===
+  Total dc_end_activation events: 145
+  Premature (productive-action-was-legal): 6 (4.1%)
+
+  Classification (priority attack > interact > special > move):
+    attack legal, declined:   0 (0.0%)   P1:0 P2:0
+    interact legal, declined: 0 (0.0%)   P1:0 P2:0
+    special legal, declined:  0 (0.0%)   P1:0 P2:0
+    move-only available:      6 (100.0%)   P1:6 P2:0
+
+  By round: R1:1 R2:1 R3:1 R4:1 R5:1 R6:1 R7:0 R8:0 R9:0 R10:0 R11:0
+  By side:  P1:6 P2:0  (ratio P2/P1 = 0.00)
+
+  Activation history of the premature activations:
+    prior attack this act: 0 (0.0%)
+    prior interact this act: 0 (0.0%)
+    prior move this act:   0 (0.0%)
+    no prior productive:   6 (100.0%)
+  Avg actions remaining at end: 1.00
+
+  Proximity to nearest mission-token/objective at premature-end:
+    ON objective (dist=0):       0 (0.0%)
+    adjacent (dist ≤ 1):         0 (0.0%)
+    near (dist ≤ 3):             0 (0.0%)
+    far (dist > 3):              6 (100.0%)
+  "ON objective" by side: P1:0 P2:0
+
+=== VP distribution ===
+  min=46  q10=46  q25=47  median=48  q75=49  q90=49  max=49
+  10-VP buckets: 40+:5
+
+Per-game diagnostic data dumped to /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-corellian-debug5-diagnostic-games.json
+
+=== Movement Metrics ===
+Avg moves/game: 18.2 | Avg attacks/game: 15.0 | Avg door opens/game: 0.8
+Avg NPC attacks/game: 5.8 | Avg NPC defeats/game: 3.8 | NPC attack share: 38.7%
+Avg activations/game: 29.0 | Avg end_activation/game: 29.0 | Avg pass/game: 13.4
+Move-to-activation ratio: 62.8% | Idle ratio (end+pass)/activations: 146.2%
+
+=== Movement Per Window (10-game) ===
+  Games 1-5: moves=18.2 attacks=15.0 end_act=29.0 activations=29.0
+
+=== Q-Value Diagnostic (round 1 start state) ===
+  Q(start_move) = 1.773
+  Q(move_toward) = 1.640
+  Q(end_activation) = 0.594
+  Q(pass) = 1.519
+  Q(attack_close) = 2.923
+  Q(attack_ranged) = 3.363
+  Q(activate) = 1.089
+  Q(play_cc) = 1.764
+  Q(ability) = 1.722
+  Q(interact) = 0.828
+
+=== Within-Group Scorer Weights ===
+  attack: targetHpRatio=0.302, targetDistNorm=1.304, targetIsolated=2.655, targetThreat=0.954, killPotential=1.407, bias=1.882
+  move:   distToNearestEnemy=0.861, threatAtDest=0.244, objectiveProximity=1.380, allySupport=0.954, mpEfficiency=0.403, bias=0.000
+  surge:  damageValue=1.300, isAccuracy=2.111, isRecover=0.422, bias=4.600
+  cc:     ccCost=4.799, isOffensive=9.737, inCombat=10.000, bias=9.995, isCombatTimed=2.222
+
+=== Per-Window Completion (10-game windows) ===
+  Games 1-5: 5/5 completed, avgVP: 47.8, updates: 2114
+
+=== Phase 2: Activation Quality ===
+  Avg productive actions/game: 123.8
+  Avg productive/activation: 4.27
+  Activations with attack: 69/145 (47.6%) — per-activation attack rate
+  Premature end_activation/game: 1.20 (ended with productive actions available)
+  Round-1 distance closed (avg): 6.0 spaces
+
+=== Phase 2: Action Conditioning on hasTargetsInRange ===
+  (per-decision rate — denominator includes move_pick_space steps; see per-activation rate above for attack frequency)
+  When targets IN range (400 decisions):
+    attack: 16.3% | move: 62.5% | end: 21.0%
+  When targets NOT in range (398 decisions):
+    move: 46.0% | end: 15.3%
+
+=== Activation-Order Strategy ===
+  Wounded figures activated early: 45/61 (73.8%)
+  Wounded figures activated late:  16/61 (26.2%)
+  (Smart play: activate wounded early to get value before they die)
+  Adj-to-killable activated early: 2/2 (100.0%)
+  Adj-to-killable activated late:  0/2 (0.0%)
+  (Smart play: activate near killable targets early to secure the kill)
+  Pass when ahead on VP:  28/67 (41.8%)
+  Pass when behind on VP: 23/67 (34.3%)
+  Pass when tied on VP:   16/67 (23.9%)
+  (Smart play: pass more when ahead to force opponent to commit first)
+
+=== Turn-Denial Targeting (Candidate B) ===
+  No equal-HP tiebreak situations observed
+
+=== Activation-Order Shadow Mode (Final) ===
+  Eligible: 72 | Gated (combat-ready): 11
+  Agree: 63 | Disagree: 9 (12.5%)
+  woundedVsWounded: 27 decisions, 18.5% disagree
+  woundedVsPositional: 19 decisions, 5.3% disagree
+  positionalVsPositional: 26 decisions, 11.5% disagree
+  By round: R1:13% R2:7% R3:12% R4:16%
+  By activation timing: early=13% late=0%
+  Avg feature delta (scorer-heuristic): enemyThreat:0.000 hpFraction:-0.002 figureCount:0.185 minEnemyNorm:0.178 minObjNorm:-0.089 attackRange:0.000 roundFrac:0.000 actLeft:0.000
+  Outcome (all eligible): 72 (attack:49% interact:3% moveOnly:36% endOnly:13%)
+  Outcome (agree):        63 (attack:46% interact:2% moveOnly:38% endOnly:14%)
+  Outcome (disagree→heur):9 (attack:67% interact:11% moveOnly:22% endOnly:0%)
+
+╔══════════════════════════════════════════════════╗
+║           PASS-TIMING AUDIT                      ║
+╚══════════════════════════════════════════════════╝
+
+=== 1. Pass Opportunity Surface ===
+  Total activations: 145 across 5 games
+  Pass-legal decisions: 71 (49.0% of activations)
+  Per-game avg: 14.2 pass-legal decisions/game
+  By round:
+    R1: 14 opportunities, pass chosen 100.0%
+    R2: 13 opportunities, pass chosen 100.0%
+    R3: 13 opportunities, pass chosen 100.0%
+    R4: 11 opportunities, pass chosen 100.0%
+  By activation gap (opp-mine):
+    Gap 1: 68 opportunities, pass chosen 94.1%
+    Gap 2: 3 opportunities, pass chosen 100.0%
+
+=== 2. Pass Decision Rate ===
+  Pass chosen: 67/71 (94.4%)
+  Activated instead: 4/71 (5.6%)
+  By VP state:
+    ahead: 28/31 (90.3%)
+    behind: 23/24 (95.8%)
+    tied: 16/16 (100.0%)
+
+=== 3. DQN Q-Value Analysis (pass vs activate) ===
+  Avg Q(pass):     0.736
+  Avg Q(activate): 0.151
+  Avg gap (pass-activate): 0.584
+  When pass chosen (N=38):    avg Q-gap = 0.585
+  When activate chosen (N=2): avg Q-gap = 0.564
+  DQN preferred type at pass-legal decisions:
+    pass: 40 (100.0%)
+
+=== 4. Activation Outcomes (when pass was legal but DC activated) ===
+  Total "activated instead of pass": 4
+  Outcomes: attack=25.0% interact=0.0% moveOnly=0.0% endOnly=75.0%
+  WASTED passes (endOnly): 3/4 (75.0%)
+  Wasted by round:
+
+=== 5. Missed Obvious Pass Opportunities ===
+  Obvious misses (endOnly + gap≥2): 0
+
+=== 6. Board Context at Pass-Legal Decisions ===
+  Avg wounded DCs (mine): 1.18
+  Avg unactivated DCs (opponent): 2.75
+  Pass rate when wounded: 92.2% (N=51)
+  Pass rate when no wounded: 100.0% (N=20)
+  Pass rate by opponent unactivated DCs:
+    2 unactivated: 94.4% (N=18)
+    3+ unactivated: 94.3% (N=53)
+
+=== 7. Per-Map Pass Analysis ===
+  Corellian Underground: 71 opportunities, pass=94.4%, wasted=75.0%
+
+=== 8. Pass-Timing Outcome Correlation ===
+  Games with pass data: 5
+  High-pass games (≥50% pass rate): 5
+  Low-pass games (<50% pass rate):  0
+  Games with wasted passes: 2
+  High-waste (≥50%): 2 games, avg total VP=48.0
+
+╔══════════════════════════════════════════════════╗
+║       PASS-TIMING SHADOW SCORER                  ║
+╚══════════════════════════════════════════════════╝
+
+=== Shadow Overview ===
+  Total pass-legal decisions: 71
+  Shadow says activate: 53 (74.6%)
+  Shadow says pass:     18 (25.4%)
+  Agree with DQN: 22 (31.0%)
+  Disagree:       49 (69.0%)
+
+=== Disagreement by Map ===
+  corellian underground: 71 total, 49 disagree (69.0%) | shadow→act,DQN→pass: 49 | shadow→pass,DQN→act: 0
+
+=== Disagreement by Round ===
+  R1: 14 total, 8 disagree (57.1%)
+  R2: 13 total, 9 disagree (69.2%)
+  R3: 13 total, 10 disagree (76.9%)
+  R4: 11 total, 8 disagree (72.7%)
+
+=== Disagreement by VP State ===
+  ahead: 31 total, 22 disagree (71.0%)
+  behind: 24 total, 17 disagree (70.8%)
+  tied: 16 total, 10 disagree (62.5%)
+
+=== Disagreement by Activation Gap ===
+  Gap 1: 68 total, 47 disagree (69.1%)
+  Gap 2: 3 total, 2 disagree (66.7%)
+
+=== Disagreement by Wounded State ===
+  Has wounded DCs: 51 total, 37 disagree (72.5%)
+  No wounded DCs: 20 total, 12 disagree (60.0%)
+
+=== Disagreement by Productive Availability ===
+  Can attack: 26 total, 24 disagree (92.3%)
+  No attack available: 45 total, 25 disagree (55.6%)
+
+=== Feature Averages (Agree vs Disagree) ===
+  gapNorm            agree=0.873  disagree=0.482  delta=-0.391
+  vpDeltaNorm        agree=-0.043  disagree=0.054  delta=0.097
+  roundFraction      agree=0.670  disagree=0.735  delta=0.064
+  myWoundedRatio     agree=0.288  disagree=0.514  delta=0.226
+  bestDcCanAttack    agree=0.091  disagree=0.490  delta=0.399
+  bestDcNearObj      agree=0.823  disagree=0.861  delta=0.038
+  myExhaustedFrac    agree=0.000  disagree=0.000  delta=0.000
+
+=== Outcome Proxy: Shadow-Activate, DQN-Pass ===
+  Count: 49
+  Context: 37 had wounded DCs or few opp unactivated (likely good to activate)
+  Strong activate signal (score>0.5): 29 (59.2%)
+
+=== Outcome Proxy: Shadow-Pass, DQN-Activate ===
+  Count: 0
+
+Learnings saved to /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-corellian-debug5.json
+Diagnostic trace saved to /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-corellian-debug5-diag-trace.json (9 disagreements)
+Ability-play audit saved to /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-corellian-debug5-ability-plays.json (107 plays)
+
+=== Ability distance-gate audit ===
+  Decisions: 172 (gate-hit 19 [11.0%] / gate-pass 153)
+  Skipped by category: offensive=21 off_move=2 defense=0 support=4 other=0
+  Played  by category: offensive=76  off_move=16  defense=12  support=3  other=46

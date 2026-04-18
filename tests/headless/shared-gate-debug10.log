@@ -1,0 +1,925 @@
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p5 d=8 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+PSA_ENTRY_DEBUG: far dc_special in allActions n=4 d=8 name=Saber Strike types=move_figure,dc_special,dc_end_activation,play_cc
+DIST_INTERNAL: actor=p5 d=8 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p5 d=8 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+PLANNER_DEBUG: far dc_special at p2.5 d=8 suppressed=true name=Saber Strike abilities_len=1 groups_keys=start_move,ability,end_activation,play_cc
+DIST_INTERNAL: actor=p10 d=3 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+SUBMIT_COMPARE: name=Brutal Cleave fkAna=Gaarkhan-1-0 fkGate=Gaarkhan-1-0 posAna=p7 posGate=p7 dAna=8 dGate=8 gateSupp=false
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p7 d=6 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+SUBMIT_COMPARE: name=Charge fkAna=Gaarkhan-1-0 fkGate=Gaarkhan-1-0 posAna=p7 posGate=p7 dAna=8 dGate=8 gateSupp=false
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=u15 d=6 source=thug:x12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=u15 d=6 source=thug:x12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=u15 d=6 source=thug:x12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=u15 d=6 source=thug:x12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=u15 d=6 source=thug:x12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=u15 d=6 source=thug:x12 npcKryknaCount=0 npcThugsCount=4
+SUBMIT_COMPARE: name=Missile Salvo fkAna=BT-1-1-0 fkGate=BT-1-1-0 posAna=u15 posGate=u15 dAna=10 dGate=10 gateSupp=false
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=t15 d=6 source=thug:o16 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=t15 d=6 source=thug:o16 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=t15 d=6 source=thug:o16 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=t15 d=6 source=thug:o16 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=t15 d=6 source=thug:o16 npcKryknaCount=0 npcThugsCount=4
+SUBMIT_COMPARE: name=Invasive Procedure fkAna=0-0-0-1-0 fkGate=0-0-0-1-0 posAna=t15 posGate=t15 dAna=9 dGate=9 gateSupp=false
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p6 d=7 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+PSA_ENTRY_DEBUG: far dc_special in allActions n=6 d=7 name=Calming Presence types=move_figure,dc_special,dc_end_activation
+DIST_INTERNAL: actor=p6 d=7 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p6 d=7 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+PLANNER_DEBUG: far dc_special at p2.5 d=7 suppressed=true name=Calming Presence abilities_len=4 groups_keys=start_move,ability,end_activation
+DIST_INTERNAL: actor=p9 d=4 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=thug:o12 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=m11 d=4 source=thug:o13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=4 source=thug:o13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=6 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=6 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=6 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=6 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=6 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p14 d=2 source=thug:o15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p14 d=2 source=thug:o15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p10 d=4 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=4 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=4 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=4 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=4 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=5 source=figs:p14 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=u15 d=4 source=thug:x14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=u15 d=4 source=thug:x14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=u15 d=4 source=thug:x14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=u15 d=4 source=thug:x14 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=u15 d=4 source=thug:x14 npcKryknaCount=0 npcThugsCount=4
+SUBMIT_COMPARE: name=Missile Salvo fkAna=BT-1-1-0 fkGate=BT-1-1-0 posAna=u15 posGate=u15 dAna=10 dGate=10 gateSupp=false
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p14 d=4 source=figs:p10 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p14 d=4 source=figs:p10 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p14 d=4 source=figs:p10 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p14 d=4 source=figs:p10 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=m11 d=1 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=1 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=1 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=1 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=1 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=1 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=1 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p10 d=3 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=3 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=3 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=3 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=3 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=s13 d=6 source=figs:p10 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=s13 d=6 source=figs:p10 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=s13 d=6 source=figs:p10 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=s13 d=6 source=figs:p10 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=m11 d=1 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=1 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p10 d=3 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=3 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=3 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p10 d=3 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p13 d=4 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p13 d=4 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p13 d=4 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p13 d=4 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p13 d=4 source=figs:n11 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=n11 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=m11 d=5 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p13 d=1 source=figs:o13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p13 d=1 source=figs:o13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p13 d=1 source=figs:o13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p13 d=1 source=figs:o13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p13 d=1 source=figs:o13 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=o13 d=1 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=1 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=1 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=1 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=1 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=1 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=1 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=n11 d=4 source=figs:p13 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=o13 d=3 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=3 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=3 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=3 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=3 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=3 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=3 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=3 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o13 d=3 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=n11 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=n11 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o15 d=1 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=o14 d=2 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+DIST_INTERNAL: actor=p9 d=6 source=figs:p15 npcKryknaCount=0 npcThugsCount=4
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to update DC card after End Activation: TypeError: Cannot read properties of null (reading 'messages')
+    at handleDcEndActivation (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/activation.js:848:37)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:1946:7)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)
+Failed to ready DC embed: TypeError: Cannot read properties of null (reading 'messages')
+    at _runStatusPhaseLogic (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:209:28)
+    at async runStatusPhaseAfterEndOfRound (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/round.js:139:3)
+    at async dispatchPhaseAdvance (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:308:9)
+    at async handlePhaseGateReady (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/handlers/phase-gate.js:215:3)
+    at async Object.submitAction (file:///Users/adammeehan/Public/IACP-Skirmish-Async/src/headless/game-harness.js:230:9)
+    at async runOneGame (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:564:15)
+    at async main (file:///Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/train.js:2306:20)

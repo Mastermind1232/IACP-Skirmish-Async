@@ -21,7 +21,8 @@
       "mcp__discord-mcp__get_message",
       "mcp__discord-mcp__get_bot_info",
       "mcp__discord-mcp__send_message",
-      "mcp__discord-mcp__delete_channel"
+      "mcp__discord-mcp__delete_channel",
+      "Bash(railway logs:*)"
     ]
   }
 }

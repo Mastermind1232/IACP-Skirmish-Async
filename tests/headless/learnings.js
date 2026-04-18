@@ -91,6 +91,20 @@ const REPLAY_UPDATES_PER_GAME = 4;  // Mini-batch updates after each game
 const REPLAY_MIN_SIZE = 256;        // Min buffer fill before replay starts
 // REPLAY_ALPHA: computed as half of scheduled ALPHA (see replayUpdate)
 
+// ── Policy-Head Replay Buffer (Phase C — AlphaZero flywheel) ────────────────
+// Per-decision samples recorded by MCTS self-play: {features, piTarget, z,
+// playerNum}. piTarget is the normalized MCTS visit distribution aggregated
+// over NUM_ACTIONS (23) abstract action types. z ∈ {-1, 0, +1} is the final
+// game outcome from the decision-maker's perspective. Fed into policyUpdate
+// for joint value-MSE + policy-CE training alongside DQN replayUpdate.
+const POLICY_BUFFER_SIZE = 10000;
+const POLICY_BATCH_SIZE = 32;
+const POLICY_UPDATES_PER_GAME = 4;
+const POLICY_MIN_SIZE = 64;         // smaller than DQN min; policy samples are per-decision not per-step
+const POLICY_ALPHA = 0.003;         // slightly lower LR than DQN — softmax CE is sharp
+const POLICY_VALUE_WEIGHT = 0.25;   // scales value-head MSE against policy CE (AlphaZero uses 1.0 but with deeper nets; at scale 64 this keeps updates proportionate)
+const POLICY_ENTROPY_BONUS = 0.001; // tiny entropy regularizer — prevents policy collapse early
+
 // ── Within-Group Scorer (Phase 5) ───────────────────────────────────────────
 const ALPHA_WG = 0.01;           // Learning rate for within-group scorers (5x main)
 const ALPHA_WG_SURGE = 0.002;   // Surge scorer LR: 5x lower — prevent re-collapse after reset
@@ -2360,12 +2374,26 @@ export function initializeNetwork() {
   }
   const ba = new Array(NUM_ACTIONS).fill(0);
 
-  return { W1, b1, Wv, bv, Wa, ba };
+  // Wp: [NUM_ACTIONS][HIDDEN_SIZE] — policy-head logits, Xavier init.
+  // Phase C: consumed by MCTS as prior when present; when absent (old
+  // checkpoints), mcts.js falls back to softmax(Q).
+  const xavierP = Math.sqrt(2 / (HIDDEN_SIZE + NUM_ACTIONS));
+  const Wp = [];
+  for (let k = 0; k < NUM_ACTIONS; k++) {
+    const row = [];
+    for (let j = 0; j < HIDDEN_SIZE; j++) {
+      row.push(randn() * xavierP);
+    }
+    Wp.push(row);
+  }
+  const bp = new Array(NUM_ACTIONS).fill(0);
+
+  return { W1, b1, Wv, bv, Wa, ba, Wp, bp };
 }
 
-/** Deep-copy all 6 parameter arrays of a network. */
+/** Deep-copy all parameter arrays of a network. Wp/bp optional (Phase C). */
 function deepCopyNetwork(network) {
-  return {
+  const copy = {
     W1: network.W1.map(row => [...row]),
     b1: [...network.b1],
     Wv: [...network.Wv],
@@ -2373,16 +2401,23 @@ function deepCopyNetwork(network) {
     Wa: network.Wa.map(row => [...row]),
     ba: [...network.ba],
   };
+  if (network.Wp) copy.Wp = network.Wp.map(row => [...row]);
+  if (network.bp) copy.bp = [...network.bp];
+  return copy;
 }
 
 // ── Forward Pass ────────────────────────────────────────────────────────────
 
 /**
  * Dueling forward pass.
- * Returns { Q: [NUM_ACTIONS], V, A: [NUM_ACTIONS], h_pre: [HIDDEN_SIZE], h: [HIDDEN_SIZE] }
+ * Returns { Q: [NUM_ACTIONS], V, A: [NUM_ACTIONS], h_pre: [HIDDEN_SIZE], h: [HIDDEN_SIZE],
+ *   P: [NUM_ACTIONS] | undefined, policyLogits: [NUM_ACTIONS] | undefined }
+ * P is returned only when the network has policy-head weights (Wp/bp). Old
+ * checkpoints without Wp/bp still forward-pass identically; MCTS falls back
+ * to softmax(Q) in that case.
  */
 function forwardPass(network, features) {
-  const { W1, b1, Wv, bv, Wa, ba } = network;
+  const { W1, b1, Wv, bv, Wa, ba, Wp, bp } = network;
 
   // Shared hidden layer: h_pre = W1 * features + b1, h = ReLU(h_pre)
   const h_pre = new Array(HIDDEN_SIZE);
@@ -2422,7 +2457,35 @@ function forwardPass(network, features) {
     Q[k] = V + A[k] - meanA;
   }
 
-  return { Q, V, A, h_pre, h };
+  // Policy head (Phase C): P = softmax(Wp · h + bp). Optional — absent on
+  // legacy checkpoints. No mean-subtraction (raw logits → softmax).
+  let P, policyLogits;
+  if (Wp && bp) {
+    policyLogits = new Array(nActions);
+    for (let k = 0; k < nActions; k++) {
+      let sum = bp[k];
+      for (let j = 0; j < HIDDEN_SIZE; j++) {
+        sum += Wp[k][j] * h[j];
+      }
+      policyLogits[k] = sum;
+    }
+    // Numerically stable softmax
+    let maxL = -Infinity;
+    for (let k = 0; k < nActions; k++) if (policyLogits[k] > maxL) maxL = policyLogits[k];
+    P = new Array(nActions);
+    let zsum = 0;
+    for (let k = 0; k < nActions; k++) {
+      P[k] = Math.exp(policyLogits[k] - maxL);
+      zsum += P[k];
+    }
+    if (zsum > 0) {
+      for (let k = 0; k < nActions; k++) P[k] /= zsum;
+    } else {
+      for (let k = 0; k < nActions; k++) P[k] = 1 / nActions;
+    }
+  }
+
+  return { Q, V, A, h_pre, h, P, policyLogits };
 }
 
 // ── NaN Safety ──────────────────────────────────────────────────────────────
@@ -2884,6 +2947,216 @@ export function replayUpdate(learnings) {
     const batchAvg = deltaSum / REPLAY_BATCH_SIZE;
     stats.avgAbsDelta = (stats.avgAbsDelta || 0) * 0.95 + batchAvg * 0.05;
   }
+}
+
+// ── Policy-Head Replay (Phase C) ────────────────────────────────────────────
+
+/**
+ * Record one MCTS self-play decision. Called per root call in self-play.
+ * Buffer is a ring of fixed size — old entries overwritten once full.
+ * z is filled in at game end via `finalizePolicyGameOutcome` (see below),
+ * since we don't know the winner mid-game. During recording we stash the
+ * sample with z=null and a gameTag; finalize walks all samples with that
+ * tag and writes z.
+ *
+ * @param {object} learnings
+ * @param {number[]} features — length NUM_FEATURES
+ * @param {number[]} piTarget — length NUM_ACTIONS (abstract-type visit dist, normalized)
+ * @param {number} playerNum — decision-maker (1 or 2)
+ * @param {string} gameTag — opaque id for this self-play game
+ */
+export function addPolicySample(learnings, features, piTarget, playerNum, gameTag) {
+  if (!learnings.policyBuffer) {
+    learnings.policyBuffer = { samples: [], writeIdx: 0, count: 0 };
+  }
+  const buf = learnings.policyBuffer;
+  const sample = {
+    features: features.slice(),
+    piTarget: piTarget.slice(),
+    playerNum,
+    gameTag,
+    z: null, // filled at game end
+  };
+  if (buf.samples.length < POLICY_BUFFER_SIZE) {
+    buf.samples.push(sample);
+  } else {
+    buf.samples[buf.writeIdx] = sample;
+  }
+  buf.writeIdx = (buf.writeIdx + 1) % POLICY_BUFFER_SIZE;
+  buf.count++;
+}
+
+/**
+ * Fill in z for every pending sample belonging to a finished self-play game.
+ * winnerPN: 1, 2, or null (draw).
+ */
+export function finalizePolicyGameOutcome(learnings, gameTag, winnerPN) {
+  const buf = learnings.policyBuffer;
+  if (!buf) return 0;
+  let updated = 0;
+  for (const s of buf.samples) {
+    if (!s || s.gameTag !== gameTag || s.z !== null) continue;
+    if (winnerPN === null || winnerPN === undefined) s.z = 0;
+    else s.z = (s.playerNum === winnerPN) ? 1 : -1;
+    updated++;
+  }
+  return updated;
+}
+
+/**
+ * Policy + value training step. Samples POLICY_BATCH_SIZE × POLICY_UPDATES_PER_GAME
+ * from the policy buffer (only samples with z filled) and updates Wp/bp/Wv/bv
+ * (and the shared trunk W1/b1) via joint policy-CE + value-MSE loss.
+ *
+ * Loss = CE(piTarget, P) + POLICY_VALUE_WEIGHT * (V - z)^2 - POLICY_ENTROPY_BONUS * H(P)
+ * Gradients:
+ *   dL/d(policyLogit_k) = P_k - piTarget_k - β*(-P_k*(log P_k + 1) + ...) → approx P_k - piTarget_k for small β
+ *   dL/d(V) = 2 * λ_v * (V - z)
+ * Backprop through linear heads then through the shared ReLU trunk.
+ *
+ * Safe no-op when: network has no Wp, buffer too small, or all samples still
+ * have z=null.
+ */
+export function policyUpdate(learnings) {
+  const network = learnings.network;
+  if (!network || !network.Wp || !network.bp) return;
+  const buf = learnings.policyBuffer;
+  if (!buf || buf.samples.length < POLICY_MIN_SIZE) return;
+
+  const readySamples = buf.samples.filter(s => s && s.z !== null);
+  if (readySamples.length < POLICY_MIN_SIZE) return;
+
+  const { W1, b1, Wv, Wa, Wp, bp } = network;
+  const nHidden = b1.length;
+  const nActions = Wp.length;
+  const stats = learnings.trainingStats;
+  if (!stats.policyStats) {
+    stats.policyStats = {
+      totalUpdates: 0, avgPolicyCE: 0, avgValueMSE: 0, avgEntropy: 0,
+      lastBatchCount: 0,
+    };
+  }
+
+  const readyLen = readySamples.length;
+
+  for (let batch = 0; batch < POLICY_UPDATES_PER_GAME; batch++) {
+    let ceSum = 0, mseSum = 0, entSum = 0;
+    for (let b = 0; b < POLICY_BATCH_SIZE; b++) {
+      const idx = Math.floor(Math.random() * readyLen);
+      const s = readySamples[idx];
+      const { features, piTarget, z } = s;
+
+      // Forward pass (includes P, policyLogits, V, h, h_pre)
+      const fp = forwardPass(network, features);
+      const { h, h_pre, V, P } = fp;
+      if (!P) continue; // shouldn't happen after the gate above
+
+      // ─── Policy CE loss + gradient ─────────────────────────────────────
+      // Gradient of CE(pi, softmax(logits)) wrt logits = P - pi
+      // Entropy bonus H(P) = -Σ P log P ; ∂H/∂logit_k = -P_k(log P_k) - P_k*(1 - ... ) — for
+      // small β we use the standard approximation ∂(-βH)/∂logit_k ≈ β*(log P_k + 1) * P_k
+      // (upper bound on its magnitude; keeps gradient direction toward higher entropy).
+      const dLogits = new Array(nActions);
+      let entropy = 0;
+      let ce = 0;
+      for (let k = 0; k < nActions; k++) {
+        const pk = Math.max(P[k], 1e-9);
+        const tk = Math.max(piTarget[k], 0);
+        if (tk > 0) ce -= tk * Math.log(pk);
+        entropy -= pk * Math.log(pk);
+        dLogits[k] = (pk - tk) - POLICY_ENTROPY_BONUS * (Math.log(pk) + 1) * pk;
+      }
+      ceSum += ce;
+      entSum += entropy;
+
+      // ─── Value MSE loss + gradient ─────────────────────────────────────
+      // Squash V into [-1, 1] via tanh so the value head can actually approach
+      // z ∈ {-1, 0, 1}. Without this, Wv is a linear readout and can't bound.
+      // Use cached V from forward, then apply tanh for loss only.
+      const vT = Math.tanh(V);
+      const mse = (vT - z) ** 2;
+      mseSum += mse;
+      // dL/dV_raw = 2 * λ_v * (tanh(V) - z) * (1 - tanh(V)^2)
+      const dV = 2 * POLICY_VALUE_WEIGHT * (vT - z) * (1 - vT * vT);
+
+      // ─── Backprop into heads + shared trunk ────────────────────────────
+      // Accumulate dh from all heads (no mean-subtraction needed for the policy
+      // head; advantage head not touched by this loss).
+      const dh = new Array(nHidden).fill(0);
+
+      // Policy head: Wp[k][j] -= α * dLogits[k] * h[j] ; bp[k] -= α * dLogits[k]
+      for (let k = 0; k < nActions; k++) {
+        const g = dLogits[k];
+        if (g === 0 || !isFinite(g)) continue;
+        const step = POLICY_ALPHA * g;
+        const row = Wp[k];
+        for (let j = 0; j < nHidden; j++) {
+          dh[j] += row[j] * g;
+          row[j] -= step * h[j];
+        }
+        bp[k] -= step;
+      }
+
+      // Value head: Wv[j] -= α * dV * h[j] ; bv -= α * dV
+      if (isFinite(dV) && dV !== 0) {
+        const stepV = POLICY_ALPHA * dV;
+        for (let j = 0; j < nHidden; j++) {
+          dh[j] += Wv[j] * dV;
+          Wv[j] -= stepV * h[j];
+        }
+        network.bv -= stepV;
+      }
+
+      // Trunk backprop: ∂h/∂h_pre = 1 if h_pre>0 else 0 (ReLU).
+      // W1[j][i] -= α * dh[j] * relu'(h_pre[j]) * features[i] ; b1[j] -= α * dh[j] * relu'(h_pre[j])
+      for (let j = 0; j < nHidden; j++) {
+        if (h_pre[j] <= 0) continue;
+        const g = dh[j];
+        if (g === 0 || !isFinite(g)) continue;
+        const step = POLICY_ALPHA * g;
+        b1[j] -= step;
+        const row = W1[j];
+        for (let i = 0; i < features.length; i++) {
+          row[i] -= step * (features[i] || 0);
+        }
+      }
+
+      sanitizeNetwork(network, stats);
+      stats.policyStats.totalUpdates++;
+    }
+    const n = Math.max(POLICY_BATCH_SIZE, 1);
+    const ps = stats.policyStats;
+    ps.avgPolicyCE = ps.avgPolicyCE * 0.95 + (ceSum / n) * 0.05;
+    ps.avgValueMSE = ps.avgValueMSE * 0.95 + (mseSum / n) * 0.05;
+    ps.avgEntropy = ps.avgEntropy * 0.95 + (entSum / n) * 0.05;
+    ps.lastBatchCount = readyLen;
+  }
+}
+
+/** Persist the policy buffer to its own file. */
+export function savePolicyBuffer(learnings, filePath) {
+  const buf = learnings.policyBuffer;
+  if (!buf || buf.samples.length === 0) return;
+  writeFileSync(filePath, JSON.stringify({
+    samples: buf.samples,
+    writeIdx: buf.writeIdx,
+    count: buf.count,
+  }));
+}
+
+export function loadPolicyBuffer(learnings, filePath) {
+  try {
+    if (existsSync(filePath)) {
+      const data = JSON.parse(readFileSync(filePath, 'utf8'));
+      learnings.policyBuffer = {
+        samples: data.samples || [],
+        writeIdx: data.writeIdx || 0,
+        count: data.count || 0,
+      };
+      return;
+    }
+  } catch { /* start fresh */ }
+  learnings.policyBuffer = { samples: [], writeIdx: 0, count: 0 };
 }
 
 // ── Action Abstraction ──────────────────────────────────────────────────────
@@ -4911,6 +5184,37 @@ export function loadLearnings(filePath) {
           data.network.ba.push(0);
         }
       }
+      // Phase C migration: add policy head (Wp, bp) to legacy checkpoints.
+      // Fresh Xavier init keeps the legacy DQN behavior unchanged (MCTS still
+      // reads softmax(Q) as prior when P is near-uniform); actual training
+      // gradient descent in Phase C will push P toward MCTS visit distributions.
+      if (data.network && (!data.network.Wp || !data.network.bp)) {
+        const xavierP = Math.sqrt(2 / (HIDDEN_SIZE + NUM_ACTIONS));
+        data.network.Wp = [];
+        for (let k = 0; k < NUM_ACTIONS; k++) {
+          const row = [];
+          for (let j = 0; j < HIDDEN_SIZE; j++) row.push(randn() * xavierP);
+          data.network.Wp.push(row);
+        }
+        data.network.bp = new Array(NUM_ACTIONS).fill(0);
+        console.log(`[learnings] Migrated network: added policy head Wp[${NUM_ACTIONS}×${HIDDEN_SIZE}]`);
+      }
+      // Extend existing Wp rows if HIDDEN_SIZE grew since last write, or add
+      // rows if NUM_ACTIONS grew.
+      if (data.network && data.network.Wp) {
+        const xavierP = Math.sqrt(2 / (HIDDEN_SIZE + NUM_ACTIONS));
+        for (let k = 0; k < data.network.Wp.length; k++) {
+          while (data.network.Wp[k].length < HIDDEN_SIZE) {
+            data.network.Wp[k].push(randn() * xavierP);
+          }
+        }
+        while (data.network.Wp.length < NUM_ACTIONS) {
+          const row = [];
+          for (let j = 0; j < HIDDEN_SIZE; j++) row.push(randn() * xavierP);
+          data.network.Wp.push(row);
+          data.network.bp.push(0);
+        }
+      }
       // Ensure Phase 3 stats fields exist
       data.trainingStats.featureNames = FEATURE_NAMES;
       data.trainingStats.hiddenSize = HIDDEN_SIZE;
@@ -4925,6 +5229,7 @@ export function loadLearnings(filePath) {
       if (!data.affiliationStats) data.affiliationStats = {};
       if (!data.matchups) data.matchups = [];
       if (!data.replayBuffer) data.replayBuffer = { transitions: [], writeIdx: 0, count: 0 };
+      if (!data.policyBuffer) data.policyBuffer = { samples: [], writeIdx: 0, count: 0 };
       if (!data.withinGroupWeights) {
         data.withinGroupWeights = {
           attack: new Array(6).fill(0), move: new Array(9).fill(0),
@@ -5038,6 +5343,7 @@ export function loadLearnings(filePath) {
     affiliationStats: {},
     matchups: [],
     replayBuffer: { transitions: [], writeIdx: 0, count: 0 },
+    policyBuffer: { samples: [], writeIdx: 0, count: 0 },
     withinGroupWeights: {
       attack: new Array(6).fill(0), move: new Array(9).fill(0),
       surge: new Array(4).fill(0), cc: new Array(4).fill(0),
@@ -5621,6 +5927,27 @@ export function getQValues(learnings, features) {
   }
   if (!learnings.network) return null;
   return forwardPass(learnings.network, features).Q;
+}
+
+/**
+ * Policy-head prior P(s) over ABSTRACT_TYPES. Returns null if the network has
+ * no policy head (legacy DQN checkpoints). MCTS callers use this when present
+ * and fall back to softmax(Q) otherwise.
+ */
+export function getPolicyPrior(learnings, features) {
+  if (!learnings.network || !learnings.network.Wp || !learnings.network.bp) return null;
+  const { P } = forwardPass(learnings.network, features);
+  return P || null;
+}
+
+/**
+ * Joint forward pass (Phase C). Returns {Q, V, P} — MCTS uses P for priors
+ * and V for leaf evaluation. Null when flat network is absent.
+ */
+export function getJointForward(learnings, features) {
+  if (!learnings.network) return null;
+  const { Q, V, P } = forwardPass(learnings.network, features);
+  return { Q, V, P };
 }
 
 export { ABSTRACT_TYPES, FEATURE_NAMES, NUM_FEATURES, PASS_FEATURE_NAMES, oracleActivationPlan };

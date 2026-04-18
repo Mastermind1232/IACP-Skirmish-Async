@@ -590,26 +590,68 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   };
 }
 
+// Min-heap keyed on cost with FIFO tie-break on _seq. Produces pop() order
+// identical to Array.sort((a,b)=>a.cost-b.cost) + shift() (stable sort),
+// so computeMovementCache output is bit-identical to the previous impl.
+class MovementHeap {
+  constructor() { this.arr = []; this._seq = 0; }
+  get size() { return this.arr.length; }
+  push(item) {
+    item._seq = this._seq++;
+    this.arr.push(item);
+    let i = this.arr.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (this._cmp(this.arr[p], this.arr[i]) <= 0) break;
+      const t = this.arr[p]; this.arr[p] = this.arr[i]; this.arr[i] = t;
+      i = p;
+    }
+  }
+  pop() {
+    const n = this.arr.length;
+    if (n === 0) return null;
+    const top = this.arr[0];
+    const last = this.arr.pop();
+    if (n > 1) {
+      this.arr[0] = last;
+      const size = this.arr.length;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = 2 * i + 2;
+        let best = i;
+        if (l < size && this._cmp(this.arr[l], this.arr[best]) < 0) best = l;
+        if (r < size && this._cmp(this.arr[r], this.arr[best]) < 0) best = r;
+        if (best === i) break;
+        const t = this.arr[best]; this.arr[best] = this.arr[i]; this.arr[i] = t;
+        i = best;
+      }
+    }
+    return top;
+  }
+  _cmp(a, b) {
+    if (a.cost !== b.cost) return a.cost - b.cost;
+    return a._seq - b._seq;
+  }
+}
+
 export function computeMovementCache(startCoord, mpLimit, board, profile) {
   const startTopLeft = normalizeCoord(startCoord);
   if (!board?.spacesSet?.has(startTopLeft)) return { nodes: new Map(), cells: new Map(), parent: new Map(), maxMp: mpLimit };
   const startKey = movementStateKey(startTopLeft, profile.size);
-  const queue = [
-    {
-      key: startKey,
-      topLeft: startTopLeft,
-      size: profile.size,
-      cost: 0,
-      footprint: getNormalizedFootprint(startTopLeft, profile.size),
-    },
-  ];
+  const queue = new MovementHeap();
+  queue.push({
+    key: startKey,
+    topLeft: startTopLeft,
+    size: profile.size,
+    cost: 0,
+    footprint: getNormalizedFootprint(startTopLeft, profile.size),
+  });
   const bestCost = new Map([[startKey, 0]]);
   const nodes = new Map();
   const cells = new Map();
   const parent = new Map();
-  while (queue.length > 0) {
-    queue.sort((a, b) => a.cost - b.cost);
-    const current = queue.shift();
+  while (queue.size > 0) {
+    const current = queue.pop();
     if (current.cost > mpLimit) continue;
     // G64: Massive figures cannot enter spaces occupied by other Massive figures
     const hitsMassive = profile.isMassive && board.massiveOccupiedSet &&

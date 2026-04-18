@@ -1,0 +1,33 @@
+[
+  {
+    "game": 1,
+    "mapId": "chopper-base-atollon",
+    "matchupLabel": "Jedi Council vs Sith Lords",
+    "winner": "P2",
+    "p1VP": 10,
+    "p2VP": 20,
+    "finalRound": 9,
+    "stopReason": "normal",
+    "ended": true,
+    "figureDefeats": 1,
+    "attackActions": 18,
+    "moveActions": 33,
+    "activationsWithAttack": 18,
+    "totalActivations": 29,
+    "passActivations": 10,
+    "endActivations": 29,
+    "doorOpens": 1,
+    "productiveActions": 155,
+    "prematureEndAct": 0,
+    "attackWhenTargetsInRange": 8,
+    "moveWhenTargetsInRange": 41,
+    "endWhenTargetsInRange": 8,
+    "decisionsWithTargets": 57,
+    "decisionsWithoutTargets": 149,
+    "npcAttacks": 18,
+    "npcDefeats": 5,
+    "totalIterations": 380,
+    "runawayWindowCount": 0,
+    "round1DistClosed": null
+  }
+]

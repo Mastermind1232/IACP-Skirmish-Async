@@ -29,11 +29,11 @@ import { createTestGame } from '../fixtures/game-builder.js';
 //
 // `dcName_startsWith` counts include the legitimate attachment-stripping
 // fallback in src/game/dc-helpers.js (bracket-name resolution).
+// 2026-04-17: dcName_equality 55→56. Engine-side Fury of Kashyyyk Reach
+// check at available-actions.js mirrors the handler's `_hasFuryReach`
+// (closes parity scenarios 12/13). Attachment is identified by bracket name;
+// no specialAbilityIds-style pointer exists for DC-attachment lookups.
 export const DD_BASELINE = {
-  // 2026-04-17: +1 for engine-side Fury of Kashyyyk closure at
-  // src/engine/available-actions.js:2155 — `dc.dcName === '[Fury of Kashyyyk]'`
-  // is the engine mirror of the handler's _hasFuryReach, closing parity
-  // scenario #12. Removing it re-opens the gap, so the site is intentional.
   dcName_equality: 56,
   dcName_includes: 5,
   dcName_startsWith: 4,
@@ -159,7 +159,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Engine now applies permanent Reach (fixed 2026-04-16; available-actions.js extends melee maxRange to 2 when attacker has REACH keyword or passive). Both sides agree. Fury of Kashyyyk conditional WOOKIEE Reach and Electrostaff loadout-card Reach remain engine-only gaps.',
+    reason: 'Engine now applies permanent Reach (fixed 2026-04-16; available-actions.js extends melee maxRange to 2 when attacker has REACH keyword or passive). Both sides agree. Fury of Kashyyyk and Electrostaff loadout-card Reach also closed 2026-04-17 (scenarios 12/13).',
   },
 
   // 3. Hide — handler filters Hidden targets, engine does not
@@ -217,7 +217,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Engine now reads game.nextAttackReach[playerNum] and extends melee maxRange to 2 when set (fixed 2026-04-16; available-actions.js:2149-2157). Both sides agree. Fury of Kashyyyk conditional WOOKIEE Reach and Electrostaff loadout-card Reach remain engine-only gaps.',
+    reason: 'Engine now reads game.nextAttackReach[playerNum] and extends melee maxRange to 2 when set (fixed 2026-04-16; available-actions.js:2149-2170). Both sides agree. Fury of Kashyyyk and Electrostaff loadout-card Reach also closed 2026-04-17 (scenarios 12/13).',
   },
 
   // 5. Priority Target — handler ignores figure-blocking LOS via abilityText
@@ -256,7 +256,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2224-2231. Engine now reads _aaEff.abilityText and nulls the figureBlockingCoords set (line 2233) when abilityText contains both "priority target" and "line of sight", matching the handler\'s dc-play-area.js bypass. Rebel Saboteur (Elite) sees Greedo on both sides. Positive control: if engine drops the abilityText check, Greedo returns to handler_only and this baseline trips.',
+    reason: 'Engine now parses abilityText for Priority Target and nulls the figure-blocking set when abilityText contains both "priority target" and "line of sight" (fixed 2026-04-17; available-actions.js:2205-2220). Both sides agree.',
   },
 
   // 6. Marksman CC (nextAttackIgnoreFigureLOS) — handler-only LOS bypass flag
@@ -287,7 +287,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2224-2231. Engine now reads game.nextAttackIgnoreFigureLOS?.[msgId] and nulls figureBlockingCoords (line 2233) when the flag is set, matching handler dc-play-area.js. Bossk sees Greedo on both sides when the flag is active. Note: engine is read-only at target enumeration; consumption/delete-on-read is the mutator\'s responsibility at attack resolution. Positive control: if engine drops the flag read, Greedo returns to handler_only and this baseline trips.',
+    reason: 'Engine now reads game.nextAttackIgnoreFigureLOS[msgId] and nulls the figure-blocking set when set (fixed 2026-04-17; available-actions.js:2205-2220). Both sides agree. Handler consumes the flag at attack resolution; engine target enumeration remains read-only.',
   },
 
   // 7. Clawdite Shapeshifter Scout form — handler-only LOS bypass via figure config
@@ -326,7 +326,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2226 and :2230. Engine now reads getConfig(game, figureKey)?.form and nulls figureBlockingCoords (line 2233) when form === "Scout", matching handler dc-play-area.js Clawdite Scout treatment. Clawdite in Scout form sees Greedo on both sides. Positive control: if engine drops the form read, Greedo returns to handler_only and this baseline trips.',
+    reason: 'Engine now reads figureConfig.form via getConfig and nulls the figure-blocking set when form === "Scout" (fixed 2026-04-17; available-actions.js:2205-2220). Both sides agree.',
   },
 
   // 8. Insignificant (Dio) — BOTH sides implement; positive-control / regression guard
@@ -386,7 +386,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2290-2291. Engine now reads game.roundDefenderCannotBeTargetedUnlessWithinSpaces and continues (skips target) when protection applies to the enemy player and dist > spaces, matching handler dc-play-area.js:1012-1013. Boba Fett at a1 → Greedo at a5 (dist 4) is filtered by both when the spaces cap is 3. Positive control: if engine drops the check, Greedo returns to engine_only and this baseline trips.',
+    reason: 'Closed 2026-04-17 at available-actions.js:2268-2271 — engine now mirrors handler dc-play-area.js:1012-1013 by filtering targets beyond game.roundDefenderCannotBeTargetedUnlessWithinSpaces.spaces when the flag protects the enemy player (I Must Go Alone CC). Positive control: this scenario fails if either side removes the check.',
   },
 
   // 10. Fire Mission — handler uses group-LOS delegation; engine only checks attacker LOS
@@ -425,7 +425,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2329-2347. Engine now reads game.fireMissionActive?.[msgId]; when primary LOS fails, it retries LOS from every other figure in the attacker group (parses [DG N] / [Group N] from displayName, honours figures + Z-6/Mortar/Riot squad upgrade), matching handler dc-play-area.js:1032-1050 group-LOS delegation. Stormtrooper-1-0 at a1 with LOS blocked by Boba Fett at a2 still sees Greedo at a3 via group-member Stormtrooper-1-1 at c1 on both sides. Blast 1 is a combat-resolution concern, out of target-enumeration scope. Positive control: if engine drops the fireMissionActive retry, Greedo returns to handler_only and this baseline trips.',
+    reason: 'Closed 2026-04-17 at available-actions.js:2297-2318 — engine now mirrors handler dc-play-area.js:1032-1050 by retrying LOS from every other figure in the attacker group when game.fireMissionActive[msgId] is set. Attachment-aware figure count adjusts for Z-6/Mortar/Riot Trooper upgrades. Uses same _aaEffectiveMs and losBlockingCoords as primary LOS, so doors/shields/figure-blocking rules stay consistent. Blast 1 is a combat-resolution concern and out of scope for target enumeration parity. Positive control: this scenario fails if either side removes the group-LOS retry.',
   },
 
   // 11. Vanish immunity — handler-only exclusion by matching DC name prefix
@@ -456,7 +456,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2281-2285. Engine now reads game.vanishImmunityUntilNextActivation?.[enemyPn], resolves the vanished msgId to its dcName via dcMessageMeta, and continues (skips target) when fk starts with the vanished DC\'s dcName + "-", matching handler dc-play-area.js:1002-1006. Greedo is filtered on both sides while the immunity flag is held. Positive control: if engine drops the dcMessageMeta lookup or the prefix check, Greedo returns to engine_only and this baseline trips.',
+    reason: 'Closed 2026-04-17 at available-actions.js:2267-2274 — engine now mirrors handler dc-play-area.js:1002-1006 by reading game.vanishImmunityUntilNextActivation[enemyPn], looking up the protected dcName via deps.dcMessageMeta, and skipping figureKeys that start with that dcName (covers all group/figure indices). Positive control: this scenario fails if either side removes the check.',
   },
 
   // 12. Fury of Kashyyyk — attachment-granted Reach for WOOKIEE attackers
@@ -490,7 +490,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2154-2155 and :2162-2164. Engine now computes _hasFury = reachKws.includes("WOOKIEE") && getDcList(game, playerNum).some(dc => dc.dcName === "[Fury of Kashyyyk]"), folds it into _hasReach, and extends maxRange from 1 to 2 (line 2164), matching handler dc-play-area.js _hasFuryReach. Wookiee Warrior with [Fury of Kashyyyk] in dcList sees Greedo at distance 2 on both sides. Positive control: if engine drops either the WOOKIEE keyword or the attachment check, Greedo returns to handler_only and this baseline trips.',
+    reason: 'Engine now applies Fury of Kashyyyk Reach to WOOKIEE attackers when the attachment is in the dcList (fixed 2026-04-17; available-actions.js:2149-2170 extends melee maxRange to 2). Both sides agree.',
   },
 
   // 13. Electrostaff loadout-card Reach — handler reads loadout-card passive
@@ -527,7 +527,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2156-2157 and :2163-2164. Engine now reads getConfig(game, figureKey)?.loadout, looks up getLoadoutCards()[loadoutName], and folds loadout.passive === "Reach" into _hasReach (_loadoutReach), extending maxRange from 1 to 2, matching handler dc-play-area.js:1539-1540. Purge Trooper (Elite) with Electrostaff loadout sees Greedo at distance 2 on both sides. Positive control: if engine drops the loadout lookup, Greedo returns to handler_only and this baseline trips.',
+    reason: 'Engine now reads figureConfig.loadout and treats loadout-card passive === "Reach" as an attacker-side Reach grant (fixed 2026-04-17; available-actions.js:2149-2170 via getLoadoutCards + getConfig). Both sides agree.',
   },
 
   // 14. Closed door — engine does not merge closed-door edges into mapSpaces
@@ -558,7 +558,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2171-2201 and :2318. Engine now builds _aaEffectiveMs by merging _aaClosedEdgePairs into impassableEdges (line 2194-2195), then calls hasLineOfSight(ac, tc, _aaEffectiveMs, losBlockingCoords) at line 2318 — matching the handler\'s dc-play-area.js:940-970 merge. Both sides exclude Greedo behind a closed door at r11|r12. Positive control: if engine drops the _aaClosedEdgePairs merge or reverts to passing raw ms, Greedo returns to engine_only and this baseline trips.',
+    reason: 'Engine now merges closed-door edges into effectiveMs.impassableEdges before calling hasLineOfSight (fixed 2026-04-17; available-actions.js:2165-2190). Both sides agree: closed doors block LOS.',
   },
 
   // 15. Multi-cell attacker — engine only calls hasLineOfSight with the
@@ -594,7 +594,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2208-2213 and :2316-2320. Engine now builds attackerFpSet from getFootprintCells(attackerPos, attackerSize) (line 2212), materialises _aaAttackerFpCells at line 2251, and iterates attacker-fp × target-fp pairs through hasLineOfSight at lines 2316-2320 — matching the handler\'s dc-play-area.js:1026-1048 any-cell sweep. AT-RT at o14 → r14: engine finds a clear line from back-row cells o15/p15 and includes Greedo, same as handler. Positive control: if engine reverts to top-left-only at the LOS call site, Greedo returns to handler_only and this baseline trips.',
+    reason: 'Engine now iterates attacker-footprint × target-footprint for both distance and LOS (fixed 2026-04-17; available-actions.js:2219-2272). Both sides find a clear line from the back-row cell o15 or p15 to r14 and include Greedo.',
   },
 
   // 16. Energy shield — engine is shield-blind; handler merges shield spaces
@@ -630,6 +630,38 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Parity closed. Verified at available-actions.js:2182-2201 and :2318. Engine now reads game.ancillaryTokens.energyShield (line 2182), folds shield spaces into _aaExtraBlocking (line 2184), and merges them into _aaEffectiveMs.blocking (line 2197-2198); the LOS call at line 2318 uses _aaEffectiveMs — matching the handler\'s dc-play-area.js:951-968 merge. Shield at e3 between d3 and f3 blocks LOS on both sides; Greedo excluded from both handler and engine target sets. Positive control: if engine drops the shield merge, Greedo returns to engine_only and this baseline trips.',
+    reason: 'Engine now merges game.ancillaryTokens.energyShield into effectiveMs.blocking before calling hasLineOfSight (fixed 2026-04-17; available-actions.js:2165-2190). Both sides exclude Greedo when a shield at e3 sits between d3 and f3.',
+  },
+
+  // 17. C54 Smoke Grenade — engine was smoke-blind; handler merges smoke
+  //    spaces into mapSpaces.blocking alongside energy shields. Same open
+  //    row 3 corridor on mos-eisley-outskirts: smoke at e3 is the only LOS
+  //    blocker between attacker at d3 and target at f3. Same shape as
+  //    scenario 16 (shield) — they now share the engine's extraBlocking lane.
+  {
+    name: 'Smoke token — engine ignores smoke spaces; handler merges them into blocking',
+    setup() {
+      const built = createTestGame()
+        .withMap('mos-eisley-outskirts')
+        .withPlayer1Army([{ dcName: 'Bossk' }])
+        .withPlayer2Army([{ dcName: 'Greedo' }])
+        .inRound(1)
+        .build();
+      const { game, dcMessageMeta } = built;
+      game.figurePositions = {
+        1: { 'Bossk-1-0': 'd3' },
+        2: { 'Greedo-1-0': 'f3' },
+      };
+      game.ancillaryTokens = { smoke: ['e3'] };
+      const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'Bossk');
+      enableAttackFor(game, attackerMsgId);
+      return {
+        ...built,
+        attacker: { playerNum: 1, figureKey: 'Bossk-1-0', msgId: attackerMsgId, figureIndex: 0 },
+      };
+    },
+    expectedHandlerOnly: [],
+    expectedEngineOnly: [],
+    reason: 'Engine now merges game.ancillaryTokens.smoke into effectiveMs.blocking alongside energyShield (fixed 2026-04-17; available-actions.js:2177-2201). Both sides exclude Greedo when a smoke token at e3 sits between d3 and f3.',
   },
 ];

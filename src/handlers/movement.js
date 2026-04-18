@@ -475,11 +475,152 @@ export async function handleMoveAdjustMp(interaction, ctx) {
 }
 
 
+async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgId, figureKey, figureIndex, moveKey, newTopLeft, newMp) {
+  const { getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementMinimapAttachment } = ctx;
+  const nextBoard = getBoardStateForMovement(game, figureKey);
+  if (!nextBoard || !computeMovementCache) {
+    game.moveGridMessageIds = game.moveGridMessageIds || {};
+    game.moveGridMessageIds[moveKey] = [];
+    return;
+  }
+  const nextProfile = getMovementProfile(meta.dcName, figureKey, game);
+  if (game.mobileMovementActive?.[msgId]) {
+    nextProfile.isMobile = true;
+    nextProfile.ignoreBlocking = true;
+    nextProfile.ignoreFigureCost = true;
+    nextProfile.ignoreDifficult = true;
+  }
+  const nextCache = computeMovementCache(newTopLeft, newMp, nextBoard, nextProfile);
+  moveState.boardState = nextBoard;
+  moveState.movementProfile = nextProfile;
+  moveState.movementCache = nextCache;
+  moveState.cacheMaxMp = newMp;
+  if (moveState.distanceMessageId) {
+    try {
+      const distMsg = await interaction.channel.messages.fetch(moveState.distanceMessageId);
+      await distMsg.delete();
+    } catch { /* already gone */ }
+    moveState.distanceMessageId = null;
+  }
+  const newButtonSpaces = [...nextCache.cells.keys()];
+  const newIsMultiTile = nextProfile.size && nextProfile.size !== '1x1';
+  const newMultiTileNote = newIsMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
+  const newMinimapCells = newIsMultiTile
+    ? newButtonSpaces.map((tl) => bottomLeftCoord(tl, nextProfile.size))
+    : newButtonSpaces;
+  const newMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, newMinimapCells);
+  const newLabelMap = {};
+  if (newIsMultiTile) {
+    for (const s of newButtonSpaces) {
+      const n = normalizeCoord(s);
+      newLabelMap[n] = bottomLeftCoord(n, nextProfile.size).toUpperCase();
+    }
+  }
+  const newMoveContextKey = `${meta.gameId}_${moveKey}`;
+  const newMoveHeader = `**Move** — Pick destination (**${newMp}** MP remaining):${newMultiTileNote}`;
+  const newMoveActionBtns = [
+    { customId: `move_adjust_mp_${msgId}_${figureIndex}`, label: 'Pick Path Manually', style: ButtonStyle.Secondary },
+  ];
+  if (!game.urgencyMustSpendAll?.[msgId]) {
+    newMoveActionBtns.push(
+      { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'End Movement', style: ButtonStyle.Secondary }
+    );
+  }
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[newMoveContextKey] = {
+    validSpaces: newButtonSpaces,
+    cellPrefix: `move_pick_${msgId}_${figureIndex}_`,
+    mapSpaces: nextBoard.mapSpaces,
+    labelMap: newLabelMap,
+    headerText: newMoveHeader,
+    actionButtons: newMoveActionBtns,
+  };
+  const { rows: newRowBtns } = buildRowPickerButtons(newButtonSpaces, `space_row_${newMoveContextKey}_`);
+  const newActionBtns = newMoveActionBtns.map(b =>
+    new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
+  );
+  const newActionRow = new ActionRowBuilder().addComponents(...newActionBtns);
+  const newFirstPayload = {
+    content: `${newMoveHeader}\nChoose a row:`,
+    components: [...newRowBtns.slice(0, 4), newActionRow],
+    fetchReply: true,
+  };
+  if (newMinimap) newFirstPayload.files = [newMinimap];
+  const newGridMsg = await interaction.followUp(newFirstPayload).catch(() => null);
+  game.moveGridMessageIds = game.moveGridMessageIds || {};
+  game.moveGridMessageIds[moveKey] = newGridMsg?.id ? [newGridMsg.id] : [];
+}
+
+async function _renderPostMoveBoardUpdate(ctx, game, msgId) {
+  const { client, buildBoardMapPayload, updateDcActionsMessage } = ctx;
+  if (game.boardId && game.selectedMap) {
+    try {
+      const boardChannel = await fetchGameChannel(client, game.boardId);
+      if (!boardChannel) throw new Error('Board channel not found');
+      const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+      await boardChannel.send(payload);
+    } catch (err) {
+      console.error('Failed to update map after move:', err);
+    }
+  }
+  if (updateDcActionsMessage) {
+    try {
+      await updateDcActionsMessage(game, msgId, client);
+    } catch (err) {
+      console.error('Failed to update activation minimap after move:', err);
+    }
+  }
+}
+
+async function _renderRushPushPrompt(interaction, gameId, msgId, rushTargets) {
+  const btns = rushTargets.map((t, i) =>
+    new ButtonBuilder()
+      .setCustomId(`rush_push_fig_${gameId}_${msgId}_${i}`)
+      .setLabel(t.dcName.replace(/_/g, ' '))
+      .setStyle(ButtonStyle.Primary)
+  );
+  btns.push(
+    new ButtonBuilder()
+      .setCustomId(`rush_push_skip_${gameId}_${msgId}`)
+      .setLabel('Skip Rush Push')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  const rushRows = [];
+  while (btns.length > 0) rushRows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
+  await interaction.followUp({
+    content: '**Rush** — Push an adjacent SMALL hostile 1 space? Both suffer 1 Damage.',
+    components: rushRows.slice(0, 5),
+  });
+}
+
+async function _renderShoulderRushPrompt(interaction, gameId, msgId, srTargets) {
+  const srBtns = srTargets.map((t, i) =>
+    new ButtonBuilder()
+      .setCustomId(`shoulder_rush_fig_${gameId}_${msgId}_${i}`)
+      .setLabel(t.dcName.replace(/_/g, ' '))
+      .setStyle(ButtonStyle.Primary)
+  );
+  srBtns.push(
+    new ButtonBuilder()
+      .setCustomId(`shoulder_rush_skip_${gameId}_${msgId}`)
+      .setLabel('Skip (No Target)')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  const srRows = [];
+  while (srBtns.length > 0) srRows.push(new ActionRowBuilder().addComponents(srBtns.splice(0, 5)));
+  await interaction.followUp({
+    content: '**Shoulder Rush** — Choose an adjacent hostile figure to target:',
+    components: srRows.slice(0, 5),
+  });
+}
+
+
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, dcMessageMeta, clearMoveGridMessages, getBoardStateForMovement, getMovementProfile, ensureMovementCache, computeMovementCache, normalizeCoord, getMovementTarget, getFigureSize, getNormalizedFootprint, resolveMassivePush, updateMovementBankMessage, getMovementPath, pushUndo, logGameAction, countTerminalsControlledByPlayer, editDistanceMessage, getMoveMpButtonRows, buildBoardMapPayload, updateDcActionsMessage, saveGames, client
  */
-export async function handleMovePick(interaction, ctx) {
+export async function handleMovePick(interaction, ctx, opts = {}) {
+  const fastPath = !!opts.fastPath;
   const {
     getGame,
     dcMessageMeta,
@@ -878,101 +1019,11 @@ export async function handleMovePick(interaction, ctx) {
       const { onPostDeployMovementComplete } = await import('./post-deploy.js');
       await onPostDeployMovementComplete(game, meta.gameId, client, ctx, figureKey);
     }
-  } else {
-    const nextBoard = getBoardStateForMovement(game, figureKey);
-    if (nextBoard && computeMovementCache) {
-      const nextProfile = getMovementProfile(meta.dcName, figureKey, game);
-      // Force Jump: carry mobileMovement override into subsequent move steps
-      if (game.mobileMovementActive?.[msgId]) {
-        nextProfile.isMobile = true;
-        nextProfile.ignoreBlocking = true;
-        nextProfile.ignoreFigureCost = true;
-        nextProfile.ignoreDifficult = true;
-      }
-      const nextCache = computeMovementCache(newTopLeft, newMp, nextBoard, nextProfile);
-      moveState.boardState = nextBoard;
-      moveState.movementProfile = nextProfile;
-      moveState.movementCache = nextCache;
-      moveState.cacheMaxMp = newMp;
-      // Clean up old MP picker (distanceMessageId) if it exists from a previous manual-path selection
-      if (moveState.distanceMessageId) {
-        try {
-          const distMsg = await interaction.channel.messages.fetch(moveState.distanceMessageId);
-          await distMsg.delete();
-        } catch { /* already gone */ }
-        moveState.distanceMessageId = null;
-      }
-      // Show 2-step row→cell picker for new position with remaining MP.
-      // cache.cells only stores topLeft cells — no filtering needed.
-      const newButtonSpaces = [...nextCache.cells.keys()];
-      const newIsMultiTile = nextProfile.size && nextProfile.size !== '1x1';
-      const newMultiTileNote = newIsMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
-      const newMinimapCells = newIsMultiTile
-        ? newButtonSpaces.map((tl) => bottomLeftCoord(tl, nextProfile.size))
-        : newButtonSpaces;
-      const newMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, newMinimapCells);
-      const newLabelMap = {};
-      if (newIsMultiTile) {
-        for (const s of newButtonSpaces) {
-          const n = normalizeCoord(s);
-          newLabelMap[n] = bottomLeftCoord(n, nextProfile.size).toUpperCase();
-        }
-      }
-      const newMoveContextKey = `${meta.gameId}_${moveKey}`;
-      const newMoveHeader = `**Move** — Pick destination (**${newMp}** MP remaining):${newMultiTileNote}`;
-      const newMoveActionBtns = [
-        { customId: `move_adjust_mp_${msgId}_${figureIndex}`, label: 'Pick Path Manually', style: ButtonStyle.Secondary },
-      ];
-      if (!game.urgencyMustSpendAll?.[msgId]) {
-        newMoveActionBtns.push(
-          { customId: `move_pick_${msgId}_${figureIndex}_done`, label: 'End Movement', style: ButtonStyle.Secondary }
-        );
-      }
-      game.pendingSpacePick = game.pendingSpacePick || {};
-      game.pendingSpacePick[newMoveContextKey] = {
-        validSpaces: newButtonSpaces,
-        cellPrefix: `move_pick_${msgId}_${figureIndex}_`,
-        mapSpaces: nextBoard.mapSpaces,
-        labelMap: newLabelMap,
-        headerText: newMoveHeader,
-        actionButtons: newMoveActionBtns,
-      };
-      const { rows: newRowBtns } = buildRowPickerButtons(newButtonSpaces, `space_row_${newMoveContextKey}_`);
-      const newActionBtns = newMoveActionBtns.map(b =>
-        new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
-      );
-      const newActionRow = new ActionRowBuilder().addComponents(...newActionBtns);
-      const newFirstPayload = {
-        content: `${newMoveHeader}\nChoose a row:`,
-        components: [...newRowBtns.slice(0, 4), newActionRow],
-        fetchReply: true,
-      };
-      if (newMinimap) newFirstPayload.files = [newMinimap];
-      const newGridMsg = await interaction.followUp(newFirstPayload).catch(() => null);
-      game.moveGridMessageIds = game.moveGridMessageIds || {};
-      game.moveGridMessageIds[moveKey] = newGridMsg?.id ? [newGridMsg.id] : [];
-    } else {
-      game.moveGridMessageIds = game.moveGridMessageIds || {};
-      game.moveGridMessageIds[moveKey] = [];
-    }
+  } else if (!fastPath) {
+    await _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgId, figureKey, figureIndex, moveKey, newTopLeft, newMp);
   }
-  if (game.boardId && game.selectedMap) {
-    try {
-      const boardChannel = await fetchGameChannel(client, game.boardId);
-      if (!boardChannel) throw new Error('Board channel not found');
-      const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-      await boardChannel.send(payload);
-    } catch (err) {
-      console.error('Failed to update map after move:', err);
-    }
-  }
-  // Re-render the activation thread minimap so it shows the figure's new position
-  if (ctx.updateDcActionsMessage) {
-    try {
-      await ctx.updateDcActionsMessage(game, msgId, client);
-    } catch (err) {
-      console.error('Failed to update activation minimap after move:', err);
-    }
+  if (!fastPath) {
+    await _renderPostMoveBoardUpdate(ctx, game, msgId);
   }
   // (Interactive massive-push prompts are posted directly from the init block
   // above via _dispatchNextMassivePush. No post-hoc branch needed here.)
@@ -1012,24 +1063,7 @@ export async function handleMovePick(interaction, ctx) {
         activatorPos: newTopLeft,
         targets: rushTargets.map(t => t.figureKey),
       };
-      const btns = rushTargets.map((t, i) =>
-        new ButtonBuilder()
-          .setCustomId(`rush_push_fig_${game.gameId}_${msgId}_${i}`)
-          .setLabel(t.dcName.replace(/_/g, ' '))
-          .setStyle(ButtonStyle.Primary)
-      );
-      btns.push(
-        new ButtonBuilder()
-          .setCustomId(`rush_push_skip_${game.gameId}_${msgId}`)
-          .setLabel('Skip Rush Push')
-          .setStyle(ButtonStyle.Secondary)
-      );
-      const rushRows = [];
-      while (btns.length > 0) rushRows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
-      await interaction.followUp({
-        content: '**Rush** — Push an adjacent SMALL hostile 1 space? Both suffer 1 Damage.',
-        components: rushRows.slice(0, 5),
-      });
+      await _renderRushPushPrompt(interaction, game.gameId, msgId, rushTargets);
     }
   }
   // Shoulder Rush (KX-Series Security Droid): after movement MP exhausted, choose adjacent hostile → push if SMALL + enter space → free attack
@@ -1054,24 +1088,7 @@ export async function handleMovePick(interaction, ctx) {
         activatorPos: newTopLeft,
         targets: srTargets.map(t => t.figureKey),
       };
-      const srBtns = srTargets.map((t, i) =>
-        new ButtonBuilder()
-          .setCustomId(`shoulder_rush_fig_${game.gameId}_${msgId}_${i}`)
-          .setLabel(t.dcName.replace(/_/g, ' '))
-          .setStyle(ButtonStyle.Primary)
-      );
-      srBtns.push(
-        new ButtonBuilder()
-          .setCustomId(`shoulder_rush_skip_${game.gameId}_${msgId}`)
-          .setLabel('Skip (No Target)')
-          .setStyle(ButtonStyle.Secondary)
-      );
-      const srRows = [];
-      while (srBtns.length > 0) srRows.push(new ActionRowBuilder().addComponents(srBtns.splice(0, 5)));
-      await interaction.followUp({
-        content: '**Shoulder Rush** — Choose an adjacent hostile figure to target:',
-        components: srRows.slice(0, 5),
-      });
+      await _renderShoulderRushPrompt(interaction, game.gameId, msgId, srTargets);
     }
   }
   // Deference Protocol (KX-Series Security Droid): when a friendly LEADER enters a space adjacent to KX, it may gain 1 Block token (once per round)

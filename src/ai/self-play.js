@@ -30,6 +30,21 @@ export function getActiveSelfPlayGameId() {
   return activeSelfPlayGameId;
 }
 
+// ── Claimed-Krykna placement heuristic (Chopper Base A) ─────────────────────
+// The authored mission rule is that claimed Krykna land in the opponent's
+// deployment zone; the choice of WHERE within that zone is a headless
+// implementation knob. Default 'min' picks the valid space with minimum
+// BFS distance to the nearest enemy figure (aggressive — sustains the
+// Krykna moat). 'max' picks the furthest space. 'random' picks uniformly
+// at random over valid spaces. Exposed for Chopper placement ablation.
+let KRYKNA_PLACEMENT_MODE = 'min';
+export function setKryknaPlacementMode(mode) {
+  if (mode === 'min' || mode === 'max' || mode === 'random') {
+    KRYKNA_PLACEMENT_MODE = mode;
+  }
+}
+export function getKryknaPlacementMode() { return KRYKNA_PLACEMENT_MODE; }
+
 // ── Commit SHA (cached once) ──────────────────────────────────────────────────
 
 let _commitSha = null;
@@ -971,35 +986,47 @@ export async function runSelfPlayLoop(game, client, opts) {
           const validSpaces = getValidKryknaPlacementSpaces(g, playerNum, _rMapId);
           if (validSpaces.length === 0) continue;
 
-          // Pick the valid space closest to the nearest enemy figure (BFS)
-          const oppNum = playerNum === 1 ? 2 : 1;
-          const enemyCoords = new Set(
-            Object.values(g.figurePositions?.[oppNum] || {}).map(c => _rNormalize(c))
-          );
+          // Pick the valid space within the opponent's deployment zone per the
+          // KRYKNA_PLACEMENT_MODE heuristic. Mission rule (placement must be in
+          // opponent's zone) is preserved by validSpaces; we only choose WHICH
+          // valid space to use. Mode 'min' (default) is aggressive — places the
+          // new Krykna BFS-closest to the opponent's figures. Mode 'max' is the
+          // opposite (farthest). Mode 'random' is uniform over validSpaces.
           let bestSpace = validSpaces[0];
-          let bestDist = Infinity;
-          for (const space of validSpaces) {
-            const visited = new Set([space]);
-            const bfsQ = [space];
-            let dist = 0;
-            let found = false;
-            while (bfsQ.length > 0 && !found) {
-              const nextQ = [];
-              dist++;
-              for (const curr of bfsQ) {
-                for (const neighbor of (_rAdj[curr] || [])) {
-                  const n = _rNormalize(neighbor);
-                  if (visited.has(n)) continue;
-                  visited.add(n);
-                  if (enemyCoords.has(n)) { found = true; break; }
-                  nextQ.push(n);
+          if (KRYKNA_PLACEMENT_MODE === 'random') {
+            bestSpace = validSpaces[Math.floor(Math.random() * validSpaces.length)];
+          } else {
+            const oppNum = playerNum === 1 ? 2 : 1;
+            const enemyCoords = new Set(
+              Object.values(g.figurePositions?.[oppNum] || {}).map(c => _rNormalize(c))
+            );
+            let bestDist = (KRYKNA_PLACEMENT_MODE === 'max') ? -Infinity : Infinity;
+            for (const space of validSpaces) {
+              const visited = new Set([space]);
+              const bfsQ = [space];
+              let dist = 0;
+              let found = false;
+              while (bfsQ.length > 0 && !found) {
+                const nextQ = [];
+                dist++;
+                for (const curr of bfsQ) {
+                  for (const neighbor of (_rAdj[curr] || [])) {
+                    const n = _rNormalize(neighbor);
+                    if (visited.has(n)) continue;
+                    visited.add(n);
+                    if (enemyCoords.has(n)) { found = true; break; }
+                    nextQ.push(n);
+                  }
+                  if (found) break;
                 }
-                if (found) break;
+                if (!found) bfsQ.length = 0;
+                for (const x of nextQ) bfsQ.push(x);
               }
-              if (!found) bfsQ.length = 0;
-              for (const x of nextQ) bfsQ.push(x);
+              if (found) {
+                if (KRYKNA_PLACEMENT_MODE === 'max' && dist > bestDist) { bestDist = dist; bestSpace = space; }
+                else if (KRYKNA_PLACEMENT_MODE === 'min' && dist < bestDist) { bestDist = dist; bestSpace = space; }
+              }
             }
-            if (found && dist < bestDist) { bestDist = dist; bestSpace = space; }
           }
 
           // Place new Krykna at chosen space

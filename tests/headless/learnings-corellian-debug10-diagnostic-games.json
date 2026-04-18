@@ -1,0 +1,33 @@
+[
+  {
+    "game": 1,
+    "mapId": "corellian-underground",
+    "matchupLabel": "Droid Coalition vs Force Council",
+    "winner": "P2",
+    "p1VP": 4,
+    "p2VP": 43,
+    "finalRound": 9,
+    "stopReason": "normal",
+    "ended": true,
+    "figureDefeats": 2,
+    "attackActions": 19,
+    "moveActions": 21,
+    "activationsWithAttack": 19,
+    "totalActivations": 44,
+    "passActivations": 20,
+    "endActivations": 44,
+    "doorOpens": 1,
+    "productiveActions": 252,
+    "prematureEndAct": 4,
+    "attackWhenTargetsInRange": 17,
+    "moveWhenTargetsInRange": 175,
+    "endWhenTargetsInRange": 30,
+    "decisionsWithTargets": 224,
+    "decisionsWithoutTargets": 70,
+    "npcAttacks": 6,
+    "npcDefeats": 4,
+    "totalIterations": 556,
+    "runawayWindowCount": 0,
+    "round1DistClosed": 12
+  }
+]

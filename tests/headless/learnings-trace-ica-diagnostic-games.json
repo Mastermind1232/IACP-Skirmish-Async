@@ -1,0 +1,33 @@
+[
+  {
+    "game": 1,
+    "mapId": "chopper-base-atollon",
+    "matchupLabel": "Imperial Combined Arms vs Rebel Heroes",
+    "winner": "P2",
+    "p1VP": 15,
+    "p2VP": 23,
+    "finalRound": 11,
+    "stopReason": "round_cap",
+    "ended": true,
+    "figureDefeats": 6,
+    "attackActions": 39,
+    "moveActions": 31,
+    "activationsWithAttack": 38,
+    "totalActivations": 44,
+    "passActivations": 18,
+    "endActivations": 44,
+    "doorOpens": 1,
+    "productiveActions": 166,
+    "prematureEndAct": 0,
+    "attackWhenTargetsInRange": 37,
+    "moveWhenTargetsInRange": 107,
+    "endWhenTargetsInRange": 35,
+    "decisionsWithTargets": 179,
+    "decisionsWithoutTargets": 70,
+    "npcAttacks": 33,
+    "npcDefeats": 4,
+    "totalIterations": 634,
+    "runawayWindowCount": 0,
+    "round1DistClosed": 11
+  }
+]

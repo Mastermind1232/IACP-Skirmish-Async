@@ -12,11 +12,12 @@
     }
   },
   "heatMap": {
-    "version": "1.7",
+    "version": "1.20",
     "date": "2026-04-17",
-    "totalEntries": 55,
+    "totalEntries": 58,
     "coverageDistribution": {
-      "direct_oracle": 49,
+      "direct_oracle": 50,
+      "inferred_only": 2,
       "certification": 3,
       "headless_selfplay": 1,
       "runtime_invariant": 1,
@@ -68,8 +69,8 @@
     ]
   },
   "parityScoreboard": {
-    "totalScenarios": 16,
-    "exactAgreementCount": 16,
+    "totalScenarios": 17,
+    "exactAgreementCount": 17,
     "openDivergenceCount": 0,
     "openDivergences": []
   }

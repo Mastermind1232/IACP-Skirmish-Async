@@ -25,6 +25,7 @@ import { getDcList, getDcMessageIds, getActivationsRemaining, setActivationsRema
 import { DC_ACTIONS_PER_ACTIVATION } from '../discord/messages.js';
 import { isCompanionHostDefeated } from '../game/dc-helpers.js';
 import { applyStartOfActivationEffects } from '../engine/activation-effects.js';
+import { applyMoveTransition } from '../game/apply-move.js';
 
 /**
  * Headless-only DC activation: performs the 4 critical game-state mutations
@@ -193,6 +194,28 @@ export function createHarness(initialGame, options = {}) {
         }
         const events = lightweight ? [] : _translateEvents(gameId, handlerKey, userId, beforeSnap, gamesMap);
         return { game, messages: [], events };
+      }
+
+      // MCTS fast-path intercept: move_pick_ skips _renderNextMoveGrid (second
+      // computeMovementCache + canvas minimap render) and _renderPostMoveBoardUpdate.
+      // All state mutations (Overrun, Cut and Run, massive displacement,
+      // moveState, pushUndo, Deference/Cassian/Swipe/Attached) still run.
+      // Lightweight-only: Discord path never hits this branch.
+      if (lightweight && customId.startsWith('move_pick_')) {
+        const group = getHandlerGroup(handlerKey);
+        const context = group ? buildContext(group, deps) : deps;
+        const interaction = createFakeInteraction(customId, userId, { ...actionOpts, client });
+        try {
+          await applyMoveTransition(interaction, context);
+          return { game: gamesMap.get(gameId), messages: [], events: [] };
+        } catch (err) {
+          return {
+            game: gamesMap.get(gameId),
+            messages: [],
+            error: err.message,
+            events: [],
+          };
+        }
       }
 
       const beforeSnap = lightweight ? null : (gameId ? captureSnapshot(gamesMap.get(gameId)) : null);

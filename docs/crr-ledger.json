@@ -4238,12 +4238,34 @@
         "lines": [
           2238,
           2250
-        ]
+        ],
+        "sha256": "a2c7ab02baffc6b229f1d34d13ac4bf622a819a9f6481b654f5c9a69fc7bba11"
       },
       "summary": "While pushing a large figure, it cannot move diagonally and cannot be rotated.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Large-push no-diagonal no-rotate rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js (pushFigureToNearestValid BFS + getNeighborStates large-figure guard) + src/game/player-helpers.js (pushFigure write path, no-rotate — LF-007)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-psh-large-no-diag-probe.test.js"
+        ],
+        "assertions": [
+          "006a: source — pushFigureToNearestValid defined as the BFS push helper",
+          "006b: source — pushFigureToNearestValid BFS uses orthogonal-only moveVectors",
+          "006c: source — large-figure movement expander rejects diagonal neighbours",
+          "006d: source — pushFigure (the write path) never rotates the figure",
+          "006e: behavior — a direct pushFigureToNearestValid BFS simulation takes only orthogonal steps",
+          "006f: behavior — large-figure diagonal guard predicate matches CRR semantics",
+          "push BFS must NOT contain diagonal moveVectors — CRR-PSH-006",
+          "large figures must be diagonal-disallowed in getNeighborStates — CRR-PSH-006",
+          "pushFigure body must not touch figureOrientations (no rotate on push) — CRR-PSH-006/LF-007"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude-opus-4-7",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-PSH-007",

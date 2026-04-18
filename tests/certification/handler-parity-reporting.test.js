@@ -35,6 +35,7 @@ import { edgeKey, getFootprintCells } from '../../src/game/coords.js';
 import { dcNameFromFigureKey } from '../../src/game/dc-helpers.js';
 import { getDcList } from '../../src/game/player-helpers.js';
 import { getLoadoutCards, getMapTokensData, getFigureSize } from '../../src/data-loader.js';
+import { getBrokenWallEdges } from '../../src/game/movement.js';
 import { PARITY_SCENARIOS as SCENARIOS } from './_crr-baselines.js';
 
 // ── Shadow: narrow mirror of handler's target enumeration ───────────────────
@@ -96,12 +97,13 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
 
   const ms = deps.getMapData(game.selectedMap.id);
 
-  // Door + energy-shield merged LOS: mirrors dc-play-area.js:940–970.
+  // Door + shield + smoke + Wasskah merged LOS: mirrors dc-play-area.js:940–970.
   // Closed-door edges merge into mapSpaces.impassableEdges (and
   // closedDoorEdges passes to countSpaces for distance gating).
-  // Energy-shield spaces merge into mapSpaces.blocking per CRR p.28
-  // ("A space containing an energy shield blocks line of sight"). Smoke is
-  // not yet modeled — no scenario exercises that layer.
+  // Energy-shield and C54 Smoke Grenade spaces merge into mapSpaces.blocking
+  // per CRR p.28 and the C54 card. Wasskah breakable walls (blue-line edges
+  // between two difficult-terrain spaces) are subtracted from base
+  // impassableEdges so LOS can pass through them.
   const mapId = game.selectedMap.id;
   const allDoors = getMapTokensData()?.[mapId]?.doors || [];
   const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
@@ -111,15 +113,22 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
   });
   const closedDoorEdges = new Set(closedDoorsRaw.map(e => edgeKey(e[0], e[1])));
   const shieldSpaces = (game.ancillaryTokens?.energyShield || []).map(s => String(s).toLowerCase());
-  const needsOverride = closedDoorsRaw.length > 0 || shieldSpaces.length > 0;
+  const smokeSpaces = (game.ancillaryTokens?.smoke || []).map(s => String(s).toLowerCase());
+  const extraBlocking = [...shieldSpaces, ...smokeSpaces];
+  const brokenWalls = getBrokenWallEdges(game, ms);
+  const baseImpassable = ms?.impassableEdges || [];
+  const filteredImpassable = brokenWalls.size > 0
+    ? baseImpassable.filter(e => !brokenWalls.has(edgeKey(e[0], e[1])))
+    : baseImpassable;
+  const needsOverride = closedDoorsRaw.length > 0 || extraBlocking.length > 0 || brokenWalls.size > 0;
   const effectiveMs = needsOverride
     ? {
         ...ms,
         impassableEdges: closedDoorsRaw.length > 0
-          ? [...(ms.impassableEdges || []), ...closedDoorsRaw]
-          : (ms.impassableEdges || []),
-        blocking: shieldSpaces.length > 0
-          ? [...(ms.blocking || []), ...shieldSpaces]
+          ? [...filteredImpassable, ...closedDoorsRaw]
+          : filteredImpassable,
+        blocking: extraBlocking.length > 0
+          ? [...(ms.blocking || []), ...extraBlocking]
           : ms.blocking,
       }
     : ms;
