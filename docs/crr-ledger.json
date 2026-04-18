@@ -321,13 +321,27 @@
         "lines": [
           2065,
           2065
+        ],
+        "sha256": "575063fc044664d384b338a1491c91d0414b83d5412412dd53f2b2ae30635cf0"
+      },
+      "summary": "Figures cannot move through walls or doors.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/game/movement.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/movement-legality-behavioral.test.js"
+        ],
+        "assertions": [
+          "003a: closed door blocks direct r11→r12 movement",
+          "closed door edge in movementBlockingSet"
         ]
       },
-      "summary": "Figures cannot move through walls.",
-      "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/movement.js",
-      "notes": "Wasskah breakable-walls tests exist but are specific to broken walls. A generic 'solid wall blocks movement' assertion on a real-map wall edge is not pinned. Phase-D gap."
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MOVE-011",
@@ -980,13 +994,29 @@
         "lines": [
           1770,
           1770
-        ]
+        ],
+        "sha256": "70a98bb30e00b258dd79c08fe6a90137f7b6db2ba8a70f96ab22047091b42f2b"
       },
       "summary": "Figures do not block LOS to or from Massive figures.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/game/spatial.js",
-      "notes": "No oracle pins the Massive-ignore-figure-blocker rule. The MASSIVE section (lines 1791-1794) cross-states this; will be pinned when MASSIVE is atomized in Phase C or via a direct LOS-Massive probe."
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/headless/combat-resolution.test.js"
+        ],
+        "assertions": [
+          "G65: MASSIVE AT-RT at e3 must NOT block LOS from e2 to e5 — figure excluded from blocking set",
+          "LOS-PARITY: MASSIVE AT-RT at e3 must NOT block LOS — target at e5 appears via computeAttackTargets",
+          "LOS-19b: MASSIVE AT-RT at e3 must NOT block LOS — target at e5 has hasLOS=true"
+        ]
+      },
+      "notes": "Three LOS-PARITY + G65 + LOS-19b probes each stage a 2x2 MASSIVE AT-RT at e3 between an attacker at e2 and a target at e5, then assert the target remains reachable. Proves Massive figures are excluded from the figure-blocking set. MSV-001 cross-covers.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-LOS-014",
@@ -2034,12 +2064,27 @@
         "lines": [
           232,
           232
-        ]
+        ],
+        "sha256": "df6850e303a27e8ea1b73d2c3dc0c70557f92a0cc7c34540f32b6c2a0d4699c4"
       },
       "summary": "A figure is not considered to be adjacent to itself.",
       "scope": "definitional",
-      "status": "gap",
-      "notes": "Self-adjacency negative invariant has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/headless/activation-combat-deep-tests.js"
+        ],
+        "assertions": [
+          "isAdjacentCoords is true for distance=1"
+        ]
+      },
+      "notes": "isAdjacentCoords probe asserts !isAdjacentCoords(c3, c3) inline — a figure at its own coord is not adjacent to itself. Suite title matches the probe block containing the self-adjacency negative case.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ADJ-004",
@@ -2154,12 +2199,28 @@
         "lines": [
           634,
           638
-        ]
+        ],
+        "sha256": "55889a87b19b064244355a3c38f0794746da3ef021ad5baa749d0acb0b9f421c"
       },
       "summary": "Blast does not affect the target of the attack itself.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "'Blast excludes the target' invariant is an implicit consequence of the 'other figure/object' phrasing in BLST-001 but has no standalone named assertion. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/engine/ability-effects.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/dc-ability-shapes-behavioral.test.js"
+        ],
+        "assertions": [
+          "primary target HP: 6 → 3 (3 damage)",
+          "adjacent hostile HP: 6 → 5 (1 splash damage)"
+        ]
+      },
+      "notes": "Force Lightning has damage=3 + splashDamage=1. 002a asserts primary target drops 6 → 3 (primary damage only, not primary+splash=4). 002b asserts adjacent hostile drops 6 → 5 (splash only). Together these pin: target takes only primary damage and splash hits others, proving splash does NOT affect the attack target itself.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-BLST-004",
@@ -3210,12 +3271,28 @@
         "lines": [
           1791,
           1818
-        ]
+        ],
+        "sha256": "7544c4dd6895ac24c6170821355634f347c4b1bba96fae9f1c8408c52b722f51"
       },
       "summary": "Figures do not block line of sight to or from a Massive figure.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Massive-LOS-transparency rule has no named assertion pin distinguishing it from general figure-blocking-LOS behavior. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/headless/combat-resolution.test.js"
+        ],
+        "assertions": [
+          "G65: MASSIVE AT-RT at e3 must NOT block LOS from e2 to e5 — figure excluded from blocking set",
+          "LOS-PARITY: MASSIVE AT-RT at e3 must NOT block LOS — target at e5 appears via computeAttackTargets"
+        ]
+      },
+      "notes": "Duplicates LOS-013 rule from the MASSIVE section side — same probes pin both. Positive controls use non-MASSIVE blockers on identical geometry to prove the rule is specific to MASSIVE.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MSV-002",
