@@ -2242,12 +2242,27 @@
         "lines": [
           237,
           237
-        ]
+        ],
+        "sha256": "690c6f5b744136cdb1251dc10eaef2dcb3874075583eea05d05bc4239d19cd6e"
       },
       "summary": "A space that is blocking terrain is not adjacent to any other space.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Blocking-terrain-space is-not-adjacent invariant has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "data/map-spaces.json",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-adjacency-blocking-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-ADJ-006: blocking terrain cells are isolated in the adjacency graph",
+          "every blocking cell has empty neighbors AND is not listed as a neighbor by any other cell"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ADJ-007",
