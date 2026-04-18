@@ -4809,12 +4809,28 @@
         "lines": [
           1033,
           1048
-        ]
+        ],
+        "sha256": "c1263694329d2a9371859173ad53f187acb33751d6d5e7419e617bcc9c419768"
       },
       "summary": "A figure or object cannot suffer damage in excess of its Health; any damage over this amount has no effect.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Damage-clamped-at-Health rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/damage-helpers.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-damage-clamp-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-DMG-007: damage in excess of Health has no effect",
+          "reduceHp clamps newHp to 0 when damage > prevHp",
+          "only actual damage (prevHp) is attributed to totalDamageReceived, excess discarded"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-DMG-008",
