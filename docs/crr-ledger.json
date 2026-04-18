@@ -110,11 +110,33 @@
       "POWER TOKENS",
       "REVEAL",
       "SURGES",
-      "TIME PERIOD"
+      "TIME PERIOD",
+      "ABILITIES",
+      "ATTACHMENT",
+      "COMPONENT LIMITATIONS",
+      "CONFLICTS IN A SKIRMISH",
+      "SKIRMISH DEPLOYMENT",
+      "DEPLOYMENT CARDS",
+      "DEVICE TOKENS",
+      "FORM CARDS",
+      "LOCKED",
+      "SKIRMISH MISSIONS",
+      "SKIRMISH MISSION SETUP",
+      "NEGATIVE DEPLOYMENT COST",
+      "NEUTRAL FIGURES",
+      "OPTIONAL DEPLOYMENT",
+      "REST",
+      "RETRIEVING TOKENS",
+      "PLAYING A SKIRMISH",
+      "SPECIAL SETUP",
+      "STRAIN IN A SKIRMISH",
+      "STYLE TOKENS",
+      "TESTS",
+      "WITHDRAW"
     ],
     "pilot": true,
     "date": "2026-04-18",
-    "notes": "Phase-C tranche 9 (army-building + misc-rules lane) appended 42 atoms across 18 new sections (ARMY BUILDING, CHOOSING DEPLOYMENT CARDS, COMMAND CARD DECK, CLAIM, TARGET, ENTER, EXIT, ESCAPING, WITHIN X SPACES, PLAY AREA, EMPTY SPACE, MOVEMENT POINTS, MOVING THROUGH, ENDING MOVEMENT, SMALL FIGURE, SKIRMISH UPGRADES, SKIRMISH ATTACHMENTS, REINFORCE). Tranche 9 added no new test probes (pure evidence-reuse lane — leverages movement-legality / movement-trigger / terrain-stacking / status-phase oracles). Very exempt-heavy (25+/42) because this lane is dominated by pre-game army-building rules (ARMY, CDC, CCD, SKA setup, CDC-004 being the sole skirmish-covered army-building atom) and definitional cross-references (MVT, SKU, EDM-001, TGT-001/003, PLA, EMS, WXS, SMF). Tranche 8 closures stand (WKN-002, ACV-007, CNF-005). Ledger now 435 atoms across 91 seededSections. Completeness test runs ONLY against seededSections; remaining CRR sections are enumerated in docs/crr-section-inventory.json. Do not claim full-CRR coverage on this state. Tranche 10 (2026-04-18): added 56 atoms across 17 sections (GR, TIM, SOA, SSA, AOJ, CC, CTRL, HEA, HINF, INCP, INTR, NEG, PAY, PT, REV, SUR, TP) — pure evidence-reuse, no new probes.",
+    "notes": "Phase-C tranche 9 (army-building + misc-rules lane) appended 42 atoms across 18 new sections (ARMY BUILDING, CHOOSING DEPLOYMENT CARDS, COMMAND CARD DECK, CLAIM, TARGET, ENTER, EXIT, ESCAPING, WITHIN X SPACES, PLAY AREA, EMPTY SPACE, MOVEMENT POINTS, MOVING THROUGH, ENDING MOVEMENT, SMALL FIGURE, SKIRMISH UPGRADES, SKIRMISH ATTACHMENTS, REINFORCE). Tranche 9 added no new test probes (pure evidence-reuse lane — leverages movement-legality / movement-trigger / terrain-stacking / status-phase oracles). Very exempt-heavy (25+/42) because this lane is dominated by pre-game army-building rules (ARMY, CDC, CCD, SKA setup, CDC-004 being the sole skirmish-covered army-building atom) and definitional cross-references (MVT, SKU, EDM-001, TGT-001/003, PLA, EMS, WXS, SMF). Tranche 8 closures stand (WKN-002, ACV-007, CNF-005). Ledger now 435 atoms across 91 seededSections. Completeness test runs ONLY against seededSections; remaining CRR sections are enumerated in docs/crr-section-inventory.json. Do not claim full-CRR coverage on this state. Tranche 10 (2026-04-18): added 56 atoms across 17 sections (GR, TIM, SOA, SSA, AOJ, CC, CTRL, HEA, HINF, INCP, INTR, NEG, PAY, PT, REV, SUR, TP) — pure evidence-reuse, no new probes. Tranche 11 (2026-04-18): added 51 atoms across 22 sections (ABIL, ATTC, CMP, CFS, SKD, DCD, DVT, FRM, LCK, SKM, SKMS, NEGC, NTF, OPD, RST, RTK, PLS, SSU, STSK, STY, TST, WDR) — completes the engine-testable inventory sweep (130/130).",
     "divergences": []
   },
   "atoms": [
@@ -9459,6 +9481,813 @@
       "scope": "definitional",
       "status": "exempt",
       "notes": "Campaign-only army-building constraint (scope:definitional because scope enum excludes 'campaign'); no skirmish analog."
+    },
+    {
+      "id": "CRR-ABIL-001",
+      "crr": {
+        "section": "ABILITIES",
+        "lines": [
+          94,
+          99
+        ]
+      },
+      "summary": "All text on cards and hero sheets are called abilities; abilities can be mandatory or optional (\"may\", \"use\", or cost-to-activate makes them optional). If any part cannot be performed, the player performs as much as possible.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Mandatory/optional taxonomy + \"do-as-much-as-possible\" rule. Enforced per-card; no generic oracle."
+    },
+    {
+      "id": "CRR-ABIL-002",
+      "crr": {
+        "section": "ABILITIES",
+        "lines": [
+          100,
+          103
+        ]
+      },
+      "summary": "An ability that is \"used\" can be triggered multiple times per round, but each ability can only be triggered once per timing instance (e.g., \"Use while attacking\" is once per attack).",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-SUR-002"
+      ],
+      "notes": "Once-per-timing-instance for abilities. SUR-002 pins the per-attack once-only for surge abilities; same contract extends to other timing instances by the same rule."
+    },
+    {
+      "id": "CRR-ABIL-003",
+      "crr": {
+        "section": "ABILITIES",
+        "lines": [
+          104,
+          118
+        ]
+      },
+      "summary": "Ability costs include special-action, surge, strain, threat, exhaust, deplete, discard/play, and VP.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-014",
+        "CRR-EXH-001",
+        "CRR-VPS-004"
+      ],
+      "notes": "Taxonomy of ability costs. Surge-cost pinned by ATK-014 (Spend Surges); exhaust pinned by EXH; VP cost pinned by VPS-004. Strain and threat/deplete are downstream definitional."
+    },
+    {
+      "id": "CRR-ABIL-004",
+      "crr": {
+        "section": "ABILITIES",
+        "lines": [
+          119,
+          119
+        ]
+      },
+      "summary": "A figure can perform each special action ability only once per activation.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/activation.js",
+      "notes": "Per-activation special-action limit. Enforced inline in activation.js via dcActionsData tracking; no dedicated oracle pins the \"second special-action offer suppressed\" invariant in isolation."
+    },
+    {
+      "id": "CRR-ABIL-005",
+      "crr": {
+        "section": "ABILITIES",
+        "lines": [
+          120,
+          122
+        ]
+      },
+      "summary": "A \"during your activation\" ability can be used before or after an action within an activation; these are not interrupting abilities and cannot be used while resolving another ability.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/activation.js",
+      "notes": "Between-actions ability surfacing. Implemented per-card; no isolated oracle."
+    },
+    {
+      "id": "CRR-ABIL-006",
+      "crr": {
+        "section": "ABILITIES",
+        "lines": [
+          126,
+          127
+        ]
+      },
+      "summary": "An ability that causes damage (such as Force Choke) is not considered an attack and does not count toward attack-per-activation limits.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/dc-special.js",
+      "notes": "Non-attack damage abilities bypass attack limits. Enforced inline; no dedicated oracle pinning \"ability damage does not consume the attack slot\"."
+    },
+    {
+      "id": "CRR-ATTC-001",
+      "crr": {
+        "section": "ATTACHMENT",
+        "lines": [
+          409,
+          411
+        ]
+      },
+      "summary": "Imperial Class \"Attachment\" cards are placed on Deployment cards when figures deploy; abilities apply to all figures in the group.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only Imperial Class attachment mechanic (scope:definitional because campaign-only). Skirmish has a separate SKIRMISH ATTACHMENTS section covered by SKA-*."
+    },
+    {
+      "id": "CRR-ATTC-002",
+      "crr": {
+        "section": "ATTACHMENT",
+        "lines": [
+          412,
+          414
+        ]
+      },
+      "summary": "When the last figure in a group is defeated, attached Imperial Class cards return to the player's play area and may be re-attached on future deployments.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only recycle flow for Imperial Class attachments. Not applicable in skirmish."
+    },
+    {
+      "id": "CRR-ATTC-003",
+      "crr": {
+        "section": "ATTACHMENT",
+        "lines": [
+          415,
+          416
+        ]
+      },
+      "summary": "Many attachments require the group to have a specific trait (e.g., TROOPER); attachments with trait restrictions cannot be played on groups lacking the trait.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Trait restriction on Imperial Class attachments (campaign). Skirmish Upgrade attachments handle this via SKA atoms."
+    },
+    {
+      "id": "CRR-CMP-001",
+      "crr": {
+        "section": "COMPONENT LIMITATIONS",
+        "lines": [
+          902,
+          905
+        ]
+      },
+      "summary": "Tokens are not limited; dice can be re-rolled as needed without counting as a reroll; cards that run out cannot be drawn or used further.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Physical-component workarounds. Engine uses in-memory pools; no scarcity invariant to oracle."
+    },
+    {
+      "id": "CRR-CMP-002",
+      "crr": {
+        "section": "COMPONENT LIMITATIONS",
+        "lines": [
+          906,
+          913
+        ]
+      },
+      "summary": "In a campaign, players are limited to the physical figures supplied; expansion packs define specific limits.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign figure-pool limits (scope:definitional because campaign-only)."
+    },
+    {
+      "id": "CRR-CMP-003",
+      "crr": {
+        "section": "COMPONENT LIMITATIONS",
+        "lines": [
+          914,
+          915
+        ]
+      },
+      "summary": "In a skirmish, a player can have at most: one of each unique Deployment card, two of each elite Deployment card, and four of each regular Deployment card.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/ui/army-builder.js",
+      "notes": "Army-composition copy limits. Enforced at army-build time in UI / /start flow; no dedicated oracle pins \"copy-count cap\" for uniques/elites/regulars."
+    },
+    {
+      "id": "CRR-CFS-001",
+      "crr": {
+        "section": "CONFLICTS IN A SKIRMISH",
+        "lines": [
+          964,
+          965
+        ]
+      },
+      "summary": "During a skirmish, outside of attacks, mission rules resolve first, then effects from the player with initiative, then each other player clockwise.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CNF-007"
+      ],
+      "notes": "Initiative-first ordering outside attacks is the core contract pinned by CNF-007 (sor-sequencing-probes)."
+    },
+    {
+      "id": "CRR-CFS-002",
+      "crr": {
+        "section": "CONFLICTS IN A SKIRMISH",
+        "lines": [
+          966,
+          966
+        ]
+      },
+      "summary": "If multiple mission rules would resolve at the same time, the player with initiative decides their order.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CNF-008"
+      ],
+      "notes": "Mission-rule tie-break by initiative. CNF-008 already captures this branch."
+    },
+    {
+      "id": "CRR-SKD-001",
+      "crr": {
+        "section": "SKIRMISH DEPLOYMENT",
+        "lines": [
+          1107,
+          1108
+        ]
+      },
+      "summary": "During setup of a skirmish, players place all of their figures within their deployment zone.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-SKMS-004"
+      ],
+      "notes": "Top-level pointer to the detailed \"Deploy Units\" step in Skirmish Mission Setup (SKMS-004)."
+    },
+    {
+      "id": "CRR-DCD-001",
+      "crr": {
+        "section": "DEPLOYMENT CARDS",
+        "lines": [
+          1117,
+          1118
+        ]
+      },
+      "summary": "All non-hero figures have corresponding Deployment cards listing group name, size, abilities, Speed, Health, Defense, and attack.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Data schema of DC records. Stored in data/dc-effects.json."
+    },
+    {
+      "id": "CRR-DCD-002",
+      "crr": {
+        "section": "DEPLOYMENT CARDS",
+        "lines": [
+          1119,
+          1121
+        ]
+      },
+      "summary": "A Deployment card with a Campaign Deployment Icon is campaign-only; a Skirmish Deployment Icon makes it skirmish-only.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Play-mode restriction. Enforced by army-builder filter; no oracle needed."
+    },
+    {
+      "id": "CRR-DCD-003",
+      "crr": {
+        "section": "DEPLOYMENT CARDS",
+        "lines": [
+          1125,
+          1126
+        ]
+      },
+      "summary": "Elite Deployment cards have a red border; regular Deployment cards have gray borders.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Visual taxonomy. Data-only distinction."
+    },
+    {
+      "id": "CRR-DCD-004",
+      "crr": {
+        "section": "DEPLOYMENT CARDS",
+        "lines": [
+          1127,
+          1127
+        ]
+      },
+      "summary": "Unique cards are identified by a bullet (▪) before the name (e.g., \"▪ Darth Vader\").",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Naming convention. Uniqueness enforcement is structural (see UNI-*)."
+    },
+    {
+      "id": "CRR-DCD-005",
+      "crr": {
+        "section": "DEPLOYMENT CARDS",
+        "lines": [
+          1132,
+          1137
+        ]
+      },
+      "summary": "The SKIRMISH UPGRADE trait excludes cards from rules/abilities referencing Deployment cards unless explicitly stated (e.g., \"Temporary Alliance\" and \"Take Initiative\" exclusions).",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CDC-004"
+      ],
+      "notes": "Skirmish Upgrade exclusion already pinned by CDC-004 (status-phase-behavioral 003c)."
+    },
+    {
+      "id": "CRR-DVT-001",
+      "crr": {
+        "section": "DEVICE TOKENS",
+        "lines": [
+          1145,
+          1157
+        ]
+      },
+      "summary": "Saska Teft uses device tokens to grant herself and fellow Rebels abilities; these tokens only interact with abilities on Saska's Hero sheet and Class cards.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only hero-specific token (Saska Teft). No skirmish presence."
+    },
+    {
+      "id": "CRR-FRM-001",
+      "crr": {
+        "section": "FORM CARDS",
+        "lines": [
+          1368,
+          1373
+        ]
+      },
+      "summary": "A Form card adds its text box and abilities box to a Deployment card; placed below the DC when gained; text is treated as though on the DC.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/form-cards.js",
+      "notes": "Only Clawdite Shapeshifter uses Form cards in the current corpus. Form-swap mechanics are niche; no dedicated oracle."
+    },
+    {
+      "id": "CRR-FRM-002",
+      "crr": {
+        "section": "FORM CARDS",
+        "lines": [
+          1374,
+          1374
+        ]
+      },
+      "summary": "A Deployment card can only gain a Form card with a subname corresponding to that Deployment card's name.",
+      "scope": "skirmish",
+      "status": "exempt",
+      "notes": "Subname-matching rule enforced by data; no runtime invariant worth oracle-pinning."
+    },
+    {
+      "id": "CRR-FRM-003",
+      "crr": {
+        "section": "FORM CARDS",
+        "lines": [
+          1375,
+          1377
+        ]
+      },
+      "summary": "Form Cards are unique: only 1 copy of each Form card can be in play at a time; in skirmish, only 1 copy per army.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/form-cards.js",
+      "notes": "Form-card uniqueness (M28 in testing audit is the open gap for Clawdite form uniqueness — still OPEN per memory). Gap confirmed."
+    },
+    {
+      "id": "CRR-LCK-001",
+      "crr": {
+        "section": "LOCKED",
+        "lines": [
+          1779,
+          1780
+        ]
+      },
+      "summary": "A locked door cannot be opened until the mission rules unlock it.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-DOR-001"
+      ],
+      "notes": "Delegates to the DOORS section (DOR-*), which already covers open/closed/locked door states."
+    },
+    {
+      "id": "CRR-SKM-001",
+      "crr": {
+        "section": "SKIRMISH MISSIONS",
+        "lines": [
+          1910,
+          1911
+        ]
+      },
+      "summary": "The map for each skirmish mission is shown in its diagram; rules for each skirmish mission are listed on Skirmish Mission cards.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Data-definitional (mission cards). Missions are declared in data/missions/."
+    },
+    {
+      "id": "CRR-SKMS-001",
+      "crr": {
+        "section": "SKIRMISH MISSION SETUP",
+        "lines": [
+          1970,
+          1972
+        ]
+      },
+      "summary": "Setup Step 1 — Bring Armies and Command Cards: both players place Deployment cards faceup in their play areas and shuffle their 15-card Command decks.",
+      "scope": "skirmish",
+      "status": "exempt",
+      "notes": "Procedural setup. Bot hands players pre-built armies; CC shuffle happens at game-start."
+    },
+    {
+      "id": "CRR-SKMS-002",
+      "crr": {
+        "section": "SKIRMISH MISSION SETUP",
+        "lines": [
+          1973,
+          1974
+        ]
+      },
+      "summary": "Setup Step 2 — Determine Initiative: the player with the lowest total Deployment-card cost chooses who begins with the initiative token (random on tie).",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/game/initiative.js",
+      "notes": "Initial-initiative determination from army costs. Implemented in game-setup; no dedicated oracle pins \"lowest total cost → choice of initiative\"."
+    },
+    {
+      "id": "CRR-SKMS-003",
+      "crr": {
+        "section": "SKIRMISH MISSION SETUP",
+        "lines": [
+          1975,
+          1982
+        ]
+      },
+      "summary": "Setup Step 3 — Determine and Set Up Skirmish Mission: the initiative player draws a skirmish mission card; players build the map, place tokens, and observe the A/B letter selector.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Physical map/token setup. Bot loads mission-specific configuration from data/missions/."
+    },
+    {
+      "id": "CRR-SKMS-004",
+      "crr": {
+        "section": "SKIRMISH MISSION SETUP",
+        "lines": [
+          1983,
+          1991
+        ]
+      },
+      "summary": "Setup Step 4 — Deploy Units: the initiative player chooses a deployment zone and places all their figures there; opposing players then deploy, choosing from remaining zones.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/deploy.js",
+      "notes": "Deployment-zone choice + figure placement. Enforced inline; no dedicated oracle pins \"initiative picks zone first\"."
+    },
+    {
+      "id": "CRR-SKMS-005",
+      "crr": {
+        "section": "SKIRMISH MISSION SETUP",
+        "lines": [
+          1992,
+          1993
+        ]
+      },
+      "summary": "Setup Step 5 — Draw Command Cards: set the round dial to 1; each player draws 3 cards from their Command deck.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CC-001",
+        "CRR-CCD-001"
+      ],
+      "notes": "Draw-3-at-setup pinned by CC-001 / CCD-001."
+    },
+    {
+      "id": "CRR-NEGC-001",
+      "crr": {
+        "section": "NEGATIVE DEPLOYMENT COST",
+        "lines": [
+          2122,
+          2125
+        ]
+      },
+      "summary": "A Skirmish Upgrade card with a negative deployment cost increases the total deployment budget of the rest of the army by its magnitude (e.g., -4 cost allows the remainder to total up to 44).",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/ui/army-builder.js",
+      "notes": "Negative-cost budget math. Enforced at army-build time; no oracle pins the budget arithmetic."
+    },
+    {
+      "id": "CRR-NEGC-002",
+      "crr": {
+        "section": "NEGATIVE DEPLOYMENT COST",
+        "lines": [
+          2126,
+          2128
+        ]
+      },
+      "summary": "A negative-cost attachment requires at least one eligible Deployment card in the army; when a group with such an attachment is defeated, VPs scored are modified by the negative cost.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-WIN-005",
+        "CRR-SKA-004"
+      ],
+      "notes": "Attachment-cost VP adjustment branch. WIN-005 / SKA-004 cover the (positive) attachment-cost side; negative-cost scoring is the symmetric case with sign flipped."
+    },
+    {
+      "id": "CRR-NTF-001",
+      "crr": {
+        "section": "NEUTRAL FIGURES",
+        "lines": [
+          2149,
+          2149
+        ]
+      },
+      "summary": "No player controls a neutral figure; neutral figures cannot activate or perform actions.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/activation.js",
+      "notes": "Neutral-figure activation exclusion. Rare in skirmish (mission-specific); no dedicated oracle."
+    },
+    {
+      "id": "CRR-NTF-002",
+      "crr": {
+        "section": "NEUTRAL FIGURES",
+        "lines": [
+          2150,
+          2151
+        ]
+      },
+      "summary": "Neutral figures cannot suffer damage or be targeted by attacks, abilities, or game effects except as specified by mission rules.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/combat.js",
+      "notes": "Neutral damage/target immunity. Mission-specific; no generic oracle."
+    },
+    {
+      "id": "CRR-NTF-003",
+      "crr": {
+        "section": "NEUTRAL FIGURES",
+        "lines": [
+          2152,
+          2153
+        ]
+      },
+      "summary": "Figures can move through spaces containing neutral figures at no additional cost but cannot end movement there (unless companion or Massive).",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/game/movement.js",
+      "notes": "Neutral-space movement allowance. Mission-specific; no generic oracle."
+    },
+    {
+      "id": "CRR-NTF-004",
+      "crr": {
+        "section": "NEUTRAL FIGURES",
+        "lines": [
+          2154,
+          2154
+        ]
+      },
+      "summary": "Neutral figures block line of sight.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/game/los.js",
+      "notes": "Neutral LOS block. Mission-specific; no generic oracle."
+    },
+    {
+      "id": "CRR-OPD-001",
+      "crr": {
+        "section": "OPTIONAL DEPLOYMENT",
+        "lines": [
+          2179,
+          2187
+        ]
+      },
+      "summary": "In a campaign, optional deployments allow the Imperial player to spend threat to deploy groups and/or reinforce figures; the Deploy and Reinforce step of the Status Phase is an optional deployment.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only (scope:definitional); no skirmish analog (skirmish uses open-group reinforce)."
+    },
+    {
+      "id": "CRR-RST-001",
+      "crr": {
+        "section": "REST",
+        "lines": [
+          2379,
+          2385
+        ]
+      },
+      "summary": "During a campaign, a hero can perform a rest action to recover strain equal to Endurance (and convert overflow into damage recovery).",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only rest mechanic (hero figures do not exist in skirmish)."
+    },
+    {
+      "id": "CRR-RTK-001",
+      "crr": {
+        "section": "RETRIEVING TOKENS",
+        "lines": [
+          2387,
+          2389
+        ],
+        "sha256": "90e292c634b99e39f5cfa8f627da39d9f76e1dc19fcf37f3bc887864c6c8932b"
+      },
+      "summary": "A figure adjacent to or in the same space as a token can perform an interact action to retrieve the token; the token then moves with the figure.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/handlers/interact.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/interact-legality-probes.test.js"
+        ],
+        "assertions": [
+          "003: Bossk (normal) at terminal h21 → interact offered",
+          "005: P1 Stormtrooper (cost 6) at terminal, P2 Obi-Wan 3 spaces away → no interact"
+        ]
+      },
+      "notes": "Interact-to-retrieve is the generic token-claim mechanism. Pinned by interact-legality-probes 003 (offered when adjacent) and 005 (Alter Mind exclusion).",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-RTK-002",
+      "crr": {
+        "section": "RETRIEVING TOKENS",
+        "lines": [
+          2390,
+          2392
+        ]
+      },
+      "summary": "A carried token cannot be retrieved by others or dropped voluntarily; on figure defeat, carried tokens drop in the figure's space.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/interact.js",
+      "notes": "Token-drop-on-defeat. Mission-specific (e.g., capture-the-flag variants); no dedicated oracle."
+    },
+    {
+      "id": "CRR-RTK-003",
+      "crr": {
+        "section": "RETRIEVING TOKENS",
+        "lines": [
+          2395,
+          2395
+        ]
+      },
+      "summary": "Retrieving a token is not claiming a token.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Terminology distinction. Handled per-mission; retrieve = pickup, claim = permanent acquisition (CLM-*)."
+    },
+    {
+      "id": "CRR-PLS-001",
+      "crr": {
+        "section": "PLAYING A SKIRMISH",
+        "lines": [
+          2458,
+          2460
+        ]
+      },
+      "summary": "Each round of a skirmish consists of an Activation Phase followed by a Status Phase.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-APH-001"
+      ],
+      "notes": "Round structure. Activation Phase section already covered by APH atoms."
+    },
+    {
+      "id": "CRR-PLS-002",
+      "crr": {
+        "section": "PLAYING A SKIRMISH",
+        "lines": [
+          2463,
+          2465
+        ]
+      },
+      "summary": "Starting with the initiative player, players take turns activating groups; a player with fewer ready DCs than any opponent can pass instead of activating.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ACV-002",
+        "CRR-ACV-007"
+      ],
+      "notes": "Alternation + pass-when-fewer-ready-DCs is the ACV-002 (activation alternation) + ACV-007 (exhausted player skipped) contract."
+    },
+    {
+      "id": "CRR-PLS-003",
+      "crr": {
+        "section": "PLAYING A SKIRMISH",
+        "lines": [
+          2470,
+          2472
+        ]
+      },
+      "summary": "The player with initiative breaks all ties for mission rules (e.g., equidistant figures).",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CFS-002"
+      ],
+      "notes": "Initiative tiebreak. CFS-002 and CNF-008 already pin this."
+    },
+    {
+      "id": "CRR-SSU-001",
+      "crr": {
+        "section": "SPECIAL SETUP",
+        "lines": [
+          2503,
+          2505
+        ]
+      },
+      "summary": "When mission rules instruct to randomly place tokens, the Imperial player shuffles the tokens facedown at indicated spaces; no player may examine the facedown side until revealed.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/mission-setup.js",
+      "notes": "Random-facedown token placement. Mission-specific (Sabacc, crate-reveal missions); no dedicated oracle pins the \"facedown-hidden\" invariant."
+    },
+    {
+      "id": "CRR-SSU-002",
+      "crr": {
+        "section": "SPECIAL SETUP",
+        "lines": [
+          2506,
+          2509
+        ]
+      },
+      "summary": "When mission rules instruct to choose and place tokens, the Imperial player places them facedown in chosen indicated spaces; Rebel players cannot examine them; once placed they cannot be moved, but Imperial can examine them.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/mission-setup.js",
+      "notes": "Imperial-choose placement variant. Similar to SSU-001 but Imperial keeps knowledge. No oracle."
+    },
+    {
+      "id": "CRR-STSK-001",
+      "crr": {
+        "section": "STRAIN IN A SKIRMISH",
+        "lines": [
+          2580,
+          2582
+        ],
+        "sha256": "a78483d44fae3d363a1f84c4d472fb4fb241859cf1f3196f45f1c63bf66f058d"
+      },
+      "summary": "In a skirmish, when a figure suffers strain, it suffers equal damage instead; the controlling player can prevent that damage by discarding one Command card from the top of their deck per point of prevention.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/handlers/combat.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/combat-behavioral.test.js"
+        ],
+        "assertions": [
+          "B-C-PEND-001: handleStrainChoice alldmg clears pendingStrainChoice",
+          "B-C-PEND-002: handleStrainChoice discard path clears pendingStrainChoice",
+          "B-C-STRAIN-001: alldmg path applies full HP damage"
+        ]
+      },
+      "notes": "Strain-as-damage + CC-discard-to-prevent pinned by combat-behavioral B-C-PEND-001/002 and B-C-STRAIN-001.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-STY-001",
+      "crr": {
+        "section": "STYLE TOKENS",
+        "lines": [
+          2590,
+          2596
+        ]
+      },
+      "summary": "Tress Hacnua uses style tokens to enhance her melee attacks and build to finishing strikes; these tokens only interact with abilities on Tress's Hero sheet and Class cards.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only hero-specific token (Tress Hacnua). No skirmish presence."
+    },
+    {
+      "id": "CRR-TST-001",
+      "crr": {
+        "section": "TESTS",
+        "lines": [
+          2666,
+          2667
+        ]
+      },
+      "summary": "Tests redirects to Attribute Tests.",
+      "scope": "definitional",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATT-001"
+      ],
+      "notes": "Pure-pointer section. Attribute Tests (ATT-*) already covers the semantics."
+    },
+    {
+      "id": "CRR-WDR-001",
+      "crr": {
+        "section": "WITHDRAW",
+        "lines": [
+          2812,
+          2823
+        ]
+      },
+      "summary": "During a campaign, a wounded hero who is defeated withdraws: removed from the map, cannot be activated, abilities unavailable, can still help with group decisions.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only wounded-hero withdrawal. Skirmish has no heroes and no wounded state."
     }
   ]
 }
