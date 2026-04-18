@@ -4268,8 +4268,13 @@
       },
       "summary": "When a figure is placed, it enters the space(s) where it is placed, exits the space(s) it previously occupied, and ends movement.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Place-triggers-enter/exit/ends-movement composite rule has no named assertion pin tying all three together. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Placement semantics: exit-old = pushFigure overwriting prevPos (PSH-002), enter-new = pushFigure writing newSpace (PSH-002, PLC-001), ends-movement = placement does not consume MP (PLC-002).",
+      "seeAlso": [
+        "CRR-PLC-001",
+        "CRR-PSH-002",
+        "CRR-PLC-002"
+      ]
     },
     {
       "id": "CRR-DT-001",
@@ -6430,12 +6435,29 @@
         "lines": [
           1008,
           1010
-        ]
+        ],
+        "sha256": "c7f0a2b9cd331f7552850f1d87c205bcc17579b72ea979ed11119bca0dcb502c"
       },
       "summary": "If a crate token is in a space containing terrain, the terrain in the space still takes effect (e.g., blocking terrain with a crate still blocks).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Token-on-terrain precedence rule has no oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js (terrain keyed by coord, not by token overlay)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-object-terrain-probes.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "002a: source — movement.js does not read cratePositions (terrain is independent)",
+          "002b: behavior — a difficult cell with a crate overlay still costs +1",
+          "002c: terrain is stored in mapSpaces.terrain, not in any token map"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-CRT-003",
@@ -6575,12 +6597,28 @@
         "lines": [
           2639,
           2641
-        ]
+        ],
+        "sha256": "c767f80eaed8c8b8f38645c8ea607f986aba3b8181513a304b1c65d2292df5c0"
       },
       "summary": "If a terminal is in a space containing terrain, the terrain in the space still takes effect (e.g., blocking terrain with a terminal still blocks).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Token-on-terrain precedence rule has no oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js (terrain keyed by coord, not by token overlay)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-object-terrain-probes.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "004a: source — movement.js does not read terminal-position maps (terrain is independent)",
+          "004b: behavior — a difficult cell retains +1 surcharge regardless of token overlay"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-TRM-005",
