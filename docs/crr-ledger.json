@@ -5407,12 +5407,30 @@
         "lines": [
           1253,
           1254
-        ]
+        ],
+        "sha256": "0505a3bf0676f13146f221adc7d55b3539522a31f6762c05e73f4e1a40d54955"
       },
       "summary": "An energy shield does not block movement, adjacency, or counting spaces.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Movement/adjacency/counting-spaces pass-through on energy-shield spaces has no named oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js (shield-blind; energyShield stored in game.ancillaryTokens only)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-es-pass-through-probe.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "002a: src/game/movement.js has no reference to energyShield (shield-blind movement)",
+          "002b: buildTempBoardState ignores game.ancillaryTokens.energyShield (only rubble is read)",
+          "002c: shield on a middle cell does not change movement cost (a1→a3 costs 2 either way)",
+          "002d: adjacency set is shield-blind (a2 remains a neighbor of a1/a3 with shield present)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ES-003",
@@ -5535,12 +5553,29 @@
         "lines": [
           2421,
           2421
-        ]
+        ],
+        "sha256": "a609ba06f5daba799133702984e939b9d5759299a0e5086d1fcbcf2d8e60f204"
       },
       "summary": "The effect of rubble does not stack with the effect of preexisting difficult terrain.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "No-stack rubble+difficult rule has no oracle pin (would require a probe placing rubble on a difficult-terrain space and asserting single movement-cost surcharge). Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js (rubble upgrade gated by terrain[nc]==='normal')",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-rubble-invariant-probes.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "002a: source — both rubble paths gate upgrade by normal-terrain precondition (no stacking)",
+          "002b: source — no branch applies difficult surcharge twice under rubble (no += 1)",
+          "002c: behavior — difficult surcharge is a single +1 (bound that rubble cannot exceed)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-RBL-003",
@@ -5549,12 +5584,29 @@
         "lines": [
           2422,
           2422
-        ]
+        ],
+        "sha256": "53a1de9ebc19ea85c900c527ed9ba1805abdb43b51ec822162b74e1e8c2645cd"
       },
       "summary": "A space can contain both rubble and an energy shield.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Co-occupancy of rubble + energy shield has no oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js + ancillaryTokens schema (rubble/energyShield independent arrays)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-rubble-invariant-probes.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "003a: ancillaryTokens.rubble and .energyShield are independent arrays (no mutual exclusion)",
+          "003b: source — no cross-exclusion logic between rubble and energyShield",
+          "003c: shield layer is orthogonal — movement.js does not read energyShield at all"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-LF-001",
