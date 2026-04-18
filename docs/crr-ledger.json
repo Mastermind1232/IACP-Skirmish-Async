@@ -9952,9 +9952,11 @@
       },
       "summary": "A figure can perform each special action ability only once per activation.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/activation.js",
-      "notes": "Per-activation special-action limit. Enforced inline in activation.js via dcActionsData tracking; no dedicated oracle pins the \"second special-action offer suppressed\" invariant in isolation."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ACT-007"
+      ],
+      "notes": "Same rule as CRR-ACT-007 (one-per-activation special). Pinned by 'rejects duplicate special (specialsUsed)' + 'already been used' in tests/domain/oracle/dc-ability-behavioral.test.js."
     },
     {
       "id": "CRR-ABIL-005",
@@ -9982,9 +9984,11 @@
       },
       "summary": "An ability that causes damage (such as Force Choke) is not considered an attack and does not count toward attack-per-activation limits.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/dc-special.js",
-      "notes": "Non-attack damage abilities bypass attack limits. Enforced inline; no dedicated oracle pinning \"ability damage does not consume the attack slot\"."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-039"
+      ],
+      "notes": "Same rule as CRR-ATK-039 (Force Choke is not an attack). Pinned by Phase-2 Force Choke probe in tests/domain/oracle/dc-ability-behavioral.test.js."
     },
     {
       "id": "CRR-ATTC-001",
