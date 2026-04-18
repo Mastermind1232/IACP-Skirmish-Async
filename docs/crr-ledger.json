@@ -4087,12 +4087,30 @@
         "lines": [
           2238,
           2250
-        ]
+        ],
+        "sha256": "a2c7ab02baffc6b229f1d34d13ac4bf622a819a9f6481b654f5c9a69fc7bba11"
       },
       "summary": "A pushed figure is not considered to be voluntarily exiting its space.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Push-not-voluntary rule (matters for Stun, defensive abilities, etc.) has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/player-helpers.js (pushFigure)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-voluntary-exit-probes.test.js",
+          "src/game/player-helpers.js",
+          "src/handlers/movement.js"
+        ],
+        "assertions": [
+          "003a: pushFigure body does not reference voluntary-exit gates (Cripple/HoldGround/Tripod)",
+          "003b: voluntary-exit gates live in handler layer (src/handlers/movement.js), not in pushFigure",
+          "003c: pushFigure succeeds on a figure flagged as Crippled (no gate invoked)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-PSH-004",
@@ -5024,12 +5042,30 @@
         "lines": [
           1050,
           1061
-        ]
+        ],
+        "sha256": "635ca4372df10942c3d431a63c4aae35a0201684dd608f0c1f638c07aa3477e0"
       },
       "summary": "When being defeated and removed from the map, a figure is not considered to be voluntarily exiting its spaces.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Defeat-is-not-voluntary-exit rule has no named assertion pin (matters for Stun, hostile-figure-move-cost reactions, etc.). Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/player-helpers.js (removeFigurePosition)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-voluntary-exit-probes.test.js",
+          "src/game/player-helpers.js",
+          "src/handlers/movement.js"
+        ],
+        "assertions": [
+          "004a: removeFigurePosition body does not reference voluntary-exit gates",
+          "004b: voluntary-exit handler gates do not call removeFigurePosition",
+          "004c: removeFigurePosition removes a Crippled figure cleanly (no gate invoked)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-DEF-005",
