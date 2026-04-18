@@ -11015,13 +11015,30 @@
         "lines": [
           1983,
           1991
-        ]
+        ],
+        "sha256": "b580905196f679c5ba6cf9aa3dceb7b1957a720deddec8395d2c809e1e9b0bc8"
       },
       "summary": "Setup Step 4 — Deploy Units: the initiative player chooses a deployment zone and places all their figures there; opposing players then deploy, choosing from remaining zones.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/deploy.js",
-      "notes": "Deployment-zone choice + figure placement. Enforced inline; no dedicated oracle pins \"initiative picks zone first\"."
+      "status": "covered",
+      "implementationArea": "src/handlers/setup.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-skms-deploy-step-probe.test.js",
+          "src/handlers/setup.js"
+        ],
+        "assertions": [
+          "004a: source — zone-choice interaction is gated to the initiative player (or Devious Scheme override)",
+          "004b: source — the chosen zone is recorded on game.deploymentZoneChosen (single source of truth)",
+          "004c: source — the opposing player is assigned the complementary zone (red <-> blue)",
+          "004d: source — deploy-time zone lookup resolves each player to their assigned zone"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-SKMS-005",
