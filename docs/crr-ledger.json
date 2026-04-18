@@ -292,13 +292,29 @@
         "lines": [
           2061,
           2062
-        ]
+        ],
+        "sha256": "0f1fe3bdadfffb4d86b626067d892a84b0bd1dd7b554d277eb7140ad3e094662"
       },
       "summary": "MP may be granted from sources other than the Move action.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "Beast Tamer (activation-effects.js:123) and Urgency (abilities.test.js:156) exercise non-Move MP grants, but no named assertion pins 'arbitrary sources may grant MP' as the general rule. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/game-helpers.js",
+      "evidence": {
+        "type": "unit_test",
+        "files": [
+          "tests/headless/activation-combat-deep-tests.js",
+          "src/game/abilities.test.js"
+        ],
+        "assertions": [
+          "initializes movement bank from scratch",
+          "adds to existing movement bank",
+          "resolveAbility Urgency (Speed+2) with active activation applies MP"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MOVE-008",
