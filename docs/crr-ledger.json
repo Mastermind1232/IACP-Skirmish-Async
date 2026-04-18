@@ -6094,12 +6094,29 @@
         "lines": [
           2744,
           2746
-        ]
+        ],
+        "sha256": "28e4d6b5475c7e399c69a45b46e952e9609a655fce4fc58d1fd9c133a69449fa"
       },
       "summary": "Each player can only use one copy of each unique card at a time; unique cards are identified by a bullet (▪) before the name.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "One-unique-copy-per-player skirmish deck-construction rule has no data_validation oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/validation.js (validateDeckLegal — unique+count>1 guard)",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-unique-card-probes.test.js",
+          "src/game/validation.js"
+        ],
+        "assertions": [
+          "001a: source — validateDeckLegal rejects dcNameCounts[name] > 1 for unique cards",
+          "001b: behavior — duplicating a real unique DC yields the unique-duplicate error",
+          "001c: behavior — a single copy of the same unique DC does NOT produce a unique-duplicate error"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-UNI-002",
@@ -6108,12 +6125,29 @@
         "lines": [
           2747,
           2749
-        ]
+        ],
+        "sha256": "0edf1496e6c4f342ffc39ec109343a895ae3c3b1adad3c62b6b95715b90c605e"
       },
       "summary": "Unique cards are identified by name only — sub-names, affiliations, and abilities are not taken into account when determining which cards have the same name.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Name-only identity rule for unique cards has no data_validation oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/validation.js (dcNameCounts is name-keyed; stats.unique is a boolean)",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-unique-card-probes.test.js",
+          "src/game/validation.js"
+        ],
+        "assertions": [
+          "002a: source — dcNameCounts is keyed by the resolved dc name (no affiliation/ability suffix)",
+          "002b: source — unique check reads stats.unique (boolean), not a sub-name or ability flag",
+          "002c: behavior — two different unique DCs do NOT collide (name is the only key)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-TER-001",
