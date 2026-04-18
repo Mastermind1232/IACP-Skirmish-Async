@@ -6542,8 +6542,13 @@
       },
       "summary": "Walls are not terrain and are not affected by abilities that affect terrain — Massive figures can enter blocking terrain but cannot move through walls.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Massive-cannot-cross-wall carveout has no named oracle pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Composite rule: (a) walls are not terrain — structurally true in the data model (walls live in impassableEdges, terrain in the terrain map, separate concepts/shapes), (b) Massive figures enter blocking terrain (CRR-MSV-003) but (c) no figure — including Massive — may cross walls (CRR-MOVE-010 / CRR-WAL-001). The conjunction is the pinned invariants composed.",
+      "seeAlso": [
+        "CRR-MOVE-010",
+        "CRR-MSV-003",
+        "CRR-WAL-001"
+      ]
     },
     {
       "id": "CRR-WAL-003",
