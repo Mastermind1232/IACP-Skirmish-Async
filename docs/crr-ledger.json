@@ -6916,12 +6916,29 @@
         "lines": [
           940,
           940
-        ]
+        ],
+        "sha256": "355d6d4b92a65db7c2606844fc50dc1b1eb30276ad6886c185e1abd81cd723b8"
       },
       "summary": "Objects cannot gain conditions.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Objects-immune-to-conditions rule has no named assertion pin. Engine stores conditions keyed by figureKey; object keys are a separate namespace, so the invariant holds structurally but is not exercised by a named oracle. Phase-D gap."
+      "status": "covered",
+      "notes": "Architectural invariant: applyCondition(game, figureKey, cond) writes into game.figureConditions[figureKey]. Objects (crates/terminals) live in separate maps (cratePositions, crateHealth, crateTokens, deviceTokens) with no condition-storage field. No code path maps an object identifier into figureConditions.",
+      "implementationArea": "src/game/conditions.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-objects-no-conditions-probe.test.js"
+        ],
+        "assertions": [
+          "009a: applyCondition signature pins its parameter as figureKey",
+          "009b: no object-level condition storage exists (no crateConditions / terminalConditions fields)",
+          "009d: applying a condition only mutates figureConditions (round-trip)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-HLT-001",
