@@ -2467,12 +2467,27 @@
         "lines": [
           647,
           647
-        ]
+        ],
+        "sha256": "1ef4ff977ec768791538fbbe637f84b2b1742e3b373df761e669aeb02794d7da"
       },
       "summary": "A figure with Bleeding that has resolved an action suffers 1 damage.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Bleeding post-action 1-damage tick is implemented in src/engine/combat-bridge.js and src/handlers/combat-special-effects.js but has no named test assertion pinning the rule. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/engine/combat-bridge.js",
+      "evidence": {
+        "type": "unit_test",
+        "files": [
+          "tests/headless/combat-effects-tests.js"
+        ],
+        "assertions": [
+          "Bleed accept reduces HP by 1 (simulated)",
+          "HP reduced by 1"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-BLED-003",
