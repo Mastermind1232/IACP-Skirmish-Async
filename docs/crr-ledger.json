@@ -232,13 +232,28 @@
         "lines": [
           2060,
           2060
-        ]
+        ],
+        "sha256": "681c3ebdf02522229516cdd566126aa4fdbed89f8a8cebba9a52bc96448594e1"
       },
       "summary": "Gaining MP does not itself move the figure.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/game/movement.js",
-      "notes": "Implicit in the engine (grantMovementBank mutates MP only) but not pinned by a named assertion. Phase-D gap."
+      "evidence": {
+        "type": "unit_test",
+        "files": [
+          "tests/headless/activation-combat-deep-tests.js"
+        ],
+        "assertions": [
+          "initializes movement bank from scratch",
+          "adds to existing movement bank"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      },
+      "notes": "grantMovementBank mutates only game.movementBank (total/remaining counters); figurePositions is never touched — gaining MP is separate from moving."
     },
     {
       "id": "CRR-MOVE-006",
@@ -277,13 +292,29 @@
         "lines": [
           2063,
           2064
-        ]
+        ],
+        "sha256": "618e5af4cf135b0c9c0be521fe24cbd9da585be15be6e81e714c168256d699dc"
       },
       "summary": "Figures without Massive or Mobile cannot enter or be pushed through blocking or impassable terrain.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/game/movement.js",
-      "notes": "'005c: massive ignores blocking terrain' proves the inverse (Massive bypasses), but a named assertion for the positive non-Massive-blocking rule is not confidently located. Phase-D gap."
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/movement-profile-mobile-probes.test.js",
+          "tests/headless/activation-combat-deep-tests.js"
+        ],
+        "assertions": [
+          "non-Mobile / non-Massive figures cannot cross blocking terrain",
+          "blocking terrain prevents movement when not ignoring",
+          "a3 is unreachable behind blocking"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MOVE-009",
@@ -3533,12 +3564,27 @@
         "lines": [
           1791,
           1818
-        ]
+        ],
+        "sha256": "7544c4dd6895ac24c6170821355634f347c4b1bba96fae9f1c8408c52b722f51"
       },
       "summary": "After a Massive figure ends movement in spaces containing another figure, it cannot voluntarily move again during that activation, Start of Round, or End of Round.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Massive-end-on-figure movement lock-out has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/activation-state.js",
+      "evidence": {
+        "type": "unit_test",
+        "files": [
+          "tests/headless/activation-combat-deep-tests.js"
+        ],
+        "assertions": [
+          "locks voluntary movement after Massive push",
+          "massiveMovementLocked is in figkey cleanup list"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MSV-009",
