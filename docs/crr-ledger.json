@@ -4220,12 +4220,27 @@
         "lines": [
           1164,
           1175
-        ]
+        ],
+        "sha256": "b007c533b8acb6f5537772b340f0f6e35cc03a4277cc8f6d407b92e98e3a635c"
       },
       "summary": "Line of sight can be traced through difficult terrain.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "LOS-through-difficult rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-los-transparency-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-DT-003: LOS passes through difficult terrain",
+          "hasLineOfSight a1→e1 with difficult terrain at c1 → true"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-DT-004",
@@ -5556,12 +5571,27 @@
         "lines": [
           2161,
           2161
-        ]
+        ],
+        "sha256": "000186495f908cae27d3029193af6c0a56c3140edc9b1746cb09c00b92ceaafc"
       },
       "summary": "Except for doors, objects do not restrict movement or block line of sight.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Non-door object transparency (crates/terminals do not block LOS or movement) has no named oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-los-transparency-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-OBJ-002: Non-door objects do not block LOS",
+          "non-door objects (crates, terminals) must never enter the LOS blocking set"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-OBJ-003",
@@ -6130,12 +6160,27 @@
         "lines": [
           1006,
           1007
-        ]
+        ],
+        "sha256": "d38ac5e202f5960ed53af0768aefa920692f4cae32e40125b10487e45ff9bbc6"
       },
       "summary": "Crate tokens do not block line of sight or figure movement; figures may move through and end their movement in the same space as a crate token.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Crate-as-transparent-for-LOS-and-movement has no named oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-los-transparency-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-CRT-001: Crate tokens do not block LOS",
+          "crate tokens must not block LOS"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-CRT-002",
@@ -6260,12 +6305,27 @@
         "lines": [
           2637,
           2638
-        ]
+        ],
+        "sha256": "c420976f0c28f1285db136f1268c83f598098a978040fd791737be7f9f94de84"
       },
       "summary": "Terminals do not block line of sight or movement; figures can end their movement in the same space as a terminal token.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Terminal-as-transparent-for-LOS-and-movement has no named oracle pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-los-transparency-probes.test.js"
+        ],
+        "assertions": [
+          "PROBE-PD-TRM-003: Terminal tokens do not block LOS",
+          "terminal tokens must not block LOS"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-TRM-004",
