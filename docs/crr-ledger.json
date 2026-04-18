@@ -5732,12 +5732,29 @@
         "lines": [
           2162,
           2162
-        ]
+        ],
+        "sha256": "678bd238a61020a3570ab002db99b20000927a5f867ff96baa46c7cc141af8ef"
       },
       "summary": "Objects cannot be pushed.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Objects-immune-to-push has no named oracle pin. Phase-D gap."
+      "status": "covered",
+      "notes": "Architectural invariant: pushFigure reads/writes only game.figurePositions[playerNum][figureKey]. No pushCrate/pushTerminal/pushObject helper exists. Object-position maps (cratePositions, deviceTokens) are initialised at mission setup and never mutated by push/movement logic.",
+      "implementationArea": "src/game/player-helpers.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-objects-no-push-probe.test.js"
+        ],
+        "assertions": [
+          "003a: pushFigure signature binds to figurePositions[playerNum][figureKey]",
+          "003b: no pushCrate / pushTerminal / pushObject helper exists",
+          "003c: pushFigure ignores non-existent figure keys (returns null)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-OBJ-004",
