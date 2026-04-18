@@ -4205,8 +4205,11 @@
       },
       "summary": "Placing a figure in a space requires no movement points.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Place-no-MP-cost rule has no named assertion pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Placement writes go through the same pushFigure helper as push (src/game/abilities.js uses pushFigure for teleport/place/displacement ops). PSH-004 pins that pushFigure never reads/writes movementBank or mpRemaining — so placement cannot consume MP either.",
+      "seeAlso": [
+        "CRR-PSH-004"
+      ]
     },
     {
       "id": "CRR-PLC-003",
