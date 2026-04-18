@@ -3851,12 +3851,31 @@
         "lines": [
           1819,
           1828
-        ]
+        ],
+        "sha256": "745b263253634669f2bf10f782129d6d5b02cf677cb7072dbc5a002ac6bf901b"
       },
       "summary": "A figure without the melee icon cannot perform melee attacks; an attack targeting an adjacent figure that uses the ranged icon is still classified as a ranged attack.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Melee-icon-requirement and adjacent-ranged-classification rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/engine/available-actions.js + src/handlers/combat.js (isRanged = attackInfo.type === 'range')",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-melee-classification-probe.test.js",
+          "src/engine/available-actions.js",
+          "src/handlers/combat.js"
+        ],
+        "assertions": [
+          "003a: source — isRanged is derived from the ranged weapon-type flag (distance-independent)",
+          "003b: source — no branch rewrites isRanged after computing it (no distance override)",
+          "003c: data — attack.type is a per-DC classifier; a \"range\" DC stays ranged regardless of distance",
+          "003d: range defaults — a ranged weapon never collapses to melee range [1,1]"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MEL-004",
@@ -8225,9 +8244,11 @@
       },
       "summary": "When an ability instructs a player to pay another player VPs, the paying player loses VPs and the paid player gains an equal number of VPs.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/vp-math.js",
-      "notes": "Pay-VP-to-opponent transfer semantics (deduct payer + award payee of equal amount) has no dedicated oracle. Only one skirmish ability currently uses this (Paying VPs section), and its behavior isn't pinned by name. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Same rule as CRR-PAY-001 (cross-section). Symmetric deductVp+awardObjectiveVp pair in vp-helpers.js.",
+      "seeAlso": [
+        "CRR-PAY-001"
+      ]
     },
     {
       "id": "CRR-VPS-004",
@@ -10196,13 +10217,31 @@
         "lines": [
           2189,
           2190
-        ]
+        ],
+        "sha256": "2b1ea0fa03362a0d6c3ee516d03bd90105826d9bce2c74bf8b84324485397922"
       },
       "summary": "In a Skirmish, when an ability instructs a player to pay another player VPs, the paying player loses VPs and the paid player gains an equal number of VPs.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/vp-helpers.js",
-      "notes": "VP transfer between players. Few cards invoke this (Negotiate, Utinni variants). Inline in combat.js; no dedicated transfer-oracle."
+      "status": "covered",
+      "implementationArea": "src/game/vp-helpers.js (deductVp + awardObjectiveVp symmetric pair)",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-vp-payment-probes.test.js",
+          "src/game/vp-helpers.js",
+          "src/handlers/combat.js"
+        ],
+        "assertions": [
+          "001a: behavior — deductVp(N) + awardObjectiveVp(N) preserves total VP across both players",
+          "001b: behavior — payment amount is the same number on both sides (no asymmetry)",
+          "001c: source — Hondo Negotiate pays 2 VP via symmetric pair (deductVp + awardObjectiveVp)",
+          "001d: recipient gain goes to objectives (not kills); paid VP is objective VP"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-PAY-002",
