@@ -2168,12 +2168,28 @@
         "lines": [
           635,
           636
-        ]
+        ],
+        "sha256": "d0a93ae0efb0c05c74519698851b984ca73f003a95d29be62da438aa485c3360"
       },
       "summary": "In skirmish, Blast damage affects both hostile and friendly figures (friendly-fire exemption applies only in Legends of the Alliance campaign).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Friendly-fire Blast scenario is not covered by any named assertion. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/combat.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/dc-ability-shapes-behavioral.test.js"
+        ],
+        "assertions": [
+          "adjacent FRIENDLY also takes splash damage",
+          "adjacent friendly takes splash damage (8 → 7) — splash is indiscriminate"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      },
+      "notes": "Skirmish Blast/splash is indiscriminate: Force Lightning splashDamage probe places a friendly adjacent to target and asserts the friendly loses HP identically to a hostile splash target. Campaign friendly-fire exemption is out of scope (campaign rule per CRR line)."
     },
     {
       "id": "CRR-BLST-005",
@@ -6982,13 +6998,28 @@
         "lines": [
           1329,
           1329
-        ]
+        ],
+        "sha256": "df985ca6f4ba2564d2249ca535023a5d4774b697b5d937a6df2471dd0e0cd10b"
       },
       "summary": "For a multi-figure group, the figure cost is equal to the figure's reinforcement cost.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/defeat-handler.js",
-      "notes": "Multi-figure group VP = per-figure reinforcement cost (dcStats.subCost). No dedicated oracle explicitly pins that the per-figure defeat of a multi-figure group (e.g., Stormtrooper squad) awards VP = subCost rather than full group cost. Phase-D gap — candidate for a dedicated defeat-pipeline probe with a multi-figure DC."
+      "status": "covered",
+      "implementationArea": "src/engine/combat-bridge.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/headless/combat-resolution.test.js"
+        ],
+        "assertions": [
+          "should be only reinforcement cost, not including attachment VP",
+          "no attachment VP awarded for non-last figure"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      },
+      "notes": "Multi-figure group: per-figure VP awarded on each defeat equals the deployment cards reinforcement (sub)cost, not the full group deployment cost. Stormtrooper (Regular) defeat probe asserts vpGained is less than full-group cost + attachment."
     },
     {
       "id": "CRR-FGC-003",
@@ -6997,13 +7028,27 @@
         "lines": [
           1330,
           1330
-        ]
+        ],
+        "sha256": "7c43c5a9012224e21a3e0c7559f95cda0e637876c7dd852a385de2d78ae00034"
       },
       "summary": "A companion has a figure cost of 0.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/defeat-handler.js",
-      "notes": "Companions (Salacious B. Crumb, The Child, Dio) are excluded from area control via PROBE-VP-001 but no oracle pins that defeating a companion awards 0 VP specifically. Phase-D gap — companion-defeat-VP=0 probe candidate."
+      "status": "covered",
+      "implementationArea": "data/dc-effects.json",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/headless/destruct-general-tests.js"
+        ],
+        "assertions": [
+          "companions cost 0 (explicit or undefined = 0)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      },
+      "notes": "Companion dc-effects entries have cost=0 (or undefined defaulting to 0). Oracle iterates The Child, Salacious B. Crumb, Dio, J4X-7, Junk Droid, BD-1 and asserts cost === 0 || undefined."
     },
     {
       "id": "CRR-FGC-004",
@@ -8259,13 +8304,32 @@
         "lines": [
           2105,
           2106
-        ]
+        ],
+        "sha256": "b4a63ba0b26b1d70af4a5f3f4398de16b06d13ed62380a75bfae1ace3f9e0d05"
       },
       "summary": "A figure is not required to spend all of its movement points, but at the end of its activation, it loses all remaining movement points.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "End-of-activation MP-pool reset (movementBank → 0) is part of applyEndOfActivationEffects but not pinned as a named assertion in end-activation-parity tests (which focus on condition discard and Shield). Phase-D gap — candidate for a new B-ENDACT probe."
+      "status": "covered",
+      "implementationArea": "src/game/activation-state.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/headless/activation-combat-deep-tests.js",
+          "tests/domain/oracle/accumulation-soak-behavioral.test.js",
+          "tests/domain/oracle/final-sentinels-behavioral.test.js",
+          "tests/domain/oracle/activation-cost-behavioral.test.js"
+        ],
+        "assertions": [
+          "movementBank cleanup per msgId",
+          "movementBank[msgA] cleaned",
+          "movementBank cleaned"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      },
+      "notes": "End-of-activation MP-pool reset is implemented via cleanupActivation() (src/game/activation-state.js) — movementBank is enumerated in ACTIVATION_MSGID_FLAGS and deleted for the activated DC msgId. handleDcEndActivation (src/handlers/activation.js) calls cleanupActivation() unconditionally. Assertions above pin the behavior directly by name."
     },
     {
       "id": "CRR-MVP-006",
@@ -8889,13 +8953,29 @@
         "lines": [
           854,
           854
-        ]
+        ],
+        "sha256": "f98979adeb3652014e8b2adc305a90f81a1fa515af06474852fc938ff0e742e8"
       },
       "summary": "After a Command card's effect has resolved, the card is placed faceup in the player's discard pile.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/handlers/cc-hand.js",
-      "notes": "Discard-on-resolve is inline in cc-hand.js and per-card handlers. No dedicated oracle pins the generic \"played CC ends in discard\" invariant."
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/headless/cc-coverage.test.js",
+          "tests/domain/oracle/combat-reactions-behavioral.test.js"
+        ],
+        "assertions": [
+          "Urgency should be in P1 discard",
+          "Negation in discard pile"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      },
+      "notes": "Played CC resolving → placed in ccDiscard[playerNum]. Pinned by two direct assertions in different suites: Urgency via headless-flow path (cc-coverage) and Negation via combat-reaction path (combat-reactions-behavioral)."
     },
     {
       "id": "CRR-CC-004",
@@ -9288,13 +9368,30 @@
         "lines": [
           2222,
           2224
-        ]
+        ],
+        "sha256": "960dcf7f4f8eff0b086121145e421c11701e358888982ff21014db2893c63823"
       },
       "summary": "When a figure with a power token declares an attack or is declared as target, it may spend 1 of its power tokens to apply +1 of that token's symbol to the attack/defense results.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/handlers/combat.js",
-      "notes": "Power-token spend mechanic. Spend flow lives in combat.js token phase; no direct oracle for the \"+1 symbol on spend\" invariant (token-grant is covered by power-token-grant-oracles, spend is not isolated)."
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/combat-token-behavioral.test.js"
+        ],
+        "assertions": [
+          "attacker spending Damage token adds +1 bonusHits",
+          "defender spending Block token adds +1 bonusBlock and sets tracking flags",
+          "attacker spending Surge token adds +1 tokenSurgeBonus",
+          "defender spending Evade token adds +1 bonusEvade"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      },
+      "notes": "Power-token spend handler is handleCombatToken in src/handlers/combat.js — Damage/Surge bonuses for attacker, Block/Evade bonuses for defender. Tests B-C-TOKEN-001 through B-C-TOKEN-004 pin each symbol application path."
     },
     {
       "id": "CRR-PT-002",
