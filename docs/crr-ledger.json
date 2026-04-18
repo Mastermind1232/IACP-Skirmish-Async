@@ -1468,13 +1468,29 @@
         "lines": [
           471,
           472
-        ]
+        ],
+        "sha256": "291374cbf19474fa028777cf149079974fb5a62e9946e04bc4795461ae37ee48"
       },
       "summary": "Step 3 Rerolls: when dice are rerolled, their old results are ignored and the new results are used instead.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "Reroll mechanics are tested by multiple combat-timing probes but the specific 'old result discarded, new result used' invariant is not pinned by a named assertion independent of the once-per-die rule (ATK-020). Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/combat.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/combat-handler-oracles.test.js"
+        ],
+        "assertions": [
+          "005a: attack die reroll updates totals correctly",
+          "Replaced die is exactly the fixture",
+          "Unchanged die preserved",
+          "Totals are exact sum of current dice array"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ATK-020",
