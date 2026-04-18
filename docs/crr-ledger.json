@@ -3765,8 +3765,10 @@
       },
       "summary": "The target of a Reach attack must be within line of sight (in addition to the 2-space limit).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Reach-requires-LOS corner rule has no named assertion pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-011"
+      ]
     },
     {
       "id": "CRR-MEL-001",
