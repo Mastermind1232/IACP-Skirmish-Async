@@ -5271,8 +5271,12 @@
       },
       "summary": "Figures that are not ready cannot be activated.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "No oracle-level assertion pins the not-ready → cannot-activate gate. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Dual of RDY-001 (\"ready = activatable\"). Enforcement: activation action-generators (src/engine/available-actions.js, src/handlers/activation.js) skip any DC index present in getActivatedDcIndices(). Once EXH-003 marks a group activated, its figures are structurally unavailable to activate again until Status Phase readies cards (CRR-RDY-002).",
+      "seeAlso": [
+        "CRR-RDY-001",
+        "CRR-EXH-003"
+      ]
     },
     {
       "id": "CRR-EXH-005",
