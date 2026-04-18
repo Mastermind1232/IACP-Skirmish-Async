@@ -4286,12 +4286,28 @@
         "lines": [
           1164,
           1175
-        ]
+        ],
+        "sha256": "b007c533b8acb6f5537772b340f0f6e35cc03a4277cc8f6d407b92e98e3a635c"
       },
       "summary": "A figure does not need to spend additional movement points to exit a space containing difficult terrain.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Difficult-terrain no-exit-surcharge rule has no named assertion pin (movement cost is symmetric in behavior, but not pinned as an explicit invariant). Phase-D gap."
+      "status": "covered",
+      "notes": "evaluateMovementStep charges difficult +1 only on entry (enteringDifficult branch). No exitingDifficult counterpart exists; moving from a difficult-origin cell to a normal cell costs the base 1 MP.",
+      "implementationArea": "src/game/movement.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-dt-exit-probe.test.js"
+        ],
+        "assertions": [
+          "002a: moving from a difficult-origin cell to a normal cell costs exactly 1 MP",
+          "002c: source pin — movement.js has no exitingDifficult branch (asymmetry is literal)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-DT-003",
