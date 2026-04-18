@@ -7559,13 +7559,31 @@
         "lines": [
           213,
           214
-        ]
+        ],
+        "sha256": "caf5c8e3f447113aa1d71b4cd81eb999be6b18a8130ed89971bc71847e030621"
       },
       "summary": "During a skirmish, players alternate activating groups, starting with the player with initiative each round.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/handlers/round.js",
-      "notes": "Initiative-opens-Activation-Phase behavior is close-adjacent to sor-sequencing 004a (initiative-first for SoR CC effects) but that probe pins CC-order inside SoR, not the first-activation-of-the-Activation-Phase. Phase-D gap."
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-activation-alternation-probe.test.js",
+          "src/handlers/round.js",
+          "src/handlers/activation.js"
+        ],
+        "assertions": [
+          "004a: source — Activation Phase opens with currentActivationTurnPlayerId set to initiativePlayerId (round.js)",
+          "004c: source — after an activation ends, the turn flips to the other player (alternation pin)",
+          "004d: source — pass action also flips turn to the other player (alternation pin)",
+          "004f: source — initiative passes each round; next round opens with the new initiative player"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-APH-005",
