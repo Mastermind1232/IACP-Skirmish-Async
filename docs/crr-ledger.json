@@ -4661,12 +4661,27 @@
         "lines": [
           1033,
           1048
-        ]
+        ],
+        "sha256": "c1263694329d2a9371859173ad53f187acb33751d6d5e7419e617bcc9c419768"
       },
       "summary": "If a figure suffers damage outside of an attack, the damage is not prevented by block and the figure does not roll defense dice.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Out-of-attack damage-bypasses-defense rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/engine/ability-resolver.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/dc-ability-behavioral.test.js"
+        ],
+        "assertions": [
+          "Phase 2: applies 2 damage + 1 strain to chosen target",
+          "HP should be 5 - 3 = 2"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-DMG-005",
@@ -8554,13 +8569,27 @@
         "lines": [
           2103,
           2104
-        ]
+        ],
+        "sha256": "effa7ff5b9219cb61406519ca025c2a58c57c60be721da2650e6b5120341acb1"
       },
       "summary": "Any time a figure gains movement points during its activation, they are added to the remaining total (movement point pool).",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/engine/movement.js",
-      "notes": "MP-pool accumulation semantics (multiple MP grants stack within an activation) has no dedicated oracle. Implementation aggregates movementBank[figureKey] but no pinned assertion for gain-adds-to-remaining. Phase-D gap."
+      "evidence": {
+        "type": "unit_test",
+        "files": [
+          "tests/headless/activation-combat-deep-tests.js"
+        ],
+        "assertions": [
+          "adds to existing movement bank",
+          "game.movementBank.msg1.remaining, 4"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-MVP-005",
@@ -9055,9 +9084,11 @@
       },
       "summary": "A figure cannot target an empty space with an attack.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/combat.js",
-      "notes": "Target must be a hostile figure or attackable object. Structurally enforced via getAvailableActions + target enumeration (no empty-space candidates emitted); no dedicated oracle isolates the \"cannot declare empty space\" invariant."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-031"
+      ],
+      "notes": "Literally the same rule as CRR-ATK-031 (no empty-space attack targets). Pinned by PROBE-PD-ATK-031 in tests/domain/oracle/phase-d-target-invariants.test.js."
     },
     {
       "id": "CRR-SSA-004",
