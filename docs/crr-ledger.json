@@ -93,11 +93,28 @@
       "SMALL FIGURE",
       "SKIRMISH UPGRADES",
       "SKIRMISH ATTACHMENTS",
-      "REINFORCE"
+      "REINFORCE",
+      "GOLDEN RULES",
+      "TIMING",
+      "STEPS OF AN ATTACK",
+      "SPECIAL SITUATIONS REGARDING ATTACKS",
+      "ATTACKING OBJECTS",
+      "COMMAND CARDS",
+      "CONTROL",
+      "HEALTH",
+      "HIDDEN INFORMATION",
+      "INCAPACITATED",
+      "INTERRUPT",
+      "NEGATIVE SYMBOLS",
+      "PAYING VPS",
+      "POWER TOKENS",
+      "REVEAL",
+      "SURGES",
+      "TIME PERIOD"
     ],
     "pilot": true,
     "date": "2026-04-18",
-    "notes": "Phase-C tranche 9 (army-building + misc-rules lane) appended 42 atoms across 18 new sections (ARMY BUILDING, CHOOSING DEPLOYMENT CARDS, COMMAND CARD DECK, CLAIM, TARGET, ENTER, EXIT, ESCAPING, WITHIN X SPACES, PLAY AREA, EMPTY SPACE, MOVEMENT POINTS, MOVING THROUGH, ENDING MOVEMENT, SMALL FIGURE, SKIRMISH UPGRADES, SKIRMISH ATTACHMENTS, REINFORCE). Tranche 9 added no new test probes (pure evidence-reuse lane — leverages movement-legality / movement-trigger / terrain-stacking / status-phase oracles). Very exempt-heavy (25+/42) because this lane is dominated by pre-game army-building rules (ARMY, CDC, CCD, SKA setup, CDC-004 being the sole skirmish-covered army-building atom) and definitional cross-references (MVT, SKU, EDM-001, TGT-001/003, PLA, EMS, WXS, SMF). Tranche 8 closures stand (WKN-002, ACV-007, CNF-005). Ledger now 435 atoms across 91 seededSections. Completeness test runs ONLY against seededSections; remaining CRR sections are enumerated in docs/crr-section-inventory.json. Do not claim full-CRR coverage on this state.",
+    "notes": "Phase-C tranche 9 (army-building + misc-rules lane) appended 42 atoms across 18 new sections (ARMY BUILDING, CHOOSING DEPLOYMENT CARDS, COMMAND CARD DECK, CLAIM, TARGET, ENTER, EXIT, ESCAPING, WITHIN X SPACES, PLAY AREA, EMPTY SPACE, MOVEMENT POINTS, MOVING THROUGH, ENDING MOVEMENT, SMALL FIGURE, SKIRMISH UPGRADES, SKIRMISH ATTACHMENTS, REINFORCE). Tranche 9 added no new test probes (pure evidence-reuse lane — leverages movement-legality / movement-trigger / terrain-stacking / status-phase oracles). Very exempt-heavy (25+/42) because this lane is dominated by pre-game army-building rules (ARMY, CDC, CCD, SKA setup, CDC-004 being the sole skirmish-covered army-building atom) and definitional cross-references (MVT, SKU, EDM-001, TGT-001/003, PLA, EMS, WXS, SMF). Tranche 8 closures stand (WKN-002, ACV-007, CNF-005). Ledger now 435 atoms across 91 seededSections. Completeness test runs ONLY against seededSections; remaining CRR sections are enumerated in docs/crr-section-inventory.json. Do not claim full-CRR coverage on this state. Tranche 10 (2026-04-18): added 56 atoms across 17 sections (GR, TIM, SOA, SSA, AOJ, CC, CTRL, HEA, HINF, INCP, INTR, NEG, PAY, PT, REV, SUR, TP) — pure evidence-reuse, no new probes.",
     "divergences": []
   },
   "atoms": [
@@ -8431,6 +8448,1017 @@
       "scope": "definitional",
       "status": "exempt",
       "notes": "Campaign-only reinforcement with threat economy. Skirmish Status Phase does not include Deploy and Reinforce; skirmish does not reinforce defeated figures."
+    },
+    {
+      "id": "CRR-GR-001",
+      "crr": {
+        "section": "GOLDEN RULES",
+        "lines": [
+          26,
+          28
+        ]
+      },
+      "summary": "Card text supersedes the rulebook when a conflict arises; \"cannot\" effects override \"can\"/\"must\" effects.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Rule-of-precedence meta-rule. Enforced by card-text implementation fidelity rather than a runtime invariant; any violation would manifest as a per-card bug, not a generic engine check."
+    },
+    {
+      "id": "CRR-GR-002",
+      "crr": {
+        "section": "GOLDEN RULES",
+        "lines": [
+          28,
+          29
+        ]
+      },
+      "summary": "When a rule and a mission rule conflict, the mission rule takes precedence.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Mission-rule precedence. Implemented per-mission rather than as a central mechanism; violations would be per-mission bugs."
+    },
+    {
+      "id": "CRR-TIM-001",
+      "crr": {
+        "section": "TIMING",
+        "lines": [
+          30,
+          37
+        ]
+      },
+      "summary": "Abilities and rules with \"before\" or \"when\" timing resolve before the triggering effect; \"after\" timing resolves once the triggering effect has fully resolved.",
+      "scope": "definitional",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CNF-001",
+        "CRR-CNF-007"
+      ],
+      "notes": "Timing-keyword semantics; the actual ordering contract lives in CONFLICTS (CRR-CNF-*) and is pinned by sor-sequencing + combat-reactions-behavioral oracles."
+    },
+    {
+      "id": "CRR-TIM-002",
+      "crr": {
+        "section": "TIMING",
+        "lines": [
+          37,
+          39
+        ]
+      },
+      "summary": "Simultaneously triggered abilities resolve in the order specified by Conflicts timing resolution.",
+      "scope": "definitional",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CNF-007"
+      ],
+      "notes": "Delegated to CNF-007 (initiative-first outside attacks) which already carries sor-sequencing-probes evidence."
+    },
+    {
+      "id": "CRR-SOA-001",
+      "crr": {
+        "section": "STEPS OF AN ATTACK",
+        "lines": [
+          455,
+          467
+        ]
+      },
+      "summary": "Step 1 — Declare Target: attack resolution advances through this step in the canonical 8-step sequence.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-010"
+      ],
+      "notes": "Step 1 is pinned by the existing ATTACKS atom CRR-ATK-010; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+    },
+    {
+      "id": "CRR-SOA-002",
+      "crr": {
+        "section": "STEPS OF AN ATTACK",
+        "lines": [
+          468,
+          470
+        ]
+      },
+      "summary": "Step 2 — Roll Dice: attack resolution advances through this step in the canonical 8-step sequence.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-011"
+      ],
+      "notes": "Step 2 is pinned by the existing ATTACKS atom CRR-ATK-011; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+    },
+    {
+      "id": "CRR-SOA-003",
+      "crr": {
+        "section": "STEPS OF AN ATTACK",
+        "lines": [
+          471,
+          473
+        ]
+      },
+      "summary": "Step 3 — Rerolls: attack resolution advances through this step in the canonical 8-step sequence.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-012"
+      ],
+      "notes": "Step 3 is pinned by the existing ATTACKS atom CRR-ATK-012; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+    },
+    {
+      "id": "CRR-SOA-004",
+      "crr": {
+        "section": "STEPS OF AN ATTACK",
+        "lines": [
+          474,
+          478
+        ]
+      },
+      "summary": "Step 4 — Apply Modifiers: attack resolution advances through this step in the canonical 8-step sequence.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-013"
+      ],
+      "notes": "Step 4 is pinned by the existing ATTACKS atom CRR-ATK-013; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+    },
+    {
+      "id": "CRR-SOA-005",
+      "crr": {
+        "section": "STEPS OF AN ATTACK",
+        "lines": [
+          479,
+          480
+        ]
+      },
+      "summary": "Step 5 — Spend Surges: attack resolution advances through this step in the canonical 8-step sequence.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-014"
+      ],
+      "notes": "Step 5 is pinned by the existing ATTACKS atom CRR-ATK-014; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+    },
+    {
+      "id": "CRR-SOA-006",
+      "crr": {
+        "section": "STEPS OF AN ATTACK",
+        "lines": [
+          481,
+          485
+        ]
+      },
+      "summary": "Step 6 — Check Accuracy: attack resolution advances through this step in the canonical 8-step sequence.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-015"
+      ],
+      "notes": "Step 6 is pinned by the existing ATTACKS atom CRR-ATK-015; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+    },
+    {
+      "id": "CRR-SOA-007",
+      "crr": {
+        "section": "STEPS OF AN ATTACK",
+        "lines": [
+          486,
+          489
+        ]
+      },
+      "summary": "Step 7 — Calculate Damage: attack resolution advances through this step in the canonical 8-step sequence.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-016"
+      ],
+      "notes": "Step 7 is pinned by the existing ATTACKS atom CRR-ATK-016; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+    },
+    {
+      "id": "CRR-SOA-008",
+      "crr": {
+        "section": "STEPS OF AN ATTACK",
+        "lines": [
+          490,
+          495
+        ]
+      },
+      "summary": "Step 8 — After Attack Resolves: attack resolution advances through this step in the canonical 8-step sequence.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-017"
+      ],
+      "notes": "Step 8 is pinned by the existing ATTACKS atom CRR-ATK-017; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+    },
+    {
+      "id": "CRR-SSA-001",
+      "crr": {
+        "section": "SPECIAL SITUATIONS REGARDING ATTACKS",
+        "lines": [
+          501,
+          505
+        ]
+      },
+      "summary": "A non-hero figure with a Deployment card can use only one of its actions to attack per activation; special actions involving attacks count against this limit.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/combat.js",
+      "notes": "Attack-per-activation limit is enforced inline in combat.js via attacksPerformed tracking; no dedicated oracle pins the \"one attack per activation for DC figures\" invariant in isolation."
+    },
+    {
+      "id": "CRR-SSA-002",
+      "crr": {
+        "section": "SPECIAL SITUATIONS REGARDING ATTACKS",
+        "lines": [
+          504,
+          505
+        ],
+        "sha256": "d9917c46611e00fdc4b364d833525167c5ee43486b0be8d81e54e93d8067998f"
+      },
+      "summary": "Attacks performed outside a figure's activation do not count toward the one-attack-per-activation limit.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/handlers/combat.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/free-attack-mutex-probes.test.js"
+        ],
+        "assertions": [
+          "only pendingFiringSquad set → count === 1",
+          "matches Firing Squad entry, clears it, leaves other fields untouched"
+        ]
+      },
+      "notes": "Out-of-activation free attacks (Overwatch, Counter Attack, etc.) are surfaced independently of the normal action budget. Pinned by free-attack-mutex-probes.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-SSA-003",
+      "crr": {
+        "section": "SPECIAL SITUATIONS REGARDING ATTACKS",
+        "lines": [
+          506,
+          506
+        ]
+      },
+      "summary": "A figure cannot target an empty space with an attack.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/combat.js",
+      "notes": "Target must be a hostile figure or attackable object. Structurally enforced via getAvailableActions + target enumeration (no empty-space candidates emitted); no dedicated oracle isolates the \"cannot declare empty space\" invariant."
+    },
+    {
+      "id": "CRR-SSA-004",
+      "crr": {
+        "section": "SPECIAL SITUATIONS REGARDING ATTACKS",
+        "lines": [
+          507,
+          508
+        ]
+      },
+      "summary": "A figure cannot target a friendly figure with an attack; friendly figures may still suffer damage from some abilities (e.g., Blast).",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-FRF-005"
+      ],
+      "notes": "Same no-friendly-target rule already captured by FRF-005 (FRIENDLY FIGURE section)."
+    },
+    {
+      "id": "CRR-SSA-005",
+      "crr": {
+        "section": "SPECIAL SITUATIONS REGARDING ATTACKS",
+        "lines": [
+          509,
+          512
+        ]
+      },
+      "summary": "Dice rolled by the attacker form the attack pool; dice rolled by the defender form the defense pool. Red/blue/yellow/green are attack dice; black/white are defense dice.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Taxonomy of dice colors. Enforced by data files and dice-rolling helpers; no behavioral invariant worth isolated pinning."
+    },
+    {
+      "id": "CRR-AOJ-001",
+      "crr": {
+        "section": "ATTACKING OBJECTS",
+        "lines": [
+          547,
+          549
+        ]
+      },
+      "summary": "An object has Health specified by mission rules; when damage >= Health, the object is destroyed (doors are \"opened\").",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/combat.js",
+      "notes": "Object health is modeled on doors (destructible walls) and crates. Handler-level destruction is inline; no dedicated oracle pins the generic \"damage>=Health destroys object\" invariant across object types."
+    },
+    {
+      "id": "CRR-AOJ-002",
+      "crr": {
+        "section": "ATTACKING OBJECTS",
+        "lines": [
+          550,
+          554
+        ]
+      },
+      "summary": "Abilities that refer to \"target\" can apply to objects; abilities that refer to \"figure\" cannot. Conditions cannot be applied to objects; objects cannot suffer strain or be pushed.",
+      "scope": "skirmish",
+      "status": "exempt",
+      "notes": "Target/figure terminology guard. Enforced per-ability in card implementations; no generic invariant to oracle-pin."
+    },
+    {
+      "id": "CRR-AOJ-003",
+      "crr": {
+        "section": "ATTACKING OBJECTS",
+        "lines": [
+          556,
+          557
+        ]
+      },
+      "summary": "An object rolls defense dice only if mission rules specify a die color; otherwise it rolls no dice.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "data/missions/*.json",
+      "notes": "Per-object defense dice are mission-specific data. No skirmish-mission uses attackable objects beyond doors in the current corpus; not an isolable oracle."
+    },
+    {
+      "id": "CRR-AOJ-004",
+      "crr": {
+        "section": "ATTACKING OBJECTS",
+        "lines": [
+          562,
+          568
+        ],
+        "sha256": "62c795d02300dde7422e378dac6388d69aa61ffc5dadd71f708f571504ec3400"
+      },
+      "summary": "Doors: only spaces sharing an edge with a door are adjacent to the door (and the door to those spaces). For ranged attacks, the door is considered to occupy each empty space it shares an edge with.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/game/los.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/los-slice2-probes.test.js"
+        ],
+        "assertions": [
+          "a3 → a5 across closed door between a3|a4 returns false",
+          "a3 → a4 adjacency through the closed door returns false"
+        ]
+      },
+      "notes": "Door edge-adjacency rule is exercised by los-slice2-probes (and documented in the Door Adjacency Rule memory: doors only openable from edge-sharing spaces, not diagonals).",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-CC-001",
+      "crr": {
+        "section": "COMMAND CARDS",
+        "lines": [
+          850,
+          851
+        ]
+      },
+      "summary": "During skirmish setup, each player draws three Command cards into their hand; Command cards in a player's hand are secret from the opponent.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CCD-001"
+      ],
+      "notes": "Draw-3-at-setup is part of command-deck setup; see CCD-001."
+    },
+    {
+      "id": "CRR-CC-002",
+      "crr": {
+        "section": "COMMAND CARDS",
+        "lines": [
+          852,
+          853
+        ],
+        "sha256": "3579b1335ef22529ec01e9d506df7e9f77783561b2ae7c64d1d33a1dff29dba2"
+      },
+      "summary": "Each player draws one Command card each Status Phase, plus one additional Command card for each terminal token the player controls.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/handlers/round.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/status-phase-behavioral.test.js"
+        ],
+        "assertions": [
+          "004a: base draw = 1 card per player (no terminals, no bonuses)",
+          "004c: Rebel High Command adds +1 draw"
+        ]
+      },
+      "notes": "Status-phase draw is pinned by status-phase-behavioral; terminal-bonus draw is the mission-specific token-control interaction.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-CC-003",
+      "crr": {
+        "section": "COMMAND CARDS",
+        "lines": [
+          854,
+          854
+        ]
+      },
+      "summary": "After a Command card's effect has resolved, the card is placed faceup in the player's discard pile.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/cc-hand.js",
+      "notes": "Discard-on-resolve is inline in cc-hand.js and per-card handlers. No dedicated oracle pins the generic \"played CC ends in discard\" invariant."
+    },
+    {
+      "id": "CRR-CC-004",
+      "crr": {
+        "section": "COMMAND CARDS",
+        "lines": [
+          856,
+          858
+        ]
+      },
+      "summary": "A player cannot play multiple copies of the same Command card on the same trigger condition or during the same timing instance.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/cc-hand.js",
+      "notes": "Same-trigger-same-card restriction. Enforced per-card where relevant (e.g., accuracy-stacking bugs). No generic oracle."
+    },
+    {
+      "id": "CRR-CC-005",
+      "crr": {
+        "section": "COMMAND CARDS",
+        "lines": [
+          864,
+          868
+        ]
+      },
+      "summary": "Each player's Command deck has 15 cards; total cost <= 15; per-card copy limit given by restriction icons.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CCD-001",
+        "CRR-CCD-002"
+      ],
+      "notes": "Command-deck construction constraints already covered by CCD atoms."
+    },
+    {
+      "id": "CRR-CTRL-001",
+      "crr": {
+        "section": "CONTROL",
+        "lines": [
+          974,
+          975
+        ]
+      },
+      "summary": "A player controls a tile if at least one friendly figure occupies it and no hostile figure occupies it; shared occupation → no one controls.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/game/control.js",
+      "notes": "Tile control used in mission scoring (e.g., zone-control missions). Functionally exercised by mission scoring probes but no isolated oracle pins \"friendly+no-hostile = control\"."
+    },
+    {
+      "id": "CRR-CTRL-002",
+      "crr": {
+        "section": "CONTROL",
+        "lines": [
+          976,
+          978
+        ],
+        "sha256": "ffe4fc6ea98c27102b649eea801ddcc1b1b3b67585edcc70ef2354d5b8efdcaa"
+      },
+      "summary": "A player controls a token if at least one friendly figure is on/adjacent and no hostile figure is on/adjacent; shared → no one controls.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/game/control.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/control-exclusion-probes.test.js"
+        ],
+        "assertions": [
+          "001b: Alter Mind active — P2 cost≤9 figure within 3 spaces of Obi-Wan excluded → null",
+          "002b: Powerful Influence active — P2 excluded near P1 Force User → P1 controls"
+        ]
+      },
+      "notes": "Token control + exclusion by Alter Mind / Powerful Influence pinned by control-exclusion-probes 001b/002b.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-CTRL-003",
+      "crr": {
+        "section": "CONTROL",
+        "lines": [
+          979,
+          980
+        ]
+      },
+      "summary": "In a Skirmish, a player controls a deployment zone if they have a figure in any space of the zone and no hostile figure is in any space of the zone.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/game/control.js",
+      "notes": "Deployment-zone control used by e.g., Moisture Farm mission. Mission-specific scoring; no isolated oracle for the generic zone-control invariant."
+    },
+    {
+      "id": "CRR-CTRL-004",
+      "crr": {
+        "section": "CONTROL",
+        "lines": [
+          975,
+          978
+        ]
+      },
+      "summary": "Contested objects (both friendly and hostile present) are controlled by no one.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CTRL-002"
+      ],
+      "notes": "Contested-null branch is symmetric across tile/token/zone; control-exclusion-probes 002a (no Powerful Influence → both present → null) pins the shared-null case."
+    },
+    {
+      "id": "CRR-HEA-001",
+      "crr": {
+        "section": "HEALTH",
+        "lines": [
+          1475,
+          1475
+        ],
+        "sha256": "3fc0b8a4786c40a21f8f0d85337b7fff22f2fa672e199f22715f530df7110583"
+      },
+      "summary": "When a figure has damage tokens equal to its Health, it is defeated.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/engine/defeat-pipeline.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/interrupt-defeat-oracles.test.js"
+        ],
+        "assertions": [
+          "self-damage to 0 HP + processFigureDefeat awards VP to opponent",
+          "3 damage to 0 HP + processFigureDefeat produces correct game state"
+        ]
+      },
+      "notes": "Damage >= Health → defeat pinned by interrupt-defeat-oracles (self-damage-to-0-HP and 3-damage-to-0-HP assertions both drive the defeat pipeline).",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-HEA-002",
+      "crr": {
+        "section": "HEALTH",
+        "lines": [
+          1475,
+          1476
+        ]
+      },
+      "summary": "Health is listed on the figure's Deployment card or Hero sheet.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Data-only: per-DC Health field in data/dc-effects.json."
+    },
+    {
+      "id": "CRR-HINF-001",
+      "crr": {
+        "section": "HIDDEN INFORMATION",
+        "lines": [
+          1499,
+          1509
+        ]
+      },
+      "summary": "Campaign Guide and Imperial Deployment-card hands are hidden from Rebel players.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only information-hiding (scope:definitional because scope enum excludes 'campaign'). Skirmish is symmetric (both hands mutually hidden) and uses UI-level secrecy, not engine invariants."
+    },
+    {
+      "id": "CRR-HINF-002",
+      "crr": {
+        "section": "HIDDEN INFORMATION",
+        "lines": [
+          1506,
+          1512
+        ]
+      },
+      "summary": "Players cannot look at the cards in any deck; discarded cards, active missions, faceup cards on the table, and cards in play areas are open information.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/ui/",
+      "notes": "UI-enforced. Skirmish bot exposes opponent play-area DCs via /show but hands remain hidden. No engine-level invariant to oracle."
+    },
+    {
+      "id": "CRR-INCP-001",
+      "crr": {
+        "section": "INCAPACITATED",
+        "lines": [
+          1580,
+          1584
+        ]
+      },
+      "summary": "An incapacitated figure remains on the map under the same player's control but does not restrict movement or block line of sight; other figures cannot end movement in its space.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/game/movement.js",
+      "notes": "INCAPACITATED is a mission-specific status (e.g., Rescue-the-Hostage variants). Skirmish missions in the current corpus do not invoke it; no dedicated oracle."
+    },
+    {
+      "id": "CRR-INCP-002",
+      "crr": {
+        "section": "INCAPACITATED",
+        "lines": [
+          1585,
+          1585
+        ]
+      },
+      "summary": "When a figure is incapacitated, it discards all conditions, and conditions cannot be applied to that figure.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/game/conditions.js",
+      "notes": "Condition-discard on incapacitation. Not exercised by current missions."
+    },
+    {
+      "id": "CRR-INCP-003",
+      "crr": {
+        "section": "INCAPACITATED",
+        "lines": [
+          1586,
+          1587
+        ]
+      },
+      "summary": "An incapacitated figure cannot suffer damage or be targeted/affected by attacks, abilities, or game effects (except as specified by mission rules); its abilities are not available.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/combat.js",
+      "notes": "Targeting and damage immunity for incapacitated figures. Not exercised by current skirmish missions."
+    },
+    {
+      "id": "CRR-INCP-004",
+      "crr": {
+        "section": "INCAPACITATED",
+        "lines": [
+          1588,
+          1588
+        ]
+      },
+      "summary": "An incapacitated figure can still be pushed by a massive figure ending its movement in the incapacitated figure's space.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/game/movement.js",
+      "notes": "Massive-push exception for incapacitated figures. Not exercised by current skirmish missions."
+    },
+    {
+      "id": "CRR-INTR-001",
+      "crr": {
+        "section": "INTERRUPT",
+        "lines": [
+          1652,
+          1656
+        ],
+        "sha256": "6ec48eac53c81d9ea92381d7da35060885e52d0c80f019a222b8dcd3c2034365"
+      },
+      "summary": "Interrupt abilities pause the current action/ability, fully resolve, and then the paused action/ability resumes from the interruption point.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/handlers/interrupts.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/interrupt-defeat-oracles.test.js",
+          "tests/domain/oracle/interrupt-predefeat-behavioral.test.js"
+        ],
+        "assertions": [
+          "figure survives interrupt damage and remains in figurePositions"
+        ]
+      },
+      "notes": "Interrupt pause/resume contract pinned by interrupt-predefeat-behavioral (survivor case: figure absorbs interrupt damage mid-attack and attack resumes).",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-INTR-002",
+      "crr": {
+        "section": "INTERRUPT",
+        "lines": [
+          1657,
+          1660
+        ]
+      },
+      "summary": "If an interrupt makes the current action/ability invalid, that effect is not resolved, but any costs used to resolve that effect are still paid.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/interrupts.js",
+      "notes": "Cost-is-paid-even-if-invalidated rule. Exercised inline by e.g., Assassinate interrupts; no isolated oracle pinning the \"cost paid even on invalidation\" invariant."
+    },
+    {
+      "id": "CRR-INTR-003",
+      "crr": {
+        "section": "INTERRUPT",
+        "lines": [
+          1661,
+          1661
+        ]
+      },
+      "summary": "A figure's action cannot be interrupted while the figure is in a space containing another figure.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/interrupts.js",
+      "notes": "Same-space-no-interrupt rule (protects resolving figures from interrupt loopholes when co-located with large figures). Niche; no oracle."
+    },
+    {
+      "id": "CRR-NEG-001",
+      "crr": {
+        "section": "NEGATIVE SYMBOLS",
+        "lines": [
+          2131,
+          2134
+        ],
+        "sha256": "2fb0d5caf399a6aaebf8c727740ba20c0643ae5deb1cdd6675e5b75b6ddb5b9e"
+      },
+      "summary": "Attribute tests and attacks can gain negative versions of symbols. A positive and a negative version of the same symbol eliminate each other immediately; a negative symbol has no other effect.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/handlers/combat.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/combat-oracles.test.js"
+        ],
+        "assertions": [
+          "003a: defender weakened — reduces effective block after pierce",
+          "003b: attacker weakened — reduces damage after block subtraction",
+          "003c: attacker weakened can reduce damage to 0",
+          "003e: both weakened — defender weaken then attacker weaken in sequence"
+        ]
+      },
+      "notes": "Weakened is the canonical negative-symbol source (-1 attack / -1 block). Combat-oracles 003a/b/c/e pin positive/negative cancellation semantics across attacker and defender.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-NEG-002",
+      "crr": {
+        "section": "NEGATIVE SYMBOLS",
+        "lines": [
+          2131,
+          2132
+        ]
+      },
+      "summary": "Weakened (-1 attack / -1 defense) is a canonical source of negative symbols in attack/defense results.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-WKN-001"
+      ],
+      "notes": "Weakened semantics fully defined in WKN atoms; this entry is a pointer."
+    },
+    {
+      "id": "CRR-PAY-001",
+      "crr": {
+        "section": "PAYING VPS",
+        "lines": [
+          2189,
+          2190
+        ]
+      },
+      "summary": "In a Skirmish, when an ability instructs a player to pay another player VPs, the paying player loses VPs and the paid player gains an equal number of VPs.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/game/vp-helpers.js",
+      "notes": "VP transfer between players. Few cards invoke this (Negotiate, Utinni variants). Inline in combat.js; no dedicated transfer-oracle."
+    },
+    {
+      "id": "CRR-PAY-002",
+      "crr": {
+        "section": "PAYING VPS",
+        "lines": [
+          2191,
+          2193
+        ]
+      },
+      "summary": "If an ability requires a player to pay more VPs than they have, that player cannot use the ability; if it requires an opponent to pay more than they have, the opponent pays all of their remaining VPs.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-VPS-004"
+      ],
+      "notes": "Self-pay-insufficient branch pinned by VPS-004; opponent-pay-all branch is a gap in that atom's corollary."
+    },
+    {
+      "id": "CRR-PT-001",
+      "crr": {
+        "section": "POWER TOKENS",
+        "lines": [
+          2222,
+          2224
+        ]
+      },
+      "summary": "When a figure with a power token declares an attack or is declared as target, it may spend 1 of its power tokens to apply +1 of that token's symbol to the attack/defense results.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/combat.js",
+      "notes": "Power-token spend mechanic. Spend flow lives in combat.js token phase; no direct oracle for the \"+1 symbol on spend\" invariant (token-grant is covered by power-token-grant-oracles, spend is not isolated)."
+    },
+    {
+      "id": "CRR-PT-002",
+      "crr": {
+        "section": "POWER TOKENS",
+        "lines": [
+          2225,
+          2226
+        ]
+      },
+      "summary": "A figure can only spend a power token of the appropriate type: the attacker cannot spend block/evade tokens; the defender cannot spend damage/surge tokens.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/combat.js",
+      "notes": "Type-match restriction on spend. Enforced inline in combat token phase; no dedicated \"wrong-type-token-not-offered\" oracle."
+    },
+    {
+      "id": "CRR-PT-003",
+      "crr": {
+        "section": "POWER TOKENS",
+        "lines": [
+          2231,
+          2232
+        ],
+        "sha256": "9f03e2054f8a0b42f0af6618cd842e197cd09e9a0d7ccdbf669740a773a8180e"
+      },
+      "summary": "Each figure can have at most 2 total power tokens; excess on grant forces discard down to 2.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/game/game-helpers.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/power-token-grant-oracles.test.js"
+        ],
+        "assertions": [
+          "game-helpers.js always pushes tokens before checking overflow",
+          "game-helpers.js queues pendingPowerTokenOverflow on overflow",
+          "Shield grant to figure already at cap queues overflow instead of refusing",
+          "Hold the Line granting 3 Block to figure at cap-1 overflows by 2",
+          "selfPlay mode discards oldest tokens to stay at cap"
+        ]
+      },
+      "notes": "Cap=2 + overflow queue pinned by power-token-grant-oracles. selfPlay branch directly exercises the forced-discard path.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-PT-004",
+      "crr": {
+        "section": "POWER TOKENS",
+        "lines": [
+          2229,
+          2229
+        ]
+      },
+      "summary": "When an ability refers to the wild power token, the player can choose any power token type.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/combat.js",
+      "notes": "Wild-token flexibility. Not currently tied to any skirmish-scope DC/CC in the corpus; no oracle."
+    },
+    {
+      "id": "CRR-PT-005",
+      "crr": {
+        "section": "POWER TOKENS",
+        "lines": [
+          2232,
+          2232
+        ]
+      },
+      "summary": "A figure cannot spend more than 1 power token per attack.",
+      "scope": "skirmish",
+      "status": "gap",
+      "implementationArea": "src/handlers/combat.js",
+      "notes": "1-per-attack spend limit. Enforced inline in combat token phase; no dedicated oracle pinning the \"second-spend blocked\" invariant."
+    },
+    {
+      "id": "CRR-REV-001",
+      "crr": {
+        "section": "REVEAL",
+        "lines": [
+          2398,
+          2400
+        ]
+      },
+      "summary": "When a rule or ability instructs a player to reveal a card, the player shows it to all players, and after the ability resolves the card returns to its original location (unless otherwise affected).",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Reveal is a UI/procedural instruction, not an engine invariant. No skirmish-scope DC/CC uses reveal in a way that requires oracle-pinning."
+    },
+    {
+      "id": "CRR-SUR-001",
+      "crr": {
+        "section": "SURGES",
+        "lines": [
+          2614,
+          2615
+        ]
+      },
+      "summary": "Each evade result removes one surge result at the end of the Apply Modifiers step, reducing the number of surges the attacker can spend.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ATK-013",
+        "CRR-ATK-014"
+      ],
+      "notes": "Evade-cancels-surge mechanic is pinned by the existing ATK-013 (Apply Modifiers) / ATK-014 (Spend Surges) step atoms."
+    },
+    {
+      "id": "CRR-SUR-002",
+      "crr": {
+        "section": "SURGES",
+        "lines": [
+          2616,
+          2616
+        ],
+        "sha256": "5b827331b9b49788f467db84eb5ea42d55ef895ff5c7bf68e05e849e9af49481"
+      },
+      "summary": "Each surge ability can be triggered only once per attack.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/handlers/combat.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/surge-legality-probes.test.js"
+        ],
+        "assertions": [
+          "001: Bossk → [\"damage 2\", \"pierce 2\"]",
+          "004a: Bossk spending both surges (damage 2 + pierce 2) → correct final damage"
+        ]
+      },
+      "notes": "Once-per-attack surge rule pinned by surge-legality-probes (surge list enumeration + dual-spend resolution confirms single-trigger per ability).",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "CRR-SUR-003",
+      "crr": {
+        "section": "SURGES",
+        "lines": [
+          2617,
+          2617
+        ]
+      },
+      "summary": "During a campaign, a hero performing an attack may spend one surge to recover one strain (limit once per attack).",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only surge-for-strain recovery (scope:definitional because scope enum excludes 'campaign'); skirmish has no heroes."
+    },
+    {
+      "id": "CRR-SUR-004",
+      "crr": {
+        "section": "SURGES",
+        "lines": [
+          2618,
+          2620
+        ]
+      },
+      "summary": "A surge spent on a keyword ability (Blast, Cleave, condition keyword) adds the keyword during Spend Surges; the keyword's effect performs/applies after the attack resolves if the target suffered damage.",
+      "scope": "skirmish",
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-BLST-001",
+        "CRR-ATK-017"
+      ],
+      "notes": "Blast/Cleave timing already captured by BLST atoms and the after-attack-resolves step ATK-017."
+    },
+    {
+      "id": "CRR-TP-001",
+      "crr": {
+        "section": "TIME PERIOD",
+        "lines": [
+          2729,
+          2743
+        ]
+      },
+      "summary": "Time-period values restrict which Side Mission cards and Agenda sets may be included in a given campaign.",
+      "scope": "definitional",
+      "status": "exempt",
+      "notes": "Campaign-only army-building constraint (scope:definitional because scope enum excludes 'campaign'); no skirmish analog."
     }
   ]
 }
