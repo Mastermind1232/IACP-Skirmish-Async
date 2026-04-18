@@ -10407,13 +10407,30 @@
         "lines": [
           2225,
           2226
-        ]
+        ],
+        "sha256": "9183fee643f748ba8d8ee21d81bb0b0e739122bb8f45d74f3b71e4c70198c454"
       },
       "summary": "A figure can only spend a power token of the appropriate type: the attacker cannot spend block/evade tokens; the defender cannot spend damage/surge tokens.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/handlers/combat.js",
-      "notes": "Type-match restriction on spend. Enforced inline in combat token phase; no dedicated \"wrong-type-token-not-offered\" oracle."
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-power-token-type-probe.test.js"
+        ],
+        "assertions": [
+          "getEligibleTokens must use role-gated allowed set — CRR-PT-002",
+          "getEligibleTokens must filter by allowed.includes(type) — CRR-PT-002",
+          "Squad Cohesion must reject donor tokens of the wrong type — CRR-PT-002",
+          "attacker eligibility must include Damage/Surge/Wild, exclude Block/Evade — CRR-PT-002",
+          "defender eligibility must include Block/Evade/Wild, exclude Damage/Surge — CRR-PT-002"
+        ]
+      },
+      "reviewedBy": {
+        "name": "phase-d-batch-44",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-PT-003",
@@ -10455,13 +10472,30 @@
         "lines": [
           2229,
           2229
-        ]
+        ],
+        "sha256": "240df33d25482b021ac2edc6da031c0a592e9f03af4cb0dcd582a1b246a8fc41"
       },
       "summary": "When an ability refers to the wild power token, the player can choose any power token type.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/handlers/combat.js",
-      "notes": "Wild-token flexibility. Not currently tied to any skirmish-scope DC/CC in the corpus; no oracle."
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-power-token-type-probe.test.js"
+        ],
+        "assertions": [
+          "sendWildTypeWindow must scope Wild options to the role-native pair — CRR-PT-004",
+          "Wild option buttons must emit the combat_token_<gid>_wild_<type> customId — CRR-PT-004",
+          "combat_token router must accept att|def|wild role segments — CRR-PT-004",
+          "attacker Wild must resolve to Damage/Surge — CRR-PT-004",
+          "defender Wild must resolve to Block/Evade — CRR-PT-004"
+        ]
+      },
+      "reviewedBy": {
+        "name": "phase-d-batch-44",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-PT-005",
