@@ -2999,12 +2999,34 @@
         "lines": [
           992,
           992
-        ]
+        ],
+        "sha256": "f3b0af897cd6ddfbe0c9b26f3c12fd9041ba67edf891a9b2ec9d9b43e04c5417"
       },
       "summary": "Impassable terrain can be moved into and through for counting-spaces measurement (even though figures cannot actually enter it).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Counting-through-impassable-terrain rule has no named assertion pin; distinct from movement legality. Phase-D gap."
+      "status": "covered",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-cs-impassable-terrain-probe.test.js",
+          "src/game/spatial.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "countSpaces signature must include blockedEdges (doors) — CRR-CS-002",
+          "countSpaces must not consult terrain[] — counting does not care about terrain type — CRR-CS-002",
+          "countSpaces must not reference any impassable-terrain concept — CRR-CS-002",
+          "no code may assign \"impassable\" as a terrain type — CRR-CS-002",
+          "no src file may declare impassableTerrain or impassableSpaces — only edge-level impassableEdges exists — CRR-CS-002",
+          "no map-data file may encode terrain: \"impassable\" — CRR-CS-002 (no engine substrate for the rule)",
+          "CRR-CS-003 must be pinned (positive counterpart) — CRR-CS-002 context"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "The engine has no 'impassable terrain' category. Terrain types assigned in src/ are 'normal' and 'difficult' only; 'blocking' is a separate space-list (excluded from adjacency); 'impassable' is edge-scoped (impassableEdges = walls). No map-data JSON encodes terrain: 'impassable'. countSpaces BFS does not consult terrain[] at all — only adjacency and optional blockedEdges (closed doors). CRR-CS-003 pins the positive counterpart (walls/doors/blocking DO block counting). Vacuously satisfied within skirmish scope."
     },
     {
       "id": "CRR-CS-003",
