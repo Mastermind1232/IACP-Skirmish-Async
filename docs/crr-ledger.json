@@ -11023,13 +11023,33 @@
         "lines": [
           2232,
           2232
-        ]
+        ],
+        "sha256": "9cf5a243ac8d2dd5d6b81291112ff3e733d2c92326d72f37bb8beb2a2e87eab1"
       },
       "summary": "A figure cannot spend more than 1 power token per attack.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/combat.js",
-      "notes": "1-per-attack spend limit. Enforced inline in combat token phase; no dedicated oracle pinning the \"second-spend blocked\" invariant."
+      "status": "covered",
+      "implementationArea": "src/handlers/combat.js (advanceTokenPhase, handleCombatToken, sendTokenWindow linear state machine)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-pt-one-token-per-attack-probe.test.js",
+          "src/handlers/combat.js"
+        ],
+        "assertions": [
+          "005a: source — advanceTokenPhase clears tokenPhase on entry and only promotes attacker → defender",
+          "005b: source — there is exactly one promotion to defender inside advanceTokenPhase (no loop-back to attacker)",
+          "005c: source — handleCombatToken guards on tokenPhase match (second click after spend is rejected because tokenPhase is null)",
+          "005d: source — each of the three spend branches (direct / squad-cohesion / wild) ends with exactly one advanceTokenPhase call",
+          "005e: source — sendTokenWindow is opened at most once per attack per role; every opener first sets tokenPhase to match",
+          "005f: source — after a spend, the spent token is removed from the figure pool (one-way consumption)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      },
+      "notes": "Token phase is a strict linear state machine: attacker (optional, one-shot) → defender (optional, one-shot) → proceedAfterTokens. advanceTokenPhase clears tokenPhase then promotes at most once; handleCombatToken's `if (combat.tokenPhase !== expectedPhase) return` guard blocks a second click after any spend."
     },
     {
       "id": "CRR-REV-001",
