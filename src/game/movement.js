@@ -547,8 +547,24 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   if (neighbor.type === 'rotate') {
     const overlapping = nextFootprint.some((c) => board.occupiedSet.has(c));
     if (overlapping && !profile.canEndOnOccupied) return null;
+    // CRR MOVE-016: rotation base cost is 1 MP, but Large figures without
+    // Massive or Mobile pay the same additional MP costs as ordinary steps
+    // for difficult terrain and hostile-figure cells in the newly-entered
+    // footprint. Massive/Mobile set ignoreDifficult + ignoreFigureCost on
+    // the profile (game/movement.js:getMovementProfile), so those figures
+    // retain the flat 1-MP rotation cost per CRR-MOVE-015.
+    const rotateEntering = nextFootprint.filter((cell) => !prevSet.has(cell));
+    const rotateIntoDifficult =
+      !profile.ignoreDifficult &&
+      rotateEntering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult');
+    const rotateIntoHostile = board.hostileOccupiedSet
+      ? rotateEntering.some((cell) => board.hostileOccupiedSet.has(cell))
+      : rotateEntering.some((cell) => board.occupiedSet.has(cell));
+    let extraCost = 0;
+    if (rotateIntoDifficult) extraCost += 1;
+    if (rotateIntoHostile && !profile.ignoreFigureCost) extraCost += 1;
     return {
-      cost: 1,
+      cost: 1 + extraCost,
       occupied: overlapping,
       canEnd: !overlapping || profile.canEndOnOccupied,
       footprint: nextFootprint,

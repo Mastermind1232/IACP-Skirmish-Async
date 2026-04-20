@@ -589,12 +589,27 @@
       },
       "summary": "Additional MP costs apply to rotation if the Large figure does not have Massive or Mobile.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/game/movement.js",
-      "notes": "Rotation cost matrix (Massive/Mobile vs. baseline) not pinned by a named assertion distinct from the 1-MP case. Phase-D gap; likely an added it-block in movement-rotation-displacement-behavioral.test.js.",
-      "seeAlso": [
-        "CRR-MOVE-015"
-      ]
+      "notes": "Implemented in evaluateMovementStep (game/movement.js). The rotation branch now derives rotateEntering = nextFootprint \\ prevFootprint and adds +1 MP for difficult-terrain cells (gated by profile.ignoreDifficult) and +1 MP for hostile-occupied cells (gated by profile.ignoreFigureCost) — the same cost matrix as ordinary step movement. Massive and Mobile set ignoreDifficult + ignoreFigureCost (and canEndOnOccupied for Massive) in getMovementProfile, so their rotation stays flat-1-MP, preserving MOVE-015. Variables renamed to rotateInto* so DT-005 single-enteringDifficult pin still holds.",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-move-016-rotation-cost-matrix-probe.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "baseline rotation into difficult cell costs 2 MP",
+          "Massive rotation into difficult cell stays 1 MP",
+          "Mobile rotation into difficult cell stays 1 MP",
+          "baseline rotation into hostile cell costs 2 MP",
+          "plain rotation = 1 MP — CRR-MOVE-015 preserved under MOVE-016 fix"
+        ]
+      },
+      "reviewedBy": {
+        "name": "crr-ledger-batch-109",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MOVE-017",
