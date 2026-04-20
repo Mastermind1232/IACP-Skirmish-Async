@@ -952,9 +952,12 @@
       },
       "summary": "Walls only block LOS along an entire edge of a space; if a wall does not cover an entire edge, LOS may be traced to, from, and through that edge and corner.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/spatial.js",
-      "notes": "No oracle pins the partial-wall carveout. Existing wall tests all use full-edge walls. Phase-D gap; would require authoring a partial-edge probe."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-WAL-003",
+        "CRR-ES-003"
+      ],
+      "notes": "LINE-OF-SIGHT-section restatement of CRR-WAL-003. Partial-edge-wall LOS behavior is pinned by CRR-ES-003's diagonal-corner probes where walls interact with 0.5/0.5 corner geometry."
     },
     {
       "id": "CRR-LOS-007",
