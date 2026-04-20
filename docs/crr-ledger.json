@@ -7086,8 +7086,12 @@
       },
       "summary": "If a mission token is in a space containing terrain, the terrain in the space still takes effect.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Token-on-terrain precedence rule (same as CRT-002 / TRM-004) has no oracle pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-CRT-002",
+        "CRR-TRM-004"
+      ],
+      "notes": "General MISSION-TOKEN restatement of the token-on-terrain precedence rule. Already pinned for the two concrete mission-token subtypes (crate, terminal) — the invariant holds because terrain is keyed by coord in src/game/movement.js and is not overlaid by any token kind."
     },
     {
       "id": "CRR-MSN-005",
