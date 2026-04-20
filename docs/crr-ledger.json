@@ -840,9 +840,15 @@
       },
       "summary": "MP granted outside a figure's own activation must be spent immediately as an interrupt or be lost.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/movement.js",
-      "notes": "movement-interrupt-behavioral.test.js covers attack-of-opportunity-style interrupts, but the 'MP-outside-activation → immediate-or-lost' rule is not pinned by a specific assertion. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Covered by CRR-MOVE-019: MP is stored only in game.movementBank[msgId], keyed by the activating DC message id, and cleared by cleanupActivation at activation end (plus explicit End-Turn and round-rollover deletes). MP granted via interrupt (e.g. Rapid-Grapple-Cable, On-the-Attack-Run in interrupts.js) is written to movementBank[pickedMsgId] of the interrupted activation — so it must either be spent during that activation (as an interrupt) or is discarded when that activation ends. There is no cross-activation MP storage site. Pinned via PROBE-PD-MOVE-019 (batch-91).",
+      "seeAlso": [
+        "CRR-MOVE-019"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-LOS-001",
@@ -10155,9 +10161,15 @@
       },
       "summary": "If a figure gains movement points when it is not its activation, those MPs must be spent immediately as an interrupt or be lost; MP gained during a special action must be spent during that special action.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/movement.js",
-      "notes": "Off-activation MP use-immediately-or-lose and special-action MP scoping rules have no oracle. Only a few skirmish effects grant off-activation MP (rare). Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Covered by CRR-MOVE-019: MP is stored only in game.movementBank[msgId], keyed by the activating DC message id, and cleared by cleanupActivation at activation end (plus explicit End-Turn and round-rollover deletes). MP granted via interrupt (e.g. Rapid-Grapple-Cable, On-the-Attack-Run in interrupts.js) is written to movementBank[pickedMsgId] of the interrupted activation — so it must either be spent during that activation (as an interrupt) or is discarded when that activation ends. There is no cross-activation MP storage site. Pinned via PROBE-PD-MOVE-019 (batch-91).",
+      "seeAlso": [
+        "CRR-MOVE-019"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MVT-001",
