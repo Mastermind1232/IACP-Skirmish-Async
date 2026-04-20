@@ -7992,9 +7992,16 @@
       },
       "summary": "Movement points may be spent before or after performing an action; MP gained as part of a special action must be spent during that action.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/movement.js",
-      "notes": "Movement-bank interleaving with actions is exercised by movement-pick-behavioral but no named assertion pins the 'MP from special action must be spent during that action' restriction. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Covered by CRR-MOVE-019 + CRR-GRP-004: the movementBank lives alongside dcActionsData in the activation scope; both data.remaining and movementBank.remaining are per-msgId, so players can spend MP either before or after actions until activation ends — MP not spent is discarded by cleanupActivation. The \"MP from a special action must be spent during that action\" sub-clause follows: when the special action completes, data.remaining decrements and cleanupActivation (if the activation ends) clears the bank; interrupt-granted MP is keyed to the interrupted activation and discarded with it. Pinned via PROBE-PD-GRP-004 + PROBE-PD-MOVE-019 (batches 91/92).",
+      "seeAlso": [
+        "CRR-MOVE-019",
+        "CRR-GRP-004"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ACT-006",
@@ -10239,9 +10246,15 @@
       },
       "summary": "A figure does not need to end movement to perform a 'during your activation' ability that isn't an action or attack.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/movement.js",
-      "notes": "Mid-move during-activation ability triggers (non-action, non-attack) — e.g., Reactive Plating, passive triggers — are structurally possible because movement is interruptible, but no dedicated oracle pins 'ability resolves without ending movement'. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Covered by CRR-GRP-004: during-your-activation abilities (non-action, non-attack) are dispatched between actions via the dcActionsData FSM — they do not require figure movement to have ended because they are not themselves the action/attack window. Pinned via PROBE-PD-GRP-004 (batch-91).",
+      "seeAlso": [
+        "CRR-GRP-004"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-SMF-001",
@@ -11609,9 +11622,15 @@
       },
       "summary": "A \"during your activation\" ability can be used before or after an action within an activation; these are not interrupting abilities and cannot be used while resolving another ability.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/activation.js",
-      "notes": "Between-actions ability surfacing. Implemented per-card; no isolated oracle."
+      "status": "covered_by_ref",
+      "notes": "Covered by CRR-GRP-004: the dcActionsData FSM serializes action resolution (data.remaining decrements only on action completion), so \"during your activation\" abilities can only be triggered between actions — not in the middle of an action or another ability. Pinned via PROBE-PD-GRP-004 (batch-91).",
+      "seeAlso": [
+        "CRR-GRP-004"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ABIL-006",
