@@ -3346,8 +3346,8 @@
       },
       "summary": "If an attack has the Focus keyword and the target suffers ≥1 damage, the attacker gains Focused after the attack resolves.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Focus-keyword-grants-Focused-post-hit rule has no named assertion pin. Phase-D gap."
+      "status": "exempt",
+      "notes": "Vacuous in skirmish — the \"Focus\" attack keyword does not exist on any skirmish DC. Verified by enumerating every keyword value in data/dc-effects.json (BRAWLER, CREATURE, DARK DISCIPLE, DROID, FORCE USER, GUARDIAN, HEAVY WEAPON, HUNTER, IG-88, LEADER, MASSIVE, MOBILE, PROFESSIONAL, REACH, SMUGGLER, SPY, SQUAD UPGRADE, TECHNICIAN, TROOPER, VEHICLE, WOOKIE/WOOKIEE + case variants); none are \"Focus\". The CRR FOC-004 rule fires only when an attack carries the Focus keyword — no skirmish substrate exists, so the rule is definitionally vacuous and has no engine behavior to pin."
     },
     {
       "id": "CRR-FOC-005",
