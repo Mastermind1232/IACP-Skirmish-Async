@@ -2395,12 +2395,28 @@
         "lines": [
           238,
           239
-        ]
+        ],
+        "sha256": "bdbf32e02a20f03da6f1eee1ee200339cdad7cba3bfc974c033f50e5e5389369"
       },
       "summary": "A figure or object occupying blocking terrain is adjacent to another figure, object, or space at distance 1 even though its space is not adjacent to those spaces.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Blocking-terrain-occupant distance-1 adjacency override has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-adj-blocking-terrain-probe.test.js"
+        ],
+        "assertions": [
+          "007a: source — getRange is pure Manhattan, not terrain-aware",
+          "007b: source — isAdjacentCoords is defined as getRange === 1",
+          "007d: behavior — blocking-terrain occupant at distance 1 is still adjacent"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-BLST-001",
