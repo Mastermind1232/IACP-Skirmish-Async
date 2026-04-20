@@ -9612,13 +9612,36 @@
         "lines": [
           2626,
           2627
-        ]
+        ],
+        "sha256": "41b51a669173f765fa7c8dfd65e7cd3128318fe5b9ae4734b4058af3e8b6b918"
       },
       "summary": "If the target is a large figure, the attacker must target one space that the target occupies; this space is used for line of sight and some abilities.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "covered",
       "implementationArea": "src/engine/combat-bridge.js",
-      "notes": "Large-figure target-space selection is implemented (per-footprint LOS + distance computed for each occupied space) but no dedicated oracle pins 'attacker chooses the target space'. LOS checks iterate footprint spaces and return the best; no assertion covers the 'attacker picks which space' semantics explicitly. Phase-D gap."
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-tgt-large-figure-target-space-probe.test.js",
+          "src/game/coords.js",
+          "src/handlers/dc-play-area.js",
+          "src/engine/available-actions.js"
+        ],
+        "assertions": [
+          "getFootprintCells must enumerate all cells of a multi-cell figure",
+          "dc-play-area.js must expand target footprint via getFootprintCells before target evaluation",
+          "dc-play-area.js must compute min distance across attacker/target footprint pairs",
+          "dc-play-area.js LOS check must try all attacker-cell × target-cell pairs",
+          "available-actions.js must expand multi-cell target footprint",
+          "available-actions.js must compute min distance across attacker × target footprint pairs",
+          "available-actions.js LOS check must try all attacker-cell × target-cell pairs"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "Pinned via direct_oracle: both target-enumeration sites (authoritative Discord-side picker in src/handlers/dc-play-area.js + engine-side parity in src/engine/available-actions.js) expand multi-cell targets via getFootprintCells(coord, size) from src/game/coords.js. Distance = Math.min over attacker-fp × target-fp cell pairs; LOS = any-pair-succeeds (break outer on first success). This implements the 'attacker picks optimal target space' semantics — the attacker is modelled as always choosing whichever occupied space best serves the attack (rational-agent equivalence). MASSIVE targets null the figure-blocking set at both sites before footprint-LOS iteration."
     },
     {
       "id": "CRR-TGT-003",
