@@ -3041,12 +3041,33 @@
         "lines": [
           994,
           996
-        ]
+        ],
+        "sha256": "78a00054abb0d753334ded7b7ce5e8e5b1e1127475f9d542273565432be91440"
       },
       "summary": "When an ability says 'within N spaces' or 'adjacent', counts are taken from the figure using the ability.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "'Counted from the ability-using figure' framing has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js (getFiguresWithinRange, getFiguresAdjacentTo)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-cs-ability-user-frame-probe.test.js",
+          "src/game/spatial.js"
+        ],
+        "assertions": [
+          "004a: source — getFiguresWithinRange takes a single `coord` reference argument",
+          "004b: source — distance inside getFiguresWithinRange is getRange(coord, …) with coord as first arg",
+          "004c: source — getFiguresAdjacentTo is a thin wrapper that reuses the same reference coord",
+          "004d: behavior — a figure at a1 sees self at distance 0 and a figure at a3 at distance 2",
+          "004e: behavior — frame-of-reference swap: same two figures, range-from-other-figure flips the count semantic",
+          "004f: source — the range-gate inside getFiguresWithinRange uses the computed d vs range (no coord swap)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      },
+      "notes": "Both within-N and adjacent share one helper (getFiguresWithinRange) whose FIRST argument is the ability-user's coord; every distance read is getRange(coord, target). The adjacent wrapper reuses the same coord. Ability-user frame is therefore structurally guaranteed."
     },
     {
       "id": "CRR-CS-005",
