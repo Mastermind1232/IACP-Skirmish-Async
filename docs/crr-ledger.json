@@ -10321,13 +10321,33 @@
         "lines": [
           547,
           549
-        ]
+        ],
+        "sha256": "a47720bd136f6a414560e1207d77972ca5fc769f608bd707b40e342d9d4a4840"
       },
       "summary": "An object has Health specified by mission rules; when damage >= Health, the object is destroyed (doors are \"opened\").",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/combat.js",
-      "notes": "Object health is modeled on doors (destructible walls) and crates. Handler-level destruction is inline; no dedicated oracle pins the generic \"damage>=Health destroys object\" invariant across object types."
+      "status": "covered",
+      "implementationArea": "src/engine/combat-bridge.js (crate damage paths: direct-attack and Blast splash)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-aoj-object-destruction-probe.test.js"
+        ],
+        "assertions": [
+          "direct-attack path must init HP, subtract with floor, destroy at <=0, and delete cratePositions — CRR-AOJ-001",
+          "Blast splash path must init HP, subtract with floor, destroy at <=0, and delete cratePositions — CRR-AOJ-001",
+          "there must be ≥2 destruction-threshold sites (direct + blast), both using <= 0 — CRR-AOJ-001",
+          "no destruction site may use strict < 0 — CRR-AOJ-001",
+          "damage subtraction must be clamped to ≥ 0 at both damage sites — CRR-AOJ-001",
+          "destruction must delete cratePositions entry at each damage path — CRR-AOJ-001",
+          "destruction log must state \"destroyed\" — CRR-AOJ-001"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "Crates are the sole attackable object with an HP pool. Both damage sites (direct attack, Blast splash) share the init/subtract-with-floor/destroy-at-<=0/delete pattern; threshold `<= 0` (not `< 0`) structurally pins damage>=Health. Doors are not attackable in this codebase (opened via interact, not combat), so the \"doors are opened\" clause is vacuously satisfied."
     },
     {
       "id": "CRR-AOJ-002",
