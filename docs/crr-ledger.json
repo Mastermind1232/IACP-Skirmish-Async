@@ -7519,13 +7519,29 @@
         "lines": [
           194,
           197
-        ]
+        ],
+        "sha256": "8c38ddaf502c651e2b594939f26daa34075c0bf243e87265749808cccc0cdf0d"
       },
       "summary": "After performing up to two actions and 'during your activation' abilities, a figure declares the end of its activation; the player may end early; remaining actions and unspent movement points do not carry over to the figure's next activation.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/activation.js",
-      "notes": "End-of-activation cleanup IS exercised (end-activation-parity / activation-sequencing) but the specific 'remaining actions and unspent MP do NOT carry over to the figure's NEXT activation' cross-activation invariant has no direct assertion. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/activation-state.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-acv-mp-no-carry-probe.test.js"
+        ],
+        "assertions": [
+          "005a: source — movementBank is listed as a per-activation per-msgId flag",
+          "005b: source — cleanupActivation deletes every per-msgId flag for the ending msgId",
+          "005d: behavior — cleanupActivation empties the msgId movementBank entry",
+          "005e: behavior — next activation starts with no inherited MP"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ACV-006",
