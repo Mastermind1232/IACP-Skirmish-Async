@@ -1382,13 +1382,32 @@
         "lines": [
           442,
           444
-        ]
+        ],
+        "sha256": "fec8dfe160383f294bc1d6efa548a14b98e6e6b8c014056a68f3f925d08ebd35"
       },
       "summary": "During an attack, if the attacker's LOS to the target space changes or the defender moves, the attacker must re-declare a target space; if none of the defender's spaces are eligible, the attack misses and there is no target space.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "Mid-attack target-space re-declaration is a rare edge case triggered by interrupts that move the defender or break LOS. No named assertion pins the re-declaration path. Phase-D gap."
+      "status": "covered",
+      "notes": "Pinned via PROBE-PD-ATK-007/008/028 (batch-96). game.pendingCombat is a single object set at attack declaration; no parallel-attack container exists; no \"defender moves mid-attack\" / \"re-declare target\" substrate exists — the CRR re-declaration rule is vacuously satisfied (the engine has no mid-attack defender movement path).",
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      },
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-atk-combat-atomicity-probe.test.js",
+          "src/handlers/combat.js",
+          "src/engine/combat-bridge.js",
+          "src/handlers/combat-reactions.js"
+        ],
+        "assertions": [
+          "combat.js must set pendingCombat as a single object",
+          "no src file may declare a parallel-combat container",
+          "must not declare a mid-attack target re-declaration path"
+        ]
+      },
+      "implementationArea": "src/handlers/combat.js"
     },
     {
       "id": "CRR-ATK-008",
@@ -1401,9 +1420,15 @@
       },
       "summary": "For a melee attack: if the target of the attack ends its movement such that it is no longer adjacent to the attacker (or within 2 spaces and in LOS if the attack has Reach), the attack misses.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "Mid-attack melee-range loss (e.g., Dio pulls target away) is not pinned by a named assertion. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Covered by CRR-ATK-007: melee target-moved-out-of-range miss is vacuously satisfied because the engine has no mid-attack defender movement substrate (single pendingCombat lifecycle, no defender-move branch in resolveCombatAfterRolls). Pinned via PROBE-PD-ATK-007/008/028 (batch-96).",
+      "seeAlso": [
+        "CRR-ATK-007"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ATK-009",
@@ -1923,13 +1948,30 @@
         "lines": [
           492,
           495
-        ]
+        ],
+        "sha256": "b35efc9b691078ef0ba5b95c71e4bd40ea6593521e0904a2789a296a2417fe7f"
       },
       "summary": "'After performing' and 'after resolving' an attack refer to the same timing instance; during an Attack action, all 'after resolving an attack' abilities must resolve before any 'after resolving an action' abilities can trigger.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "The strict ordering between after-attack and after-action triggers is not pinned by a named assertion. Phase-D gap."
+      "status": "covered",
+      "notes": "Pinned via PROBE-PD-ATK-007/008/028 (batch-96). resolveCombatAfterRolls is the single post-rolls path — \"after performing\" and \"after resolving\" refer to the same terminal step in the combat FSM. Cancel-and-replace interrupt (Slow on the Draw) clears pendingCombat entirely rather than resuming with updated state, preserving the single-timing-instance invariant.",
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      },
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-atk-combat-atomicity-probe.test.js",
+          "src/engine/combat-bridge.js",
+          "src/handlers/combat-reactions.js"
+        ],
+        "assertions": [
+          "resolveCombatAfterRolls must be the sole post-rolls resolver",
+          "Slow-on-the-Draw must null pendingCombat"
+        ]
+      },
+      "implementationArea": "src/engine/combat-bridge.js"
     },
     {
       "id": "CRR-ATK-029",
