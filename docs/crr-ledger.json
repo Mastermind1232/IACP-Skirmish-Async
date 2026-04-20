@@ -277,13 +277,32 @@
         "lines": [
           2060,
           2061
-        ]
+        ],
+        "sha256": "cfcd2f5b55e31c08806ba79ef2c81240eb84b86e8ddad20f3fa8842d7858b6d3"
       },
       "summary": "The Move action completes immediately after granting MP; action-count advances before any MP is spent.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "Action-completion-vs-MP-spend semantics not pinned by a named assertion. High-value probe for MP-interleaving correctness. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/dc-play-area.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-move-action-completes-at-grant-probe.test.js"
+        ],
+        "assertions": [
+          "006a: source — dc_move handler branches on the Move action",
+          "006b: source — Move grants MP (speed) to movementBank before deducting the action",
+          "006c: source — Move action deducts 1 action (not 2) for a plain Move",
+          "006d: source — SpendMp and Executive-Order free-moves bypass the action deduction",
+          "006e: source — the space-pick handler (movement.js) never deducts an action",
+          "006f: source — Move writes the space picker AFTER the action is already deducted"
+        ]
+      },
+      "notes": "Action-count decrement happens in the dc_move handler immediately after the MP bank write and before the space picker is shown; MP spending in movement.js never re-deducts an action.",
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MOVE-007",
