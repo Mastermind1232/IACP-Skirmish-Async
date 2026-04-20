@@ -4442,12 +4442,33 @@
         "lines": [
           2238,
           2250
-        ]
+        ],
+        "sha256": "a2c7ab02baffc6b229f1d34d13ac4bf622a819a9f6481b654f5c9a69fc7bba11"
       },
       "summary": "When a figure with Massive or Mobile is pushed, the push ignores terrain; Massive may also end movement in spaces with other figures.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Push-Massive/Mobile terrain-override rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js (getMovementProfile, pushFigureToNearestValid)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-push-massive-mobile-terrain-probe.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "007a: source — profile.ignoreBlocking is driven by Massive OR Mobile",
+          "007b: source — profile.ignoreDifficult is driven by Massive OR Mobile (among others)",
+          "007c: source — profile.canEndOnOccupied is Massive-only",
+          "007d: source — pushFigureToNearestValid skips the blocking check when ignoreBlocking is set",
+          "007e: source — pushFigureToNearestValid accepts a destination when not forbidden, not occupied, and not blocked",
+          "007f: source — push BFS cost is uniform (no DT surcharge) — only edge-count determines \"nearest\""
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      },
+      "notes": "Massive/Mobile push-ignores-terrain is encoded in the shared movementProfile flags (ignoreBlocking/ignoreDifficult) and consumed by pushFigureToNearestValid during destination BFS. The Massive-only canEndOnOccupied flag is the static source of the end-on-occupied allowance (exercised at runtime after the massive-displacement engine relocates overlapping figures)."
     },
     {
       "id": "CRR-PLC-001",
