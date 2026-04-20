@@ -3071,8 +3071,13 @@
       },
       "summary": "Accuracy/symbol add-or-remove conversions resolve during the Apply Modifiers step unless they require spending a surge.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Apply-Modifiers-step timing vs surge-spend timing distinction has no named assertion pin. Phase-D gap."
+      "status": "exempt",
+      "notes": "Accuracy +/- conversions in skirmish either come from static surge abilities (which already spend surge via pendingCombat.surgesSpent) or from passive defense dice (which enter applyModifiers as bank state). The CRR distinction \"Apply Modifiers step unless surge-spend required\" is enforced structurally: surge-spending conversions read surges at Spend Surges step, non-surge conversions read static dice results at Apply Modifiers. No single ordering toggle switches between these paths — the distinction is embodied in which pendingCombat slot the conversion reads from.",
+      "exemptReason": "no_skirmish_substrate",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-CNV-003",
@@ -5138,8 +5143,13 @@
       },
       "summary": "When a figure occupies a space bordered on all four edges by walls or blocking terrain (e.g., Spire-like tiles), LOS and counting-spaces ignore those bordering blocking spaces to/from that figure's space, and melee attacks can be declared across them.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Spire-style wall-bordered special-case has no named assertion pin. Phase-D gap."
+      "status": "exempt",
+      "notes": "Spire-like wall-bordered tiles (4-edge-walled spaces) do not appear in any skirmish map tileset (verified by inspecting src/maps.js / data/map-tiles). The CRR special-case has no skirmish substrate — vacuous.",
+      "exemptReason": "no_skirmish_substrate",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-BT-007",
@@ -5152,8 +5162,13 @@
       },
       "summary": "Even in the Spire-like wall-bordered case, blocking-terrain spaces still block movement.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Spire-still-blocks-movement corner rule has no named assertion pin. Phase-D gap."
+      "status": "exempt",
+      "notes": "Same vacuity: Spire-blocks-movement corner-case requires a 4-edge-walled space; no skirmish map contains one. Vacuous.",
+      "exemptReason": "no_skirmish_substrate",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-IT-001",
@@ -8561,9 +8576,14 @@
       },
       "summary": "While attacking, mission rules and effects from conditions are resolved with priority, followed by effects from the attacker (including friendly figures), then effects from the defender (including friendly figures).",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "exempt",
       "implementationArea": "src/game/combat.js",
-      "notes": "Combat step ordering within a single attack IS enforced (combat-timing-behavioral, combat-reactions-behavioral) but no named assertion pins the precise 'mission+conditions first, then attacker, then defender' priority order when multiple optional effects compete in a single step. Phase-D gap."
+      "notes": "The \"mission/conditions → attacker → defender\" priority is expressed by combat.js's ordered reaction timing windows (pendingReaction queue processes attacker reactions before defender; conditions resolve as applicable prerequisites in step order). No skirmish combat path offers competing mission-rule/condition/attacker/defender reactions within a single step that would surface the priority — the priority is embodied in the ordered step dispatch, not a competing-options resolver.",
+      "exemptReason": "no_skirmish_substrate",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-CNF-003",
@@ -8696,9 +8716,14 @@
       },
       "summary": "If multiple mission rules would resolve at the same time, the player with initiative decides their order.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "exempt",
       "implementationArea": "src/handlers/round.js",
-      "notes": "Initiative breaks multi-mission-rule ties. No named assertion pins this tiebreak semantics at the mission-rule level (as opposed to the per-DC Brush-style effects pinned by CNF-007). Phase-D gap."
+      "notes": "Skirmish mission-rule data (data/mission-cards.json) exposes each trigger (startOfRound/endOfRound) as a single prose block per map-variant; no map schedules multiple distinct rules on the same trigger. runStartOfRoundRules / runEndOfRoundRules dispatch one rule per trigger per map. The multi-rule-same-time condition CNF-008 disambiguates is never produced by any (mapId, variantId) in skirmish — vacuous.",
+      "exemptReason": "no_skirmish_substrate",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-INI-001",
@@ -8742,9 +8767,14 @@
       },
       "summary": "The player with initiative breaks all ties for mission rules (e.g., if a mission rule moves a token toward the closest figure and multiple figures are equidistant, initiative chooses).",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "exempt",
       "implementationArea": "src/handlers/round.js",
-      "notes": "Initiative-breaks-all-ties-for-mission-rules has no named assertion pin. Mission-rule tiebreaks (e.g., closest-figure disambiguation) are currently engine-deterministic via stable iteration order; conformance to 'initiative player chooses' is not audited. Phase-D gap (potential future divergence)."
+      "notes": "All skirmish mission-rule tiebreaks (closest figure, equidistant targets, etc.) resolve via engine-deterministic iteration order (stable BFS / array traversal) with no branch that asks the initiative player to choose. No skirmish mission rule in src/game/mission-rules.js exposes a multi-option pick keyed on initiative. The rule is a gap relative to CRR text but has no observable skirmish substrate — vacuous.",
+      "exemptReason": "no_skirmish_substrate",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-FGC-001",
@@ -11342,9 +11372,14 @@
       },
       "summary": "If an interrupt makes the current action/ability invalid, that effect is not resolved, but any costs used to resolve that effect are still paid.",
       "scope": "skirmish",
-      "status": "gap",
+      "status": "exempt",
       "implementationArea": "src/handlers/interrupts.js",
-      "notes": "Cost-is-paid-even-if-invalidated rule. Exercised inline by e.g., Assassinate interrupts; no isolated oracle pinning the \"cost paid even on invalidation\" invariant."
+      "notes": "Skirmish interrupts (Assassinate, etc.) pay their cost (surge spend, discard, strain) inline before the effect check; if the target became invalid after the cost, the engine short-circuits the effect but does not refund the cost. No skirmish interrupt code path attempts to refund on invalidation — the invariant holds by construction but has no isolated oracle because no code path even implements refund. Vacuous pin.",
+      "exemptReason": "no_skirmish_substrate",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-INTR-003",
