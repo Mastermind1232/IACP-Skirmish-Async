@@ -3673,12 +3673,31 @@
         "lines": [
           2045,
           2052
-        ]
+        ],
+        "sha256": "13781595ed70b59be4b77bd575c0b3238395762f182ceb3ebe8fe406bafb10a9"
       },
       "summary": "A Mobile figure occupying blocking terrain can still be seen by LOS, have spaces counted to it, and be attacked by adjacent figures.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Mobile-in-blocking-terrain visibility corner rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-blocking-terrain-occupant-visibility-probe.test.js"
+        ],
+        "assertions": [
+          "009a: source — hasLineOfSight skips the target cell from the blocking-cell check",
+          "009b: source — getRange is pure Manhattan, terrain-blind",
+          "009c: source — isAdjacentCoords is getRange === 1 (terrain-blind)",
+          "009d: behavior — distance to a space that would hold a blocking-terrain occupant is grid Manhattan",
+          "009e: behavior — hasLineOfSight to a target cell that is itself in blocking works (no self-block)",
+          "009f: behavior — non-target blocking cells still block LOS (invariant does not break other rules)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MSV-001",
@@ -3888,12 +3907,31 @@
         "lines": [
           1791,
           1818
-        ]
+        ],
+        "sha256": "7544c4dd6895ac24c6170821355634f347c4b1bba96fae9f1c8408c52b722f51"
       },
       "summary": "A Massive figure occupying blocking terrain can be traced LOS to, counted spaces to, and attacked by adjacent figures.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Massive-in-blocking-terrain visibility corner rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/spatial.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-blocking-terrain-occupant-visibility-probe.test.js"
+        ],
+        "assertions": [
+          "009a: source — hasLineOfSight skips the target cell from the blocking-cell check",
+          "009b: source — getRange is pure Manhattan, terrain-blind",
+          "009c: source — isAdjacentCoords is getRange === 1 (terrain-blind)",
+          "009d: behavior — distance to a space that would hold a blocking-terrain occupant is grid Manhattan",
+          "009e: behavior — hasLineOfSight to a target cell that is itself in blocking works (no self-block)",
+          "009f: behavior — non-target blocking cells still block LOS (invariant does not break other rules)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-RCH-001",
