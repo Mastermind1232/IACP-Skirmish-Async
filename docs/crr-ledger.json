@@ -4824,8 +4824,12 @@
       },
       "summary": "A figure cannot enter a space containing impassable terrain unless an ability allows it (e.g., Massive, Mobile).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Impassable-terrain cannot-enter default rule has no named assertion pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "IMPASSABLE TERRAIN-section restatement: \"cannot enter impassable terrain (unless Massive/Mobile)\" is the subset of MOVE-008 (covers both blocking AND impassable) and PLC-003 (cannot place in blocking/impassable). The Massive/Mobile exception is pinned by MSV-003 and MOB-002.",
+      "seeAlso": [
+        "CRR-MOVE-008",
+        "CRR-PLC-003"
+      ]
     },
     {
       "id": "CRR-IT-002",
@@ -4838,8 +4842,13 @@
       },
       "summary": "When impassable terrain is on a single edge, figures cannot move or be pushed through it (or be placed on it if Large) unless a special ability allows it.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Impassable-edge rule has no named assertion pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Impassable terrain on a single edge == a wall in the engine (mapSpaces.impassableEdges). Wall-edge movement blocking is pinned by MOVE-010 (cannot move through walls/doors) and WAL-001 (walls block movement/LOS); wall-edge adjacency is pinned by ADJ-002 (spaces sharing a wall edge are not adjacent).",
+      "seeAlso": [
+        "CRR-MOVE-010",
+        "CRR-WAL-001",
+        "CRR-ADJ-002"
+      ]
     },
     {
       "id": "CRR-IT-003",
@@ -4869,8 +4878,12 @@
       },
       "summary": "Massive and Mobile figures can enter/move through impassable terrain.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Massive/Mobile-ignore-impassable corner rule has no named assertion pin distinct from the blocking-terrain case. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Massive/Mobile entering impassable terrain is a direct restatement: MSV-003 pins \"Massive ignores terrain for movement and can enter/end on blocking or impassable terrain\" and MOB-002 pins the same for Mobile. Same ignoreBlocking profile flag drives both cases.",
+      "seeAlso": [
+        "CRR-MSV-003",
+        "CRR-MOB-002"
+      ]
     },
     {
       "id": "CRR-REC-001",
