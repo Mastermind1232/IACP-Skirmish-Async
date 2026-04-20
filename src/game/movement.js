@@ -176,9 +176,13 @@ export function getOccupiedSpacesForMovement(game, excludeFigureKey = null) {
   for (const p of [1, 2]) {
     for (const [k, coord] of Object.entries(poses[p] || {})) {
       if (k === excludeFigureKey) continue;
-      // G39: Companion figures can share spaces — don't block movement
+      // G39: Companion figures can share spaces — don't block movement.
+      // CRR-INCP-001: an incapacitated figure's space blocks movement-end
+      // (even for companions that otherwise share). Current skirmish
+      // substrate: The Child when game.childIncapacitated is true.
       const dcName = dcNameFromFigureKey(k);
-      if (isDcCompanion(dcName)) continue;
+      const _isIncap = dcName === 'The Child' && game.childIncapacitated;
+      if (isDcCompanion(dcName) && !_isIncap) continue;
       const size = game.figureOrientations?.[k] || getFigureSize(dcName);
       occupied.push(...getFootprintCells(coord, size));
     }

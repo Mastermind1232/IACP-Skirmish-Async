@@ -46,6 +46,9 @@ export function isConditionImmune(game, figureKey) {
  * @returns {boolean} true if the condition was newly applied, false if already present
  */
 export function applyCondition(game, figureKey, cond) {
+  // CRR-INCP-002: an incapacitated figure cannot have conditions applied.
+  // Skirmish substrate: The Child while game.childIncapacitated is true.
+  if (game?.childIncapacitated && dcNameFromFigureKey(figureKey) === 'The Child') return false;
   game.figureConditions = game.figureConditions || {};
   game.figureConditions[figureKey] = game.figureConditions[figureKey] || [];
   if (game.figureConditions[figureKey].includes(cond)) return false;

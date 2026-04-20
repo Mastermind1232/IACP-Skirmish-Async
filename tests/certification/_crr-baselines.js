@@ -33,8 +33,14 @@ import { createTestGame } from '../fixtures/game-builder.js';
 // check at available-actions.js mirrors the handler's `_hasFuryReach`
 // (closes parity scenarios 12/13). Attachment is identified by bracket name;
 // no specialAbilityIds-style pointer exists for DC-attachment lookups.
+// 2026-04-20: dcName_equality 56→57. CRR-INCP-001 requires an incapacitated
+// figure's space to block movement-end (the exception to G39 companion
+// space-sharing). Only skirmish substrate is The Child (childIncapacitated
+// flag set by Force Exhaustion); getOccupiedSpacesForMovement now includes
+// The Child's footprint when incapacitated. Single known incap-capable
+// figure, so a dcName equality check is the correct shape here.
 export const DD_BASELINE = {
-  dcName_equality: 56,
+  dcName_equality: 57,
   dcName_includes: 5,
   dcName_startsWith: 4,
   cardNameIncludes: 82,

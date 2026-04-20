@@ -29,9 +29,9 @@
     "ccCount": 293
   },
   "directDetectionCensus": {
-    "baselineTotal": 147,
+    "baselineTotal": 148,
     "perFamily": {
-      "dcName_equality": 56,
+      "dcName_equality": 57,
       "dcName_includes": 5,
       "dcName_startsWith": 4,
       "cardNameIncludes": 82

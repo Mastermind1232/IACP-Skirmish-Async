@@ -805,6 +805,14 @@ export async function handleForceExhaustion(interaction, ctx) {
     // Incapacitate The Child
     game.childIncapacitated = true;
 
+    // CRR-INCP-002: "When a figure is incapacitated, it discards all
+    // conditions". Clear any conditions currently on The Child at the
+    // moment of incapacitation. applyCondition() enforces the second half
+    // of the rule ("conditions cannot be applied to that figure").
+    if (fe.childFigureKey && game.figureConditions?.[fe.childFigureKey]) {
+      delete game.figureConditions[fe.childFigureKey];
+    }
+
     // Remove 1 attack die (weakest first: yellow > green > blue > red)
     if (game.pendingCombat) {
       const dice = [...(game.pendingCombat.attackInfo.dice || [])];

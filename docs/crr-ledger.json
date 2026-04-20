@@ -2286,12 +2286,33 @@
         "lines": [
           522,
           526
-        ]
+        ],
+        "sha256": "a553a8298112fd1740975766e6cea9ab691d1eef7fac4d237ae4aee5f55a21bf"
       },
       "summary": "Some abilities allow a player to perform an attack with a hostile figure; the resolving player chooses the target and controls the figure for the duration of that attack; all non-neutral figures are considered hostile, no figures friendly, and the figure cannot target itself.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Substrate exists: Murne Rin's False Orders special action (src/game/abilities.js:1478, handlers in src/handlers/combat.js handleFalseOrdersAttack and src/handlers/dc-play-area.js handleFalseOrdersAction) lets the attacker perform an attack with a hostile figure within 4 spaces with cost ≤ 4. Gap: no named oracle probe pins the controller-swap / target-reselection / self-exclusion invariants for False Orders. (Previously misclassified as exempt 'no skirmish substrate' — corrected 2026-04-20.)"
+      "status": "covered",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "src/game/abilities.js",
+          "src/handlers/dc-play-area.js",
+          "src/handlers/combat.js",
+          "tests/domain/oracle/phase-d-atk-036-false-orders-attack-with-hostile-probe.test.js"
+        ],
+        "assertions": [
+          "const enemyNum = opponentPlayerNum(playerNum);",
+          "for (const [fk, pos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {",
+          "if (figKey !== controlledFigureKey) allOtherPositions[figKey] = pos;",
+          "const { controllerPlayerNum, controlledFigureKey, controlledPlayerNum } = fo;",
+          "falseOrdersControllerPlayerNum: controllerPlayerNum,"
+        ]
+      },
+      "notes": "Murne Rin's False Orders substrate. pendingFalseOrders records controllerPlayerNum (resolver) + controlledPlayerNum (opponent of resolver, so figure is hostile) + controlledFigureKey. Phase-1 target pool iterates only the opponent's figurePositions. Phase-2 target pool excludes the controlled figure itself. handleFalseOrdersAtkPick gates on controllerPlayerNum. pendingCombat stores falseOrdersControllerPlayerNum separately from attackerPlayerNum (figure's natural side), and ≥4 downstream combat sites resolve the effective attacker via `combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum` for the duration of the attack.",
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ATK-037",
@@ -2314,12 +2335,31 @@
         "lines": [
           529,
           533
-        ]
+        ],
+        "sha256": "3fa39c5cac57a19c0c792b59a6e151acb9b0e5da7c4b5dc0c4389e047ad6510a"
       },
       "summary": "Attack-with-hostile: resolver rolls attack dice and can use any of the figure's abilities; the figure using this ability does not count as having performed an attack; when performing such an attack, the resolver may spend one of that figure's power tokens.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Substrate exists: Murne Rin's False Orders (see CRR-ATK-036). Gap: no named probe pins (a) resolver rolls attack dice and can use the controlled figure's abilities, (b) controlled figure does not count as having performed an attack (critical for SSA-001 one-attack-per-activation), (c) resolver may spend one of the controlled figure's power tokens. (Previously misclassified as exempt — corrected 2026-04-20.)"
+      "status": "covered",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "src/handlers/combat.js",
+          "tests/domain/oracle/phase-d-atk-038-false-orders-consequences-probe.test.js"
+        ],
+        "assertions": [
+          "const attackInfo = controlledStats?.attack || { dice: ['red'], range: [1, 3] };",
+          "applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || []);",
+          "attackerFigureKey: controlledFigureKey,",
+          "const atkPlayerNum = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;",
+          "const effectiveAttackerForSurge = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;"
+        ]
+      },
+      "notes": "handleFalseOrdersAtkPick seeds pendingCombat with attackInfo pulled from controlledStats?.attack (resolver rolls the controlled figure's dice) and calls applyDcPassivesToCombat with controlledStats?.passives (resolver uses figure's keywords/surges). attackerFigureKey = controlledFigureKey (power-token spend targets controlled figure's tokens). attackerMsgId = False-Orders trigger msgId (Murne Rin's dcMessage), NOT the controlled figure's activation msgId — attackPerformedThisActivation is keyed per-msgId, so the controlled figure's own-activation budget is untouched. Power-token spend and surge-spend handlers both resolve their player-gate via combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum, so the resolver decides which controlled-figure token to spend and how to allocate surges.",
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ATK-039",
@@ -11400,12 +11440,33 @@
         "lines": [
           1580,
           1584
-        ]
+        ],
+        "sha256": "dfa638a85694b44cc74924ca090ef77887f02bb61813e2631a7b699320018bff"
       },
       "summary": "An incapacitated figure remains on the map under the same player's control but does not restrict movement or block line of sight; other figures cannot end movement in its space.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Substrate exists: The Child's Force Exhaustion sets game.childIncapacitated; INCP-003 is already covered on this substrate (batch-106). Gap: no probe pins (a) The Child stays on the map (childPosition preserved while incapacitated), (b) The Child's space does not restrict movement / block LOS while incapacitated, (c) other figures cannot end movement in The Child's space. (Previously misclassified as exempt alongside INCP-002/004 despite INCP-003 already being closed on the same substrate — corrected 2026-04-20.)"
+      "status": "covered",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "src/handlers/combat-reactions.js",
+          "src/handlers/dc-play-area.js",
+          "src/engine/available-actions.js",
+          "src/game/movement.js",
+          "tests/domain/oracle/phase-d-incp-001-incap-on-map-probe.test.js"
+        ],
+        "assertions": [
+          "game.childIncapacitated = true;",
+          "if (fkEff?.companion === true) continue;",
+          "const _isIncap = dcName === 'The Child' && game.childIncapacitated;",
+          "if (isDcCompanion(dcName) && !_isIncap) continue;"
+        ]
+      },
+      "notes": "Force-Exhaustion (combat-reactions.js:806) sets game.childIncapacitated = true without deleting The Child from figurePositions — remains on map under same player's control. The Child is a companion in dc-effects.json, so figure-blocking coord builders in dc-play-area.js (handler) and available-actions.js (engine) already skip its footprint regardless of incap status — does not block LOS. getOccupiedSpacesForMovement in movement.js gates the companion skip on `dcName === 'The Child' && game.childIncapacitated`: companions remain pass-through/end-through when healthy, but the incapacitated Child's footprint re-enters the occupied set — implementing 'other figures cannot end movement in its space'. Cross-ref: CRR-INCP-003 (untargetable-while-incap) already covered on the same substrate (batch-106).",
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-INCP-002",
@@ -11414,12 +11475,31 @@
         "lines": [
           1585,
           1585
-        ]
+        ],
+        "sha256": "d42ae91e87377d6b73fb4e40dfef2c6c459db1e6aa6a14b83a809c9825f285fa"
       },
       "summary": "When a figure is incapacitated, it discards all conditions, and conditions cannot be applied to that figure.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Substrate exists: The Child's Force Exhaustion (game.childIncapacitated). Gap: no probe pins (a) conditions on The Child are cleared at the moment of incapacitation, (b) applyCondition is a no-op for The Child while childIncapacitated is true. (Previously misclassified as exempt — corrected 2026-04-20.)"
+      "status": "covered",
+      "implementationArea": "src/handlers/combat-reactions.js, src/game/conditions.js",
+      "notes": "Force-Exhaustion Yes branch sets game.childIncapacitated = true and deletes game.figureConditions[fe.childFigureKey] (clause a — discard on incap). applyCondition() in src/game/conditions.js early-returns false when dcNameFromFigureKey(figureKey) === 'The Child' and game.childIncapacitated (clause b — no new conditions).",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-incp-002-incap-conditions-probe.test.js",
+          "src/handlers/combat-reactions.js",
+          "src/game/conditions.js"
+        ],
+        "assertions": [
+          "delete game.figureConditions[fe.childFigureKey];",
+          "if (game?.childIncapacitated && dcNameFromFigureKey(figureKey) === 'The Child') return false;",
+          "CRR-INCP-002"
+        ]
+      },
+      "reviewedBy": {
+        "name": "crr-ledger-batch-113",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-INCP-003",
@@ -11459,12 +11539,31 @@
         "lines": [
           1588,
           1588
-        ]
+        ],
+        "sha256": "95989d06cabc91fafbaa3339ebe9256c56dd7ff1d17109f24aee2288c3d7c633"
       },
       "summary": "An incapacitated figure can still be pushed by a massive figure ending its movement in the incapacitated figure's space.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Substrate exists: The Child's Force Exhaustion (game.childIncapacitated). Gap: no probe pins that a Massive figure ending movement in The Child's space can still push him, despite INCP-001's general 'other figures cannot end movement in an incapacitated figure's space' rule (this is the exception to INCP-001). (Previously misclassified as exempt — corrected 2026-04-20.)"
+      "status": "covered",
+      "implementationArea": "src/game/movement.js",
+      "notes": "Massive movement profile sets canEndOnOccupied: true, bypassing the occupiedSet gate that enforces INCP-001 for non-Massive figures. collectOverlappingFigures iterates every figure in figurePositions and only skips movingFigureKey — no companion or incap exemption — so an incap Child overlapped by a Massive mover's footprint is collected and pushed via the iterative displacement engine (pushFigure / pushFigureToNearestValid). Neither push path consults game.childIncapacitated.",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-incp-004-incap-massive-push-probe.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "canEndOnOccupied: isMassive,",
+          "const canEnd = !isOccupied || profile.canEndOnOccupied;",
+          "export function collectOverlappingFigures",
+          "CRR-INCP-004"
+        ]
+      },
+      "reviewedBy": {
+        "name": "crr-ledger-batch-113",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-INTR-001",
