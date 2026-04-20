@@ -1367,13 +1367,28 @@
         "lines": [
           440,
           441
-        ]
+        ],
+        "sha256": "72e09032de308484de46c08bde21d72f37ab747c5094f6b4ee739e8e987c99df"
       },
       "summary": "A figure must end its movement (not sharing a space with another non-companion figure) to perform an attack.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/post-deploy.js",
-      "notes": "No named assertion pins the 'must have finished movement and not be sharing a space' precondition for attack eligibility. The engine currently requires a committed position but the shared-space edge case is not directly probed. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/engine/available-actions.js",
+      "notes": "Pinned via PROBE-PD-ATK-006/013 (batch-98). available-actions.js returns [] for attack-target computation when attackerPos is absent — a figure mid-displacement or without a committed position cannot be offered an attack. Movement-end occupancy validity (not sharing a space with a non-companion figure) is enforced at move-commit time by movement.js (occupancy + Massive displacement), so attackerPos always refers to a committed, non-overlapping space.",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-atk-006-013-timing-probe.test.js",
+          "src/engine/available-actions.js"
+        ],
+        "assertions": [
+          "available-actions.js must short-circuit attack-target computation when attackerPos is missing"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ATK-007",
@@ -1546,13 +1561,30 @@
         "lines": [
           461,
           462
-        ]
+        ],
+        "sha256": "12b30cf9f17147e8defa39bfb60c5ccc9b693a062f174a0cb01ccb7d8e0757d8"
       },
       "summary": "Abilities with timing 'before declaring an attack' or 'before declaring a target' are performed immediately before Step 1.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "Pre-declare timing is a narrow conflict-resolution point. No named assertion pins the 'immediately before Step 1' timing. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/cc-timing.js",
+      "notes": "Pinned via PROBE-PD-ATK-006/013 (batch-98). cc-timing.js routes beforeyoudeclareattack and beforedeclaringrangedattack via ctx.duringActivation (true before pendingCombat is set, i.e. pre-Step 1) — and distinguishes them from whenyoudeclareattack which requires ctx.duringAttack. Step 1 is the pendingCombat-set boundary.",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-atk-006-013-timing-probe.test.js",
+          "src/game/cc-timing.js"
+        ],
+        "assertions": [
+          "cc-timing must route beforeyoudeclareattack via duringActivation",
+          "cc-timing must route beforedeclaringrangedattack via duringActivation",
+          "when-you-declare-attack must be gated on duringAttack"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ATK-014",
