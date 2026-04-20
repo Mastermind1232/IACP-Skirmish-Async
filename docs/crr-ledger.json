@@ -2290,8 +2290,8 @@
       },
       "summary": "Some abilities allow a player to perform an attack with a hostile figure; the resolving player chooses the target and controls the figure for the duration of that attack; all non-neutral figures are considered hostile, no figures friendly, and the figure cannot target itself.",
       "scope": "skirmish",
-      "status": "exempt",
-      "notes": "Exempt: attack-with-hostile-figure (Coerce-style) is not invoked by any current skirmish corpus DC/CC. No engine substrate."
+      "status": "gap",
+      "notes": "Substrate exists: Murne Rin's False Orders special action (src/game/abilities.js:1478, handlers in src/handlers/combat.js handleFalseOrdersAttack and src/handlers/dc-play-area.js handleFalseOrdersAction) lets the attacker perform an attack with a hostile figure within 4 spaces with cost ≤ 4. Gap: no named oracle probe pins the controller-swap / target-reselection / self-exclusion invariants for False Orders. (Previously misclassified as exempt 'no skirmish substrate' — corrected 2026-04-20.)"
     },
     {
       "id": "CRR-ATK-037",
@@ -2318,8 +2318,8 @@
       },
       "summary": "Attack-with-hostile: resolver rolls attack dice and can use any of the figure's abilities; the figure using this ability does not count as having performed an attack; when performing such an attack, the resolver may spend one of that figure's power tokens.",
       "scope": "skirmish",
-      "status": "exempt",
-      "notes": "Exempt: attack-with-hostile consequence rules (does-not-count-as-attack, power-token spend) are not invoked by any current skirmish corpus DC/CC. No engine substrate."
+      "status": "gap",
+      "notes": "Substrate exists: Murne Rin's False Orders (see CRR-ATK-036). Gap: no named probe pins (a) resolver rolls attack dice and can use the controlled figure's abilities, (b) controlled figure does not count as having performed an attack (critical for SSA-001 one-attack-per-activation), (c) resolver may spend one of the controlled figure's power tokens. (Previously misclassified as exempt — corrected 2026-04-20.)"
     },
     {
       "id": "CRR-ATK-039",
@@ -11404,8 +11404,8 @@
       },
       "summary": "An incapacitated figure remains on the map under the same player's control but does not restrict movement or block line of sight; other figures cannot end movement in its space.",
       "scope": "skirmish",
-      "status": "exempt",
-      "notes": "Exempt: incapacitated status is not invoked by any current skirmish mission; rule has no engine substrate in skirmish corpus."
+      "status": "gap",
+      "notes": "Substrate exists: The Child's Force Exhaustion sets game.childIncapacitated; INCP-003 is already covered on this substrate (batch-106). Gap: no probe pins (a) The Child stays on the map (childPosition preserved while incapacitated), (b) The Child's space does not restrict movement / block LOS while incapacitated, (c) other figures cannot end movement in The Child's space. (Previously misclassified as exempt alongside INCP-002/004 despite INCP-003 already being closed on the same substrate — corrected 2026-04-20.)"
     },
     {
       "id": "CRR-INCP-002",
@@ -11418,8 +11418,8 @@
       },
       "summary": "When a figure is incapacitated, it discards all conditions, and conditions cannot be applied to that figure.",
       "scope": "skirmish",
-      "status": "exempt",
-      "notes": "Exempt: incapacitated condition-discard is not exercised by any current skirmish mission; no engine substrate."
+      "status": "gap",
+      "notes": "Substrate exists: The Child's Force Exhaustion (game.childIncapacitated). Gap: no probe pins (a) conditions on The Child are cleared at the moment of incapacitation, (b) applyCondition is a no-op for The Child while childIncapacitated is true. (Previously misclassified as exempt — corrected 2026-04-20.)"
     },
     {
       "id": "CRR-INCP-003",
@@ -11463,8 +11463,8 @@
       },
       "summary": "An incapacitated figure can still be pushed by a massive figure ending its movement in the incapacitated figure's space.",
       "scope": "skirmish",
-      "status": "exempt",
-      "notes": "Exempt: incapacitated-massive-push exception is not exercised by any current skirmish mission; no engine substrate."
+      "status": "gap",
+      "notes": "Substrate exists: The Child's Force Exhaustion (game.childIncapacitated). Gap: no probe pins that a Massive figure ending movement in The Child's space can still push him, despite INCP-001's general 'other figures cannot end movement in an incapacitated figure's space' rule (this is the exception to INCP-001). (Previously misclassified as exempt — corrected 2026-04-20.)"
     },
     {
       "id": "CRR-INTR-001",
