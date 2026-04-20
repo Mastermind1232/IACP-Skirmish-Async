@@ -708,13 +708,33 @@
         "lines": [
           2079,
           2080
-        ]
+        ],
+        "sha256": "36b272664741caf43e70f538691385735a2f0a6666ce495b0bd7533eed00b814"
       },
       "summary": "During a 'Move X spaces' effect, a Large figure's base cannot rotate.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/movement.js",
-      "notes": "Large-rotation-lock during Move-X not pinned. Phase-D gap; probe home is movement-rotation-displacement-behavioral.test.js."
+      "status": "covered",
+      "implementationArea": "src/handlers/movement.js",
+      "notes": "Piggybacks on the MOVE-017 moveXBypassActive flag. Each of the three profile-setup sites in handlers/movement.js, when the flag is set and profile.isLarge, forces profile.canRotate = false. getNeighborStates in game/movement.js only emits a rotate neighbor when canRotate is truthy, so Large figures cannot plan or commit a rotation during Move-X.",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-move-020-move-x-large-no-rotate-probe.test.js",
+          "src/handlers/movement.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "if (game.moveXBypassActive?.[msgId])",
+          "if (profile.isLarge) profile.canRotate = false",
+          "if (nextProfile.isLarge) nextProfile.canRotate = false",
+          "if (profile.canRotate)",
+          "type: 'rotate'"
+        ]
+      },
+      "reviewedBy": {
+        "name": "crr-ledger-batch-108",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MOVE-021",

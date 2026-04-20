@@ -336,9 +336,11 @@ export async function handleMoveMp(interaction, ctx) {
   }
   // CRR MOVE-017: "Move X spaces" effects (freeMoveBonus) ignore MP costs
   // from terrain + hostile figures, but still respect non-cost restrictions.
+  // CRR MOVE-020: during "Move X spaces", a Large figure's base cannot rotate.
   if (game.moveXBypassActive?.[msgId]) {
     profile.ignoreFigureCost = true;
     profile.ignoreDifficult = true;
+    if (profile.isLarge) profile.canRotate = false;
   }
   moveState.boardState = boardState;
   moveState.movementProfile = profile;
@@ -497,9 +499,11 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
     nextProfile.ignoreDifficult = true;
   }
   // CRR MOVE-017: "Move X spaces" effects (freeMoveBonus) ignore MP costs.
+  // CRR MOVE-020: during "Move X spaces", a Large figure's base cannot rotate.
   if (game.moveXBypassActive?.[msgId]) {
     nextProfile.ignoreFigureCost = true;
     nextProfile.ignoreDifficult = true;
+    if (nextProfile.isLarge) nextProfile.canRotate = false;
   }
   const nextCache = computeMovementCache(newTopLeft, newMp, nextBoard, nextProfile);
   moveState.boardState = nextBoard;
@@ -713,9 +717,11 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     profile.ignoreDifficult = true;
   }
   // CRR MOVE-017: "Move X spaces" effects (freeMoveBonus) ignore MP costs.
+  // CRR MOVE-020: during "Move X spaces", a Large figure's base cannot rotate.
   if (game.moveXBypassActive?.[msgId]) {
     profile.ignoreFigureCost = true;
     profile.ignoreDifficult = true;
+    if (profile.isLarge) profile.canRotate = false;
   }
   const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
   if (!startCoord) {

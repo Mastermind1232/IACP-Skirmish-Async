@@ -51,7 +51,7 @@ describe('PROBE-PD-MOVE-017: Move-X effects bypass MP costs via moveXBypassActiv
 
   it('017b: source — movement.js profile-setup branches read moveXBypassActive and set ignoreFigureCost + ignoreDifficult', () => {
     const matches = [...MV_SRC.matchAll(
-      /if \(game\.moveXBypassActive\?\.\[msgId\]\) \{\s*\n\s*\w+\.ignoreFigureCost = true;\s*\n\s*\w+\.ignoreDifficult = true;\s*\n\s*\}/g,
+      /if \(game\.moveXBypassActive\?\.\[msgId\]\) \{\s*\n\s*\w+\.ignoreFigureCost = true;\s*\n\s*\w+\.ignoreDifficult = true;/g,
     )];
     assert.ok(matches.length >= 3,
       `expected at least 3 movement.js profile sites to wire moveXBypassActive; found ${matches.length} — CRR-MOVE-017`);
