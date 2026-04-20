@@ -3346,12 +3346,34 @@
         "lines": [
           1861,
           1861
-        ]
+        ],
+        "sha256": "d989c5eeeab7a2c4d3d6f456ff881a4d9192c2586f555ad39a1c8fe97fb50b92"
       },
       "summary": "On a miss, non-damage-gated effects (such as the Recover keyword) can still be triggered.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Recover-still-fires-on-miss rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/engine/combat-bridge.js (Recover heal gate outside the hit/damage branch chain)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-mis-recover-not-damage-gated-probe.test.js",
+          "src/engine/combat-bridge.js",
+          "src/handlers/combat.js"
+        ],
+        "assertions": [
+          "004a: source — Recover heal branch has no hit/damage guard; only surgeRecover > 0 + attacker-msg + SbR opt-out",
+          "004b: source — rule intent is documented: \"heal attacker even if attack dealt 0 damage\"",
+          "004c: source — Recover heal lives OUTSIDE (after) the hit/damage branch chain",
+          "004d: source — by contrast, Cleave IS damage-gated (hit && damage > 0) — demonstrates the gate pattern Recover lacks",
+          "004e: source — surgeRecover accumulates during surge-spending with no hit/damage predicate",
+          "004f: source — embed-refresh for Recover triggers even on 0-damage (attacker HP embed must update on heal)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      },
+      "notes": "Recover heal gate `if (combat.surgeRecover > 0 && combat.attackerMsgId != null && !_sbrBlockRecover)` is structurally outside the hit/damage if/else chain; inline comment pins the CRR intent. Cleave gate's hit&&damage>0 guard is the direct counter-example (CRR-MIS-005 pair)."
     },
     {
       "id": "CRR-MIS-005",
