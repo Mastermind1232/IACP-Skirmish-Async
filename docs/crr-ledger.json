@@ -11309,13 +11309,29 @@
         "lines": [
           1586,
           1587
-        ]
+        ],
+        "sha256": "a00d79ba8e69982e65d42d0ff3d122a8b07bf52bf217dc7f3a483db31df02bc4"
       },
       "summary": "An incapacitated figure cannot suffer damage or be targeted/affected by attacks, abilities, or game effects (except as specified by mission rules); its abilities are not available.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/combat.js",
-      "notes": "Targeting and damage immunity for incapacitated figures. Not exercised by current skirmish missions."
+      "status": "covered",
+      "implementationArea": "src/handlers/dc-play-area.js",
+      "notes": "Substrate: The Child (childIncapacitated flag set by Force Exhaustion). Attack-target builder in dc-play-area.js excludes the Child from the target list while incapacitated.",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-incp-003-incap-untargetable-probe.test.js",
+          "src/handlers/dc-play-area.js"
+        ],
+        "assertions": [
+          "dcNameFromFigureKey(k) === 'the child' && game.childIncapacitated",
+          "CRR INCP-003"
+        ]
+      },
+      "reviewedBy": {
+        "name": "crr-ledger-batch-106",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-INCP-004",

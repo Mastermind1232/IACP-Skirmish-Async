@@ -987,6 +987,9 @@ async function buildAndSendAttackTargets(
     // Hide is a -2 accuracy condition per CRR (RULES_REFERENCE.md:1586), not a
     // targeting block. Hidden targets remain selectable; the -2 penalty is
     // applied at combat resolution (src/game/combat.js:221–224).
+    // CRR INCP-003: incapacitated figures cannot be targeted by attacks.
+    // Current skirmish substrate: The Child (childIncapacitated flag set by Force Exhaustion).
+    if (dcNameFromFigureKey(k) === 'the child' && game.childIncapacitated) continue;
     // Insignificant (Dio): can't be targeted if in same space as a friendly figure
     {
       const _insigDcName = dcNameFromFigureKey(k);
