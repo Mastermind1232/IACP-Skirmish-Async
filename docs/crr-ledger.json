@@ -9522,9 +9522,12 @@
       },
       "summary": "Spending movement points is not an action and may be done at any time during a figure's activation, before or after an action, but cannot be spent while resolving another action or ability.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/movement.js",
-      "notes": "MP-spend-is-not-an-action invariant and interleave rules have no dedicated oracle. Action-surfacing and movement-legality tests exercise the allowed patterns tangentially but no named assertion pins the rule itself. Phase-D gap."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-MOVE-006",
+        "CRR-MOVE-012"
+      ],
+      "notes": "The 'not an action' and 'any time before or after' clauses are pinned by MOVE-012 (SpendMp bypasses the actions-gate, reuses bank, and never deducts an action) together with MOVE-006 (Move completes at MP-grant, so MP persists across subsequent actions within the activation). The 'cannot be spent while resolving another action or ability' clause is enforced by the SpendMp button's !hasActiveMoveSession gate in src/discord/components.js plus combat-thread isolation from the DG play area."
     },
     {
       "id": "CRR-MVP-007",
