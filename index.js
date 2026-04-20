@@ -172,6 +172,7 @@ import {
   applyDamageAndFinishCombat as _applyDamageAndFinishCombatPure,
   checkPostCombatSurges as _checkPostCombatSurgesPure,
   finishCombatResolution as _finishCombatResolutionPure,
+  computeCleaveEligibleTargets,
 } from './src/engine/combat-bridge.js';
 import {
   getHandWindowButtonRow as _getHandWindowButtonRowPure,
@@ -3178,6 +3179,7 @@ function buildAllDeps() {
     getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton,
     countTerminalsControlledByPlayer, isFigureInDeploymentZone,
     getFiguresOnOrAdjacentToSpace, getFiguresAdjacentToCoord, applyNpcDamageToFigure,
+    getEffectiveMapSpaces, isWithinN, computeCleaveEligibleTargets, getCleaveTargetButtons,
     postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postKryknaPlaceButtons, postFluctuationSwapButtons,
     getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
     getDetermineInitiativeButtons, populatePlayAreas,

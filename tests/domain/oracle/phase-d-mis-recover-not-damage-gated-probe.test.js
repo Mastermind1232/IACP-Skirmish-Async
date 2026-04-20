@@ -49,7 +49,7 @@ describe('PROBE-PD-MIS-004: Recover (non-damage-gated) still fires on a miss', (
 
   it('004d: source — by contrast, Cleave IS damage-gated (hit && damage > 0) — demonstrates the gate pattern Recover lacks', () => {
     assert.match(CB_SRC,
-      /if \(hit && damage > 0 && effectiveCleave > 0 && game\.selectedMap\?\.id\) \{/,
+      /if \(hit && damage > 0 && cleaveQueue\.length > 0 && game\.selectedMap\?\.id\) \{/,
       'Cleave gate must require hit && damage > 0 — CRR-MIS-005 counterpart, CRR-MIS-004 contrast');
   });
 

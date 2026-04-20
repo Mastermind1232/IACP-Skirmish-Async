@@ -111,6 +111,7 @@ import {
   applyDamageAndFinishCombat as _realApplyDamageAndFinishCombat,
   finishCombatResolution as _realFinishCombatResolution,
   checkPostCombatSurges as _realCheckPostCombatSurges,
+  computeCleaveEligibleTargets,
 } from '../engine/combat-bridge.js';
 
 import {
@@ -602,6 +603,9 @@ export function buildHeadlessDeps(options = {}) {
     processFigureDefeat,
     checkWinConditions, resolveCombatAfterRolls, applyDamageAndFinishCombat,
     finishCombatResolution, checkPostCombatSurges,
+    computeCleaveEligibleTargets,
+    isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapData),
+    getCleaveTargetButtons,
     applyDirectDamageToFigure, applyNpcDamageToFigure,
     decrementActivationIfGroupDefeated,
     checkNefariousGains, checkHuntDissent, checkThisIsTheWay,

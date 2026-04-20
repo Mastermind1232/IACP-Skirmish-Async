@@ -249,6 +249,65 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
 }
 
 /**
+ * CRR-CLV-005: compute the per-attack Cleave-eligible target set for the
+ * attacker's current combat. Melee: figures adjacent to attacker; Ranged:
+ * figures within Accuracy + LOS of attacker. Always excludes the initial
+ * attack target. Includes crates. Called from the initial Cleave prompt in
+ * applyDamageAndFinishCombat and the sequential re-prompt in
+ * handleCleaveTarget.
+ */
+export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, deps) {
+  const { getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN, hasLineOfSight, getFigureLabel } = deps;
+  if (!game.selectedMap?.id) return [];
+  const mapId = game.selectedMap.id;
+  const attackerPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
+  if (!attackerPos) return [];
+  const targets = [];
+  if (!combat.isRanged) {
+    const adjToAttacker = getFiguresAdjacentToCoord(game, attackerPos, mapId, combat.attackerFigureKey);
+    for (const c of adjToAttacker) {
+      if (c.playerNum !== defenderPlayerNum) continue;
+      if (c.figureKey === combat.target?.figureKey) continue;
+      targets.push(c);
+    }
+    if (game.cratePositions) {
+      const rawMs = getMapData(mapId);
+      const adj = rawMs?.adjacency || {};
+      const atkNorm = String(attackerPos).toLowerCase();
+      const atkAdj = new Set((adj[atkNorm] || []).map((c) => String(c).toLowerCase()));
+      atkAdj.add(atkNorm);
+      for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
+        if (atkAdj.has(String(curCoord).toLowerCase())) {
+          const hp = game.crateHealth?.[origCoord] ?? 5;
+          targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
+        }
+      }
+    }
+  } else {
+    const totalAcc = (combat.attackRoll?.acc || 0) + (combat.surgeAccuracy || 0) + (combat.bonusAccuracy || 0);
+    const mapSpaces = getEffectiveMapSpaces(game, mapId);
+    for (const [fk, fCoord] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
+      if (fk === combat.target?.figureKey) continue;
+      if (!isWithinN(attackerPos, fCoord, totalAcc, mapId) || !hasLineOfSight(attackerPos, fCoord, mapSpaces, null)) continue;
+      targets.push({ figureKey: fk, playerNum: defenderPlayerNum });
+    }
+    if (game.cratePositions) {
+      for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
+        if (isWithinN(attackerPos, String(curCoord).toLowerCase(), totalAcc, mapId)) {
+          const hp = game.crateHealth?.[origCoord] ?? 5;
+          targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
+        }
+      }
+    }
+  }
+  return targets.map((c) => {
+    if (c.isCrate) return c;
+    const { label } = getFigureLabel(game, c.playerNum, c.figureKey, c.figureKey);
+    return { figureKey: c.figureKey, playerNum: c.playerNum, label };
+  });
+}
+
+/**
  * Apply damage, conditions, defeat logic, and finish combat resolution.
  * Called from resolveCombatAfterRolls and handleFigureheadDecision.
  */
@@ -1232,7 +1291,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     // The Darksaber: convert Blast X → Cleave X during Darksaber Strike attack (before blast applies)
     let effectiveBlast = totalBlast;
     if (combat.darksaberBlastToCleave && (combat.surgeBlast || 0) > 0) {
-      combat.surgeCleave = (combat.surgeCleave || 0) + combat.surgeBlast;
+      const _dsCv = combat.surgeBlast;
+      combat.surgeCleave = (combat.surgeCleave || 0) + _dsCv;
+      (combat.cleaveSources = combat.cleaveSources || []).push({ value: _dsCv, label: `Cleave ${_dsCv} (Darksaber Blast→Cleave)` });
       const _dsConvertedBlast = combat.surgeBlast;
       combat.surgeBlast = 0;
       effectiveBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
@@ -1901,79 +1962,39 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
   }
 
-  // Wave 3: Cleave — eligible targets are those the attacker COULD target for this attack (not adjacent to target).
-  // Melee: adjacent to attacker. Ranged: within LOS + Accuracy of attacker. Includes objects (crates).
+  // CRR-CLV-005: Multiple Cleave abilities resolve one at a time in the
+  // attacker's chosen order; each Cleave independently chooses a target from
+  // its own eligible set. We build a queue from combat.cleaveSources (one
+  // entry per accumulation site — passive, surge, Krayt Dragon Fury, Darksaber)
+  // and sequentially prompt the attacker for each entry.
   // Rules: RULES_REFERENCE.md Lines 859-873.
   const effectiveCleave = (combat.surgeCleave || 0) + (combat.passiveCleave || 0);
-  if (hit && damage > 0 && effectiveCleave > 0 && game.selectedMap?.id) {
-    const _clvMapId = game.selectedMap.id;
-    const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
-    const cleaveTargets = [];
-    if (attackerPos) {
-      if (!combat.isRanged) {
-        // Melee: adjacent to attacker
-        const adjToAttacker = getFiguresAdjacentToCoord(game, attackerPos, _clvMapId, combat.attackerFigureKey);
-        for (const c of adjToAttacker) {
-          if (c.playerNum !== defenderPlayerNum) continue;
-          if (c.figureKey === combat.target?.figureKey) continue;
-          cleaveTargets.push(c);
-        }
-        // Melee crates: adjacent to attacker
-        if (game.cratePositions) {
-          const rawMs = getMapData(_clvMapId);
-          const adj = rawMs?.adjacency || {};
-          const atkNorm = String(attackerPos).toLowerCase();
-          const atkAdj = new Set((adj[atkNorm] || []).map(c => String(c).toLowerCase()));
-          atkAdj.add(atkNorm);
-          for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
-            if (atkAdj.has(String(curCoord).toLowerCase())) {
-              const hp = game.crateHealth?.[origCoord] ?? 5;
-              cleaveTargets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
-            }
-          }
-        }
-      } else {
-        // Ranged: within Accuracy + LOS of attacker
-        const totalAcc = (combat.attackRoll?.acc || 0) + (combat.surgeAccuracy || 0) + (combat.bonusAccuracy || 0);
-        const _clvMapSpaces = getEffectiveMapSpaces(game, _clvMapId);
-        for (const pn of [defenderPlayerNum]) {
-          for (const [fk, fCoord] of Object.entries(game.figurePositions?.[pn] || {})) {
-            if (fk === combat.target?.figureKey) continue;
-            if (!isWithinN(attackerPos, fCoord, totalAcc, _clvMapId) || !hasLineOfSight(attackerPos, fCoord, _clvMapSpaces, null)) continue;
-            cleaveTargets.push({ figureKey: fk, playerNum: pn });
-          }
-        }
-        // Ranged crates: within Accuracy of attacker
-        if (game.cratePositions) {
-          for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
-            if (isWithinN(attackerPos, String(curCoord).toLowerCase(), totalAcc, _clvMapId)) {
-              const hp = game.crateHealth?.[origCoord] ?? 5;
-              cleaveTargets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
-            }
-          }
-        }
-      }
-    }
+  const cleaveQueue = Array.isArray(combat.cleaveSources) && combat.cleaveSources.length > 0
+    ? combat.cleaveSources.slice()
+    : (effectiveCleave > 0 ? [{ value: effectiveCleave, label: `Cleave ${effectiveCleave}` }] : []);
+  if (hit && damage > 0 && cleaveQueue.length > 0 && game.selectedMap?.id) {
+    const cleaveTargets = computeCleaveEligibleTargets(game, combat, defenderPlayerNum, {
+      getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN, hasLineOfSight, getFigureLabel,
+    });
     if (cleaveTargets.length > 0) {
-      const targetsWithLabels = cleaveTargets.map((c) => {
-        if (c.isCrate) return c;
-        const { msgId, label } = getFigureLabel(game, c.playerNum, c.figureKey, c.figureKey);
-        return { figureKey: c.figureKey, playerNum: c.playerNum, label };
-      });
+      const firstSource = cleaveQueue.shift();
       game.pendingCleave = {
         gameId: game.gameId,
         combatThreadId: combat.combatThreadId,
-        surgeCleave: effectiveCleave,
+        surgeCleave: firstSource.value,
+        sourceLabel: firstSource.label,
+        cleaveQueue,
         attackerPlayerNum,
+        defenderPlayerNum,
         ownerId,
-        targets: targetsWithLabels,
+        targets: cleaveTargets,
         resultText,
         combat,
         initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
       };
-      const cleaveRows = getCleaveTargetButtons(game.gameId, targetsWithLabels);
+      const cleaveRows = getCleaveTargetButtons(game.gameId, cleaveTargets);
       await thread.send(sanitizeMentions({
-        content: `**Cleave (${effectiveCleave} damage):** <@${ownerId}> \u2014 Choose one eligible target to apply cleave damage:`,
+        content: `**${firstSource.label}:** <@${ownerId}> \u2014 Choose one eligible target to apply cleave damage:`,
         allowedMentions: { users: [ownerId] },
         components: cleaveRows,
       }));

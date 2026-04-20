@@ -72,12 +72,16 @@ describe('PROBE-PD-OBJ-005: object damage in skirmish only flows to crates (the 
   });
 
   it('005d: source — Cleave target-selection adds only crates (isCrate: true) from cratePositions, not doors/tokens/rubble', () => {
-    const cleaveCrateAdds = CB_SRC.match(/cleaveTargets\.push\(\{[\s\S]*?isCrate:\s*true[\s\S]*?crateOrigCoord:/g) || [];
+    // computeCleaveEligibleTargets helper pushes into a local `targets` array
+    // (one site for melee, one for ranged); each push sets isCrate: true for
+    // crate entries. The regex matches either the helper's `targets.push` or
+    // the legacy `cleaveTargets.push` name.
+    const cleaveCrateAdds = CB_SRC.match(/(?:cleaveTargets|targets)\.push\(\{[\s\S]*?isCrate:\s*true[\s\S]*?crateOrigCoord:/g) || [];
     assert.ok(cleaveCrateAdds.length >= 2,
       `Cleave must have ≥2 crate-adding sites (melee + ranged); found ${cleaveCrateAdds.length} — CRR-OBJ-005`);
     // Cleave must not add any non-crate object-flag as a target
     assert.doesNotMatch(CB_SRC,
-      /cleaveTargets\.push\(\{[\s\S]*?(?:isDoor|isToken|isRubble|isDevice|isMissionToken):\s*true/,
+      /(?:cleaveTargets|targets)\.push\(\{[\s\S]*?(?:isDoor|isToken|isRubble|isDevice|isMissionToken):\s*true/,
       'Cleave must not target non-crate objects — CRR-OBJ-005');
   });
 

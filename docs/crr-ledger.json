@@ -585,7 +585,8 @@
         "lines": [
           2074,
           2075
-        ]
+        ],
+        "sha256": "ee00c1d37cc7f3a3fb15b0c153fd04c4cac5b7fdc028a26551745523deb07281"
       },
       "summary": "Additional MP costs apply to rotation if the Large figure does not have Massive or Mobile.",
       "scope": "skirmish",
@@ -1321,7 +1322,8 @@
         "lines": [
           1748,
           1750
-        ]
+        ],
+        "sha256": "b669d6b76665bdcb82494bc619cdbe9486fca35c16f29a6755453208cfe6936d"
       },
       "summary": "The two corner-to-corner lines used for LOS tracing must be non-intersecting and non-overlapping.",
       "scope": "skirmish",
@@ -1335,10 +1337,10 @@
           "src/game/spatial.js"
         ],
         "assertions": [
-          "for (const [ax, ay] of aCorners) { let visibleTargetCorners = 0;",
+          "for (const [ax, ay] of aCorners) {",
           "if (visibleTargetCorners >= 2) return true;",
-          "const INSET = 0.49; (inset > 0 && inset < 0.5)",
-          "const EPS = 1e-6; return t > EPS && t < 1 - EPS && u > EPS && u < 1 - EPS;",
+          "const INSET = 0.49;",
+          "return t > EPS && t < 1 - EPS && u > EPS && u < 1 - EPS;",
           "if (count >= 2) { cornerBlocked = true; break; }"
         ]
       },
@@ -3054,12 +3056,34 @@
         "lines": [
           836,
           837
-        ]
+        ],
+        "sha256": "ca2fa55b41b2a96701fb8776975b0a42dbe80271a27c3e5b3e649c6bb39f5e53"
       },
       "summary": "Multiple Cleave abilities on one attack resolve one at a time in the attacker's chosen order; each Cleave target is chosen independently.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Multi-Cleave sequencing and independent target selection is not pinned by a named assertion. Phase-D gap."
+      "status": "covered",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "src/handlers/combat.js",
+          "src/engine/combat-bridge.js",
+          "tests/domain/oracle/phase-d-clv-005-multi-cleave-sequential-probe.test.js"
+        ],
+        "assertions": [
+          "(combat.cleaveSources = combat.cleaveSources || []).push({ value: _cv, label: `Cleave ${_cv} (passive)` });",
+          "(combat.cleaveSources = combat.cleaveSources || []).push({ value: _cv, label: `Cleave ${_cv} (surge)` });",
+          "(combat.cleaveSources = combat.cleaveSources || []).push({ value: _kdfX, label: `Cleave ${_kdfX} (Krayt Dragon Fury)` });",
+          "(combat.cleaveSources = combat.cleaveSources || []).push({ value: _dsCv, label: `Cleave ${_dsCv} (Darksaber Blast→Cleave)` });",
+          "const cleaveQueue = Array.isArray(combat.cleaveSources) && combat.cleaveSources.length > 0",
+          "export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, deps)",
+          "const nextSource = cleaveQueue.shift();"
+        ]
+      },
+      "notes": "Per-attack Cleave sources are tracked as combat.cleaveSources at every accumulation site (passive, surge, Krayt Dragon Fury, Darksaber Blast→Cleave). applyDamageAndFinishCombat builds pending.cleaveQueue, pops the first entry for the initial prompt, and handleCleaveTarget re-prompts sequentially for each subsequent source with a freshly-recomputed eligible-target set via the shared computeCleaveEligibleTargets helper.",
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-CLV-006",
@@ -4215,7 +4239,8 @@
         "lines": [
           1791,
           1818
-        ]
+        ],
+        "sha256": "7544c4dd6895ac24c6170821355634f347c4b1bba96fae9f1c8408c52b722f51"
       },
       "summary": "When a Massive figure pushes other figures as a result of ending its movement, the Mobile keyword on a pushed figure affects the push and where the pushed figure can end movement.",
       "scope": "skirmish",
@@ -4229,12 +4254,12 @@
           "src/game/movement.js"
         ],
         "assertions": [
-          "getMovementKeywords returns new Set(raw.map(lowercase))",
+          "return new Set(raw.map((k) => String(k).toLowerCase()));",
           "const isMobile = keywords.has('mobile');",
           "ignoreBlocking: isMassive || isMobile",
           "const profile = getMovementProfile(dcName, figureKey, game);",
           "const blocked = !profile.ignoreBlocking && [...footprint].some((cell) => board.blockingSet.has(cell));",
-          "pushFigureToNearestValid fallback when validSpaces.length === 0"
+          "if (validSpaces.length === 0) {"
         ]
       },
       "reviewedBy": {

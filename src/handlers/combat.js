@@ -3679,7 +3679,7 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
       const pier = p.match(/^pierce\s+(\d+)$/i);      if (pier)   { combat.bonusPierce    = (combat.bonusPierce    || 0) + parseInt(pier[1],   10); continue; }
       const surg = p.match(/^\+(\d+)\s+surge$/);      if (surg)   { combat.surgeBonus     = (combat.surgeBonus     || 0) + parseInt(surg[1],   10); continue; }
       const blas = p.match(/^blast\s+(\d+)$/);        if (blas)   { combat.bonusBlast     = (combat.bonusBlast     || 0) + parseInt(blas[1],   10); continue; }
-      const clv  = p.match(/^cleave\s+(\d+)$/);       if (clv)    { combat.passiveCleave  = (combat.passiveCleave  || 0) + parseInt(clv[1],    10); continue; }
+      const clv  = p.match(/^cleave\s+(\d+)$/);       if (clv)    { const _cv = parseInt(clv[1], 10); combat.passiveCleave  = (combat.passiveCleave  || 0) + _cv; (combat.cleaveSources = combat.cleaveSources || []).push({ value: _cv, label: `Cleave ${_cv} (passive)` }); continue; }
       if (p === 'bleed')        { combat.bonusConditions = (combat.bonusConditions || []).concat(['Bleed']); continue; }
       if (p === 'professional') { combat.rerollOneAttackDie = (combat.rerollOneAttackDie || 0) + 1; continue; }
     }
@@ -4744,7 +4744,11 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.conditions?.length) combat.surgeConditions = (combat.surgeConditions || []).concat(mod.conditions);
       combat.surgeBlast = (combat.surgeBlast || 0) + (mod.blast ?? 0);
       combat.surgeRecover = (combat.surgeRecover || 0) + (mod.recover ?? 0);
-      combat.surgeCleave = (combat.surgeCleave || 0) + (mod.cleave ?? 0);
+      if (mod.cleave) {
+        const _cv = mod.cleave ?? 0;
+        combat.surgeCleave = (combat.surgeCleave || 0) + _cv;
+        (combat.cleaveSources = combat.cleaveSources || []).push({ value: _cv, label: `Cleave ${_cv} (surge)` });
+      }
       // Cancel: remove N block results from defender (like Pierce but applied to results)
       if (mod.surgeCancel) combat.surgeCancel = (combat.surgeCancel || 0) + mod.surgeCancel;
       // Named surge flags
@@ -4844,7 +4848,10 @@ export async function handleCombatSurge(interaction, ctx) {
         if (_kdfHas) {
           const _kdfX = combat.attackRoll?.surge ?? 0;
           if (mod.surgeComplex === 'cleave x') {
-            combat.surgeCleave = (combat.surgeCleave || 0) + _kdfX;
+            if (_kdfX > 0) {
+              combat.surgeCleave = (combat.surgeCleave || 0) + _kdfX;
+              (combat.cleaveSources = combat.cleaveSources || []).push({ value: _kdfX, label: `Cleave ${_kdfX} (Krayt Dragon Fury)` });
+            }
             await thread.send(`**Krayt Dragon Fury** — Cleave ${_kdfX} (${_kdfX} Surge rolled).`).catch(discordCatch);
           } else if (mod.surgeComplex === 'recover x') {
             combat.surgeRecover = (combat.surgeRecover || 0) + _kdfX;
@@ -5256,6 +5263,46 @@ export async function handleCleaveTarget(interaction, ctx) {
   } catch {}
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (cleaveMsgId) embedRefreshMsgIds.add(cleaveMsgId);
+  // CRR-CLV-005: if more Cleave sources remain, re-prompt with the next
+  // source's value and a fresh eligible-target list (defeated figures drop out
+  // naturally; surviving prior-cleaved targets remain eligible since each
+  // Cleave independently chooses its target per the rule).
+  const cleaveQueue = Array.isArray(pending.cleaveQueue) ? pending.cleaveQueue.slice() : [];
+  if (cleaveQueue.length > 0) {
+    const {
+      computeCleaveEligibleTargets: ctxComputeCleaveEligibleTargets,
+      getCleaveTargetButtons: ctxGetCleaveTargetButtons,
+      getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN, hasLineOfSight, getFigureLabel,
+    } = ctx;
+    if (ctxComputeCleaveEligibleTargets && ctxGetCleaveTargetButtons) {
+      const defPN = pending.defenderPlayerNum ?? opponentPlayerNum(pending.attackerPlayerNum);
+      const nextTargets = ctxComputeCleaveEligibleTargets(game, pending.combat, defPN, {
+        getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN, hasLineOfSight, getFigureLabel,
+      });
+      if (nextTargets.length > 0) {
+        const nextSource = cleaveQueue.shift();
+        const cThread = await fetchCombatThread(client, pending.combat.combatThreadId);
+        game.pendingCleave = {
+          ...pending,
+          surgeCleave: nextSource.value,
+          sourceLabel: nextSource.label,
+          cleaveQueue,
+          targets: nextTargets,
+          initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
+        };
+        if (cThread) {
+          const nextRows = ctxGetCleaveTargetButtons(game.gameId, nextTargets);
+          await cThread.send(sanitizeMentions({
+            content: `**${nextSource.label}:** <@${pending.ownerId}> \u2014 Choose one eligible target to apply cleave damage:`,
+            allowedMentions: { users: [pending.ownerId] },
+            components: nextRows,
+          })).catch(discordCatch);
+        }
+        saveGames();
+        return;
+      }
+    }
+  }
   delete game.pendingCleave;
   const { checkPostCombatSurges } = ctx;
   if (checkPostCombatSurges) {

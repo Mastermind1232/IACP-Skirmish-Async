@@ -21,6 +21,8 @@ const COMBAT_DEPS = [
   'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
   'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage',
   'sendBleedingPrompt', 'processFigureDefeat',
+  'getMapData', 'getEffectiveMapSpaces', 'isWithinN', 'getFigureLabel',
+  'computeCleaveEligibleTargets', 'getCleaveTargetButtons',
 ];
 
 const CONTEXT_GROUPS = {
