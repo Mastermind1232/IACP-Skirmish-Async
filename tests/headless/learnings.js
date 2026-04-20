@@ -21,7 +21,7 @@ const GAMMA = 0.95;          // Discount factor
 let ALPHA = 0.001;           // Base learning rate (scheduled — see getEffectiveAlpha)
 const ALPHA_TAU = 3000;      // Inverse-sqrt half-life in games
 const ALPHA_FLOOR = 0.0001;  // Minimum LR (10% of base)
-const HIDDEN_SIZE = 64;      // Hidden layer width (Phase 2: 32→64)
+const HIDDEN_SIZE = 128;     // Hidden layer width (Phase D capacity bump: 64→128)
 const DELTA_CLAMP = 1.0;     // Clips TD error magnitude
 const TARGET_UPDATE_INTERVAL = 500; // Sync target net every N updates
 const N_STEP = 4;            // N-step returns — multi-step credit assignment (was 1)
@@ -97,7 +97,7 @@ const REPLAY_MIN_SIZE = 256;        // Min buffer fill before replay starts
 // over NUM_ACTIONS (23) abstract action types. z ∈ {-1, 0, +1} is the final
 // game outcome from the decision-maker's perspective. Fed into policyUpdate
 // for joint value-MSE + policy-CE training alongside DQN replayUpdate.
-const POLICY_BUFFER_SIZE = 10000;
+const POLICY_BUFFER_SIZE = 50000;
 const POLICY_BATCH_SIZE = 32;
 const POLICY_UPDATES_PER_GAME = 4;
 const POLICY_MIN_SIZE = 64;         // smaller than DQN min; policy samples are per-decision not per-step
