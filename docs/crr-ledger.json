@@ -8657,13 +8657,35 @@
         "lines": [
           1632,
           1633
-        ]
+        ],
+        "sha256": "e1693fbac2ea3a5efb43e57cc7d4a23cc19a91abc1adb314cd39475598f0f7fe"
       },
       "summary": "If mission rules have an attribute icon in parentheses after the target of an interact, the figure must pass the corresponding attribute test to resolve the effect.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/interact.js",
-      "notes": "Attribute-gated interact (e.g., (Tech) or (Insight) in mission rules) is implemented per-mission in skirmish missions that use it, but no general oracle asserts 'interact resolves only on passed attribute test'. Per-mission attribute-test gates (ATT section) are covered; the interact-gate binding is not explicitly pinned. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "N/A — no skirmish mission uses attribute-gated interact (vacuously satisfied)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-iact-no-attribute-test-probe.test.js"
+        ],
+        "assertions": [
+          "no mission card may encode an attribute-icon-gated interact — CRR-IACT-005",
+          "no mission may require an attribute test — CRR-IACT-005",
+          "src/handlers/interact.js must not branch on attribute tests — CRR-IACT-005",
+          "interact resolution must go through the legal-options helper — CRR-IACT-005",
+          "no attribute-test conditional may gate interact resolution — CRR-IACT-005",
+          "CRR-ELI-004 must be exempt (attribute tests are campaign-only) — CRR-IACT-005 context"
+        ]
+      },
+      "seeAlso": [
+        "CRR-ELI-004"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "Attribute tests are a campaign mechanic (pinned exempt at CRR-ELI-004). No skirmish mission in data/mission-cards.json encodes an attribute-icon-gated interact — the four IACP tokens (Tech/Insight/Strength/Wisdom) are absent from the entire data tree. The interact handler in src/handlers/interact.js has no attribute-test branch. Rule is vacuously satisfied in skirmish scope."
     },
     {
       "id": "CRR-IACT-006",
