@@ -10506,13 +10506,34 @@
         "lines": [
           974,
           975
-        ]
+        ],
+        "sha256": "8722cffc2733fab11462e3f6eb6f189cb7c34078616e9e1000471286d19b37e2"
       },
       "summary": "A player controls a tile if at least one friendly figure occupies it and no hostile figure occupies it; shared occupation → no one controls.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/control.js",
-      "notes": "Tile control used in mission scoring (e.g., zone-control missions). Functionally exercised by mission scoring probes but no isolated oracle pins \"friendly+no-hostile = control\"."
+      "status": "covered",
+      "implementationArea": "src/game/board-helpers.js (getSpaceController, countTerminalsControlledByPlayer, getPlayerOccupiedCellsForControl); src/game/mission-rules.js (vpPerControlledDeploymentZone)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-ctrl-tile-control-probe.test.js",
+          "src/game/board-helpers.js",
+          "src/game/mission-rules.js"
+        ],
+        "assertions": [
+          "001a: source — getSpaceController uses the present-and-no-hostile shape (returns 1, 2, or null)",
+          "001b: source — countTerminalsControlledByPlayer uses the same shape",
+          "001c: source — vpPerControlledDeploymentZone uses the count-based equivalent (present-and-no-hostile)",
+          "001d: source — all three sites source cells from the SAME helper getPlayerOccupiedCellsForControl",
+          "001e: source — getPlayerOccupiedCellsForControl excludes companion figures that do not count for control",
+          "001f: source — rule intent is explicitly documented at the deployment-zone scoring site"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      },
+      "notes": "Three control-scoring sites (space, terminal, deployment-zone) share one predicate shape: `p1Has && !p2Has` → P1 controls, `p2Has && !p1Has` → P2 controls, else nobody. Shared cell helper excludes companions. Rule verbatim cited in a code comment at the zone-VP site."
     },
     {
       "id": "CRR-CTRL-002",
