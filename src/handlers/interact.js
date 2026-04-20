@@ -80,6 +80,10 @@ export async function handleInteractChoice(interaction, ctx) {
   }
   // F14: Snapshot state before mutate for undo
   const previousContraband = optionId === 'retrieve_contraband' ? game.figureContraband?.[figureKey] : undefined;
+  // RTK-002: snapshot dropped-contraband list so undo can restore a dropped-space pickup
+  const previousDroppedContrabandSpaces = optionId === 'retrieve_contraband' && game.droppedContrabandSpaces
+    ? game.droppedContrabandSpaces.slice()
+    : undefined;
   let previousLaunchPanelState;
   let previousOpenedDoors;
   let previousP1LaunchFlipped;
@@ -111,6 +115,19 @@ export async function handleInteractChoice(interaction, ctx) {
   if (optionId === 'retrieve_contraband') {
     game.figureContraband = game.figureContraband || {};
     game.figureContraband[figureKey] = true;
+    // RTK-002: if picking up a dropped-on-defeat token, consume one dropped-space entry
+    // that the figure is adjacent to / on. Static spawn-coord tokens are unaffected.
+    if (game.droppedContrabandSpaces?.length) {
+      const { getFigureAdjacentCoordsFromSet } = await import('../game/board-helpers.js');
+      const { toLowerSet } = await import('../game/coords.js');
+      const droppedSet = toLowerSet(game.droppedContrabandSpaces);
+      const hits = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, droppedSet);
+      if (hits.length) {
+        const consumed = String(hits[0]).toLowerCase();
+        const idx = game.droppedContrabandSpaces.indexOf(consumed);
+        if (idx >= 0) game.droppedContrabandSpaces.splice(idx, 1);
+      }
+    }
     logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** retrieved **${tokenLabel}**!`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId.startsWith('launch_panel_')) {
     const parts = optionId.replace('launch_panel_', '').split('_');
@@ -147,6 +164,7 @@ export async function handleInteractChoice(interaction, ctx) {
       figureKey,
       previousRemaining,
       previousContraband,
+      previousDroppedContrabandSpaces,
       previousLaunchPanelState,
       previousOpenedDoors,
       previousP1LaunchFlipped,

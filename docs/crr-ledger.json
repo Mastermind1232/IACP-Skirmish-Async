@@ -12452,13 +12452,32 @@
         "lines": [
           2390,
           2392
-        ]
+        ],
+        "sha256": "44bed490b3ed0603899f730107d785a72d7880aeb6d2241ee74cbce824ebf2f0"
       },
       "summary": "A carried token cannot be retrieved by others or dropped voluntarily; on figure defeat, carried tokens drop in the figure's space.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/interact.js",
-      "notes": "Token-drop-on-defeat. Mission-specific (e.g., capture-the-flag variants); no dedicated oracle."
+      "status": "covered",
+      "implementationArea": "src/engine/defeat-handler.js",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      },
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "src/engine/defeat-handler.js",
+          "src/game/board-helpers.js",
+          "src/handlers/interact.js",
+          "tests/domain/oracle/phase-d-rtk-002-token-drop-on-defeat-probe.test.js"
+        ],
+        "assertions": [
+          "droppedContrabandSpaces",
+          "wasCarryingContraband",
+          "mech?.type === 'carry'",
+          "delete game.figureContraband[figureKey]"
+        ]
+      }
     },
     {
       "id": "CRR-RTK-003",

@@ -95,8 +95,27 @@ export async function processFigureDefeat(game, opts, deps) {
     }
   }
 
+  // 0. Capture position + carry state BEFORE removing (needed for RTK-002 drop).
+  const lastPos = game.figurePositions?.[defeatedPlayerNum]?.[figureKey] || null;
+  const wasCarryingContraband = !!(game.figureContraband?.[figureKey]);
+
   // 1. Remove position + conditions + device tokens
   removeFigurePosition(game, defeatedPlayerNum, figureKey);
+
+  // 1b. CRR RTK-002: carried tokens drop in the defeated figure's space.
+  //     Mos Eisley Outskirts B (Smuggled Goods) is the current skirmish
+  //     substrate; gated on mission mechanics so non-carry missions are unaffected.
+  if (wasCarryingContraband) {
+    const mech = game?.selectedMission?.mechanics;
+    if (mech?.type === 'carry' && lastPos) {
+      game.droppedContrabandSpaces = game.droppedContrabandSpaces || [];
+      const norm = String(lastPos).toLowerCase();
+      if (!game.droppedContrabandSpaces.includes(norm)) {
+        game.droppedContrabandSpaces.push(norm);
+      }
+    }
+    delete game.figureContraband[figureKey];
+  }
 
   // 2. Calculate and award VP
   let vp = 0;

@@ -281,8 +281,18 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
 
   if (interactLabel && mech?.type === 'carry') {
     const missionSide = variant === 'a' ? 'missionA' : 'missionB';
-    if (!game.figureContraband?.[figureKey] && isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, missionSide)) {
-      options.push({ id: 'retrieve_contraband', label: interactLabel, missionSpecific: true });
+    const alreadyCarrying = !!game.figureContraband?.[figureKey];
+    if (!alreadyCarrying) {
+      let eligible = isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, missionSide);
+      // CRR RTK-002: dropped-on-defeat tokens are also retrievable.
+      if (!eligible) {
+        const dropped = game.droppedContrabandSpaces || [];
+        if (dropped.length) {
+          const droppedSet = toLowerSet(dropped);
+          eligible = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, droppedSet).length > 0;
+        }
+      }
+      if (eligible) options.push({ id: 'retrieve_contraband', label: interactLabel, missionSpecific: true });
     }
   }
 
