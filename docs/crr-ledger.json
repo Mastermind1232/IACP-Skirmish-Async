@@ -6683,8 +6683,11 @@
       },
       "summary": "For abilities that refer to adjacency, the spaces that share an edge with a door are the only spaces considered adjacent to that door; for distance abilities, the door is considered to occupy each space with which it shares an edge.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Door-as-target-for-adjacency/distance abilities has no oracle pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-AOJ-004"
+      ],
+      "notes": "DOORS-section restatement of CRR-AOJ-004 (ATTACKING OBJECTS). AOJ-004 already pins the edge-sharing-adjacency and the door-occupies-each-adjacent-space rules for doors via src/game/los.js."
     },
     {
       "id": "CRR-DOR-008",
