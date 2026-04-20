@@ -6,6 +6,7 @@ import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js'
 import { getDcStats } from '../data-loader.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { cardNameEquals } from '../game/card-names.js';
+import { sumSquadDcCost } from '../game/player-helpers.js';
 
 /**
  * Parity with setup.js applySetupAttachment's Lie in Ambush branch.
@@ -268,14 +269,8 @@ export async function runDraftRandom(game, client, deps, options = {}) {
 
   // Initiative + deployment zone — CRR: lower-cost squad chooses, tie → random.
   if (!game.initiativeDetermined) {
-    const squadCost = (squad) => (squad?.dcList || []).reduce((sum, entry) => {
-      const name = typeof entry === 'string' ? entry.replace(/^\[|\]$/g, '') : entry;
-      const stats = getDcStats(name) || getDcStats(`[${name}]`)
-        || getDcStats(`${name} (Regular)`) || getDcStats(`${name} (Elite)`);
-      return sum + (stats?.cost ?? 0);
-    }, 0);
-    const p1Cost = squadCost(game.player1Squad);
-    const p2Cost = squadCost(game.player2Squad);
+    const p1Cost = sumSquadDcCost(game.player1Squad, getDcStats);
+    const p2Cost = sumSquadDcCost(game.player2Squad, getDcStats);
     let winner;
     if (p1Cost < p2Cost) winner = game.player1Id;
     else if (p2Cost < p1Cost) winner = game.player2Id;

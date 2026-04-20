@@ -26,8 +26,8 @@ const BRIDGE_SRC = readFileSync(resolve(ROOT, 'src/engine/setup-bridge.js'), 'ut
 describe('PROBE-PD-SKMS-002: initiative = lower-cost squad, tied → random', () => {
   it('002a: handler — Discord setup sums both squad costs before picking winner', () => {
     assert.match(SETUP_SRC,
-      /const p1Cost = squadCost\(game\.player1Squad\);\s*\n\s*const p2Cost = squadCost\(game\.player2Squad\);/,
-      'handleInitiativeRoll must compute both squad costs — CRR-SKMS-002');
+      /const p1Cost = sumSquadDcCost\(game\.player1Squad, lookup\);\s*\n\s*const p2Cost = sumSquadDcCost\(game\.player2Squad, lookup\);/,
+      'handleInitiativeRoll must compute both squad costs via sumSquadDcCost — CRR-SKMS-002');
   });
 
   it('002b: handler — lower-cost path assigns initiative to the cheaper squad', () => {

@@ -8,6 +8,26 @@ export function getInitiativePlayerNum(game) {
   return game.initiativePlayerId === game.player1Id ? 1 : 2;
 }
 
+// ── Squad cost helper ───────────────────────────────────────────────────────
+
+/**
+ * Sum the deployment-card costs for a squad. Handles bracketed attachment
+ * names, (Regular)/(Elite) variants, and missing costs gracefully.
+ * Used for CRR SKIRMISH SETUP Step 2 initiative (lower-cost chooses).
+ * @param {{ dcList?: Array }} squad
+ * @param {(name: string) => ({ cost?: number } | null | undefined)} statsLookup
+ */
+export function sumSquadDcCost(squad, statsLookup) {
+  return (squad?.dcList || []).reduce((sum, entry) => {
+    const name = typeof entry === 'string' ? entry.replace(/^\[|\]$/g, '') : entry;
+    const stats = statsLookup(name)
+      || statsLookup(`[${name}]`)
+      || statsLookup(`${name} (Regular)`)
+      || statsLookup(`${name} (Elite)`);
+    return sum + (stats?.cost ?? 0);
+  }, 0);
+}
+
 // Player-number property accessors — eliminates `pn === 1 ? game.p1X : game.p2X` ternaries.
 
 // ── Getters (read-only access) ──────────────────────────────────────────────

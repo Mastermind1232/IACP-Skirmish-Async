@@ -17,7 +17,7 @@ import {
   getPlayerId, getSquad, getDcList, getDcMessageIds, getHandChannelId, getPlayAreaId,
   dcAttachmentsKey, ccDeckKey, ccHandKey,
   deployLabelsKey as _deployLabelsKey, deployMetadataKey as _deployMetadataKey,
-  getInitiativePlayerNum, opponentPlayerNum,
+  getInitiativePlayerNum, opponentPlayerNum, sumSquadDcCost,
 } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, isFigurelessDc } from '../game/index.js';
 import { stripBrackets, cardNameEquals } from '../game/card-names.js';
@@ -858,16 +858,9 @@ export async function handleDetermineInitiative(interaction, ctx) {
   // strategic choice) and fall back to random on a tie.
   if (!winner) {
     const dcEffects = getDcEffects();
-    const squadCost = (squad) => (squad?.dcList || []).reduce((sum, entry) => {
-      const name = typeof entry === 'string' ? entry.replace(/^\[|\]$/g, '') : entry;
-      const stats = dcEffects[name]
-        || dcEffects[`[${name}]`]
-        || dcEffects[`${name} (Regular)`]
-        || dcEffects[`${name} (Elite)`];
-      return sum + (stats?.cost ?? 0);
-    }, 0);
-    const p1Cost = squadCost(game.player1Squad);
-    const p2Cost = squadCost(game.player2Squad);
+    const lookup = (n) => dcEffects[n];
+    const p1Cost = sumSquadDcCost(game.player1Squad, lookup);
+    const p2Cost = sumSquadDcCost(game.player2Squad, lookup);
     if (p1Cost < p2Cost) winner = game.player1Id;
     else if (p2Cost < p1Cost) winner = game.player2Id;
     else winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
