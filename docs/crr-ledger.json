@@ -7384,12 +7384,35 @@
         "lines": [
           2029,
           2031
-        ]
+        ],
+        "sha256": "fabe10bf2aa479b153fd8361e583762fed4441543b276d8acf6b33c1a1e54c34"
       },
       "summary": "Mission tokens represent objects, people, or points of interest; they have no inherent effects and act as specified in the mission.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Mission-token-as-mission-specific-effect is definitional; no engine pin names mission tokens generically. Phase-D gap."
+      "status": "covered",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-msn-mission-tokens-no-inherent-effects-probe.test.js",
+          "src/game/mission-rules.js",
+          "src/data-loader.js",
+          "data/map-tokens.json"
+        ],
+        "assertions": [
+          "map-tokens.json must declare >=6 token types across all missions",
+          "must not carry behavioral fields",
+          "mission-specific token rule",
+          "mission-rules.js must not contain a generic token-effect dispatcher",
+          "getMissionRules must pull per-variant rules from missionCardsData",
+          "no src file may declare a generic token-effect helper",
+          "ancillaryTokens must use named effect keys, not generic"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "Pinned via invariant_pin: mission tokens carry only positional/label/image data in data/map-tokens.json (no effect/trigger/action/onEnter fields on any of the 6+ tokenTypes entries). All token behavior is mission-scoped, dispatched from src/game/mission-rules.js via per-mission `rules.*` config (vpPerLaunchPanelControlled, vpPerContrabandInDeploymentZone, vpForControllingNamedArea, vpPerTokenForControllingCell, placeTokensOnCrates) fetched by getMissionRules(mapId, variant) from missionCardsData. No generic getTokenEffect/applyTokenEffect/TOKEN_EFFECTS helper exists in src/. ancillaryTokens container stores only ability-scoped named effects (energyShield, smoke) — never a generic tokenType dispatcher."
     },
     {
       "id": "CRR-MSN-002",
