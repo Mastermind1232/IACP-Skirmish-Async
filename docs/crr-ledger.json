@@ -1737,13 +1737,30 @@
         "lines": [
           484,
           485
-        ]
+        ],
+        "sha256": "fccd369d265114473ac4f689a4f79b0c4fc765d46a96cbdb37c8bbf163074709"
       },
       "summary": "LOS and distance between attacker and target are determined separately; for large figures, the two determinations may use different spaces.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/spatial.js",
-      "notes": "The LOS-vs-distance independence rule is not pinned by a named assertion. Large-figure any-space choice is covered by LOS-003 on the LOS side, but the corresponding distance-side any-space behavior has no direct probe. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/engine/available-actions.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-atk-los-distance-independence-probe.test.js"
+        ],
+        "assertions": [
+          "025a: source — distance iteration is a standalone min-reduction over attacker-fp × target-fp",
+          "025b: source — LOS iteration is a standalone first-hit search over attacker-fp × target-fp",
+          "025c: source — distance and LOS loops are separated (distance computed, range gate applied, then LOS computed)",
+          "025d: source — the distance loop does NOT short-circuit on LOS; the LOS loop does NOT record distance",
+          "025e: source — target-footprint cells are enumerated for multi-cell (non-1x1) targets"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ATK-026",
