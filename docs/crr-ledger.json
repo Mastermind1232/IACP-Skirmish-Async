@@ -4852,8 +4852,11 @@
       },
       "summary": "Line of sight can be traced through impassable terrain.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "LOS-through-impassable rule has no named assertion pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "LOS ignores terrain-cell type by construction: hasLineOfSight reads only mapSpaces.blocking (for cell blocking) and mapSpaces.impassableEdges (for walls), never consulting the terrain map for difficult/impassable tagging. DT-003 pins this invariant for difficult terrain; the same helper serves any non-blocking non-wall terrain type, including impassable.",
+      "seeAlso": [
+        "CRR-DT-003"
+      ]
     },
     {
       "id": "CRR-IT-004",
