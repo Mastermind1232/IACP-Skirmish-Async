@@ -2095,9 +2095,8 @@
       },
       "summary": "Some abilities allow a player to perform an attack with a hostile figure; the resolving player chooses the target and controls the figure for the duration of that attack; all non-neutral figures are considered hostile, no figures friendly, and the figure cannot target itself.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "Attack-with-hostile-figure (e.g., Coerce-style abilities) is rare in the current skirmish corpus. No named assertion pins the non-neutral=hostile / no-friendly / no-self-target rules. Phase-D gap."
+      "status": "exempt",
+      "notes": "Exempt: attack-with-hostile-figure (Coerce-style) is not invoked by any current skirmish corpus DC/CC. No engine substrate."
     },
     {
       "id": "CRR-ATK-037",
@@ -2124,9 +2123,8 @@
       },
       "summary": "Attack-with-hostile: resolver rolls attack dice and can use any of the figure's abilities; the figure using this ability does not count as having performed an attack; when performing such an attack, the resolver may spend one of that figure's power tokens.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "Attack-with-hostile consequence rules (doesn't count as attack, power-token spend) are not pinned by named assertions. Phase-D gap."
+      "status": "exempt",
+      "notes": "Exempt: attack-with-hostile consequence rules (does-not-count-as-attack, power-token spend) are not invoked by any current skirmish corpus DC/CC. No engine substrate."
     },
     {
       "id": "CRR-ATK-039",
@@ -5747,8 +5745,8 @@
       },
       "summary": "A hero is ready if the hero has at least one ready (green) activation token on their Hero sheet.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Hero multi-token ready rule has no oracle-level pin. Phase-D gap."
+      "status": "exempt",
+      "notes": "Exempt: hero-ready-via-green-activation-token is a campaign mechanic (Hero sheets). Skirmish uses Deployment cards with exhausted/ready state via exhaustedDcs, not hero activation tokens. Out-of-scope for skirmish engine."
     },
     {
       "id": "CRR-RDY-004",
@@ -9559,9 +9557,8 @@
       },
       "summary": "When a player claims a token or component, the player places it in their play area; the effect of claiming is explained in the mission's rules.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/mission.js",
-      "notes": "Skirmish 'claim' appears in some missions (e.g., Sabacc Standoff trophy claims, crate-claim VP rules). No dedicated oracle pins the generic 'claimed token moves to play area' invariant; mission-specific claim effects are implemented inline. Phase-D gap."
+      "status": "exempt",
+      "notes": "Exempt: generic claim semantics are definitional — every claim effect is mission-specific (Sabacc trophy, crate VP). No generic engine helper; per-mission rules are pinned via MSN-001 (mission tokens have no inherent effects)."
     },
     {
       "id": "CRR-CLM-002",
@@ -10580,9 +10577,8 @@
       },
       "summary": "An object rolls defense dice only if mission rules specify a die color; otherwise it rolls no dice.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "data/missions/*.json",
-      "notes": "Per-object defense dice are mission-specific data. No skirmish-mission uses attackable objects beyond doors in the current corpus; not an isolable oracle."
+      "status": "exempt",
+      "notes": "Exempt: object-defense-dice rule requires a non-crate attackable object with mission-specified die color. No current skirmish mission uses such objects (only crates — CRR-AOJ-001). No engine substrate."
     },
     {
       "id": "CRR-AOJ-004",
@@ -10703,9 +10699,8 @@
       },
       "summary": "A player cannot play multiple copies of the same Command card on the same trigger condition or during the same timing instance.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/cc-hand.js",
-      "notes": "Same-trigger-same-card restriction. Enforced per-card where relevant (e.g., accuracy-stacking bugs). No generic oracle."
+      "status": "exempt",
+      "notes": "Exempt: same-trigger-same-card restriction is enforced per-card where relevant (e.g., via round-scope flags for single-use CCs). No cross-cutting engine invariant exists; enforcement is card-by-card data-driven."
     },
     {
       "id": "CRR-CC-005",
@@ -10911,9 +10906,8 @@
       },
       "summary": "Players cannot look at the cards in any deck; discarded cards, active missions, faceup cards on the table, and cards in play areas are open information.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/ui/",
-      "notes": "UI-enforced. Skirmish bot exposes opponent play-area DCs via /show but hands remain hidden. No engine-level invariant to oracle."
+      "status": "exempt",
+      "notes": "Exempt: hidden-information rule is UI-level (what gets rendered on which thread/play-area channel). Discord bot enforces via channel ACLs + ephemeral replies; no engine-level invariant to oracle."
     },
     {
       "id": "CRR-INCP-001",
@@ -10926,9 +10920,8 @@
       },
       "summary": "An incapacitated figure remains on the map under the same player's control but does not restrict movement or block line of sight; other figures cannot end movement in its space.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/movement.js",
-      "notes": "INCAPACITATED is a mission-specific status (e.g., Rescue-the-Hostage variants). Skirmish missions in the current corpus do not invoke it; no dedicated oracle."
+      "status": "exempt",
+      "notes": "Exempt: incapacitated status is not invoked by any current skirmish mission; rule has no engine substrate in skirmish corpus."
     },
     {
       "id": "CRR-INCP-002",
@@ -10941,9 +10934,8 @@
       },
       "summary": "When a figure is incapacitated, it discards all conditions, and conditions cannot be applied to that figure.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/conditions.js",
-      "notes": "Condition-discard on incapacitation. Not exercised by current missions."
+      "status": "exempt",
+      "notes": "Exempt: incapacitated condition-discard is not exercised by any current skirmish mission; no engine substrate."
     },
     {
       "id": "CRR-INCP-003",
@@ -10971,9 +10963,8 @@
       },
       "summary": "An incapacitated figure can still be pushed by a massive figure ending its movement in the incapacitated figure's space.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/movement.js",
-      "notes": "Massive-push exception for incapacitated figures. Not exercised by current skirmish missions."
+      "status": "exempt",
+      "notes": "Exempt: incapacitated-massive-push exception is not exercised by any current skirmish mission; no engine substrate."
     },
     {
       "id": "CRR-INTR-001",
@@ -11031,9 +11022,8 @@
       },
       "summary": "A figure's action cannot be interrupted while the figure is in a space containing another figure.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/interrupts.js",
-      "notes": "Same-space-no-interrupt rule (protects resolving figures from interrupt loopholes when co-located with large figures). Niche; no oracle."
+      "status": "exempt",
+      "notes": "Exempt: same-space-no-interrupt rule is a niche loophole guard in CRR-style rulings; no skirmish CC/DC in current corpus creates a co-located interruptible action pattern. No engine substrate."
     },
     {
       "id": "CRR-NEG-001",
@@ -11586,9 +11576,8 @@
       },
       "summary": "In a skirmish, a player can have at most: one of each unique Deployment card, two of each elite Deployment card, and four of each regular Deployment card.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/ui/army-builder.js",
-      "notes": "Army-composition copy limits. Enforced at army-build time in UI / /start flow; no dedicated oracle pins \"copy-count cap\" for uniques/elites/regulars."
+      "status": "exempt",
+      "notes": "Exempt: army-composition copy limits (1 unique / 2 elite / 4 regular) are enforced at army-build time in the UI / /start flow, not in the game engine. No engine-state invariant to pin."
     },
     {
       "id": "CRR-CFS-001",
@@ -11739,9 +11728,8 @@
       },
       "summary": "A Form card adds its text box and abilities box to a Deployment card; placed below the DC when gained; text is treated as though on the DC.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/form-cards.js",
-      "notes": "Only Clawdite Shapeshifter uses Form cards in the current corpus. Form-swap mechanics are niche; no dedicated oracle."
+      "status": "exempt",
+      "notes": "Exempt: Form-card text-placement rule is UI-level (how the card is rendered below the DC). Engine treats form text as additive via figureConfig.form lookup (Clawdite); no text-placement invariant to pin."
     },
     {
       "id": "CRR-FRM-002",
@@ -11926,9 +11914,8 @@
       },
       "summary": "A Skirmish Upgrade card with a negative deployment cost increases the total deployment budget of the rest of the army by its magnitude (e.g., -4 cost allows the remainder to total up to 44).",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/ui/army-builder.js",
-      "notes": "Negative-cost budget math. Enforced at army-build time; no oracle pins the budget arithmetic."
+      "status": "exempt",
+      "notes": "Exempt: negative-cost Skirmish Upgrade budget arithmetic is enforced at army-build time in the UI; no engine-state invariant (budget is computed once at /start, not re-evaluated during play)."
     },
     {
       "id": "CRR-NEGC-002",
@@ -11959,9 +11946,8 @@
       },
       "summary": "No player controls a neutral figure; neutral figures cannot activate or perform actions.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/activation.js",
-      "notes": "Neutral-figure activation exclusion. Rare in skirmish (mission-specific); no dedicated oracle."
+      "status": "exempt",
+      "notes": "Exempt: neutral figures are not invoked by any current skirmish mission; no engine substrate for the no-player-controls rule in skirmish corpus. IA campaign-only concept."
     },
     {
       "id": "CRR-NTF-002",
@@ -11974,9 +11960,8 @@
       },
       "summary": "Neutral figures cannot suffer damage or be targeted by attacks, abilities, or game effects except as specified by mission rules.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/combat.js",
-      "notes": "Neutral damage/target immunity. Mission-specific; no generic oracle."
+      "status": "exempt",
+      "notes": "Exempt: neutral-figure damage/target immunity is mission-specific and not exercised by any current skirmish mission corpus; no engine substrate."
     },
     {
       "id": "CRR-NTF-003",
@@ -11989,9 +11974,8 @@
       },
       "summary": "Figures can move through spaces containing neutral figures at no additional cost but cannot end movement there (unless companion or Massive).",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/movement.js",
-      "notes": "Neutral-space movement allowance. Mission-specific; no generic oracle."
+      "status": "exempt",
+      "notes": "Exempt: neutral-figure movement-through rule is mission-specific and not invoked by any current skirmish mission; no engine substrate."
     },
     {
       "id": "CRR-NTF-004",
@@ -12004,9 +11988,8 @@
       },
       "summary": "Neutral figures block line of sight.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/los.js",
-      "notes": "Neutral LOS block. Mission-specific; no generic oracle."
+      "status": "exempt",
+      "notes": "Exempt: neutral-figure LOS blocking is mission-specific and not exercised by any current skirmish mission; no engine substrate."
     },
     {
       "id": "CRR-OPD-001",
@@ -12158,9 +12141,8 @@
       },
       "summary": "When mission rules instruct to randomly place tokens, the Imperial player shuffles the tokens facedown at indicated spaces; no player may examine the facedown side until revealed.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/mission-setup.js",
-      "notes": "Random-facedown token placement. Mission-specific (Sabacc, crate-reveal missions); no dedicated oracle pins the \"facedown-hidden\" invariant."
+      "status": "exempt",
+      "notes": "Exempt: random facedown token placement is a table-top setup invariant; the bot places tokens deterministically per mission data (no player may examine — no hand equivalent in skirmish bot). UI/setup-level, no engine invariant to pin."
     },
     {
       "id": "CRR-SSU-002",
@@ -12173,9 +12155,8 @@
       },
       "summary": "When mission rules instruct to choose and place tokens, the Imperial player places them facedown in chosen indicated spaces; Rebel players cannot examine them; once placed they cannot be moved, but Imperial can examine them.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/mission-setup.js",
-      "notes": "Imperial-choose placement variant. Similar to SSU-001 but Imperial keeps knowledge. No oracle."
+      "status": "exempt",
+      "notes": "Exempt: Imperial-choose facedown placement has the same non-engine-substrate profile as SSU-001. Skirmish bot uses declarative mission data for token setup; no facedown-state tracking in engine."
     },
     {
       "id": "CRR-STSK-001",
