@@ -5563,12 +5563,34 @@
         "lines": [
           1050,
           1061
-        ]
+        ],
+        "sha256": "635ca4372df10942c3d431a63c4aae35a0201684dd608f0c1f638c07aa3477e0"
       },
       "summary": "If a figure is defeated during its activation, its activation ends.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Defeat-ends-activation rule has no named assertion pin (comments exist in tests/domain/oracle/final-sentinels-behavioral.test.js but no describe/it-level anchor). Phase-D gap."
+      "status": "covered",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-def-defeat-ends-activation-probe.test.js",
+          "src/game/player-helpers.js",
+          "src/engine/defeat-handler.js",
+          "src/engine/available-actions.js"
+        ],
+        "assertions": [
+          "removeFigurePosition must delete the figure-position entry — CRR-DEF-005",
+          "processFigureDefeat must remove the defeated figure position — CRR-DEF-005",
+          "getAvailableActions must skip DCs with no surviving figures — CRR-DEF-005",
+          "Move offer must be gated on hasPosition — CRR-DEF-005",
+          "Interact offer must be gated on the figure position — CRR-DEF-005",
+          "Attack target computation must short-circuit to [] when attacker has no position — CRR-DEF-005"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "Defeat is a position-delete: processFigureDefeat Step 1 calls removeFigurePosition, which deletes game.figurePositions[pn][figureKey]. Once position is gone, getAvailableActions offers zero further actions for that figure — Move gated on hasPosition, Interact gated on pos, attack-target computation returns [] on missing attackerPos, and the whole DC is skipped when no survivors remain. Activation therefore terminates naturally for the defeated figure."
     },
     {
       "id": "CRR-DEF-006",
