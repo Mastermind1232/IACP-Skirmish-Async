@@ -1557,13 +1557,33 @@
         "lines": [
           470,
           470
-        ]
+        ],
+        "sha256": "25dbc5fc7b17311b0c2116620067bc2bbf2a6cf7d361834765ccdfd02a803c27"
       },
       "summary": "If any abilities modify the attack or defense dice pools, they are resolved before rolling (Step 2 setup).",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "pendingOverrideAttackDice pattern implements pre-roll pool modification but no named assertion pins the 'before rolling' timing. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/combat.js (pool-mutation block + single rollAttackDice site)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-atk-pool-mods-before-roll-probe.test.js",
+          "src/handlers/combat.js"
+        ],
+        "assertions": [
+          "018a: source — the attack pool is a single `let dice = [...baseDice];` accumulator",
+          "018b: source — pool mutations are gathered in a single pre-roll block",
+          "018c: source — the rollAttackDice call is uniquely downstream of the mutation block",
+          "018d: source — pendingOverrideAttackDice is consumed BEFORE the roll (rewrites attackInfo, then deletes)",
+          "018e: source — override rewrites attackInfo.dice (not the rolled result)",
+          "018f: source — combat.attackRoll is assigned exclusively from the rollAttackDice result"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      },
+      "notes": "Every attack-pool mutation (bonus dice, remove-max, keep-max, add-yellow-until, pendingOverrideAttackDice) applies to the single `let dice = [...baseDice]` accumulator before the unique rollAttackDice(dice) call. Source-ordering invariant (018c) pins roll-is-downstream; the override-is-consumed-pre-roll ordering (018d) pins the more intricate case. Result assignment (018f) is a direct spread of the roll output."
     },
     {
       "id": "CRR-ATK-019",
