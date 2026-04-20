@@ -7356,13 +7356,31 @@
         "lines": [
           154,
           157
-        ]
+        ],
+        "sha256": "8f13cfa0f133f60a0e5e0ec76f9be0c5ba4ab49d859c0d712ff9cdbf5d32aeb6"
       },
       "summary": "Special actions are denoted by ♦; a single ♦ costs one action, two ♦ icons cost two actions but are treated as one ability; special actions containing multiple attacks or a move+attack still cost only the listed number of actions.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "Special-action icon cost semantics (1♦ vs 2♦) are encoded in DC data but no named assertion explicitly pins the 'two-icon = two-action cost, one ability' rule. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/dc-play-area.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-act-special-icon-cost-probe.test.js"
+        ],
+        "assertions": [
+          "004a: CC specials tag actionCost: 1",
+          "004b: CC doubles tag actionCost: 2",
+          "004c: DC specials read per-index cost from specialCosts (default 1)",
+          "004d: insufficient-action gate rejects specials that cost more than remaining",
+          "004e: action deduction uses _effectiveActionCost for dc_special_, else 1",
+          "004f: reducer DcActionPerformed subtracts payload.actionCost (default 1)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-ACT-005",
