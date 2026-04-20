@@ -4201,8 +4201,28 @@
       },
       "summary": "When a Massive figure pushes other figures as a result of ending its movement, the Mobile keyword on a pushed figure affects the push and where the pushed figure can end movement.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Mobile-affects-Massive-push interaction has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "notes": "Invariant pin on the keyword→profile→push-destination chain: getMovementKeywords returns the lowercased DC keyword set, getMovementProfile derives isMobile and sets ignoreBlocking = isMassive || isMobile, and pushFigureToNearestValid (used by resolveNextDisplacements fallback when adjacency yields no valid space) builds the profile for the PUSHED figure and gates the blocking-cell rejection behind !profile.ignoreBlocking. Mobile pushed figures therefore can land on blocking-terrain cells that a normal figure cannot. No code change; chain composes correctly today.",
+      "implementationArea": "src/game/movement.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-msv-007-mobile-push-destination-probe.test.js",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "getMovementKeywords returns new Set(raw.map(lowercase))",
+          "const isMobile = keywords.has('mobile');",
+          "ignoreBlocking: isMassive || isMobile",
+          "const profile = getMovementProfile(dcName, figureKey, game);",
+          "const blocked = !profile.ignoreBlocking && [...footprint].some((cell) => board.blockingSet.has(cell));",
+          "pushFigureToNearestValid fallback when validSpaces.length === 0"
+        ]
+      },
+      "reviewedBy": {
+        "name": "crr-ledger-batch-110",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MSV-008",
