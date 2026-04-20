@@ -5994,12 +5994,31 @@
         "lines": [
           1305,
           1306
-        ]
+        ],
+        "sha256": "6ce048de8d921fbf90d3ff86c3640aabbea4dfcf48157c1abdf54c6a5aa9d1d7"
       },
       "summary": "If all Deployment cards or activation tokens belonging to a player are exhausted, the player cannot use abilities that must be used before, during, or after the player's figure activates.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "All-exhausted ability lockout has no named oracle pin. Phase-D gap."
+      "status": "covered",
+      "notes": "EXH-005 lockout emerges from activation-state: when all DCs are exhausted, ACTIVATE_DC branch filters out every DC, no activation opens, currentActivationTurnPlayerId stays null, ctx.duringActivation is false — so pre/during/post-activation abilities cannot fire. Enforced structurally, not by a dedicated gate.",
+      "implementationArea": "src/game/cc-timing.js",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      },
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-exh-005-006-exhausted-ability-gate-probe.test.js",
+          "src/engine/available-actions.js",
+          "src/game/cc-timing.js"
+        ],
+        "assertions": [
+          "dcExhaustedState?.get(msgId)",
+          "currentActivationTurnPlayerId === playerId",
+          "if (exhausted) continue;"
+        ]
+      }
     },
     {
       "id": "CRR-EXH-006",
@@ -6008,12 +6027,31 @@
         "lines": [
           1307,
           1308
-        ]
+        ],
+        "sha256": "e4fe922770c1566ef032198a6f464209a0005498540bb16604bb89701d827d09"
       },
       "summary": "Abilities on exhausted cards can be used as long as the abilities do not require the player to exhaust the card to use the ability.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Non-exhaust-cost abilities remaining usable on exhausted cards has no oracle pin. Phase-D gap."
+      "status": "covered",
+      "notes": "EXH-006 upheld by absence: only the ACTIVATE_DC branch reads dcExhaustedState (single read site in available-actions.js); cc-timing.js routes no timing tag through dcExhaustedState. Abilities that do not require exhausting are thus unaffected by a card being exhausted.",
+      "implementationArea": "src/engine/available-actions.js",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      },
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-exh-005-006-exhausted-ability-gate-probe.test.js",
+          "src/engine/available-actions.js",
+          "src/game/cc-timing.js"
+        ],
+        "assertions": [
+          "dcExhaustedState?.get(msgId)",
+          "currentActivationTurnPlayerId === playerId",
+          "if (exhausted) continue;"
+        ]
+      }
     },
     {
       "id": "CRR-DEPL-001",
@@ -12037,13 +12075,33 @@
         "lines": [
           1375,
           1377
-        ]
+        ],
+        "sha256": "a3844f89fed024ab669fd59f88226349d813ae337a6f44cf213938e916c68e44"
       },
       "summary": "Form Cards are unique: only 1 copy of each Form card can be in play at a time; in skirmish, only 1 copy per army.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/form-cards.js",
-      "notes": "Form-card uniqueness (M28 in testing audit is the open gap for Clawdite form uniqueness — still OPEN per memory). Gap confirmed."
+      "status": "covered",
+      "implementationArea": "src/game/figure-config.js",
+      "notes": "Covered by direct oracle — per-team form uniqueness enforced by getFormsChosenByTeamClawdites. Pick UI filters taken forms; commit-time re-check rejects with error. Skirmish has no non-Clawdite form-consumer, so per-team uniqueness = per-army uniqueness.",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      },
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-frm-003-form-uniqueness-probe.test.js",
+          "src/game/figure-config.js",
+          "src/handlers/setup.js",
+          "src/handlers/round.js"
+        ],
+        "assertions": [
+          "getFormsChosenByTeamClawdites",
+          "Clawdite Shapeshifter",
+          "already chosen by another Clawdite on your team",
+          "!takenForms.has(n)"
+        ]
+      }
     },
     {
       "id": "CRR-LCK-001",
