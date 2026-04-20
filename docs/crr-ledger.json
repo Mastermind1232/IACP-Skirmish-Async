@@ -2995,8 +2995,11 @@
       },
       "summary": "For figures/objects in blocking terrain, distance is measured to the space they occupy (ignoring that terrain); a distance of 1 makes them adjacent even though their space is not adjacent to the target's space.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Blocking-terrain-occupant counting-spaces carve-out has no named assertion pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Section-restatement of ADJ-007: distance-to-blocking-terrain-occupant uses pure Manhattan (getRange), unaffected by terrain. ADJ-007 pins getRange as Manhattan-only and isAdjacentCoords as getRange===1 — same implementation serves both the adjacency (distance=1) and general counting-spaces cases. CS-005 is the COUNTING SPACES-section restatement of the same rule pinned in ADJ-007.",
+      "seeAlso": [
+        "CRR-ADJ-007"
+      ]
     },
     {
       "id": "CRR-FOC-001",
