@@ -49,41 +49,50 @@ function buildCtx(overrides = {}) {
 
 // ── PROBE-VP-010: vpPerControlledDeploymentZone ───────────────────────────
 
-describe('PROBE-VP-010: vpPerControlledDeploymentZone — strict majority per zone', () => {
+describe('PROBE-VP-010: vpPerControlledDeploymentZone — friendly present AND no hostile present (CRR CONTROL)', () => {
   const RULES = {
     vpPerControlledDeploymentZone: { vp: 3 },
   };
 
-  it('010a: P1 has 2 figures vs P2 has 1 in red zone → P1 gains 3 VP', async () => {
+  it('010a: P1 has 2 figures and P2 has 1 in red zone → hostile present, NO control → 0 VP', async () => {
     const game = buildGame(
-      // P1: 2 figures in red zone
       { 'Stormtrooper (Regular)-0-0': 'p19', 'Stormtrooper (Regular)-0-1': 'p20' },
-      // P2: 1 figure in red zone
       { 'Rebel Saboteur-0-0': 'q19' },
+    );
+    const ctx = buildCtx();
+
+    await runEndOfRoundRules(game, MAP_ID, VARIANT, RULES, ctx);
+
+    assert.equal(game.player1VP.objectives, 0,
+      'P1 gains 0 VP — CRR requires "no hostile figures in any space"; P2 is present');
+    assert.equal(game.player2VP.objectives, 0, 'P2 gains 0 VP — hostile present too');
+  });
+
+  it('010b: P1 alone in red zone → control → P1 gains 3 VP', async () => {
+    const game = buildGame(
+      { 'Stormtrooper (Regular)-0-0': 'p19', 'Stormtrooper (Regular)-0-1': 'p20' },
+      {},
     );
     const ctx = buildCtx();
 
     await runEndOfRoundRules(game, MAP_ID, VARIANT, RULES, ctx);
 
     assert.equal(game.player1VP.objectives, 3,
-      'P1 gains 3 VP for strict majority in red zone (2 > 1)');
-    assert.equal(game.player2VP.objectives, 0,
-      'P2 gains 0 VP — no majority in any zone');
+      'P1 controls red zone (friendly present, no hostile) → 3 VP');
+    assert.equal(game.player2VP.objectives, 0, 'P2 has no figures in either zone');
   });
 
-  it('010b: equal figures in red zone (1 vs 1) → tie → no VP for either', async () => {
+  it('010c: 1 vs 1 in red zone → hostile present → no control for either', async () => {
     const game = buildGame(
-      // P1: 1 figure in red zone
       { 'Stormtrooper (Regular)-0-0': 'p19' },
-      // P2: 1 figure in red zone
       { 'Rebel Saboteur-0-0': 'q19' },
     );
     const ctx = buildCtx();
 
     await runEndOfRoundRules(game, MAP_ID, VARIANT, RULES, ctx);
 
-    assert.equal(game.player1VP.objectives, 0, 'P1 gains 0 VP — tie in red zone');
-    assert.equal(game.player2VP.objectives, 0, 'P2 gains 0 VP — tie in red zone');
+    assert.equal(game.player1VP.objectives, 0, 'P1 gains 0 VP — hostile present');
+    assert.equal(game.player2VP.objectives, 0, 'P2 gains 0 VP — hostile present');
   });
 });
 

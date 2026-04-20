@@ -266,9 +266,20 @@ export async function runDraftRandom(game, client, deps, options = {}) {
   populateLieInAmbushSetAsideFromAttachments(game, 1);
   populateLieInAmbushSetAsideFromAttachments(game, 2);
 
-  // Initiative + deployment zone
+  // Initiative + deployment zone — CRR: lower-cost squad chooses, tie → random.
   if (!game.initiativeDetermined) {
-    const winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
+    const squadCost = (squad) => (squad?.dcList || []).reduce((sum, entry) => {
+      const name = typeof entry === 'string' ? entry.replace(/^\[|\]$/g, '') : entry;
+      const stats = getDcStats(name) || getDcStats(`[${name}]`)
+        || getDcStats(`${name} (Regular)`) || getDcStats(`${name} (Elite)`);
+      return sum + (stats?.cost ?? 0);
+    }, 0);
+    const p1Cost = squadCost(game.player1Squad);
+    const p2Cost = squadCost(game.player2Squad);
+    let winner;
+    if (p1Cost < p2Cost) winner = game.player1Id;
+    else if (p2Cost < p1Cost) winner = game.player2Id;
+    else winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
     const playerNum = winner === game.player1Id ? 1 : 2;
     game.initiativePlayerId = winner;
     game.initiativeDetermined = true;

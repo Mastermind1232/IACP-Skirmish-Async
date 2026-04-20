@@ -363,8 +363,10 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
   }
 
   // vpPerControlledDeploymentZone: award VP for each deployment zone a player controls.
-  // Control = more figures in the zone than the opponent (strict majority).
-  // Used by Hoth Battle Station A (Inside Job): 3 VP per zone controlled.
+  // CRR CONTROL: "a player Controls a deployment zone if there is at least one
+  // friendly figure in any space of that deployment zone and no hostile figures
+  // in any space of that deployment zone." Used by Hoth Battle Station A
+  // (Inside Job): 3 VP per zone controlled.
   if (rules.vpPerControlledDeploymentZone && mapId) {
     const { vp, vpMessage } = rules.vpPerControlledDeploymentZone;
     if (typeof vp === 'number') {
@@ -381,8 +383,8 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
             if (p1Cells.has(c)) p1Count++;
             if (p2Cells.has(c)) p2Count++;
           }
-          if (p1Count > p2Count) vpByPlayer[1] += vp;
-          else if (p2Count > p1Count) vpByPlayer[2] += vp;
+          if (p1Count > 0 && p2Count === 0) vpByPlayer[1] += vp;
+          else if (p2Count > 0 && p1Count === 0) vpByPlayer[2] += vp;
         }
         for (const pn of [1, 2]) {
           if (vpByPlayer[pn] > 0) {

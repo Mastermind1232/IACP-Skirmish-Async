@@ -10134,13 +10134,32 @@
         "lines": [
           979,
           980
-        ]
+        ],
+        "sha256": "46ffac4a238b452b19016f93b8d9cebf07137e6f6e7d65ebecf8a95cf3b44004"
       },
       "summary": "In a Skirmish, a player controls a deployment zone if they have a figure in any space of the zone and no hostile figure is in any space of the zone.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/control.js",
-      "notes": "Deployment-zone control used by e.g., Moisture Farm mission. Mission-specific scoring; no isolated oracle for the generic zone-control invariant."
+      "status": "covered",
+      "implementationArea": "src/game/mission-rules.js (vpPerControlledDeploymentZone branch in runEndOfRoundRules)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-ctrl-zone-friendly-only-probe.test.js"
+        ],
+        "assertions": [
+          "003a: source — rule evaluates vpPerControlledDeploymentZone with both counts",
+          "003b: source — control predicate is \"friendly present AND opponent absent\"",
+          "003c: source — header doc names the CRR rule verbatim",
+          "003d: behavior — control predicate matches CRR semantics for all 9 count combos",
+          "control must require friendly >=1 AND no hostile in zone — CRR-CTRL-003",
+          "1/1 → hostile present, no control (NOT tie-majority)",
+          "3/1 → hostile present, NO p1 control (was under old strict-majority)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude-opus-4-7",
+        "date": "2026-04-19"
+      }
     },
     {
       "id": "CRR-CTRL-004",
@@ -11121,13 +11140,32 @@
         "lines": [
           1973,
           1974
-        ]
+        ],
+        "sha256": "2df51633390bbb30d762e7f90af79d846c1bb418cb5f0a6f5708cb0d8c47b753"
       },
       "summary": "Setup Step 2 — Determine Initiative: the player with the lowest total Deployment-card cost chooses who begins with the initiative token (random on tie).",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/initiative.js",
-      "notes": "Initial-initiative determination from army costs. Implemented in game-setup; no dedicated oracle pins \"lowest total cost → choice of initiative\"."
+      "status": "covered",
+      "implementationArea": "src/handlers/setup.js (handleInitiativeRoll: lower-cost squad wins, tie → random) + src/engine/setup-bridge.js (headless parity)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-skms-initiative-by-cost-probe.test.js"
+        ],
+        "assertions": [
+          "002a: handler — Discord setup sums both squad costs before picking winner",
+          "002b: handler — lower-cost path assigns initiative to the cheaper squad",
+          "002c: handler — ties fall back to a 50/50 coin flip",
+          "002d: bridge — headless setup also uses lower-cost + random tiebreak",
+          "002e: behavior — pure predicate matches CRR semantics",
+          "handler must award initiative to the lower-cost player — CRR-SKMS-002",
+          "tied-cost fallback must be random — CRR-SKMS-002"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude-opus-4-7",
+        "date": "2026-04-19"
+      }
     },
     {
       "id": "CRR-SKMS-003",

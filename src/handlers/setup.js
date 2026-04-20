@@ -851,9 +851,26 @@ export async function handleDetermineInitiative(interaction, ctx) {
     zoneChooser = game.player2Id;
   }
 
-  // Initiative is always determined by random roll
+  // CRR SKIRMISH SETUP Step 2: "The player who has the lowest total cost of
+  // Deployment cards chooses which player begins the game with the initiative
+  // token. In the case of a tie, players determine initiative randomly."
+  // We auto-assign initiative to the lower-cost player (the near-universal
+  // strategic choice) and fall back to random on a tie.
   if (!winner) {
-    winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
+    const dcEffects = getDcEffects();
+    const squadCost = (squad) => (squad?.dcList || []).reduce((sum, entry) => {
+      const name = typeof entry === 'string' ? entry.replace(/^\[|\]$/g, '') : entry;
+      const stats = dcEffects[name]
+        || dcEffects[`[${name}]`]
+        || dcEffects[`${name} (Regular)`]
+        || dcEffects[`${name} (Elite)`];
+      return sum + (stats?.cost ?? 0);
+    }, 0);
+    const p1Cost = squadCost(game.player1Squad);
+    const p2Cost = squadCost(game.player2Squad);
+    if (p1Cost < p2Cost) winner = game.player1Id;
+    else if (p2Cost < p1Cost) winner = game.player2Id;
+    else winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
   }
 
   const playerNum = winner === game.player1Id ? 1 : 2;
