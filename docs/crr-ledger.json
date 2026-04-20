@@ -8569,13 +8569,28 @@
         "lines": [
           2755,
           2755
-        ]
+        ],
+        "sha256": "481fc8f8b5efefdbe6fb1c56430c5bd1ecdac9d5e48db4bf71736aed9acf78a8"
       },
       "summary": "If using an ability requires a player to pay more VPs than that player has, that player cannot use that ability.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/available-actions.js",
-      "notes": "Ability-legality gate on VP-insufficient state has no named oracle. Phase-D gap — candidate action-surfacing probe."
+      "status": "covered",
+      "implementationArea": "src/game/abilities.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-vps-vp-cost-gate-probe.test.js"
+        ],
+        "assertions": [
+          "004a: source — autoDeductVp gate reads currentVp and short-circuits on shortfall",
+          "004b: source — gate precedes the Phase-2 deductVp call in source order",
+          "004d: source — there is no code path that deducts VP before the affordability check"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-VPS-005",
