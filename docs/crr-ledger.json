@@ -1288,13 +1288,33 @@
         "lines": [
           427,
           429
-        ]
+        ],
+        "sha256": "e1032855242abe38b6b23c32e54398b1dc95bfba31ebfce9daa3ddfa0c354fc8"
       },
       "summary": "When a DC figure performs an attack using an alternate attack pool, they may still trigger their own surge abilities unless the triggering ability states otherwise.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "No named assertion pins 'alternate-pool attack retains DC surge abilities by default'. Biv Close-and-Personal and similar alternate-pool abilities are coded but the default-retention rule is not explicitly probed. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/combat.js (getAttackerSurgeAbilities), src/handlers/combat.js (pendingOverrideAttackDice consumer)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-atk-alt-pool-keeps-surges-probe.test.js",
+          "src/game/combat.js",
+          "src/handlers/combat.js"
+        ],
+        "assertions": [
+          "004a: source — getAttackerSurgeAbilities reads surges keyed on attacker DC (not on dice pool)",
+          "004b: source — the ONLY full opt-out is combat.blockSurgeAbilities (no dice-pool predicate)",
+          "004c: source — the final surge list is base + doubles + bonus (all attacker-DC-derived)",
+          "004d: source — pendingOverrideAttackDice mutates attackInfo only (not the surge set)",
+          "004e: source — explicit opt-out path exists (Tusken Cycler wires blockSurgeAbilities via _pendingBlockSurgeAbilities)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      },
+      "notes": "Surge-ability gathering is decoupled from the dice pool by construction: getAttackerSurgeAbilities keys on attackerDcName (or defenderDcName under Reverse Engineer), never on attackInfo.dice or pendingOverrideAttackDice. The override consumer in handlers/combat.js only rewrites attackInfo.{dice,range,attackType} — it does not touch the DC surge set. The sole full opt-out is an explicit blockSurgeAbilities flag (e.g. Tusken Cycler) wired via overrideDice.blockSurgeAbilities, matching the CRR's 'unless the triggering ability states otherwise' carve-out."
     },
     {
       "id": "CRR-ATK-005",
