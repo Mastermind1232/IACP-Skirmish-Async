@@ -201,6 +201,29 @@ export function validateLedger({ updateShas = false } = {}) {
     if (atom.status === 'covered_by_ref') {
       if (!Array.isArray(atom.seeAlso) || atom.seeAlso.length === 0) {
         errors.push(`[${ctx}] covered_by_ref atom must have non-empty seeAlso`);
+      } else {
+        // Chain must terminate in at least one covered (or transitively covered) atom.
+        // gap or exempt parents break the chain — a covered_by_ref pointing at an
+        // exempt/gap atom is not real coverage (the batch-116/117 audit closed this).
+        const seen = new Set();
+        const reachesCovered = (id) => {
+          if (seen.has(id)) return false;
+          seen.add(id);
+          const target = atomsById.get(id);
+          if (!target) return false;
+          if (target.status === 'covered') return true;
+          if (target.status === 'covered_by_ref' && Array.isArray(target.seeAlso)) {
+            return target.seeAlso.some(reachesCovered);
+          }
+          return false;
+        };
+        const anyChainTerminatesCovered = atom.seeAlso.some(reachesCovered);
+        if (!anyChainTerminatesCovered) {
+          errors.push(
+            `[${ctx}] covered_by_ref seeAlso chain does not terminate in a covered atom ` +
+            `(pointed at ${atom.seeAlso.join(', ')}) — chain broken by gap/exempt/missing parent`
+          );
+        }
       }
     }
 
@@ -209,6 +232,24 @@ export function validateLedger({ updateShas = false } = {}) {
       for (const ref of atom.seeAlso) {
         if (!atomsById.has(ref)) {
           warnings.push(`[${ctx}] seeAlso ${ref} does not resolve to a ledger atom (may be from a not-yet-atomized section)`);
+        }
+      }
+    }
+
+    // implementationArea: every .js/.json/.md path fragment must exist on disk.
+    // Format is a free-form string with comma-separated files and optional
+    // parenthetical annotations (e.g., "src/game/foo.js (helperFn), data/bar.json").
+    if (atom.implementationArea && typeof atom.implementationArea === 'string') {
+      const parts = atom.implementationArea
+        .split(/,|\+/)
+        .map((s) => s.replace(/\s*\(.+?\)\s*/g, '').trim())
+        .filter(Boolean);
+      for (const p of parts) {
+        if (p.startsWith('N/A')) continue;
+        if (!/\.(js|json|md)$/.test(p)) continue;
+        const abs = path.join(ROOT, p);
+        if (!fs.existsSync(abs)) {
+          errors.push(`[${ctx}] implementationArea path does not exist: ${p}`);
         }
       }
     }
