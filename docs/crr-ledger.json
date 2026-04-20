@@ -11317,6 +11317,43 @@
       }
     },
     {
+      "id": "CRR-CC-008",
+      "crr": {
+        "section": "COMMAND CARDS",
+        "lines": [
+          855,
+          855
+        ],
+        "sha256": "882ddb0686fdd45b253d99b18a9cfd4a60e45f247598226f3d82d7f0ab1ac6ed"
+      },
+      "summary": "If there are no cards remaining in a player's Command deck, the player cannot draw Command cards.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/game/abilities.js, src/handlers/round.js, src/handlers/cc-hand.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-cc-008-deck-exhaustion-probe.test.js",
+          "src/game/abilities.js",
+          "src/handlers/round.js",
+          "src/handlers/cc-hand.js"
+        ],
+        "assertions": [
+          "for (let i = 0; i < n && deck.length > 0; i++) {",
+          "for (let i = 0; i < p1DrawCount && p1Deck.length > 0; i++) {",
+          "for (let i = 0; i < p2DrawCount && p2Deck.length > 0; i++) {",
+          "for (let d = 0; d < 2 && deck.length > 0; d++) {",
+          "for (let d = 0; d < 3 && deck.length > 0; d++) {",
+          "if (deck.length === 0) {"
+        ]
+      },
+      "notes": "Every CC-draw site gates on deck.length > 0: drawCcCards helper (ability-driven), Status-Phase base+terminal+RHC draws, Rule by Fear draw-2, Rogue One draw-3, manual draw button (explicit early-return with user message).",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-20"
+      }
+    },
+    {
       "id": "CRR-CTRL-001",
       "crr": {
         "section": "CONTROL",
