@@ -10775,10 +10775,11 @@
       "scope": "definitional",
       "status": "covered_by_ref",
       "seeAlso": [
-        "CRR-CNF-001",
+        "CRR-CNF-004",
+        "CRR-CNF-005",
         "CRR-CNF-007"
       ],
-      "notes": "Timing-keyword semantics; the actual ordering contract lives in CONFLICTS (CRR-CNF-*) and is pinned by sor-sequencing + combat-reactions-behavioral oracles."
+      "notes": "Timing-keyword semantics. Behavioral ordering contract is pinned by covered CNF atoms: CNF-004 (multi-figure one-player resolution order), CNF-005 (optional-ability coincidence), CNF-007 (skirmish outside-of-attacks mission rules → initiative → opponent)."
     },
     {
       "id": "CRR-TIM-002",
@@ -10878,9 +10879,9 @@
       "scope": "skirmish",
       "status": "covered_by_ref",
       "seeAlso": [
-        "CRR-ATK-014"
+        "CRR-ATK-023"
       ],
-      "notes": "Step 5 is pinned by the existing ATTACKS atom CRR-ATK-014; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+      "notes": "Step 5 is pinned by CRR-ATK-023 (Step 5 Spend Surges); the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
     },
     {
       "id": "CRR-SOA-006",
@@ -10895,9 +10896,9 @@
       "scope": "skirmish",
       "status": "covered_by_ref",
       "seeAlso": [
-        "CRR-ATK-015"
+        "CRR-ATK-024"
       ],
-      "notes": "Step 6 is pinned by the existing ATTACKS atom CRR-ATK-015; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+      "notes": "Step 6 is pinned by CRR-ATK-024 (Step 6 Check Accuracy); the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
     },
     {
       "id": "CRR-SOA-007",
@@ -10929,9 +10930,9 @@
       "scope": "skirmish",
       "status": "covered_by_ref",
       "seeAlso": [
-        "CRR-ATK-017"
+        "CRR-ATK-027"
       ],
-      "notes": "Step 8 is pinned by the existing ATTACKS atom CRR-ATK-017; the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
+      "notes": "Step 8 is pinned by CRR-ATK-027 (Step 8 After-attack abilities); the STEPS OF AN ATTACK section is a restatement of the same 8-step sequence."
     },
     {
       "id": "CRR-SSA-001",
@@ -11145,11 +11146,8 @@
       },
       "summary": "During skirmish setup, each player draws three Command cards into their hand; Command cards in a player's hand are secret from the opponent.",
       "scope": "skirmish",
-      "status": "covered_by_ref",
-      "seeAlso": [
-        "CRR-CCD-001"
-      ],
-      "notes": "Draw-3-at-setup is part of command-deck setup; see CCD-001."
+      "status": "exempt",
+      "notes": "One-shot setup initialization: each player's CC hand is seeded at skirmish-setup time via the setup handler; subsequent runtime CC invariants are pinned by CRR-CC-002 (status-phase draw), CRR-CC-003 (discard after resolve), and CRR-CC-008 (deck exhaustion). The hand-secrecy half is inherent to Discord's per-player hand channel (no cross-player reads in code)."
     },
     {
       "id": "CRR-CC-002",
@@ -11237,12 +11235,8 @@
       },
       "summary": "Each player's Command deck has 15 cards; total cost <= 15; per-card copy limit given by restriction icons.",
       "scope": "skirmish",
-      "status": "covered_by_ref",
-      "seeAlso": [
-        "CRR-CCD-001",
-        "CRR-CCD-002"
-      ],
-      "notes": "Command-deck construction constraints already covered by CCD atoms."
+      "status": "exempt",
+      "notes": "Pre-game army-building constraints (deck size, total cost, per-card copy limit). The skirmish bot does not validate user-submitted decklists against these caps at runtime; legal decklists are assumed as input. Mirrors the exempt rationale in CRR-CCD-001 and CRR-CCD-002."
     },
     {
       "id": "CRR-CC-006",
@@ -12028,10 +12022,10 @@
       "scope": "skirmish",
       "status": "covered_by_ref",
       "seeAlso": [
-        "CRR-ATK-013",
-        "CRR-ATK-014"
+        "CRR-ATK-021",
+        "CRR-ATK-023"
       ],
-      "notes": "Evade-cancels-surge mechanic is pinned by the existing ATK-013 (Apply Modifiers) / ATK-014 (Spend Surges) step atoms."
+      "notes": "Evade-cancels-surge mechanic is pinned by CRR-ATK-021 (Step 4 Apply Modifiers — end-of-step evade-cancels-surge) and CRR-ATK-023 (Step 5 Spend Surges — reduced surge pool)."
     },
     {
       "id": "CRR-SUR-002",
@@ -12091,9 +12085,9 @@
       "status": "covered_by_ref",
       "seeAlso": [
         "CRR-BLST-001",
-        "CRR-ATK-017"
+        "CRR-ATK-027"
       ],
-      "notes": "Blast/Cleave timing already captured by BLST atoms and the after-attack-resolves step ATK-017."
+      "notes": "Blast/Cleave timing already captured by BLST atoms and the after-attack-resolves step CRR-ATK-027 (Step 8 After-attack abilities)."
     },
     {
       "id": "CRR-TP-001",
@@ -12153,11 +12147,11 @@
       "scope": "skirmish",
       "status": "covered_by_ref",
       "seeAlso": [
-        "CRR-ATK-014",
+        "CRR-ATK-023",
         "CRR-EXH-001",
         "CRR-VPS-004"
       ],
-      "notes": "Taxonomy of ability costs. Surge-cost pinned by ATK-014 (Spend Surges); exhaust pinned by EXH; VP cost pinned by VPS-004. Strain and threat/deplete are downstream definitional."
+      "notes": "Taxonomy of ability costs. Surge-cost pinned by CRR-ATK-023 (Step 5 Spend Surges); exhaust pinned by EXH; VP cost pinned by VPS-004. Strain and threat/deplete are downstream definitional."
     },
     {
       "id": "CRR-ABIL-004",
@@ -12326,11 +12320,8 @@
       },
       "summary": "If multiple mission rules would resolve at the same time, the player with initiative decides their order.",
       "scope": "skirmish",
-      "status": "covered_by_ref",
-      "seeAlso": [
-        "CRR-CNF-008"
-      ],
-      "notes": "Mission-rule tie-break by initiative. CNF-008 already captures this branch."
+      "status": "exempt",
+      "notes": "Vacuous in current skirmish data: mission-rule data (data/mission-cards.json) exposes each trigger (startOfRound/endOfRound) as a single prose block per map-variant; no map schedules multiple distinct mission rules on the same trigger. runStartOfRoundRules / runEndOfRoundRules dispatch one rule per trigger per map. The multi-rule-same-time condition this atom disambiguates is never produced by any (mapId, variantId) in skirmish. Same rationale as CRR-CNF-008."
     },
     {
       "id": "CRR-SKD-001",
@@ -12635,12 +12626,8 @@
       },
       "summary": "Setup Step 5 — Draw Command Cards: set the round dial to 1; each player draws 3 cards from their Command deck.",
       "scope": "skirmish",
-      "status": "covered_by_ref",
-      "seeAlso": [
-        "CRR-CC-001",
-        "CRR-CCD-001"
-      ],
-      "notes": "Draw-3-at-setup pinned by CC-001 / CCD-001."
+      "status": "exempt",
+      "notes": "One-shot setup initialization: round dial and per-player hand are seeded at skirmish-setup time. Runtime CC invariants are governed elsewhere (CRR-CC-002 status-phase draw, CRR-CC-008 deck exhaustion). Mirrors the exempt rationale of sibling CRR-CC-001."
     },
     {
       "id": "CRR-NEGC-001",
@@ -12882,11 +12869,8 @@
       },
       "summary": "The player with initiative breaks all ties for mission rules (e.g., equidistant figures).",
       "scope": "skirmish",
-      "status": "covered_by_ref",
-      "seeAlso": [
-        "CRR-CFS-002"
-      ],
-      "notes": "Initiative tiebreak. CFS-002 and CNF-008 already pin this."
+      "status": "exempt",
+      "notes": "Vacuous in current skirmish data: no map schedules multiple mission rules on the same trigger (see exempt rationale on CRR-CFS-002 and CRR-CNF-008). Per-rule tiebreaks (e.g., Hutt Cartel Hostile Takeover closest-equidistant) are handled per-mission in their own rule logic rather than via a central tiebreak mechanism."
     },
     {
       "id": "CRR-SSU-001",
@@ -12972,11 +12956,8 @@
       },
       "summary": "Tests redirects to Attribute Tests.",
       "scope": "definitional",
-      "status": "covered_by_ref",
-      "seeAlso": [
-        "CRR-ATT-001"
-      ],
-      "notes": "Pure-pointer section. Attribute Tests (ATT-*) already covers the semantics."
+      "status": "exempt",
+      "notes": "Pure-pointer section inside TESTS → ATTRIBUTE TESTS. Attribute tests themselves are campaign-only (see CRR-ATT-001); skirmish scope excludes. No engine invariant."
     },
     {
       "id": "CRR-WDR-001",
