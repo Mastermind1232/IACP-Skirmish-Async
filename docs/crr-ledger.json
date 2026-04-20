@@ -5405,12 +5405,32 @@
         "lines": [
           1033,
           1048
-        ]
+        ],
+        "sha256": "c1263694329d2a9371859173ad53f187acb33751d6d5e7419e617bcc9c419768"
       },
       "summary": "If an effect reduces a figure's Health and it has suffered more damage than the resulting Health, the excess damage is discarded and has no effect.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Health-reduction excess-damage-discard corner rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/round.js (Adrenaline end-of-round maxHp revert)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-dmg-health-reduction-defeat-probe.test.js"
+        ],
+        "assertions": [
+          "max-HP reduction must be clamped to ≥ 0 — CRR-DMG-008",
+          "current HP must be clamped to the resulting Health — CRR-DMG-008",
+          "order must be: suffer damage → reduce max → clamp current — CRR-DMG-008",
+          "defeat must fire when clamped current reaches 0 — CRR-DMG-008",
+          "Adrenaline-driven defeat must be self-inflicted (no VP) — CRR-DMG-008",
+          "only round.js may reduce maxHp — CRR-DMG-008 single enforcement site"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "In skirmish, the sole effect that reduces a figure's Health is the Adrenaline end-of-round revert. The revert enforces the CRR-DMG-008 discard invariant via a two-sided clamp: Math.max(0, curHp-5) floors damage at 0 (excess damage below 0 discarded), and Math.min(afterDamage, newMax) clamps current to the resulting Health (excess damage beyond newMax discarded). No other src site mutates maxHp downward, so the invariant has a single enforcement point."
     },
     {
       "id": "CRR-DEF-001",
