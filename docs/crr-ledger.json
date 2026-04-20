@@ -4761,8 +4761,14 @@
       },
       "summary": "When blocking terrain is on a single edge, figures cannot move through, be pushed through, or (for Large figures) be placed on that edge unless a special ability allows it (e.g., Massive, Mobile).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Blocking-edge rule (as distinct from full-space blocking) has no named assertion pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Blocking terrain on a single edge == a wall in the engine (mapSpaces.impassableEdges) — same representation as single-edge impassable terrain (see CRR-IT-002). Wall-edge movement/push blocking is pinned by MOVE-010 (cannot move through walls/doors) and WAL-001 (walls block movement/LOS); wall-edge adjacency (which governs Large-figure footprint placement across edges) is pinned by ADJ-002 (spaces sharing a wall edge are not adjacent).",
+      "seeAlso": [
+        "CRR-MOVE-010",
+        "CRR-WAL-001",
+        "CRR-ADJ-002",
+        "CRR-IT-002"
+      ]
     },
     {
       "id": "CRR-BT-003",
@@ -4820,8 +4826,13 @@
       },
       "summary": "If a figure or object without Mobile or Massive occupies blocking terrain, apply the rules for Mobile to that figure or object (for LOS/counting/adjacency purposes).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Apply-Mobile-rules fallback for non-Mobile/non-Massive occupants of blocking terrain has no named assertion pin. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "The engine's LOS/counting/adjacency code is terrain-blind about occupants — the same target-self-skip (hasLineOfSight), pure-Manhattan getRange, and getRange===1 adjacency apply regardless of whether the occupant has Mobile/Massive. So any figure found in blocking terrain automatically receives the Mobile-treatment pinned for CRR-MSV-009 / CRR-MOB-003. See CRR-BT-003 for the unified reachability statement.",
+      "seeAlso": [
+        "CRR-MSV-009",
+        "CRR-MOB-003",
+        "CRR-BT-003"
+      ]
     },
     {
       "id": "CRR-BT-006",
