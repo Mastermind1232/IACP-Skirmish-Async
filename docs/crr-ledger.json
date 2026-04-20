@@ -3650,8 +3650,12 @@
       },
       "summary": "During a mission that allows escaping, Stunned figures cannot escape.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Escape-mission Stun-blocks-escape rule has no named assertion pin. Phase-D gap — low priority because escape missions are rare in skirmish."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ESC-001",
+        "CRR-ESC-002"
+      ],
+      "notes": "Vacuous consequence of no-escape-in-skirmish (pinned at CRR-ESC-001). The Stunned-cannot-escape interaction is the STUNNED-side restatement of CRR-ESC-002; both are vacuously satisfied since no skirmish mission invokes the escape rule."
     },
     {
       "id": "CRR-HID-001",
@@ -9545,13 +9549,34 @@
         "lines": [
           1284,
           1285
-        ]
+        ],
+        "sha256": "0a0b0881922eda80e68ba0ede3412f4e3fc6c67f6f6aac7cd651c8ef6ad15583"
       },
       "summary": "To escape, a figure must spend one movement point while on or adjacent to the space indicated in the mission's rules.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/mission.js",
-      "notes": "Escape is mission-specific (e.g., certain skirmish missions with extraction zones). No generic escape-mechanic oracle. Phase-D gap — low priority (few skirmish missions use it)."
+      "status": "covered",
+      "implementationArea": "N/A — no skirmish mission uses the escape rule (vacuously satisfied)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-esc-no-escape-mechanic-probe.test.js"
+        ],
+        "assertions": [
+          "no skirmish mission may invoke the escape rule — CRR-ESC-001",
+          "no ability may reference the escape rule — CRR-ESC-001",
+          "only Desperate Escape may match the escape token — CRR-ESC-001",
+          "Desperate Escape effect must be a 6-space move, not the mission-escape rule — CRR-ESC-001",
+          "no src file outside self-play.js may mention escape — CRR-ESC-001",
+          "self-play.js must contain the stuck-escape-hatch constant — CRR-ESC-001",
+          "self-play.js must contain the stuck-escape-hatch log message — CRR-ESC-001",
+          "self-play.js must not reference mission-escape vocabulary — CRR-ESC-001"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "Skirmish has no escape mechanic. No mission, ability, or command card invokes the escape rule (Desperate Escape is a 6-space move, unrelated). The only source mentions of \"escape\" live in src/ai/self-play.js as AI-training stuck-detection (\"escape hatch\"), not the CRR escape mechanic. Rule is vacuously satisfied."
     },
     {
       "id": "CRR-ESC-002",
@@ -9564,9 +9589,11 @@
       },
       "summary": "A figure cannot escape while Stunned.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/mission.js",
-      "notes": "Stun-blocks-escape interaction has no oracle. Phase-D gap."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ESC-001"
+      ],
+      "notes": "Vacuous consequence of no-escape-in-skirmish (pinned at CRR-ESC-001). With no mission, ability, or card invoking the escape rule, the Stunned-blocks-escape restriction cannot be violated."
     },
     {
       "id": "CRR-ESC-003",
@@ -9579,9 +9606,11 @@
       },
       "summary": "When a figure escapes, it is removed from the map; a figure not on the map cannot be affected by abilities and cannot perform activations.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/mission.js",
-      "notes": "Off-map-figure invariant (abilities can't target, activation skipped) has no dedicated oracle. Related to defeat-cleanup flows but escape != defeat. Phase-D gap."
+      "status": "covered_by_ref",
+      "seeAlso": [
+        "CRR-ESC-001"
+      ],
+      "notes": "Vacuous consequence of no-escape-in-skirmish (pinned at CRR-ESC-001). No code path in skirmish removes a figure from the map via escape, so the off-map-figure invariants cannot be exercised."
     },
     {
       "id": "CRR-WXS-001",
