@@ -4668,8 +4668,8 @@
       },
       "summary": "If a non-ability effect pushes a figure (mission rule, closing door between two spaces of a large figure), the controller of the pushed figure chooses placement.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Non-ability-push controller-choice rule has no named assertion pin. Phase-D gap."
+      "status": "exempt",
+      "notes": "Vacuous in skirmish — no non-ability push of a player figure exists. Every pushFigure() call site in src/ is ability-driven: combat-special-effects.js (Concussive Bolt, Flurry, surge pushes), dc-play-area.js (DC-ability pushes), abilities.js (Slam, Force Manipulate, Darth Vader, etc.), movement.js (Massive displacement from ability-driven movement), activation.js (ability pushes). Mission-rule pushes in skirmish (Krykna push, Devaron crate push) push NPCs or objects, never player figures. Closing-door push of a large figure has no engine substrate (no skirmish mission closes doors automatically). The CRR PSH-005 rule (non-ability push → controller chooses placement) is definitionally vacuous — no substrate to pin."
     },
     {
       "id": "CRR-PSH-006",
@@ -7236,8 +7236,8 @@
       },
       "summary": "If a large figure occupies spaces on both sides of a door when it closes, that figure is pushed to the closest valid space.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Large-figure-across-closing-door push rule has no oracle pin. Phase-D gap."
+      "status": "exempt",
+      "notes": "Vacuous in skirmish — no engine path closes a door while a large figure occupies both sides. Doors are manually opened by players via the standard open-door action; there is no mission rule or auto-close handler in src/game that would fire a closing-door push. Grepped src for doorClose/close.*door/closeDoorWithFigure/largeFigureDoorClose — no hits. CRR DOR-006 (large figure across closing door → pushed to closest valid space) is definitionally vacuous in skirmish."
     },
     {
       "id": "CRR-DOR-007",
