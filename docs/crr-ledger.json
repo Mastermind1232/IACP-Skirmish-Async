@@ -5599,12 +5599,35 @@
         "lines": [
           1068,
           1069
-        ]
+        ],
+        "sha256": "36bd7966b246a0f409a4201da8f56fd08d0639caf5595fe9894324c294b28a69"
       },
       "summary": "At the end of each mission, all depleted cards are flipped faceup (reset).",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "End-of-mission reset of depleted cards has no oracle pin. Skirmish games are single-mission, so this only manifests across games — not currently exercised by oracle tests. Phase-D gap."
+      "status": "covered",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-dpl-no-end-of-mission-reset-probe.test.js",
+          "src/game-state.js",
+          "src/engine/game-readers.js",
+          "src/game/mission-rules.js"
+        ],
+        "assertions": [
+          "game-state.js must declare both depletion arrays — CRR-DPL-002",
+          "isDepletedRemovedFromGame must be a pure read — CRR-DPL-002",
+          "no source file may reset, splice, pop, shift, or delete either depletion array — CRR-DPL-002",
+          "no end-of-mission depletion-reset helper may exist in skirmish — CRR-DPL-002",
+          "mission-rules.js must terminate via game.ended — CRR-DPL-002",
+          "mission-rules.js must not reset depletion arrays — CRR-DPL-002",
+          "DPL-001 must be pinned (it establishes the one-way depletion invariant) — CRR-DPL-002 context"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "Skirmish == single mission; depletion is one-way within a game (no splice/pop/reset anywhere in src/). Game termination via game.ended does not — and need not — flip depleted cards faceup because there is no subsequent mission. Vacuously satisfied within skirmish scope."
     },
     {
       "id": "CRR-DPL-003",
