@@ -3062,12 +3062,32 @@
         "lines": [
           1347,
           1348
-        ]
+        ],
+        "sha256": "523fc1c6bd223a570b8795f490a2f78f87720ed5ada596bb7409a3322a412de8"
       },
       "summary": "If a figure gains Focused after rolling dice for an attack or test, it cannot use the condition until its next attack or test.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Post-roll Focused-can't-be-used-this-attack rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/conditions.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-foc-post-roll-probe.test.js"
+        ],
+        "assertions": [
+          "006a: source — plain applyCondition signature has no attackInfo/die parameter",
+          "006b: source — plain applyCondition body does not touch attackInfo or dice",
+          "006c: source — applyConditionWithDie is the sole path that adds a die",
+          "006d: behavior — applyCondition(Focus) does not mutate an existing pendingCombat.attackInfo.dice",
+          "006e: behavior — pre-roll applyConditionWithDie DOES add the green die (contrast)",
+          "006f: behavior — duplicate Focus gain is a no-op on both helpers (no double-grant)"
+        ]
+      },
+      "notes": "Post-roll Focus uses plain applyCondition (no attackInfo param, no dice mutation); only pre-roll applyConditionWithDie adds a Focus die. Therefore a Focus landing mid-attack cannot contribute to the current roll.",
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MIS-001",
