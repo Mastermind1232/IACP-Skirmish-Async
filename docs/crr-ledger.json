@@ -6412,12 +6412,34 @@
         "lines": [
           2164,
           2164
-        ]
+        ],
+        "sha256": "1c3a69126884941058c29493b8aef8775b42a66c1a7fc9d6c20761f25ec2e46b"
       },
       "summary": "Abilities that apply damage to objects only affect objects that can be attacked.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Damage-to-objects filter (blast/cleave/splash only hits attackable objects) has no direct oracle pin. Phase-D gap."
+      "status": "covered",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-obj-damage-only-attackable-probe.test.js",
+          "src/game-state.js",
+          "src/engine/combat-bridge.js"
+        ],
+        "assertions": [
+          "game-state.js must declare crateHealth alongside other object containers — CRR-OBJ-005",
+          "no non-crate object may have an HP field — CRR-OBJ-005",
+          "only combat-bridge.js may apply damage to objects — CRR-OBJ-005",
+          "no src file may apply Math.max(0, -) damage decrement to any non-crate object container — CRR-OBJ-005",
+          "Cleave must not target non-crate objects — CRR-OBJ-005",
+          "no non-crate object container may be subject to damage math — CRR-OBJ-005",
+          "CRR-AOJ-001 must be covered (crate-destruction flow pinned) — CRR-OBJ-005 context"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Opus 4.7)",
+        "date": "2026-04-20"
+      },
+      "notes": "Skirmish has exactly one attackable object class: crates. game.crateHealth is the sole object-HP field in game-state.js; no doorHealth / tokenHealth / rubbleHealth / deviceHealth exist. All object-damage decrement sites in src/ target game.crateHealth[origCoord] and live in combat-bridge.js (direct attack + Blast splash). Cleave target-selection only adds crates (isCrate: true). Complementary scope-pin to CRR-AOJ-001's destruction-flow pin."
     },
     {
       "id": "CRR-GRP-001",
