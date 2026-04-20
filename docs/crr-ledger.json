@@ -3384,12 +3384,29 @@
         "lines": [
           2584,
           2589
-        ]
+        ],
+        "sha256": "422458aee9883907043c2eb2f9e59149c1305816e31e73cb1c3a47308ec16daf"
       },
       "summary": "A figure can resolve an attack that has already been declared if it becomes Stunned during that attack.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Mid-attack-Stun does-not-abort-declared-attack rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/conditions.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-stn-mid-attack-probe.test.js"
+        ],
+        "assertions": [
+          "002a: source — applyCondition never reads or mutates pendingCombat",
+          "002b: behavior — applying Stun to the attacker leaves pendingCombat intact",
+          "002c: behavior — applying Stun to the defender also leaves pendingCombat intact"
+        ]
+      },
+      "notes": "applyCondition only mutates figureConditions; it has no pendingCombat branch, so a Stun landing mid-attack cannot abort a declared attack.",
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-STN-003",
