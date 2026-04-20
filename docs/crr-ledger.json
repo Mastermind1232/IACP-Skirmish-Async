@@ -6322,12 +6322,31 @@
         "lines": [
           1729,
           1730
-        ]
+        ],
+        "sha256": "65e66958572757f43385f250b2abb70c353a04a76ab36fa5c46c81616bca17f0"
       },
       "summary": "When a large figure moves or rotates, it exits all spaces it occupied and then enters all of its new spaces, even if some of those spaces overlap.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Exit-then-enter ordering for large-figure moves has no oracle pin (matters for enter/exit-triggered reactions). Phase-D gap."
+      "status": "covered",
+      "notes": "Pinned via PROBE-PD-LF-006 (batch-92). Large-figure move is a single top-left replacement; footprint is derived on-read via getFootprintCells. No per-cell occupancy store exists, so no partial/interleaved multi-cell state can be observed by triggered effects — atomic exit-then-enter is the structural consequence.",
+      "implementationArea": "src/handlers/movement.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-lf-006-exit-then-enter-atomic-probe.test.js",
+          "src/handlers/movement.js",
+          "src/game/coords.js"
+        ],
+        "assertions": [
+          "movement.js must write newTopLeft in a single assignment",
+          "getFootprintCells must derive footprint from (topLeft, size)",
+          "no src file may declare a per-cell footprint occupancy container"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-LF-007",
@@ -6807,12 +6826,33 @@
         "lines": [
           2653,
           2656
-        ]
+        ],
+        "sha256": "eefe28adf7c431874bf0c879805b34398c18065e0f40929fd61fa8ac8b291d80"
       },
       "summary": "If a group of spaces is fully encompassed by a single terrain border (or a combination of a single terrain border and walls), each of those spaces is considered to contain that terrain type.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Full-encompass terrain-assignment rule has no oracle pin (engine reads per-space terrain directly from map data). Phase-D gap."
+      "status": "covered",
+      "notes": "Pinned via PROBE-PD-TER-001/002 (batch-92). Engine reads terrain per-space from mapSpaces.terrain (coord→type) — the fully-encompass rule is applied at map-authoring time and baked into the per-space object, not computed at runtime. No runtime encompass-region helper exists.",
+      "implementationArea": "data/map-spaces.json",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-ter-terrain-is-per-space-probe.test.js",
+          "data/map-spaces.json",
+          "src/game/movement.js",
+          "src/handlers/combat.js"
+        ],
+        "assertions": [
+          "map-spaces.json must have maps block",
+          "movement.js must build terrain as a per-space coord",
+          "combat.js must read terrain per-space via terrain[s]",
+          "no src file may declare a runtime encompass-region helper"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-TER-002",
@@ -6821,12 +6861,32 @@
         "lines": [
           2657,
           2658
-        ]
+        ],
+        "sha256": "9d14e8bb08e569688f82fece134a51bcf5b93794de759418d92d5dba7e965868"
       },
       "summary": "Colored borders (in combination with walls) that do not fully encompass a space or group of spaces are terrain edges — terrain rules are applied only to the colored edge of this space and not the space itself.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Edge-only terrain application has no oracle pin. Phase-D gap."
+      "status": "covered",
+      "notes": "Pinned via PROBE-PD-TER-001/002 (batch-92). Engine has no edge-terrain container — terrain is coord→type only. Edge-only coloured borders are applied at map-authoring time (as non-terrain edges) and the engine has no runtime edge-terrain computation.",
+      "implementationArea": "data/map-spaces.json",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-ter-terrain-is-per-space-probe.test.js",
+          "data/map-spaces.json",
+          "src/game/movement.js"
+        ],
+        "assertions": [
+          "must be a simple string type (per-space)",
+          "must not declare terrainEdges",
+          "must not declare edgeTerrain",
+          "no src file may declare a runtime edge-terrain container"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-TER-003",
