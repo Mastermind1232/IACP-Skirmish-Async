@@ -781,9 +781,12 @@
       },
       "summary": "A figure stuck in a space where it cannot end movement (e.g., Stunned inside another figure) is pushed to the closest valid space; controller chooses ties.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/movement.js",
-      "notes": "Stuck-figure displacement corner case not pinned. Phase-D gap; probe home is push-figure-oracles.test.js."
+      "status": "covered_by_ref",
+      "notes": "The \"pushed to closest valid space\" mechanic IS pushFigureToNearestValid in src/game/movement.js — the same BFS already pinned by PSH-007 (uniform-cost neighbor expansion, 3-way AND destination gate: !overlapForbidden && !overlapOther && !blocked). The stuck-figure corner case is a consumer of that same helper; controller tie-break is the BFS's queue order (first valid space found). MSV-006 pins the displacement-choice path for Massive-induced overlaps, which shares the same closest-valid-space semantics.",
+      "seeAlso": [
+        "CRR-PSH-007",
+        "CRR-MSV-006"
+      ]
     },
     {
       "id": "CRR-MOVE-026",
