@@ -6524,12 +6524,29 @@
         "lines": [
           1188,
           1189
-        ]
+        ],
+        "sha256": "affd929021edd18882a7a55c769b717e92e9f7de6364295417719ed38194acbc"
       },
       "summary": "If an effect closes a door, place a door token on the map as shown on the mission's map; figures cannot voluntarily close doors.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Door-closing-by-effect and no-voluntary-close rules have no oracle pin (skirmish currently has no common door-close effect exercised). Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/interact.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-dor-no-voluntary-close-probe.test.js"
+        ],
+        "assertions": [
+          "005a: interact handler surfaces only open_door_ options — no close_door_",
+          "005b: openedDoors mutation sites are all append-only (.push)",
+          "005c: no file under src/ contains a closeDoor / close_door / openedDoors.splice / pop / shift call"
+        ]
+      },
+      "notes": "No skirmish effect currently closes a door; negative invariant pin verifies the impossibility of a voluntary close across all src/ files.",
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-18"
+      }
     },
     {
       "id": "CRR-DOR-006",
