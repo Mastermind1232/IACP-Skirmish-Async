@@ -1633,13 +1633,34 @@
         "lines": [
           474,
           476
-        ]
+        ],
+        "sha256": "59eb579b50178b0c33ef079218eae68e0636fd3031ccff13a9c95153f6b68c65"
       },
       "summary": "Step 4 Apply Modifiers: add/remove symbols and Accuracy; at end of step each evade cancels one surge; surge abilities that provide modifiers are not resolved until Step 5.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/combat.js",
-      "notes": "Evade-cancels-surge arithmetic is performed in the engine but no named assertion pins it as a separately testable invariant — it is entangled with composite combat-oracles cases. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/combat.js (evade cancellation + Step-5 gather), src/game/combat.js (computeCombatResult read-only)",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-atk-evade-cancels-surge-probe.test.js",
+          "src/handlers/combat.js",
+          "src/game/combat.js"
+        ],
+        "assertions": [
+          "021a: source — evadeCancelled is Math.min(rawSurge, totalEvade) in handler",
+          "021b: source — totalSurge is rawSurge minus evadeCancelled (no other deduction path)",
+          "021c: source — rawSurge includes bonuses; evade cancellation happens AFTER all surge bonuses accumulate",
+          "021d: source — surge-spending (Step 5) follows the cancellation in source order",
+          "021e: source — affordable-surge filter uses the post-cancellation totalSurge as its budget",
+          "021f: source — computeCombatResult (game/combat.js) reads evadeCancelledSurge but does not recompute it"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      },
+      "notes": "End-of-Step-4 evade cancellation is a single `Math.min(rawSurge, totalEvade)` site in src/handlers/combat.js; Step-5 surge-spending (getAttackerSurgeAbilities + affordable filter) runs AFTER that site in source order, so surge-ability modifiers are chosen against the post-cancellation budget. computeCombatResult in src/game/combat.js only reads the stored value — no recompute path exists."
     },
     {
       "id": "CRR-ATK-022",
