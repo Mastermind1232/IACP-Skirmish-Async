@@ -334,6 +334,12 @@ export async function handleMoveMp(interaction, ctx) {
     profile.ignoreFigureCost = true;
     profile.ignoreDifficult = true;
   }
+  // CRR MOVE-017: "Move X spaces" effects (freeMoveBonus) ignore MP costs
+  // from terrain + hostile figures, but still respect non-cost restrictions.
+  if (game.moveXBypassActive?.[msgId]) {
+    profile.ignoreFigureCost = true;
+    profile.ignoreDifficult = true;
+  }
   moveState.boardState = boardState;
   moveState.movementProfile = profile;
   const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
@@ -487,6 +493,11 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
   if (game.mobileMovementActive?.[msgId]) {
     nextProfile.isMobile = true;
     nextProfile.ignoreBlocking = true;
+    nextProfile.ignoreFigureCost = true;
+    nextProfile.ignoreDifficult = true;
+  }
+  // CRR MOVE-017: "Move X spaces" effects (freeMoveBonus) ignore MP costs.
+  if (game.moveXBypassActive?.[msgId]) {
     nextProfile.ignoreFigureCost = true;
     nextProfile.ignoreDifficult = true;
   }
@@ -698,6 +709,11 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   if (game.mobileMovementActive?.[msgId]) {
     profile.isMobile = true;
     profile.ignoreBlocking = true;
+    profile.ignoreFigureCost = true;
+    profile.ignoreDifficult = true;
+  }
+  // CRR MOVE-017: "Move X spaces" effects (freeMoveBonus) ignore MP costs.
+  if (game.moveXBypassActive?.[msgId]) {
     profile.ignoreFigureCost = true;
     profile.ignoreDifficult = true;
   }

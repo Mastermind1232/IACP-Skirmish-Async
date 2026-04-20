@@ -603,13 +603,34 @@
         "lines": [
           2076,
           2076
-        ]
+        ],
+        "sha256": "fb6503c1e11ba5e02f3df1166671aba346fd5fe09d8f04777e31d93b1a26d6b9"
       },
       "summary": "'Move X spaces' effects ignore movement-point costs (terrain/figure additional costs do not apply).",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "No named assertion pins the 'MP costs bypassed by Move X' rule. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/abilities.js",
+      "notes": "Every freeMoveBonus grant site in abilities.js tags game.moveXBypassActive[msgId] = true. The three handleMovePick profile-setup sites in handlers/movement.js read the flag and set profile.ignoreFigureCost + profile.ignoreDifficult, causing computeMovementCache (evaluateMovementStep) to skip the +1 adders for difficult terrain and hostile figures. moveXBypassActive is listed in ACTIVATION_MSGID_FLAGS + ROUND_OBJECT_FLAGS so it clears at activation/round end. ignoreBlocking intentionally NOT set — Move-X still obeys blocking-terrain restrictions (MOVE-018).",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-move-017-move-x-ignores-costs-probe.test.js",
+          "src/game/abilities.js",
+          "src/handlers/movement.js",
+          "src/game/activation-state.js"
+        ],
+        "assertions": [
+          "game.moveXBypassActive[msgId] = true",
+          "if (game.moveXBypassActive?.[msgId])",
+          "ignoreFigureCost = true",
+          "ignoreDifficult = true",
+          "'moveXBypassActive'"
+        ]
+      },
+      "reviewedBy": {
+        "name": "crr-ledger-batch-107",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MOVE-018",

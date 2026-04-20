@@ -2315,9 +2315,13 @@ export function resolveAbility(abilityId, context) {
       const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
       const validSpaces = [...validSet];
       if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
-      // freeMoveBonus (Mortar Launcher): grant MP before the space pick so player can move first
+      // freeMoveBonus (Mortar Launcher): grant MP before the space pick so player can move first.
+      // CRR MOVE-017: "Move X spaces" effects ignore MP costs from terrain/figures; tag the bank
+      // with moveXBypassActive so the commit path sets ignoreDifficult / ignoreFigureCost.
       if (entry.freeMoveBonus > 0 && msgId) {
         addMovementPoints(game, msgId, entry.freeMoveBonus);
+        game.moveXBypassActive = game.moveXBypassActive || {};
+        game.moveXBypassActive[msgId] = true;
       }
       const moveNote = entry.freeMoveBonus > 0 ? ` (Move up to ${entry.freeMoveBonus} spaces first, then choose a target space.)` : '';
       return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}:${moveNote}`, refreshMovementBank: entry.freeMoveBonus > 0, activeMsgId: msgId };
@@ -2479,6 +2483,9 @@ export function resolveAbility(abilityId, context) {
     const { game, msgId } = context;
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     addMovementPoints(game, msgId, entry.freeMoveBonus);
+    // CRR MOVE-017: "Move X spaces" effects ignore MP costs from terrain/figures.
+    game.moveXBypassActive = game.moveXBypassActive || {};
+    game.moveXBypassActive[msgId] = true;
     // Also grant free attack if specified (e.g. Executor)
     if (entry.freeAttackBonus) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
@@ -2507,6 +2514,9 @@ export function resolveAbility(abilityId, context) {
     const { game, msgId, meta } = context;
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     addMovementPoints(game, msgId, entry.freeMoveBonus);
+    // CRR MOVE-017: "Move X spaces" effects ignore MP costs from terrain/figures.
+    game.moveXBypassActive = game.moveXBypassActive || {};
+    game.moveXBypassActive[msgId] = true;
     const nb = entry.nextAttacksBonusHits;
     game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
     game.nextAttacksBonusHits[meta.playerNum] = { count: nb.count, bonus: nb.bonus };
@@ -4005,6 +4015,9 @@ export function resolveAbility(abilityId, context) {
     const freeMovePart = entry.freeMoveBonus > 0 ? ` Gained ${entry.freeMoveBonus} free movement point${entry.freeMoveBonus !== 1 ? 's' : ''} — use the Move button.` : '';
     if (entry.freeMoveBonus > 0) {
       addMovementPoints(game, msgId, entry.freeMoveBonus);
+      // CRR MOVE-017: "Move X spaces" effects ignore MP costs from terrain/figures.
+      game.moveXBypassActive = game.moveXBypassActive || {};
+      game.moveXBypassActive[msgId] = true;
     }
     return {
       applied: true,
