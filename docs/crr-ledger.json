@@ -618,13 +618,31 @@
         "lines": [
           2077,
           2078
-        ]
+        ],
+        "sha256": "66d27c38bd9b804d0a344303f11948bdfbcf9a6a2ca0782046c2f256f43a1640"
       },
       "summary": "'Move X spaces' still obeys all non-cost terrain and figure restrictions (e.g., cannot end in another figure's space).",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "Not pinned as a named assertion. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/movement.js",
+      "notes": "Covered by invariant pin — Move-X grants deposit MP into game.movementBank[msgId] with uniform shape and consume via the sole handleMovePick commit path, validating destinations through the shared movementCache (terrain + figure-occupancy). No Move-X-specific bypass flag.",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-move-018-move-x-obeys-restrictions-probe.test.js",
+          "src/handlers/movement.js"
+        ],
+        "assertions": [
+          "getMovementTarget(cache, targetLower)",
+          "Destination not valid for the selected MP",
+          "mobileMovementActive",
+          "handleMoveXCommit|commitMoveX|commitBonusMove|handleBonusMove"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MOVE-019",
