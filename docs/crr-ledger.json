@@ -8586,13 +8586,31 @@
         "lines": [
           951,
           952
-        ]
+        ],
+        "sha256": "84535551fe24231f542797415c5fe0e9c51483c7ec46116019869f94a6247ec7"
       },
       "summary": "Effects from multiple figures under the control of a single player are resolved in the order of that player's choice.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/combat-bridge.js",
-      "notes": "Player-choice ordering for multi-figure simultaneous effects (e.g., multiple reaction prompts) is implemented as sequential prompts but no named assertion pins the 'resolver chooses order' rule. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js",
+      "notes": "Player-choice ordering for multi-figure simultaneous effects (e.g., multiple reaction prompts) is implemented as sequential prompts but no named assertion pins the 'resolver chooses order' rule. Phase-D gap.",
+      "reviewedBy": {
+        "name": "claude",
+        "date": "2026-04-20"
+      },
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "src/game/movement.js",
+          "tests/domain/oracle/phase-d-cnf-004-player-choice-order-probe.test.js"
+        ],
+        "assertions": [
+          "needsFigurePick",
+          "controllerPlayerNum",
+          "pending.phase === 'friendly'",
+          "applyFigurePick"
+        ]
+      }
     },
     {
       "id": "CRR-CNF-005",
