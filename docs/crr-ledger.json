@@ -633,13 +633,34 @@
         "lines": [
           2078,
           2079
-        ]
+        ],
+        "sha256": "09b271fe2653b485569465e596ce97e8e4ce92d49260e37d1cb60ad021d91137"
       },
       "summary": "Unused 'move up to X spaces' movement cannot be saved for later.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "Not pinned. Phase-D gap — candidate probe: finalize Move-up-to-X and assert remaining distance is discarded."
+      "status": "covered",
+      "implementationArea": "src/game/activation-state.js",
+      "notes": "Pinned via PROBE-PD-MOVE-019 (batch-91). movementBank is per-msgId and cleared at activation end by cleanupActivation + explicit End-Turn + round rollover deletes; no cross-activation MP storage exists.",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-move-019-unused-mp-discarded-probe.test.js",
+          "src/game/activation-state.js",
+          "src/handlers/activation.js",
+          "src/handlers/round.js"
+        ],
+        "assertions": [
+          "movementBank must be on ACTIVATION_MSGID_FLAGS",
+          "cleanupActivation must delete per-msgId flags",
+          "End Turn path must delete the movement bank",
+          "Round rollover must delete the movement bank",
+          "no src file may declare a cross-activation MP carry-over container"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MOVE-020",
@@ -6572,12 +6593,36 @@
         "lines": [
           1459,
           1460
-        ]
+        ],
+        "sha256": "986f65a10632862fd8ca244ad8684051db13d98b8b8bde65e0feb51f518a7b8d"
       },
       "summary": "While activating a group of two or more figures, each figure resolves its activation independently — resolve both actions for one figure before resolving actions for the next figure.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Per-figure sequential resolution within a group has no named oracle pin. Phase-D gap."
+      "status": "covered",
+      "notes": "Pinned via PROBE-PD-GRP-004 (batch-91). Single-pointer selectedFigure + data.remaining FSM serializes per-figure action resolution; multi-figure groups switch via handleDcSwitchFig which nulls the pointer back to the picker.",
+      "implementationArea": "src/engine/available-actions.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-grp-004-per-figure-sequential-probe.test.js",
+          "src/handlers/activation.js",
+          "src/engine/available-actions.js",
+          "src/handlers/dc-play-area.js",
+          "src/discord/components.js"
+        ],
+        "assertions": [
+          "handleDcSwitchFig must null selectedFigure",
+          "available-actions.js must read selectedFigure as the single current figure",
+          "available-actions.js must gate action-offering on data.remaining > 0",
+          "dc-play-area.js must read actionsData.selectedFigure uniformly",
+          "Move button must embed f${selectedFigure}",
+          "no src file may declare a parallel-figure activation container"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ELI-001",
@@ -7827,9 +7872,15 @@
       },
       "summary": "Each action must be resolved completely before the figure performs its next action.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/activation.js",
-      "notes": "No named assertion pins the 'resolve one action completely before starting another' invariant. Engine enforces via dcActionsData transitions but not by a direct oracle. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Covered by CRR-GRP-004: the same dcActionsData FSM (single-pointer selectedFigure + data.remaining decrement) serializes figure order, inter-action ability windows, and action-complete-before-next atomicity. Pinned via PROBE-PD-GRP-004 (batch-91).",
+      "seeAlso": [
+        "CRR-GRP-004"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ACT-004",
@@ -8011,9 +8062,15 @@
       },
       "summary": "While activating a group of two or more figures, the player activates all figures in the order of their choice; both actions must be resolved for each figure before the next figure activates, and before the opponent resolves an activation.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/activation.js",
-      "notes": "Intra-group figure-order and 'both-actions-before-next-figure' sequencing is enforced by the DG iteration in activation-setup.js but no named assertion pins the ordering invariant. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Covered by CRR-GRP-004: the same dcActionsData FSM (single-pointer selectedFigure + data.remaining decrement) serializes figure order, inter-action ability windows, and action-complete-before-next atomicity. Pinned via PROBE-PD-GRP-004 (batch-91).",
+      "seeAlso": [
+        "CRR-GRP-004"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-ACV-004",
@@ -8116,9 +8173,15 @@
       },
       "summary": "Abilities that can be used during a figure's activation are used before or after either of that figure's two actions, not while performing actions or other abilities.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/handlers/activation.js",
-      "notes": "'Inter-action ability window' is engine-enforced by the dcActionsData finite state machine but not pinned by a dedicated oracle. Phase-D gap."
+      "status": "covered_by_ref",
+      "notes": "Covered by CRR-GRP-004: the same dcActionsData FSM (single-pointer selectedFigure + data.remaining decrement) serializes figure order, inter-action ability windows, and action-complete-before-next atomicity. Pinned via PROBE-PD-GRP-004 (batch-91).",
+      "seeAlso": [
+        "CRR-GRP-004"
+      ],
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-APH-001",
