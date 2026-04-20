@@ -4108,12 +4108,29 @@
         "lines": [
           1176,
           1181
-        ]
+        ],
+        "sha256": "8edbdbf52d68e152148b10f426ccfb252e960f546d2dc948515eba99611f0615"
       },
       "summary": "When distributing a number of identical elements amongst figures, the total given out must be ≤ the designated amount; each recipient may receive zero up to the full amount.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Distribute-token semantics rule has no named assertion pin. Phase-D gap — only relevant if/when skirmish adds cards with distribute-tokens wording."
+      "status": "covered",
+      "implementationArea": "src/game/damage-helpers.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-dis-distribute-cap-probe.test.js"
+        ],
+        "assertions": [
+          "001a: source — healHpDistributed initializes remaining=totalAmount and caps per-heal",
+          "001c: source — totalRecovered is computed as totalAmount - remaining",
+          "001d: behavior — distribute 5 across a DC with only 3 total damage → totalRecovered=3 (≤ total)",
+          "001f: behavior — individual figure can receive zero (undamaged skipped, others healed)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-RER-001",
