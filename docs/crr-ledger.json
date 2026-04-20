@@ -4624,12 +4624,30 @@
         "lines": [
           1164,
           1175
-        ]
+        ],
+        "sha256": "b007c533b8acb6f5537772b340f0f6e35cc03a4277cc8f6d407b92e98e3a635c"
       },
       "summary": "When a large figure enters difficult terrain, it spends only one additional movement point regardless of how many spaces of difficult terrain it occupies.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Large-figure-difficult single-surcharge rule has no named assertion pin. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game/movement.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-dt-large-single-surcharge-probe.test.js"
+        ],
+        "assertions": [
+          "005a: source — `entering` is the set of newly-entered cells (nextFootprint minus prevFootprint)",
+          "005b: source — `enteringDifficult` is a single boolean via Array.some, not a count",
+          "005c: source — the DT surcharge is a single unconditional +1 (no loop, no multiplier)",
+          "005d: source — only one `enteringDifficult` definition exists (no size-branched alternate surcharge)",
+          "005e: source — the step-cost is baseCost (1) + extraCost (DT + hostile surcharges only)"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-DT-006",
