@@ -1,0 +1,967 @@
+{
+  "group": "E",
+  "atomCount": 88,
+  "generatedAt": "2026-04-20",
+  "findings": [
+    {
+      "id": "CRR-ACT-004",
+      "clauses": [
+        "Special actions are denoted on components by the \uf041 icon. If an ability has two \uf041 icons, the ability is\nconsidered to be one action, but it costs the figure two of its actions to resolve.\n\u2501 When a special action (\uf041) contains multiple attacks, or a move and an attack, it still only requires the\nlisted number of actions to perform."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 6 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-ACT-007",
+      "clauses": [
+        "A figure can perform each special action (\uf041) only once per activation."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-ACV-002",
+      "clauses": [
+        "Players alternate resolving activations. When resolving an activation, a player chooses one ready friendly\ngroup to activate. After a player finishes resolving an activation, one of their opponents then resolves an\nactivation."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-ACV-005",
+      "clauses": [
+        "After performing up to two actions and the applicable \u201cduring your activation\u201d abilities, such as spending\nthe remaining movement points, a figure declares the end of its activation. A player may choose to end a\nfigure's activation without performing both actions or spending all of its movement points. Remaining\nactions and unspent movement points do not carry over to a figure's next activation."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 4 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-ACV-007",
+      "clauses": [
+        "If all friendly groups are exhausted, that player cannot perform an activation. The player's opponent(s)\ncontinue to resolve activations until all groups are exhausted."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-APH-004",
+      "clauses": [
+        "During a skirmish, players alternate activating groups, starting with the player with initiative each round. In\nFour-Player Skirmishes (p.32), each player in clockwise order activates one of their ready groups."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: During a skirmish, players alternate activating groups, star..."
+    },
+    {
+      "id": "CRR-APH-006",
+      "clauses": [
+        "During a skirmish, if a player has fewer ready Deployment cards than any of their opponents, that player\nmay choose not to activate a group and pass play back to their opponent."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: During a skirmish, if a player has fewer ready Deployment ca..."
+    },
+    {
+      "id": "CRR-BT-001",
+      "clauses": [
+        "Blocking terrain is represented by a solid red line surrounding a space of the map. Figures cannot enter, be\npushed into, count spaces through, or trace line of sight through a space of blocking terrain.",
+        "Sometimes blocking terrain is only on one edge of a space. Figures cannot move through, be pushed\nthrough, or be placed on (if a Large figure) a blocking edge unless they have a special ability that allows\nthis, such as Massive or Mobile.",
+        "If a figure with Massive or Mobile occupies a space containing blocking terrain, line of sight can be traced\nto that figure, spaces can be counted to that figure, and adjacency can be determined for that figure.\n\u2501 To draw line of sight to a figure or object occupying blocking terrain, you draw line of sight to its space\n(or a chosen space if the figure or object occupies more than one space). You can draw line of sight into\nthe space, but not through it.\n\u2501 When drawing line of sight from a figure or object occupying blocking terrain, you can draw line of\nsight out of its space (the space chosen if the figure or object occupies more than one space).",
+        "If a figure or object without Mobile or Massive occupies a space containing blocking terrain, apply the\nrules for Mobile to that figure or object.",
+        "While a figure occupies a space bordered on all four edges by walls or spaces that contain blocking terrain\n(such as in \uf036 01B \u201dthe Spire\u201d):",
+        "Those spaces of blocking terrain do not block counting spaces to or from that figure's space.",
+        "Those spaces of blocking terrain do not block line of sight to or from that figure's space.",
+        "Melee attacks can be declared by or targeting that figure, ignoring those spaces of blocking terrain.",
+        "Those spaces of blocking terrain still block movement."
+      ],
+      "fit": "partial",
+      "missing": [
+        "Only 2 assertions for 9 clauses \u2014 likely shallow coverage",
+        "Complex rule (9 clauses) with minimal test coverage (2 assertions)"
+      ],
+      "risk": "high",
+      "rationale": "Only 2 assertions for 9 clauses \u2014 likely shallow coverage; Complex rule (9 clauses) with minimal test coverage (2 assertions)"
+    },
+    {
+      "id": "CRR-BT-004",
+      "clauses": [
+        "Blocking terrain is represented by a solid red line surrounding a space of the map. Figures cannot enter, be\npushed into, count spaces through, or trace line of sight through a space of blocking terrain.",
+        "Sometimes blocking terrain is only on one edge of a space. Figures cannot move through, be pushed\nthrough, or be placed on (if a Large figure) a blocking edge unless they have a special ability that allows\nthis, such as Massive or Mobile.",
+        "If a figure with Massive or Mobile occupies a space containing blocking terrain, line of sight can be traced\nto that figure, spaces can be counted to that figure, and adjacency can be determined for that figure.\n\u2501 To draw line of sight to a figure or object occupying blocking terrain, you draw line of sight to its space\n(or a chosen space if the figure or object occupies more than one space). You can draw line of sight into\nthe space, but not through it.\n\u2501 When drawing line of sight from a figure or object occupying blocking terrain, you can draw line of\nsight out of its space (the space chosen if the figure or object occupies more than one space).",
+        "If a figure or object without Mobile or Massive occupies a space containing blocking terrain, apply the\nrules for Mobile to that figure or object.",
+        "While a figure occupies a space bordered on all four edges by walls or spaces that contain blocking terrain\n(such as in \uf036 01B \u201dthe Spire\u201d):",
+        "Those spaces of blocking terrain do not block counting spaces to or from that figure's space.",
+        "Those spaces of blocking terrain do not block line of sight to or from that figure's space.",
+        "Melee attacks can be declared by or targeting that figure, ignoring those spaces of blocking terrain.",
+        "Those spaces of blocking terrain still block movement."
+      ],
+      "fit": "partial",
+      "missing": [
+        "Only 1 assertions for 9 clauses \u2014 likely shallow coverage",
+        "Complex rule (9 clauses) with minimal test coverage (1 assertions)"
+      ],
+      "risk": "high",
+      "rationale": "Only 1 assertions for 9 clauses \u2014 likely shallow coverage; Complex rule (9 clauses) with minimal test coverage (1 assertions)"
+    },
+    {
+      "id": "CRR-CC-002",
+      "clauses": [
+        "Each player draws one Command card each Status Phase, plus one additional Command card for each\nterminal token the player controls (Control p.23)."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CC-003",
+      "clauses": [
+        "After the effect of a Command card has resolved, it is placed faceup in the player's discard pile."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CC-006",
+      "clauses": [
+        "Many Command cards have a restriction box listed above the ability. When playing a Command card that\nlists a trait, figure name, and/or affiliation icon, it must be played on a single friendly figure that matches\nall of the restrictions listed."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: Many Command cards have a restriction box listed above the a..."
+    },
+    {
+      "id": "CRR-CC-007",
+      "clauses": [
+        "If the card has the \uf041 (special action) icon, that figure must spend one action to resolve the ability.\nIf the card has two special action icons (\uf041 \uf041), that figure must spend two actions to resolve the ability."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: If the card has the \uf041 (special action) icon, that figure mus..."
+    },
+    {
+      "id": "CRR-CC-008",
+      "clauses": [
+        "If there are no cards remaining in a player's Command deck, the player cannot draw Command cards."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: If there are no cards remaining in a player's Command deck, ..."
+    },
+    {
+      "id": "CRR-CDC-004",
+      "clauses": [
+        "Skirmish Upgrade Cards: Some Deployment cards have the SKIRMISH UPGRADE trait. These cards provide\nspecial abilities, but unlike normal Deployment cards, they do not have corresponding figures. Rules and\nabilities on cards that reference Deployment cards do not affect, do not include, and cannot manipulate\nSkirmish Upgrade cards unless the rule or ability states otherwise.\nFor example, a player cannot use the card \"Temporary Alliance\" to add Skirmish Upgrade cards from other\nfactions to their army. Or, as another example, when using \"Take Initiative,\" players cannot choose to\nexhaust one of their Skirmish Upgrade cards."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CND-005",
+      "clauses": [
+        "Conditions have the BENEFICIAL or HARMFUL trait. This trait has no inherent effect but may be referred to by\nabilities. Focused, Hidden are BENEFICIAL, Bleeding, Stunned, Weakened are HARMFUL conditions."
+      ],
+      "fit": "unclear",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "evidence_type unrecognized or test not readable"
+    },
+    {
+      "id": "CRR-CND-006",
+      "clauses": [
+        "A figure cannot be affected by multiple instances of the same condition. For example, if a figure that is\nalready Stunned would become Stunned again for any reason, nothing happens."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CND-007",
+      "clauses": [
+        "Condition keywords (Focus, Hide, Bleed, Stun, Weaken) are sometimes gained for attacks. When an attack\nhas a condition keyword, the corresponding condition is applied using the following rules:\n\u2501 The target of the attack must suffer one or more \uf048 in step 7 of the attack for the corresponding\ncondition to be applied. The corresponding condition is applied after the attack resolves."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CND-009",
+      "clauses": [
+        "Objects cannot gain conditions."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: Objects cannot gain conditions...."
+    },
+    {
+      "id": "CRR-CNF-004",
+      "clauses": [
+        "Effects from multiple figures under the control of a single player are resolved in the order of that player's\nchoice."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: Effects from multiple figures under the control of a single ..."
+    },
+    {
+      "id": "CRR-CNF-005",
+      "clauses": [
+        "The decision for a player to resolve an optional ability coincides with the order of resolution. After a player\nhas declined to trigger one or more abilities, the player does not have the opportunity to trigger that ability\nuntil the next triggering instance."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CNF-007",
+      "clauses": [
+        "During a skirmish, outside of attacks, mission rules are resolved first, followed by effects from the player with\ninitiative, then effects from each other player, proceeding clockwise around the table."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CNV-001",
+      "clauses": [
+        "Some abilities convert one die result into another. When resolving one of these abilities, the old result is\nremoved from the dice results and the new result is added to the dice results (attack/defense pool)."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CNV-003",
+      "clauses": [
+        "After being converted, the new result may be converted again by other effects."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CTRL-001",
+      "clauses": [
+        "A player Controls a tile if there is at least one friendly figure in any space of the tile and no hostile figures\nin any spaces of the tile. \u2013 If both friendly and hostile figures are on the same tile, no one Controls the tile."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: A player Controls a tile if there is at least one friendly f..."
+    },
+    {
+      "id": "CRR-CTRL-002",
+      "clauses": [
+        "A player Controls a token if there is at least one friendly figure on or adjacent to the token and there are no\nhostile figures on or adjacent to the token.\n\u2501 If both friendly and hostile figures are on or adjacent to the token, no one Controls the token."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-CTRL-003",
+      "clauses": [
+        "In a Skirmish, a player Controls a deployment zone if there is at least one friendly figure in any space of\nthat deployment zone and no hostile figures in any space of that deployment zone."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: In a Skirmish, a player Controls a deployment zone if there ..."
+    },
+    {
+      "id": "CRR-DEPL-001",
+      "clauses": [
+        "During setup of a skirmish, players place all of their figures within their deployment zone. \u201cSkirmish Mission\nSetup\u201d p.45."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: During setup of a skirmish, players place all of their figur..."
+    },
+    {
+      "id": "CRR-ELI-001",
+      "clauses": [
+        "All figures that correspond to elite (red) Deployment cards are elite. Elite figures usually have better abilities\nand more Health compared to their regular versions."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-ELI-002",
+      "clauses": [
+        "Elite Deployment cards share the same name as regular Deployment cards. When a figure is called out by\nname (for example, \"Stormtrooper\"), this refers to both regular and elite versions of this figure."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-ELI-003",
+      "clauses": [
+        "Elite figures are immune to some abilities. For example, an ability may say \"Choose a regular figure.\""
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-ESC-001",
+      "clauses": [
+        "Certain mission rules can allow a figure to escape. In order to escape, the figure must spend one movement\npoint while on or adjacent to the space indicated in the mission's rules."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: Certain mission rules can allow a figure to escape. In order..."
+    },
+    {
+      "id": "CRR-EXH-003",
+      "clauses": [
+        "After a player activates a group, the player exhausts its corresponding Deployment card or activation token\nto mark that the figures in that group have already activated during this round.",
+        "After a companion resolves an activation its companion card is exhausted."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 2 clauses"
+    },
+    {
+      "id": "CRR-EXH-005",
+      "clauses": [
+        "If all Deployment cards or activation tokens belonging to a player are exhausted, the player cannot use\nabilities that must be used before, during, or after the player's figure activates."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: If all Deployment cards or activation tokens belonging to a ..."
+    },
+    {
+      "id": "CRR-EXH-006",
+      "clauses": [
+        "Abilities on exhausted cards can be used as long as the abilities do not require the player to exhaust the card\nto use the ability."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: Abilities on exhausted cards can be used as long as the abil..."
+    },
+    {
+      "id": "CRR-FGC-001",
+      "clauses": [
+        "For a single-figure group, the figure cost is equal to the group's deployment cost."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-FGC-002",
+      "clauses": [
+        "For a multi-figure group, the figure cost is equal to the figure's reinforcement cost."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-FGC-003",
+      "clauses": [
+        "A companion has a figure cost of 0."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-FOC-001",
+      "clauses": [
+        "Focused is a BENEFICIAL condition that provides the figure with an additional green die the next\ntime the figure performs an attribute test or performs an attack. The condition is discarded after the\nattribute test or after attack resolves."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-FOC-002",
+      "clauses": [
+        "time the figure performs an attribute test or performs an attack. The condition is discarded after the\nattribute test or after attack resolves."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-FOC-003",
+      "clauses": [
+        "A figure with this condition automatically gains the extra die when it attacks or performs an attribute test.\nThe player cannot choose to save the condition for a later attack or test."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-FOC-005",
+      "clauses": [
+        "Due to timing conflict resolution, an existing Focused is discarded before a new Focused is gained."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-FOC-006",
+      "clauses": [
+        "If a figure gains the Focused condition after rolling dice for an attack or test, it cannot use the condition\nuntil the next time it attacks or performs a test."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: If a figure gains the Focused condition after rolling dice f..."
+    },
+    {
+      "id": "CRR-FRM-003",
+      "clauses": [
+        "Form Cards are unique. If there are multiple Clawdite Shapeshifters in play, only 1 copy of each Clawdite\nShapeshifter Form card can be in play at the same time. During a skirmish, only 1 copy can be in play in each\narmy instead."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 4 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-GRP-002",
+      "clauses": [
+        "Each Deployment card shows a number of bars below its deployment cost. Ttheir is the starting group size.\nThis number of figures is placed when deploying this group."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: Each Deployment card shows a number of bars below its deploy..."
+    },
+    {
+      "id": "CRR-GRP-003",
+      "clauses": [
+        "When a Deployment card for a group is exhausted, all figures in that group are exhausted and cannot\nperform activations."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-GRP-004",
+      "clauses": [
+        "While activating a group of two or more figures, each figure resolves its activation independently. Resolve\nboth actions for one figure before resolving actions for the next figure."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: While activating a group of two or more figures, each figure..."
+    },
+    {
+      "id": "CRR-IACT-001",
+      "clauses": [
+        "A figure can perform an interact as an action."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-IACT-002",
+      "clauses": [
+        "A figure must be in the same space as or adjacent to an object in order to interact with it."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-IACT-005",
+      "clauses": [
+        "If the mission rules have an attribute icon in parentheses after the target of the interact, the figure must pass\nthe corresponding attribute test in order to resolve the effect of the interact."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: If the mission rules have an attribute icon in parentheses a..."
+    },
+    {
+      "id": "CRR-INCP-001",
+      "clauses": [
+        "Some mission rules refer to a figure being incapacitated, most often when a figure is defeated. Instead of being\nremoved from the map, the figure remains on the map and gains a number of restrictions.",
+        "The figure remains under the control of the same player.",
+        "The figure does not restrict movement or block line of sight. Other figures cannot end their movement in a\nspace containing an incapacitated figure."
+      ],
+      "fit": "partial",
+      "missing": [
+        "invariant_pin evidence pins code structure (e.g., 'X is at line Y'), not comprehensive runtime behavior verification",
+        "May miss: exception cases, edge conditions, interactions with other game state, complex timing scenarios"
+      ],
+      "risk": "high",
+      "rationale": "invariant_pin on multi-clause rule (3 clauses); source-level proofs do not guarantee runtime correctness for all CRR scenarios"
+    },
+    {
+      "id": "CRR-INCP-002",
+      "clauses": [
+        "When a figure is incapacitated, it discards all conditions, and conditions cannot be applied to that figure."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: When a figure is incapacitated, it discards all conditions, ..."
+    },
+    {
+      "id": "CRR-INCP-003",
+      "clauses": [
+        "The figure cannot suffer \uf048 (damage) or be targeted or affected by attacks, abilities, or any game effect\nexcept as specified by the mission's rules. The abilities of the figure are no longer available."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-INCP-004",
+      "clauses": [
+        "The figure can still be pushed by a massive figure ending its movement in the incapacitated figure's space."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: The figure can still be pushed by a massive figure ending it..."
+    },
+    {
+      "id": "CRR-MEL-001",
+      "clauses": [
+        "Some Deployment cards and Item cards are marked with the \uf050 icon. This icon means that the figures can\nperform melee attacks.",
+        "Melee attacks can target a hostile figure or object adjacent to or in the same space as the attacker.",
+        "Accuracy is not required while performing melee attacks.",
+        "If a figure does not have the \uf050 icon, it cannot perform melee attacks. An attack targeting an adjacent figure\nthat uses the \uf04f icon is a ranged attack, not a melee attack.",
+        "A \uf050 (melee) attack with the Reach keyword can target figures or objects in line of sight and within 2\nspaces."
+      ],
+      "fit": "partial",
+      "missing": [
+        "Only 1 assertions for 5 clauses \u2014 likely shallow coverage",
+        "CRR specifies restrictions/gates but assertions do not verify rejection logic",
+        "Complex rule (5 clauses) with minimal test coverage (1 assertions)"
+      ],
+      "risk": "high",
+      "rationale": "Only 1 assertions for 5 clauses \u2014 likely shallow coverage; CRR specifies restrictions/gates but assertions do not verify rejection logic; Complex rule (5 clauses) with minimal test coverage (1 assertions)"
+    },
+    {
+      "id": "CRR-MEL-002",
+      "clauses": [
+        "Some Deployment cards and Item cards are marked with the \uf050 icon. This icon means that the figures can\nperform melee attacks.",
+        "Melee attacks can target a hostile figure or object adjacent to or in the same space as the attacker.",
+        "Accuracy is not required while performing melee attacks.",
+        "If a figure does not have the \uf050 icon, it cannot perform melee attacks. An attack targeting an adjacent figure\nthat uses the \uf04f icon is a ranged attack, not a melee attack.",
+        "A \uf050 (melee) attack with the Reach keyword can target figures or objects in line of sight and within 2\nspaces."
+      ],
+      "fit": "partial",
+      "missing": [
+        "Only 2 assertions for 5 clauses \u2014 likely shallow coverage",
+        "CRR specifies restrictions/gates but assertions do not verify rejection logic",
+        "Complex rule (5 clauses) with minimal test coverage (2 assertions)"
+      ],
+      "risk": "high",
+      "rationale": "Only 2 assertions for 5 clauses \u2014 likely shallow coverage; CRR specifies restrictions/gates but assertions do not verify rejection logic; Complex rule (5 clauses) with minimal test coverage (2 assertions)"
+    },
+    {
+      "id": "CRR-MEL-003",
+      "clauses": [
+        "Some Deployment cards and Item cards are marked with the \uf050 icon. This icon means that the figures can\nperform melee attacks.",
+        "Melee attacks can target a hostile figure or object adjacent to or in the same space as the attacker.",
+        "Accuracy is not required while performing melee attacks.",
+        "If a figure does not have the \uf050 icon, it cannot perform melee attacks. An attack targeting an adjacent figure\nthat uses the \uf04f icon is a ranged attack, not a melee attack.",
+        "A \uf050 (melee) attack with the Reach keyword can target figures or objects in line of sight and within 2\nspaces."
+      ],
+      "fit": "partial",
+      "missing": [
+        "invariant_pin evidence pins code structure (e.g., 'X is at line Y'), not comprehensive runtime behavior verification",
+        "May miss: exception cases, edge conditions, interactions with other game state, complex timing scenarios"
+      ],
+      "risk": "high",
+      "rationale": "invariant_pin on multi-clause rule (5 clauses); source-level proofs do not guarantee runtime correctness for all CRR scenarios"
+    },
+    {
+      "id": "CRR-MSN-001",
+      "clauses": [
+        "These tokens are used to represent objects, people, or general points of interest.\nMission tokens have no inherent effects and act as specified in the mission."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: These tokens are used to represent objects, people, or gener..."
+    },
+    {
+      "id": "CRR-PAY-001",
+      "clauses": [
+        "In a Skirmish, when an ability instructs a player to pay another player VPs, the paying player loses VPs and the\npaid player gains an equal number of VPs."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 4 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-PLC-001",
+      "clauses": [
+        "PLACE\nMany effects place figures or tokens on specific spaces of the map.",
+        "When a figure on the map is placed, it is removed from its current space and then placed where indicated.",
+        "Placing a figure in a space requires no movement points.",
+        "A player cannot choose to place a figure in a space where it cannot end its movement, such as in a space\ncontaining another figure, blocking terrain, or impassable terrain (unless their ability allows it).",
+        "When a figure is placed, it enters the space(s) where it is placed and exits the space(s) it occupied before.",
+        "When a figure is placed, it ends movement."
+      ],
+      "fit": "partial",
+      "missing": [
+        "Only 1 assertions for 6 clauses \u2014 likely shallow coverage",
+        "CRR specifies restrictions/gates but assertions do not verify rejection logic",
+        "Complex rule (6 clauses) with minimal test coverage (1 assertions)"
+      ],
+      "risk": "high",
+      "rationale": "Only 1 assertions for 6 clauses \u2014 likely shallow coverage; CRR specifies restrictions/gates but assertions do not verify rejection logic; Complex rule (6 clauses) with minimal test coverage (1 assertions)"
+    },
+    {
+      "id": "CRR-PLC-003",
+      "clauses": [
+        "PLACE\nMany effects place figures or tokens on specific spaces of the map.",
+        "When a figure on the map is placed, it is removed from its current space and then placed where indicated.",
+        "Placing a figure in a space requires no movement points.",
+        "A player cannot choose to place a figure in a space where it cannot end its movement, such as in a space\ncontaining another figure, blocking terrain, or impassable terrain (unless their ability allows it).",
+        "When a figure is placed, it enters the space(s) where it is placed and exits the space(s) it occupied before.",
+        "When a figure is placed, it ends movement."
+      ],
+      "fit": "partial",
+      "missing": [
+        "Only 1 assertions for 6 clauses \u2014 likely shallow coverage",
+        "CRR specifies restrictions/gates but assertions do not verify rejection logic",
+        "Complex rule (6 clauses) with minimal test coverage (1 assertions)"
+      ],
+      "risk": "high",
+      "rationale": "Only 1 assertions for 6 clauses \u2014 likely shallow coverage; CRR specifies restrictions/gates but assertions do not verify rejection logic; Complex rule (6 clauses) with minimal test coverage (1 assertions)"
+    },
+    {
+      "id": "CRR-RDY-002",
+      "clauses": [
+        "Deployment cards (Imperial groups and Rebel allies), all exhausted Imperial cards (Class cards, Agenda\ncards, Imperial companion cards. Reward cards), and activation tokens of heroes are readied during the\nReady step of the Status Phase of each round. All exhausted cards of a hero are readied at the start of that\nhero's activation."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-RTK-001",
+      "clauses": [
+        "Some missions allow figures to retrieve specific tokens. A figure adjacent to or in the same space as the token\ncan perform an interact to retrieve the token. Place the token on the figure's base to mark that the figure is now\ncarrying that token. The token now moves with the figure."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-RTK-002",
+      "clauses": [
+        "A carried token cannot be retrieved by other figures, traded to other figures, or voluntarily dropped.",
+        "If a figure is defeated, any tokens that it is carrying are dropped in its space. This includes when a hero\nbecomes wounded or if the hero withdraws."
+      ],
+      "fit": "partial",
+      "missing": [
+        "CRR specifies restrictions/gates but assertions do not verify rejection logic"
+      ],
+      "risk": "high",
+      "rationale": "CRR specifies restrictions/gates but assertions do not verify rejection logic"
+    },
+    {
+      "id": "CRR-SKA-003",
+      "clauses": [
+        "Abilities on \"Attachment\" cards apply to all figures in the corresponding group.",
+        "Many attachments require the group to have a specific trait, such as \"TROOPER.\" Attachments with these\nrestrictions cannot be placed on a group that does not have the trait."
+      ],
+      "fit": "partial",
+      "missing": [
+        "invariant_pin evidence pins code structure (e.g., 'X is at line Y'), not comprehensive runtime behavior verification",
+        "May miss: exception cases, edge conditions, interactions with other game state, complex timing scenarios"
+      ],
+      "risk": "high",
+      "rationale": "invariant_pin on multi-clause rule (2 clauses); source-level proofs do not guarantee runtime correctness for all CRR scenarios"
+    },
+    {
+      "id": "CRR-SKMS-002",
+      "clauses": [
+        "2. Determine Initiative: The player who has the lowest total cost of Deployment cards chooses which player\nbegins the game with the initiative token. In the case of a tie, players determine initiative randomly."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: 2. Determine Initiative: The player who has the lowest total..."
+    },
+    {
+      "id": "CRR-SKMS-004",
+      "clauses": [
+        "4. Deploy Units: The player with initiative chooses one of the deployment zone shown on the skirmish\nmission's diagram. If playing two-player skirmish, red or blue deployment zones are available. If playing\nFour-Player Skirmish, also yellow and green deployment zones exist. The player with initiative deploys all\nof their figures in the chosen deployment zone.\nThe player to their left does the same, choosing from the remaining deployment zones, and so on until all\nplayers have deployed.\nIf all of a player's figures do not fit in their deployment zone, the player must remove and redeploy figures\nto fill as many spaces of this zone as possible. Then the player deploys any remaining figures as close to\nthe deployment zone as possible (see \"Counting Spaces\" on page 23)."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: 4. Deploy Units: The player with initiative chooses one of t..."
+    },
+    {
+      "id": "CRR-SKR-001",
+      "clauses": [
+        "In skirmish, some effects on command and Deployment cards refer to the number of the current round. Players\nshould keep track of the current round number. The round number advances during the Status Phase after step\n3, \u201cEnd of Round Effects\u201d. (See \u201cStatus Phase\u201d p. 57)"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-SSA-001",
+      "clauses": [
+        "Unlike heroes, a figure that has a Deployment card can use only one of its actions to attack per activation.\nThis includes using special actions that involve performing one or more attacks (such as the Nexu's\n\"Pounce\" or Darth Vader's \"Brutality\").",
+        "If an ability allows a figure to perform an attack outside of its activation, this attack does not count toward\nthe limit of one attack per activation."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 2 clauses"
+    },
+    {
+      "id": "CRR-SSA-002",
+      "clauses": [
+        "If an ability allows a figure to perform an attack outside of its activation, this attack does not count toward\nthe limit of one attack per activation."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-STSK-001",
+      "clauses": [
+        "In a skirmish, when a figure suffers \uf043, it suffers an equal amount of \uf048 (damage) instead. The player\ncontrolling the figure can prevent any of this \uf048 by discarding one Command card from the top of their deck\nfor each \uf043 that they wishes to prevent."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-TGT-002",
+      "clauses": [
+        "If the target is a large figure, the attacker must target one space that the target occupies. This space is used\nfor determining line of sight and some abilities."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 7 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-TIE-001",
+      "clauses": [
+        "In the rare situation that both players have the same number of victory points at the end of the game, the player\nwith the most victory points from defeating hostile figures wins the game."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-TIE-002",
+      "clauses": [
+        "If the result is still a tie, each player counts the number of damage tokens on their remaining figures. Then, each\nplayer adds the Health values of any defeated figures corresponding to Deployment cards still in their play area.\nThe player with the lowest total damage tokens and Health wins."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-TIE-003",
+      "clauses": [
+        "If players are still tied, each player rolls one blue die, and the player with the highest Accuracy rolled wins the\ngame."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-TRM-002",
+      "clauses": [
+        "In a skirmish, each player draws one additional Command card during the Status Phase for\neach terminal the player controls."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-TRM-003",
+      "clauses": [
+        "Terminals do not block line of sight or movement. Figures can end their movement in the same space as a\nterminal token."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-TRM-004",
+      "clauses": [
+        "If a terminal is in a space containing terrain, the terrain in the space still takes effect. For example, a space\nwith blocking terrain that contains a terminal token still blocks line of sight, and figures cannot enter the\nspace."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: If a terminal is in a space containing terrain, the terrain ..."
+    },
+    {
+      "id": "CRR-UNI-001",
+      "clauses": [
+        "UNIQUE\nEach player can only use one copy of each unique card at a time. These cards are identified by a bullet (\u25aa)\nbefore the name, for example, \"\u25aa Darth Vader.\""
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-UNI-002",
+      "clauses": [
+        "Unique cards are identified by name only. Sub-names, affiliations, and abilities are not taken into account\nwhen determining which cards have the same name. For example, a player that has \"\u25aa Luke Skywalker\nHERO OF THE REBELLION\" in play cannot deploy \u201c\u25aa Luke Skywalker JEDI KNIGHT\u201d."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-VPS-001",
+      "clauses": [
+        "In a Skirmish, some abilities allow a player to spend their VPs or force their opponent to lose VPs. A player"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 2 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-VPS-002",
+      "clauses": [
+        "cannot have fewer than 0 VPs and any VPs lost beyond 0 are ignored. When an ability instructs a player to pay"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-VPS-004",
+      "clauses": [
+        "If using an ability requires a player to pay more VPs than that player has, that player cannot use that ability."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: If using an ability requires a player to pay more VPs than t..."
+    },
+    {
+      "id": "CRR-VPS-005",
+      "clauses": [
+        "If a player's ability requires an opponent to pay more VPs than they have, that opponent pays all of their\nremaining VPs."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 3 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-WIN-001",
+      "clauses": [
+        "A two-player skirmish mission ends as soon as one player has accumulated 40 or more victory points (VPs)."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-WIN-003",
+      "clauses": [
+        "The player with the most VPs wins the game. If all of a player's figures are defeated, the player loses the game\nimmediately, regardless of victory points."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle with 1 assertions covering 1 clauses"
+    },
+    {
+      "id": "CRR-WIN-004",
+      "clauses": [
+        "A player earns victory points (VPs) during a game each time the player defeats an opponent's figure or through\nabilities or mission rules.",
+        "When a figure is defeated, the opposing player scores VPs equal to that figure's Figure Cost (p.30)."
+      ],
+      "fit": "partial",
+      "missing": [
+        "Only 1 assertions for 2 clauses \u2014 likely shallow coverage"
+      ],
+      "risk": "high",
+      "rationale": "Only 1 assertions for 2 clauses \u2014 likely shallow coverage"
+    },
+    {
+      "id": "CRR-WIN-005",
+      "clauses": [
+        "When the last figure in a group is defeated, if that group had an attachment, the opposing player scores VPs\nequal to that attachment's cost."
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin; single clause: When the last figure in a group is defeated, if that group h..."
+    }
+  ]
+}

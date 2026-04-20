@@ -1,0 +1,682 @@
+{
+  "group": "D",
+  "atomCount": 58,
+  "generatedAt": "2026-04-20",
+  "findings": [
+    {
+      "id": "CRR-LOS-001",
+      "clauses": [
+        "LOS is traced from one corner of the source space",
+        "LOS traces to two adjacent corners of target space",
+        "Lines must be non-intersecting and non-overlapping",
+        "Lines passing through area containing a wall blocks LOS",
+        "Lines passing through area containing a door blocks LOS",
+        "Lines passing through area containing non-companion figure blocks LOS",
+        "Lines passing through area containing energy shield blocks LOS",
+        "Lines passing through area containing blocking terrain blocks LOS"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Non-companion figure blocking as part of LOS blocking set \u2014 probe tests doors/shields but not figures as blockers explicitly"
+      ],
+      "risk": "high",
+      "rationale": "Analyzed probe and source files for CRR-LOS-001."
+    },
+    {
+      "id": "CRR-LOS-002",
+      "clauses": [
+        "Blocker set includes walls",
+        "Blocker set includes doors",
+        "Blocker set includes non-companion figures",
+        "Blocker set includes energy shields",
+        "Blocker set includes blocking terrain"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Non-companion figures as blockers \u2014 no direct test showing figures block LOS when placed between attacker and target"
+      ],
+      "risk": "high",
+      "rationale": "Analyzed probe and source files for CRR-LOS-002."
+    },
+    {
+      "id": "CRR-LOS-003",
+      "clauses": [
+        "Large attacker may use any of its spaces as source",
+        "Large target may use any of its spaces as target",
+        "Multi-space object target may use any of its spaces as target"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LOS-003."
+    },
+    {
+      "id": "CRR-LOS-007",
+      "clauses": [
+        "LOS blocked through corner with 2+ walls",
+        "LOS blocked through corner with 2+ doors",
+        "LOS blocked through corner with 2+ blocking terrain",
+        "LOS blocked through corner with 2+ energy shields",
+        "LOS blocked through corner with mixed combinations of walls/doors/blocking/shields"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LOS-007."
+    },
+    {
+      "id": "CRR-LOS-008",
+      "clauses": [
+        "LOS allowed through corner with exactly 1 obstacle",
+        "One figure + one diagonally positioned wall allowed at corner",
+        "One figure + one diagonally positioned door allowed at corner",
+        "One figure + one diagonally positioned blocking terrain allowed at corner",
+        "One figure + one diagonally positioned energy shield allowed at corner"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LOS-008."
+    },
+    {
+      "id": "CRR-LOS-009",
+      "clauses": [
+        "Figure can have LOS to another that doesn't have LOS back",
+        "Asymmetric LOS is possible"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LOS-009."
+    },
+    {
+      "id": "CRR-LOS-010",
+      "clauses": [
+        "Figure does not block LOS to itself",
+        "Target figure does not block LOS"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LOS-010."
+    },
+    {
+      "id": "CRR-LOS-011",
+      "clauses": [
+        "Figures always have LOS to adjacent figures",
+        "Figures always have LOS to adjacent objects",
+        "Doors may block adjacent LOS (exception)",
+        "Figures have LOS to figures in same space",
+        "Figures have LOS to objects in same space",
+        "Figures have LOS to themselves"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Door-adjacent exception \u2014 only one test case exists for closed door blocking adjacency"
+      ],
+      "risk": "medium",
+      "rationale": "Analyzed probe and source files for CRR-LOS-011."
+    },
+    {
+      "id": "CRR-LOS-013",
+      "clauses": [
+        "Figures do not block LOS to Massive figures",
+        "Figures do not block LOS from Massive figures"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LOS-013."
+    },
+    {
+      "id": "CRR-LOS-014",
+      "clauses": [
+        "Blocking edge at target corners blocks LOS if between target and source corner",
+        "Door at target corners blocks LOS if between target and source corner",
+        "Wall at target corners blocks LOS if between target and source corner"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LOS-014."
+    },
+    {
+      "id": "CRR-LOS-015",
+      "clauses": [
+        "LOS can be drawn to figure occupying blocking terrain",
+        "LOS can be drawn to object occupying blocking terrain",
+        "Shield on target does not block LOS into target"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LOS-015."
+    },
+    {
+      "id": "CRR-LOS-016",
+      "clauses": [
+        "The two corner-to-corner lines must be non-intersecting",
+        "The two corner-to-corner lines must be non-overlapping"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LOS-016."
+    },
+    {
+      "id": "CRR-ADJ-001",
+      "clauses": [
+        "Space is adjacent to spaces sharing an edge (orthogonal)",
+        "Space is adjacent to spaces sharing a corner (diagonal)"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ADJ-001."
+    },
+    {
+      "id": "CRR-ADJ-002",
+      "clauses": [
+        "Two spaces sharing edge with wall are not adjacent",
+        "Two spaces sharing edge with door are not adjacent",
+        "Two spaces sharing edge with blocking terrain are not adjacent"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ADJ-002."
+    },
+    {
+      "id": "CRR-ADJ-005",
+      "clauses": [
+        "Spaces on opposite sides of diagonal intersection of walls are not adjacent",
+        "Spaces on opposite sides of diagonal intersection of doors are not adjacent",
+        "Spaces on opposite sides of diagonal intersection of blocking terrain are not adjacent",
+        "Rule applies only when BOTH right-angle paths are blocked"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ADJ-005."
+    },
+    {
+      "id": "CRR-ADJ-006",
+      "clauses": [
+        "Space that is blocking terrain is not adjacent to any other space"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ADJ-006."
+    },
+    {
+      "id": "CRR-ADJ-007",
+      "clauses": [
+        "Figure on blocking terrain is adjacent to another figure at distance 1",
+        "Object on blocking terrain is adjacent to another figure at distance 1",
+        "Figure on blocking terrain is adjacent to another object at distance 1",
+        "Figure on blocking terrain is adjacent to space at distance 1 even though its space is not adjacent"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ADJ-007."
+    },
+    {
+      "id": "CRR-CS-001",
+      "clauses": [
+        "Distance is the number of moves a small figure needs to go from one space to another",
+        "Impassable terrain can be entered for counting"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Impassable terrain counting rule\u2014no explicit test of this carveout in distance calculations"
+      ],
+      "risk": "medium",
+      "rationale": "Analyzed probe and source files for CRR-CS-001."
+    },
+    {
+      "id": "CRR-CS-002",
+      "clauses": [
+        "Impassable terrain can be moved through for counting"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Dedicated coverage for impassable-terrain behavior in counting context is limited"
+      ],
+      "risk": "medium",
+      "rationale": "Analyzed probe and source files for CRR-CS-002."
+    },
+    {
+      "id": "CRR-CS-003",
+      "clauses": [
+        "Counting cannot pass through walls",
+        "Counting cannot pass through doors",
+        "Counting cannot pass through blocking terrain"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Test coverage for all three blocker types in counting context not fully explicit"
+      ],
+      "risk": "medium",
+      "rationale": "Analyzed probe and source files for CRR-CS-003."
+    },
+    {
+      "id": "CRR-CS-004",
+      "clauses": [
+        "When ability says 'within N spaces', counts taken from ability user",
+        "When ability says 'adjacent', counts taken from ability user"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-CS-004."
+    },
+    {
+      "id": "CRR-HID-001",
+      "clauses": [
+        "Hidden is a BENEFICIAL condition",
+        "Hidden applies -2 Accuracy penalty to attacks"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-HID-001."
+    },
+    {
+      "id": "CRR-HID-002",
+      "clauses": [
+        "Figure discards Hidden after resolving an attack"
+      ],
+      "fit": "unclear",
+      "missing": [
+        "No dedicated test file directly testing discard behavior"
+      ],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-HID-002."
+    },
+    {
+      "id": "CRR-RCH-001",
+      "clauses": [
+        "Figure with Reach may perform melee attacks at range 2"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-RCH-001."
+    },
+    {
+      "id": "CRR-RNG-001",
+      "clauses": [
+        "Ranged attacks can target any hostile figure with LOS",
+        "Ranged attacks can target any attackable object with LOS"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-RNG-001."
+    },
+    {
+      "id": "CRR-DIS-001",
+      "clauses": [
+        "Distribution divides identical elements amongst figures",
+        "Each figure receives at least one element or none"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-DIS-001."
+    },
+    {
+      "id": "CRR-RER-001",
+      "clauses": [
+        "When dice are rerolled, old results ignored",
+        "New results replace old results"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-RER-001."
+    },
+    {
+      "id": "CRR-RER-002",
+      "clauses": [
+        "Each die rerolled only once per attack",
+        "Reroll limit is regardless of who rerolls"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-RER-002."
+    },
+    {
+      "id": "CRR-ES-001",
+      "clauses": [
+        "Space with energy shield blocks LOS"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ES-001."
+    },
+    {
+      "id": "CRR-ES-002",
+      "clauses": [
+        "Energy shield does not block movement",
+        "Energy shield does not block adjacency",
+        "Energy shield does not block counting spaces"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ES-002."
+    },
+    {
+      "id": "CRR-ES-003",
+      "clauses": [
+        "Diagonal intersection of shield + wall blocks LOS",
+        "Diagonal intersection of shield + door blocks LOS",
+        "Diagonal intersection of shield + blocking terrain blocks LOS",
+        "Diagonal intersection of shield + shield blocks LOS"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ES-003."
+    },
+    {
+      "id": "CRR-ES-004",
+      "clauses": [
+        "LOS can be traced to figure occupying shield space",
+        "LOS can be traced to object occupying shield space"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ES-004."
+    },
+    {
+      "id": "CRR-ES-005",
+      "clauses": [
+        "LOS can be drawn out of shield space"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-ES-005."
+    },
+    {
+      "id": "CRR-RBL-001",
+      "clauses": [
+        "Rubble space is considered difficult terrain",
+        "Rubble may have additional rules depending on mission"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-RBL-001."
+    },
+    {
+      "id": "CRR-RBL-002",
+      "clauses": [
+        "Rubble effect does not stack with preexisting difficult terrain"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-RBL-002."
+    },
+    {
+      "id": "CRR-RBL-003",
+      "clauses": [
+        "Space can contain both rubble and energy shield"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-RBL-003."
+    },
+    {
+      "id": "CRR-LF-002",
+      "clauses": [
+        "Large attacker LOS traced from any of its spaces",
+        "Large attacker may use different space than figure is attacked from"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LF-002."
+    },
+    {
+      "id": "CRR-LF-003",
+      "clauses": [
+        "Large target performs per-space targeting during attack"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LF-003."
+    },
+    {
+      "id": "CRR-LF-004",
+      "clauses": [
+        "Large figures cannot move diagonally"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LF-004."
+    },
+    {
+      "id": "CRR-LF-005",
+      "clauses": [
+        "Large figure may spend 1 MP to rotate 90 degrees"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LF-005."
+    },
+    {
+      "id": "CRR-LF-006",
+      "clauses": [
+        "Large figure exits all spaces when it moves",
+        "Large figure enters all spaces when it moves",
+        "Exit and entry are atomic"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LF-006."
+    },
+    {
+      "id": "CRR-LF-007",
+      "clauses": [
+        "Large figure pushed does not rotate",
+        "Large figure moving set number of spaces does not rotate"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-LF-007."
+    },
+    {
+      "id": "CRR-OBJ-002",
+      "clauses": [
+        "Objects except doors do not restrict movement",
+        "Objects except doors do not block LOS"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-OBJ-002."
+    },
+    {
+      "id": "CRR-OBJ-003",
+      "clauses": [
+        "Objects cannot be pushed"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-OBJ-003."
+    },
+    {
+      "id": "CRR-OBJ-004",
+      "clauses": [
+        "Mission rules can allow objects to be attacked by specified figures"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-OBJ-004."
+    },
+    {
+      "id": "CRR-OBJ-005",
+      "clauses": [
+        "Abilities applying damage to objects only affect objects in range"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-OBJ-005."
+    },
+    {
+      "id": "CRR-TER-001",
+      "clauses": [
+        "Single terrain tile fully encompassing group of spaces defines terrain type for all"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-TER-001."
+    },
+    {
+      "id": "CRR-TER-002",
+      "clauses": [
+        "Colored borders without walls do not block movement",
+        "Colored borders without walls do not block LOS",
+        "Colored borders without walls do not block adjacency",
+        "Colored borders without walls do not affect counting"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-TER-002."
+    },
+    {
+      "id": "CRR-DOR-001",
+      "clauses": [
+        "Doors block LOS"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-DOR-001."
+    },
+    {
+      "id": "CRR-DOR-002",
+      "clauses": [
+        "Doors block adjacency",
+        "Spaces sharing only edge with door are not adjacent"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-DOR-002."
+    },
+    {
+      "id": "CRR-DOR-003",
+      "clauses": [
+        "Figures cannot move through closed doors",
+        "Figures cannot trace LOS through closed doors",
+        "Figures cannot count spaces through closed doors"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-DOR-003."
+    },
+    {
+      "id": "CRR-DOR-004",
+      "clauses": [
+        "Figure can interact with door to open it",
+        "Player removes door from map when opened"
+      ],
+      "fit": "partial",
+      "missing": [
+        "No test explicitly validates door-removal behavior when opened"
+      ],
+      "risk": "medium",
+      "rationale": "Analyzed probe and source files for CRR-DOR-004."
+    },
+    {
+      "id": "CRR-DOR-005",
+      "clauses": [
+        "When effect closes door, place door token on map"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Limited test coverage for door-closing effect and token placement"
+      ],
+      "risk": "medium",
+      "rationale": "Analyzed probe and source files for CRR-DOR-005."
+    },
+    {
+      "id": "CRR-CRT-001",
+      "clauses": [
+        "Crate tokens do not block LOS",
+        "Crate tokens do not block figure movement"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-CRT-001."
+    },
+    {
+      "id": "CRR-CRT-002",
+      "clauses": [
+        "If crate in space with terrain, terrain effect applies"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-CRT-002."
+    },
+    {
+      "id": "CRR-WAL-001",
+      "clauses": [
+        "Walls are solid black lines along map-tile boundaries",
+        "Figures cannot move through walls",
+        "Walls block LOS",
+        "Walls block adjacency"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-WAL-001."
+    },
+    {
+      "id": "CRR-AOJ-001",
+      "clauses": [
+        "Object has Health from mission rules",
+        "When damaged, object loses Health",
+        "When Health reaches 0, object is destroyed"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-AOJ-001."
+    },
+    {
+      "id": "CRR-AOJ-004",
+      "clauses": [
+        "Only spaces sharing edge with door are adjacent (per door rule)"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Analyzed probe and source files for CRR-AOJ-004."
+    }
+  ]
+}

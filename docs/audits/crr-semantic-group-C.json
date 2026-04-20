@@ -1,0 +1,562 @@
+{
+  "group": "C",
+  "atomCount": 50,
+  "generatedAt": "2026-04-20",
+  "findings": [
+    {
+      "id": "CRR-DPL-001",
+      "clauses": [
+        "When a card is depleted, it is flipped facedown",
+        "Depleted card cannot be used for the remainder of the mission"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Direct oracle test (B-I-PREDEFEAT-003) exercises depletion path and verifies card removal from attachments."
+    },
+    {
+      "id": "CRR-DPL-002",
+      "clauses": [
+        "At the end of each mission, all depleted cards are flipped faceup",
+        "Depletion array must not be reset by any game code path"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Invariant pin across multiple source files verifies no-reset invariant and proper depletion array presence."
+    },
+    {
+      "id": "CRR-EDM-002",
+      "clauses": [
+        "Non-companion figure cannot end movement in space occupied by another non-companion figure",
+        "Unless moving figure has Massive keyword (exception)"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Tests 005e and 005a directly verify blocked endpoint and Massive bypass respectively."
+    },
+    {
+      "id": "CRR-ETR-001",
+      "clauses": [
+        "Some effects are triggered when figure enters space (movement)",
+        "Some effects are triggered when figure enters space (push)",
+        "Some effects are triggered when figure enters space (placement)"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Tests only cover Rush and Block-token entry triggers (movement-based adjacency effects); does not comprehensively cover all entry-triggered effects"
+      ],
+      "risk": "medium",
+      "rationale": "Oracle test verifies specific entry triggers (Rush, Block) but does not exhaustively validate all entry-trigger categories."
+    },
+    {
+      "id": "CRR-EXT-001",
+      "clauses": [
+        "Some effects are triggered when figure exits space (move-out)",
+        "Some effects are triggered when figure exits space (push-out)",
+        "Some effects are triggered when figure exits space (placement-away)"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Test only verifies Dio Follow exit trigger (movement-based); does not comprehensively cover push-exit or placement-away exit triggers"
+      ],
+      "risk": "medium",
+      "rationale": "Oracle test covers one exit-trigger type (movement) but does not exhaustively validate all exit-trigger categories."
+    },
+    {
+      "id": "CRR-MOB-001",
+      "clauses": [
+        "Mobile figures ignore additional movement point costs when entering difficult terrain",
+        "Mobile figures ignore additional movement point costs when entering spaces with hostile figures"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "PROBE-MOB-001 directly asserts ignoreDifficult=true for Mobile; PROBE-MOB-003 covers ignoreFigureCost."
+    },
+    {
+      "id": "CRR-MOB-002",
+      "clauses": [
+        "Mobile figures ignore terrain for movement",
+        "Mobile figures can move through impassable terrain",
+        "Mobile figures can enter blocking terrain"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "PROBE-MOB-002 directly asserts ignoreBlocking=true for Mobile figures; probe comment confirms full coverage."
+    },
+    {
+      "id": "CRR-MOB-003",
+      "clauses": [
+        "Mobile figure occupying blocking terrain can still be seen/traced for LOS purposes"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Invariant pin verifies hasLineOfSight skips blocking-set lookup (source-level check); behavioral LOS coverage when Mobile occupies blocking terrain not fully exercised"
+      ],
+      "risk": "medium",
+      "rationale": "Test confirms source-level blocking-set skip but lacks end-to-end behavioral validation of LOS from Mobile-occupied blocking spaces."
+    },
+    {
+      "id": "CRR-MOVE-001",
+      "clauses": [
+        "All figures move one space at a time"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 001a verifies 1 MP reaches adjacent spaces only (a2, b1, b2 from a1), confirming one-space-at-a-time rule."
+    },
+    {
+      "id": "CRR-MOVE-002",
+      "clauses": [
+        "Large figures cannot move diagonally in a single step"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 004a explicitly verifies 2x2 figures only reach orthogonal destinations at cost 1 (no diagonals)."
+    },
+    {
+      "id": "CRR-MOVE-004",
+      "clauses": [
+        "When figure performs Move action, it gains movement points equal to its Speed"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Invariant pin verifies Move-action handler branch exists and Speed mapping exists in code; behavioral exercise with variable Speed values not covered"
+      ],
+      "risk": "low",
+      "rationale": "Source-level check confirms handler code path exists but lacks behavioral proof that all Speed values correctly map to MP grants."
+    },
+    {
+      "id": "CRR-MOVE-005",
+      "clauses": [
+        "Gaining movement points does not itself move the figure"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Unit test is embedded in headless activation-combat integration flow; does not isolate Move-action grant in pure unit context"
+      ],
+      "risk": "low",
+      "rationale": "Evidence provided is integration-level test, not focused isolation of Move-action grant semantics."
+    },
+    {
+      "id": "CRR-MOVE-006",
+      "clauses": [
+        "Move action completes immediately after granting movement points"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Invariant pin verifies dc_move handler branch exists; behavioral exercise of action-completion flow end-to-end not covered"
+      ],
+      "risk": "low",
+      "rationale": "Source-level check for handler branch but no behavioral proof of immediate action completion post-MP-grant."
+    },
+    {
+      "id": "CRR-MOVE-007",
+      "clauses": [
+        "Movement points can be gained from sources other than Move action"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Unit test embedded in abilities flow; does not isolate non-Move MP sources as distinct test case"
+      ],
+      "risk": "low",
+      "rationale": "Test is integration-level (abilities initialization), not a focused unit test of non-Move MP sources."
+    },
+    {
+      "id": "CRR-MOVE-008",
+      "clauses": [
+        "Figures without Massive or Mobile cannot enter blocking terrain",
+        "Figures without Massive or Mobile cannot be pushed into blocking terrain"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Direct oracle test verifies non-Mobile/non-Massive figures cannot cross blocking-terrain barriers."
+    },
+    {
+      "id": "CRR-MOVE-009",
+      "clauses": [
+        "Massive figures ignore terrain for movement"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 005b explicitly verifies Massive ignores difficult-terrain additional movement cost."
+    },
+    {
+      "id": "CRR-MOVE-010",
+      "clauses": [
+        "Figures cannot move through walls",
+        "Figures cannot move through doors"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Test only covers door blocking (003a); \"walls\" term not explicitly distinguished from doors in test assertions"
+      ],
+      "risk": "low",
+      "rationale": "Doors validated but wall-specific movement blocking not evidenced as distinct test case."
+    },
+    {
+      "id": "CRR-MOVE-011",
+      "clauses": [
+        "Figures cannot move through closed doors"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 003a directly verifies closed door blocks direct movement (r11\u2192r12)."
+    },
+    {
+      "id": "CRR-MOVE-012",
+      "clauses": [
+        "Figure may interleave MP spending around non-Move actions"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Invariant pin checks that dc_spend_mp_ handler is registered; behavioral exercise of MP interleave (spend-move-spend sequence) not directly tested"
+      ],
+      "risk": "medium",
+      "rationale": "Source-level check for handler registration but no behavioral proof of actual MP interleave flow."
+    },
+    {
+      "id": "CRR-MOVE-013",
+      "clauses": [
+        "Figures can move diagonally along the corner of any individual wall/door/blocking terrain"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Invariant pin verifies canMoveDiagonally returns OR of two flanking corners (source-level); behavioral test does not exhaustively verify all corner-flank types"
+      ],
+      "risk": "medium",
+      "rationale": "Source-level logic check for diagonal OR but behavioral coverage incomplete across different terrain-corner configurations."
+    },
+    {
+      "id": "CRR-MOVE-014",
+      "clauses": [
+        "Figure cannot move through the diagonal intersection where two walls/doors seal both flanks"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Behavioral test provided (014a) but does not exhaustively verify all two-wall-seal combinations (different terrain types, orientations)"
+      ],
+      "risk": "medium",
+      "rationale": "Test covers some seal scenarios but does not comprehensively validate all flank-sealing configurations."
+    },
+    {
+      "id": "CRR-MOVE-015",
+      "clauses": [
+        "Large figure may rotate 90\u00b0 by spending 1 movement point"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 001a verifies rotation produces endpoint at same topLeft with rotated size."
+    },
+    {
+      "id": "CRR-MOVE-016",
+      "clauses": [
+        "Additional movement point costs apply to rotation if Large figure does not end in clear footprint"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test verifies baseline rotation into difficult cell costs 2 MP (1 base + 1 difficult)."
+    },
+    {
+      "id": "CRR-MOVE-017",
+      "clauses": [
+        "Move X Spaces effects ignore movement point costs (terrain costs, hostile-figure costs, etc)",
+        "Move X Spaces effects allow bypass of cost restrictions"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test pin verifies moveXBypassActive flag gates bypass behavior and handler checks confirm cost bypass."
+    },
+    {
+      "id": "CRR-MOVE-018",
+      "clauses": [
+        "Move X Spaces still obeys non-cost terrain restrictions (blocking, impassable)",
+        "Move X Spaces still obeys figure-blocking restrictions",
+        "Move X Spaces still obeys door-blocking restrictions"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Invariant pin checks that getMovementTarget is invoked during Move X (source-level); behavioral exercise of all non-cost restriction types not comprehensive"
+      ],
+      "risk": "medium",
+      "rationale": "Source-level check for getMovementTarget usage but no behavioral proof that all restriction types are enforced during Move X."
+    },
+    {
+      "id": "CRR-MOVE-019",
+      "clauses": [
+        "Unused move-up-to-X movement cannot be saved for later",
+        "Movement bank is tracked per-activation message ID"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Invariant pins verify movementBank lives on ACTIVATION_MSGID_FLAGS and cleanup per msgId removes unused MP."
+    },
+    {
+      "id": "CRR-MOVE-020",
+      "clauses": [
+        "During Move X Spaces effect, Large figure base cannot rotate"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test pin verifies moveXBypassActive flag blocks rotation during Move X context."
+    },
+    {
+      "id": "CRR-MOVE-021",
+      "clauses": [
+        "Figures can move through other figures' spaces"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 002b verifies friendly-occupied space is passable as intermediate, not as endpoint."
+    },
+    {
+      "id": "CRR-MOVE-022",
+      "clauses": [
+        "Entering a space containing a hostile figure costs 1 additional movement point"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 002c verifies hostile-occupied space costs +1 MP (2 total via hostile path vs 2 diagonal bypass)."
+    },
+    {
+      "id": "CRR-MOVE-023",
+      "clauses": [
+        "Figure may only enter a space it could legally end movement in"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 002a confirms hostile-occupied endpoints are excluded from reachable destinations."
+    },
+    {
+      "id": "CRR-MOVE-024",
+      "clauses": [
+        "Entering a space containing difficult terrain costs 1 additional movement point"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test verifies difficult-only cell costs 2 MP (1 base orthogonal + 1 difficult)."
+    },
+    {
+      "id": "CRR-MSV-001",
+      "clauses": [
+        "Figures do not block line of sight to or from a Massive figure"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test G65 verifies MASSIVE AT-RT at e3 does not block LOS from e2 to e5."
+    },
+    {
+      "id": "CRR-MSV-003",
+      "clauses": [
+        "Massive figures ignore terrain for movement"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 005c confirms Massive ignores blocking-terrain movement restrictions."
+    },
+    {
+      "id": "CRR-MSV-004",
+      "clauses": [
+        "Massive figures can enter spaces containing hostile figures"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 005a asserts Massive can end on occupied spaces (canEndOnOccupied=true)."
+    },
+    {
+      "id": "CRR-MSV-005",
+      "clauses": [
+        "Massive figures cannot enter spaces containing other Massive figures"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 005d confirms footprint overlap with another Massive blocks endpoint."
+    },
+    {
+      "id": "CRR-MSV-006",
+      "clauses": [
+        "Massive figure can end movement in spaces containing blocking terrain"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Evidence file is displacement behavioral test (B-MVDISP-003); test does not directly validate clause about ending in blocking terrain"
+      ],
+      "risk": "low",
+      "rationale": "Evidence file citation does not clearly support the stated clause; requires clarification or direct test."
+    },
+    {
+      "id": "CRR-MSV-007",
+      "clauses": [
+        "When Massive figure ends movement in space with other non-companion figures, those figures are pushed",
+        "Push ignores blocking terrain during Massive-triggered push"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Invariant pin focuses on source-level check of mobilePushDestSet computation; behavioral exercise of Massive-push with terrain not fully covered"
+      ],
+      "risk": "medium",
+      "rationale": "Source pin verifies set exists but lacks behavioral proof of Massive-push terrain-ignore behavior."
+    },
+    {
+      "id": "CRR-MSV-008",
+      "clauses": [
+        "After Massive figure ends movement in space with non-companion figures, voluntary movement is locked"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Unit test asserts lock but embedded in headless activation-combat integration flow"
+      ],
+      "risk": "low",
+      "rationale": "Test is integration-level, not a focused unit test of post-Massive-move voluntary-exit lock."
+    },
+    {
+      "id": "CRR-MSV-009",
+      "clauses": [
+        "Massive figure occupying blocking terrain can be traced/seen for LOS purposes"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Similar to MOB-003: invariant pin verifies blocking-set skip (source-level); behavioral LOS coverage incomplete"
+      ],
+      "risk": "medium",
+      "rationale": "Source-level check for blocking-set skip but behavioral validation of LOS from Massive-occupied blocking spaces incomplete."
+    },
+    {
+      "id": "CRR-MVP-001",
+      "clauses": [
+        "Moving to an adjacent space costs a figure 1 movement point"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 001a verifies 1 MP reaches only adjacent spaces (a2, b1, b2 from a1)."
+    },
+    {
+      "id": "CRR-MVP-002",
+      "clauses": [
+        "Entering a space occupied by a hostile figure costs an additional movement point"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test 002c confirms hostile-occupied space costs +1 MP (2 total)."
+    },
+    {
+      "id": "CRR-MVP-003",
+      "clauses": [
+        "Each space containing difficult terrain costs an additional movement point"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Test verifies difficult-only cell costs 2 MP (1 base + 1 difficult)."
+    },
+    {
+      "id": "CRR-MVP-004",
+      "clauses": [
+        "Any time figure gains movement points during activation, they are added to existing movement bank"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Unit test embedded in headless activation-combat integration; does not isolate MP-bank addition in pure context"
+      ],
+      "risk": "low",
+      "rationale": "Test context is larger activation flow, not focused isolation of MP accumulation."
+    },
+    {
+      "id": "CRR-MVP-005",
+      "clauses": [
+        "Figure is not required to spend all movement points it possesses",
+        "Unused movement points are discarded at end of activation"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Multiple probes verify movementBank cleanup per activation message ID, confirming optional spend and discard."
+    },
+    {
+      "id": "CRR-PSH-001",
+      "clauses": [
+        "Push moves figure a specified number of spaces"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "B-PUSH-001 behavioral test exercises push-distance mechanics."
+    },
+    {
+      "id": "CRR-PSH-002",
+      "clauses": [
+        "Pushed figure can move in any direction",
+        "Pushed figure does not need to move directly away from pusher"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Invariant pins confirm pushFigure signature omits pusher position (002a) and body contains no direction math (002b), plus behavioral round-trip test (002c)."
+    },
+    {
+      "id": "CRR-PSH-003",
+      "clauses": [
+        "Pushed figure is not considered to be voluntarily exiting when pushed"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Invariant pin confirms pushFigure body does not reference voluntary-exit gates (Cripple, etc)."
+    },
+    {
+      "id": "CRR-PSH-004",
+      "clauses": [
+        "Pushing a figure requires no movement points",
+        "Push ignores additional movement costs"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Invariant pins confirm pushFigure never touches movementBank or mpRemaining (004a), plus behavioral test with zero MP (004b)."
+    },
+    {
+      "id": "CRR-PSH-006",
+      "clauses": [
+        "While pushing large figure, it cannot move diagonally",
+        "While pushing large figure, cannot rotate"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Invariant pin identifies pushFigureToNearestValid as BFS helper enforcing orthogonal-only push paths."
+    },
+    {
+      "id": "CRR-PSH-007",
+      "clauses": [
+        "When figure with Massive or Mobile is pushed, push ignores blocking terrain"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "Invariant pin confirms profile.ignoreBlocking is driven by Massive OR Mobile in push validation context."
+    }
+  ]
+}

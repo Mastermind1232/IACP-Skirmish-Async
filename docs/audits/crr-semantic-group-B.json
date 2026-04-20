@@ -1,0 +1,443 @@
+{
+  "group": "B",
+  "atomCount": 42,
+  "generatedAt": "2026-04-20",
+  "findings": [
+    {
+      "id": "CRR-BLED-001",
+      "clauses": [
+        "Bleeding is a HARMFUL condition",
+        "figure may discard it by spending the surge specified on the Bleeding condition card"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "src/game/conditions.test.js confirms HARMFUL_CONDITIONS = ['Stun', 'Bleed', 'Weaken']; card discard mechanism in conditions.js"
+    },
+    {
+      "id": "CRR-BLED-002",
+      "clauses": [
+        "figure with Bleeding that has resolved an action suffers 1 damage"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "tests/headless/combat-effects-tests.js test: 'Bleed accept reduces HP by 1 (simulated)' validates damage application"
+    },
+    {
+      "id": "CRR-BLED-003",
+      "clauses": [
+        "Bleeding is not voluntarily suffering strain"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "probe file tests: handleBleedResolve must reduce HP directly and not invoke applyStrainToFigure; multiple enforcement sites confirm"
+    },
+    {
+      "id": "CRR-BLST-001",
+      "clauses": [
+        "When target suffers \u22651 damage, every other figure and object on or adjacent to target space suffers Blast value damage"
+      ],
+      "fit": "partial",
+      "missing": [
+        "blast fires on defeated target is a known bug (test 008a expects this but fails per oracle finding 1)"
+      ],
+      "risk": "high",
+      "rationale": "Tests 008a/008b verify Blast on killed target, but oracle notes this silently fails (position removed before adjacency check)"
+    },
+    {
+      "id": "CRR-BLST-003",
+      "clauses": [
+        "Blast is applied after attack resolves",
+        "Blast does not affect the target of the attack",
+        "Blast only affects other figures and objects on or adjacent to target space"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "dc-ability-shapes-behavioral.test.js: primary target (6\u21923 HP) takes full damage; adjacent takes splash only (6\u21925)"
+    },
+    {
+      "id": "CRR-BLST-004",
+      "clauses": [
+        "Blast damage affects both hostile and friendly figures in skirmish"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "dc-ability-shapes-behavioral.test.js 002c: adjacent friendly takes splash damage (8\u21927) \u2014 splash is indiscriminate"
+    },
+    {
+      "id": "CRR-BLST-005",
+      "clauses": [
+        "Damage suffered by Blast is not prevented by block"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "blast-cleave-oracles.test.js: assertion 'Blast should deal 2 damage to adjacent bystander even when target killed' verifies block bypass"
+    },
+    {
+      "id": "CRR-BLST-006",
+      "clauses": [
+        "If attack inflicts condition (Stunned/Bleeding), condition applied only to target, not to Blast-affected figures"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "dc-ability-shapes-behavioral.test.js 003b: primary target has Weaken; adjacent figure does NOT gain Weaken (only splashDamage)"
+    },
+    {
+      "id": "CRR-CLV-001",
+      "clauses": [
+        "When target suffers \u22651 damage, attacker may choose different eligible hostile figure/object to suffer Cleave damage"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Cleave target must be eligible as an attack target (oracle finding 2: code uses target adjacency not attacker)"
+      ],
+      "risk": "high",
+      "rationale": "Tests 009a/009c/009d show expected behavior but code bug documented in oracle (uses wrong adjacency)"
+    },
+    {
+      "id": "CRR-CLV-003",
+      "clauses": [
+        "Chosen figure/object must be eligible target (melee: adjacent to attacker, ranged: within LOS and Accuracy)"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Test 009a asserts melee Cleave should offer figure adjacent to attacker (not target); test expects this but oracle notes code fails"
+      ],
+      "risk": "high",
+      "rationale": "oracle finding 2 identifies that code uses target adjacency instead of attacker adjacency for Cleave eligibility"
+    },
+    {
+      "id": "CRR-CLV-005",
+      "clauses": [
+        "multiple Cleave abilities on one attack resolve one at a time in attacker's chosen order",
+        "target independently chosen for each Cleave"
+      ],
+      "fit": "unclear",
+      "missing": [
+        "invariant_pin type assertions (code inspection only) \u2014 no direct behavioral test of sequential resolution and choice ordering"
+      ],
+      "risk": "medium",
+      "rationale": "Probe uses code-level assertions (cleaveSources array, cleaveQueue, nextSource.shift); actual game-state testing of choice UI missing"
+    },
+    {
+      "id": "CRR-CLV-007",
+      "clauses": [
+        "ranged Cleave: chosen figure within LOS of attacker and within spaces equal to or less than Accuracy result"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "blast-cleave-oracles.test.js 009b: ranged attack with acc=5, target 3 spaces away; bystander 2 spaces away (within Accuracy) offered"
+    },
+    {
+      "id": "CRR-DEF-001",
+      "clauses": [
+        "When figure has damage tokens equal to Health, figure is defeated"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "defeat-pipeline-oracles.test.js: processFigureDefeat invoked when damage == Health"
+    },
+    {
+      "id": "CRR-DEF-003",
+      "clauses": [
+        "non-hero figure defeated is removed from map with condition and damage tokens"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "oracle test confirms processFigureDefeat covers all defeat side effects for non-hero figures"
+    },
+    {
+      "id": "CRR-DEF-004",
+      "clauses": [
+        "when defeated and removed from map, figure is not voluntarily exiting spaces it occupied"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "phase-d-voluntary-exit-probes.test.js: removeFigurePosition body does not reference voluntary-exit gates"
+    },
+    {
+      "id": "CRR-DEF-005",
+      "clauses": [
+        "if figure defeated during activation, activation ends"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "phase-d-def-defeat-ends-activation-probe.test.js: six specific enforcement sites verified (getAvailableActions, Move/Interact/Attack gates)"
+    },
+    {
+      "id": "CRR-DMG-001",
+      "clauses": [
+        "when figure suffered damage \u2265 Health, figure is defeated"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "combat-behavioral.test.js: lethal strain triggers processFigureDefeat"
+    },
+    {
+      "id": "CRR-DMG-003",
+      "clauses": [
+        "when non-hero figure suffers damage, place equal damage tokens next to figure; tokens move with figure"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "combat-behavioral.test.js: HP reduced 5\u21922 confirms damage token placement (test name: 'HP reduced from 5 to 2 (3 damage)')"
+    },
+    {
+      "id": "CRR-DMG-004",
+      "clauses": [
+        "if figure suffers damage outside attack, damage not prevented by block and figure does not roll defense"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "dc-ability-behavioral.test.js: Phase 2 applies 2 damage + 1 strain without defense roll; HP reduced as expected"
+    },
+    {
+      "id": "CRR-DMG-006",
+      "clauses": [
+        "when effect mentions 'damage suffered', refers to total value of damage tokens currently on figure"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "wookiee-rage-oracles.test.js: damage scales with damage suffered (3 suffered\u21923 damage, 1 suffered\u21921 damage, 0 suffered\u21920 damage)"
+    },
+    {
+      "id": "CRR-DMG-007",
+      "clauses": [
+        "figure cannot suffer damage in excess of Health; excess has no effect"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "phase-d-damage-clamp-probes.test.js: reduceHp clamps newHp to 0 when damage > prevHp; excess discarded"
+    },
+    {
+      "id": "CRR-DMG-008",
+      "clauses": [
+        "if effect reduces figure's Health and figure suffered damage > new Health, excess discarded"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "phase-d-dmg-health-reduction-defeat-probe.test.js: order verified (damage\u2192reduce max\u2192clamp current) with single enforcement site in round.js"
+    },
+    {
+      "id": "CRR-HEA-001",
+      "clauses": [
+        "when figure has damage tokens equal to Health, it is defeated"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "interrupt-defeat-oracles.test.js: self-damage to 0 HP triggers processFigureDefeat; correct game state produced"
+    },
+    {
+      "id": "CRR-INTR-001",
+      "clauses": [
+        "interrupt pauses current action, fully resolves, resumes from interruption point",
+        "figure can interrupt own activation"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "interrupt-defeat-oracles.test.js / interrupt-predefeat-behavioral.test.js: figure survives interrupt damage, remains in figurePositions"
+    },
+    {
+      "id": "CRR-NEG-001",
+      "clauses": [
+        "positive and negative of same symbol eliminate each other immediately",
+        "negative symbol has no other effect"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "combat-oracles.test.js 003a/003b/003c/003e: weakened -1 applied correctly; defender/attacker weakened tested in sequence"
+    },
+    {
+      "id": "CRR-PT-001",
+      "clauses": [
+        "figure with power token may spend 1 to apply +1 of token's symbol to attack/defense results"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "combat-token-behavioral.test.js: attacker spending Damage adds +1 bonusHits, defender spending Block adds +1 bonusBlock"
+    },
+    {
+      "id": "CRR-PT-002",
+      "clauses": [
+        "attacker cannot spend block/evade tokens; defender cannot spend damage/surge tokens"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "phase-d-power-token-type-probe.test.js: getEligibleTokens filtered by role-gated allowed set; Squad Cohesion rejects wrong type"
+    },
+    {
+      "id": "CRR-PT-003",
+      "clauses": [
+        "each figure can have at most 2 total power tokens; excess on grant forces discard"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "power-token-grant-oracles.test.js: tokens pushed before overflow check; pendingPowerTokenOverflow queued on overflow"
+    },
+    {
+      "id": "CRR-PT-004",
+      "clauses": [
+        "wild power token allows player to choose any token type"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "phase-d-power-token-type-probe.test.js: sendWildTypeWindow scopes to role-native pair; attacker Wild \u2192 Damage/Surge, defender Wild \u2192 Block/Evade"
+    },
+    {
+      "id": "CRR-PT-005",
+      "clauses": [
+        "figure cannot spend more than 1 power token per attack"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "phase-d-pt-one-token-per-attack-probe.test.js: advanceTokenPhase clears on entry (one promotion only); spent token removed (one-way consumption)"
+    },
+    {
+      "id": "CRR-REC-001",
+      "clauses": [
+        "when figure recovers damage or strain, remove listed amount of tokens from figure or Hero sheet"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "dc-ability-shapes-behavioral.test.js: self recovers 1 damage (7\u21928 HP), target recovers 1 damage"
+    },
+    {
+      "id": "CRR-SPS-001",
+      "clauses": [
+        "all players ready all exhausted cards"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "status-phase-behavioral.test.js: ready cards + draw CCs + initiative swap + round increment + cleanup sequence verified"
+    },
+    {
+      "id": "CRR-SPS-002",
+      "clauses": [
+        "each player draws 1 CC plus 1 additional per terminal controlled"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "status-phase-behavioral.test.js: base draw=1 card; terminal bonus=+1 per terminal; stacking with RHC additive"
+    },
+    {
+      "id": "CRR-SPS-003",
+      "clauses": [
+        "resolve any abilities or mission rules triggered at end of round"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "status-phase-behavioral.test.js: Regenerate (Bossk recovers HP, clears Bleed), Hardy (clears all harmful conditions)"
+    },
+    {
+      "id": "CRR-SPS-004",
+      "clauses": [
+        "increase round counter; pass initiative to player on left; begin new round with Activation Phase"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "status-phase-behavioral.test.js: ready cards + draw CCs + initiative swap + round increment verified"
+    },
+    {
+      "id": "CRR-STN-001",
+      "clauses": [
+        "Stunned figure cannot voluntarily exit space and cannot declare attack",
+        "can resolve pre-declared attack",
+        "can use action on card to discard Stun"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "stun-oracles.test.js 002: Stunned blocks Move and Attack; remove_stun action offered; 001a: remove_stun removes Stun + 1 action left"
+    },
+    {
+      "id": "CRR-STN-002",
+      "clauses": [
+        "figure can resolve attack already declared if it becomes Stunned during attack"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "phase-d-stn-mid-attack-probe.test.js: applyCondition never reads/mutates pendingCombat; Stun on attacker/defender leaves combat intact"
+    },
+    {
+      "id": "CRR-STN-003",
+      "clauses": [
+        "Stunned figure uses action specified on card to discard Stun"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "stun-oracles.test.js 001a: remove_stun action available; submission removes Stun and costs 1 action"
+    },
+    {
+      "id": "CRR-STR-001",
+      "clauses": [
+        "in skirmish, when figure would suffer strain, it suffers equal damage instead"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "combat-behavioral.test.js: alldmg path applies full HP damage (strain converted to damage)"
+    },
+    {
+      "id": "CRR-STR-002",
+      "clauses": [
+        "player can prevent strain-damage by discarding 1 CC from top of deck per point prevented"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "combat-behavioral.test.js: discard path reduces deck and applies remaining as HP"
+    },
+    {
+      "id": "CRR-WKN-001",
+      "clauses": [
+        "Weakened is HARMFUL condition and applies -1 while defending and -1 while attacking"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "combat-oracles.test.js 003a/003b: defender weakened reduces effective block; attacker weakened reduces damage; conditions.test.js confirms HARMFUL"
+    },
+    {
+      "id": "CRR-WKN-002",
+      "clauses": [
+        "Weakened automatically discarded at end of figure's activation"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "end-activation-parity.test.js: discards Weaken on all activating DC figures; respects disarmPermanentWeakened lock"
+    }
+  ]
+}

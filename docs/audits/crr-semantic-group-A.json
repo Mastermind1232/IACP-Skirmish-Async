@@ -1,0 +1,547 @@
+{
+  "group": "A",
+  "atomCount": 46,
+  "generatedAt": "2026-04-20",
+  "findings": [
+    {
+      "id": "CRR-ATK-004",
+      "clauses": [
+        "When a figure corresponding to a Deployment card performs an attack using an alternate attack pool, they may still trigger their surge abilities",
+        "unless the ability triggering the attack states otherwise"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 2: No behavioral test of the exception path — probe never exercises an alternate-pool attack where the triggering ability explicitly blocks surge abilities via blockSurgeAbilities flag. Tusken Cycler wires _pendingBlockSurgeAbilities but no oracle test confirms surge-ability filtering at runtime."
+      ],
+      "risk": "high",
+      "rationale": "invariant_pin: regex matches code structure but lacks behavioral oracle. A future refactor could silently break surge-ability exclusion logic."
+    },
+    {
+      "id": "CRR-ATK-006",
+      "clauses": [
+        "A figure must end its movement to perform an attack",
+        "not sharing a space with another non-companion figure"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: available-actions.js short-circuits attackerPos check; movement commit validates occupancy. Both behavioral paths confirmed."
+    },
+    {
+      "id": "CRR-ATK-007",
+      "clauses": [
+        "During an attack, if attacker's LOS to target space changes, attacker must re-declare target",
+        "If defender moves, attacker must re-declare target",
+        "If no defender spaces are eligible, attack misses and abilities referring to target space have no effect"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 1-2: Probe only checks source structure (no mid-attack target re-declaration path exists). No behavioral oracle simulates LOS change or defender movement during atomicity window — probes invariant existence but not runtime correction."
+      ],
+      "risk": "high",
+      "rationale": "invariant_pin: confirms pendingCombat is single object and no parallel-combat container. Does NOT test re-declaration flow if LOS/defender position changed mid-attack."
+    },
+    {
+      "id": "CRR-ATK-009",
+      "clauses": [
+        "Players cannot target friendly figures with attacks"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: phase-d-target-invariants tests attack_target enumeration excludes P1 figureKeys; all returned targets verified hostile."
+    },
+    {
+      "id": "CRR-ATK-011",
+      "clauses": [
+        "For a melee attack, eligible target is any hostile figure in same space or adjacent to attacker",
+        "Within 2 spaces and in LOS if attack has Reach"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 2: Reach interaction with melee not fully tested — attack-range-defaults-probes pins Reach lifts melee to 2 but never exercises a Reach melee attack in full behavioral oracle (targeting, distance, LOS gates). Only function-level defaultAttackRange test."
+      ],
+      "risk": "medium",
+      "rationale": "direct_oracle: melee range default [1,1] and distance-2 exclusion verified. Reach case (004a) only pins code math, not an end-to-end melee+Reach targeting scenario."
+    },
+    {
+      "id": "CRR-ATK-012",
+      "clauses": [
+        "For a ranged attack, eligible target is any hostile figure within LOS of attacker"
+      ],
+      "fit": "partial",
+      "missing": [
+        "LOS-enforcing behavior not directly tested in this atom's probe files. attack-range-defaults-probes asserts defaultAttackRange but mentions LOS-PARITY only in comment, relying on RNG-03 oracle (distance check, not LOS origin). No oracle simulates ranged attack blocked by LOS failure."
+      ],
+      "risk": "medium",
+      "rationale": "direct_oracle: ranged default maxRange ≥5 verified via defaultAttackRange(). LOS requirement cited but not exercise via behavioral oracle within this atom's probes."
+    },
+    {
+      "id": "CRR-ATK-013",
+      "clauses": [
+        "If attacker has abilities with timing 'before declaring an attack', performed immediately before Step 1",
+        "If target has abilities with timing 'before declaring an attack', performed immediately before Step 1",
+        "If attacker/target have timing 'before declaring a target', performed immediately before Step 1"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 2-3: Probe only tests attacker-side timings (beforeyoudeclareattack, beforedeclaringrangedattack) via cc-timing.js routing. No test exercises TARGET-side before-declare abilities or confirms they resolve pre-Step-1."
+      ],
+      "risk": "medium",
+      "rationale": "direct_oracle: cc-timing routes beforeyoudeclareattack via duringActivation and distinguishes from whenyoudeclareattack. TARGET-side and before-target timings not explicitly covered."
+    },
+    {
+      "id": "CRR-ATK-016",
+      "clauses": [
+        "Abilities or mission rules which allow a figure to perform an attack may further restrict which targets are eligible"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "certification: Multi-Fire second-attack restriction tested; handler returns early 906–908. Concrete restriction example covered."
+    },
+    {
+      "id": "CRR-ATK-018",
+      "clauses": [
+        "If any abilities modify the attack dice pool, they are resolved before rolling",
+        "If any abilities modify the defense dice pool, they are resolved before rolling"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 2: Defense-pool modifications not tested. Probe pins attack-pool mutation block (baseDice, bonus, remove, keep, fill) but explicitly notes 'we do not test defense pool mutations here' comment in handler. Defense-pool timing uncovered."
+      ],
+      "risk": "high",
+      "rationale": "invariant_pin: attack-pool source-order confirmed (mutations before rollAttackDice). Defense pool entirely absent from probes — no behavioral oracle for defense modifiers."
+    },
+    {
+      "id": "CRR-ATK-019",
+      "clauses": [
+        "If players have any effects that reroll dice, they are resolved now",
+        "When dice are rerolled, their old results are ignored and new results are used instead"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: combat-handler-oracles tests die reroll replaces old fixture exactly; totals recomputed correctly. Unchanged dice preserved."
+    },
+    {
+      "id": "CRR-ATK-020",
+      "clauses": [
+        "Each die may be rerolled only once per attack regardless of who is rerolling the die"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: 005c G12 second reroll rejected; B-C-REROLL-004 forced reroll respects single-reroll limit."
+    },
+    {
+      "id": "CRR-ATK-021",
+      "clauses": [
+        "At the end of Step 4, each evade result cancels one surge result",
+        "At the end of this step each ability providing modifiers is not resolved until Step 5"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin: evadeCancelled = Math.min(rawSurge, totalEvade); totalSurge = rawSurge - evadeCancelled. Surge-spending (Step 5) source-ordered after cancellation (021d). computeCombatResult reads pre-computed evadeCancelledSurge, no recompute."
+    },
+    {
+      "id": "CRR-ATK-022",
+      "clauses": [
+        "Conditions are mission rules, so they perform their modifications to the results first",
+        "Hidden affects the attack results",
+        "Weakened affects the attack/defense results"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 1: CRR says 'conditions perform their modifications first' but probe only tests Hidden/Weakened specifics, not the ordering guarantee vs other Step-4 modifier types (accuracy modifiers, symbol adds/removes)."
+      ],
+      "risk": "medium",
+      "rationale": "direct_oracle: Hidden -4 accuracy penalty on ranged; Weakened -1 block on defender. Condition-first ordering not verified vs other Step-4 modifiers."
+    },
+    {
+      "id": "CRR-ATK-023",
+      "clauses": [
+        "If there are any surge results remaining, attacker may spend them to trigger surge abilities",
+        "Each surge ability can be used only once per attack"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: B-C-SURGE-003 Overload blocks 3rd surge index; B-C-SURGE-004 non-Overload unit blocked after 1 use. Per-surge limit verified."
+    },
+    {
+      "id": "CRR-ATK-024",
+      "clauses": [
+        "If performing a ranged attack, total Accuracy value must be equal to or greater than number of spaces target is away",
+        "If total Accuracy < distance, the attack misses"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: 004b acc 2 vs dist 4 misses; 004g acc exactly equal dist hits; 004c melee bypasses accuracy gate."
+    },
+    {
+      "id": "CRR-ATK-025",
+      "clauses": [
+        "Line of sight and distance between attacker and target are determined separately",
+        "For large figures they might use different spaces for their determination"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin: distance loop (min-reduction) and LOS loop (first-hit search) are structurally independent. Range gate applied between (025c). Target-footprint enumeration for multi-cell targets (025e)."
+    },
+    {
+      "id": "CRR-ATK-026",
+      "clauses": [
+        "If attack misses due to insufficient accuracy or dodge, target suffers no damage",
+        "Otherwise, Pierce allows attack to ignore a number of block results",
+        "Remaining block results subtracted from total damage results",
+        "Target suffers all remaining damage"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 1: Dodge miss case not covered in combat-oracles basic-damage tests (all test hit condition). Oracle 004a tests dodge miss but within combat-oracles; the damage-formula oracle does not isolate dodge-miss from accuracy-miss."
+      ],
+      "risk": "low",
+      "rationale": "direct_oracle: 001a/c/005 pin damage formula and pierce. Dodge-miss covered in combat-oracles but not strictly in damage-calc oracle."
+    },
+    {
+      "id": "CRR-ATK-027",
+      "clauses": [
+        "After attack resolves, Blast abilities are resolved",
+        "Cleave abilities are resolved",
+        "Condition keywords are resolved"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 1-3: Probe tests Blast and Cleave triggering when target is killed/survives but does NOT test Condition keyword resolution (Stun, Bleed) in 'after attack resolves' phase. No oracle confirms Conditions fire after damage is calculated and before 'after action resolves'."
+      ],
+      "risk": "medium",
+      "rationale": "direct_oracle: blast-cleave-oracles pins Blast/Cleave behavior. Condition-keyword timing in 'after resolves' phase not explicitly tested."
+    },
+    {
+      "id": "CRR-ATK-028",
+      "clauses": [
+        "Effects that trigger after attack resolves use 'during an attack' timing conflict resolution order",
+        "After performing attack and after resolving attack refer to the same timing instance",
+        "During an Attack action, all 'after resolving an attack' abilities must resolve before any 'after resolving an action' abilities"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 2: Probe only tests post-rolls resolver is sole site. No behavioral oracle confirms 'after performing' = 'after resolving' equivalence or tests timing ordering vs 'after action resolves'."
+      ],
+      "risk": "medium",
+      "rationale": "invariant_pin: resolveCombatAfterRolls is sole post-rolls site. Slow-on-the-Draw nulls pendingCombat. Post-attack vs post-action ordering not tested behaviorally."
+    },
+    {
+      "id": "CRR-ATK-029",
+      "clauses": [
+        "A figure with a Deployment card can use only one of its actions to attack per activation",
+        "This includes special actions like Pounce or Brutality"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 2: Unit test only checks 'already attacked this activation → 0' but does not verify that special actions EMPLOYING attacks (Pounce multi-strike, Brutality cascade) count against the single-attack-per-activation limit. No behavioral test of Pounce or Brutality interaction."
+      ],
+      "risk": "high",
+      "rationale": "unit_test: move-features.test.js tests flag only. Special-action attacks (Pounce, Brutality) uncovered — silent regression would allow repeated special-action attacks in one activation."
+    },
+    {
+      "id": "CRR-ATK-030",
+      "clauses": [
+        "If an ability allows a figure to perform an attack outside of its activation, this attack does not count toward the limit of one attack per activation"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Happy path (flag set → attack offered) tested (001a); negative (flag absent + no Assault → attack blocked, 001b) tested. But no oracle tests that the attack AFTER it fires does NOT increment attackPerformedThisActivation for the figure's own later-activation attack budget."
+      ],
+      "risk": "high",
+      "rationale": "direct_oracle: probe surfaces free-attack flag bypass but does not verify that the free attack later doesn't consume the figure's one-per-activation budget when the figure activates normally."
+    },
+    {
+      "id": "CRR-ATK-031",
+      "clauses": [
+        "A figure cannot target an empty space with an attack"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: every surfaced attack_target verified to carry a targetFigureKey mapping to current figure; empty-space test fails."
+    },
+    {
+      "id": "CRR-ATK-032",
+      "clauses": [
+        "A figure cannot target a friendly figure with an attack",
+        "Note that friendly figures may suffer damage from some abilities such as Blast"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 1: Only one assertion (002c adjacent FRIENDLY takes splash from Blast). Clause 1 attack-targeting restriction not re-tested in this atom — overlaps with CRR-ATK-009. Clause 2 ('friendly may suffer Blast') is primary test focus, but direct attack-target filtering not confirmed here."
+      ],
+      "risk": "low",
+      "rationale": "direct_oracle: Blast splash on friendly tested; attack-targeting restriction covered by CRR-ATK-009. Minimal duplication."
+    },
+    {
+      "id": "CRR-ATK-034",
+      "clauses": [
+        "Blast, Cleave, and Condition keywords require target to suffer one or more damage to be performed after attack resolves"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: 001a zero-damage blocks Stun; 001b zero-damage blocks Bleed; 002a positive-damage applies Stun; 002b positive-damage applies Bleed. Damage-gate verified."
+    },
+    {
+      "id": "CRR-ATK-036",
+      "clauses": [
+        "Some abilities allow players to perform an attack with a hostile figure",
+        "The player resolving the ability controls the hostile figure for the duration of that attack",
+        "The player resolving the ability chooses the target of the attack",
+        "All non-neutral figures are considered hostile; no figures are considered friendly",
+        "The figure cannot target itself"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin: pendingFalseOrders records controlledFigureKey, controlledPlayerNum, controllerPlayerNum separately. Controlled pool drawn from enemyNum. Target enumeration excludes controlledFigureKey. Four+ downstream combat sites use falseOrdersControllerPlayerNum ?? attackerPlayerNum pattern."
+    },
+    {
+      "id": "CRR-ATK-038",
+      "clauses": [
+        "The player resolving the ability rolls the attack dice",
+        "The player can use any of the figure's abilities as if the figure were their own",
+        "A figure that uses such an ability does not count as having performed an attack",
+        "The resolver may spend one of that figure's power tokens"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin: attackInfo from controlledStats.attack. Controlled passives applied. attackerFigureKey=controlledFigureKey (tokens). attackerMsgId=falseOrdersMsgId (not controlled-figure's own activation). Power-token and surge-spend gated on controller."
+    },
+    {
+      "id": "CRR-ATK-039",
+      "clauses": [
+        "An ability that does not involve an attack but causes a figure to suffer damage is not considered to be an attack"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: Force Choke applies 2 damage + 1 strain to chosen target without attack mechanics. HP calculation correct (5 - 3 = 2)."
+    },
+    {
+      "id": "CRR-ACC-001",
+      "clauses": [
+        "Ranged attacks need enough Accuracy to not miss the target",
+        "Amount of Accuracy needed is equal to number of spaces attacker is away from target"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: accuracy-penalty-oracles 004 and combat-oracles 004b/g test accuracy miss at distance < acc and hit at acc ≥ distance."
+    },
+    {
+      "id": "CRR-ACC-002",
+      "clauses": [
+        "Attacker's total Accuracy is determined by adding all accuracy results from dice and applying any Accuracy modifiers provided by abilities and conditions"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Probe tests Take Cover sets roundDefenseAccuracyPenalty (not roundDefenseBonusEvade) and cumulative CC penalties but does NOT test accuracy GAIN from abilities — only penalty cases. No oracle for ability-granted accuracy bonus (e.g., surge accuracy)."
+      ],
+      "risk": "medium",
+      "rationale": "direct_oracle: 001 Take Cover penalty routing; 003 cumulative CC penalties. Accuracy-bonus abilities (surge accuracy spending) uncovered."
+    },
+    {
+      "id": "CRR-ACC-003",
+      "clauses": [
+        "While attacking an adjacent figure with a ranged attack, attacker needs at least 1 Accuracy",
+        "This also applies to attacking a Companion in the same space"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 2: Companion-in-same-space case NOT tested. Probe tests adjacent (distance-1) ranged miss at acc=0 but does not isolate Companion special case or test distance-0 same-space with Companion."
+      ],
+      "risk": "medium",
+      "rationale": "direct_oracle: 003a distance-1 acc=0 ranged miss verified. Companion (distance-0 adjacent by definition) case uncovered."
+    },
+    {
+      "id": "CRR-ACC-004",
+      "clauses": [
+        "Attacking an object in the same space requires 0 accuracy"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: PROBE-PD-ACC-004 ranged attack vs distance-0 same-space passes acc gate with acc=0."
+    },
+    {
+      "id": "CRR-MIS-001",
+      "clauses": [
+        "Some effects can cause an attack to miss",
+        "When an attack misses, the target suffers zero damage"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: 004a dodge → miss, damage = 0; 004b accuracy miss (acc 2 vs dist 4)."
+    },
+    {
+      "id": "CRR-MIS-002",
+      "clauses": [
+        "The dodge icon found on the white die causes the attack to miss"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Probe tests dodge → miss but does NOT test the exception: surge-ability cancellation of dodge (004e surgeCancelDodge, Deadly Spin). Only positive dodge-miss path tested; dodge-cancellation mechanism not verified."
+      ],
+      "risk": "medium",
+      "rationale": "direct_oracle: 004a dodge → miss; 004e notes surgeCancelDodge cancels dodge but doesn't verify Deadly Spin executes or dodge cancellation flow."
+    },
+    {
+      "id": "CRR-MIS-003",
+      "clauses": [
+        "While performing a ranged attack, the attack requires Accuracy greater than or equal to the distance to the target",
+        "If total Accuracy < distance, then the attack misses"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: combat-oracles 004b miss at acc 2 < dist 4; 004g hit at acc = dist; accuracy-penalty-oracles 004 cumulative penalty misses."
+    },
+    {
+      "id": "CRR-MIS-004",
+      "clauses": [
+        "When an attack misses, other effects can still be triggered such as using the Recover keyword"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "invariant_pin: Recover heal branch has no hit/damage guard (004a). Rule intent documented (004b). Recover outside post-hit/damage chain (004c). Cleave IS damage-gated — demonstrates pattern Recover lacks (004d). Recover accumulates during surge with no predicate (004e). Embed-refresh fires on 0-damage heal (004f)."
+    },
+    {
+      "id": "CRR-MIS-005",
+      "clauses": [
+        "Ability requiring target figure to suffer one or more damage (Blast, Cleave, Condition keyword) — miss prevents that ability from being resolved because target suffers no damage"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: G22 violation Bleed applied despite 0 damage flagged; G22 positive path Bleed with damage > 0."
+    },
+    {
+      "id": "CRR-PRC-001",
+      "clauses": [
+        "This keyword allows a figure to ignore a number of block results while attacking",
+        "Example: Pierce 2 allows attack to ignore up to 2 results"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: 005a pierce 2 vs 3 block → 2 damage net (1 block remains)."
+    },
+    {
+      "id": "CRR-PRC-002",
+      "clauses": [
+        "Pierce value is applied after any Accuracy modifiers are applied"
+      ],
+      "fit": "unclear",
+      "missing": [
+        "Probe file phase-d-pierce-ordering-probe.test.js does not exist in test tree. Cannot verify source-order pin or behavioral test of pierce timing vs accuracy modifiers."
+      ],
+      "risk": "high",
+      "rationale": "No evidence files in manifest. Probe missing entirely — coverage status unknown."
+    },
+    {
+      "id": "CRR-PRC-003",
+      "clauses": [
+        "If multiple Pierce abilities are used during an attack, their values are added together"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: PROBE-PD-PRC-003 surgePierce=1 + bonusPierce=2 → total 3 pierce reduces 3 block."
+    },
+    {
+      "id": "CRR-DT-001",
+      "clauses": [
+        "A figure must spend one additional movement point to enter a space containing difficult terrain",
+        "A figure doesn't need to spend additional movement points to exit a space containing difficult terrain",
+        "Line of sight can be traced through difficult terrain",
+        "If a space contains a hostile figure and difficult terrain, other figures must spend two additional movement points to enter the space",
+        "When a large figure enters difficult terrain, it spends only one additional movement point, regardless of the number of spaces of difficult terrain that it occupies",
+        "Figures that have Massive or Mobile ignore extra movement points costs"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 4: Difficult + hostile stacking tested (PROBE-TERRAIN-004). Clauses 1, 2, 3, 5, 6: Difficult terrain alone (PROBE-TERRAIN-002) entry tested but NOT exit (CRR-DT-002 handles exit separately). Large-figure clause NOT tested — probe assumes 1x1 profiles. Mobile/Massive ignore tested but NOT isolated to entry gate for large."
+      ],
+      "risk": "high",
+      "rationale": "direct_oracle: terrain-stacking-probes uses BASE_PROFILE (1x1, not large). Large-figure single +1 surcharge claim uncovered — no test of multi-cell difficult terrain entry."
+    },
+    {
+      "id": "CRR-DT-002",
+      "clauses": [
+        "A figure doesn't need to spend additional movement points to exit a space containing difficult terrain"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: 002a moving from difficult-origin cell to normal costs exactly 1 MP (base cost). 002c source pin notes movement.js has no exitingDifficult branch — asymmetry is literal."
+    },
+    {
+      "id": "CRR-DT-003",
+      "clauses": [
+        "Line of sight can be traced through difficult terrain"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: PROBE-PD-DT-003 LOS a1→e1 with difficult at c1 passes."
+    },
+    {
+      "id": "CRR-DT-004",
+      "clauses": [
+        "If a space contains a hostile figure and difficult terrain, other figures must spend two additional movement points to enter the space (one for the figure and one for the terrain)"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: PROBE-TERRAIN-004 difficult + hostile stack costs 3 MP (base 1 + difficult 1 + hostile 1). Additive formula verified."
+    },
+    {
+      "id": "CRR-DT-005",
+      "clauses": [
+        "When a large figure enters difficult terrain, it spends only one additional movement point, regardless of the number of spaces of difficult terrain that it occupies",
+        "Figures that have Massive or Mobile ignore extra movement points costs"
+      ],
+      "fit": "partial",
+      "missing": [
+        "Clause 1: Large-figure difficult terrain single +1 surcharge claim NOT tested. Probe fixture uses 1x1 BASE_PROFILE. Clause 2 tested only for terrain-only cells, not stacked difficult + hostile with large figure."
+      ],
+      "risk": "high",
+      "rationale": "invariant_pin: 005a entering = nextFootprint minus prevFootprint. 005b enteringDifficult is single boolean (Array.some). 005c DT surcharge +1 unconditional. But large-figure multi-cell scenario uncovered."
+    },
+    {
+      "id": "CRR-DT-006",
+      "clauses": [
+        "Figures that have Massive or Mobile ignore extra movement points costs (including difficult and hostile)"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: 005b Massive ignores difficult terrain; ignoreDifficult on difficult-only cell → 1 MP. movement-legality-behavioral and terrain-stacking-probes both verify."
+    },
+    {
+      "id": "CRR-SUR-002",
+      "clauses": [
+        "Each surge ability can be triggered only once per attack"
+      ],
+      "fit": "full",
+      "missing": [],
+      "risk": "n/a",
+      "rationale": "direct_oracle: 001 Bossk [damage 2, pierce 2]; 004a spending both surges → correct final damage."
+    }
+  ]
+}
