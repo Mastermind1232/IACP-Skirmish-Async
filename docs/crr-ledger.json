@@ -2760,12 +2760,34 @@
         "lines": [
           648,
           648
-        ]
+        ],
+        "sha256": "938e38dffe5752b5386f1f635dfba947c14679c407daa8147038e3016fe3c339"
       },
       "summary": "Damage suffered from Bleeding is not considered voluntarily suffering strain.",
       "scope": "skirmish",
-      "status": "gap",
-      "notes": "Bleeding-damage-is-not-strain-cost distinction has no named assertion pin; relevant to abilities gated on voluntary strain. Phase-D gap."
+      "status": "covered",
+      "notes": "Pinned via PROBE-PD-BLED-003 (batch-95). Bleeding routes through reduceHp (generic HP-damage path); applyStrainToFigure is reserved for voluntary self-strain ability costs (Relentless, Keep the Peace, Heavy Repeater, Soresu Form) and never triggered by Bleeding. Prompt text reinforces the semantic distinction (\"suffers 1 damage\", not strain).",
+      "implementationArea": "src/handlers/combat-special-effects.js",
+      "evidence": {
+        "type": "direct_oracle",
+        "files": [
+          "tests/domain/oracle/phase-d-bled-003-bleeding-not-voluntary-strain-probe.test.js",
+          "src/handlers/combat-special-effects.js",
+          "src/engine/combat-bridge.js",
+          "src/handlers/combat.js"
+        ],
+        "assertions": [
+          "handleBleedResolve must reduce HP directly on accept",
+          "handleBleedResolve must not invoke applyStrainToFigure",
+          "Bleeding prompt must say \"suffers 1 damage\"",
+          "applyStrainToFigure helper must exist with an abilityLabel parameter",
+          "no applyStrainToFigure call site may be labeled as Bleeding"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-CLV-001",
