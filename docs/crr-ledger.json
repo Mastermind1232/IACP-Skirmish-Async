@@ -10383,13 +10383,30 @@
         "lines": [
           2486,
           2488
-        ]
+        ],
+        "sha256": "bffd6bbdce76cec70b303a779cb609e8b747b97bd549f200ee8d6e23b03fa3d4"
       },
       "summary": "Abilities on Attachment cards apply to all figures in the corresponding group; trait-restricted attachments (e.g., TROOPER) cannot be placed on groups without the trait.",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/game/abilities.js",
-      "notes": "Attachment-abilities-apply-to-all-figures-in-group and trait-gate rules are implemented inline per-attachment. No dedicated oracle pins the 'whole-group effect' invariant. Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/game-state.js",
+      "notes": "Pinned via PROBE-PD-SKA-003 (batch-97). Attachments live in game.p1DcAttachments[msgId] / game.p2DcAttachments[msgId] — keyed by DC message id only. Many call sites across combat/activation/dc-play-area read the whole-DC attachment list and apply its effects during each figure's flow; no per-figure attachment store exists. Trait-restricted attachments are data-enforced at the CC-attach UI (separate concern, not SKA-003 scope).",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-ska-003-attachments-apply-to-group-probe.test.js",
+          "src/handlers/combat.js",
+          "src/handlers/activation.js"
+        ],
+        "assertions": [
+          "DcAttachments must be read via [msgId] at >=10 sites",
+          "no src file may declare a per-figure attachment container"
+        ]
+      },
+      "reviewedBy": {
+        "name": "Claude (Phase-D oracle sweep)",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-SKA-004",
