@@ -11245,6 +11245,78 @@
       "notes": "Command-deck construction constraints already covered by CCD atoms."
     },
     {
+      "id": "CRR-CC-006",
+      "crr": {
+        "section": "COMMAND CARDS",
+        "lines": [
+          859,
+          861
+        ],
+        "sha256": "ae1c2095dbaff64bc5ae7461afeaefae2cb7c72afb552e940932d18ecdd58c86"
+      },
+      "summary": "Many Command cards have a restriction box. When playing a CC that lists a trait, figure name, and/or affiliation icon, it must be played on a single friendly figure that matches all restrictions listed.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/game/cc-timing.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-cc-006-restriction-probe.test.js",
+          "src/game/cc-timing.js",
+          "src/handlers/cc-hand.js"
+        ],
+        "assertions": [
+          "export function isCcPlayLegalByRestriction",
+          "if (!playableBy || playableBy.toLowerCase() === 'any figure') return { legal: true };",
+          "const alternatives = playableBy.split(/\\s+or\\s+/i)",
+          "const restriction = isCcPlayLegalByRestriction(game, playerNum, card);",
+          "game.pendingIllegalCcPlay = { playerNum, card, reason: restriction.reason };"
+        ]
+      },
+      "notes": "isCcPlayLegalByRestriction matches effect.playableBy against DC affiliation/name/keywords, handles ' or ' alternatives, and covers Devout/Fallen Master/Adaptive Skills/Fast Learner modifiers. cc-hand play path parks illegal plays in pendingIllegalCcPlay before the card resolves.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-20"
+      }
+    },
+    {
+      "id": "CRR-CC-007",
+      "crr": {
+        "section": "COMMAND CARDS",
+        "lines": [
+          862,
+          863
+        ],
+        "sha256": "324af8724b785dc0e5b425947e473f54ebec50b23baf1d92b711920e0d029633"
+      },
+      "summary": "A Command card with one special action icon costs the figure one action to resolve; two special action icons cost two actions.",
+      "scope": "skirmish",
+      "status": "covered",
+      "implementationArea": "src/engine/available-actions.js, src/handlers/dc-play-area.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-cc-007-special-action-cost-probe.test.js",
+          "src/engine/action-types.js",
+          "src/engine/available-actions.js",
+          "src/handlers/dc-play-area.js"
+        ],
+        "assertions": [
+          "PLAY_CC_SPECIAL: 'play_cc_special',",
+          "PLAY_CC_DOUBLE: 'play_cc_double',",
+          "if (deps.getPlayableCcSpecialsForDc && data.remaining >= 1) {",
+          "if (deps.getPlayableCcDoubleActionsForDc && data.remaining >= 2) {",
+          "if (data && typeof data.remaining === 'number') data.remaining = Math.max(0, data.remaining - 1);",
+          "if (data && typeof data.remaining === 'number') data.remaining = 0;"
+        ]
+      },
+      "notes": "Available-actions gates Special-Action CCs on remaining>=1 (offered with actionCost:1) and Double-Action CCs on remaining>=2 (actionCost:2). dc-play-area._playCcFromDcThread decrements remaining by 1 for Special Action and zeroes it for Double Action.",
+      "reviewedBy": {
+        "name": "adam@vantheon.ai",
+        "date": "2026-04-20"
+      }
+    },
+    {
       "id": "CRR-CTRL-001",
       "crr": {
         "section": "CONTROL",
