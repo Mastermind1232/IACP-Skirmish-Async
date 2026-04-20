@@ -460,13 +460,31 @@
         "lines": [
           2066,
           2070
-        ]
+        ],
+        "sha256": "caa00c06d1256082bb57a65e57c9b4ef94adbd0ee836f11825e1786823ffceb1"
       },
       "summary": "A figure may interleave MP spending around a non-Move action in the same activation (Move → attack → continue moving).",
       "scope": "skirmish",
-      "status": "gap",
-      "implementationArea": "src/engine/activation-effects.js",
-      "notes": "MP-interleaving with other actions is a core CRR rule. No named assertion pins the full move-attack-move sequence. High-value Phase-D gap."
+      "status": "covered",
+      "implementationArea": "src/handlers/dc-play-area.js",
+      "evidence": {
+        "type": "invariant_pin",
+        "files": [
+          "tests/domain/oracle/phase-d-move-mp-interleave-probe.test.js"
+        ],
+        "assertions": [
+          "012a: source — dc_spend_mp_ handler is registered",
+          "012b: source — SpendMp button is surfaced whenever movementBank.remaining > 0",
+          "012c: source — SpendMp bypasses the no-actions-remaining gate",
+          "012d: source — SpendMp reuses existing bank MP (no speed addition)",
+          "012e: source — SpendMp does NOT decrement actionsData.remaining"
+        ]
+      },
+      "notes": "movementBank is msgId-keyed (activation-scoped); SpendMp bypasses the actions-remaining gate, reuses existing bank MP, and never deducts an action — so MP granted by Move or free-move persists and can be spent before or after another action in the same activation.",
+      "reviewedBy": {
+        "name": "Adam",
+        "date": "2026-04-20"
+      }
     },
     {
       "id": "CRR-MOVE-013",
