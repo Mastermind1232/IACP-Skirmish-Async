@@ -942,16 +942,19 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/los-slice2-probes.test.js"
+          "tests/domain/oracle/los-slice2-probes.test.js",
+          "tests/domain/oracle/phase-d-los-figure-blocker-probe.test.js"
         ],
         "assertions": [
           "a3 → a5 with empty impassableEdges returns true",
-          "a3 → a5 with unrelated edge still has LOS"
+          "a3 → a5 with unrelated edge still has LOS",
+          "a3 → e3 with figure on c3 returns false",
+          "a3 → e3 with no figure blockers returns true"
         ]
       },
       "reviewedBy": {
-        "name": "Adam",
-        "date": "2026-04-17"
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
       }
     },
     {
@@ -973,17 +976,19 @@
         "files": [
           "tests/domain/oracle/los-slice2-probes.test.js",
           "tests/domain/oracle/los-06-energy-shield-probes.test.js",
-          "tests/domain/oracle/los-06-diagonal-corner-probes.test.js"
+          "tests/domain/oracle/los-06-diagonal-corner-probes.test.js",
+          "tests/domain/oracle/phase-d-los-figure-blocker-probe.test.js"
         ],
         "assertions": [
           "a3 → a5 across closed door between a3|a4 returns false",
           "b3 → e3 with shield on c3 (between) returns false",
-          "2x2 attacker — only back cell has LOS past a blocker"
+          "2x2 attacker — only back cell has LOS past a blocker",
+          "a3 → e3 with figure on c3 returns false"
         ]
       },
       "reviewedBy": {
-        "name": "Adam",
-        "date": "2026-04-17"
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
       },
       "seeAlso": [
         "CRR-LOS-001"
@@ -1422,6 +1427,7 @@
       "evidence": {
         "type": "invariant_pin",
         "files": [
+          "tests/domain/oracle/phase-d-atk-004-alt-pool-surges-behavior-probe.test.js",
           "tests/domain/oracle/phase-d-atk-alt-pool-keeps-surges-probe.test.js",
           "src/game/combat.js",
           "src/handlers/combat.js"
@@ -1431,11 +1437,14 @@
           "004b: source — the ONLY full opt-out is combat.blockSurgeAbilities (no dice-pool predicate)",
           "004c: source — the final surge list is base + doubles + bonus (all attacker-DC-derived)",
           "004d: source — pendingOverrideAttackDice mutates attackInfo only (not the surge set)",
-          "004e: source — explicit opt-out path exists (Tusken Cycler wires blockSurgeAbilities via _pendingBlockSurgeAbilities)"
+          "004e: source — explicit opt-out path exists (Tusken Cycler wires blockSurgeAbilities via _pendingBlockSurgeAbilities)",
+          "baseline — attacker DC surges are returned",
+          "alt pool — mutating attackInfo.dice does not alter the surge set",
+          "explicit opt-out — blockSurgeAbilities=true returns empty list"
         ]
       },
       "reviewedBy": {
-        "name": "Adam",
+        "name": "claude-opus-4-7",
         "date": "2026-04-20"
       },
       "notes": "Surge-ability gathering is decoupled from the dice pool by construction: getAttackerSurgeAbilities keys on attackerDcName (or defenderDcName under Reverse Engineer), never on attackInfo.dice or pendingOverrideAttackDice. The override consumer in handlers/combat.js only rewrites attackInfo.{dice,range,attackType} — it does not touch the DC surge set. The sole full opt-out is an explicit blockSurgeAbilities flag (e.g. Tusken Cycler) wired via overrideDice.blockSurgeAbilities, matching the CRR's 'unless the triggering ability states otherwise' carve-out."
@@ -1499,12 +1508,13 @@
       "status": "covered",
       "notes": "Pinned via PROBE-PD-ATK-007/008/028 (batch-96). game.pendingCombat is a single object set at attack declaration; no parallel-attack container exists; no \"defender moves mid-attack\" / \"re-declare target\" substrate exists — the CRR re-declaration rule is vacuously satisfied (the engine has no mid-attack defender movement path).",
       "reviewedBy": {
-        "name": "Claude (Phase-D oracle sweep)",
+        "name": "claude-opus-4-7",
         "date": "2026-04-20"
       },
       "evidence": {
         "type": "invariant_pin",
         "files": [
+          "tests/domain/oracle/phase-d-atk-007-target-snapshot-behavior-probe.test.js",
           "tests/domain/oracle/phase-d-atk-combat-atomicity-probe.test.js",
           "src/handlers/combat.js",
           "src/engine/combat-bridge.js",
@@ -1513,7 +1523,9 @@
         "assertions": [
           "combat.js must set pendingCombat as a single object",
           "no src file may declare a parallel-combat container",
-          "must not declare a mid-attack target re-declaration path"
+          "must not declare a mid-attack target re-declaration path",
+          "mutating game.figurePositions after declare does not change combat.target.position",
+          "deleting the defender from figurePositions does not erase combat.target.figureKey"
         ]
       },
       "implementationArea": "src/handlers/combat.js"
@@ -1768,6 +1780,7 @@
       "evidence": {
         "type": "invariant_pin",
         "files": [
+          "tests/domain/oracle/phase-d-atk-018-pool-mods-before-roll-behavior-probe.test.js",
           "tests/domain/oracle/phase-d-atk-pool-mods-before-roll-probe.test.js",
           "src/handlers/combat.js"
         ],
@@ -1777,11 +1790,14 @@
           "018c: source — the rollAttackDice call is uniquely downstream of the mutation block",
           "018d: source — pendingOverrideAttackDice is consumed BEFORE the roll (rewrites attackInfo, then deletes)",
           "018e: source — override rewrites attackInfo.dice (not the rolled result)",
-          "018f: source — combat.attackRoll is assigned exclusively from the rollAttackDice result"
+          "018f: source — combat.attackRoll is assigned exclusively from the rollAttackDice result",
+          "base [red] + override dice [blue, yellow, green] → roll reflects override pool",
+          "base [red] + override [red, red, blue] → rolled dice count = 3",
+          "base [red, blue, green] + removeDieColor \"blue\" → rolled pool has 2 dice, no blue"
         ]
       },
       "reviewedBy": {
-        "name": "Adam",
+        "name": "claude-opus-4-7",
         "date": "2026-04-20"
       },
       "notes": "Every attack-pool mutation (bonus dice, remove-max, keep-max, add-yellow-until, pendingOverrideAttackDice) applies to the single `let dice = [...baseDice]` accumulator before the unique rollAttackDice(dice) call. Source-ordering invariant (018c) pins roll-is-downstream; the override-is-consumed-pre-roll ordering (018d) pins the more intricate case. Result assignment (018f) is a direct spread of the roll output."
@@ -2116,15 +2132,20 @@
       "evidence": {
         "type": "unit_test",
         "files": [
+          "tests/domain/oracle/phase-d-atk-029-pounce-brutality-budget-probe.test.js",
           "tests/domain/move-features.test.js"
         ],
         "assertions": [
-          "already attacked this activation → 0"
+          "already attacked this activation → 0",
+          "pounceAttackPending=true → attack offered (bypass active)",
+          "pounceAttackPending cleared after resolution → attack blocked",
+          "freeAttackBonusPending cleared after resolution → attack blocked",
+          "Assault DC can still attack after the first attack — separate from special-action path"
         ]
       },
       "reviewedBy": {
-        "name": "Adam",
-        "date": "2026-04-17"
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
       },
       "notes": "move-features attackActionFeasibleAfterMove flag correctly reflects the one-attack-per-activation rule by gating on attackPerformedThisActivation."
     },
@@ -5015,16 +5036,19 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/terrain-stacking-probes.test.js"
+          "tests/domain/oracle/terrain-stacking-probes.test.js",
+          "tests/domain/oracle/phase-d-dt-005-large-figure-behavior-probe.test.js"
         ],
         "assertions": [
           "PROBE-TERRAIN-002: difficult alone",
-          "entering a difficult-only cell costs 2 MP"
+          "entering a difficult-only cell costs 2 MP",
+          "entering [c1, c2] both difficult costs 2 MP (base 1 + surcharge 1), NOT 3",
+          "Massive/Mobile large figure entering [c1, c2] both difficult costs 1 MP"
         ]
       },
       "reviewedBy": {
-        "name": "adam@vantheon.ai",
-        "date": "2026-04-17"
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
       }
     },
     {
@@ -5132,6 +5156,7 @@
       "evidence": {
         "type": "invariant_pin",
         "files": [
+          "tests/domain/oracle/phase-d-dt-005-large-figure-behavior-probe.test.js",
           "tests/domain/oracle/phase-d-dt-large-single-surcharge-probe.test.js"
         ],
         "assertions": [
@@ -5139,11 +5164,14 @@
           "005b: source — `enteringDifficult` is a single boolean via Array.some, not a count",
           "005c: source — the DT surcharge is a single unconditional +1 (no loop, no multiplier)",
           "005d: source — only one `enteringDifficult` definition exists (no size-branched alternate surcharge)",
-          "005e: source — the step-cost is baseCost (1) + extraCost (DT + hostile surcharges only)"
+          "005e: source — the step-cost is baseCost (1) + extraCost (DT + hostile surcharges only)",
+          "entering [c1, c2] both difficult costs 2 MP (base 1 + surcharge 1), NOT 3",
+          "entering [c1] difficult, [c2] normal costs 2 MP",
+          "Massive/Mobile large figure entering [c1, c2] both difficult costs 1 MP"
         ]
       },
       "reviewedBy": {
-        "name": "Adam",
+        "name": "claude-opus-4-7",
         "date": "2026-04-20"
       }
     },
