@@ -11,6 +11,7 @@ import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum, pushFigure 
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
+import { detectAttachedTrigger, applyDioFollow } from '../game/attached-dio-helpers.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 const BTM_PER_MSG = 5;
@@ -1218,19 +1219,10 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     }
   }
   // Attached (Dio): when Iden Versio exits Dio's space during movement, Dio may move up to 1 space
-  if (meta.dcName === 'Iden Versio' && startCoord && String(newTopLeft).toLowerCase() !== String(startCoord).toLowerCase()) {
-    const _dioFriendlyFigs = game.figurePositions?.[playerNum] || {};
-    for (const [_dioFk, _dioPos] of Object.entries(_dioFriendlyFigs)) {
-      if (!_dioPos) continue;
-      if (!_dioFk.startsWith('Dio-')) continue;
-      if (String(_dioPos).toLowerCase() !== String(startCoord).toLowerCase()) continue;
-      // Iden was on Dio's space and has now moved away — trigger Attached
-      const _dioMapId = game.selectedMap?.id;
-      if (!_dioMapId) continue;
-      const _dioAdj = getMapData(_dioMapId)?.adjacency?.[_dioPos] || [];
-      if (_dioAdj.length === 0) continue;
-      // Best follow space is path[1] (first step on Iden's path)
-      const _dioDefaultSpace = (path && path.length >= 2) ? String(path[1]).toLowerCase() : _dioAdj[0];
+  {
+    const _attachedTrigger = detectAttachedTrigger(game, playerNum, meta.dcName, startCoord, newTopLeft, path);
+    if (_attachedTrigger) {
+      const { dioFigureKey: _dioFk, dioPos: _dioPos, adjacencies: _dioAdj, defaultFollowSpace: _dioDefaultSpace } = _attachedTrigger;
       game.pendingDioFollow = {
         dioFigureKey: _dioFk,
         dioPlayerNum: playerNum,
@@ -1257,7 +1249,6 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
         components: _dioRows.slice(0, 5),
         allowedMentions: { users: _dioOwnerId ? [_dioOwnerId] : [] },
       }).catch(discordCatch);
-      break;
     }
   }
   // --- Post-move interrupt detection: C23 Parting Blow, C15 Dirty Trick, C43 Disengage ---
@@ -1443,9 +1434,7 @@ export async function handleDioFollowPick(interaction, ctx) {
 
   // Move Dio to the chosen space
   const { dioFigureKey, dioPlayerNum, currentSpace } = pending;
-  game.figurePositions = game.figurePositions || {};
-  game.figurePositions[dioPlayerNum] = game.figurePositions[dioPlayerNum] || {};
-  game.figurePositions[dioPlayerNum][dioFigureKey] = space;
+  applyDioFollow(game, dioFigureKey, dioPlayerNum, space);
   delete game.pendingDioFollow;
 
   await interaction.message.edit({ content: `**Attached** — **Dio** moved from **${currentSpace.toUpperCase()}** to **${space.toUpperCase()}** (following Iden Versio).`, components: [] }).catch(discordCatch);
