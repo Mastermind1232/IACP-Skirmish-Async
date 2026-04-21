@@ -1,6 +1,7 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
+import { removeForceExhaustionDie } from '../game/force-exhaustion-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { chunkButtonsToRows } from '../discord/components.js';
@@ -815,17 +816,9 @@ export async function handleForceExhaustion(interaction, ctx) {
 
     // Remove 1 attack die (weakest first: yellow > green > blue > red)
     if (game.pendingCombat) {
-      const dice = [...(game.pendingCombat.attackInfo.dice || [])];
-      const removeOrder = ['yellow', 'green', 'blue', 'red'];
-      let removed = false;
-      for (const color of removeOrder) {
-        const idx = dice.indexOf(color);
-        if (idx !== -1) {
-          dice.splice(idx, 1);
-          removed = true;
-          if (thread) await thread.send(`**Force Exhaustion** — Removed 1 **${color}** attack die.`).catch(discordCatch);
-          break;
-        }
+      const { dice, removedColor } = removeForceExhaustionDie(game.pendingCombat.attackInfo.dice);
+      if (removedColor && thread) {
+        await thread.send(`**Force Exhaustion** — Removed 1 **${removedColor}** attack die.`).catch(discordCatch);
       }
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
 

@@ -8,6 +8,7 @@ import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDc
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2331,34 +2332,24 @@ export async function handleAttackTarget(interaction, ctx) {
   // Force Exhaustion (The Child / Clan of Two): when attack targets The Child or a figure with Clan of Two,
   // The Child's owner may choose to incapacitate The Child to remove 1 attack die and Weaken the attacker.
   {
-    // Check if the target is The Child or has "Clan of Two" attachment
-    const _feTargetIsChild = targetDcName === 'The Child';
     const _feDefMsgId = target.isNpc ? null : (findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, target.figureKey) || null);
     const _feDefUpgrades = _feDefMsgId ? (game.p1DcAttachments?.[_feDefMsgId] || game.p2DcAttachments?.[_feDefMsgId] || []) : [];
-    const _feTargetHasClanOfTwo = cardNameIncludes(_feDefUpgrades, 'Clan of Two');
-    if (_feTargetIsChild || _feTargetHasClanOfTwo) {
-      // Find The Child on the defender's side — must be alive (in figurePositions) and not already incapacitated
-      const _feDefPositions = game.figurePositions?.[defenderPlayerNum] || {};
-      let _feChildFigureKey = null;
-      for (const fk of Object.keys(_feDefPositions)) {
-        if (dcNameFromFigureKey(fk) === 'The Child') { _feChildFigureKey = fk; break; }
-      }
-      if (_feChildFigureKey && !game.childIncapacitated) {
-        const defOwnerId = getPlayerId(game, defenderPlayerNum);
-        game.pendingForceExhaustion = {
-          gameId: game.gameId,
-          defenderPlayerNum,
-          attackerPlayerNum,
-          attackerFigureKey,
-          childFigureKey: _feChildFigureKey,
-          combatThreadId: thread.id,
-        };
-        const feRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`force_exhaustion_yes_${game.gameId}`).setLabel('Use Force Exhaustion (Incapacitate The Child)').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId(`force_exhaustion_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated** to remove 1 attack die and apply **Weakened** to the attacker. Use this ability?`, components: [feRow], allowedMentions: { users: [defOwnerId] } }));
-      }
+    const _feDecision = canOfferForceExhaustion(game, defenderPlayerNum, targetDcName, _feDefUpgrades);
+    if (_feDecision.eligible) {
+      const defOwnerId = getPlayerId(game, defenderPlayerNum);
+      game.pendingForceExhaustion = {
+        gameId: game.gameId,
+        defenderPlayerNum,
+        attackerPlayerNum,
+        attackerFigureKey,
+        childFigureKey: _feDecision.childFigureKey,
+        combatThreadId: thread.id,
+      };
+      const feRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`force_exhaustion_yes_${game.gameId}`).setLabel('Use Force Exhaustion (Incapacitate The Child)').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`force_exhaustion_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated** to remove 1 attack die and apply **Weakened** to the attacker. Use this ability?`, components: [feRow], allowedMentions: { users: [defOwnerId] } }));
     }
   }
 
