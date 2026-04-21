@@ -106,9 +106,11 @@ export function buildSquadConfirmText(squad, validation, deps) {
   }
 
   // Informational warnings (non-blocking): upgrade expectations + affiliation
+  // + soft attachment notes surfaced via validateDeckLegal.
   const upgradeWarnings = validateUpgradeWarnings(squad);
   const { warnings: affiliationWarnings } = validateArmyAffiliation(squad);
-  const allWarnings = [...upgradeWarnings, ...affiliationWarnings];
+  const deckWarnings = validation?.warnings || [];
+  const allWarnings = [...upgradeWarnings, ...affiliationWarnings, ...deckWarnings];
   if (allWarnings.length) {
     const warnList = allWarnings.map(w => `\u2022 ${w}`).join('\n');
     text += `\n\n\u2139\ufe0f **Warnings:**\n${warnList}`;

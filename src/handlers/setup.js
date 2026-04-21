@@ -27,7 +27,7 @@ import { resolveStartOfRoundEffect } from './round.js';
 import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows, buildRowPickerButtons } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
-import { _matchesKeywordPhrase } from '../game/validation.js';
+import { _matchesKeywordPhrase, findEligibilityExtender } from '../game/validation.js';
 import { isBlitzMission, initBlitzDeployment, sendBlitzTurnPrompt, checkBlitzGroupComplete } from './blitz-deploy.js';
 
 /** Get blocking terrain info for deployment filtering.
@@ -55,7 +55,7 @@ const RESTRICTION_KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE', 'TROOPER'
  * Parse the restriction line from an attachment card and return a filter function.
  * Returns { restrictionText, filter: (dcName) => bool } or null if no restriction.
  */
-function getAttachmentRestriction(cardName) {
+export function getAttachmentRestriction(cardName, armyDcNames = null) {
   const effects = getDcEffects();
   const card = effects[cardName] || effects[`[${cardName}]`];
   if (!card) return null;
@@ -87,9 +87,16 @@ function getAttachmentRestriction(cardName) {
     }
   }
 
+  // Eligibility-extension short-circuit (Bo-Katan + Darksaber, etc.)
+  const extenderDcName = armyDcNames
+    ? findEligibilityExtender(String(cardName).replace(/^\[|\]$/g, ''), armyDcNames, effects)
+    : null;
+
   return {
     restrictionText: restrictionRaw,
+    extenderDcName,
     filter: (dcName) => {
+      if (extenderDcName && dcName === extenderDcName) return true;
       const dcStats = effects[dcName];
       if (!dcStats) return true; // unknown DC, allow
       const dcKw = (dcStats.keywords || []).map(k => String(k).toUpperCase());
@@ -189,7 +196,8 @@ export function findAutoAttachTarget(cardName, dcList, dcMsgIds, alreadyAttached
     KEYWORDS.some((k) => a.toUpperCase().includes(k)),
   );
   if (isKeyword) {
-    const kwRestriction = getAttachmentRestriction(cardName);
+    const armyDcNames = (dcList || []).map((d) => d?.dcName).filter(Boolean);
+    const kwRestriction = getAttachmentRestriction(cardName, armyDcNames);
     if (kwRestriction) {
       const kwMatches = [];
       for (let i = 0; i < dcList.length; i++) {
@@ -203,10 +211,22 @@ export function findAutoAttachTarget(cardName, dcList, dcMsgIds, alreadyAttached
   }
   // Match alternatives against DC names (case-insensitive)
   const matches = [];
+  // Eligibility-extension: Bo-Katan + Darksaber, etc. — her passive grants her
+  // eligibility even though the printed restriction is MAUL OR SABINE WREN ONLY.
+  const armyDcNamesForExt = (dcList || []).map((d) => d?.dcName).filter(Boolean);
+  const extender = findEligibilityExtender(
+    String(cardName).replace(/^\[|\]$/g, ''),
+    armyDcNamesForExt,
+    getDcEffects(),
+  );
   for (let i = 0; i < dcList.length; i++) {
     if (alreadyAttached?.has(dcMsgIds[i])) continue;
     if (isFigurelessDc(dcList[i].dcName)) continue;
     const name = (dcList[i].dcName || '').toLowerCase();
+    if (extender && dcList[i].dcName === extender) {
+      matches.push(dcMsgIds[i]);
+      continue;
+    }
     for (const alt of alternatives) {
       if (name.includes(alt.toLowerCase())) {
         matches.push(dcMsgIds[i]);
@@ -2170,6 +2190,21 @@ export async function handleSetupAttachTo(interaction, ctx) {
   const dcMsgId = interaction.values[0];
   if (!dcMsgId) return;
 
+  // Server-side re-check: the picker dropdown already filters ineligible
+  // DCs, but a crafted interaction could still submit one. Confirm the
+  // chosen DC satisfies the "X ONLY" restriction (or is granted access
+  // via an eligibility-extending passive like Bo-Katan + Darksaber).
+  const armyDcNames = (getDcList(game, playerNum) || []).map(d => d?.dcName).filter(Boolean);
+  const restriction = getAttachmentRestriction(card, armyDcNames);
+  const chosenDcName = ctx.dcMessageMeta?.get(dcMsgId)?.dcName;
+  if (restriction && chosenDcName && !restriction.filter(chosenDcName)) {
+    await interaction.followUp({
+      content: `🚫 **${card}** requires **${restriction.restrictionText}**. **${chosenDcName}** is not eligible.`,
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
+
   // Store choice and show confirmation instead of applying immediately
   game.pendingAttachConfirm = game.pendingAttachConfirm || {};
   game.pendingAttachConfirm[playerNum] = { card, dcMsgId };
@@ -2473,7 +2508,8 @@ export async function _sendAttachmentDropdown(game, gameId, playerNum, card, cli
   const handChannel = await fetchGameChannel(client, handId);
   const dcList = getDcList(game, playerNum) || [];
   const dcMsgIds = getDcMessageIds(game, playerNum) || [];
-  const restriction = getAttachmentRestriction(card);
+  const armyDcNames = dcList.map((d) => d?.dcName).filter(Boolean);
+  const restriction = getAttachmentRestriction(card, armyDcNames);
   // DCs that already have an attachment cannot receive another (CRR p.56: "Each Deployment card can have only one Attachment")
   const alreadyAttached = new Set(
     (game.setupAttachmentApplied?.[playerNum] || []).map(a => a.dcMsgId),

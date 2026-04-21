@@ -1,7 +1,35 @@
 /**
  * Game validation (deck legal, etc.). No Discord; uses data-loader for card data.
  */
-import { getDcEffects, getDcKeywords, getCcEffect, getCcEffectsData } from '../data-loader.js';
+import { getDcEffects, getDcKeywords, getCcEffect, getCcEffectsData, getAbilityLibrary } from '../data-loader.js';
+
+/**
+ * Check whether any DC in `armyDcNames` has a passive whose library entry
+ * declares `extendsAttachmentEligibility` covering `cardName`. Used by the
+ * attachment-restriction filter to let e.g. Bo-Katan's "Last Wielder of the
+ * Darksaber" grant her the Darksaber even though she doesn't match the
+ * attachment's "MAUL OR SABINE WREN ONLY" line.
+ *
+ * Returns the DC name that extends eligibility, or null if none.
+ */
+export function findEligibilityExtender(cardName, armyDcNames, dcEffects) {
+  if (!cardName || !Array.isArray(armyDcNames) || armyDcNames.length === 0) return null;
+  const lib = getAbilityLibrary()?.abilities || {};
+  const needles = new Set([cardName, `[${cardName}]`, cardName.replace(/^\[|\]$/g, '')].filter(Boolean));
+  for (const dcName of armyDcNames) {
+    const stats = dcEffects[dcName];
+    const slugs = stats?.specialAbilityIds || [];
+    for (const slug of slugs) {
+      const entry = lib[slug];
+      const list = entry?.extendsAttachmentEligibility;
+      if (!Array.isArray(list) || list.length === 0) continue;
+      for (const allowed of list) {
+        if (needles.has(allowed)) return dcName;
+      }
+    }
+  }
+  return null;
+}
 
 export const DC_POINTS_LEGAL = 40;
 export const CC_CARDS_LEGAL = 15;
@@ -260,12 +288,18 @@ export function validateDeckLegal(squad) {
     errors.push(`Command deck total cost is ${ccCost}. Legal total cost is exactly ${CC_COST_LEGAL}.`);
   }
   // ── Attachment target validation ──
-  const attachmentWarnings = validateAttachmentTargets(dcList);
-  errors.push(...attachmentWarnings);
+  // Returns { errors, warnings }: errors are hard legality violations (an
+  // attachment whose restriction is unsatisfiable in this army); warnings are
+  // advisory (an attachment that is legal only because of an eligibility-
+  // extending passive like Bo-Katan's "Last Wielder of the Darksaber").
+  const attachment = validateAttachmentTargets(dcList);
+  errors.push(...attachment.errors);
+  const warnings = [...attachment.warnings];
 
   return {
     legal: errors.length === 0,
     errors,
+    warnings,
     dcTotal,
     ccCount: ccList.length,
     ccCost,
@@ -288,8 +322,13 @@ export function _matchesKeywordPhrase(phrase, dcKw, affiliation) {
 /**
  * Parse the "X ONLY" restriction from an attachment card's abilityText.
  * Returns { restrictionText, filter: (dcName, dcEffects) => bool } or null if no restriction.
+ *
+ * `armyDcNames` (optional) is the full army DC list. When provided, the filter
+ * also returns true for any DC that extends eligibility via a library entry
+ * flagged with `extendsAttachmentEligibility` (e.g. Bo-Katan's "Last Wielder
+ * of the Darksaber" grants Darksaber eligibility to her group).
  */
-function parseAttachmentRestriction(cardName, dcEffects) {
+function parseAttachmentRestriction(cardName, dcEffects, armyDcNames = null) {
   const card = dcEffects[cardName] || dcEffects[`[${cardName}]`];
   if (!card?.abilityText || !card.attachment) return null;
   const firstLine = card.abilityText.split('\n')[0].trim();
@@ -310,9 +349,20 @@ function parseAttachmentRestriction(cardName, dcEffects) {
     }
   }
 
+  // Pre-compute the eligibility-extender (if any DC in the army has a passive
+  // that names this attachment via `extendsAttachmentEligibility`).
+  const extenderDcName = armyDcNames
+    ? findEligibilityExtender(cardName.replace(/^\[|\]$/g, ''), armyDcNames, dcEffects)
+    : null;
+
   return {
     restrictionText: restrictionRaw,
+    extenderDcName,
     filter: (dcName) => {
+      // Eligibility extension short-circuit: if this DC's passive grants access
+      // (e.g. Bo-Katan + Darksaber), bypass the printed "X ONLY" restriction.
+      if (extenderDcName && dcName === extenderDcName) return true;
+
       const dcStats = dcEffects[dcName];
       if (!dcStats) return false;
       const dcKw = (dcStats.keywords || []).map(k => String(k).toUpperCase());
@@ -377,11 +427,20 @@ function parseAttachmentRestriction(cardName, dcEffects) {
 }
 
 /**
- * Validate that each attachment card in the army has at least one valid non-attachment target.
+ * Validate that each attachment card in the army has at least one valid
+ * non-attachment target. Returns two lists:
+ *   - errors:   attachments whose restriction cannot be satisfied by any DC
+ *               in the army (hard legality violation).
+ *   - warnings: attachments that are legal only because of an
+ *               eligibility-extending passive (e.g. Bo-Katan's "Last Wielder
+ *               of the Darksaber" grants Darksaber access to her group).
+ *               The deck is legal; the note just makes the non-obvious
+ *               dependency visible in the UI.
  * @param {string[]} dcList
- * @returns {string[]} array of error messages for attachments with no valid targets
+ * @returns {{ errors: string[], warnings: string[] }}
  */
 function validateAttachmentTargets(dcList) {
+  const errors = [];
   const warnings = [];
   const dcEffects = getDcEffects();
 
@@ -401,18 +460,26 @@ function validateAttachmentTargets(dcList) {
     const stats = dcEffects[name];
     if (!stats?.attachment) continue;
 
-    const restriction = parseAttachmentRestriction(name, dcEffects);
+    const restriction = parseAttachmentRestriction(name, dcEffects, nonAttachmentNames);
     if (!restriction) continue; // No "X ONLY" restriction line — skip
 
     const hasValidTarget = nonAttachmentNames.some(targetName => restriction.filter(targetName));
+    const displayName = name.startsWith('[') && name.endsWith(']') ? name.slice(1, -1) : name;
     if (!hasValidTarget) {
-      // Use display name without brackets for readability
-      const displayName = name.startsWith('[') && name.endsWith(']') ? name.slice(1, -1) : name;
-      warnings.push(`"${displayName}" requires a ${restriction.restrictionText} figure, but none found in army.`);
+      errors.push(`"${displayName}" requires a ${restriction.restrictionText} figure, but none found in army.`);
+      continue;
+    }
+    // If the only way this attachment is legal is via an eligibility-extending
+    // passive, surface a soft warning so the player sees the dependency.
+    if (restriction.extenderDcName) {
+      const printedOk = nonAttachmentNames.some(n => n !== restriction.extenderDcName && restriction.filter(n));
+      if (!printedOk) {
+        warnings.push(`"${displayName}" is legal only because **${restriction.extenderDcName}** extends its eligibility. Printed restriction: ${restriction.restrictionText}.`);
+      }
     }
   }
 
-  return warnings;
+  return { errors, warnings };
 }
 
 // ── Unique upgrade warnings (test cases R5, R11, R41, I2, M3) ──

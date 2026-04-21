@@ -20,8 +20,8 @@
       }
     },
     "lastManualPatch": {
-      "at": "2026-04-21T04:04:54.638Z",
-      "batch": "dc-cc-batch-4: Sling Barrage (Ewok Warrior Elite) wiring",
+      "at": "2026-04-21T04:27:21.850Z",
+      "batch": "dc-cc-batch-5: attachment restriction + eligibility extension",
       "patched": 1
     },
     "triagedAt": "2026-04-21T02:38:46.983Z",
@@ -10244,16 +10244,41 @@
       "description": null,
       "owners": [],
       "wiredSelfClaim": null,
-      "status": "exempt",
-      "implHint": "wired under label \"Darksaber\" (30 src hits); needs direct review",
-      "exemptReason": "Bo-Katan card text DOES print \"Last Wielder of the Darksaber\". Library entry has no structured dispatch fields (label-only), so the passive is NOT wired at runtime. Effective no-op because attachment eligibility (\"MAUL OR SABINE WREN ONLY\" on The Darksaber) is not enforced anywhere in src/. Full fix requires (a) attachment-restriction enforcement system, (b) extending eligibility when this passive is present. Larger than a data patch — flagged as partial gap (covered-by-no-enforcement, not breaking correctness today).",
+      "status": "covered",
+      "implHint": "extendsAttachmentEligibility field on library entry; findEligibilityExtender consumed by both validation and setup picker",
+      "exemptReason": null,
       "triage": {
         "dispatchKind": "name-only",
         "structuredFields": [],
         "implRefs": {},
         "testRefs": {},
         "riskTier": "high"
-      }
+      },
+      "evidence": {
+        "files": [
+          "data/ability-library.json",
+          "data/dc-effects.json",
+          "src/game/validation.js",
+          "src/handlers/setup.js",
+          "src/engine/hand-ui-helpers.js",
+          "tests/domain/oracle/dc-cc-attachment-eligibility-extension-probe.test.js",
+          "tests/domain/oracle/dc-cc-attachment-manual-picker-gate-probe.test.js",
+          "tests/domain/oracle/dc-cc-validation-errors-warnings-split-probe.test.js"
+        ],
+        "assertions": [
+          "library entry last_wielder_darksaber_bokatan declares extendsAttachmentEligibility = [\"The Darksaber\",\"[The Darksaber]\"]",
+          "Bo-Katan Kryze dc-effects specialAbilityIds includes last_wielder_darksaber_bokatan",
+          "findEligibilityExtender(cardName, army, dcEffects) returns the DC whose passive grants access, or null",
+          "parseAttachmentRestriction + getAttachmentRestriction both short-circuit their filter to accept the extender DC",
+          "handleSetupAttachTo re-runs getAttachmentRestriction server-side and rejects ineligible chosen DCs",
+          "validateDeckLegal returns warnings surfacing extender-only-legal attachments"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
+      },
+      "notes": "Campaign slice: attachment-eligibility extension. Before this batch, the \"MAUL OR SABINE WREN ONLY\" restriction on The Darksaber was never enforced anywhere in src/, which made Bo-Katan's passive effectively a no-op — players could already attach Darksaber to anyone. This batch ships the enforcement layer AND the first extending-passive wired into it, so both sides (restriction + bypass) are correctness-tested end-to-end. Attachment-card Special Actions (Orbital Bombardment, Overwatch, Smuggler's Run, The Darksaber, Vader's Finest, Z-6 Trooper) remain unwired dispatch — separate campaign (B-slice) deferred."
     },
     {
       "id": "DC-PASS-PERSONAL-COMBAT-SHIELD-BOKATAN",

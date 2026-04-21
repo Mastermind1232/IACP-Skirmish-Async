@@ -2828,7 +2828,10 @@
     },
     "last_wielder_darksaber_bokatan": {
       "type": "dcPassive",
-      "label": "The Last Wielder of the Darksaber"
+      "label": "The Last Wielder of the Darksaber",
+      "description": "You may include \"The Darksaber\" in your army. At the start of the round, you may attach it to this group.",
+      "extendsAttachmentEligibility": ["The Darksaber", "[The Darksaber]"],
+      "wiredStatus": "wired"
     },
     "leaping_slash": {
       "type": "dcSpecial",
