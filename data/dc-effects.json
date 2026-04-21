@@ -5319,6 +5319,9 @@
       "subCost": 3,
       "health": 5,
       "speed": 4,
+      "specialAbilityIds": [
+        "get_into_position"
+      ],
       "passives": [
         "Aim"
       ],

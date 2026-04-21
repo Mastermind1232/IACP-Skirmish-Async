@@ -1,0 +1,627 @@
+{
+  "_meta": {
+    "generatedAt": "2026-04-21T02:39:07.148Z",
+    "totalOrphans": 36,
+    "byVerdict": {
+      "dead-data": 2,
+      "dup-alt-slug": 9,
+      "wired-by-passive-string": 19,
+      "wired-by-label": 6
+    }
+  },
+  "orphans": [
+    {
+      "slug": "dead_weight_pardon_bokatan",
+      "type": "dcPassive",
+      "label": "Dead Weight Pardon",
+      "labelHits": 0,
+      "labelHitFiles": [],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [],
+      "nearestDcOwner": null,
+      "verdict": "dead-data"
+    },
+    {
+      "slug": "last_wielder_darksaber_bokatan",
+      "type": "dcPassive",
+      "label": "The Last Wielder of the Darksaber",
+      "labelHits": 0,
+      "labelHitFiles": [],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [],
+      "nearestDcOwner": null,
+      "verdict": "dead-data"
+    },
+    {
+      "slug": "aim_rebel_trooper_elite",
+      "type": "dcSpecial",
+      "label": "Aim",
+      "labelHits": 8,
+      "labelHitFiles": [
+        "src/engine/combat-bridge.js",
+        "src/handlers/combat.js"
+      ],
+      "siblings": [
+        "aim_rebel_trooper_reg"
+      ],
+      "ownedSibling": "aim_rebel_trooper_reg",
+      "passiveOwners": [
+        "Rebel Trooper (Elite)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "dup-alt-slug"
+    },
+    {
+      "slug": "fury_wookiee_reg",
+      "type": "dcSpecial",
+      "label": "Fury",
+      "labelHits": 50,
+      "labelHitFiles": [
+        "src/data-loader.js",
+        "src/engine/available-actions.js",
+        "src/engine/combat-bridge.js",
+        "src/game/abilities.js",
+        "src/game/abilities.test.js"
+      ],
+      "siblings": [
+        "fury_wookiee_elite"
+      ],
+      "ownedSibling": "fury_wookiee_elite",
+      "passiveOwners": [
+        "Wookiee Warrior (Elite)",
+        "Wookiee Warrior (Regular)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "dup-alt-slug"
+    },
+    {
+      "slug": "leg_hydraulics",
+      "type": "dcSpecial",
+      "label": "Leg Hydraulics",
+      "labelHits": 3,
+      "labelHitFiles": [
+        "src/engine/combat-bridge.js"
+      ],
+      "siblings": [
+        "leg_hydraulics_tress"
+      ],
+      "ownedSibling": "leg_hydraulics_tress",
+      "passiveOwners": [
+        "Tress Hacnua"
+      ],
+      "nearestDcOwner": {
+        "dc": "Tress Hacnua",
+        "slug": "leg_hydraulics_tress"
+      },
+      "verdict": "dup-alt-slug"
+    },
+    {
+      "slug": "personal_combat_shield_bokatan",
+      "type": "dcPassive",
+      "label": "Personal Combat Shield",
+      "labelHits": 7,
+      "labelHitFiles": [
+        "src/game/abilities.js",
+        "src/handlers/combat.js"
+      ],
+      "siblings": [
+        "personal_combat_shield_gar_saxon"
+      ],
+      "ownedSibling": "personal_combat_shield_gar_saxon",
+      "passiveOwners": [],
+      "nearestDcOwner": {
+        "dc": "Bo-Katan Kryze",
+        "slug": "personal_combat_shield_gar_saxon"
+      },
+      "verdict": "dup-alt-slug"
+    },
+    {
+      "slug": "relentless_pursuit",
+      "type": "dcSpecial",
+      "label": "Relentless Pursuit",
+      "labelHits": 0,
+      "labelHitFiles": [],
+      "siblings": [
+        "fifth_brother_relentless"
+      ],
+      "ownedSibling": "fifth_brother_relentless",
+      "passiveOwners": [
+        "Fifth Brother"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "dup-alt-slug"
+    },
+    {
+      "slug": "self_preservation",
+      "type": "dcSpecial",
+      "label": "Self-Preservation",
+      "labelHits": 3,
+      "labelHitFiles": [
+        "src/engine/combat-bridge.js"
+      ],
+      "siblings": [
+        "self_preservation_hired_gun_elite"
+      ],
+      "ownedSibling": "self_preservation_hired_gun_elite",
+      "passiveOwners": [
+        "Hired Gun (Elite)"
+      ],
+      "nearestDcOwner": {
+        "dc": "Hired Gun (Elite)",
+        "slug": "self_preservation_hired_gun_elite"
+      },
+      "verdict": "dup-alt-slug"
+    },
+    {
+      "slug": "squad_training_shoretrooper_reg",
+      "type": "dcSpecial",
+      "label": "Squad Training",
+      "labelHits": 2,
+      "labelHitFiles": [
+        "src/handlers/combat.js"
+      ],
+      "siblings": [
+        "squad_training_shoretrooper_elite",
+        "squad_training_stormtrooper_elite",
+        "squad_training_stormtrooper_reg"
+      ],
+      "ownedSibling": "squad_training_shoretrooper_elite",
+      "passiveOwners": [],
+      "nearestDcOwner": {
+        "dc": "Shoretrooper (Elite)",
+        "slug": "squad_training_shoretrooper_elite"
+      },
+      "verdict": "dup-alt-slug"
+    },
+    {
+      "slug": "stealthy",
+      "type": "dcSpecial",
+      "label": "Stealthy",
+      "labelHits": 5,
+      "labelHitFiles": [
+        "src/handlers/post-deploy.js"
+      ],
+      "siblings": [
+        "stealthy_davith"
+      ],
+      "ownedSibling": "stealthy_davith",
+      "passiveOwners": [
+        "Davith Elso"
+      ],
+      "nearestDcOwner": {
+        "dc": "Davith Elso",
+        "slug": "stealthy_davith"
+      },
+      "verdict": "dup-alt-slug"
+    },
+    {
+      "slug": "stim_canister",
+      "type": "dcSpecial",
+      "label": "Stim Canister",
+      "labelHits": 2,
+      "labelHitFiles": [
+        "src/game/abilities.js"
+      ],
+      "siblings": [
+        "stim_canister_bd1"
+      ],
+      "ownedSibling": "stim_canister_bd1",
+      "passiveOwners": [],
+      "nearestDcOwner": {
+        "dc": "BD-1",
+        "slug": "stim_canister_bd1"
+      },
+      "verdict": "dup-alt-slug"
+    },
+    {
+      "slug": "advanced_weapons_research",
+      "type": "dcSpecial",
+      "label": "Advanced Weapons Research",
+      "labelHits": 11,
+      "labelHitFiles": [
+        "src/engine/activation-setup.js",
+        "src/handlers/activation.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Director Krennic"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "ambush_ewok",
+      "type": "dcSpecial",
+      "label": "Ambush",
+      "labelHits": 52,
+      "labelHitFiles": [
+        "src/ai/training-config.js",
+        "src/discord/components.js",
+        "src/engine/deploy-ui-helpers.js",
+        "src/engine/setup-bridge.js",
+        "src/game/card-names.test.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Ewok Warrior (Elite)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "beskar_armor",
+      "type": "dcSpecial",
+      "label": "Beskar Armor",
+      "labelHits": 5,
+      "labelHitFiles": [
+        "src/handlers/post-deploy.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "The Armorer",
+        "The Mandalorian"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "bounty_fennec",
+      "type": "dcSpecial",
+      "label": "Bounty",
+      "labelHits": 7,
+      "labelHitFiles": [
+        "src/engine/combat-bridge.js",
+        "src/game/abilities.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Fennec Shand"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "brutal_tactics",
+      "type": "dcSpecial",
+      "label": "Brutal Tactics",
+      "labelHits": 3,
+      "labelHitFiles": [
+        "src/engine/combat-bridge.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Saw Gerrerra"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "cover_fire_ct1701",
+      "type": "dcSpecial",
+      "label": "Cover Fire",
+      "labelHits": 19,
+      "labelHitFiles": [
+        "src/discord/action-buttons.js",
+        "src/engine/available-actions.js",
+        "src/engine/combat-bridge.js",
+        "src/handlers/combat.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "CT-1701"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "curious_lothcat",
+      "type": "dcSpecial",
+      "label": "Curious",
+      "labelHits": 3,
+      "labelHitFiles": [
+        "src/handlers/interact.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Loth-cat (Elite)",
+        "Loth-cat (Regular)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "fly_by",
+      "type": "dcSpecial",
+      "label": "Fly-By",
+      "labelHits": 6,
+      "labelHitFiles": [
+        "src/engine/combat-bridge.js",
+        "src/handlers/combat.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Jet Trooper (Elite)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "forward_emplacement",
+      "type": "dcSpecial",
+      "label": "Forward Emplacement",
+      "labelHits": 9,
+      "labelHitFiles": [
+        "src/handlers/post-deploy.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "E-Web Engineer (Elite)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "hardy_trandoshan",
+      "type": "dcSpecial",
+      "label": "Hardy",
+      "labelHits": 4,
+      "labelHitFiles": [
+        "src/handlers/round.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Trandoshan Hunter (Elite)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "hold_the_line",
+      "type": "dcSpecial",
+      "label": "Hold the Line",
+      "labelHits": 3,
+      "labelHitFiles": [
+        "src/engine/activation-effects.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Baze Malbus"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "into_the_fray",
+      "type": "dcSpecial",
+      "label": "Into the Fray",
+      "labelHits": 7,
+      "labelHitFiles": [
+        "src/engine/activation-effects.js",
+        "src/engine/activation-setup.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Baze Malbus"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "jets_jet_trooper",
+      "type": "dcSpecial",
+      "label": "Jets",
+      "labelHits": 5,
+      "labelHitFiles": [
+        "src/engine/combat-bridge.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Jet Trooper (Regular)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "merciless",
+      "type": "dcSpecial",
+      "label": "Merciless",
+      "labelHits": 5,
+      "labelHitFiles": [
+        "src/game/abilities.js",
+        "src/handlers/combat.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "HK Assassin Droid (Elite)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "mystic_hunter",
+      "type": "dcSpecial",
+      "label": "Mystic Hunter",
+      "labelHits": 3,
+      "labelHitFiles": [
+        "src/handlers/combat.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Zuckuss"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "open_minded",
+      "type": "dcSpecial",
+      "label": "Open-Minded",
+      "labelHits": 6,
+      "labelHitFiles": [
+        "src/engine/combat-bridge.js",
+        "src/handlers/activation.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Del Meeko"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "security_detail",
+      "type": "dcSpecial",
+      "label": "Security Detail",
+      "labelHits": 10,
+      "labelHitFiles": [
+        "src/handlers/post-deploy.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Death Trooper (Regular)"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "smooth_landing",
+      "type": "dcSpecial",
+      "label": "Smooth Landing",
+      "labelHits": 18,
+      "labelHitFiles": [
+        "src/handlers/post-deploy.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Bodhi Rook",
+        "Hera Syndulla"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "tactical_movement",
+      "type": "dcSpecial",
+      "label": "Tactical Movement",
+      "labelHits": 6,
+      "labelHitFiles": [
+        "src/engine/activation-setup.js",
+        "src/handlers/activation.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [
+        "Fenn Signis"
+      ],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-passive-string"
+    },
+    {
+      "slug": "+1 hit, pierce 1",
+      "type": "surge",
+      "label": "+1 Hit, Pierce 1",
+      "labelHits": 1,
+      "labelHitFiles": [
+        "src/game/combat.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-label"
+    },
+    {
+      "slug": "accuracy 2, surge 1",
+      "type": "surge",
+      "label": "+2 Accuracy, +1 Surge",
+      "labelHits": 2,
+      "labelHitFiles": [
+        "src/game/combat.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-label"
+    },
+    {
+      "slug": "damage 3",
+      "type": "surge",
+      "label": "+3 Hits",
+      "labelHits": 1,
+      "labelHitFiles": [
+        "src/game/combat.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-label"
+    },
+    {
+      "slug": "damage 4",
+      "type": "surge",
+      "label": "+4 Hits",
+      "labelHits": 3,
+      "labelHitFiles": [
+        "src/game/abilities.test.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-label"
+    },
+    {
+      "slug": "force_exhaustion_child",
+      "type": "dcSpecial",
+      "label": "Force Exhaustion",
+      "labelHits": 12,
+      "labelHitFiles": [
+        "src/engine/available-actions.js",
+        "src/handlers/combat-reactions.js",
+        "src/handlers/combat.js",
+        "src/handlers/dc-play-area.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-label"
+    },
+    {
+      "slug": "useful_hide_tauntaun",
+      "type": "dcSpecial",
+      "label": "Useful Hide",
+      "labelHits": 2,
+      "labelHitFiles": [
+        "src/engine/combat-bridge.js"
+      ],
+      "siblings": [],
+      "ownedSibling": null,
+      "passiveOwners": [],
+      "nearestDcOwner": null,
+      "verdict": "wired-by-label"
+    }
+  ]
+}

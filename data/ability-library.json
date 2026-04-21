@@ -2237,6 +2237,7 @@
       "label": "Get into Position: Gain 4 movement points and become Focused.",
       "mpBonus": 4,
       "applyFocus": true,
+      "actionCost": 2,
       "wiredStatus": "wired"
     },
     "gifted_mechanic": {

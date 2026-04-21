@@ -441,10 +441,16 @@ export function getDcStats(dcName) {
           const entry = lib.abilities?.[id];
           return entry?.mpCost ?? entry?.mpCostToActivate ?? 0;
         });
-        if (mpCosts.some(c => c > 0)) {
+        const actionCosts = filtered.map((id) => lib.abilities?.[id]?.actionCost);
+        const hasActionCost = actionCosts.some(c => typeof c === 'number');
+        if (mpCosts.some(c => c > 0) || hasActionCost) {
           eff._specialMpCosts = mpCosts;
-          // MP-based abilities cost 0 actions; others default to 1
-          eff._specialActionCosts = mpCosts.map(mp => mp > 0 ? 0 : 1);
+          // Precedence: explicit library `actionCost` > MP-based 0-cost > default 1
+          eff._specialActionCosts = filtered.map((id, i) => {
+            const ac = actionCosts[i];
+            if (typeof ac === 'number') return ac;
+            return mpCosts[i] > 0 ? 0 : 1;
+          });
         }
       }
     }
