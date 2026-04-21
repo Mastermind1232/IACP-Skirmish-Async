@@ -4463,20 +4463,23 @@
       "summary": "Melee attacks can target a hostile figure or object adjacent to or in the same space as the attacker.",
       "scope": "skirmish",
       "status": "covered",
-      "implementationArea": "src/game/combat.js",
+      "implementationArea": "src/handlers/dc-play-area.js, src/game/combat.js",
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/attack-range-defaults-probes.test.js"
+          "tests/domain/oracle/attack-range-defaults-probes.test.js",
+          "tests/domain/oracle/phase-d-mel-001-002-003-melee-cluster-probe.test.js"
         ],
         "assertions": [
-          "002a: melee attack with no range field → [1, 1]"
+          "002a: melee attack with no range field → [1, 1]",
+          "defaultAttackRange({ type: \"melee\" }) → [1, 1]"
         ]
       },
       "reviewedBy": {
-        "name": "adam@vantheon.ai",
-        "date": "2026-04-17"
-      }
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
+      },
+      "notes": "Batch-121: cluster probe added covering melee range [1,1], ranged non-collapse, and Bo-Rifle-style override."
     },
     {
       "id": "CRR-MEL-002",
@@ -4496,17 +4499,21 @@
         "type": "direct_oracle",
         "files": [
           "tests/domain/oracle/attack-range-defaults-probes.test.js",
-          "tests/domain/oracle/combat-oracles.test.js"
+          "tests/domain/oracle/combat-oracles.test.js",
+          "tests/domain/oracle/phase-d-mel-001-002-003-melee-cluster-probe.test.js"
         ],
         "assertions": [
           "005c: melee attack ignores distance in accuracy check",
-          "004c: melee bypasses accuracy gate — acc 0, distance 5 → HIT (RNG-03 oracle)"
+          "004c: melee bypasses accuracy gate — acc 0, distance 5 → HIT (RNG-03 oracle)",
+          "isRanged=false, totalAccuracy=0, distance=5 → HIT",
+          "counterfactual: isRanged=true, totalAccuracy=0, distance=5 → MISS"
         ]
       },
       "reviewedBy": {
-        "name": "adam@vantheon.ai",
-        "date": "2026-04-17"
-      }
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
+      },
+      "notes": "Batch-121: added paired positive/negative probe on computeCombatResult — gate only fires when isRanged=true, confirming MEL-002 is a real bypass not a no-op."
     },
     {
       "id": "CRR-MEL-003",
@@ -4521,11 +4528,12 @@
       "summary": "A figure without the melee icon cannot perform melee attacks; an attack targeting an adjacent figure that uses the ranged icon is still classified as a ranged attack.",
       "scope": "skirmish",
       "status": "covered",
-      "implementationArea": "src/engine/available-actions.js + src/handlers/combat.js (isRanged = attackInfo.type === 'range')",
+      "implementationArea": "src/engine/available-actions.js, src/handlers/combat.js, src/handlers/dc-play-area.js",
       "evidence": {
-        "type": "invariant_pin",
+        "type": "direct_oracle",
         "files": [
           "tests/domain/oracle/phase-d-melee-classification-probe.test.js",
+          "tests/domain/oracle/phase-d-mel-001-002-003-melee-cluster-probe.test.js",
           "src/engine/available-actions.js",
           "src/handlers/combat.js"
         ],
@@ -4533,13 +4541,16 @@
           "003a: source — isRanged is derived from the ranged weapon-type flag (distance-independent)",
           "003b: source — no branch rewrites isRanged after computing it (no distance override)",
           "003c: data — attack.type is a per-DC classifier; a \"range\" DC stays ranged regardless of distance",
-          "003d: range defaults — a ranged weapon never collapses to melee range [1,1]"
+          "003d: range defaults — a ranged weapon never collapses to melee range [1,1]",
+          "defaultAttackRange({ type: \"range\" }) → [1, 99], not [1, 1]",
+          "defaultAttackRange({ type: \"range\", range: [2, 5] }) → [2, 5]"
         ]
       },
       "reviewedBy": {
-        "name": "claude",
-        "date": "2026-04-18"
-      }
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
+      },
+      "notes": "Batch-121: promoted to direct_oracle — new probe exercises defaultAttackRange end-to-end, confirming ranged classification never collapses and authored range arrays flow through."
     },
     {
       "id": "CRR-MEL-004",
@@ -4940,20 +4951,24 @@
       "summary": "When a figure on the map is placed, it is removed from its current space and then placed where indicated.",
       "scope": "skirmish",
       "status": "covered",
-      "implementationArea": "src/game/movement.js",
+      "implementationArea": "src/game/player-helpers.js, src/game/movement.js",
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/krykna-placement-behavioral.test.js"
+          "tests/domain/oracle/krykna-placement-behavioral.test.js",
+          "tests/domain/oracle/phase-d-plc-001-place-atomic-probe.test.js"
         ],
         "assertions": [
-          "001a: P1 places in blue (opponent) zone, P2 places in red zone"
+          "001a: P1 places in blue (opponent) zone, P2 places in red zone",
+          "prevPos=a1 → newPos=c3: positions record holds only c3 after the call",
+          "newSpace=\"C3\" stored as \"c3\""
         ]
       },
       "reviewedBy": {
-        "name": "adam@vantheon.ai",
-        "date": "2026-04-17"
-      }
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
+      },
+      "notes": "Batch-121: pushFigure atomic-write probe added — exits-old/enters-new semantics pinned on the canonical write path used by every place/teleport/displacement site."
     },
     {
       "id": "CRR-PLC-002",
@@ -4985,20 +5000,24 @@
       "summary": "A player cannot choose to place a figure in a space where it cannot end movement (occupied space, blocking terrain, impassable terrain) unless an ability explicitly allows it.",
       "scope": "skirmish",
       "status": "covered",
-      "implementationArea": "src/game/movement.js",
+      "implementationArea": "src/game/player-helpers.js, src/game/movement.js",
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/krykna-placement-behavioral.test.js"
+          "tests/domain/oracle/krykna-placement-behavioral.test.js",
+          "tests/domain/oracle/phase-d-plc-001-place-atomic-probe.test.js"
         ],
         "assertions": [
-          "001b: occupied spaces excluded"
+          "001b: occupied spaces excluded",
+          "no entry in figurePositions[playerNum] → returns null and writes nothing",
+          "pushFigure rejects figureKey whose prevPos is explicitly undefined"
         ]
       },
       "reviewedBy": {
-        "name": "adam@vantheon.ai",
-        "date": "2026-04-17"
-      }
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
+      },
+      "notes": "Batch-121: ghost-write-guard probes added — pushFigure rejects place into a figure without a prior position, preventing spontaneous re-entry onto illegal spaces."
     },
     {
       "id": "CRR-PLC-004",
@@ -5218,22 +5237,25 @@
       "summary": "Figures cannot enter, be pushed into, count spaces through, or trace line of sight through a space containing blocking terrain.",
       "scope": "skirmish",
       "status": "covered",
-      "implementationArea": "src/game/movement.js",
+      "implementationArea": "src/game/movement.js, src/game/spatial.js",
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/movement-legality-behavioral.test.js"
+          "tests/domain/oracle/movement-legality-behavioral.test.js",
+          "tests/domain/oracle/phase-d-bt-001-blocking-terrain-behavior-probe.test.js"
         ],
         "assertions": [
           "005c: massive ignores blocking terrain",
-          "005e: non-massive control — CANNOT end on occupied spaces"
+          "005e: non-massive control — CANNOT end on occupied spaces",
+          "b1 blocking → no path from a1 to c1 (would require entering b1)",
+          "hasLineOfSight(a1,e1) with c1 blocking → false"
         ]
       },
       "reviewedBy": {
-        "name": "adam@vantheon.ai",
-        "date": "2026-04-17"
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
       },
-      "notes": "The 005c 'Massive ignores blocking terrain' and 005e 'non-massive control cannot end on occupied' assertions together pin the default rule that non-Massive/non-Mobile figures cannot enter blocking. Direct-entry probe still missing; Phase-D nice-to-have."
+      "notes": "Batch-121: direct behavioral probes added — (a) non-Massive entry unreachability via computeMovementCache and (b) LOS tracing via hasLineOfSight with blocking on ray. Counterfactual controls included."
     },
     {
       "id": "CRR-BT-002",
@@ -5289,16 +5311,20 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/movement-legality-behavioral.test.js"
+          "tests/domain/oracle/movement-legality-behavioral.test.js",
+          "tests/domain/oracle/phase-d-bt-001-blocking-terrain-behavior-probe.test.js"
         ],
         "assertions": [
-          "005c: massive ignores blocking terrain"
+          "005c: massive ignores blocking terrain",
+          "Massive profile with b1 blocking → c1 reachable (c1 cost = 2)",
+          "Mobile profile with b1 blocking → c1 reachable (c1 cost = 2)"
         ]
       },
       "reviewedBy": {
-        "name": "adam@vantheon.ai",
-        "date": "2026-04-17"
-      }
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
+      },
+      "notes": "Batch-121: behavioral probes added showing ignoreBlocking=true profile (Massive OR Mobile) reaches cells through blocking terrain; also a counterfactual pinning that the gate reads the ignoreBlocking flag, not the keyword directly."
     },
     {
       "id": "CRR-BT-005",
@@ -9649,16 +9675,20 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
+          "tests/domain/oracle/phase-d-win-004-vp-scales-with-cost-probe.test.js",
           "tests/domain/oracle/defeat-pipeline-behavioral.test.js"
         ],
         "assertions": [
-          "attacker gains kill VP equal to deployment cost"
+          "attacker gains kill VP equal to deployment cost",
+          "cost=6, figures=1 → 6 VP",
+          "cost=8, figures=3, subCost=3 → 3 VP per kill (not 8)",
+          "companion is recognised and awards 0 VP regardless of cost"
         ]
       },
       "notes": "For a single-figure group, figure cost = deployment cost (CRR-FGC-001); this is the case B-DEFEAT-002 pins.",
       "reviewedBy": {
-        "name": "adam@vantheon.ai",
-        "date": "2026-04-18"
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
       }
     },
     {
@@ -10715,19 +10745,22 @@
       "implementationArea": "src/game-state.js",
       "notes": "Pinned via PROBE-PD-SKA-003 (batch-97). Attachments live in game.p1DcAttachments[msgId] / game.p2DcAttachments[msgId] — keyed by DC message id only. Many call sites across combat/activation/dc-play-area read the whole-DC attachment list and apply its effects during each figure's flow; no per-figure attachment store exists. Trait-restricted attachments are data-enforced at the CC-attach UI (separate concern, not SKA-003 scope).",
       "evidence": {
-        "type": "invariant_pin",
+        "type": "direct_oracle",
         "files": [
           "tests/domain/oracle/phase-d-ska-003-attachments-apply-to-group-probe.test.js",
+          "tests/domain/oracle/phase-d-ska-003-attachment-shared-lookup-probe.test.js",
           "src/handlers/combat.js",
           "src/handlers/activation.js"
         ],
         "assertions": [
           "DcAttachments must be read via [msgId] at >=10 sites",
-          "no src file may declare a per-figure attachment container"
+          "no src file may declare a per-figure attachment container",
+          "two figures of the same DC (same msgId) see the same attachment list",
+          "mutating the attachment list via one figure"
         ]
       },
       "reviewedBy": {
-        "name": "Claude (Phase-D oracle sweep)",
+        "name": "claude-opus-4-7",
         "date": "2026-04-20"
       }
     },
@@ -11575,19 +11608,22 @@
       "scope": "skirmish",
       "status": "covered",
       "evidence": {
-        "type": "invariant_pin",
+        "type": "direct_oracle",
         "files": [
           "src/handlers/combat-reactions.js",
           "src/handlers/dc-play-area.js",
           "src/engine/available-actions.js",
           "src/game/movement.js",
-          "tests/domain/oracle/phase-d-incp-001-incap-on-map-probe.test.js"
+          "tests/domain/oracle/phase-d-incp-001-incap-on-map-probe.test.js",
+          "tests/domain/oracle/phase-d-incp-001-incap-blocks-movement-end-probe.test.js"
         ],
         "assertions": [
           "game.childIncapacitated = true;",
           "if (fkEff?.companion === true) continue;",
           "const _isIncap = dcName === 'The Child' && game.childIncapacitated;",
-          "if (isDcCompanion(dcName) && !_isIncap) continue;"
+          "if (isDcCompanion(dcName) && !_isIncap) continue;",
+          "getOccupiedSpacesForMovement includes incap Child footprint",
+          "Companion pass-through: healthy Child does not block end-movement."
         ]
       },
       "notes": "Force-Exhaustion (combat-reactions.js:806) sets game.childIncapacitated = true without deleting The Child from figurePositions — remains on map under same player's control. The Child is a companion in dc-effects.json, so figure-blocking coord builders in dc-play-area.js (handler) and available-actions.js (engine) already skip its footprint regardless of incap status — does not block LOS. getOccupiedSpacesForMovement in movement.js gates the companion skip on `dcName === 'The Child' && game.childIncapacitated`: companions remain pass-through/end-through when healthy, but the incapacitated Child's footprint re-enters the occupied set — implementing 'other figures cannot end movement in its space'. Cross-ref: CRR-INCP-003 (untargetable-while-incap) already covered on the same substrate (batch-106).",
@@ -12815,12 +12851,13 @@
       "status": "covered",
       "implementationArea": "src/engine/defeat-handler.js",
       "reviewedBy": {
-        "name": "claude",
+        "name": "claude-opus-4-7",
         "date": "2026-04-20"
       },
       "evidence": {
         "type": "direct_oracle",
         "files": [
+          "tests/domain/oracle/phase-d-rtk-002-no-voluntary-drop-probe.test.js",
           "src/engine/defeat-handler.js",
           "src/game/board-helpers.js",
           "src/handlers/interact.js",
@@ -12830,7 +12867,10 @@
           "droppedContrabandSpaces",
           "wasCarryingContraband",
           "mech?.type === 'carry'",
-          "delete game.figureContraband[figureKey]"
+          "delete game.figureContraband[figureKey]",
+          "src/ contains no \"drop_contraband\" or \"trade_contraband\" option id",
+          "carrier defeat: position captured, contraband entry removed, drop space recorded",
+          "non-carry mission: contraband is cleared but NO drop space recorded"
         ]
       }
     },
