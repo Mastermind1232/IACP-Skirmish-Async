@@ -483,8 +483,8 @@ After On the Lam movement, auto-check LOS from attacker to defender. If no LOS, 
 ### C8 — Adrenaline health tracking
 Add `game.adrenalineHealthBonus[figureKey] = 5`. Apply at play time. In `cleanupRoundStart`, subtract bonus and reduce HP if needed.
 
-### C17 — Evacuate negative attachment cost
-Fix formula: `Math.ceil(baseCost / 2) - attachmentCost` where `attachmentCost` is the attachment's cost field.
+### C17 — Evacuate negative attachment cost — FIXED 2026-04-21
+Formula: `max(0, ceil((baseCost + positiveAtts) / 2) + negativeAtts)` (abilities.js:7144-7168). Covers DC + CC attachments. Negative-cost attachments applied AFTER halving per Destruct V2 ruling. Probes: tests/domain/oracle/evacuate-vp-probe.test.js.
 
 ### C19-C20 — Get Behind Me automation
 Wire full mechanics: target swap during combat, recalculate defense pool, cancel previous CC effects on old defender.

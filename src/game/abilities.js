@@ -7142,16 +7142,32 @@ export function resolveAbility(abilityId, context) {
         syncHealthStateToList(game, playerNum, targetMsgId, hs);
       }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      let totalCost = getDcEffects()[dcName]?.cost ?? 0;
-      // Include CC attachment costs in the VP calculation
+      const baseCost = getDcEffects()[dcName]?.cost ?? 0;
+      // IACP ruling: halve (base + positive attachments), then subtract
+      // negative-cost attachments AFTER halving (not half the subtracted cost).
+      // Covers DC attachments (Scavenged Walker -1, Wookiee Avenger -4, etc.)
+      // which were previously omitted entirely, plus CC attachments.
+      let posAttCost = 0;
+      let negAttCost = 0;
+      const _addAtt = (c) => {
+        if (typeof c !== 'number') return;
+        if (c < 0) negAttCost += c; else posAttCost += c;
+      };
       const _evCcAtts = (playerNum === 1 ? game.p1CcAttachments : game.p2CcAttachments)?.[targetMsgId];
       if (Array.isArray(_evCcAtts)) {
-        for (const ccName of _evCcAtts) {
-          totalCost += getCcEffect(ccName)?.cost ?? 0;
+        for (const ccName of _evCcAtts) _addAtt(getCcEffect(ccName)?.cost);
+      }
+      const _evDcAtts = (playerNum === 1 ? game.p1DcAttachments : game.p2DcAttachments)?.[targetMsgId];
+      if (Array.isArray(_evDcAtts)) {
+        const _dcEffs = getDcEffects();
+        for (const name of _evDcAtts) {
+          const entry = _dcEffs?.[`[${name}]`] || _dcEffs?.[name];
+          if (entry?.attachment) _addAtt(entry.cost);
         }
       }
-      const halfVp = Math.ceil(totalCost / 2);
-      return { applied: true, logMessage: `**Evacuate** — **${dcName}** is defeated. Opponent gains ${halfVp > 0 ? halfVp + ' VP (half the deployment cost' + (Array.isArray(_evCcAtts) && _evCcAtts.length ? ' incl. attachments' : '') + ' — use `/editvp -' + halfVp + '` to adjust)' : 'no VP'} from this defeat.`, refreshDcEmbed: true };
+      const halfVp = Math.max(0, Math.ceil((baseCost + posAttCost) / 2) + negAttCost);
+      const _hadAtts = (Array.isArray(_evCcAtts) && _evCcAtts.length) || (Array.isArray(_evDcAtts) && _evDcAtts.length);
+      return { applied: true, logMessage: `**Evacuate** — **${dcName}** is defeated. Opponent gains ${halfVp > 0 ? halfVp + ' VP (half the deployment cost' + (_hadAtts ? ' incl. attachments' : '') + ' — use `/editvp -' + halfVp + '` to adjust)' : 'no VP'} from this defeat.`, refreshDcEmbed: true };
     }
     // Phase 1: find friendly figures within 2 spaces (not self)
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);

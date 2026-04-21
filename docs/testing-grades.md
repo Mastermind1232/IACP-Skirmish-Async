@@ -404,7 +404,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C14 | PASS | Comm Disruption auto-prompt: `promptCommDisruption()` in cc-hand.js checks opponent's hand after any CC play. Timing expanded in cc-timing.js:211 to `duringActivation || duringRound || pendingPrompt`. |
 | C15 | PASS | Post-move interrupt detection in movement-interrupts.js — `detectPostMoveInterrupts` walks path, checks if hostile entered adjacent to Smuggler/Hunter with Dirty Trick in hand. Prompts opponent with Play/Skip buttons via `mvint_play_`/`mvint_skip_` handlers. |
 | C16 | PASS | Parting Blow (abilities.js:7883) triggers on exit, Dirty Trick (movement-interrupts.js:101) triggers on entry. Different trigger moments — no conflict. Both fully wired independently. |
-| C17 | PASS | Evacuate includes attachment costs (abilities.js:6203-6211). Correctly computes half of total cost including attachments. |
+| C17 | PASS | Evacuate VP = max(0, ceil((baseCost + positiveAtts) / 2) + negativeAtts) (abilities.js:7144-7168). Covers DC + CC attachments; negative-cost attachments subtracted AFTER halving per Destruct V2 ruling. Probes: tests/domain/oracle/evacuate-vp-probe.test.js. |
 | C18 | PASS | Final Stand timing `whenFriendlyFigureWithin3SpacesWouldBeDefeated`, playableBy `Baze Malbus`. Baze is within 0 spaces of himself. No code prevents self-targeting. |
 | C19 | PASS | Get Behind Me: attackTargetSwap handler in abilities.js validates Small/cost≤10/within 3, swaps combat.target to eligible figure. Grants 3 MP. |
 | C20 | PASS | Get Behind Me cancels defender-side CC effects on target swap: resets bonusBlock, bonusEvade, defenseBonusDice, defensePoolRemoveMax. |
