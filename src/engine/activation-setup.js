@@ -16,6 +16,7 @@ import {
   ccDeckKey, ccHandKey,
 } from '../game/player-helpers.js';
 import { countGameSpaces } from '../game/board-helpers.js';
+import { awrRange, enumerateAwrTargets } from '../game/awr-helpers.js';
 import { getAllFigureCoords } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, grantMovementBank, figureChoiceLabels, isCompanionHostDefeated, reduceHp } from '../game/index.js';
@@ -437,10 +438,8 @@ export async function finalizeActivation({
       const selfPos = game.figurePositions?.[playerNum]?.[selfFk];
       if (selfPos) {
         const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-        const _awrRange = cardNameIncludes(_awrAtts, 'Advanced Com Systems') ? 3 : 2;
-        const friendlyFigs = Object.entries(game.figurePositions?.[playerNum] || {})
-          .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= _awrRange)
-          .sort(([a], [b]) => (a === selfFk ? -1 : b === selfFk ? 1 : 0));
+        const _awrRange = awrRange(_awrAtts);
+        const friendlyFigs = enumerateAwrTargets(game, playerNum, selfFk, _awrRange);
         if (friendlyFigs.length > 0) {
           const _awrSlice = friendlyFigs.slice(0, 4);
           const _awrLabels = figureChoiceLabels(_awrSlice.map(([fk]) => fk));
