@@ -17,6 +17,7 @@ import {
 } from '../game/player-helpers.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { awrRange, enumerateAwrTargets } from '../game/awr-helpers.js';
+import { detectDroidKitTrigger } from '../game/droid-kit-helpers.js';
 import { getAllFigureCoords } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, grantMovementBank, figureChoiceLabels, isCompanionHostDefeated, reduceHp } from '../game/index.js';
@@ -545,10 +546,8 @@ export async function finalizeActivation({
   if (dcName === 'Iden Versio') {
     const _dkDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _dkSelfFk = `${dcName}-${_dkDgIndex}-0`;
-    const _dkSelfPos = game.figurePositions?.[playerNum]?.[_dkSelfFk];
-    const _dkDioFk = Object.keys(game.figurePositions?.[playerNum] || {}).find(fk => fk.startsWith('Dio-'));
-    const _dkDioPos = _dkDioFk ? game.figurePositions[playerNum][_dkDioFk] : null;
-    if (_dkSelfPos && _dkDioPos && String(_dkSelfPos).toLowerCase() === String(_dkDioPos).toLowerCase()) {
+    const _dkResult = detectDroidKitTrigger(game, playerNum, _dkSelfFk);
+    if (_dkResult.applicable) {
       const dkRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_damage`).setLabel('Damage Token').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_surge`).setLabel('Surge Token').setStyle(ButtonStyle.Primary),
@@ -558,8 +557,7 @@ export async function finalizeActivation({
       );
       await thread.send({ content: `🤖 **Droid Kit** — **Dio** is in **${displayName}**'s space. Gain 1 Power Token:`, components: [dkRow] }).catch(discordCatch);
     } else {
-      const reason = !_dkDioFk ? 'Dio is not in play' : 'Dio is not in the same space';
-      await thread.send({ content: `🤖 **Droid Kit** — ${reason}; no Power Token gained.` }).catch(discordCatch);
+      await thread.send({ content: `🤖 **Droid Kit** — ${_dkResult.reason}; no Power Token gained.` }).catch(discordCatch);
     }
   }
 
