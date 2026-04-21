@@ -1859,6 +1859,13 @@
       "category": "dc-special",
       "label": "Flamethrower",
       "description": "Choose a space within 2 and adjacent to a hostile. Each figure in/adjacent to that space suffers 2 damage, 1 strain, and becomes Weakened.",
+      "fixedAreaEffect": true,
+      "fixedAreaRange": 2,
+      "fixedAreaRequiresAdjacentHostile": true,
+      "fixedAreaDamage": 2,
+      "fixedAreaStrain": 1,
+      "fixedAreaConditions": ["Weaken"],
+      "logMessage": "**Flamethrower** — Each figure on or adjacent to the chosen space suffers 2 Damage + 1 Strain and becomes Weakened.",
       "wiredStatus": "wired"
     },
     "flawless_execution": {

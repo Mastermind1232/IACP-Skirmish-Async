@@ -2476,7 +2476,17 @@ export function resolveAbility(abilityId, context) {
     const occ = boardState.occupiedSet;
     const occArr = occ instanceof Set ? [...occ] : (occ || []);
     const reachable = getReachableSpaces(activatingPos, range, boardState.mapSpaces, occArr);
-    const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
+    let validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
+    if (entry.fixedAreaRequiresAdjacentHostile) {
+      const hostilePlayer = playerNum === 1 ? 2 : 1;
+      const hostileSpaces = new Set(Object.values(game.figurePositions?.[hostilePlayer] || {}).filter(Boolean).map((s) => String(s).toLowerCase()));
+      const adjMap = boardState.mapSpaces?.adjacency || {};
+      validSet = new Set([...validSet].filter((sp) => {
+        if (hostileSpaces.has(sp)) return true;
+        const adj = (adjMap[sp] || []).map((s) => String(s).toLowerCase());
+        return adj.some((a) => hostileSpaces.has(a));
+      }));
+    }
     const validSpaces = [...validSet];
     if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
     return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**${entry.label}** — Choose a space within ${range}:` };
