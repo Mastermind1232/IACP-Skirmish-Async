@@ -13,6 +13,7 @@ import { cleanupActivation } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels } from '../game/index.js';
 import { getAllFigureCoords } from '../game/spatial.js';
 import { countGameSpaces } from '../game/board-helpers.js';
+import { isFieldTacticsDc, fieldTacticsRoundKey, enumerateFieldTacticsTargets } from '../game/field-tactics-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -67,32 +68,11 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
  * @param {Function} findDcMsgIdForFigure - (gameId, playerNum, figureKey) => msgId | null
  */
 async function maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, client, findDcMsgIdForFigure) {
-  const dcName = meta.dcName;
-  if (dcName !== 'Death Trooper (Elite)' && dcName !== 'Death Trooper (Regular)') return;
+  if (!isFieldTacticsDc(meta.dcName)) return;
   // Guard: limit once per round per group
-  const ftRoundKey = `fieldTactics_${dcMsgId}`;
+  const ftRoundKey = fieldTacticsRoundKey(dcMsgId);
   if (game.roundFigureAbilityUsed?.[ftRoundKey]) return;
-  const eff = getDcEffects();
-  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-  const prefix = `${dcName}-${dgIndex}-`;
-  // Find any figure in this DG that is on the board to serve as origin for range check
-  const myFigKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
-  if (myFigKeys.length === 0) return;
-  const originPos = game.figurePositions?.[meta.playerNum]?.[myFigKeys[0]];
-  if (!originPos) return;
-  // Scan all friendly figures for TROOPER or LEADER keyword, cost ≤ 6, within 2 spaces
-  const validTargets = [];
-  for (const [fk, pos] of Object.entries(game.figurePositions?.[meta.playerNum] || {})) {
-    if (!pos || fk.startsWith(prefix)) continue; // skip self
-    const fkDcName = dcNameFromFigureKey(fk);
-    const fkEff = eff?.[fkDcName];
-    if (!fkEff) continue;
-    const kws = (fkEff.keywords || []).map(k => String(k).toUpperCase());
-    if (!kws.includes('TROOPER') && !kws.includes('LEADER')) continue;
-    if ((fkEff.cost ?? 99) > 6) continue;
-    if (countGameSpaces(game, originPos, pos) > 2) continue;
-    validTargets.push(fk);
-  }
+  const validTargets = enumerateFieldTacticsTargets(game, meta, getDcEffects());
   if (validTargets.length === 0) return;
   const ownerId = getPlayerId(game, meta.playerNum);
   const gameId = game.gameId;
