@@ -2582,8 +2582,12 @@ export async function handleCombatRoll(interaction, ctx) {
     const baseDice = Array.isArray(baseDef) ? baseDef : [baseDef];
     const bonusDice = combat.defenseBonusDice || [];
     const pool = [...baseDice, ...bonusDice];
-    // Autofire: defender adds 1 white die
-    if (game.autofireActive?.[combat.attackerMsgId]) {
+    // Autofire: defender adds 1 white die.
+    // NB: check the per-combat flag (set when the attack was declared), not
+    // game.autofireActive — that game-level flag is deleted at attack-declare
+    // time (see the autofire setup block that pushes 'autofire_chain' into
+    // bonusSurgeAbilities), so reading it here would always miss.
+    if (combat.autofireAttack) {
       pool.push('white');
       await thread.send('**Autofire** — Defender adds 1 white die to defense pool.').catch(discordCatch);
     }
