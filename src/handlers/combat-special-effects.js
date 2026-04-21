@@ -9,6 +9,7 @@ import { reduceHp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, apply
 import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, ccHandKey, ccDiscardKey, pushFigure } from '../game/player-helpers.js';
 import { getDcKeywords } from '../data-loader.js';
 import { checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
+import { isAphraAlive, applyDubiousCounterpartsActionBump } from '../game/dubious-counterparts-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
@@ -610,13 +611,10 @@ export async function handleMissileSalvoDone(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   // Dubious Counterparts (Doctor Aphra): after a friendly DROID resolves Missile Salvo,
   // that figure may perform 1 additional action
-  const _dcAphraDcList = getDcList(game, playerNum) || [];
-  const _dcAphraAlive = _dcAphraDcList.some(dc => dc?.dcName === 'Doctor Aphra') &&
-    Object.keys(game.figurePositions?.[playerNum] || {}).some(fk => fk.startsWith('Doctor Aphra-'));
-  if (_dcAphraAlive) {
+  if (isAphraAlive(game, playerNum)) {
     const actionsData = game.dcActionsData?.[msgId];
     if (actionsData) {
-      actionsData.remaining = Math.min((actionsData.total ?? 2) + 1, actionsData.remaining + 1);
+      applyDubiousCounterpartsActionBump(actionsData, 2);
       if (updateDcActionsMessage) await updateDcActionsMessage(game, msgId, client || interaction.client);
       const _dcMeta = dcMessageMeta?.get(msgId);
       const _dcDisplayName = _dcMeta?.displayName || _dcMeta?.dcName || 'BT-1';

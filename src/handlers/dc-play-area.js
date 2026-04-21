@@ -30,6 +30,7 @@ import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { finalizeActivation } from '../engine/activation-setup.js';
 import { cleanupActivation } from '../game/activation-state.js';
+import { isAphraAlive, applyDubiousCounterpartsActionBump } from '../game/dubious-counterparts-helpers.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -2195,11 +2196,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   // that figure may perform 1 additional action
   if (buttonKey === 'dc_special_' && abilityId === 'invasive_procedure' && resolveResult.applied && actionsData) {
     const playerNum = meta.playerNum;
-    const _dcAphraDcList = getDcList(game, playerNum) || [];
-    const _dcAphraAlive = _dcAphraDcList.some(dc => dc?.dcName === 'Doctor Aphra') &&
-      Object.keys(game.figurePositions?.[playerNum] || {}).some(fk => fk.startsWith('Doctor Aphra-'));
-    if (_dcAphraAlive) {
-      actionsData.remaining = Math.min((actionsData.total ?? DC_ACTIONS_PER_ACTIVATION) + 1, actionsData.remaining + 1);
+    if (isAphraAlive(game, playerNum)) {
+      applyDubiousCounterpartsActionBump(actionsData, DC_ACTIONS_PER_ACTIVATION);
       await updateDcActionsMessage(game, msgId, client);
       const thread = interaction.channel;
       await thread.send(`**Dubious Counterparts** (Doctor Aphra) — **${displayName}** gains 1 additional action after resolving **Invasive Procedure**.`).catch(discordCatch);
