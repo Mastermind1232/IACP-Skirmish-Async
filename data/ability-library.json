@@ -4401,7 +4401,8 @@
       "type": "dcSpecial",
       "category": "dc-special",
       "label": "Sling Barrage",
-      "description": "Perform a ranged attack with +1 reroll per nearby friendly Ewok.",
+      "description": "Perform a Ranged attack using your printed attack pool. During this attack, you may reroll up to 1 attack die for each other figure in your group with line of sight to the defender.",
+      "slingBarrageReroll": true,
       "wiredStatus": "wired"
     },
     "Slippery Target": {

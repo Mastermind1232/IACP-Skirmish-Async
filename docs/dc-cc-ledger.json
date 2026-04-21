@@ -20,9 +20,9 @@
       }
     },
     "lastManualPatch": {
-      "at": "2026-04-21T02:38:51.007Z",
-      "batch": "dc-cc-batch-3: 12 orphan library entries marked exempt",
-      "patched": 11
+      "at": "2026-04-21T04:04:54.638Z",
+      "batch": "dc-cc-batch-4: Sling Barrage (Ewok Warrior Elite) wiring",
+      "patched": 1
     },
     "triagedAt": "2026-04-21T02:38:46.983Z",
     "triageSummary": {
@@ -17513,14 +17513,34 @@
         }
       ],
       "wiredSelfClaim": "wired",
-      "status": "gap",
-      "notes": "IMPLEMENTATION GAP: no src/ hits for slug OR label \"Sling Barrage\". Card text: perform a ranged attack with +1 reroll per nearby friendly Ewok. Other Ewok Warrior (Elite) ability \"Forest Fighters\" is wired at src/handlers/combat.js (ForestFighters), so the DC is partially implemented. Needs handler.",
+      "status": "covered",
+      "notes": "Live PvP correctness fix. Before this patch the Sling Barrage button was a silent no-op: the library entry had no dispatch fields, so Ewok Warrior (Elite) players lost up to 2 rerolls per Special Action attack vs printed rules. \"Group\" is enforced via figure-key prefix match (same DC name + dgIndex), matching the canonical definition used elsewhere for group-scoped effects. LOS check uses the shared hasLineOfSight helper with the same map-spaces resolution as sibling specials (Light It Up, Shared Calculations).",
       "triage": {
         "dispatchKind": "name-only",
         "structuredFields": [],
         "implRefs": {},
         "testRefs": {},
         "riskTier": "high"
+      },
+      "evidence": {
+        "files": [
+          "data/ability-library.json",
+          "src/game/abilities.js",
+          "src/handlers/combat.js",
+          "src/game/activation-state.js",
+          "tests/domain/oracle/dc-cc-sling-barrage-ewok-elite-probe.test.js"
+        ],
+        "assertions": [
+          "slingBarrageReroll: true on sling_barrage_ewok_elite library entry",
+          "Ewok Warrior (Elite) specialAbilityIds references the slug",
+          "resolveAbility sets pendingSlingBarrage + freeAttackBonusPending + pendingOverrideAttackDice(ranged)",
+          "combat.js reads game.pendingSlingBarrage[attackerMsgId], counts other-group-mates with LOS to target, adds that count to atkSpecialReroll",
+          "activation-state per-activation + round cleanup lists both include pendingSlingBarrage"
+        ]
+      },
+      "reviewedBy": {
+        "name": "claude-opus-4-7",
+        "date": "2026-04-20"
       }
     },
     {

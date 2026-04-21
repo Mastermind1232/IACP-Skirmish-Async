@@ -1592,6 +1592,24 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // Sling Barrage (Ewok Warrior Elite): perform a Ranged attack with printed pool;
+  // during that attack, reroll up to 1 atk die per OTHER group-mate with LOS to defender.
+  if (entry.type === 'dcSpecial' && entry.slingBarrageReroll) {
+    const { game, msgId } = context;
+    if (game && msgId) {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: 'Sling Barrage' };
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[msgId] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
+      game.pendingSlingBarrage = game.pendingSlingBarrage || {};
+      game.pendingSlingBarrage[msgId] = true;
+    }
+    return {
+      applied: true,
+      logMessage: '**Sling Barrage** — Perform a **Ranged** attack with your printed pool. You may reroll up to **1 attack die per other group-mate with line of sight to the defender**. Use the **Attack** button.',
+    };
+  }
+
   // Focus Fire (SC2-M2 Tank): Double Action — perform 2 attacks targeting the same figure
   if (entry.type === 'dcSpecial' && entry.focusFireDoubleAttack) {
     const { game, msgId } = context;

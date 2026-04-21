@@ -2771,6 +2771,32 @@ export async function handleCombatRoll(interaction, ctx) {
       }
     }
 
+    // Sling Barrage (Ewok Warrior Elite): +1 atk reroll per OTHER figure in the same group with LOS to defender.
+    // "Group" = same DC name + same deployment-group index (figure-key prefix `${dcName}-${dgIndex}-`).
+    if (game.pendingSlingBarrage?.[combat.attackerMsgId]) {
+      delete game.pendingSlingBarrage[combat.attackerMsgId];
+      const sbMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
+      const sbDefCoord = combat.target?.coord ? String(combat.target.coord).toLowerCase() : null;
+      if (sbMapSp && sbDefCoord && ctx.hasLineOfSight) {
+        const parts = String(combat.attackerFigureKey).split('-');
+        const sbGroupPrefix = parts.length >= 3 ? `${parts.slice(0, -1).join('-')}-` : null;
+        if (sbGroupPrefix) {
+          const sbFigs = game.figurePositions?.[attackerPlayerNum] || {};
+          let sbBonus = 0;
+          for (const [fk, pos] of Object.entries(sbFigs)) {
+            if (fk === combat.attackerFigureKey) continue;
+            if (!fk.startsWith(sbGroupPrefix)) continue;
+            if (!pos) continue;
+            if (ctx.hasLineOfSight(String(pos).toLowerCase(), sbDefCoord, sbMapSp)) sbBonus += 1;
+          }
+          if (sbBonus > 0) {
+            atkSpecialReroll += sbBonus;
+            await thread.send(`**Sling Barrage** — ${sbBonus} other group-mate${sbBonus === 1 ? '' : 's'} with LOS to defender: +${sbBonus} attack reroll${sbBonus === 1 ? '' : 's'}.`).catch(discordCatch);
+          }
+        }
+      }
+    }
+
     // Build forced reroll queue for Batch 2B abilities
     combat.forcedRerollQueue = [];
     // Versatile Weaponry (HK Assassin Elite): attacker forces 1 def die reroll
