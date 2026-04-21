@@ -1864,7 +1864,9 @@
       "fixedAreaRequiresAdjacentHostile": true,
       "fixedAreaDamage": 2,
       "fixedAreaStrain": 1,
-      "fixedAreaConditions": ["Weaken"],
+      "fixedAreaConditions": [
+        "Weaken"
+      ],
       "logMessage": "**Flamethrower** — Each figure on or adjacent to the chosen space suffers 2 Damage + 1 Strain and becomes Weakened.",
       "wiredStatus": "wired"
     },
@@ -2837,7 +2839,10 @@
       "type": "dcPassive",
       "label": "The Last Wielder of the Darksaber",
       "description": "You may include \"The Darksaber\" in your army. At the start of the round, you may attach it to this group.",
-      "extendsAttachmentEligibility": ["The Darksaber", "[The Darksaber]"],
+      "extendsAttachmentEligibility": [
+        "The Darksaber",
+        "[The Darksaber]"
+      ],
       "wiredStatus": "wired"
     },
     "leaping_slash": {
@@ -3998,7 +4003,9 @@
       "type": "dcSpecial",
       "label": "Saber Orbit",
       "description": "Choose up to 3 adjacent hostile figures. For each, perform a Melee attack using 1 red die.",
-      "overrideAttackDice": ["red"],
+      "overrideAttackDice": [
+        "red"
+      ],
       "overrideAttackType": "melee",
       "saberOrbitChain": 3,
       "logMessage": "**Saber Orbit** — Up to 3 free Melee attacks (1 red die each). Use the Attack button for each target.",
@@ -4167,7 +4174,13 @@
       "category": "dc-special",
       "label": "Service",
       "description": "You or an adjacent DROID/VEHICLE recovers 1 damage.",
-      "wiredStatus": "wired"
+      "wiredStatus": "wired",
+      "recoverSelfOrAdjacentFriendly": 1,
+      "recoverSelfOrAdjacentTraitFilter": [
+        "DROID",
+        "VEHICLE"
+      ],
+      "logMessage": "**Service** — You or an adjacent friendly DROID/VEHICLE recovers 1 Damage."
     },
     "Set a Trap": {
       "type": "ccEffect",

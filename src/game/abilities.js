@@ -4122,6 +4122,85 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: opts, targetFigureKeys: tFks };
   }
 
+  // dcSpecial: recoverSelfOrAdjacentFriendly (Service — R2-D2) — you or an adjacent friendly
+  // recovers N damage; optional trait filter applies to the adjacent target only (self always eligible).
+  if (entry.type === 'dcSpecial' && typeof entry.recoverSelfOrAdjacentFriendly === 'number' && entry.recoverSelfOrAdjacentFriendly > 0) {
+    const { game, msgId, meta, dcMessageMeta, dcHealthState, targetFigureKey } = context;
+    if (!game || !msgId || !meta || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const playerNum = meta.playerNum;
+    const mapId = game.selectedMap?.id;
+    const label = entry.label || 'Service';
+    const amount = entry.recoverSelfOrAdjacentFriendly;
+    const traitFilter = (entry.recoverSelfOrAdjacentTraitFilter || []).map((t) => String(t).toUpperCase());
+
+    const applyHealN = (healMsgId) => {
+      const hs = (dcHealthState.get(healMsgId) || []).slice();
+      let totalHealed = 0;
+      let remaining = amount;
+      for (let i = 0; i < hs.length && remaining > 0; i++) {
+        if (!Array.isArray(hs[i])) continue;
+        const [cur, max] = hs[i];
+        if (cur == null || max == null) continue;
+        const healed = Math.min(max - cur, remaining);
+        hs[i] = [cur + healed, max];
+        totalHealed += healed;
+        remaining -= healed;
+      }
+      dcHealthState.set(healMsgId, hs);
+      syncHealthStateToList(game, playerNum, healMsgId, hs);
+      return totalHealed;
+    };
+
+    if (targetFigureKey) {
+      if (targetFigureKey === 'self') {
+        const healed = applyHealN(msgId);
+        return { applied: true, logMessage: `**${label}** — Recovered ${healed} Damage (self).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId] };
+      }
+      const tMsgId = findMsgIdForFigureKey(game, playerNum, targetFigureKey, dcMessageMeta);
+      if (!tMsgId) return { applied: false, manualMessage: `Could not find adjacent friendly DC — resolve manually.` };
+      const tMeta = dcMessageMeta.get(tMsgId);
+      const healed = applyHealN(tMsgId);
+      const tName = tMeta?.displayName || tMeta?.dcName || dcNameFromFigureKey(targetFigureKey);
+      return { applied: true, logMessage: `**${label}** — **${tName}** recovered ${healed} Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [tMsgId] };
+    }
+
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const adjFriendlyKeys = [];
+    if (mapId) {
+      for (const fk of activatingKeys) {
+        const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+        for (const { figureKey, playerNum: p } of adj) {
+          if (p !== playerNum) continue;
+          if (activatingKeys.includes(figureKey)) continue;
+          if (adjFriendlyKeys.includes(figureKey)) continue;
+          if (traitFilter.length > 0) {
+            const dn = dcNameFromFigureKey(figureKey);
+            const kws = getKeywordsUpper(dn);
+            if (!kws.some((k) => traitFilter.includes(k))) continue;
+          }
+          adjFriendlyKeys.push(figureKey);
+        }
+      }
+    }
+
+    if (adjFriendlyKeys.length === 0) {
+      const healed = applyHealN(msgId);
+      return { applied: true, logMessage: `**${label}** — Recovered ${healed} Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId] };
+    }
+
+    const selfName = meta.displayName || meta.dcName || 'self';
+    const opts = [`Heal self (${selfName})`];
+    const tFks = ['self'];
+    for (const fk of adjFriendlyKeys) {
+      const fMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+      const fMeta = fMsgId ? dcMessageMeta.get(fMsgId) : null;
+      const fName = fMeta?.displayName || fMeta?.dcName || dcNameFromFigureKey(fk);
+      opts.push(`Heal: ${fName}`);
+      tFks.push(fk);
+    }
+    return { requiresChoice: true, choiceOptions: opts, targetFigureKeys: tFks };
+  }
+
   // dcSpecial: healFriendlyAdjacent (Stim Canister) — one adjacent friendly recovers N damage
   if (entry.type === 'dcSpecial' && typeof entry.healFriendlyAdjacent === 'number' && entry.healFriendlyAdjacent > 0) {
     const { game, msgId, meta, dcMessageMeta, dcHealthState, targetFigureKey } = context;
