@@ -133,7 +133,7 @@ def run(count: int, seed: int) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument('--count', type=int, default=200)
+    ap.add_argument('--count', type=int, default=500)
     ap.add_argument('--seed', type=int, default=42)
     args = ap.parse_args()
     return run(args.count, args.seed)
