@@ -94,6 +94,10 @@ import {
   applyDistractingEvade,
 } from '../game/distracting-helpers.js';
 import {
+  hasCunningAbility,
+  applyCunningFlag,
+} from '../game/cunning-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1751,9 +1755,9 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Cunning (Han Solo, Jyn Odan, Nexu): while defending, +1 Block per Evade result
-  const cunningIds = ['cunning_han', 'cunning_jyn', 'cunning_nexu_elite', 'cunning_nexu_reg'];
-  if (defSpecialIds.some(id => cunningIds.includes(id))) {
-    game.pendingCombat.hasCunning = true;
+  if (hasCunningAbility(defSpecialIds)) {
+    const r = applyCunningFlag(game.pendingCombat);
+    game.pendingCombat.hasCunning = r.hasCunning;
   }
 
   // Distracting (Han Solo, C-3PO): if this figure is adjacent to the targeted space, +1 Evade for defender
