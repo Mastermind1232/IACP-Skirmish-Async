@@ -134,6 +134,11 @@ import {
   applyVanguardDieSwap,
 } from '../game/vanguard-helpers.js';
 import {
+  hasForestFightersAbility,
+  forestFightersQualifies,
+  applyForestFightersHit,
+} from '../game/forest-fighters-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -2043,10 +2048,11 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Forest Fighters (Ewok Warrior Elite): +1 Hit during melee attack if Hidden
-  if (atkSpecialIds.includes('forest_fighters') && !isRanged) {
+  if (hasForestFightersAbility(atkSpecialIds)) {
     const atkConds = game.figureConditions?.[attackerFigureKey] || [];
-    if (atkConds.includes('Hide')) {
-      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+    if (forestFightersQualifies({ isRanged, attackerConditions: atkConds })) {
+      const r = applyForestFightersHit(game.pendingCombat);
+      game.pendingCombat.bonusHits = r.bonusHits;
       await thread.send('**Forest Fighters** — +1 Hit (Hidden, Melee attack).');
     }
   }
