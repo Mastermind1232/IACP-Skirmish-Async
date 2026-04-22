@@ -60,6 +60,7 @@ import {
   hasSquadTrainingAbility,
   applySquadTrainingReroll,
 } from '../game/squad-training-helpers.js';
+import { hasQueryAbility, applyQueryBonus } from '../game/query-hk47-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -1882,9 +1883,10 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Query (HK-47): +1 Hit unless defender becomes Bleeding
-  if (atkSpecialIds.includes('query_hk47')) {
-    game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
-    game.pendingCombat.queryBonusHitApplied = true;
+  if (hasQueryAbility(atkSpecialIds)) {
+    const bump = applyQueryBonus(game.pendingCombat);
+    game.pendingCombat.bonusHits = bump.bonusHits;
+    game.pendingCombat.queryBonusHitApplied = bump.queryBonusHitApplied;
     await thread.send('**Query** — +1 Hit applied. (Will be removed if defender becomes Bleeding from this attack.)');
   }
 
