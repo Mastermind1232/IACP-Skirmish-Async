@@ -3153,6 +3153,23 @@ def _cc_generic_heal(game, pending, ctx, amount):
 # Register many cards via generic handlers — cuts code size dramatically.
 # Format: (cardName, lambda wrapping generic)
 
+_CC_REAL_CARDS_SIMPLE = [
+    # Validated against data/cc-effects.json
+    ('Bodyguard', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusBlock', 2)),
+    ('Capture the Weary', lambda g, p, c: _cc_generic_condition(g, p, c, 'Weaken')),
+    ('Feint', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusAccuracy', 1)),
+    ('Heavy Ordnance', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('Honoring the Fallen', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('On the Lam', lambda g, p, c: _cc_generic_mp(g, p, c, 3)),
+    ('One in a Million', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'defenseDiceRemoved', 999)),
+    ('Personal Energy Shield', lambda g, p, c: _cc_generic_tokens(g, p, c, 'Evade', 1)),
+    ('Rank and File', lambda g, p, c: _cc_generic_mp(g, p, c, 1)),
+    ('Right Back At Ya!', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
+    ('Run for Cover', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'attackerDiceToRemove', 1)),
+    ('Set for Stun', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'setForStunActive', 1)),
+]
+
+
 _CC_SIMPLE_REGISTRATIONS = [
     ('Agility', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusEvade', 2)),
     ('Anticipate', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusBlock', 2)),
@@ -3417,6 +3434,9 @@ register('There Is No Try', _cc_there_is_no_try)
 
 # Bulk-register simple CCs via the generic helpers
 for _name, _fn in _CC_SIMPLE_REGISTRATIONS:
+    if _name not in _CC_EFFECTS:
+        register(_name, _fn)
+for _name, _fn in _CC_REAL_CARDS_SIMPLE:
     if _name not in _CC_EFFECTS:
         register(_name, _fn)
 
