@@ -189,6 +189,9 @@ import {
   MON_CALA_SF_LOKU_CONDITION,
 } from '../game/mon-cala-sf-loku-helpers.js';
 import {
+  hasSlowOnTheDrawAbility,
+} from '../game/slow-on-the-draw-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -2460,7 +2463,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Slow on the Draw (Greedo): when Greedo declares an attack, defender may interrupt to attack Greedo first
-  if (atkSpecialIds.includes('slow_on_the_draw_greedo')) {
+  if (hasSlowOnTheDrawAbility(atkSpecialIds)) {
     const defOwnerId = getPlayerId(game, defenderPlayerNum);
     game.pendingSlowOnTheDraw = {
       gameId: game.gameId,
