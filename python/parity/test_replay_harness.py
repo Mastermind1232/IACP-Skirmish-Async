@@ -74,7 +74,8 @@ def test_parser_covers_expected_prefixes():
 
 
 def test_parser_rejects_unknown():
-    assert parse_custom_id('combat_roll_TEST01', '', {}, {}) is None
+    # Use a genuinely-unknown prefix; most combat/CC prefixes are now parsed.
+    assert parse_custom_id('totally_unknown_prefix_TEST01', '', {}, {}) is None
     assert parse_custom_id('', '', {}, {}) is None
     assert parse_custom_id(None, '', {}, {}) is None
 
@@ -109,9 +110,9 @@ def test_replay_harness_reports_unsupported():
             'recordedAt': '2026-04-22T00:00:00Z',
             'initialState': initial,
         },
-        # combat_roll_* has no Python parser today.
+        # A deliberately-unknown prefix — the parser rejects it.
         {
-            'seq': 0, 'customId': 'combat_roll_TEST01', 'userId': 'p1',
+            'seq': 0, 'customId': 'totally_unknown_prefix_TEST01', 'userId': 'p1',
             'actionOpts': None, 'diceRolled': [],
             'stateSnapshot': initial, 'ok': True,
         },
