@@ -18,6 +18,7 @@ import {
   deadPreciseBonusApplies,
   applyDeadPreciseBonus,
 } from '../game/dead-precise-kotun-helpers.js';
+import { hasAwkwardAbility, awkwardBlocks } from '../game/awkward-atst-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2080,7 +2081,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Awkward (AT-ST): cannot attack adjacent figures
-  if (atkSpecialIds.includes('awkward_atst') && distanceToTarget <= 1) {
+  if (hasAwkwardAbility(atkSpecialIds) && awkwardBlocks(distanceToTarget)) {
     await thread.send('**Awkward** — Cannot attack adjacent figures. Attack cancelled.');
     delete game.pendingCombat;
     saveGames();
