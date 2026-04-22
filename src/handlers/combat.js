@@ -13,6 +13,11 @@ import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper
 import { hasAimAbility, aimBonusApplies, applyAimBonus } from '../game/aim-rebel-trooper-helpers.js';
 import { hasTakeCoverAbility, applyTakeCoverBonus } from '../game/take-cover-jawa-helpers.js';
 import { hasSlipperyAbility, applySlipperyBonus } from '../game/slippery-smuggler-helpers.js';
+import {
+  hasDeadPreciseAbility,
+  deadPreciseBonusApplies,
+  applyDeadPreciseBonus,
+} from '../game/dead-precise-kotun-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2124,11 +2129,10 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Dead Precise (Ko-Tun Feralo): +2 Accuracy if didn't move this activation
-  if (atkSpecialIds.includes('dead_precise_kotun')) {
-    if (!game.figureMoved?.[attackerFigureKey]) {
-      game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
-      await thread.send('**Dead Precise** — Has not moved this activation: +2 Accuracy.');
-    }
+  if (hasDeadPreciseAbility(atkSpecialIds) && deadPreciseBonusApplies(attackerFigureKey, game.figureMoved)) {
+    const bump = applyDeadPreciseBonus({ bonusAccuracy: game.pendingCombat.bonusAccuracy });
+    game.pendingCombat.bonusAccuracy = bump.bonusAccuracy;
+    await thread.send('**Dead Precise** — Has not moved this activation: +2 Accuracy.');
   }
 
   // Spray Fire (Heavy Stormtrooper Elite): -3 Accuracy, +1 Surge (always beneficial at melee range)
