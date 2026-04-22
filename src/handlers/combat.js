@@ -85,6 +85,11 @@ import {
   applyFrontLineDieSwap,
 } from '../game/front-line-helpers.js';
 import {
+  hasInspiringAbility,
+  applyInspiringReroll,
+  INSPIRING_RANGE,
+} from '../game/inspiring-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -2764,9 +2769,10 @@ export async function handleCombatRoll(interaction, ctx) {
         if (fk === combat.attackerFigureKey) continue;
         const fn = dcNameFromFigureKey(fk);
         const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
-        if (!(fe?.specialAbilityIds || []).includes('inspiring')) continue;
-        if (atkPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), 3)) {
-          atkSpecialReroll += 1;
+        if (!hasInspiringAbility(fe?.specialAbilityIds)) continue;
+        if (atkPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), INSPIRING_RANGE)) {
+          const r = applyInspiringReroll({ atkSpecialReroll });
+          atkSpecialReroll = r.atkSpecialReroll;
           await thread.send(`**Inspiring** (${fn}) — friendly within 3 spaces, +1 attack reroll granted.`).catch(discordCatch);
           break;
         }
