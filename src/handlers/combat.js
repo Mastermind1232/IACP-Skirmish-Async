@@ -149,6 +149,13 @@ import {
   applyMuchToLearnReroll,
 } from '../game/much-to-learn-helpers.js';
 import {
+  hasAdvTargetingComputerAbility,
+  advTcRerollLostHits,
+  applyAdvTcHitBonus,
+  ADV_TARGETING_COMPUTER_CONDITION,
+  ADV_TARGETING_COMPUTER_BONUS_DIE,
+} from '../game/adv-targeting-computer-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1857,8 +1864,8 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Advanced Targeting Computer (Dark Trooper Mk III): auto-Focus on declare
-  if (atkSpecialIds.includes('adv_targeting_computer_dark_trooper')) {
-    const _atcResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
+  if (hasAdvTargetingComputerAbility(atkSpecialIds)) {
+    const _atcResult = applyConditionWithDie(game, attackerFigureKey, ADV_TARGETING_COMPUTER_CONDITION, game.pendingCombat.attackInfo, ADV_TARGETING_COMPUTER_BONUS_DIE);
     if (_atcResult.applied) {
       game.pendingCombat.attackInfo = _atcResult.attackInfo;
       await thread.send('**Advanced Targeting Computer** — Dark Trooper Mk III is **Focused** before attacking (+1 green die).');
@@ -3479,9 +3486,10 @@ export async function handleCombatReroll(interaction, ctx) {
           const _atcDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
           const _atcDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
           const _atcEff = _atcDcEff[_atcDcName] || _atcDcEff[_atcDcName?.replace(/\s*\[.*\]\s*$/, '')];
-          if ((_atcEff?.specialAbilityIds || []).includes('adv_targeting_computer_dark_trooper')) {
-            if ((newDie.dmg || 0) < (oldDie.dmg || 0)) {
-              combat.bonusHits = (combat.bonusHits || 0) + 1;
+          if (hasAdvTargetingComputerAbility(_atcEff?.specialAbilityIds || [])) {
+            if (advTcRerollLostHits(oldDie, newDie)) {
+              const _atcBonus = applyAdvTcHitBonus(combat);
+              combat.bonusHits = _atcBonus.bonusHits;
               combat.advTcBonusApplied = true;
               await thread.send('**Advanced Targeting Computer** — Rerolled die has fewer Hits: +1 Hit applied.');
             }

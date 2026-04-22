@@ -155,12 +155,22 @@ describe('ORACLE-CONDDICE-003: Pattern B sites use applyConditionWithDie', () =>
   });
 
   it('Advanced Targeting Computer uses applyConditionWithDie', () => {
+    // Advanced Targeting Computer was extracted to
+    // src/game/adv-targeting-computer-helpers.js during the
+    // medium-risk probe grind. Handler now delegates via
+    // hasAdvTargetingComputerAbility, and Focus + green-die are
+    // named constants. The applyConditionWithDie contract is still
+    // enforced at the ATC call site.
     const src = readSrc('src/handlers/combat.js');
-    const idx = src.indexOf("atkSpecialIds.includes('adv_targeting_computer_dark_trooper')");
-    assert.ok(idx > 0, 'Advanced Targeting Computer site found');
-    const block = src.slice(idx, idx + 300);
+    const idx = src.indexOf('hasAdvTargetingComputerAbility(atkSpecialIds)');
+    assert.ok(idx > 0, 'Advanced Targeting Computer site found (post-extraction)');
+    const block = src.slice(idx, idx + 400);
     assert.ok(block.includes('applyConditionWithDie(game, attackerFigureKey'),
       'Advanced Targeting Computer must use applyConditionWithDie');
+    assert.ok(block.includes('ADV_TARGETING_COMPUTER_CONDITION'),
+      'Advanced Targeting Computer must pass ADV_TARGETING_COMPUTER_CONDITION constant');
+    assert.ok(block.includes('ADV_TARGETING_COMPUTER_BONUS_DIE'),
+      'Advanced Targeting Computer must pass ADV_TARGETING_COMPUTER_BONUS_DIE constant');
   });
 
   it('Sharpshooter uses applyConditionWithDie', () => {
