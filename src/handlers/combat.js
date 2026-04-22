@@ -55,6 +55,7 @@ import {
   applyChargeGeneratorsBonus,
 } from '../game/charge-generators-helpers.js';
 import { hasSprayFireAbility, applySprayFire } from '../game/spray-fire-helpers.js';
+import { hasRaiderAbility, buildRaiderForcedReroll } from '../game/raider-weequay-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2879,9 +2880,8 @@ export async function handleCombatRoll(interaction, ctx) {
       }
     }
     // Raider (Weequay Elite/Reg): attacker chooses any 1 die, force reroll
-    const raiderIds = ['raider_weequay_elite', 'raider_weequay_reg'];
-    if (atkSIds.some(id => raiderIds.includes(id))) {
-      combat.forcedRerollQueue.push({ controlPlayer: attackerPlayerNum, pool: 'any', remaining: 1, source: 'Raider' });
+    if (hasRaiderAbility(atkSIds)) {
+      combat.forcedRerollQueue.push(buildRaiderForcedReroll(attackerPlayerNum));
     }
     // Precision (Grand Inquisitor): if attacking/defending against adjacent, choose any 1 die to force reroll
     if (atkSIds.includes('precision_grand_inquisitor') || defSIds.includes('precision_grand_inquisitor')) {
