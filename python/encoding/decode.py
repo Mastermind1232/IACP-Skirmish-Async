@@ -542,11 +542,7 @@ def _reconstruct_figures(
         # Whose anchor is this? Use footprint channel at (y, x).
         is_friendly = _cell_val(spatial, E._S_FRIENDLY_FOOTPRINT, y, x) == 1.0
         is_enemy = _cell_val(spatial, E._S_ENEMY_FOOTPRINT, y, x) == 1.0
-        if is_friendly:
-            player = own
-        elif is_enemy:
-            player = opp
-        else:
+        if not (is_friendly or is_enemy):
             # Anchor with no footprint — skip; encoder never writes this.
             continue
 
@@ -558,6 +554,32 @@ def _reconstruct_figures(
             E._S_SIZE_1X1,
         )
         is_attach = _is_attach_at(spatial, y, x)
+
+        # When both footprints overlap at an anchor cell (a larger figure
+        # from one side covers a 1x1 anchor belonging to the other side),
+        # disambiguate by matching trait signature against each side's
+        # roster — the anchor's traits belong to *exactly one* figure.
+        if is_friendly and is_enemy:
+            sig = (kws, aff_ch, size_ch, is_attach)
+            own_has = any(
+                _trait_signature(n) == sig for n in (own_roster or [])
+            )
+            opp_has = any(
+                _trait_signature(n) == sig for n in (opp_roster or [])
+            )
+            if own_has and not opp_has:
+                player = own
+            elif opp_has and not own_has:
+                player = opp
+            else:
+                # Both (or neither) rosters contain the signature; fall
+                # back to the original own-first heuristic.
+                player = own
+        elif is_friendly:
+            player = own
+        else:
+            player = opp
+
         roster_hint = own_roster if player == own else opp_roster
         dc_name = _pick_dc_name(kws, aff_ch, size_ch, is_attach, roster_hint)
         figure_key = _next_key(player, dc_name)
