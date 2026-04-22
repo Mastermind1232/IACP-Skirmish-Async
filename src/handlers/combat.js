@@ -12,6 +12,7 @@ import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
 import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
 import { hasAimAbility, aimBonusApplies, applyAimBonus } from '../game/aim-rebel-trooper-helpers.js';
 import { hasTakeCoverAbility, applyTakeCoverBonus } from '../game/take-cover-jawa-helpers.js';
+import { hasSlipperyAbility, applySlipperyBonus } from '../game/slippery-smuggler-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2092,9 +2093,9 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Slippery (Alliance Smuggler E/R): while defending, apply -2 Accuracy
-  const slipperyIds = ['slippery_smuggler_elite', 'slippery_smuggler_reg'];
-  if (defSpecialIds.some(id => slipperyIds.includes(id))) {
-    game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) - 2;
+  if (hasSlipperyAbility(defSpecialIds)) {
+    const bump = applySlipperyBonus({ bonusAccuracy: game.pendingCombat.bonusAccuracy });
+    game.pendingCombat.bonusAccuracy = bump.bonusAccuracy;
     await thread.send('**Slippery** — Defender applies -2 Accuracy to the attack.');
   }
 
