@@ -1997,6 +1997,228 @@ def _cc_size_advantage(game, pending, ctx):
     return {'applied': True, 'playerNum': player_num, 'bonusHits': 2}
 
 
+def _cc_field_tactician(game, pending, ctx):
+    """Field Tactician (specialAction): chosen friendly within 2 interrupts to move.
+
+    Required: ctx.target_msg_id — the friendly DC to trigger.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    if not target_msg_id:
+        raise ValueError('field_tactician: requires ctx.target_msg_id')
+    data['fieldTacticianPending'] = {
+        'targetMsgId': target_msg_id,
+        'playerNum': pending.get('playerNum'),
+    }
+    return {'applied': True, 'targetMsgId': target_msg_id}
+
+
+def _cc_feral_swipes(game, pending, ctx):
+    """Feral Swipes (specialAction): attack each die separately using red.
+
+    Flags pendingCombat / nextAttackFlags for attack resolver.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if isinstance(combat, dict):
+        c = dict(combat)
+        c['feralSwipesActive'] = True
+        data['pendingCombat'] = c
+        return {'applied': True}
+    player_num = pending.get('playerNum')
+    flags = dict(data.get('nextAttackFlags') or {})
+    existing = flags.get(player_num) or {}
+    existing['feralSwipesActive'] = True
+    flags[player_num] = existing
+    data['nextAttackFlags'] = flags
+    return {'applied': True, 'queued': True}
+
+
+def _cc_guardian_stance(game, pending, ctx):
+    """Guardian Stance: reroll 1 or more attack OR defense dice for
+    adjacent friendly defender.
+
+    Required: ctx.side ('attacker' or 'defender'), ctx.dice_count (int).
+    """
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    side = (ctx or {}).get('side')
+    count = int((ctx or {}).get('dice_count') or 1)
+    if side not in ('attacker', 'defender'):
+        raise ValueError("guardian_stance: side must be 'attacker' or 'defender'")
+    c = dict(combat)
+    key = 'attackerRerollCount' if side == 'attacker' else 'defenderRerollCount'
+    c[key] = int(c.get(key) or 0) + count
+    data['pendingCombat'] = c
+    return {'applied': True, 'side': side, 'count': count}
+
+
+def _cc_guild_programming(game, pending, ctx):
+    """Guild Programming: each Rapid Fire sub-attack starts Focused.
+
+    Sets game.guildProgrammingActive[msg_id] = True.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('guild_programming: requires ctx.msg_id')
+    flag = dict(data.get('guildProgrammingActive') or {})
+    flag[msg_id] = True
+    data['guildProgrammingActive'] = flag
+    return {'applied': True, 'msgId': msg_id}
+
+
+def _cc_hidden_trap(game, pending, ctx):
+    """Hidden Trap: adjacent-to-terminal figures take 2 Damage each.
+
+    Required: ctx.adjacent_targets — list of {figureKey, playerNum}.
+    """
+    targets = (ctx or {}).get('adjacent_targets') or []
+    if not isinstance(targets, list):
+        raise ValueError('hidden_trap: requires adjacent_targets list')
+    hits = []
+    for t in targets:
+        if not isinstance(t, dict):
+            continue
+        fk = t.get('figureKey')
+        pn = t.get('playerNum')
+        if fk and pn in (1, 2):
+            _apply_hp_damage_via_health_state(game, fk, pn, 2)
+            hits.append(fk)
+    return {'applied': True, 'hits': hits}
+
+
+def _cc_lets_make_a_deal(game, pending, ctx):
+    """Let's Make a Deal: pay X VP to apply -X Hits, then become Focused.
+
+    Required: ctx.vp_paid + ctx.figure_key.
+    """
+    from python.engine.mechanics.vp_helpers import deduct_vp
+
+    data = game.data if hasattr(game, 'data') else game
+    vp_paid = int((ctx or {}).get('vp_paid') or 0)
+    figure_key = (ctx or {}).get('figure_key')
+    player_num = pending.get('playerNum')
+    if vp_paid < 0 or not figure_key or player_num not in (1, 2):
+        raise ValueError('lets_make_a_deal: requires vp_paid + figure_key + playerNum')
+    # Transfer VP to opponent
+    opp = 2 if player_num == 1 else 1
+    deduct_vp(game, player_num, vp_paid)
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+    award_objective_vp(game, opp, vp_paid)
+    # Apply -X to pendingCombat hits
+    combat = data.get('pendingCombat')
+    if isinstance(combat, dict):
+        c = dict(combat)
+        c['bonusHits'] = int(c.get('bonusHits') or 0) - vp_paid
+        data['pendingCombat'] = c
+    _apply_condition_to_target(game, figure_key, 'Focus')
+    return {
+        'applied': True, 'vpPaid': vp_paid, 'hitsReduced': vp_paid,
+        'figureKey': figure_key,
+    }
+
+
+def _cc_learn_by_example(game, pending, ctx):
+    """Learn by Example: play as a copy of a FORCE USER CC in a discard pile.
+
+    Required: ctx.copied_card — the name of the CC to copy.
+    Queues the copied effect via game.pendingCcEffect.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    copied = (ctx or {}).get('copied_card')
+    if not copied:
+        raise ValueError('learn_by_example: requires ctx.copied_card')
+    data['pendingCcEffect'] = {
+        'cardName': copied,
+        'playerNum': pending.get('playerNum'),
+        'viaLearnByExample': True,
+    }
+    return {'applied': True, 'copiedCard': copied}
+
+
+def _cc_transmit_the_plans(game, pending, ctx):
+    """Transmit the Plans: distribute 2 Hit Tokens + 2 VP if adjacent to terminal.
+
+    Required: ctx.distribution — list of {figureKey, count} summing ≤ 2.
+    Optional: ctx.adjacent_to_terminal (bool).
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    dist = (ctx or {}).get('distribution') or []
+    if not isinstance(dist, list):
+        raise ValueError('transmit_the_plans: requires ctx.distribution list')
+    total = sum(int(e.get('count', 0)) for e in dist if isinstance(e, dict))
+    if total > 2:
+        raise ValueError(f'transmit_the_plans: distribution sum must be ≤2 (got {total})')
+    for entry in dist:
+        fk = entry.get('figureKey')
+        count = int(entry.get('count', 0))
+        if fk and count > 0:
+            grant_power_tokens(data, fk, 'Damage', count)
+    vp_awarded = 0
+    if (ctx or {}).get('adjacent_to_terminal') and player_num in (1, 2):
+        award_objective_vp(game, player_num, 2)
+        vp_awarded = 2
+    return {'applied': True, 'tokensDistributed': total, 'vpAwarded': vp_awarded}
+
+
+def _cc_dark_energy(game, pending, ctx):
+    """Dark Energy (duringActivation): push a SMALL figure within 3 up to 1 space,
+    then that figure suffers 1 damage.
+
+    Required: ctx.target_figure_key + ctx.target_player_num + ctx.destination.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    destination = (ctx or {}).get('destination')
+    if not target_fk or target_pn not in (1, 2) or not destination:
+        raise ValueError(
+            'dark_energy: requires target_figure_key + target_player_num + destination'
+        )
+    positions_all = data.get('figurePositions') or {}
+    pos_map = positions_all.get(target_pn)
+    if isinstance(pos_map, dict) and target_fk in pos_map:
+        pm = dict(pos_map)
+        pm[target_fk] = str(destination).lower()
+        positions_all[target_pn] = pm
+        data['figurePositions'] = positions_all
+    _apply_hp_damage_via_health_state(game, target_fk, target_pn, 1)
+    return {
+        'applied': True, 'targetFigureKey': target_fk,
+        'destination': str(destination).lower(), 'damage': 1,
+    }
+
+
+def _cc_dioxis_fumes(game, pending, ctx):
+    """Dioxis Fumes: each non-DROID figure suffers 1 Strain; until end of
+    round, non-DROIDs can't gain movement points.
+
+    Required: ctx.non_droid_targets — list of {figureKey, playerNum}.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    targets = (ctx or {}).get('non_droid_targets') or []
+    if not isinstance(targets, list):
+        raise ValueError('dioxis_fumes: requires non_droid_targets list')
+    hits = []
+    for t in targets:
+        if not isinstance(t, dict):
+            continue
+        fk = t.get('figureKey')
+        pn = t.get('playerNum')
+        if fk and pn in (1, 2):
+            _apply_hp_damage_via_health_state(game, fk, pn, 1)
+            hits.append(fk)
+    data['dioxisFumesActive'] = True  # blocks MP grants to non-DROIDs this round
+    return {'applied': True, 'hits': hits, 'mpBlockActive': True}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -2145,6 +2367,16 @@ register('Price on Their Heads', _cc_price_on_their_heads)
 register('Strategic Shift', _cc_strategic_shift)
 register('Reduce to Rubble', _cc_reduce_to_rubble)
 register('Size Advantage', _cc_size_advantage)
+register('Field Tactician', _cc_field_tactician)
+register('Feral Swipes', _cc_feral_swipes)
+register('Guardian Stance', _cc_guardian_stance)
+register('Guild Programming', _cc_guild_programming)
+register('Hidden Trap', _cc_hidden_trap)
+register("Let's Make a Deal", _cc_lets_make_a_deal)
+register('Learn by Example', _cc_learn_by_example)
+register('Transmit the Plans', _cc_transmit_the_plans)
+register('Dark Energy', _cc_dark_energy)
+register('Dioxis Fumes', _cc_dioxis_fumes)
 
 
 def registered_cc_effects() -> list:
