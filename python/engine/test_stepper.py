@@ -808,6 +808,37 @@ def test_celebration_pass_clears_window_no_vp():
     assert (new_g.data.get('player1VP') or {}) == prior_vp  # unchanged
 
 
+def test_cover_fire_block_grants_token_and_clears_pending():
+    g = create_game()
+    g.data['pendingCoverFire'] = {'attackerPlayerNum': 1}
+    new_g = step(g, Action(
+        type=ActionType.COVER_FIRE_BLOCK, player=1,
+        params={'figure_key': 'Luke-0-0'},
+    ))
+    assert 'Block' in new_g.data['figurePowerTokens']['Luke-0-0']
+    assert new_g.data['pendingCoverFire'] is None
+
+
+def test_cover_fire_block_requires_window():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.COVER_FIRE_BLOCK, player=1,
+            params={'figure_key': 'Luke-0-0'},
+        ))
+    except ValueError as e:
+        assert 'pendingCoverFire' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_cover_fire_skip_clears_pending():
+    g = create_game()
+    g.data['pendingCoverFire'] = {'attackerPlayerNum': 1}
+    new_g = step(g, Action(type=ActionType.COVER_FIRE_SKIP, player=1))
+    assert new_g.data['pendingCoverFire'] is None
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -861,6 +892,9 @@ def main():
         ('celebration_play_requires_window', test_celebration_play_requires_window),
         ('celebration_play_requires_card_in_hand', test_celebration_play_requires_card_in_hand),
         ('celebration_pass_clears_window', test_celebration_pass_clears_window_no_vp),
+        ('cover_fire_block_grants_token', test_cover_fire_block_grants_token_and_clears_pending),
+        ('cover_fire_block_requires_window', test_cover_fire_block_requires_window),
+        ('cover_fire_skip_clears_pending', test_cover_fire_skip_clears_pending),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

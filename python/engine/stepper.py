@@ -1130,3 +1130,41 @@ def _handle_celebration_pass(game: GameState, action: Action) -> GameState:
 
 register(ActionType.CELEBRATION_PLAY, _handle_celebration_play)
 register(ActionType.CELEBRATION_PASS, _handle_celebration_pass)
+
+
+# ---------------------------------------------------------------------------
+# Cover Fire (CC response) — attacker picks a figure to receive 1 Block Token
+# ---------------------------------------------------------------------------
+
+def _handle_cover_fire_block(game: GameState, action: Action) -> GameState:
+    """Cover Fire block-token grant — attacker picks a figure to receive 1 Block.
+
+    Required param:
+        figure_key (str) — the figure to receive the token.
+
+    Effects:
+        - grant_power_tokens(figure_key, 'Block', 1)
+        - Clears game.pendingCoverFire
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+    if not figure_key:
+        raise ValueError('cover_fire_block requires figure_key param')
+    if not game.data.get('pendingCoverFire'):
+        raise ValueError('cover_fire_block: no pendingCoverFire window open')
+    grant_power_tokens(game.data, figure_key, 'Block', 1)
+    game.data['pendingCoverFire'] = None
+    return game
+
+
+def _handle_cover_fire_skip(game: GameState, action: Action) -> GameState:
+    """Skip the Cover Fire window — just clears pending state."""
+    if not game.data.get('pendingCoverFire'):
+        raise ValueError('cover_fire_skip: no pendingCoverFire window open')
+    game.data['pendingCoverFire'] = None
+    return game
+
+
+register(ActionType.COVER_FIRE_BLOCK, _handle_cover_fire_block)
+register(ActionType.COVER_FIRE_SKIP, _handle_cover_fire_skip)
