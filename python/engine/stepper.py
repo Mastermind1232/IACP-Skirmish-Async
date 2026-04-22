@@ -1033,3 +1033,55 @@ def _handle_dc_special(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.DC_SPECIAL, _handle_dc_special)
+
+
+# ---------------------------------------------------------------------------
+# END_START_OF_ROUND (P7)
+# ---------------------------------------------------------------------------
+
+def _handle_end_start_of_round(game: GameState, action: Action) -> GameState:
+    """Close out the Start-of-Round window.
+
+    JS flow (round.js): initiative player clicks "end SoR" first, which
+    advances to the non-initiative player; they click → window ends. The
+    Python stepper collapses this into a single transition (it doesn't
+    model the mid-window handoff per-player).
+
+    Effects:
+        - Clear startOfRoundWhoseTurn (None → window closed).
+        - Runs mission_rules.run_start_of_round_rules (if a mission is
+          selected) — handles Cantina tokens, random reveals, crate tokens.
+        - Transitions roundPhase → 'activation' when not already set.
+
+    DC-specific SoR passives (Brush, Force Slow, Excavation, Shape/Shift)
+    flow through their individual ability ports in Phase 4 — this handler
+    owns the data-driven mission layer + the window-closure state change.
+    """
+    from python.engine.mechanics.mission_rules import run_start_of_round_rules
+    from python.engine.data.dc_effects_loader import get_dc_effects
+
+    data = game.data
+    data['startOfRoundWhoseTurn'] = None
+
+    selected = data.get('selectedMission') or {}
+    if isinstance(selected, Mapping):
+        variant = selected.get('variant') or 'a'
+        map_id = data.get('mapId')
+        if not map_id:
+            selected_map = data.get('selectedMap') or {}
+            map_id = selected_map.get('id') if isinstance(selected_map, Mapping) else None
+        # Resolve mission rules lazily; they may be stashed on game or
+        # looked up from mission-cards.json via a ctx-injected getter.
+        rules = selected.get('rules') if isinstance(selected, Mapping) else None
+        if isinstance(rules, Mapping):
+            sor_rules = rules.get('startOfRound')
+            if isinstance(sor_rules, Mapping):
+                run_start_of_round_rules(game.data, map_id, variant, dict(sor_rules))
+
+    if data.get('roundPhase') not in ('activation', 'end', 'game_over'):
+        data['roundPhase'] = 'activation'
+
+    return game
+
+
+register(ActionType.END_START_OF_ROUND, _handle_end_start_of_round)

@@ -728,6 +728,44 @@ def test_dc_special_requires_params():
     raise AssertionError('expected ValueError for missing params')
 
 
+def test_end_start_of_round_clears_window_and_transitions():
+    g = create_game()
+    g.data['startOfRoundWhoseTurn'] = 'alice'
+    g.data['roundPhase'] = 'start_of_round'
+    new_g = step(g, Action(type=ActionType.END_START_OF_ROUND, player=1))
+    assert new_g.data['startOfRoundWhoseTurn'] is None
+    assert new_g.data['roundPhase'] == 'activation'
+
+
+def test_end_start_of_round_runs_mission_sor_rules():
+    g = create_game()
+    g.data['startOfRoundWhoseTurn'] = 'alice'
+    g.data['roundPhase'] = 'start_of_round'
+    g.data['initiativePlayerId'] = 'alice'
+    g.data['player1Id'] = 'alice'
+    g.data['player1CcHand'] = ['A', 'B', 'C']
+    g.data['selectedMission'] = {
+        'variant': 'a',
+        'rules': {
+            'startOfRound': {
+                'setTokenCountFromInitiativeHand': {'gameKey': 'cantinaTokens'},
+            },
+        },
+    }
+    new_g = step(g, Action(type=ActionType.END_START_OF_ROUND, player=1))
+    assert new_g.data['cantinaTokens'] == 3
+    assert new_g.data['startOfRoundWhoseTurn'] is None
+
+
+def test_end_start_of_round_preserves_game_over_phase():
+    g = create_game()
+    g.data['roundPhase'] = 'game_over'
+    g.data['startOfRoundWhoseTurn'] = 'alice'
+    new_g = step(g, Action(type=ActionType.END_START_OF_ROUND, player=1))
+    # roundPhase should stay 'game_over', not override to 'activation'
+    assert new_g.data['roundPhase'] == 'game_over'
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -774,6 +812,9 @@ def main():
         ('dc_special_rejects_missing_figure', test_dc_special_rejects_missing_figure),
         ('dc_special_rejects_out_of_range_idx', test_dc_special_rejects_out_of_range_idx),
         ('dc_special_requires_params', test_dc_special_requires_params),
+        ('end_start_of_round_clears_window', test_end_start_of_round_clears_window_and_transitions),
+        ('end_start_of_round_runs_mission_sor_rules', test_end_start_of_round_runs_mission_sor_rules),
+        ('end_start_of_round_preserves_game_over', test_end_start_of_round_preserves_game_over_phase),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
