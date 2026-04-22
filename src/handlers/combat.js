@@ -10,6 +10,7 @@ import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.
 import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
 import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
+import { hasAimAbility, aimBonusApplies, applyAimBonus } from '../game/aim-rebel-trooper-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2105,11 +2106,14 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Aim (Rebel Trooper E/R): +1 Hit, +2 Accuracy if figure has not moved this activation
-  const aimIds = ['aim_rebel_trooper_elite', 'aim_rebel_trooper_reg'];
-  if (atkSpecialIds.some(id => aimIds.includes(id))) {
-    if (!game.figureMoved?.[attackerFigureKey]) {
-      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
-      game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
+  if (hasAimAbility(atkSpecialIds)) {
+    if (aimBonusApplies(attackerFigureKey, game.figureMoved)) {
+      const bump = applyAimBonus({
+        bonusHits: game.pendingCombat.bonusHits,
+        bonusAccuracy: game.pendingCombat.bonusAccuracy,
+      });
+      game.pendingCombat.bonusHits = bump.bonusHits;
+      game.pendingCombat.bonusAccuracy = bump.bonusAccuracy;
       await thread.send('**Aim** — Has not moved this activation: +1 Hit, +2 Accuracy.');
     }
   }
