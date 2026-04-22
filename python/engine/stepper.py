@@ -1022,7 +1022,15 @@ def _handle_dc_special(game: GameState, action: Action) -> GameState:
     except (ValueError, AttributeError):
         pass
 
-    result = ability_dispatch.resolve(game.data, ability_id, ctx)
+    try:
+        result = ability_dispatch.resolve(game.data, ability_id, ctx)
+    except ability_dispatch.UnknownAbility:
+        result = {'applied': False, 'reason': 'unknown_ability', 'abilityId': ability_id}
+    except ability_dispatch.PatternNotImplemented as e:
+        result = {'applied': False, 'reason': 'pattern_not_implemented', 'message': str(e)}
+    except NotImplementedError as e:
+        # Catches TriggerNotImplemented / ChainNotImplemented / subclasses
+        result = {'applied': False, 'reason': 'handler_not_implemented', 'message': str(e)}
     game.data['lastDcSpecialResult'] = {
         'abilityId': ability_id,
         'figureKey': figure_key,
