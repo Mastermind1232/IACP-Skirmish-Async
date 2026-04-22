@@ -105,6 +105,11 @@ import {
   KTP_STRAIN_AMOUNT,
 } from '../game/keep-the-peace-helpers.js';
 import {
+  hasHunkerDownAbility,
+  hasQualifyingTerrainAdjacent,
+  applyHunkerDownEvade,
+} from '../game/hunker-down-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1792,13 +1797,11 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Hunker Down (Cara Dune): if defender shares edge/corner with blocking/impassable/difficult terrain, +1 Evade
-  if (defSpecialIds.includes('hunker_down') && mapSpaces && targetCoord) {
+  if (hasHunkerDownAbility(defSpecialIds) && mapSpaces && targetCoord) {
     const adjToDefender = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
-    const terrain = mapSpaces.terrain || {};
-    const hunkerTerrain = ['blocking', 'impassable', 'difficult'];
-    const hasNearbyTerrain = [...adjToDefender].some(s => hunkerTerrain.includes((terrain[s] || 'normal').toLowerCase()));
-    if (hasNearbyTerrain) {
-      game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) + 1;
+    if (hasQualifyingTerrainAdjacent(adjToDefender, mapSpaces.terrain || {})) {
+      const r = applyHunkerDownEvade(game.pendingCombat);
+      game.pendingCombat.bonusEvade = r.bonusEvade;
       await thread.send('**Hunker Down** — Cara Dune is adjacent to terrain, +1 Evade.');
     }
   }

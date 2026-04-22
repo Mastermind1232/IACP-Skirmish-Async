@@ -35,6 +35,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
 const MV_SRC = readFileSync(resolve(ROOT, 'src/game/movement.js'), 'utf8');
 const CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
+const HD_SRC = readFileSync(resolve(ROOT, 'src/game/hunker-down-helpers.js'), 'utf8');
 
 function* walkFiles(dir) {
   for (const name of readdirSync(dir)) {
@@ -70,10 +71,18 @@ describe('PROBE-PD-TER-001/002: terrain is per-space from map data; engine has n
       'movement.js must build terrain as a per-space coord→type map — CRR-TER-001');
   });
 
-  it('001c: source — combat.js (Hunker Down) reads terrain per-space via terrain[s], never per-edge', () => {
+  it('001c: source — Hunker Down helper reads terrain per-space (coord→type), never per-edge', () => {
+    // Hunker Down's per-space terrain read was extracted to
+    // src/game/hunker-down-helpers.js during the medium-risk probe
+    // grind. The per-space contract is still enforced; the read
+    // now lives in the helper, invoked from combat.js via
+    // hasQualifyingTerrainAdjacent(adjSet, mapSpaces.terrain).
+    assert.match(HD_SRC,
+      /terrainMap\?\.\[coord\] \|\| 'normal'/,
+      'hunker-down-helpers.js must read terrain per-space via terrainMap[coord] — CRR-TER-001');
     assert.match(CB_SRC,
-      /terrain\[s\] \|\| 'normal'/,
-      'combat.js must read terrain per-space via terrain[s] — CRR-TER-001');
+      /hasQualifyingTerrainAdjacent\(.*mapSpaces\.terrain/s,
+      'combat.js must delegate Hunker Down terrain check to per-space helper — CRR-TER-001');
   });
 
   it('002a: source — no src file declares a runtime edge-terrain container (no edgeTerrain / terrainEdges / borderTerrain / coloredBorders)', () => {
