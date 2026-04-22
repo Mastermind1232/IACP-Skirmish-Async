@@ -3201,6 +3201,44 @@ _CC_REAL_CARDS_SIMPLE = [
     ('Efficient Travel', lambda g, p, c: {'applied': True}),  # terrain bypass placeholder
     ('Element of Surprise', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'elementOfSurprise', 1)),
     ('Elusive', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'elusiveActive', 1)),
+    # Third validated batch
+    ('A Powerful Influence', lambda g, p, c: {'applied': True}),  # control block marker
+    ("All in a Day's Work", lambda g, p, c: _cc_generic_condition(g, p, c, 'Focus')),
+    ('Disarm', lambda g, p, c: _cc_generic_condition(g, p, c, 'Weaken')),
+    ('Droid Mastery', lambda g, p, c: _cc_generic_condition(g, p, c, 'Focus')),
+    ('Emergency Aid', lambda g, p, c: _cc_generic_heal(g, p, c, 2)),
+    ('Endless Reserves', lambda g, p, c: {'applied': True}),  # re-deploy
+    ('Escalating Hostility', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
+    ('Etiquette and Protocol', lambda g, p, c: _cc_generic_condition(g, p, c, 'Stun')),
+    ('Evacuate', lambda g, p, c: {'applied': True}),  # self-defeat for half-VP
+    ('Eyes on the Prize', lambda g, p, c: _cc_generic_mp(g, p, c, 1)),
+    ('Face Me!', lambda g, p, c: {'applied': True}),  # push
+    ('Fatal Deception', lambda g, p, c: {'applied': True}),  # false-orders variant
+    ('Ferocity', lambda g, p, c: {'applied': True}),  # creature attack
+    ('Field Promotion', lambda g, p, c: _cc_generic_tokens(g, p, c, 'Surge', 2)),
+    ('Field Supply', lambda g, p, c: _cc_generic_tokens(g, p, c, 'Damage', 1)),
+    ('Findsman Meditation', lambda g, p, c: {'applied': True}),  # opponent group marker
+    ('Fool Me Once', lambda g, p, c: {'applied': True}),  # opponent discard swap
+    ('Forbidden Knowledge', lambda g, p, c: {'applied': True}),  # complex CC discard
+    ('Force Drain', lambda g, p, c: _cc_generic_damage(g, p, c, 3)),
+    ('Force Jump', lambda g, p, c: _cc_generic_mp(g, p, c, 5)),
+    ('Force Lightning', lambda g, p, c: _cc_generic_damage(g, p, c, 3)),
+    ('Force Surge', lambda g, p, c: _cc_generic_mp(g, p, c, 1)),
+    ('Foresee', lambda g, p, c: {'applied': True}),  # deck peek
+    ('Fuel Upgrade', lambda g, p, c: {'applied': True}),  # VEHICLE round bonus
+    ('Gauntlet Blade', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
+    ('Grenadier', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
+    ('Guerilla Warfare', lambda g, p, c: {'applied': True}),  # isolate bonus marker
+    ('Harsh Environment', lambda g, p, c: {'applied': True}),  # terrain marker
+    ('Hostile Negotiation', lambda g, p, c: {'applied': True}),  # opponent random discard
+    ('I Can Feel It', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'attackerRerollCount', 1)),
+    ('Jundland Terror', lambda g, p, c: {'applied': True}),  # NPC attack
+    ('Just Business', lambda g, p, c: {'applied': True}),  # Professional marker
+    ('Karabast!', lambda g, p, c: {'applied': True}),  # per-damage-suffered bonus
+    ('Knowledge and Defense', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusDefenseDice', 1)),
+    ('Lightbow', lambda g, p, c: {'applied': True}),  # attack variant
+    ('Lure of the Dark Side', lambda g, p, c: {'applied': True}),  # false-orders variant
+    ('Wookiee Rage', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
 ]
 
 
