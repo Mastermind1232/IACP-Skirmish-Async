@@ -25,6 +25,11 @@ import {
   sniperGateOpen,
   applySniperRerolls,
 } from '../game/sniper-helpers.js';
+import {
+  hasCompositePlatingAbility,
+  compositePlatingApplies,
+  applyCompositePlatingBonus,
+} from '../game/composite-plating-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -1890,8 +1895,9 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Composite Plating (Heavy Stormtrooper Regular): +1 Block if attacker 4+ spaces away
-  if (defSpecialIds.includes('composite_plating') && distanceToTarget >= 4) {
-    game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+  if (hasCompositePlatingAbility(defSpecialIds) && compositePlatingApplies(distanceToTarget)) {
+    const { bonusBlock } = applyCompositePlatingBonus(game.pendingCombat);
+    game.pendingCombat.bonusBlock = bonusBlock;
     await thread.send(`**Composite Plating** — +1 Block (attacker ${distanceToTarget} spaces away).`);
   }
 
