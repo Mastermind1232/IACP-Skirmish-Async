@@ -656,6 +656,99 @@ def test_regroup_removes_only_harmful_conditions():
     assert 'Hide' in g['figureConditions']['Han-0-0']
 
 
+def test_bladestorm_surge_and_post_combat_trigger():
+    g = {
+        'pendingCcEffect': {'cardName': 'Bladestorm', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusSurges'] == 1
+    triggers = g['pendingCombat']['postCombatTriggers']
+    assert len(triggers) == 1
+    assert triggers[0]['effect'] == 'bladestorm_adjacent_damage'
+
+
+def test_spinning_kick_adds_cleave():
+    g = {
+        'pendingCcEffect': {'cardName': 'Spinning Kick', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusCleave'] == 3
+
+
+def test_heightened_reflexes_records_die_to_zero():
+    g = {
+        'pendingCcEffect': {'cardName': 'Heightened Reflexes', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g, {'die_index': 1})
+    assert g['pendingCombat']['defenderDiceToZero'] == [1]
+
+
+def test_looking_for_a_fight_grants_token_and_moves():
+    g = {
+        'pendingCcEffect': {'cardName': 'Looking for a Fight', 'playerNum': 1},
+        'figurePositions': {1: {'Han-0-0': 'a1'}, 2: {}},
+    }
+    r = resolve_pending_cc_effect(g, {
+        'figure_key': 'Han-0-0', 'move_destination': 'A2',
+    })
+    assert r['applied'] is True
+    assert g['figurePowerTokens']['Han-0-0'] == ['Damage']
+    assert g['figurePositions'][1]['Han-0-0'] == 'a2'
+
+
+def test_draw_sets_free_attack_bonus():
+    g = {'pendingCcEffect': {'cardName': 'Draw!', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0'})
+    assert g['freeAttackBonusPending']['hl1dc0'] is True
+
+
+def test_hit_and_run_queues_post_attack_mp():
+    g = {'pendingCcEffect': {'cardName': 'Hit and Run', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0'})
+    assert g['postAttackMpBonus']['hl1dc0'] == 3
+
+
+def test_expose_weakness_stamps_pierce_target():
+    g = {'pendingCcEffect': {'cardName': 'Expose Weakness', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'target_figure_key': 'Vader-0-0'})
+    assert g['exposeWeaknessTargets']['Vader-0-0'] == {'pierce': 2}
+
+
+def test_veteran_instincts_grants_both_tokens():
+    g = {'pendingCcEffect': {'cardName': 'Veteran Instincts', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {
+        'figure_key': 'Han-0-0',
+        'first_token': 'Damage', 'second_token': 'Evade',
+    })
+    assert r['applied'] is True
+    assert sorted(g['figurePowerTokens']['Han-0-0']) == ['Damage', 'Evade']
+
+
+def test_toxic_dart_strain_and_weaken():
+    g = {
+        'pendingCcEffect': {'cardName': 'Toxic Dart', 'playerNum': 1},
+        'p2DcMessageIds': ['hl2dc0'],
+        'p2DcList': [{'dcName': 'Vader'}],
+        'dcHealthState': {'hl2dc0': [[8, 8]]},
+    }
+    resolve_pending_cc_effect(g, {
+        'target_figure_key': 'Vader-0-0', 'target_player_num': 2,
+    })
+    assert g['dcHealthState']['hl2dc0'][0][0] == 7
+    assert 'Weaken' in g['figureConditions']['Vader-0-0']
+
+
+def test_take_position_marks_push_immune():
+    g = {'pendingCcEffect': {'cardName': 'Take Position', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'figure_key': 'Han-0-0'})
+    assert g['takePositionActive']['Han-0-0'] == {
+        'bonusBlock': 1, 'pushImmune': True,
+    }
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -738,6 +831,16 @@ def main():
         ('roar_no_op_below_threshold', test_roar_no_op_below_threshold),
         ('reposition_moves_friendly', test_reposition_moves_friendly),
         ('regroup_removes_harmful_only', test_regroup_removes_only_harmful_conditions),
+        ('bladestorm_surge_and_trigger', test_bladestorm_surge_and_post_combat_trigger),
+        ('spinning_kick_cleave', test_spinning_kick_adds_cleave),
+        ('heightened_reflexes_die_to_zero', test_heightened_reflexes_records_die_to_zero),
+        ('looking_for_a_fight_token_and_move', test_looking_for_a_fight_grants_token_and_moves),
+        ('draw_free_attack', test_draw_sets_free_attack_bonus),
+        ('hit_and_run_post_attack_mp', test_hit_and_run_queues_post_attack_mp),
+        ('expose_weakness_pierce_target', test_expose_weakness_stamps_pierce_target),
+        ('veteran_instincts_both_tokens', test_veteran_instincts_grants_both_tokens),
+        ('toxic_dart_strain_weaken', test_toxic_dart_strain_and_weaken),
+        ('take_position_push_immune', test_take_position_marks_push_immune),
     ]
     failures = []
     for name, fn in cases:

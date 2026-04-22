@@ -1051,6 +1051,200 @@ def _cc_regroup(game, pending, ctx):
     return {'applied': True, 'removed': removed}
 
 
+def _cc_bladestorm(game, pending, ctx):
+    """Bladestorm: +1 Surge to attack results; each adjacent hostile after
+    attack suffers 1 Damage.
+
+    The Damage phase is post-combat; here we just set the surge + queue
+    a post-combat trigger.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if isinstance(combat, dict):
+        c = dict(combat)
+        c['bonusSurges'] = int(c.get('bonusSurges') or 0) + 1
+        triggers = list(c.get('postCombatTriggers') or [])
+        triggers.append({'effect': 'bladestorm_adjacent_damage', 'damage': 1})
+        c['postCombatTriggers'] = triggers
+        data['pendingCombat'] = c
+        return {'applied': True, 'bonusSurges': 1, 'postCombatTrigger': True}
+    return {'applied': False, 'reason': 'no_pending_combat'}
+
+
+def _cc_spinning_kick(game, pending, ctx):
+    """Spinning Kick: attack gains Cleave 1 and Cleave 2 keywords."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusCleave'] = int(c.get('bonusCleave') or 0) + 3  # 1 + 2
+    data['pendingCombat'] = c
+    return {'applied': True, 'cleave': 3}
+
+
+def _cc_heightened_reflexes(game, pending, ctx):
+    """Heightened Reflexes: remove results of 1 defense die.
+
+    Required: ctx.die_index (int) — position in defenseRoll to zero out.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    die_index = (ctx or {}).get('die_index')
+    if not isinstance(die_index, int):
+        raise ValueError('heightened_reflexes: requires int ctx.die_index')
+    c = dict(combat)
+    remove_list = list(c.get('defenderDiceToZero') or [])
+    if die_index not in remove_list:
+        remove_list.append(die_index)
+    c['defenderDiceToZero'] = remove_list
+    data['pendingCombat'] = c
+    return {'applied': True, 'dieIndex': die_index}
+
+
+def _cc_looking_for_a_fight(game, pending, ctx):
+    """Looking for a Fight: gain 1 Hit Token. Then move up to 1 space or push
+    an adjacent SMALL figure 1 space.
+
+    Required: ctx.figure_key. Optional: ctx.move_destination OR
+    ctx.push_target_figure_key + ctx.push_destination.
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('looking_for_a_fight: requires ctx.figure_key')
+    grant_power_tokens(data, figure_key, 'Damage', 1)
+    # Move or push branches
+    move_dest = (ctx or {}).get('move_destination')
+    push_target = (ctx or {}).get('push_target_figure_key')
+    push_dest = (ctx or {}).get('push_destination')
+    positions_all = data.get('figurePositions') or {}
+    if move_dest:
+        for pn in (1, 2):
+            pos_map = positions_all.get(pn)
+            if isinstance(pos_map, dict) and figure_key in pos_map:
+                pm = dict(pos_map)
+                pm[figure_key] = str(move_dest).lower()
+                positions_all[pn] = pm
+                break
+    elif push_target and push_dest:
+        for pn in (1, 2):
+            pos_map = positions_all.get(pn)
+            if isinstance(pos_map, dict) and push_target in pos_map:
+                pm = dict(pos_map)
+                pm[push_target] = str(push_dest).lower()
+                positions_all[pn] = pm
+                break
+    data['figurePositions'] = positions_all
+    return {
+        'applied': True,
+        'figureKey': figure_key,
+        'moveDest': str(move_dest).lower() if move_dest else None,
+        'pushTarget': push_target,
+    }
+
+
+def _cc_draw_emote(game, pending, ctx):
+    """Draw!: perform an attack without using an action.
+
+    Sets game.freeAttackBonusPending[msgId]=True.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('draw: requires ctx.msg_id')
+    pending_map = dict(data.get('freeAttackBonusPending') or {})
+    pending_map[msg_id] = True
+    data['freeAttackBonusPending'] = pending_map
+    return {'applied': True, 'msgId': msg_id}
+
+
+def _cc_hit_and_run(game, pending, ctx):
+    """Hit and Run: perform attack, then gain 3 MP.
+
+    Queues the MP bonus to apply after the attack resolves via
+    game.postAttackMpBonus[msgId] = 3.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('hit_and_run: requires ctx.msg_id')
+    bonus = dict(data.get('postAttackMpBonus') or {})
+    bonus[msg_id] = int(bonus.get(msg_id) or 0) + 3
+    data['postAttackMpBonus'] = bonus
+    return {'applied': True, 'msgId': msg_id, 'mpQueued': 3}
+
+
+def _cc_expose_weakness(game, pending, ctx):
+    """Expose Weakness: the next attack targeting an adjacent hostile gains Pierce 2.
+
+    Sets game.exposeWeaknessTargets[target_figure_key] = {pierce: 2}.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    if not target_fk:
+        raise ValueError('expose_weakness: requires ctx.target_figure_key')
+    weakness = dict(data.get('exposeWeaknessTargets') or {})
+    weakness[target_fk] = {'pierce': 2}
+    data['exposeWeaknessTargets'] = weakness
+    return {'applied': True, 'targetFigureKey': target_fk, 'pierce': 2}
+
+
+def _cc_veteran_instincts(game, pending, ctx):
+    """Veteran Instincts: gain 1 Hit OR Surge Token, then 1 Block OR Evade Token.
+
+    Required: ctx.figure_key + ctx.first_token + ctx.second_token.
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    first = (ctx or {}).get('first_token')
+    second = (ctx or {}).get('second_token')
+    if not figure_key:
+        raise ValueError('veteran_instincts: requires ctx.figure_key')
+    if first not in ('Damage', 'Surge'):
+        raise ValueError("first_token must be 'Damage' or 'Surge'")
+    if second not in ('Block', 'Evade'):
+        raise ValueError("second_token must be 'Block' or 'Evade'")
+    grant_power_tokens(data, figure_key, first, 1)
+    grant_power_tokens(data, figure_key, second, 1)
+    return {
+        'applied': True,
+        'figureKey': figure_key,
+        'firstToken': first,
+        'secondToken': second,
+    }
+
+
+def _cc_toxic_dart(game, pending, ctx):
+    """Toxic Dart: hostile within 3 and in LOS suffers 1 Strain and becomes Weakened."""
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    if not target_fk or target_pn not in (1, 2):
+        raise ValueError('toxic_dart: requires target_figure_key + target_player_num')
+    _apply_hp_damage_via_health_state(game, target_fk, target_pn, 1)
+    _apply_condition_to_target(game, target_fk, 'Weaken')
+    return {'applied': True, 'targetFigureKey': target_fk}
+
+
+def _cc_take_position(game, pending, ctx):
+    """Take Position: this round, +1 Block while defending + cannot be pushed."""
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('take_position: requires ctx.figure_key')
+    position_map = dict(data.get('takePositionActive') or {})
+    position_map[figure_key] = {'bonusBlock': 1, 'pushImmune': True}
+    data['takePositionActive'] = position_map
+    return {'applied': True, 'figureKey': figure_key}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -1146,6 +1340,16 @@ register('Ready Weapons', _cc_ready_weapons)
 register('Roar', _cc_roar)
 register('Reposition', _cc_reposition)
 register('Regroup', _cc_regroup)
+register('Bladestorm', _cc_bladestorm)
+register('Spinning Kick', _cc_spinning_kick)
+register('Heightened Reflexes', _cc_heightened_reflexes)
+register('Looking for a Fight', _cc_looking_for_a_fight)
+register('Draw!', _cc_draw_emote)
+register('Hit and Run', _cc_hit_and_run)
+register('Expose Weakness', _cc_expose_weakness)
+register('Veteran Instincts', _cc_veteran_instincts)
+register('Toxic Dart', _cc_toxic_dart)
+register('Take Position', _cc_take_position)
 
 
 def registered_cc_effects() -> list:
