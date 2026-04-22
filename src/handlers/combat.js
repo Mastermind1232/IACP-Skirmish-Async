@@ -192,6 +192,9 @@ import {
   hasSlowOnTheDrawAbility,
 } from '../game/slow-on-the-draw-helpers.js';
 import {
+  isIllicitArmsEligibleFigure,
+} from '../game/illicit-arms-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -2492,9 +2495,7 @@ export async function handleAttackTarget(interaction, ctx) {
       if (!pos) continue;
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-      if (!(fkEff?.specialAbilityIds || []).includes('illicit_arms_bib')) continue;
-      // Check army affiliation is Scum
-      if (String(fkEff?.affiliation || '').toLowerCase() !== 'scum') continue;
+      if (!isIllicitArmsEligibleFigure(fkEff)) continue;
       // Bib is alive — check if owner has CCs in hand
       const bibOwnerHand = getCcHand(game, attackerPlayerNum) || [];
       if (bibOwnerHand.length === 0) {
