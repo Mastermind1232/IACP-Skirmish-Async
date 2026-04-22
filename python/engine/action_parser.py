@@ -155,6 +155,225 @@ def _parse_dc_activate(cid: str, uid: str, game: Mapping[str, Any], opts: Mappin
     )
 
 
+# -- Parsers for the bridge-fallback prefixes ------------------------------
+
+def _tail(cid: str, prefix: str) -> str:
+    return cid[len(prefix):]
+
+
+def _parse_cc_confirm_play(cid, uid, game, opts):
+    # cc_confirm_play_{gameId}
+    return Action(type=ActionType.CC_CONFIRM_PLAY, player=_user_to_player_num(game, uid))
+
+
+def _parse_cc_cancel_play(cid, uid, game, opts):
+    return Action(type=ActionType.CC_CANCEL_PLAY, player=_user_to_player_num(game, uid))
+
+
+def _parse_celebration_play(cid, uid, game, opts):
+    # celebration_play_{gameId}
+    return Action(type=ActionType.CELEBRATION_PLAY, player=_user_to_player_num(game, uid))
+
+
+def _parse_celebration_pass(cid, uid, game, opts):
+    return Action(type=ActionType.CELEBRATION_PASS, player=_user_to_player_num(game, uid))
+
+
+def _parse_cover_fire_block(cid, uid, game, opts):
+    # cover_fire_block_{gameId}_{playerNum}_{figureKey}
+    rest = _tail(cid, 'cover_fire_block_')
+    parts = rest.split('_', 2)
+    if len(parts) < 3:
+        return None
+    try:
+        player_num = int(parts[1])
+    except ValueError:
+        player_num = _user_to_player_num(game, uid)
+    figure_key = parts[2]
+    return Action(
+        type=ActionType.COVER_FIRE_BLOCK, player=player_num,
+        params={'figure_key': figure_key},
+    )
+
+
+def _parse_cover_fire_skip(cid, uid, game, opts):
+    return Action(type=ActionType.COVER_FIRE_SKIP, player=_user_to_player_num(game, uid))
+
+
+def _parse_comm_disruption_play(cid, uid, game, opts):
+    return Action(type=ActionType.COMM_DISRUPTION_PLAY, player=_user_to_player_num(game, uid))
+
+
+def _parse_comm_disruption_skip(cid, uid, game, opts):
+    return Action(type=ActionType.COMM_DISRUPTION_SKIP, player=_user_to_player_num(game, uid))
+
+
+def _parse_rush_push_skip(cid, uid, game, opts):
+    # rush_push_skip_{gameId}_{msgId}
+    rest = _tail(cid, 'rush_push_skip_')
+    parts = rest.split('_', 1)
+    msg_id = parts[1] if len(parts) > 1 else ''
+    return Action(
+        type=ActionType.RUSH_PUSH_SKIP, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id},
+    )
+
+
+def _parse_rush_push_fig(cid, uid, game, opts):
+    # rush_push_fig_{gameId}_{msgId}_{figIndex}
+    rest = _tail(cid, 'rush_push_fig_')
+    parts = rest.rsplit('_', 1)
+    if len(parts) != 2:
+        return None
+    head, idx = parts
+    head_parts = head.split('_', 1)
+    msg_id = head_parts[1] if len(head_parts) > 1 else ''
+    try:
+        fig_idx = int(idx)
+    except ValueError:
+        return None
+    return Action(
+        type=ActionType.RUSH_PUSH_FIG, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id, 'fig_idx': fig_idx},
+    )
+
+
+def _parse_shoulder_rush_skip(cid, uid, game, opts):
+    rest = _tail(cid, 'shoulder_rush_skip_')
+    parts = rest.split('_', 1)
+    msg_id = parts[1] if len(parts) > 1 else ''
+    return Action(
+        type=ActionType.SHOULDER_RUSH_SKIP, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id},
+    )
+
+
+def _parse_shoulder_rush_fig(cid, uid, game, opts):
+    rest = _tail(cid, 'shoulder_rush_fig_')
+    parts = rest.rsplit('_', 1)
+    if len(parts) != 2:
+        return None
+    head, idx = parts
+    head_parts = head.split('_', 1)
+    msg_id = head_parts[1] if len(head_parts) > 1 else ''
+    try:
+        fig_idx = int(idx)
+    except ValueError:
+        return None
+    return Action(
+        type=ActionType.SHOULDER_RUSH_FIG, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id, 'fig_idx': fig_idx},
+    )
+
+
+def _parse_false_orders_skip(cid, uid, game, opts):
+    rest = _tail(cid, 'false_orders_skip_')
+    parts = rest.split('_', 1)
+    msg_id = parts[1] if len(parts) > 1 else ''
+    return Action(
+        type=ActionType.FALSE_ORDERS_SKIP, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id},
+    )
+
+
+def _parse_false_orders_action(cid, uid, game, opts):
+    # false_orders_action_{gameId}_{msgId}_{kind: move|attack|skip}
+    rest = _tail(cid, 'false_orders_action_')
+    parts = rest.rsplit('_', 1)
+    if len(parts) != 2:
+        return None
+    head, kind = parts
+    head_parts = head.split('_', 1)
+    msg_id = head_parts[1] if len(head_parts) > 1 else ''
+    player = _user_to_player_num(game, uid)
+    if kind == 'move':
+        return Action(type=ActionType.FALSE_ORDERS_MOVE, player=player,
+                       params={'msg_id': msg_id})
+    if kind == 'attack':
+        return Action(type=ActionType.FALSE_ORDERS_ATTACK, player=player,
+                       params={'msg_id': msg_id})
+    if kind == 'skip':
+        return Action(type=ActionType.FALSE_ORDERS_SKIP, player=player,
+                       params={'msg_id': msg_id})
+    return None
+
+
+def _parse_missile_salvo_done(cid, uid, game, opts):
+    rest = _tail(cid, 'missile_salvo_done_')
+    parts = rest.split('_', 1)
+    msg_id = parts[1] if len(parts) > 1 else ''
+    return Action(
+        type=ActionType.MISSILE_SALVO_DONE, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id},
+    )
+
+
+def _parse_missile_salvo_die(cid, uid, game, opts):
+    # missile_salvo_die_{color}_{gameId}_{msgId}
+    rest = _tail(cid, 'missile_salvo_die_')
+    parts = rest.split('_', 2)
+    if len(parts) < 3:
+        return None
+    color, _game_id, msg_id = parts[0], parts[1], parts[2]
+    return Action(
+        type=ActionType.MISSILE_SALVO_DIE, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id, 'color': color},
+    )
+
+
+def _parse_arsenal_pick(cid, uid, game, opts):
+    # arsenal_pick_{gameId}_{msgId}_{figureIndex}
+    rest = _tail(cid, 'arsenal_pick_')
+    parts = rest.rsplit('_', 1)
+    if len(parts) != 2:
+        return None
+    head, idx = parts
+    head_parts = head.split('_', 1)
+    msg_id = head_parts[1] if len(head_parts) > 1 else ''
+    try:
+        fig_idx = int(idx)
+    except ValueError:
+        return None
+    return Action(
+        type=ActionType.ARSENAL_PICK, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id, 'figure_idx': fig_idx},
+    )
+
+
+def _parse_pounce_space(cid, uid, game, opts):
+    # pounce_space_{gameId}_{msgId}_{figureIndex}_{space}
+    rest = _tail(cid, 'pounce_space_')
+    parts = rest.split('_', 3)
+    if len(parts) != 4:
+        return None
+    _game_id, msg_id, fig_idx_str, space = parts
+    try:
+        fig_idx = int(fig_idx_str)
+    except ValueError:
+        return None
+    return Action(
+        type=ActionType.POUNCE_SPACE, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id, 'figure_idx': fig_idx, 'space': space},
+    )
+
+
+def _parse_deployment_fig(cid, uid, game, opts):
+    # deployment_fig_{gameId}_{playerNum}_{dcIndex}
+    rest = _tail(cid, 'deployment_fig_')
+    parts = rest.rsplit('_', 2)
+    if len(parts) != 3:
+        return None
+    try:
+        player_num = int(parts[1])
+        dc_idx = int(parts[2])
+    except ValueError:
+        return None
+    return Action(
+        type=ActionType.DEPLOY_FIGURE, player=player_num,
+        params={'dc_index': dc_idx},
+    )
+
+
 # Dispatch table: exact prefix → parser function.
 _PARSERS = (
     ('auto_deploy_', _parse_auto_deploy),
@@ -163,6 +382,26 @@ _PARSERS = (
     ('end_end_of_round_', _parse_end_end_of_round),
     ('dc_end_activation_', _parse_dc_end_activation),
     ('dc_activate_', _parse_dc_activate),
+    # Bridge-fallback prefixes (owned by stepper_bridge)
+    ('cc_confirm_play_', _parse_cc_confirm_play),
+    ('cc_cancel_play_', _parse_cc_cancel_play),
+    ('celebration_play_', _parse_celebration_play),
+    ('celebration_pass_', _parse_celebration_pass),
+    ('cover_fire_block_', _parse_cover_fire_block),
+    ('cover_fire_skip_', _parse_cover_fire_skip),
+    ('comm_disruption_play_', _parse_comm_disruption_play),
+    ('comm_disruption_skip_', _parse_comm_disruption_skip),
+    ('rush_push_skip_', _parse_rush_push_skip),
+    ('rush_push_fig_', _parse_rush_push_fig),
+    ('shoulder_rush_skip_', _parse_shoulder_rush_skip),
+    ('shoulder_rush_fig_', _parse_shoulder_rush_fig),
+    ('false_orders_skip_', _parse_false_orders_skip),
+    ('false_orders_action_', _parse_false_orders_action),
+    ('missile_salvo_done_', _parse_missile_salvo_done),
+    ('missile_salvo_die_', _parse_missile_salvo_die),
+    ('arsenal_pick_', _parse_arsenal_pick),
+    ('pounce_space_', _parse_pounce_space),
+    ('deployment_fig_', _parse_deployment_fig),
 )
 
 
