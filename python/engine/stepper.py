@@ -21,6 +21,9 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Mapping, Optional
 
 from python.engine.actions import ActionType
+from python.engine.data.dc_effects_loader import get_dc_effect
+from python.engine.data.map_spaces_loader import get_map_spaces
+from python.engine.mechanics.movement_cache import get_path_cost
 from python.engine.state import GameState
 
 
@@ -129,5 +132,180 @@ def _handle_end_activation_phase(game: GameState, action: Action) -> GameState:
     return game
 
 
+# ---------------------------------------------------------------------------
+# Activation + movement
+# ---------------------------------------------------------------------------
+
+def _dc_name_from_figure_key(figure_key: str) -> str:
+    """'Rebel Trooper (Regular)-0-0' -> 'Rebel Trooper (Regular)'."""
+    parts = figure_key.rsplit('-', 2)
+    if len(parts) == 3:
+        return parts[0]
+    return figure_key
+
+
+def _occupied_cells(game: GameState, exclude_key: Optional[str] = None) -> list:
+    """Flatten figurePositions to a list of cells, optionally dropping one."""
+    out = []
+    fp = game.get('figurePositions') or {}
+    if not isinstance(fp, Mapping):
+        return out
+    for player_key, positions in fp.items():
+        if not isinstance(positions, Mapping):
+            continue
+        for fkey, coord in positions.items():
+            if fkey == exclude_key:
+                continue
+            if isinstance(coord, str) and coord:
+                out.append(coord)
+    return out
+
+
+def _find_figure(game: GameState, figure_key: str):
+    """Return (player, coord) for figure_key, or (None, None)."""
+    fp = game.get('figurePositions') or {}
+    if not isinstance(fp, Mapping):
+        return None, None
+    for player_key, positions in fp.items():
+        if isinstance(positions, Mapping) and figure_key in positions:
+            try:
+                return int(player_key), positions[figure_key]
+            except (TypeError, ValueError):
+                return None, None
+    return None, None
+
+
+def _handle_activate_dc(game: GameState, action: Action) -> GameState:
+    """Start an activation for a specific figure.
+
+    Required params: figure_key (str).
+    Effects:
+      - Mark figure_key as the sole entry in activeFigureKeys.
+      - Record starting position in activationStartPositions[player].
+      - Set movementPoints = DC speed stat.
+      - Decrement activationsRemaining[player] by 1.
+      - Clear figureDamageThisActivation[player][figure_key] if present.
+    """
+    figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+    if not figure_key:
+        raise ValueError('activate_dc requires figure_key param')
+
+    player, coord = _find_figure(game, figure_key)
+    if player is None:
+        raise ValueError(f'activate_dc: figure {figure_key!r} not on board')
+    if action.player and action.player != player:
+        raise ValueError(
+            f'activate_dc: action.player={action.player} does not own {figure_key!r} '
+            f'(owned by p{player})'
+        )
+
+    rem = dict(game.get('activationsRemaining') or {})
+    # Allow both int and str keys.
+    cur = rem.get(player, rem.get(str(player), 0))
+    if not isinstance(cur, (int, float)) or cur <= 0:
+        raise ValueError(f'activate_dc: player {player} has no activations remaining')
+    rem[player] = int(cur) - 1
+    game['activationsRemaining'] = rem
+
+    game['activeFigureKeys'] = [figure_key]
+    game['activePlayer'] = player
+
+    starts = dict(game.get('activationStartPositions') or {})
+    pstarts = dict(starts.get(player, starts.get(str(player), {})))
+    pstarts[figure_key] = coord
+    starts[player] = pstarts
+    game['activationStartPositions'] = starts
+
+    dc_name = _dc_name_from_figure_key(figure_key)
+    effect = get_dc_effect(dc_name) or {}
+    speed = effect.get('speed')
+    if not isinstance(speed, (int, float)):
+        speed = 4
+    game['movementPoints'] = int(speed)
+
+    # Clear per-activation damage counter for this figure.
+    dmg = dict(game.get('figureDamageThisActivation') or {})
+    pdmg = dict(dmg.get(player, dmg.get(str(player), {})))
+    pdmg.pop(figure_key, None)
+    dmg[player] = pdmg
+    game['figureDamageThisActivation'] = dmg
+
+    return game
+
+
+def _handle_dc_end_activation(game: GameState, action: Action) -> GameState:
+    """End the currently-active figure's activation.
+
+    Effects:
+      - Clear activeFigureKeys and movementPoints.
+      - Swap activePlayer (alternation).
+    """
+    game['activeFigureKeys'] = []
+    game['movementPoints'] = 0
+    active = int(game.get('activePlayer') or 1)
+    game['activePlayer'] = 2 if active == 1 else 1
+    return game
+
+
+def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
+    """Move the currently-active figure to `coord`.
+
+    Required params: coord (str), optionally figure_key (defaults to the
+    first active figure).
+    Effects:
+      - Charge MP equal to path cost; require MP >= cost.
+      - Update figurePositions and figuresMovedThisRound.
+    """
+    coord = action.params.get('coord')
+    if not isinstance(coord, str) or not coord:
+        raise ValueError('move_pick_space requires coord param')
+
+    active_keys = game.get('activeFigureKeys') or []
+    figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+    if not figure_key:
+        if not active_keys:
+            raise ValueError('move_pick_space: no active figure to move')
+        figure_key = active_keys[0]
+
+    player, start_coord = _find_figure(game, figure_key)
+    if player is None:
+        raise ValueError(f'move_pick_space: figure {figure_key!r} not on board')
+    if start_coord == coord:
+        return game  # no-op
+
+    mp = int(game.get('movementPoints') or 0)
+    map_id = game.get('mapId')
+    map_spaces = get_map_spaces(map_id)
+    if not map_spaces:
+        raise ValueError(f'move_pick_space: no map spaces for mapId={map_id!r}')
+
+    occupied = _occupied_cells(game, exclude_key=figure_key)
+    cost = get_path_cost(start_coord, coord, map_spaces, occupied)
+    if cost == float('inf'):
+        raise ValueError(f'move_pick_space: {coord} unreachable from {start_coord}')
+    if cost > mp:
+        raise ValueError(
+            f'move_pick_space: insufficient MP (need {cost}, have {mp})'
+        )
+
+    game['movementPoints'] = mp - int(cost)
+
+    fp = dict(game.get('figurePositions') or {})
+    ppos = dict(fp.get(player, fp.get(str(player), {})))
+    ppos[figure_key] = coord
+    fp[player] = ppos
+    game['figurePositions'] = fp
+
+    moved = list(game.get('figuresMovedThisRound') or [])
+    if figure_key not in moved:
+        moved.append(figure_key)
+    game['figuresMovedThisRound'] = moved
+
+    return game
+
+
 register(ActionType.PASS_ACTIVATION_TURN, _handle_pass_activation_turn)
 register(ActionType.END_ACTIVATION_PHASE, _handle_end_activation_phase)
+register(ActionType.ACTIVATE_DC, _handle_activate_dc)
+register(ActionType.DC_END_ACTIVATION, _handle_dc_end_activation)
+register(ActionType.MOVE_PICK_SPACE, _handle_move_pick_space)
