@@ -65,6 +65,7 @@ class DistributedV2Config:
     max_inference_batch: int = 128
     inference_poll_timeout_s: float = 0.01
     heartbeat_every_s: float = 30.0
+    transport: str = 'shared'  # 'shared' (zero-copy) or 'queue' (pickled)
 
 
 # ---------------------------------------------------------------------------
@@ -75,9 +76,10 @@ def _v2_worker_main(
     rank: int,
     command_q: mp.Queue,
     examples_q: mp.Queue,
-    request_q: mp.Queue,
-    reply_q: mp.Queue,
+    request_q,              # queue OR None (shared transport)
+    reply_q,                # queue OR None (shared transport)
     stop_event: mp.Event,
+    shared_pool=None,       # SharedPool or None
 ) -> None:
     """Worker loop: CPU-only, uses RemoteInferenceBackend for evals.
 
@@ -99,8 +101,14 @@ def _v2_worker_main(
         from python.mcts.self_play import TrainingExample, _visit_counts_to_policy
         from python.encoding.encode import encode_state
 
-        backend = RemoteInferenceBackend(request_q, reply_q, rank)
-        print(f'[worker {rank}] ready (cpu, remote backend)', flush=True)
+        if shared_pool is not None:
+            from python.mcts.shared_inference import SharedMemoryInferenceBackend
+            backend = SharedMemoryInferenceBackend(shared_pool, rank)
+            transport_label = 'shared'
+        else:
+            backend = RemoteInferenceBackend(request_q, reply_q, rank)
+            transport_label = 'queue'
+        print(f'[worker {rank}] ready (cpu, {transport_label} backend)', flush=True)
 
         while not stop_event.is_set():
             try:
@@ -277,8 +285,20 @@ def run_distributed_v2(config: DistributedV2Config, resume: bool = False) -> Non
         f'sims={config.mcts_simulations} max_batch={config.max_inference_batch}'
     )
 
-    request_q: mp.Queue = mp.Queue()
-    reply_qs: List[mp.Queue] = [mp.Queue() for _ in range(config.n_workers)]
+    use_shared = (config.transport == 'shared')
+    if use_shared:
+        from python.mcts.shared_inference import SharedPool
+        shared_pool = SharedPool.build(
+            n_workers=config.n_workers,
+            max_batch=config.games_per_worker,
+        )
+        request_q = None
+        reply_qs = [None] * config.n_workers
+    else:
+        shared_pool = None
+        request_q = mp.Queue()
+        reply_qs = [mp.Queue() for _ in range(config.n_workers)]
+
     command_qs: List[mp.Queue] = [mp.Queue() for _ in range(config.n_workers)]
     examples_q: mp.Queue = mp.Queue()
     stop_event = mp.Event()
@@ -302,7 +322,8 @@ def run_distributed_v2(config: DistributedV2Config, resume: bool = False) -> Non
         p = mp.Process(
             target=_v2_worker_main,
             args=(rank, command_qs[rank], examples_q,
-                  request_q, reply_qs[rank], stop_event),
+                  request_q, reply_qs[rank] if reply_qs[rank] else None,
+                  stop_event, shared_pool),
             daemon=False,
         )
         p.start()
@@ -351,11 +372,18 @@ def run_distributed_v2(config: DistributedV2Config, resume: bool = False) -> Non
                     break
 
                 # Serve one batch of inference.
-                served = serve_inference_once(
-                    net, device, request_q, reply_qs,
-                    max_batch=config.max_inference_batch,
-                    poll_timeout_s=config.inference_poll_timeout_s,
-                )
+                if use_shared:
+                    from python.mcts.shared_inference import serve_shared_once
+                    served = serve_shared_once(
+                        net, device, shared_pool,
+                        max_wait_s=config.inference_poll_timeout_s,
+                    )
+                else:
+                    served = serve_inference_once(
+                        net, device, request_q, reply_qs,
+                        max_batch=config.max_inference_batch,
+                        poll_timeout_s=config.inference_poll_timeout_s,
+                    )
                 total_inference_rows += served
 
                 # Health check + heartbeat.

@@ -67,6 +67,9 @@ def _parse_args() -> argparse.Namespace:
                          'v2 = central inference server (true batching, default)')
     ap.add_argument('--max-inference-batch', type=int, default=128,
                     help='v2 only: max rows per GPU forward pass on the inference server')
+    ap.add_argument('--transport', choices=('shared', 'queue'), default='shared',
+                    help='v2 only: shared-memory tensors (zero-copy, default) '
+                         'or pickle-through-queue (slower)')
     return ap.parse_args()
 
 
@@ -109,6 +112,7 @@ def _run_distributed(args):
             n_res_blocks=args.n_res_blocks,
             checkpoint_every=args.checkpoint_every,
             max_inference_batch=args.max_inference_batch,
+            transport=args.transport,
         )
         run_distributed_v2(config, resume=args.resume)
         return
