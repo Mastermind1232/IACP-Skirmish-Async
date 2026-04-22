@@ -2424,6 +2424,182 @@ def _cc_balancing_force(game, pending, ctx):
     return {'applied': True, 'hits': applied}
 
 
+def _cc_payday(game, pending, ctx):
+    """Payday: gain 4 VP. Discard 2 random CCs from opponent's hand."""
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    award_objective_vp(game, player_num, 4)
+    # Opponent discards 2 from hand (caller picks which; default: first 2)
+    opp = 2 if player_num == 1 else 1
+    hand_key = 'player1CcHand' if opp == 1 else 'player2CcHand'
+    disc_key = 'player1CcDiscard' if opp == 1 else 'player2CcDiscard'
+    hand = list(data.get(hand_key) or [])
+    discard = list(data.get(disc_key) or [])
+    # Discard 2 (or fewer if hand smaller)
+    discarded = hand[:2]
+    discard.extend(discarded)
+    data[hand_key] = hand[2:]
+    data[disc_key] = discard
+    return {'applied': True, 'vpGained': 4, 'oppDiscarded': discarded}
+
+
+def _cc_provoke(game, pending, ctx):
+    """Provoke: friendly TROOPER/GUARDIAN recovers 2 Damage.
+
+    Required: ctx.figure_key + ctx.msg_id.
+    """
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import parse_figure_key
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    player_num = pending.get('playerNum')
+    if not figure_key or not msg_id or player_num not in (1, 2):
+        raise ValueError('provoke: requires figure_key + msg_id + playerNum')
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    dc_health_state = data.get('dcHealthState')
+    if isinstance(dc_health_state, dict):
+        heal_hp(dc_health_state, data, msg_id, fig_idx, 2, player_num)
+    return {'applied': True, 'figureKey': figure_key, 'healed': 2}
+
+
+def _cc_on_a_mission(game, pending, ctx):
+    """On a Mission: move up to 5 spaces + push SMALL entered figures.
+
+    Required: ctx.msg_id. Grants +5 MP via grant_movement_bank with
+    marker onAMissionActive[msg_id] = True for push logic.
+    """
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('on_a_mission: requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, 5)
+    flag = dict(data.get('onAMissionActive') or {})
+    flag[msg_id] = True
+    data['onAMissionActive'] = flag
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': 5}
+
+
+def _cc_last_stand(game, pending, ctx):
+    """Last Stand: prevent defeat — figure stays at 1 HP instead.
+
+    Required: ctx.figure_key + ctx.msg_id.
+    """
+    from python.engine.mechanics.dc_helpers import parse_figure_key
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    player_num = pending.get('playerNum')
+    if not figure_key or not msg_id or player_num not in (1, 2):
+        raise ValueError('last_stand: requires figure_key + msg_id + playerNum')
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    dc_health_state = data.get('dcHealthState')
+    if isinstance(dc_health_state, dict):
+        hs = dc_health_state.get(msg_id) or []
+        if fig_idx < len(hs):
+            entry = hs[fig_idx]
+            if isinstance(entry, list) and len(entry) >= 2:
+                entry[0] = max(1, entry[0])  # ensure ≥1 HP
+                dc_health_state[msg_id] = hs
+    return {'applied': True, 'figureKey': figure_key, 'survived': True}
+
+
+def _cc_retreat(game, pending, ctx):
+    """Retreat: +3 MP and remove all HARMFUL conditions.
+
+    Required: ctx.figure_key + ctx.msg_id.
+    """
+    from python.engine.mechanics.conditions import filter_condition
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    if not figure_key or not msg_id:
+        raise ValueError('retreat: requires figure_key + msg_id')
+    grant_movement_bank(game, msg_id, 3)
+    for cond in ('Stun', 'Weaken', 'Bleed'):
+        filter_condition(game, figure_key, cond)
+    return {'applied': True, 'figureKey': figure_key, 'mpGranted': 3}
+
+
+def _cc_stasis(game, pending, ctx):
+    """Stasis: target hostile becomes Stunned."""
+    target_fk = (ctx or {}).get('target_figure_key')
+    if not target_fk:
+        raise ValueError('stasis: requires ctx.target_figure_key')
+    _apply_condition_to_target(game, target_fk, 'Stun')
+    return {'applied': True, 'targetFigureKey': target_fk}
+
+
+def _cc_targeted(game, pending, ctx):
+    """Targeted: gain +3 Accuracy this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusAccuracy'] = int(c.get('bonusAccuracy') or 0) + 3
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusAccuracy': 3}
+
+
+def _cc_tactical_officer(game, pending, ctx):
+    """Tactical Officer (specialAction): friendly interrupts to perform an action.
+
+    Required: ctx.target_msg_id.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    if not target_msg_id:
+        raise ValueError('tactical_officer: requires ctx.target_msg_id')
+    data['tacticalOfficerPending'] = {
+        'targetMsgId': target_msg_id,
+        'playerNum': pending.get('playerNum'),
+    }
+    return {'applied': True, 'targetMsgId': target_msg_id}
+
+
+def _cc_frenzy(game, pending, ctx):
+    """Frenzy (duringActivation): gain an extra attack this activation.
+
+    Sets game.frenzyBonusAttack[msg_id] = True.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('frenzy: requires ctx.msg_id')
+    flag = dict(data.get('frenzyBonusAttack') or {})
+    flag[msg_id] = True
+    data['frenzyBonusAttack'] = flag
+    return {'applied': True, 'msgId': msg_id}
+
+
+def _cc_grit(game, pending, ctx):
+    """Grit: recover 3 Damage + become Focused."""
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import parse_figure_key
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    player_num = pending.get('playerNum')
+    if not figure_key or not msg_id or player_num not in (1, 2):
+        raise ValueError('grit: requires figure_key + msg_id + playerNum')
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    dc_health_state = data.get('dcHealthState')
+    if isinstance(dc_health_state, dict):
+        heal_hp(dc_health_state, data, msg_id, fig_idx, 3, player_num)
+    _apply_condition_to_target(game, figure_key, 'Focus')
+    return {'applied': True, 'figureKey': figure_key, 'healed': 3}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -2591,6 +2767,16 @@ register('Against the Odds', _cc_against_the_odds)
 register('Ballistics Matrix', _cc_ballistics_matrix)
 register('Blood Feud', _cc_blood_feud)
 register('Balancing Force', _cc_balancing_force)
+register('Payday', _cc_payday)
+register('Provoke', _cc_provoke)
+register('On a Mission', _cc_on_a_mission)
+register('Last Stand', _cc_last_stand)
+register('Retreat', _cc_retreat)
+register('Stasis', _cc_stasis)
+register('Targeted', _cc_targeted)
+register('Tactical Officer', _cc_tactical_officer)
+register('Frenzy', _cc_frenzy)
+register('Grit', _cc_grit)
 
 
 def registered_cc_effects() -> list:
