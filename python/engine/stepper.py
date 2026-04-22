@@ -2343,3 +2343,259 @@ def _handle_missile_salvo_die(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.MISSILE_SALVO_DIE, _handle_missile_salvo_die)
+
+
+# ---------------------------------------------------------------------------
+# Combat state machine (thin — operates on pendingCombat dict)
+# ---------------------------------------------------------------------------
+
+def _require_pending_combat(game: GameState, label: str) -> Dict[str, Any]:
+    combat = game.data.get('pendingCombat')
+    if combat is None or not isinstance(combat, Mapping):
+        raise ValueError(f'{label}: no pendingCombat open')
+    return dict(combat)
+
+
+def _handle_combat_ready(game: GameState, action: Action) -> GameState:
+    """Mark a player as ready during the combat confirmation gate.
+
+    Paired with the JS 'I'm ready to resolve' buttons on both sides.
+    Required: action.player ∈ {1, 2}. When both p1Ready and p2Ready are
+    set, stamps combat.phase='ready'.
+    """
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        raise ValueError('combat_ready requires player ∈ {1, 2}')
+    combat = _require_pending_combat(game, 'combat_ready')
+    key = 'p1Ready' if player == 1 else 'p2Ready'
+    combat[key] = True
+    if combat.get('p1Ready') and combat.get('p2Ready'):
+        combat['phase'] = 'ready'
+    game.data['pendingCombat'] = combat
+    return game
+
+
+def _handle_combat_gate(game: GameState, action: Action) -> GameState:
+    """Combat mid-attack gate — advance pendingCombat.phase by gate name.
+
+    Required param: gate (str) — arbitrary phase label the caller wants
+    to stamp. Used for Assassinate / Close Quarters sub-phase dispatch.
+    """
+    gate = action.params.get('gate')
+    if not isinstance(gate, str) or not gate:
+        raise ValueError('combat_gate requires gate (str) param')
+    combat = _require_pending_combat(game, 'combat_gate')
+    combat['phase'] = gate
+    game.data['pendingCombat'] = combat
+    return game
+
+
+def _handle_combat_reroll(game: GameState, action: Action) -> GameState:
+    """Record that specific dice indices were re-rolled.
+
+    Does NOT perform the actual dice recomputation (atomic ATTACK_TARGET
+    does that for AI; Discord UI consumers plug in their own dice-roll
+    service). Instead it tracks which indices were rerolled so the
+    resolve step can reconcile.
+
+    Required params:
+        side (str) — 'attacker' or 'defender'.
+        indices (list[int]) — dice positions to mark as rerolled.
+    Optional:
+        new_values (list) — if provided, overwrites the dice values at
+        those positions (used by RNG-tested flows).
+    """
+    side = action.params.get('side')
+    indices = action.params.get('indices')
+    if side not in ('attacker', 'defender'):
+        raise ValueError("combat_reroll: side must be 'attacker' or 'defender'")
+    if not isinstance(indices, list) or not all(isinstance(i, int) for i in indices):
+        raise ValueError('combat_reroll: indices must be list[int]')
+    combat = _require_pending_combat(game, 'combat_reroll')
+    key = 'attackerRerolledIndices' if side == 'attacker' else 'defenderRerolledIndices'
+    existing = list(combat.get(key) or [])
+    for i in indices:
+        if i not in existing:
+            existing.append(i)
+    combat[key] = existing
+
+    new_values = action.params.get('new_values')
+    if new_values is not None:
+        dice_field = 'attackRoll' if side == 'attacker' else 'defenseRoll'
+        dice = list(combat.get(dice_field) or [])
+        for pos, val in zip(indices, new_values):
+            if 0 <= pos < len(dice):
+                dice[pos] = val
+        combat[dice_field] = dice
+    game.data['pendingCombat'] = combat
+    return game
+
+
+def _handle_combat_surge(game: GameState, action: Action) -> GameState:
+    """Spend one surge on an ability ID.
+
+    Required param: ability (str). Decrements pendingCombat.surgeRemaining
+    (clamped at 0) and appends the ability to pendingCombat.triggeredSurges.
+    """
+    ability = action.params.get('ability')
+    if not isinstance(ability, str) or not ability:
+        raise ValueError('combat_surge requires ability (str) param')
+    combat = _require_pending_combat(game, 'combat_surge')
+    surge_remaining = int(combat.get('surgeRemaining') or 0)
+    if surge_remaining <= 0:
+        raise ValueError('combat_surge: no surges remaining')
+    combat['surgeRemaining'] = surge_remaining - 1
+    triggered = list(combat.get('triggeredSurges') or [])
+    triggered.append(ability)
+    combat['triggeredSurges'] = triggered
+    if combat['surgeRemaining'] == 0:
+        combat['phase'] = 'surges_done'
+    game.data['pendingCombat'] = combat
+    return game
+
+
+def _handle_combat_skip_surges(game: GameState, action: Action) -> GameState:
+    """End the surge-spending phase — sets surgeRemaining=0 + phase='surges_done'."""
+    combat = _require_pending_combat(game, 'combat_skip_surges')
+    combat['surgeRemaining'] = 0
+    combat['phase'] = 'surges_done'
+    game.data['pendingCombat'] = combat
+    return game
+
+
+def _handle_combat_passive(game: GameState, action: Action) -> GameState:
+    """Record a passive effect that fired during combat resolution.
+
+    Required param: passive (str) — the passive id/name.
+    """
+    passive = action.params.get('passive')
+    if not isinstance(passive, str) or not passive:
+        raise ValueError('combat_passive requires passive (str) param')
+    combat = _require_pending_combat(game, 'combat_passive')
+    triggered = list(combat.get('triggeredPassives') or [])
+    if passive not in triggered:
+        triggered.append(passive)
+    combat['triggeredPassives'] = triggered
+    game.data['pendingCombat'] = combat
+    return game
+
+
+def _handle_combat_token(game: GameState, action: Action) -> GameState:
+    """Spend a power token from a figure during combat.
+
+    Required params:
+        figure_key (str), token_type (str), index (int) — position in the
+        figure's figurePowerTokens list.
+
+    Effects:
+        - Validates the token at index matches token_type.
+        - Removes it from figurePowerTokens[figure_key].
+        - Appends to pendingCombat.spentTokens for resolve-time reconciliation.
+    """
+    figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+    token_type = action.params.get('token_type') or action.params.get('tokenType')
+    token_index = action.params.get('index')
+    if token_index is None:
+        token_index = action.params.get('tokenIndex')
+    if not figure_key or not token_type or not isinstance(token_index, int):
+        raise ValueError(
+            'combat_token requires figure_key + token_type + int index params'
+        )
+    combat = _require_pending_combat(game, 'combat_token')
+    tokens_all = game.data.get('figurePowerTokens') or {}
+    tokens = list(tokens_all.get(figure_key) or [])
+    if token_index < 0 or token_index >= len(tokens):
+        raise ValueError(
+            f'combat_token: index {token_index} out of range '
+            f'({len(tokens)} tokens on {figure_key!r})'
+        )
+    if tokens[token_index] != token_type:
+        raise ValueError(
+            f"combat_token: token at index {token_index} is "
+            f"{tokens[token_index]!r}, expected {token_type!r}"
+        )
+    tokens.pop(token_index)
+    tokens_all[figure_key] = tokens
+    game.data['figurePowerTokens'] = tokens_all
+    spent = list(combat.get('spentTokens') or [])
+    spent.append({'figureKey': figure_key, 'tokenType': token_type})
+    combat['spentTokens'] = spent
+    game.data['pendingCombat'] = combat
+    return game
+
+
+def _handle_combat_resolve(game: GameState, action: Action) -> GameState:
+    """Resolve pendingCombat: applies damage, optional kill, clears pendingCombat.
+
+    Required params (most from the caller, reflecting the already-rolled
+    combat state):
+        damage (int) — final damage after all modifiers.
+        defeated (bool, default False) — whether the target was defeated.
+
+    Effects:
+        - Applies damage to the target figure via damage_helpers.reduce_hp
+          when dc_health_state is accessible on the game dict.
+        - When defeated=True: removes the target from figurePositions,
+          awards kill VP (kill cost from pendingCombat.targetStats.cost).
+        - Clears pendingCombat.
+    """
+    from python.engine.mechanics.damage_helpers import reduce_hp
+    from python.engine.mechanics.player_helpers import remove_figure_position
+    from python.engine.mechanics.vp_helpers import award_kill_vp, check_nefarious_gains
+
+    damage = action.params.get('damage')
+    defeated = bool(action.params.get('defeated'))
+    if not isinstance(damage, int) or damage < 0:
+        raise ValueError('combat_resolve requires non-negative int damage param')
+    combat = _require_pending_combat(game, 'combat_resolve')
+
+    target = combat.get('target') or {}
+    target_fk = target.get('figureKey') if isinstance(target, Mapping) else None
+    target_pn = combat.get('defenderPlayerNum')
+    attacker_pn = combat.get('attackerPlayerNum')
+
+    applied = False
+    if damage > 0 and target_fk and target_pn:
+        msg_id_key = 'defenderMsgId'
+        defender_msg_id = combat.get(msg_id_key) or target.get('msgId')
+        dc_health_state = game.data.get('dcHealthState')
+        if defender_msg_id and isinstance(dc_health_state, dict):
+            try:
+                fig_idx = int(target_fk.rsplit('-', 1)[-1])
+            except (ValueError, AttributeError):
+                fig_idx = 0
+            reduce_hp(dc_health_state, game.data, defender_msg_id, fig_idx,
+                      damage, target_pn)
+            applied = True
+
+    if defeated and target_fk and target_pn:
+        target_stats = combat.get('targetStats') or {}
+        kill_vp = int(target_stats.get('cost') or 0)
+        sub_cost = target_stats.get('subCost')
+        if sub_cost is not None:
+            kill_vp = max(kill_vp, int(sub_cost))
+        if kill_vp > 0 and attacker_pn:
+            award_kill_vp(game, attacker_pn, kill_vp)
+        remove_figure_position(game, target_pn, target_fk)
+        check_nefarious_gains(game, target_pn)
+
+    game.data['pendingCombat'] = None
+    game.data['lastCombatResult'] = {
+        'attackerPlayerNum': attacker_pn,
+        'defenderPlayerNum': target_pn,
+        'targetFigureKey': target_fk,
+        'damage': damage,
+        'defeated': defeated,
+        'applied': applied,
+    }
+    return game
+
+
+register(ActionType.COMBAT_READY, _handle_combat_ready)
+register(ActionType.COMBAT_GATE, _handle_combat_gate)
+register(ActionType.COMBAT_REROLL, _handle_combat_reroll)
+register(ActionType.COMBAT_SURGE, _handle_combat_surge)
+register(ActionType.COMBAT_SKIP_SURGES, _handle_combat_skip_surges)
+register(ActionType.COMBAT_PASSIVE, _handle_combat_passive)
+register(ActionType.COMBAT_TOKEN, _handle_combat_token)
+register(ActionType.COMBAT_RESOLVE, _handle_combat_resolve)

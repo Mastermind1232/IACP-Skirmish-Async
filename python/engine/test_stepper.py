@@ -1790,6 +1790,193 @@ def test_arsenal_pick_requires_dice_list():
     raise AssertionError('expected ValueError')
 
 
+def test_combat_ready_flags_both_sides():
+    g = create_game()
+    g.data['pendingCombat'] = {'attackerPlayerNum': 1, 'defenderPlayerNum': 2}
+    g = step(g, Action(type=ActionType.COMBAT_READY, player=1))
+    assert g.data['pendingCombat']['p1Ready'] is True
+    assert g.data['pendingCombat'].get('phase') != 'ready'
+    g = step(g, Action(type=ActionType.COMBAT_READY, player=2))
+    assert g.data['pendingCombat']['p2Ready'] is True
+    assert g.data['pendingCombat']['phase'] == 'ready'
+
+
+def test_combat_gate_stamps_phase():
+    g = create_game()
+    g.data['pendingCombat'] = {'attackerPlayerNum': 1}
+    new_g = step(g, Action(
+        type=ActionType.COMBAT_GATE, player=1,
+        params={'gate': 'close_quarters'},
+    ))
+    assert new_g.data['pendingCombat']['phase'] == 'close_quarters'
+
+
+def test_combat_reroll_records_indices_and_updates_values():
+    g = create_game()
+    g.data['pendingCombat'] = {
+        'attackerPlayerNum': 1,
+        'attackRoll': [{'face': 'blank'}, {'face': 'hit'}, {'face': 'blank'}],
+    }
+    new_g = step(g, Action(
+        type=ActionType.COMBAT_REROLL, player=1,
+        params={
+            'side': 'attacker',
+            'indices': [0, 2],
+            'new_values': [{'face': 'hit'}, {'face': 'surge'}],
+        },
+    ))
+    assert new_g.data['pendingCombat']['attackerRerolledIndices'] == [0, 2]
+    assert new_g.data['pendingCombat']['attackRoll'][0]['face'] == 'hit'
+    assert new_g.data['pendingCombat']['attackRoll'][2]['face'] == 'surge'
+
+
+def test_combat_reroll_defender_side():
+    g = create_game()
+    g.data['pendingCombat'] = {'defenderPlayerNum': 2}
+    new_g = step(g, Action(
+        type=ActionType.COMBAT_REROLL, player=2,
+        params={'side': 'defender', 'indices': [0]},
+    ))
+    assert new_g.data['pendingCombat']['defenderRerolledIndices'] == [0]
+
+
+def test_combat_surge_decrements_remaining_and_records():
+    g = create_game()
+    g.data['pendingCombat'] = {
+        'attackerPlayerNum': 1, 'surgeRemaining': 2,
+    }
+    g = step(g, Action(
+        type=ActionType.COMBAT_SURGE, player=1,
+        params={'ability': 'pierce_1'},
+    ))
+    assert g.data['pendingCombat']['surgeRemaining'] == 1
+    assert g.data['pendingCombat']['triggeredSurges'] == ['pierce_1']
+    # Spend the last surge → phase auto-advances
+    g = step(g, Action(
+        type=ActionType.COMBAT_SURGE, player=1,
+        params={'ability': 'accuracy_2'},
+    ))
+    assert g.data['pendingCombat']['surgeRemaining'] == 0
+    assert g.data['pendingCombat']['phase'] == 'surges_done'
+
+
+def test_combat_surge_rejects_when_none_remaining():
+    g = create_game()
+    g.data['pendingCombat'] = {'surgeRemaining': 0}
+    try:
+        step(g, Action(
+            type=ActionType.COMBAT_SURGE, player=1,
+            params={'ability': 'x'},
+        ))
+    except ValueError as e:
+        assert 'no surges' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_combat_skip_surges_advances_phase():
+    g = create_game()
+    g.data['pendingCombat'] = {'surgeRemaining': 2}
+    new_g = step(g, Action(type=ActionType.COMBAT_SKIP_SURGES, player=1))
+    assert new_g.data['pendingCombat']['surgeRemaining'] == 0
+    assert new_g.data['pendingCombat']['phase'] == 'surges_done'
+
+
+def test_combat_passive_dedupe():
+    g = create_game()
+    g.data['pendingCombat'] = {}
+    g = step(g, Action(type=ActionType.COMBAT_PASSIVE, player=1,
+                        params={'passive': 'cunning'}))
+    g = step(g, Action(type=ActionType.COMBAT_PASSIVE, player=1,
+                        params={'passive': 'cunning'}))
+    assert g.data['pendingCombat']['triggeredPassives'] == ['cunning']
+
+
+def test_combat_token_spends_matching_token():
+    g = create_game()
+    g.data['pendingCombat'] = {'attackerPlayerNum': 1}
+    g.data['figurePowerTokens'] = {'Luke-0-0': ['Surge', 'Block', 'Damage']}
+    new_g = step(g, Action(
+        type=ActionType.COMBAT_TOKEN, player=1,
+        params={'figure_key': 'Luke-0-0', 'token_type': 'Block', 'index': 1},
+    ))
+    assert new_g.data['figurePowerTokens']['Luke-0-0'] == ['Surge', 'Damage']
+    assert new_g.data['pendingCombat']['spentTokens'] == [
+        {'figureKey': 'Luke-0-0', 'tokenType': 'Block'},
+    ]
+
+
+def test_combat_token_mismatched_type_raises():
+    g = create_game()
+    g.data['pendingCombat'] = {}
+    g.data['figurePowerTokens'] = {'Luke-0-0': ['Surge']}
+    try:
+        step(g, Action(
+            type=ActionType.COMBAT_TOKEN, player=1,
+            params={'figure_key': 'Luke-0-0', 'token_type': 'Block', 'index': 0},
+        ))
+    except ValueError as e:
+        assert 'expected' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_combat_resolve_applies_damage_and_clears_pending():
+    g = create_game()
+    g.data['pendingCombat'] = {
+        'attackerPlayerNum': 1,
+        'defenderPlayerNum': 2,
+        'defenderMsgId': 'hl2dc0',
+        'target': {'figureKey': 'Stormtrooper-0-0'},
+        'targetStats': {'cost': 0},
+    }
+    g.data['dcHealthState'] = {'hl2dc0': [[5, 5]]}
+    g.data['figurePositions'] = {1: {}, 2: {'Stormtrooper-0-0': 'a1'}}
+    new_g = step(g, Action(
+        type=ActionType.COMBAT_RESOLVE, player=1,
+        params={'damage': 2, 'defeated': False},
+    ))
+    assert new_g.data['dcHealthState']['hl2dc0'][0][0] == 3
+    assert new_g.data['pendingCombat'] is None
+    assert new_g.data['lastCombatResult']['damage'] == 2
+    assert new_g.data['lastCombatResult']['applied'] is True
+    # Figure still on board (not defeated)
+    assert 'Stormtrooper-0-0' in new_g.data['figurePositions'][2]
+
+
+def test_combat_resolve_defeated_awards_kill_vp_and_removes_figure():
+    g = create_game()
+    g.data['pendingCombat'] = {
+        'attackerPlayerNum': 1,
+        'defenderPlayerNum': 2,
+        'defenderMsgId': 'hl2dc0',
+        'target': {'figureKey': 'Stormtrooper-0-0'},
+        'targetStats': {'cost': 4},
+    }
+    g.data['dcHealthState'] = {'hl2dc0': [[2, 5]]}
+    g.data['figurePositions'] = {1: {}, 2: {'Stormtrooper-0-0': 'a1'}}
+    new_g = step(g, Action(
+        type=ActionType.COMBAT_RESOLVE, player=1,
+        params={'damage': 2, 'defeated': True},
+    ))
+    assert new_g.data['player1VP']['kills'] == 4
+    assert new_g.data['player1VP']['total'] == 4
+    assert 'Stormtrooper-0-0' not in new_g.data['figurePositions'][2]
+
+
+def test_combat_resolve_requires_pending():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.COMBAT_RESOLVE, player=1,
+            params={'damage': 0},
+        ))
+    except ValueError as e:
+        assert 'pendingCombat' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1918,6 +2105,19 @@ def main():
         ('missile_salvo_die_consumes_and_sets', test_missile_salvo_die_consumes_color_and_sets_override),
         ('missile_salvo_die_rejects_unavailable', test_missile_salvo_die_rejects_unavailable_color),
         ('missile_salvo_die_requires_pending', test_missile_salvo_die_requires_pending),
+        ('combat_ready_flags_both_sides', test_combat_ready_flags_both_sides),
+        ('combat_gate_stamps_phase', test_combat_gate_stamps_phase),
+        ('combat_reroll_records_indices', test_combat_reroll_records_indices_and_updates_values),
+        ('combat_reroll_defender_side', test_combat_reroll_defender_side),
+        ('combat_surge_decrements', test_combat_surge_decrements_remaining_and_records),
+        ('combat_surge_rejects_when_none', test_combat_surge_rejects_when_none_remaining),
+        ('combat_skip_surges_advances', test_combat_skip_surges_advances_phase),
+        ('combat_passive_dedupe', test_combat_passive_dedupe),
+        ('combat_token_spends_matching', test_combat_token_spends_matching_token),
+        ('combat_token_mismatched_raises', test_combat_token_mismatched_type_raises),
+        ('combat_resolve_applies_damage', test_combat_resolve_applies_damage_and_clears_pending),
+        ('combat_resolve_defeated_awards_vp', test_combat_resolve_defeated_awards_kill_vp_and_removes_figure),
+        ('combat_resolve_requires_pending', test_combat_resolve_requires_pending),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
