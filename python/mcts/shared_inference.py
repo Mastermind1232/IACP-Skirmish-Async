@@ -147,6 +147,7 @@ def serve_shared_once(
     device: torch.device,
     pool: SharedPool,
     max_wait_s: float = 0.05,
+    use_amp: bool = False,
 ) -> int:
     """Drain any pending requests, run one forward, release replies.
 
@@ -182,7 +183,13 @@ def serve_shared_once(
 
     net.eval()
     with torch.no_grad():
-        logits, values = net(spatial, scalar)
+        if use_amp and device.type == 'cuda':
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                logits, values = net(spatial, scalar)
+            logits = logits.float()
+            values = values.float()
+        else:
+            logits, values = net(spatial, scalar)
     logits = logits.cpu()
     values = values.cpu()
 

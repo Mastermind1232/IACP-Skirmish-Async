@@ -66,6 +66,9 @@ class DistributedV2Config:
     inference_poll_timeout_s: float = 0.01
     heartbeat_every_s: float = 30.0
     transport: str = 'shared'  # 'shared' (zero-copy) or 'queue' (pickled)
+    pipeline_depth: int = 1    # >1 enables virtual-loss pipelined MCTS
+    fp16_inference: bool = True   # autocast inference forward in float16
+    compile_net: bool = False  # torch.compile the trained net (slow first call)
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +100,7 @@ def _v2_worker_main(
         from python.mcts.actions import policy_index_to_action
         from python.mcts.batched_search import BatchedMCTS
         from python.mcts.inference_backend import RemoteInferenceBackend
+        from python.mcts.pipelined_search import PipelinedBatchedMCTS
         from python.mcts.search import _terminal_reward_p1
         from python.mcts.self_play import TrainingExample, _visit_counts_to_policy
         from python.encoding.encode import encode_state
@@ -108,7 +112,10 @@ def _v2_worker_main(
         else:
             backend = RemoteInferenceBackend(request_q, reply_q, rank)
             transport_label = 'queue'
-        print(f'[worker {rank}] ready (cpu, {transport_label} backend)', flush=True)
+        print(
+            f'[worker {rank}] ready (cpu, {transport_label} backend)',
+            flush=True,
+        )
 
         while not stop_event.is_set():
             try:
@@ -120,10 +127,18 @@ def _v2_worker_main(
 
             try:
                 rng = _random.Random(cmd['seed'])
-                mcts = BatchedMCTS(
-                    backend=backend,
-                    attack_rng_seed=rng.randint(0, 1 << 30),
-                )
+                pipeline_depth = int(cmd.get('pipeline_depth', 1) or 1)
+                if pipeline_depth > 1:
+                    mcts = PipelinedBatchedMCTS(
+                        backend=backend,
+                        attack_rng_seed=rng.randint(0, 1 << 30),
+                        pipeline_depth=pipeline_depth,
+                    )
+                else:
+                    mcts = BatchedMCTS(
+                        backend=backend,
+                        attack_rng_seed=rng.randint(0, 1 << 30),
+                    )
                 n_games = cmd['n_games']
                 games = []
                 for _ in range(n_games):
@@ -272,6 +287,12 @@ def run_distributed_v2(config: DistributedV2Config, resume: bool = False) -> Non
         start_iter = int(payload.get('iteration', 0)) + 1
         print(f'resumed from iter {start_iter - 1}')
     net.to(device)
+    if config.compile_net:
+        try:
+            net = torch.compile(net)
+            print('[trainer] torch.compile applied to net')
+        except Exception as e:
+            print(f'[trainer] torch.compile failed ({e}); continuing uncompiled')
 
     optimizer = torch.optim.Adam(
         net.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay,
@@ -288,9 +309,12 @@ def run_distributed_v2(config: DistributedV2Config, resume: bool = False) -> Non
     use_shared = (config.transport == 'shared')
     if use_shared:
         from python.mcts.shared_inference import SharedPool
+        # Pipelined MCTS can submit up to games_per_worker * pipeline_depth
+        # rows per call. Size the pool slots accordingly.
+        slot_size = config.games_per_worker * max(1, config.pipeline_depth)
         shared_pool = SharedPool.build(
             n_workers=config.n_workers,
-            max_batch=config.games_per_worker,
+            max_batch=slot_size,
         )
         request_q = None
         reply_qs = [None] * config.n_workers
@@ -344,6 +368,7 @@ def run_distributed_v2(config: DistributedV2Config, resume: bool = False) -> Non
                     'max_moves': config.max_moves_per_game,
                     'temperature_moves': config.temperature_moves,
                     'seed': rng.randint(0, 1 << 30),
+                    'pipeline_depth': config.pipeline_depth,
                 })
 
             # Interleave inference serving with example collection.
@@ -377,12 +402,14 @@ def run_distributed_v2(config: DistributedV2Config, resume: bool = False) -> Non
                     served = serve_shared_once(
                         net, device, shared_pool,
                         max_wait_s=config.inference_poll_timeout_s,
+                        use_amp=config.fp16_inference,
                     )
                 else:
                     served = serve_inference_once(
                         net, device, request_q, reply_qs,
                         max_batch=config.max_inference_batch,
                         poll_timeout_s=config.inference_poll_timeout_s,
+                        use_amp=config.fp16_inference,
                     )
                 total_inference_rows += served
 

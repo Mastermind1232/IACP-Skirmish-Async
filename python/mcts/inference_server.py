@@ -26,6 +26,7 @@ def serve_inference_once(
     reply_qs: List,
     max_batch: int = 128,
     poll_timeout_s: float = 0.05,
+    use_amp: bool = False,
 ) -> int:
     """Pull one mega-batch worth of requests, run one forward, reply.
 
@@ -61,7 +62,13 @@ def serve_inference_once(
 
     net.eval()
     with torch.no_grad():
-        logits, values = net(spatial, scalar)
+        if use_amp and device.type == 'cuda':
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                logits, values = net(spatial, scalar)
+            logits = logits.float()
+            values = values.float()
+        else:
+            logits, values = net(spatial, scalar)
     logits = logits.cpu()
     values = values.cpu()
 

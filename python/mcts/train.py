@@ -70,6 +70,14 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument('--transport', choices=('shared', 'queue'), default='shared',
                     help='v2 only: shared-memory tensors (zero-copy, default) '
                          'or pickle-through-queue (slower)')
+    ap.add_argument('--pipeline-depth', type=int, default=1,
+                    help='v2 only: virtual-loss MCTS pipelining depth '
+                         '(1 = disabled, 4-8 = typical for GPU saturation)')
+    ap.add_argument('--no-fp16', action='store_true',
+                    help='disable fp16 autocast during inference serving')
+    ap.add_argument('--compile', action='store_true',
+                    help='apply torch.compile to the CNN (slow first call, '
+                         '1.5-2x forward speedup after)')
     return ap.parse_args()
 
 
@@ -113,6 +121,9 @@ def _run_distributed(args):
             checkpoint_every=args.checkpoint_every,
             max_inference_batch=args.max_inference_batch,
             transport=args.transport,
+            pipeline_depth=args.pipeline_depth,
+            fp16_inference=not args.no_fp16,
+            compile_net=args.compile,
         )
         run_distributed_v2(config, resume=args.resume)
         return
