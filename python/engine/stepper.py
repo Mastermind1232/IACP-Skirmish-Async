@@ -1669,3 +1669,86 @@ def _handle_cc_confirm_play(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.CC_CONFIRM_PLAY, _handle_cc_confirm_play)
+
+
+# ---------------------------------------------------------------------------
+# PLAY_CC_SPECIAL / PLAY_CC_DOUBLE — CC played from DC (special-action timing)
+# ---------------------------------------------------------------------------
+
+def _play_cc_from_dc(game: GameState, action: Action, *,
+                     check_fn, timing_label: str) -> GameState:
+    """Shared pipeline for DC-triggered CC plays (Special / Double Action).
+
+    - Validates card is in the attacker's hand
+    - Uses check_fn(cc_name, dc_name, display_name, darksaber, extra_kw, game)
+      to enforce per-DC playability (timing + restrictions)
+    - Moves hand → discard
+    - Sets pendingCcEffect + lastPlayedCc
+    """
+    from python.engine.cards.deck import discard_from_hand
+    from python.engine.data.cc_effects_loader import get_cc_effect
+    from python.engine.mechanics.cc_timing import has_darksaber_imperial
+
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        raise ValueError(f'{timing_label} requires player ∈ {{1, 2}}')
+
+    card = action.params.get('card') or action.params.get('cardName')
+    dc_name = action.params.get('dc_name') or action.params.get('dcName')
+    display_name = action.params.get('display_name') or action.params.get('displayName') or dc_name
+    if not card or not dc_name:
+        raise ValueError(f'{timing_label} requires card + dc_name params')
+
+    hand_key = 'player1CcHand' if player == 1 else 'player2CcHand'
+    hand = game.data.get(hand_key) or []
+    if card not in hand:
+        raise ValueError(f'{timing_label}: {card!r} not in P{player} hand')
+
+    effect = get_cc_effect(card)
+    if effect is None:
+        raise ValueError(f'{timing_label}: unknown card {card!r}')
+
+    if not action.params.get('force'):
+        darksaber = has_darksaber_imperial(game, player, dc_name)
+        if not check_fn(card, dc_name, display_name, darksaber, None, game):
+            raise ValueError(
+                f'{timing_label}: {card!r} not playable by {dc_name!r} '
+                f'(timing + restriction gate failed)'
+            )
+
+    discard_from_hand(game, player, card)
+    game.data['pendingCcEffect'] = {
+        'cardName': card,
+        'playerNum': player,
+        'timing': effect.get('timing'),
+        'playableBy': effect.get('playableBy'),
+        'dcName': dc_name,
+    }
+    game.data['lastPlayedCc'] = {
+        'cardName': card,
+        'playerNum': player,
+        'dcName': dc_name,
+    }
+    return game
+
+
+def _handle_play_cc_special(game: GameState, action: Action) -> GameState:
+    """Play a CC with specialAction timing, triggered from a DC."""
+    from python.engine.mechanics.cc_timing import is_cc_playable_by_dc
+    return _play_cc_from_dc(
+        game, action, check_fn=is_cc_playable_by_dc,
+        timing_label='play_cc_special',
+    )
+
+
+def _handle_play_cc_double(game: GameState, action: Action) -> GameState:
+    """Play a CC with doubleActionSpecial timing, triggered from a DC."""
+    from python.engine.mechanics.cc_timing import is_cc_double_action_playable_by_dc
+    return _play_cc_from_dc(
+        game, action, check_fn=is_cc_double_action_playable_by_dc,
+        timing_label='play_cc_double',
+    )
+
+
+register(ActionType.PLAY_CC_SPECIAL, _handle_play_cc_special)
+register(ActionType.PLAY_CC_DOUBLE, _handle_play_cc_double)

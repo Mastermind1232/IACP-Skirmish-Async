@@ -1250,6 +1250,84 @@ def test_cc_confirm_play_requires_pending():
     raise AssertionError('expected ValueError')
 
 
+def test_play_cc_special_moves_to_discard_with_pending_effect():
+    from python.engine.data import cc_effects_loader, dc_effects_loader
+    cc_effects_loader._cc_effects = {
+        'Master Operative': {'timing': 'specialAction', 'playableBy': 'Any Figure'},
+    }
+    dc_effects_loader._dc_effects = {'Luke Skywalker': {'keywords': [], 'affiliation': 'Rebel'}}
+    try:
+        g = create_game()
+        g.data['player1CcHand'] = ['Master Operative']
+        new_g = step(g, Action(
+            type=ActionType.PLAY_CC_SPECIAL, player=1,
+            params={'card': 'Master Operative', 'dc_name': 'Luke Skywalker'},
+        ))
+        assert new_g.data['player1CcHand'] == []
+        assert new_g.data['player1CcDiscard'] == ['Master Operative']
+        assert new_g.data['pendingCcEffect']['cardName'] == 'Master Operative'
+        assert new_g.data['pendingCcEffect']['dcName'] == 'Luke Skywalker'
+    finally:
+        cc_effects_loader.reset_cache()
+        dc_effects_loader.reset_cache()
+
+
+def test_play_cc_special_rejects_wrong_timing():
+    from python.engine.data import cc_effects_loader, dc_effects_loader
+    # 'duringActivation' is not specialAction — should reject
+    cc_effects_loader._cc_effects = {
+        'Hold On': {'timing': 'duringActivation', 'playableBy': 'Any Figure'},
+    }
+    dc_effects_loader._dc_effects = {'Luke Skywalker': {}}
+    try:
+        g = create_game()
+        g.data['player1CcHand'] = ['Hold On']
+        try:
+            step(g, Action(
+                type=ActionType.PLAY_CC_SPECIAL, player=1,
+                params={'card': 'Hold On', 'dc_name': 'Luke Skywalker'},
+            ))
+        except ValueError as e:
+            assert 'not playable' in str(e)
+            return
+        raise AssertionError('expected ValueError')
+    finally:
+        cc_effects_loader.reset_cache()
+        dc_effects_loader.reset_cache()
+
+
+def test_play_cc_double_accepts_double_action_special_timing():
+    from python.engine.data import cc_effects_loader, dc_effects_loader
+    cc_effects_loader._cc_effects = {
+        'Dual-Bladed Fury': {'timing': 'doubleActionSpecial', 'playableBy': 'Any Figure'},
+    }
+    dc_effects_loader._dc_effects = {'Darth Maul': {}}
+    try:
+        g = create_game()
+        g.data['player1CcHand'] = ['Dual-Bladed Fury']
+        new_g = step(g, Action(
+            type=ActionType.PLAY_CC_DOUBLE, player=1,
+            params={'card': 'Dual-Bladed Fury', 'dc_name': 'Darth Maul'},
+        ))
+        assert new_g.data['player1CcDiscard'] == ['Dual-Bladed Fury']
+    finally:
+        cc_effects_loader.reset_cache()
+        dc_effects_loader.reset_cache()
+
+
+def test_play_cc_special_requires_params():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.PLAY_CC_SPECIAL, player=1,
+            params={'card': 'X'},  # missing dc_name
+        ))
+    except ValueError as e:
+        assert 'dc_name' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1337,6 +1415,10 @@ def main():
         ('cc_confirm_play_delegates', test_cc_confirm_play_delegates_to_play_cc),
         ('cc_confirm_play_signal_jammer', test_cc_confirm_play_signal_jammer_cancels_both),
         ('cc_confirm_play_requires_pending', test_cc_confirm_play_requires_pending),
+        ('play_cc_special_discards_with_effect', test_play_cc_special_moves_to_discard_with_pending_effect),
+        ('play_cc_special_rejects_wrong_timing', test_play_cc_special_rejects_wrong_timing),
+        ('play_cc_double_accepts_double_timing', test_play_cc_double_accepts_double_action_special_timing),
+        ('play_cc_special_requires_params', test_play_cc_special_requires_params),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
