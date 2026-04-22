@@ -1092,6 +1092,50 @@ def test_power_token_choice_requires_pending():
     raise AssertionError('expected ValueError')
 
 
+def test_comm_disruption_play_cancels_pending_cc():
+    g = create_game()
+    g.data['pendingCommDisruptionPrompt'] = {
+        'targetPlayerNum': 2,
+        'playedCard': 'Reinforcements',
+        'playedBy': 1,
+    }
+    g.data['pendingCcEffect'] = {
+        'cardName': 'Reinforcements', 'playerNum': 1,
+        'timing': 'startOfRound',
+    }
+    g.data['player2CcHand'] = ['Comm Disruption', 'Other']
+    new_g = step(g, Action(type=ActionType.COMM_DISRUPTION_PLAY, player=2))
+    assert new_g.data['player2CcHand'] == ['Other']
+    assert new_g.data['player2CcDiscard'] == ['Comm Disruption']
+    assert new_g.data['pendingCcEffect'] is None
+    assert new_g.data['pendingCommDisruptionPrompt'] is None
+    assert new_g.data['lastCancelledCc'] == {
+        'cardName': 'Reinforcements', 'byPlayerNum': 2,
+    }
+
+
+def test_comm_disruption_play_requires_card_in_hand():
+    g = create_game()
+    g.data['pendingCommDisruptionPrompt'] = {'targetPlayerNum': 2, 'playedCard': 'X'}
+    g.data['player2CcHand'] = ['Other']
+    try:
+        step(g, Action(type=ActionType.COMM_DISRUPTION_PLAY, player=2))
+    except ValueError as e:
+        assert 'Comm Disruption' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_comm_disruption_play_requires_prompt():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.COMM_DISRUPTION_PLAY, player=2))
+    except ValueError as e:
+        assert 'pendingCommDisruptionPrompt' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1170,6 +1214,9 @@ def main():
         ('power_token_choice_hit_alias', test_power_token_choice_accepts_hit_as_damage_alias),
         ('power_token_choice_rejects_invalid', test_power_token_choice_rejects_invalid_type),
         ('power_token_choice_requires_pending', test_power_token_choice_requires_pending),
+        ('comm_disruption_play_cancels_cc', test_comm_disruption_play_cancels_pending_cc),
+        ('comm_disruption_play_requires_card', test_comm_disruption_play_requires_card_in_hand),
+        ('comm_disruption_play_requires_prompt', test_comm_disruption_play_requires_prompt),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

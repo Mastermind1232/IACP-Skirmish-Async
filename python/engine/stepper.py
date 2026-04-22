@@ -1483,3 +1483,44 @@ def _handle_power_token_choice(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.POWER_TOKEN_CHOICE, _handle_power_token_choice)
+
+
+# ---------------------------------------------------------------------------
+# COMM_DISRUPTION_PLAY — cancel a played CC by discarding Comm Disruption
+# ---------------------------------------------------------------------------
+
+def _handle_comm_disruption_play(game: GameState, action: Action) -> GameState:
+    """Play Comm Disruption from hand to cancel the prompt-trigger CC.
+
+    Requires:
+        - game.pendingCommDisruptionPrompt present with targetPlayerNum.
+        - 'Comm Disruption' in the target's hand.
+
+    Effects:
+        - Removes 'Comm Disruption' from the target's hand, pushes to discard.
+        - Clears game.pendingCcEffect (the prompt-triggering card is cancelled).
+        - Clears game.pendingCommDisruptionPrompt.
+    """
+    from python.engine.cards.deck import discard_from_hand
+
+    pending = game.data.get('pendingCommDisruptionPrompt')
+    if not pending:
+        raise ValueError('comm_disruption_play: no pendingCommDisruptionPrompt open')
+    target_pn = pending.get('targetPlayerNum') if isinstance(pending, Mapping) else None
+    if target_pn not in (1, 2):
+        raise ValueError(
+            'comm_disruption_play: pendingCommDisruptionPrompt missing targetPlayerNum'
+        )
+    if not discard_from_hand(game, target_pn, 'Comm Disruption'):
+        raise ValueError('comm_disruption_play: Comm Disruption not in hand')
+    # Cancel the prompt-triggering CC's pending effect
+    game.data['pendingCcEffect'] = None
+    game.data['pendingCommDisruptionPrompt'] = None
+    game.data['lastCancelledCc'] = {
+        'cardName': pending.get('playedCard') if isinstance(pending, Mapping) else None,
+        'byPlayerNum': target_pn,
+    }
+    return game
+
+
+register(ActionType.COMM_DISRUPTION_PLAY, _handle_comm_disruption_play)
