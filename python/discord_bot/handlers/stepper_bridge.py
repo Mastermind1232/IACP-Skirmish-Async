@@ -88,6 +88,16 @@ _BRIDGED_PREFIXES = [
     # Strain choice
     ('strain_choice_alldmg_', 'combat'),
     ('strain_choice_discard_', 'combat'),
+    # Core combat flow
+    ('attack_target_', 'combat'),
+    ('combat_roll_', 'combat'),
+    ('combat_reroll_', 'combat'),
+    ('combat_surge_', 'combat'),
+    ('combat_token_', 'combat'),
+    ('combat_resolve_ready_', 'combat'),
+    ('combat_gate_', 'combat'),
+    ('combat_passive_', 'combat'),
+    ('pre_reroll_', 'combat'),
 ]
 
 

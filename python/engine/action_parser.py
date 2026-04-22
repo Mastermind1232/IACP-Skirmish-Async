@@ -405,6 +405,162 @@ _PARSERS = (
 )
 
 
+def _parse_attack_target(cid, uid, game, opts):
+    # attack_target_{msgId}_{figureIndex}_{targetIndex}
+    rest = cid[len('attack_target_'):]
+    parts = rest.rsplit('_', 2)
+    if len(parts) != 3:
+        return None
+    msg_id, fig_str, tgt_str = parts
+    try:
+        figure_idx = int(fig_str)
+        target_idx = int(tgt_str)
+    except ValueError:
+        return None
+    return Action(
+        type=ActionType.ATTACK_TARGET, player=_user_to_player_num(game, uid),
+        params={'msg_id': msg_id, 'figure_idx': figure_idx,
+                'target_idx': target_idx},
+    )
+
+
+def _parse_combat_roll(cid, uid, game, opts):
+    # combat_roll_{gameId}
+    return Action(type=ActionType.COMBAT_ROLL, player=_user_to_player_num(game, uid))
+
+
+def _parse_combat_reroll(cid, uid, game, opts):
+    # combat_reroll_{gameId}_{side}_{idx|done} where side ∈ {atk, def}
+    rest = cid[len('combat_reroll_'):]
+    parts = rest.split('_')
+    if len(parts) < 3:
+        return None
+    side = parts[1]
+    tail = parts[2]
+    if tail == 'done':
+        return Action(
+            type=ActionType.COMBAT_REROLL, player=_user_to_player_num(game, uid),
+            params={'side': side, 'done': True},
+        )
+    try:
+        idx = int(tail)
+    except ValueError:
+        return None
+    return Action(
+        type=ActionType.COMBAT_REROLL, player=_user_to_player_num(game, uid),
+        params={'side': side, 'die_idx': idx},
+    )
+
+
+def _parse_combat_surge(cid, uid, game, opts):
+    # combat_surge_{gameId}_{idx} | combat_surge_{gameId}_done | combat_surge_{gameId}_bleed_prevention
+    rest = cid[len('combat_surge_'):]
+    parts = rest.split('_', 1)
+    if len(parts) < 2:
+        return None
+    tail = parts[1]
+    if tail == 'done':
+        return Action(
+            type=ActionType.COMBAT_SURGE, player=_user_to_player_num(game, uid),
+            params={'done': True},
+        )
+    if tail == 'bleed_prevention':
+        return Action(
+            type=ActionType.COMBAT_SURGE, player=_user_to_player_num(game, uid),
+            params={'spend': 'bleed_prevention'},
+        )
+    try:
+        idx = int(tail)
+    except ValueError:
+        return None
+    return Action(
+        type=ActionType.COMBAT_SURGE, player=_user_to_player_num(game, uid),
+        params={'surge_idx': idx},
+    )
+
+
+def _parse_combat_token(cid, uid, game, opts):
+    # combat_token_{gameId}_{prefix}_{index}
+    rest = cid[len('combat_token_'):]
+    parts = rest.rsplit('_', 1)
+    if len(parts) != 2:
+        return None
+    head, idx_str = parts
+    head_parts = head.split('_', 1)
+    token_prefix = head_parts[1] if len(head_parts) > 1 else ''
+    try:
+        idx = int(idx_str)
+    except ValueError:
+        return None
+    return Action(
+        type=ActionType.COMBAT_TOKEN, player=_user_to_player_num(game, uid),
+        params={'token_prefix': token_prefix, 'idx': idx},
+    )
+
+
+def _parse_combat_resolve_ready(cid, uid, game, opts):
+    # combat_resolve_ready_{gameId}
+    return Action(
+        type=ActionType.COMBAT_RESOLVE, player=_user_to_player_num(game, uid),
+    )
+
+
+def _parse_combat_gate(cid, uid, game, opts):
+    # combat_gate_{gameId}
+    return Action(
+        type=ActionType.COMBAT_GATE, player=_user_to_player_num(game, uid),
+    )
+
+
+def _parse_combat_passive(cid, uid, game, opts):
+    # combat_passive_{gameId}_{choiceIdx}
+    rest = cid[len('combat_passive_'):]
+    parts = rest.rsplit('_', 1)
+    if len(parts) == 2:
+        try:
+            idx = int(parts[1])
+        except ValueError:
+            idx = None
+    else:
+        idx = None
+    return Action(
+        type=ActionType.COMBAT_PASSIVE, player=_user_to_player_num(game, uid),
+        params={'choice_idx': idx} if idx is not None else {},
+    )
+
+
+def _parse_pre_reroll(cid, uid, game, opts):
+    # pre_reroll_{gameId}_{variant} (variant = twin_sabers_atk | _def | skip | shrewd_N | resourceful_atk ...)
+    rest = cid[len('pre_reroll_'):]
+    parts = rest.split('_', 1)
+    if len(parts) < 2:
+        return None
+    variant = parts[1]
+    # No real stepper action yet — pre_reroll is a UI-side modal that resolves
+    # via combat_reroll. We just mark the game with the variant for downstream
+    # parsers. Route to COMBAT_REROLL with a 'variant' param; the stepper can
+    # choose to no-op or resolve based on its own state.
+    return Action(
+        type=ActionType.COMBAT_REROLL, player=_user_to_player_num(game, uid),
+        params={'pre_reroll_variant': variant},
+    )
+
+
+# Append the core-combat parsers after their defs so the tuple references
+# resolve cleanly at import time.
+_PARSERS = _PARSERS + (
+    ('attack_target_', _parse_attack_target),
+    ('combat_roll_', _parse_combat_roll),
+    ('combat_reroll_', _parse_combat_reroll),
+    ('combat_surge_', _parse_combat_surge),
+    ('combat_token_', _parse_combat_token),
+    ('combat_resolve_ready_', _parse_combat_resolve_ready),
+    ('combat_gate_', _parse_combat_gate),
+    ('combat_passive_', _parse_combat_passive),
+    ('pre_reroll_', _parse_pre_reroll),
+)
+
+
 def parse_custom_id(
     custom_id: str,
     user_id: str = '',
