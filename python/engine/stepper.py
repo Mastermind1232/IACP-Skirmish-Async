@@ -497,9 +497,75 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     return game
 
 
+# ---------------------------------------------------------------------------
+# Round cycling
+# ---------------------------------------------------------------------------
+
+def _count_activations_from_board(game: GameState, player: int) -> int:
+    """Count distinct deployment groups for `player` on the board.
+
+    A figure_key shaped like 'DC Name-g-f' belongs to group `g`. Each
+    (dc_name, group_index) pair contributes one activation regardless of
+    how many surviving figures the group has.
+    """
+    fp = game.get('figurePositions') or {}
+    if not isinstance(fp, Mapping):
+        return 0
+    positions = fp.get(player, fp.get(str(player), {}))
+    if not isinstance(positions, Mapping):
+        return 0
+    groups = set()
+    for fkey, coord in positions.items():
+        if not coord:
+            continue
+        parts = fkey.rsplit('-', 2)
+        if len(parts) == 3:
+            groups.add((parts[0], parts[1]))
+    return len(groups)
+
+
+def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
+    """Close out the round and set up the next one.
+
+    Effects:
+      - round/currentRound += 1.
+      - activationsRemaining[p] = count of live deployment groups.
+      - Clear per-round tracking (moved, attacks, damage, active, starts).
+      - roundPhase -> 'activation'.
+      - If either side has zero groups: phase -> 'game_over'.
+    """
+    cur_round = int(game.get('round') or game.get('currentRound') or 1)
+    game['round'] = cur_round + 1
+    # Keep currentRound in sync if it was being used.
+    if 'currentRound' in game.data:
+        game['currentRound'] = cur_round + 1
+
+    p1_groups = _count_activations_from_board(game, 1)
+    p2_groups = _count_activations_from_board(game, 2)
+
+    if p1_groups == 0 or p2_groups == 0:
+        game['phase'] = 'game_over'
+        game['roundPhase'] = 'end'
+    else:
+        game['roundPhase'] = 'activation'
+
+    game['activationsRemaining'] = {1: p1_groups, 2: p2_groups}
+    game['figuresMovedThisRound'] = []
+    game['figureAttacksThisActivation'] = {}
+    game['figureDamageThisActivation'] = {}
+    game['activeFigureKeys'] = []
+    game['activationStartPositions'] = {}
+    game['movementPoints'] = 0
+    game['p1ActivationPhaseEnded'] = False
+    game['p2ActivationPhaseEnded'] = False
+
+    return game
+
+
 register(ActionType.PASS_ACTIVATION_TURN, _handle_pass_activation_turn)
 register(ActionType.END_ACTIVATION_PHASE, _handle_end_activation_phase)
 register(ActionType.ACTIVATE_DC, _handle_activate_dc)
 register(ActionType.DC_END_ACTIVATION, _handle_dc_end_activation)
 register(ActionType.MOVE_PICK_SPACE, _handle_move_pick_space)
 register(ActionType.ATTACK_TARGET, _handle_attack_target)
+register(ActionType.END_END_OF_ROUND, _handle_end_end_of_round)

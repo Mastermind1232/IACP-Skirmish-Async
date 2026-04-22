@@ -305,6 +305,45 @@ def test_attack_target_kills_and_awards_vp():
     raise AssertionError('no kill in 500 seeds — dice distribution broken')
 
 
+def test_end_end_of_round_refreshes_activations():
+    g = _two_figure_game()
+    g.data['round'] = 1
+    g.data['activationsRemaining'] = {1: 0, 2: 0}
+    g.data['figuresMovedThisRound'] = ['Rebel Trooper (Regular)-0-0']
+    g.data['figureAttacksThisActivation'] = {1: {'Rebel Trooper (Regular)-0-0': 1}}
+    new_g = step(g, Action(type=ActionType.END_END_OF_ROUND, player=0))
+    assert new_g.data['round'] == 2
+    assert new_g.data['roundPhase'] == 'activation'
+    assert new_g.data['activationsRemaining'] == {1: 1, 2: 1}
+    assert new_g.data['figuresMovedThisRound'] == []
+    assert new_g.data['figureAttacksThisActivation'] == {}
+
+
+def test_end_end_of_round_detects_game_over():
+    g = _two_figure_game()
+    g.data['figurePositions'] = {
+        1: {'Rebel Trooper (Regular)-0-0': 'a1'},
+        2: {},
+    }
+    new_g = step(g, Action(type=ActionType.END_END_OF_ROUND, player=0))
+    assert new_g.data['phase'] == 'game_over'
+    assert new_g.data['activationsRemaining'][2] == 0
+
+
+def test_end_end_of_round_counts_multi_figure_group_as_one():
+    g = _two_figure_game()
+    g.data['figurePositions'] = {
+        1: {
+            'Rebel Trooper (Regular)-0-0': 'a1',
+            'Rebel Trooper (Regular)-0-1': 'a2',
+            'Rebel Trooper (Regular)-0-2': 'a3',
+        },
+        2: {'Stormtrooper (Regular)-0-0': 'h8'},
+    }
+    new_g = step(g, Action(type=ActionType.END_END_OF_ROUND, player=0))
+    assert new_g.data['activationsRemaining'] == {1: 1, 2: 1}
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -336,6 +375,9 @@ def main():
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
         ('attack_target_kills_and_awards_vp', test_attack_target_kills_and_awards_vp),
+        ('end_end_of_round_refreshes_activations', test_end_end_of_round_refreshes_activations),
+        ('end_end_of_round_detects_game_over', test_end_end_of_round_detects_game_over),
+        ('end_end_of_round_counts_multi_figure_group_as_one', test_end_end_of_round_counts_multi_figure_group_as_one),
     ]
     failures = []
     for name, fn in cases:
