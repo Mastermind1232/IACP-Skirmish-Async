@@ -80,6 +80,11 @@ import {
   applyExploitWeaknessSurge,
 } from '../game/exploit-weakness-helpers.js';
 import {
+  hasFrontLineAbility,
+  frontLineInRange,
+  applyFrontLineDieSwap,
+} from '../game/front-line-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1923,13 +1928,10 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Front Line (Echo Base Trooper): within 3 spaces, replace 1 blue die with red
-  if (atkSpecialIds.includes('front_line') && distanceToTarget <= 3) {
-    const dice = game.pendingCombat.attackInfo.dice || [];
-    const blueIdx = dice.findIndex(d => d === 'blue');
-    if (blueIdx >= 0) {
-      const newDice = [...dice];
-      newDice[blueIdx] = 'red';
-      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: newDice };
+  if (hasFrontLineAbility(atkSpecialIds) && frontLineInRange(distanceToTarget)) {
+    const swap = applyFrontLineDieSwap(game.pendingCombat.attackInfo.dice || []);
+    if (swap.applied) {
+      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: swap.dice };
       await thread.send(`**Front Line** — 1 blue die replaced with red (target within ${distanceToTarget} spaces).`);
     }
   }
