@@ -389,8 +389,9 @@ def test_pattern_d_stub_count_is_137_after_D3_16():
     # D3.6 baseline 161 stubs. D3.7 landed 6 → 155. D3.9 landed 5 → 150.
     # D3.12 landed 3 → 147. D3.14 lands 6 → 141. D3.16 lands 4
     # (combat-defense-friends: sentinel, protector, keep_the_peace_elite,
-    # keep_the_peace_regular) → 137.
-    assert len(pattern_d_stub_ids()) == 137
+    # keep_the_peace_regular) → 137. D3.17 lands 1 (mission-start:
+    # stealthy_davith) → 136.
+    assert len(pattern_d_stub_ids()) == 136
 
 
 def test_none_of_six_is_a_stub():

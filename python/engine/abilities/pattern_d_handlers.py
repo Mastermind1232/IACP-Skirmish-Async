@@ -155,7 +155,9 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional
 
 from python.engine.abilities.pattern_d import register_trigger
-from python.engine.mechanics.conditions import HARMFUL_CONDITIONS, apply_condition_with_die
+from python.engine.mechanics.conditions import (
+    HARMFUL_CONDITIONS, apply_condition, apply_condition_with_die,
+)
 from python.engine.mechanics.dice_pool_surgery import (
     is_once_per_round_used,
     mark_once_per_round_used,
@@ -1072,6 +1074,42 @@ def install_combat_defense_friends_handlers() -> Dict[str, Any]:
     return {
         'installed': sorted(_COMBAT_DEFENSE_FRIENDS_HANDLERS.keys()),
         'trigger': 'combat-defense',
+    }
+
+
+# ── Simple self-condition handlers (deploy / mission-start) ────────────────
+
+def handle_stealthy_davith(game: Dict[str, Any],
+                            ability_id: str,
+                            ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """`stealthy_davith` — at mission-start, Davith becomes Hidden.
+
+    Library entry: {trigger: 'mission-start', description: "At the start of
+    the mission, become Hidden."}. The mission-start bus walks all figures
+    on the board with this ability and fires once per figure; ctx provides
+    the figure_key of the owning Davith figure.
+    """
+    figure_key = ctx.get('figure_key')
+    if not figure_key:
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'no-figure-key'}
+    added = apply_condition(game, figure_key, 'Hidden')
+    if not added:
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'already-hidden'}
+    return {
+        'applied': True,
+        'log_message': f'**Stealthy** — {figure_key} is Hidden at mission start.',
+    }
+
+
+def install_mission_start_handlers() -> Dict[str, Any]:
+    """Wire mission-start Pattern D handlers that are fully self-contained
+    (no choice UI, no cross-figure lookup)."""
+    register_trigger('mission-start', 'stealthy_davith', handle_stealthy_davith)
+    return {
+        'installed': ['stealthy_davith'],
+        'trigger': 'mission-start',
     }
 
 

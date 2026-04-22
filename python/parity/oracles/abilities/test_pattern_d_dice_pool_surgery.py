@@ -580,15 +580,17 @@ def test_pattern_d_runnable_ids_includes_all_three_dice_pool():
 def test_pattern_d_runnable_count_is_twenty_four_after_d3_16():
     # D3.7+D3.9+D3.12+D3.14 = 20 combat-declare real; D3.16 lands 4 more
     # (combat-defense-friends: sentinel, protector, keep_the_peace_elite,
-    # keep_the_peace_regular) → 24 runnable.
-    assert len(pattern_d_runnable_ids()) == 24
+    # keep_the_peace_regular) → 24 runnable. D3.17 lands stealthy_davith
+    # (mission-start) → 25 runnable.
+    assert len(pattern_d_runnable_ids()) == 25
 
 
 def test_pattern_d_stub_count_is_137_after_d3_16():
     # D3.6 baseline 161 stubs. D3.7 landed 6 → 155. D3.9 landed 5 → 150.
     # D3.12 lands 3 → 147. D3.14 lands 6 (combat-declare defender-side
     # second pass) → 141. D3.16 lands 4 (combat-defense-friends) → 137.
-    assert len(pattern_d_stub_ids()) == 137
+    # D3.17 lands 1 (mission-start: stealthy_davith) → 136.
+    assert len(pattern_d_stub_ids()) == 136
     assert len(pattern_d_registered_ids()) == 161
 
 

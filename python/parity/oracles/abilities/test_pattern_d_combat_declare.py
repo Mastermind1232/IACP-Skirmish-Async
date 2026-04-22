@@ -466,8 +466,9 @@ def test_pattern_d_stub_count_after_D3_16():
     # (composite_plating, conclusion, cortosis_weave, disposable,
     # exploit_weakness, gamorrean_honor_guard) → 141 stubs. D3.16 lands 4 more
     # (combat-defense-friends: keep_the_peace_elite, keep_the_peace_regular,
-    # protector, sentinel) → 137 stubs expected.
-    assert len(pattern_d_stub_ids()) == 137
+    # protector, sentinel) → 137 stubs. D3.17 lands 1 more (mission-start:
+    # stealthy_davith) → 136 stubs expected.
+    assert len(pattern_d_stub_ids()) == 136
     assert len(pattern_d_registered_ids()) == 161
 
 

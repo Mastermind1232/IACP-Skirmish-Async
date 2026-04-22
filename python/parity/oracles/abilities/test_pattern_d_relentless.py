@@ -353,8 +353,9 @@ def test_pattern_d_stub_count_is_137_after_D3_16():
     # D3.12 lands 3 more (dice-pool surgery) → 147. D3.14 lands 6 more
     # (combat-declare defender-side second pass) → 141. D3.16 lands 4 more
     # (combat-defense-friends: sentinel, protector, keep_the_peace_elite,
-    # keep_the_peace_regular) → 137.
-    assert len(pattern_d_stub_ids()) == 137
+    # keep_the_peace_regular) → 137. D3.17 lands 1 more (mission-start:
+    # stealthy_davith) → 136.
+    assert len(pattern_d_stub_ids()) == 136
 
 
 def test_none_of_five_is_a_stub():

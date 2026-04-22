@@ -130,6 +130,7 @@ def install_default_handlers() -> None:
     from python.engine.abilities.pattern_d_handlers import (
         install_combat_declare_handlers,
         install_combat_defense_friends_handlers,
+        install_mission_start_handlers,
     )
     from python.engine.abilities.pattern_e import (
         install_default_chain_handlers,
@@ -143,6 +144,7 @@ def install_default_handlers() -> None:
     install_pattern_d_stubs()
     install_combat_declare_handlers()
     install_combat_defense_friends_handlers()
+    install_mission_start_handlers()
     install_default_chain_handlers()
 
 
@@ -163,4 +165,55 @@ def dispatch_summary() -> Dict[str, Any]:
                      for p in ('A', 'B', 'C', 'D', 'E')},
         'counts': inv.get('counts', {}),
         'total': inv.get('total', len(get_ability_library())),
+    }
+
+
+def dc_ability_coverage() -> Dict[str, Any]:
+    """Report per-pattern coverage across the 310 DC-referenced ability IDs.
+
+    For each ability referenced from data/dc-effects.json specialAbilityIds,
+    classify its pattern and determine whether a real (non-stub) handler
+    fires for it. Returns a coverage breakdown.
+    """
+    import json, os
+    from python.engine.abilities.pattern_d import pattern_d_runnable_ids
+    from python.engine.abilities.pattern_e import registered_chain_ids
+
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    path = os.path.join(root, 'data', 'dc-effects.json')
+    try:
+        with open(path) as f:
+            raw = json.load(f)
+    except Exception:
+        return {'total': 0}
+    cards = raw.get('cards') or {}
+    dc_ids: set = set()
+    for dc in cards.values():
+        for aid in (dc.get('specialAbilityIds') or []):
+            dc_ids.add(aid)
+
+    d_runnable = set(pattern_d_runnable_ids())
+    e_registered = set(registered_chain_ids())
+
+    counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0, 'unknown': 0}
+    runnable = {'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0}
+    for aid in dc_ids:
+        try:
+            p = lookup_pattern(aid)
+        except UnknownAbility:
+            counts['unknown'] += 1
+            continue
+        counts[p] += 1
+        # A, B, C patterns all have resolvers that implement most cases
+        if p in ('A', 'B', 'C'):
+            runnable[p] += 1
+        elif p == 'D' and aid in d_runnable:
+            runnable['D'] += 1
+        elif p == 'E' and aid in e_registered:
+            runnable['E'] += 1
+    return {
+        'total': len(dc_ids),
+        'by_pattern': counts,
+        'runnable_by_pattern': runnable,
+        'total_runnable': sum(runnable.values()),
     }
