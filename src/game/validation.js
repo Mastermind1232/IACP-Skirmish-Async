@@ -2,6 +2,7 @@
  * Game validation (deck legal, etc.). No Discord; uses data-loader for card data.
  */
 import { getDcEffects, getDcKeywords, getCcEffect, getCcEffectsData, getAbilityLibrary } from '../data-loader.js';
+import { modularDiscountDelta } from './modular-hse-helpers.js';
 
 /**
  * Check whether any DC in `armyDcNames` has a passive whose library entry
@@ -248,15 +249,7 @@ export function validateDeckLegal(squad) {
     }
   }
   // Heavy Stormtrooper (Elite) — Modular: one attachment costs 1 less
-  const hasHSE = dcList.some(e => resolveDcName(e) === 'Heavy Stormtrooper (Elite)');
-  if (hasHSE) {
-    const hasAttachment = dcList.some(e => {
-      const n = resolveDcName(e);
-      const s = dcEffects[n] || dcEffects[`[${n}]`];
-      return s?.attachment;
-    });
-    if (hasAttachment) dcTotal -= 1;
-  }
+  dcTotal -= modularDiscountDelta(dcList, dcEffects);
   if (dcTotal !== DC_POINTS_LEGAL) {
     errors.push(`Deployment total is ${dcTotal} points. Legal total is exactly ${DC_POINTS_LEGAL}.`);
   }
