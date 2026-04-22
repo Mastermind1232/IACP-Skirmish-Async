@@ -115,6 +115,14 @@ import {
   RELENTLESS_STRAIN_AMOUNT,
 } from '../game/relentless-helpers.js';
 import {
+  hasAcpScattergun,
+  hasScattergun,
+  scattergunInRange,
+  applyScattergunHits,
+  ACP_SCATTERGUN_HIT_DELTA,
+  SCATTERGUN_HIT_DELTA,
+} from '../game/scattergun-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1875,12 +1883,14 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // ACP Scattergun (Trandoshan Hunter Elite) / Scattergun (Trandoshan Hunter Regular): +Hits when adjacent to target
-  if (distanceToTarget <= 1) {
-    if (atkSpecialIds.includes('acp_scattergun')) {
-      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 2;
+  if (scattergunInRange(distanceToTarget)) {
+    if (hasAcpScattergun(atkSpecialIds)) {
+      const r = applyScattergunHits(game.pendingCombat, ACP_SCATTERGUN_HIT_DELTA);
+      game.pendingCombat.bonusHits = r.bonusHits;
       await thread.send('**ACP Scattergun** — adjacent to target: +2 Hits.');
-    } else if (atkSpecialIds.includes('scattergun')) {
-      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+    } else if (hasScattergun(atkSpecialIds)) {
+      const r = applyScattergunHits(game.pendingCombat, SCATTERGUN_HIT_DELTA);
+      game.pendingCombat.bonusHits = r.bonusHits;
       await thread.send('**Scattergun** — adjacent to target: +1 Hit.');
     }
   }
