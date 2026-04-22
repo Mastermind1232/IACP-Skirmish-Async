@@ -40,6 +40,11 @@ import {
   applyOverpowerAttackerReroll,
   applyOverpowerDefenderReroll,
 } from '../game/overpower-helpers.js';
+import {
+  hasForesightAbility,
+  hasDefensiveStanceAbility,
+  applyDefensiveReroll,
+} from '../game/defensive-reroll-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2689,9 +2694,10 @@ export async function handleCombatRoll(interaction, ctx) {
     if (hasOverpowerAbility(atkSIds)) atkSpecialReroll = applyOverpowerAttackerReroll(atkSpecialReroll);
     if (hasOverpowerAbility(defSIds)) defSpecialReroll = applyOverpowerDefenderReroll(defSpecialReroll);
     // Foresight (Darth Vader defending): +1 def reroll
-    if (defSIds.includes('foresight')) defSpecialReroll += 1;
+    if (hasForesightAbility(defSIds)) defSpecialReroll = applyDefensiveReroll(defSpecialReroll);
     // Defensive Stance (Diala Passil defending): +1 def reroll
-    if (defSIds.includes('defensive_stance')) defSpecialReroll += 1;
+    // (Dodge-conversion clause lives in later phase, see ~line 4400)
+    if (hasDefensiveStanceAbility(defSIds)) defSpecialReroll = applyDefensiveReroll(defSpecialReroll);
     // Charge Generators (AT-DP attacking): +1 atk reroll + +1 Hit if < 9 damage suffered
     if (atkSIds.includes('charge_generators')) {
       const atkHpA = dcHS?.get(combat.attackerMsgId) || [];
