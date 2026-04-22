@@ -123,6 +123,12 @@ import {
   SCATTERGUN_HIT_DELTA,
 } from '../game/scattergun-helpers.js';
 import {
+  hasSharpshooterAbility,
+  sharpshooterInRange,
+  SHARPSHOOTER_CONDITION,
+  SHARPSHOOTER_BONUS_DIE,
+} from '../game/sharpshooter-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1917,8 +1923,8 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Sharpshooter (Fennec Shand): auto-Focus if target is 5+ spaces away
-  if (atkSpecialIds.includes('sharpshooter') && distanceToTarget >= 5) {
-    const _ssResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
+  if (hasSharpshooterAbility(atkSpecialIds) && sharpshooterInRange(distanceToTarget)) {
+    const _ssResult = applyConditionWithDie(game, attackerFigureKey, SHARPSHOOTER_CONDITION, game.pendingCombat.attackInfo, SHARPSHOOTER_BONUS_DIE);
     if (_ssResult.applied) {
       game.pendingCombat.attackInfo = _ssResult.attackInfo;
       await thread.send(`**Sharpshooter** — **${meta.dcName}** is **Focused** (target ${distanceToTarget} spaces away, +1 green die).`);

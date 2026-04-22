@@ -164,12 +164,22 @@ describe('ORACLE-CONDDICE-003: Pattern B sites use applyConditionWithDie', () =>
   });
 
   it('Sharpshooter uses applyConditionWithDie', () => {
+    // Sharpshooter predicate was extracted to
+    // src/game/sharpshooter-helpers.js during the medium-risk probe
+    // grind. Handler now delegates slug + range check via
+    // hasSharpshooterAbility / sharpshooterInRange, and the Focus
+    // condition + bonus die are named constants. The
+    // applyConditionWithDie contract is still enforced at the site.
     const src = readSrc('src/handlers/combat.js');
-    const idx = src.indexOf("atkSpecialIds.includes('sharpshooter')");
-    assert.ok(idx > 0, 'Sharpshooter site found');
-    const block = src.slice(idx, idx + 300);
+    const idx = src.indexOf('hasSharpshooterAbility(atkSpecialIds) && sharpshooterInRange');
+    assert.ok(idx > 0, 'Sharpshooter site found (post-extraction)');
+    const block = src.slice(idx, idx + 400);
     assert.ok(block.includes('applyConditionWithDie(game, attackerFigureKey'),
       'Sharpshooter must use applyConditionWithDie');
+    assert.ok(block.includes('SHARPSHOOTER_CONDITION'),
+      'Sharpshooter must pass SHARPSHOOTER_CONDITION constant');
+    assert.ok(block.includes('SHARPSHOOTER_BONUS_DIE'),
+      'Sharpshooter must pass SHARPSHOOTER_BONUS_DIE constant');
   });
 });
 
