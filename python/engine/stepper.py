@@ -20,9 +20,21 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Mapping, Optional
 
+import random as _random
+
 from python.engine.actions import ActionType
 from python.engine.data.dc_effects_loader import get_dc_effect
 from python.engine.data.map_spaces_loader import get_map_spaces
+from python.engine.mechanics.adjacency import is_chebyshev_adjacent
+from python.engine.mechanics.combat import compute_combat_result
+from python.engine.mechanics.defeat import (
+    award_kill_vp,
+    calculate_kill_vp,
+    check_nefarious_gains,
+    remove_figure_position,
+)
+from python.engine.mechanics.dice import roll_attack_dice, roll_defense_dice
+from python.engine.mechanics.los import has_line_of_sight
 from python.engine.mechanics.movement_cache import get_path_cost
 from python.engine.state import GameState
 
@@ -304,8 +316,190 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
     return game
 
 
+# ---------------------------------------------------------------------------
+# Attack
+# ---------------------------------------------------------------------------
+
+def _figure_hp_key(player: int, dc_name: str) -> str:
+    return f'{player}:{dc_name}'
+
+
+def _get_figure_hp(game: GameState, player: int, figure_key: str) -> tuple:
+    """Return (current_hp, max_hp) for figure_key, reading from dcHealthState
+    or falling back to the DC's base health."""
+    dc_name = _dc_name_from_figure_key(figure_key)
+    effect = get_dc_effect(dc_name) or {}
+    max_hp = effect.get('health')
+    if not isinstance(max_hp, (int, float)):
+        max_hp = 3
+    max_hp = int(max_hp)
+
+    try:
+        idx = int(figure_key.rsplit('-', 1)[-1])
+    except (ValueError, AttributeError):
+        idx = 0
+
+    dc_health = game.get('dcHealthState') or {}
+    key = _figure_hp_key(player, dc_name)
+    hp_list = dc_health.get(key) if isinstance(dc_health, Mapping) else None
+    if isinstance(hp_list, list) and 0 <= idx < len(hp_list):
+        entry = hp_list[idx]
+        if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+            cur, mx = entry[0], entry[1]
+            if isinstance(cur, (int, float)) and isinstance(mx, (int, float)):
+                return int(cur), int(mx)
+    return max_hp, max_hp
+
+
+def _set_figure_hp(game: GameState, player: int, figure_key: str, cur: int, mx: int) -> None:
+    dc_name = _dc_name_from_figure_key(figure_key)
+    try:
+        idx = int(figure_key.rsplit('-', 1)[-1])
+    except (ValueError, AttributeError):
+        idx = 0
+    dc_health = dict(game.get('dcHealthState') or {})
+    key = _figure_hp_key(player, dc_name)
+    hp_list = list(dc_health.get(key) or [])
+    while len(hp_list) <= idx:
+        hp_list.append([mx, mx])
+    hp_list[idx] = [int(cur), int(mx)]
+    dc_health[key] = hp_list
+    game['dcHealthState'] = dc_health
+
+
+def _attack_legal(
+    game: GameState, attacker_coord: str, target_coord: str, attack_type: str,
+) -> Optional[str]:
+    """Return an error string if the attack is illegal, else None."""
+    attack_type = (attack_type or 'range').lower()
+    if attack_type == 'melee':
+        if not is_chebyshev_adjacent(attacker_coord, target_coord):
+            return f'melee target {target_coord} not adjacent to {attacker_coord}'
+        return None
+    map_id = game.get('mapId')
+    map_spaces = get_map_spaces(map_id) if map_id else {}
+    if not map_spaces:
+        return f'no map spaces for mapId={map_id!r}'
+    if not has_line_of_sight(attacker_coord, target_coord, map_spaces):
+        return f'no LOS from {attacker_coord} to {target_coord}'
+    return None
+
+
+def _handle_attack_target(game: GameState, action: Action) -> GameState:
+    """Atomic combat resolution: declare -> roll -> resolve -> apply damage.
+
+    Required params:
+        attacker_key (str), target_key (str).
+    Optional params:
+        rng_seed (int): deterministic dice stream. Defaults to Python's
+            module random if absent.
+
+    Scope (MVP):
+        - Validates adjacency for melee, LOS for range.
+        - No surges spent (surges contribute 0 to the attack).
+        - No rerolls, no cover, no Hide/Focus condition effects.
+        - Tracks figureAttacksThisActivation; one attack per activation.
+        - On defeat: removes figure, awards kill VP (+ Jabba bonus).
+    """
+    attacker_key = action.params.get('attacker_key') or action.params.get('attackerKey')
+    target_key = action.params.get('target_key') or action.params.get('targetKey')
+    if not attacker_key or not target_key:
+        raise ValueError('attack_target requires attacker_key and target_key')
+
+    atk_player, atk_coord = _find_figure(game, attacker_key)
+    def_player, def_coord = _find_figure(game, target_key)
+    if atk_player is None:
+        raise ValueError(f'attack_target: attacker {attacker_key!r} not on board')
+    if def_player is None:
+        raise ValueError(f'attack_target: target {target_key!r} not on board')
+    if atk_player == def_player:
+        raise ValueError(
+            f'attack_target: cannot attack own figure (both p{atk_player})'
+        )
+
+    # Enforce one attack per activation per figure.
+    atk_log = dict(game.get('figureAttacksThisActivation') or {})
+    patk = dict(atk_log.get(atk_player, atk_log.get(str(atk_player), {})))
+    already = patk.get(attacker_key, 0)
+    if already >= 1:
+        raise ValueError(
+            f'attack_target: {attacker_key!r} already attacked this activation'
+        )
+
+    atk_dc = _dc_name_from_figure_key(attacker_key)
+    def_dc = _dc_name_from_figure_key(target_key)
+    atk_effect = get_dc_effect(atk_dc) or {}
+    def_effect = get_dc_effect(def_dc) or {}
+
+    attack_spec = atk_effect.get('attack') or {}
+    dice_colors = attack_spec.get('dice') or []
+    if not dice_colors:
+        raise ValueError(f'attack_target: {atk_dc!r} has no attack dice')
+    attack_type = attack_spec.get('type') or 'range'
+
+    err = _attack_legal(game, atk_coord, def_coord, attack_type)
+    if err:
+        raise ValueError(f'attack_target: {err}')
+
+    defense_colors = def_effect.get('defense') or ['white']
+    # Multi-color defense: roll each and sum block/evade/dodge.
+
+    rng = _random.Random(action.params.get('rng_seed'))
+
+    attack_roll = roll_attack_dice(dice_colors, rng=rng)
+    def_block = def_evade = 0
+    def_dodge = False
+    for color in defense_colors:
+        d = roll_defense_dice(color, rng=rng)
+        def_block += d.get('block', 0) or 0
+        def_evade += d.get('evade', 0) or 0
+        def_dodge = def_dodge or bool(d.get('dodge'))
+    defense_roll = {
+        'color': defense_colors[0],
+        'block': def_block,
+        'evade': def_evade,
+        'dodge': def_dodge,
+    }
+
+    combat = {
+        'attackRoll': attack_roll,
+        'defenseRoll': defense_roll,
+        'attackerConds': [],
+        'defenderConds': [],
+    }
+    result = compute_combat_result(combat)
+    damage = int(result.get('damage') or 0) if result.get('hit') else 0
+
+    if damage > 0:
+        cur, mx = _get_figure_hp(game, def_player, target_key)
+        new_hp = max(0, cur - damage)
+        _set_figure_hp(game, def_player, target_key, new_hp, mx)
+        if new_hp <= 0:
+            # Defeat.
+            remove_figure_position(game.data, def_player, target_key)
+            vp = calculate_kill_vp(def_dc)
+            if vp:
+                award_kill_vp(game.data, atk_player, vp)
+            check_nefarious_gains(game.data, def_player)
+
+    # Record attack on attacker.
+    patk[attacker_key] = already + 1
+    atk_log[atk_player] = patk
+    game['figureAttacksThisActivation'] = atk_log
+
+    # Record damage-this-activation.
+    dmg_log = dict(game.get('figureDamageThisActivation') or {})
+    pdmg = dict(dmg_log.get(atk_player, dmg_log.get(str(atk_player), {})))
+    pdmg[attacker_key] = (pdmg.get(attacker_key, 0) or 0) + damage
+    dmg_log[atk_player] = pdmg
+    game['figureDamageThisActivation'] = dmg_log
+
+    return game
+
+
 register(ActionType.PASS_ACTIVATION_TURN, _handle_pass_activation_turn)
 register(ActionType.END_ACTIVATION_PHASE, _handle_end_activation_phase)
 register(ActionType.ACTIVATE_DC, _handle_activate_dc)
 register(ActionType.DC_END_ACTIVATION, _handle_dc_end_activation)
 register(ActionType.MOVE_PICK_SPACE, _handle_move_pick_space)
+register(ActionType.ATTACK_TARGET, _handle_attack_target)

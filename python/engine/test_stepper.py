@@ -25,9 +25,9 @@ from python.engine.stepper import (
 def test_unknown_action_raises():
     g = create_game()
     try:
-        step(g, Action(type=ActionType.ATTACK_TARGET, player=1))
+        step(g, Action(type=ActionType.CC_DRAW, player=1))
     except NotImplementedError as e:
-        assert 'attack_target' in str(e)
+        assert 'cc_draw' in str(e)
         return
     raise AssertionError('expected NotImplementedError')
 
@@ -85,7 +85,8 @@ def test_is_implemented_reports_correctly():
     assert is_implemented(ActionType.ACTIVATE_DC)
     assert is_implemented(ActionType.MOVE_PICK_SPACE)
     assert is_implemented(ActionType.DC_END_ACTIVATION)
-    assert not is_implemented(ActionType.ATTACK_TARGET)
+    assert is_implemented(ActionType.ATTACK_TARGET)
+    assert not is_implemented(ActionType.CC_DRAW)
 
 
 def _two_figure_game():
@@ -179,6 +180,131 @@ def test_move_pick_space_rejects_insufficient_mp():
     raise AssertionError('expected ValueError')
 
 
+def _attack_ready_game():
+    g = _two_figure_game()
+    # a1/a2 known LOS-clear on mos-eisley-outskirts.
+    g.data['figurePositions'] = {
+        1: {'Rebel Trooper (Regular)-0-0': 'a1'},
+        2: {'Stormtrooper (Regular)-0-0': 'a2'},
+    }
+    g.data['activePlayer'] = 1
+    g.data['activeFigureKeys'] = ['Rebel Trooper (Regular)-0-0']
+    return g
+
+
+def test_attack_target_requires_different_owner():
+    g = _attack_ready_game()
+    g.data['figurePositions'][2]['Rebel Trooper (Regular)-0-1'] = 'h9'
+    try:
+        step(g, Action(
+            type=ActionType.ATTACK_TARGET, player=1,
+            params={
+                'attacker_key': 'Rebel Trooper (Regular)-0-0',
+                'target_key': 'Rebel Trooper (Regular)-0-1',
+                'rng_seed': 1,
+            },
+        ))
+    except ValueError as e:
+        # Under test fixture the "friendly" with same DC is on p2 — so this
+        # test actually validates the missing-figure path. Rewrite: attack
+        # a key that doesn't exist.
+        pass
+    # Attack own figure via forced construction:
+    g2 = _attack_ready_game()
+    g2.data['figurePositions'][1]['Rebel Trooper (Regular)-0-1'] = 'h9'
+    try:
+        step(g2, Action(
+            type=ActionType.ATTACK_TARGET, player=1,
+            params={
+                'attacker_key': 'Rebel Trooper (Regular)-0-0',
+                'target_key': 'Rebel Trooper (Regular)-0-1',
+                'rng_seed': 1,
+            },
+        ))
+    except ValueError as e:
+        assert 'own figure' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_attack_target_is_deterministic_with_seed():
+    g = _attack_ready_game()
+    a = step(g, Action(
+        type=ActionType.ATTACK_TARGET, player=1,
+        params={
+            'attacker_key': 'Rebel Trooper (Regular)-0-0',
+            'target_key': 'Stormtrooper (Regular)-0-0',
+            'rng_seed': 42,
+        },
+    ))
+    b = step(g, Action(
+        type=ActionType.ATTACK_TARGET, player=1,
+        params={
+            'attacker_key': 'Rebel Trooper (Regular)-0-0',
+            'target_key': 'Stormtrooper (Regular)-0-0',
+            'rng_seed': 42,
+        },
+    ))
+    assert a.data.get('dcHealthState') == b.data.get('dcHealthState'), 'seeded attack not deterministic'
+
+
+def test_attack_target_rejects_second_attack_same_activation():
+    g = _attack_ready_game()
+    # Pump target HP so the first attack can't possibly kill, keeping the
+    # figure on the board for the second-attack check.
+    g.data['dcHealthState'] = {'2:Stormtrooper (Regular)': [[50, 50]]}
+    g = step(g, Action(
+        type=ActionType.ATTACK_TARGET, player=1,
+        params={
+            'attacker_key': 'Rebel Trooper (Regular)-0-0',
+            'target_key': 'Stormtrooper (Regular)-0-0',
+            'rng_seed': 1,
+        },
+    ))
+    try:
+        step(g, Action(
+            type=ActionType.ATTACK_TARGET, player=1,
+            params={
+                'attacker_key': 'Rebel Trooper (Regular)-0-0',
+                'target_key': 'Stormtrooper (Regular)-0-0',
+                'rng_seed': 2,
+            },
+        ))
+    except ValueError as e:
+        assert 'already attacked' in str(e)
+        return
+    raise AssertionError('expected ValueError on double attack')
+
+
+def test_attack_target_kills_and_awards_vp():
+    """Walk seeds until one produces a lethal attack, then validate VP + removal."""
+    base = _attack_ready_game()
+    # Stormtrooper has 3 HP; crank target HP to 1 so any damage kills.
+    # dcHealthState = {'2:Stormtrooper (Regular)': [[1, 3]]}
+    base.data['dcHealthState'] = {'2:Stormtrooper (Regular)': [[1, 3]]}
+    # Try seeds until we land a hit with >=1 damage.
+    for seed in range(500):
+        g = base.copy()
+        try:
+            new_g = step(g, Action(
+                type=ActionType.ATTACK_TARGET, player=1,
+                params={
+                    'attacker_key': 'Rebel Trooper (Regular)-0-0',
+                    'target_key': 'Stormtrooper (Regular)-0-0',
+                    'rng_seed': seed,
+                },
+            ))
+        except Exception:
+            continue
+        # Check defeat
+        fp = new_g.data.get('figurePositions') or {}
+        if 'Stormtrooper (Regular)-0-0' not in (fp.get(2) or {}):
+            vp = (new_g.data.get('player1VP') or {}).get('kills', 0)
+            assert vp >= 1, f'no VP after kill seed={seed}'
+            return
+    raise AssertionError('no kill in 500 seeds — dice distribution broken')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -206,6 +332,10 @@ def main():
         ('move_pick_space_updates_position_and_charges_mp', test_move_pick_space_updates_position_and_charges_mp),
         ('move_pick_space_rejects_insufficient_mp', test_move_pick_space_rejects_insufficient_mp),
         ('dc_end_activation_clears_active_and_swaps_player', test_dc_end_activation_clears_active_and_swaps_player),
+        ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
+        ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
+        ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
+        ('attack_target_kills_and_awards_vp', test_attack_target_kills_and_awards_vp),
     ]
     failures = []
     for name, fn in cases:
