@@ -37,9 +37,13 @@ def state_diff(left, right, path: str = '') -> List[Diff]:
     absence are treated as the same (all mean "missing"); `null` in JSON loads
     to Python None and that *is* present-with-None — caller decides whether to
     normalize before diffing.
+
+    Dict keys are normalized to strings before comparison so Python's int
+    keys (e.g. `figurePositions[1]`) and JS's JSON-loaded string keys
+    (`figurePositions["1"]`) don't spuriously diff.
     """
-    left_data = _unwrap(left)
-    right_data = _unwrap(right)
+    left_data = _normalize(_unwrap(left))
+    right_data = _normalize(_unwrap(right))
     return _walk(left_data, right_data, path)
 
 
@@ -47,6 +51,17 @@ def _unwrap(x):
     data_attr = getattr(x, 'data', None)
     if isinstance(data_attr, dict):
         return data_attr
+    return x
+
+
+def _normalize(x):
+    """Recursively normalize dict keys to strings so int/str key confusion
+    between Python-native state and JSON-loaded state doesn't show up as
+    a spurious diff."""
+    if isinstance(x, dict):
+        return {str(k): _normalize(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_normalize(v) for v in x]
     return x
 
 

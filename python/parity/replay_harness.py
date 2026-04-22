@@ -1,33 +1,75 @@
-"""Replay-harness: load JS-recorded JSONL → run through Python engine → diff.
+"""Replay-harness: load a JS-recorded JSONL trace → apply each action
+through the Python engine → diff the result against the recorded
+snapshot. Reports per-step status so gaps between Python coverage and
+the real game are legible.
 
-Scope at D6 bootstrap:
-  - Read a JSONL file produced by `tests/headless/action-recorder.js`.
-  - Load the initial-state snapshot into a Python GameState.
-  - Diff the initial state against the snapshot (pure serialization parity).
-  - For each subsequent step, STUB the Python apply_action (D2+) and record
-    where we would have diffed.
+Trace format (emitted by `tests/headless/action-recorder.js`):
 
-The full replay — actually running each action through the Python engine — is
-unlocked deliverable by deliverable as D2–D5 land. Until then, this script:
-  1. Round-trips the initial state snapshot (deterministic-JSON test).
-  2. Validates the JSONL schema.
-  3. Reports how many steps are "replayable" (currently: 0 until D2 arrives).
+    Header (line 1):
+      { schemaVersion, gameId, recordedAt, initialState }
+
+    Step (lines 2..N+1):
+      { seq, customId, userId, actionOpts, diceRolled,
+        stateSnapshot, ok, error? }
+
+Per step we:
+  1. Parse `customId` via `python.engine.action_parser.parse_custom_id`.
+     Unparseable → mark "unsupported", skip apply, continue.
+  2. Apply via stepper (with dice-stream replay once P1-B lands; raw
+     RNG until then).
+  3. Diff the resulting Python state against `stateSnapshot`.
+  4. Record diff count + path-level detail (bounded in the report).
+
+Summary report shape:
+    {
+      gameId: str,
+      stepCount: int,
+      replayedSteps: int,
+      unsupportedSteps: int,
+      erroredSteps: int,
+      totalDiffs: int,
+      perStep: [{seq, status, customId, prefix?, diffCount, diffs[:first-8]}]
+    }
 
 CLI:
     python -m python.parity.replay_harness --jsonl path/to/game.jsonl
+    python -m python.parity.replay_harness --jsonl X.jsonl --max-diffs 4 --json
 """
+from __future__ import annotations
+
 import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, Optional
 
+from python.engine.action_parser import (
+    UnparseableCustomId,
+    parse_custom_id,
+    step_custom_id,
+)
 from python.engine.state import GameState
-from python.parity.state_diff import state_diff, format_diff
+from python.parity.state_diff import Diff, format_diff, state_diff
 
 
 REQUIRED_HEADER_FIELDS = {'schemaVersion', 'gameId', 'initialState'}
 REQUIRED_STEP_FIELDS = {'seq', 'customId', 'userId', 'stateSnapshot'}
+
+
+# Discord-side fields that are expected to diverge between JS (which
+# has real msg/thread ids from Discord) and Python (which has none).
+# They're filtered out of diff reports so signal isn't drowned in
+# noise. As handlers land and set these fields, entries move off the
+# list.
+DISCORD_ONLY_PATHS = frozenset({
+    'generalId', 'p1HandId', 'p2HandId', 'p1HandMessageId', 'p2HandMessageId',
+    'initiativeDeployMessageId', 'nonInitiativeDeployMessageId',
+    'initiativeDeployMessageIds', 'nonInitiativeDeployMessageIds',
+    'initiativeDeployedConfirmIds', 'nonInitiativeDeployedConfirmIds',
+    'p1DcMessageIds', 'p2DcMessageIds',
+    'isTestGame', 'recordedAt',
+    'boardId',
+})
 
 
 class ReplayError(Exception):
@@ -46,17 +88,27 @@ def iter_jsonl(path: Path) -> Iterator[Dict[str, Any]]:
                 raise ReplayError(f'{path}:{lineno} invalid JSON: {e}') from e
 
 
-def replay(jsonl_path: Path) -> Dict[str, Any]:
-    """Replay a recording; return a summary dict.
+def _filter_diffs(diffs: List[Diff]) -> List[Diff]:
+    """Drop diffs on well-known Discord-only paths."""
+    out: List[Diff] = []
+    for d in diffs:
+        top = d.path.split('.', 1)[0].split('[', 1)[0]
+        if top in DISCORD_ONLY_PATHS:
+            continue
+        out.append(d)
+    return out
 
-    Summary: {
-      'gameId': str,
-      'stepCount': int,
-      'initialStateDiffs': int,
-      'replayableSteps': int,        # always 0 until D2
-      'pendingDeliverables': List[str],
-    }
-    """
+
+def _step_row(seq: int, status: str, custom_id: str, **extra: Any) -> Dict[str, Any]:
+    row = {'seq': seq, 'status': status, 'customId': custom_id}
+    row.update(extra)
+    return row
+
+
+def replay(
+    jsonl_path: Path,
+    max_diffs_per_step: int = 8,
+) -> Dict[str, Any]:
     records = list(iter_jsonl(jsonl_path))
     if not records:
         raise ReplayError(f'{jsonl_path}: empty file')
@@ -68,39 +120,129 @@ def replay(jsonl_path: Path) -> Dict[str, Any]:
             f'{jsonl_path}:1 header missing fields: {sorted(missing_header)}'
         )
 
-    initial_state = GameState(header['initialState'])
-    round_tripped = GameState.from_json(initial_state.to_json())
-    init_diffs = state_diff(initial_state, round_tripped)
+    # Initial-state round-trip check (cheap serialization parity).
+    game = GameState(header['initialState'])
+    round_tripped = GameState.from_json(game.to_json())
+    init_diffs = state_diff(game, round_tripped)
 
     step_records = records[1:]
+    per_step: List[Dict[str, Any]] = []
+
+    replayed = 0
+    unsupported = 0
+    errored = 0
+    total_diffs = 0
+
     for i, rec in enumerate(step_records, start=2):
         missing_step = REQUIRED_STEP_FIELDS - set(rec.keys())
         if missing_step:
             raise ReplayError(
                 f'{jsonl_path}:{i} step missing fields: {sorted(missing_step)}'
             )
+        custom_id = rec['customId']
+        user_id = rec.get('userId') or ''
+        opts = rec.get('actionOpts') or {}
+
+        # 1. Try to parse.
+        parsed = parse_custom_id(custom_id, user_id, game, opts)
+        if parsed is None:
+            unsupported += 1
+            per_step.append(_step_row(rec['seq'], 'unsupported', custom_id))
+            # Don't apply — but ALSO don't advance `game` since we skipped.
+            # The recorded snapshot was after the un-applied action; any
+            # subsequent replayed step will diverge. Continue anyway and
+            # report so the gap is visible.
+            continue
+
+        # 2. Apply.
+        try:
+            game = step_custom_id(game, custom_id, user_id, opts)
+        except UnparseableCustomId:
+            unsupported += 1
+            per_step.append(_step_row(rec['seq'], 'unsupported', custom_id,
+                                      prefix=parsed.prefix))
+            continue
+        except Exception as e:
+            errored += 1
+            per_step.append(_step_row(
+                rec['seq'], 'errored', custom_id,
+                prefix=parsed.prefix,
+                error=f'{type(e).__name__}: {e}'[:400],
+            ))
+            continue
+
+        # 3. Diff against recorded snapshot.
+        recorded_snap = rec['stateSnapshot']
+        raw_diffs = state_diff(game, recorded_snap)
+        diffs = _filter_diffs(raw_diffs)
+        total_diffs += len(diffs)
+        replayed += 1
+
+        per_step.append(_step_row(
+            rec['seq'],
+            status='ok' if not diffs else 'diffs',
+            custom_id=custom_id,
+            prefix=parsed.prefix,
+            diffCount=len(diffs),
+            diffs=[str(d) for d in diffs[:max_diffs_per_step]],
+        ))
 
     return {
         'gameId': header['gameId'],
         'stepCount': len(step_records),
+        'replayedSteps': replayed,
+        'unsupportedSteps': unsupported,
+        'erroredSteps': errored,
+        'totalDiffs': total_diffs,
         'initialStateDiffs': len(init_diffs),
-        'initialStateDiffReport': format_diff(init_diffs) if init_diffs else None,
-        'replayableSteps': 0,
-        'pendingDeliverables': ['D2', 'D3', 'D4', 'D5'],
+        'initialStateDiffReport': (
+            format_diff(init_diffs) if init_diffs else None
+        ),
+        'perStep': per_step,
     }
 
 
+def _short_summary(summary: Dict[str, Any]) -> str:
+    lines = [
+        f'gameId={summary["gameId"]}  steps={summary["stepCount"]}',
+        f'  replayed={summary["replayedSteps"]}  '
+        f'unsupported={summary["unsupportedSteps"]}  '
+        f'errored={summary["erroredSteps"]}  '
+        f'totalDiffs={summary["totalDiffs"]}',
+    ]
+    for row in summary['perStep']:
+        status = row['status']
+        diffn = row.get('diffCount', 0)
+        line = f'  [{row["seq"]:3d}] {status:11s} {row["customId"][:60]}'
+        if diffn:
+            line += f'   diffs={diffn}'
+        lines.append(line)
+        if row.get('error'):
+            lines.append(f'        err: {row["error"]}')
+        for d in row.get('diffs', [])[:4]:
+            lines.append(f'        {d}')
+    return '\n'.join(lines)
+
+
 def main(argv: List[str]) -> int:
-    ap = argparse.ArgumentParser(description='JS→Python replay-harness (D6 bootstrap)')
+    ap = argparse.ArgumentParser(description='JS→Python replay harness')
     ap.add_argument('--jsonl', required=True, type=Path)
+    ap.add_argument('--max-diffs', type=int, default=8)
+    ap.add_argument('--json', action='store_true', help='emit JSON to stdout')
     args = ap.parse_args(argv)
     try:
-        summary = replay(args.jsonl)
+        summary = replay(args.jsonl, max_diffs_per_step=args.max_diffs)
     except ReplayError as e:
         print(f'REPLAY-ERROR: {e}', file=sys.stderr)
         return 2
-    print(json.dumps(summary, indent=2, sort_keys=True))
-    return 0 if summary['initialStateDiffs'] == 0 else 1
+    if args.json:
+        print(json.dumps(summary, indent=2, sort_keys=True))
+    else:
+        print(_short_summary(summary))
+    # Exit: 0 if zero diffs AND no errors; 1 if diffs; 2 already handled above.
+    if summary['totalDiffs'] == 0 and summary['erroredSteps'] == 0:
+        return 0
+    return 1
 
 
 if __name__ == '__main__':
