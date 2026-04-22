@@ -2600,6 +2600,161 @@ def _cc_grit(game, pending, ctx):
     return {'applied': True, 'figureKey': figure_key, 'healed': 3}
 
 
+def _cc_shoot_to_kill(game, pending, ctx):
+    """Shoot to Kill: +2 Hit for this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusHits'] = int(c.get('bonusHits') or 0) + 2
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusHits': 2}
+
+
+def _cc_skirmish(game, pending, ctx):
+    """Skirmish: +2 Hit for a TROOPER friendly's next attack.
+
+    Queues bonus on nextAttackBonuses[playerNum].
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    bonus = dict(data.get('nextAttackBonuses') or {})
+    existing = bonus.get(player_num) or {}
+    existing['bonusHits'] = int(existing.get('bonusHits') or 0) + 2
+    existing['trooperOnly'] = True
+    bonus[player_num] = existing
+    data['nextAttackBonuses'] = bonus
+    return {'applied': True, 'bonusHits': 2}
+
+
+def _cc_strategic_assault(game, pending, ctx):
+    """Strategic Assault: +2 Hit and Pierce 2 for this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusHits'] = int(c.get('bonusHits') or 0) + 2
+    c['bonusPierce'] = int(c.get('bonusPierce') or 0) + 2
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusHits': 2, 'pierce': 2}
+
+
+def _cc_bulk_up(game, pending, ctx):
+    """Bulk Up: +3 Health this round (attached as marker)."""
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('bulk_up: requires ctx.figure_key')
+    bulk = dict(data.get('bulkUpActive') or {})
+    bulk[figure_key] = 3
+    data['bulkUpActive'] = bulk
+    return {'applied': True, 'figureKey': figure_key, 'bonusHealth': 3}
+
+
+def _cc_heroic_effort(game, pending, ctx):
+    """Heroic Effort: ready DC + gain 2 Power Tokens.
+
+    Required: ctx.msg_id + ctx.figure_key.
+    """
+    from python.engine.mechanics.player_helpers import (
+        get_activated_dc_indices, set_activated_dc_indices,
+    )
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    figure_key = (ctx or {}).get('figure_key')
+    player_num = pending.get('playerNum')
+    if not msg_id or not figure_key or player_num not in (1, 2):
+        raise ValueError('heroic_effort: requires msg_id + figure_key + playerNum')
+    ids_list = (data.get('p1DcMessageIds') if player_num == 1
+                else data.get('p2DcMessageIds')) or []
+    if msg_id in ids_list:
+        idx = ids_list.index(msg_id)
+        activated = get_activated_dc_indices(game, player_num) or []
+        if idx in activated:
+            set_activated_dc_indices(
+                game, player_num, [i for i in activated if i != idx],
+            )
+    grant_power_tokens(data, figure_key, 'Surge', 2)
+    return {'applied': True, 'msgId': msg_id, 'tokensGranted': 2}
+
+
+def _cc_fear_and_dead_men(game, pending, ctx):
+    """Fear and Dead Men (whileDefending): +3 Block."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusBlock'] = int(c.get('bonusBlock') or 0) + 3
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusBlock': 3}
+
+
+def _cc_field_medic(game, pending, ctx):
+    """Field Medic: choose up to 2 friendlies within 3 — each recovers 2 Damage.
+
+    Required: ctx.targets — list of {figureKey, msgId}.
+    """
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import parse_figure_key
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    targets = (ctx or {}).get('targets') or []
+    if len(targets) > 2:
+        raise ValueError('field_medic: at most 2 targets')
+    dc_health_state = data.get('dcHealthState')
+    if not isinstance(dc_health_state, dict):
+        return {'applied': False, 'reason': 'no_health_state'}
+    healed = []
+    for t in targets:
+        if not isinstance(t, dict):
+            continue
+        fk = t.get('figureKey')
+        mid = t.get('msgId')
+        if fk and mid:
+            fig_idx = parse_figure_key(fk).get('figureIndex', 0)
+            heal_hp(dc_health_state, data, mid, fig_idx, 2, player_num)
+            healed.append(fk)
+    return {'applied': True, 'healed': healed}
+
+
+def _cc_in_the_crosshairs(game, pending, ctx):
+    """In the Crosshairs: attack targeting this figure gains +2 Accuracy."""
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    if not target_fk:
+        raise ValueError('in_the_crosshairs: requires ctx.target_figure_key')
+    marks = dict(data.get('inTheCrosshairsTargets') or {})
+    marks[target_fk] = {'bonusAccuracy': 2}
+    data['inTheCrosshairsTargets'] = marks
+    return {'applied': True, 'targetFigureKey': target_fk}
+
+
+def _cc_throw(game, pending, ctx):
+    """Throw: adjacent figure suffers 2 Damage."""
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    if not target_fk or target_pn not in (1, 2):
+        raise ValueError('throw: requires target_figure_key + target_player_num')
+    _apply_hp_damage_via_health_state(game, target_fk, target_pn, 2)
+    return {'applied': True, 'targetFigureKey': target_fk, 'damage': 2}
+
+
+def _cc_choke(game, pending, ctx):
+    """Choke: adjacent hostile suffers 2 Strain."""
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    if not target_fk or target_pn not in (1, 2):
+        raise ValueError('choke: requires target_figure_key + target_player_num')
+    _apply_hp_damage_via_health_state(game, target_fk, target_pn, 2)
+    return {'applied': True, 'targetFigureKey': target_fk, 'strain': 2}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -2777,6 +2932,16 @@ register('Targeted', _cc_targeted)
 register('Tactical Officer', _cc_tactical_officer)
 register('Frenzy', _cc_frenzy)
 register('Grit', _cc_grit)
+register('Shoot to Kill', _cc_shoot_to_kill)
+register('Skirmish', _cc_skirmish)
+register('Strategic Assault', _cc_strategic_assault)
+register('Bulk Up', _cc_bulk_up)
+register('Heroic Effort', _cc_heroic_effort)
+register('Fear and Dead Men', _cc_fear_and_dead_men)
+register('Field Medic', _cc_field_medic)
+register('In the Crosshairs', _cc_in_the_crosshairs)
+register('Throw', _cc_throw)
+register('Choke', _cc_choke)
 
 
 def registered_cc_effects() -> list:
