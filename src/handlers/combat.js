@@ -9,6 +9,7 @@ import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
+import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -4166,12 +4167,15 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     const _agDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
     const _agDefDcName = dcNameFromFigureKey(combat.target.figureKey);
     const _agDefEff = _agDcEff[_agDefDcName] || _agDcEff[(_agDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-    const _agDefSIds = _agDefEff?.specialAbilityIds || [];
-    if (_agDefSIds.includes('agile_jet_trooper_elite') || _agDefSIds.includes('agile_jet_trooper_reg')) {
-      const _agTotalBlock = (combat.defenseRoll?.block || 0) + (combat.bonusBlock || 0);
-      if (_agTotalBlock > 0) {
-        combat.bonusBlock = (combat.bonusBlock || 0) - 1;
-        combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+    if (hasAgileAbility(_agDefEff?.specialAbilityIds)) {
+      const conv = applyAgileConversion({
+        block: combat.defenseRoll?.block,
+        bonusBlock: combat.bonusBlock,
+        bonusEvade: combat.bonusEvade,
+      });
+      if (conv.applied) {
+        combat.bonusBlock = conv.bonusBlock;
+        combat.bonusEvade = conv.bonusEvade;
         combat.agileJetTrooperApplied = true;
         await thread.send('**Agile** — Converted 1 Block to 1 Evade.');
       }
