@@ -1339,3 +1339,31 @@ def _handle_spread_pain_cond(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.SPREAD_PAIN_COND, _handle_spread_pain_cond)
+
+
+# ---------------------------------------------------------------------------
+# Overwatch token placement
+# ---------------------------------------------------------------------------
+
+def _handle_overwatch_space(game: GameState, action: Action) -> GameState:
+    """Place an Overwatch token at chosen space for the given DC msgId.
+
+    Required params:
+        msg_id (str)
+        space (str) — coord (will be lowercased)
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    space = action.params.get('space')
+    if not msg_id or not space:
+        raise ValueError('overwatch_space requires msg_id + space params')
+    tokens = game.data.get('overwatchTokenPosition') or {}
+    tokens[msg_id] = str(space).lower()
+    game.data['overwatchTokenPosition'] = tokens
+    pending = game.data.get('pendingOverwatchPlacement') or {}
+    if msg_id in pending:
+        del pending[msg_id]
+        game.data['pendingOverwatchPlacement'] = pending if pending else None
+    return game
+
+
+register(ActionType.OVERWATCH_SPACE, _handle_overwatch_space)

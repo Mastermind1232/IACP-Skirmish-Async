@@ -957,6 +957,27 @@ def test_spread_pain_cond_rejects_bad_value():
     raise AssertionError('expected ValueError')
 
 
+def test_overwatch_space_places_token_and_clears_pending():
+    g = create_game()
+    g.data['pendingOverwatchPlacement'] = {'hl1dc0': {'playerNum': 1}}
+    new_g = step(g, Action(
+        type=ActionType.OVERWATCH_SPACE, player=1,
+        params={'msg_id': 'hl1dc0', 'space': 'A5'},
+    ))
+    assert new_g.data['overwatchTokenPosition']['hl1dc0'] == 'a5'
+    assert new_g.data['pendingOverwatchPlacement'] is None
+
+
+def test_overwatch_space_requires_params():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.OVERWATCH_SPACE, player=1, params={}))
+    except ValueError as e:
+        assert 'msg_id' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1022,6 +1043,8 @@ def main():
         ('spread_pain_cond_appends', test_spread_pain_cond_appends_to_combat_conditions),
         ('spread_pain_cond_skip', test_spread_pain_cond_skip_no_append_clears_pending),
         ('spread_pain_cond_rejects_bad_value', test_spread_pain_cond_rejects_bad_value),
+        ('overwatch_space_places_token', test_overwatch_space_places_token_and_clears_pending),
+        ('overwatch_space_requires_params', test_overwatch_space_requires_params),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
