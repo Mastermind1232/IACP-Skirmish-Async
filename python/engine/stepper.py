@@ -816,3 +816,61 @@ def _handle_pt_overflow_discard(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.PT_OVERFLOW_DISCARD, _handle_pt_overflow_discard)
+
+
+# ---------------------------------------------------------------------------
+# CC draw (P7 / C5-A)
+# ---------------------------------------------------------------------------
+
+def _handle_cc_draw(game: GameState, action: Action) -> GameState:
+    """Draw command cards for a player.
+
+    Required: action.player ∈ {1, 2}.
+    Optional params:
+        n (int): cards to draw (default 1).
+        target_hand_size (int): if set, draw to reach this hand size
+            (takes precedence over `n`).
+        reshuffle (bool): when True, reshuffle discard into deck if deck
+            runs out mid-draw. Default False (strict mode — may return
+            fewer cards than requested).
+        rng_seed (int): optional — for deterministic shuffle when
+            reshuffle=True and the deck empties.
+
+    Mirrors the round.js CC-draw loop. Puts drawn cards into the player's
+    hand and stores them on the transient `lastCcDraw` field so callers
+    can render the draw animation.
+    """
+    from python.engine.cards.deck import (
+        draw_cc_cards,
+        draw_to_hand_size,
+        draw_with_reshuffle,
+    )
+
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        raise ValueError('cc_draw requires player ∈ {1, 2}')
+
+    params = action.params or {}
+    target = params.get('target_hand_size')
+    if target is not None:
+        if not isinstance(target, int) or target < 0:
+            raise ValueError('cc_draw target_hand_size must be a non-negative int')
+        drew = draw_to_hand_size(game, player, target)
+    else:
+        n = params.get('n', 1)
+        if not isinstance(n, int) or n < 0:
+            raise ValueError('cc_draw n must be a non-negative int')
+        if params.get('reshuffle'):
+            rng = None
+            seed = params.get('rng_seed')
+            if seed is not None:
+                rng = _random.Random(int(seed))
+            drew = draw_with_reshuffle(game, player, n, rng=rng)
+        else:
+            drew = draw_cc_cards(game, player, n)
+
+    game.data['lastCcDraw'] = {'playerNum': player, 'cards': drew}
+    return game
+
+
+register(ActionType.CC_DRAW, _handle_cc_draw)

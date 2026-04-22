@@ -24,10 +24,11 @@ from python.engine.stepper import (
 
 def test_unknown_action_raises():
     g = create_game()
+    # PLAY_CC is not yet registered — use it as the unimplemented sentinel
     try:
-        step(g, Action(type=ActionType.CC_DRAW, player=1))
+        step(g, Action(type=ActionType.PLAY_CC, player=1))
     except NotImplementedError as e:
-        assert 'cc_draw' in str(e)
+        assert 'play_cc' in str(e)
         return
     raise AssertionError('expected NotImplementedError')
 
@@ -86,7 +87,9 @@ def test_is_implemented_reports_correctly():
     assert is_implemented(ActionType.MOVE_PICK_SPACE)
     assert is_implemented(ActionType.DC_END_ACTIVATION)
     assert is_implemented(ActionType.ATTACK_TARGET)
-    assert not is_implemented(ActionType.CC_DRAW)
+    assert is_implemented(ActionType.CC_DRAW)
+    assert is_implemented(ActionType.INTERACT)
+    assert not is_implemented(ActionType.PLAY_CC)
 
 
 def _two_figure_game():
@@ -543,6 +546,57 @@ def test_pt_overflow_discard_clears_queue_when_drained():
     assert new_g.data['pendingPowerTokenOverflow'] is None
 
 
+def test_cc_draw_pulls_n_from_deck_to_hand():
+    g = create_game()
+    g.data['player1CcDeck'] = ['A', 'B', 'C', 'D']
+    new_g = step(g, Action(type=ActionType.CC_DRAW, player=1, params={'n': 2}))
+    assert new_g.data['player1CcHand'] == ['A', 'B']
+    assert new_g.data['player1CcDeck'] == ['C', 'D']
+    assert new_g.data['lastCcDraw'] == {'playerNum': 1, 'cards': ['A', 'B']}
+
+
+def test_cc_draw_default_n_one():
+    g = create_game()
+    g.data['player1CcDeck'] = ['A', 'B']
+    new_g = step(g, Action(type=ActionType.CC_DRAW, player=1))
+    assert new_g.data['player1CcHand'] == ['A']
+    assert new_g.data['player1CcDeck'] == ['B']
+
+
+def test_cc_draw_reshuffle_from_discard_when_deck_empty():
+    g = create_game()
+    g.data['player1CcDeck'] = ['A']
+    g.data['player1CcDiscard'] = ['X', 'Y']
+    new_g = step(g, Action(
+        type=ActionType.CC_DRAW, player=1,
+        params={'n': 3, 'reshuffle': True, 'rng_seed': 7},
+    ))
+    assert sorted(new_g.data['player1CcHand']) == ['A', 'X', 'Y']
+    assert new_g.data['player1CcDiscard'] == []
+    assert new_g.data['player1CcDeck'] == []
+
+
+def test_cc_draw_target_hand_size_takes_precedence():
+    g = create_game()
+    g.data['player1CcHand'] = ['A']
+    g.data['player1CcDeck'] = ['B', 'C', 'D']
+    new_g = step(g, Action(
+        type=ActionType.CC_DRAW, player=1,
+        params={'target_hand_size': 3, 'n': 99},
+    ))
+    assert new_g.data['player1CcHand'] == ['A', 'B', 'C']
+
+
+def test_cc_draw_invalid_player_raises():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.CC_DRAW, player=0))
+    except ValueError as e:
+        assert 'player' in str(e).lower()
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -577,6 +631,11 @@ def main():
         ('interact_rejects_illegal_option', test_interact_rejects_illegal_option),
         ('pt_overflow_discard_resolves_one_slot', test_pt_overflow_discard_resolves_one_slot),
         ('pt_overflow_discard_clears_queue_when_drained', test_pt_overflow_discard_clears_queue_when_drained),
+        ('cc_draw_pulls_n_from_deck_to_hand', test_cc_draw_pulls_n_from_deck_to_hand),
+        ('cc_draw_default_n_one', test_cc_draw_default_n_one),
+        ('cc_draw_reshuffle_from_discard_when_empty', test_cc_draw_reshuffle_from_discard_when_deck_empty),
+        ('cc_draw_target_hand_size_precedence', test_cc_draw_target_hand_size_takes_precedence),
+        ('cc_draw_invalid_player_raises', test_cc_draw_invalid_player_raises),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
