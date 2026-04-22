@@ -2219,6 +2219,211 @@ def _cc_dioxis_fumes(game, pending, ctx):
     return {'applied': True, 'hits': hits, 'mpBlockActive': True}
 
 
+def _cc_take_it_down(game, pending, ctx):
+    """Take it Down: chosen friendly performs attack with +2 Hit.
+
+    Queues on nextAttackBonuses[target_player_num] and records a
+    pendingTriggeredAttack marker.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    if not target_fk or target_pn not in (1, 2):
+        raise ValueError('take_it_down: requires target_figure_key + target_player_num')
+    bonus = dict(data.get('nextAttackBonuses') or {})
+    existing = bonus.get(target_pn) or {}
+    existing['bonusHits'] = int(existing.get('bonusHits') or 0) + 2
+    bonus[target_pn] = existing
+    data['nextAttackBonuses'] = bonus
+    data['pendingTriggeredAttack'] = {
+        'attackerFigureKey': target_fk, 'playerNum': target_pn,
+    }
+    return {'applied': True, 'attackerFigureKey': target_fk, 'bonusHits': 2}
+
+
+def _cc_sarlacc_sweep(game, pending, ctx):
+    """Sarlacc Sweep: perform 2 attacks against different figures.
+
+    Records game.sarlaccSweepRemaining[msg_id] = 2 for the attack handler.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('sarlacc_sweep: requires ctx.msg_id')
+    flag = dict(data.get('sarlaccSweepRemaining') or {})
+    flag[msg_id] = 2
+    data['sarlaccSweepRemaining'] = flag
+    return {'applied': True, 'msgId': msg_id, 'attacksRemaining': 2}
+
+
+def _cc_call_the_vanguard(game, pending, ctx):
+    """Call the Vanguard: friendly TROOPER (cost ≥4) interrupts to move + attack.
+
+    Required: ctx.target_msg_id.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    if not target_msg_id:
+        raise ValueError('call_the_vanguard: requires ctx.target_msg_id')
+    data['callTheVanguardPending'] = {
+        'targetMsgId': target_msg_id,
+        'playerNum': pending.get('playerNum'),
+    }
+    return {'applied': True, 'targetMsgId': target_msg_id}
+
+
+def _cc_combat_resupply(game, pending, ctx):
+    """Combat Resupply: distribute Hit tokens equal to current round to
+    friendlies within 3.
+
+    Required: ctx.distribution — list of {figureKey, count} summing ≤ round.
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    dist = (ctx or {}).get('distribution') or []
+    round_num = int(data.get('round') or data.get('currentRound') or 1)
+    if not isinstance(dist, list):
+        raise ValueError('combat_resupply: requires distribution list')
+    total = sum(int(e.get('count', 0)) for e in dist if isinstance(e, dict))
+    if total > round_num:
+        raise ValueError(
+            f'combat_resupply: distribution sum ({total}) > round ({round_num})'
+        )
+    for entry in dist:
+        fk = entry.get('figureKey')
+        count = int(entry.get('count', 0))
+        if fk and count > 0:
+            grant_power_tokens(data, fk, 'Damage', count)
+    return {'applied': True, 'tokensDistributed': total, 'roundCap': round_num}
+
+
+def _cc_behind_enemy_lines(game, pending, ctx):
+    """Behind Enemy Lines: look at top 3 of opponent's deck.
+
+    Records game.behindEnemyLinesView = {cards, viewedBy}.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    opp = 2 if player_num == 1 else 1
+    deck_key = 'player2CcDeck' if opp == 2 else 'player1CcDeck'
+    top3 = list((data.get(deck_key) or [])[:3])
+    data['behindEnemyLinesView'] = {'cards': top3, 'viewedBy': player_num}
+    return {'applied': True, 'topCards': top3}
+
+
+def _cc_against_the_odds(game, pending, ctx):
+    """Against the Odds (endOfRound): if opponent has ≥8 more VP, up to 3 of
+    your figures gain Focus and a power token.
+
+    Required: ctx.target_figure_keys (list up to 3).
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    opp = 2 if player_num == 1 else 1
+    own_key = 'player1VP' if player_num == 1 else 'player2VP'
+    opp_key = 'player2VP' if opp == 2 else 'player1VP'
+    own_vp = int((data.get(own_key) or {}).get('total') or 0)
+    opp_vp = int((data.get(opp_key) or {}).get('total') or 0)
+    if opp_vp - own_vp < 8:
+        return {'applied': False, 'reason': 'vp_gap_below_8'}
+    targets = (ctx or {}).get('target_figure_keys') or []
+    if len(targets) > 3:
+        raise ValueError('against_the_odds: at most 3 targets')
+    applied_targets = []
+    for fk in targets:
+        _apply_condition_to_target(game, fk, 'Focus')
+        grant_power_tokens(data, fk, 'Surge', 1)
+        applied_targets.append(fk)
+    return {'applied': True, 'targets': applied_targets}
+
+
+def _cc_ballistics_matrix(game, pending, ctx):
+    """Ballistics Matrix: place as attachment on own DC.
+
+    Required: ctx.msg_id.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    player_num = pending.get('playerNum')
+    if not msg_id or player_num not in (1, 2):
+        raise ValueError('ballistics_matrix: requires msg_id + playerNum')
+    key = 'p1CcAttachments' if player_num == 1 else 'p2CcAttachments'
+    attachments = dict(data.get(key) or {})
+    card_list = list(attachments.get(msg_id) or [])
+    if 'Ballistics Matrix' not in card_list:
+        card_list.append('Ballistics Matrix')
+    attachments[msg_id] = card_list
+    data[key] = attachments
+    return {'applied': True, 'attachedTo': msg_id}
+
+
+def _cc_ballistics_matrix_exhaust(game, pending, ctx):
+    """Ballistics Matrix exhaust trigger: spend to re-roll any number of attack dice."""
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    count = int((ctx or {}).get('reroll_count') or 1)
+    if not msg_id:
+        raise ValueError('ballistics_matrix_exhaust: requires ctx.msg_id')
+    # Mark exhausted
+    exhausted_map = dict(data.get('exhaustedSkirmishUpgrades') or {})
+    exh_list = list(exhausted_map.get(msg_id) or [])
+    if 'Ballistics Matrix' not in exh_list:
+        exh_list.append('Ballistics Matrix')
+    exhausted_map[msg_id] = exh_list
+    data['exhaustedSkirmishUpgrades'] = exhausted_map
+    # Add rerolls to combat
+    combat = data.get('pendingCombat')
+    if isinstance(combat, dict):
+        c = dict(combat)
+        c['attackerRerollCount'] = int(c.get('attackerRerollCount') or 0) + count
+        data['pendingCombat'] = c
+    return {'applied': True, 'rerolls': count}
+
+
+def _cc_blood_feud(game, pending, ctx):
+    """Blood Feud (specialAction): place on hostile DC; when last figure
+    defeated, +4 VP.
+
+    Required: ctx.target_msg_id — opponent's DC msgId.
+    Sets game.bloodFeudTargets[target_msg_id] = {markerOwner, bonus:4}.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    player_num = pending.get('playerNum')
+    if not target_msg_id or player_num not in (1, 2):
+        raise ValueError('blood_feud: requires target_msg_id + playerNum')
+    marks = dict(data.get('bloodFeudTargets') or {})
+    marks[target_msg_id] = {'markerOwner': player_num, 'bonus': 4}
+    data['bloodFeudTargets'] = marks
+    return {'applied': True, 'targetMsgId': target_msg_id}
+
+
+def _cc_balancing_force(game, pending, ctx):
+    """Balancing Force: each player chooses up to 3 figures, rolls 1 red die
+    and applies damage equal to dots (simplified: take ctx.damage list).
+
+    Required: ctx.hits — list of {figureKey, playerNum, damage}.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    hits = (ctx or {}).get('hits') or []
+    if not isinstance(hits, list):
+        raise ValueError('balancing_force: requires hits list')
+    applied = []
+    for h in hits:
+        if not isinstance(h, dict):
+            continue
+        fk = h.get('figureKey')
+        pn = h.get('playerNum')
+        dmg = int(h.get('damage') or 0)
+        if fk and pn in (1, 2) and dmg > 0:
+            _apply_hp_damage_via_health_state(game, fk, pn, dmg)
+            applied.append(fk)
+    return {'applied': True, 'hits': applied}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -2377,6 +2582,15 @@ register('Learn by Example', _cc_learn_by_example)
 register('Transmit the Plans', _cc_transmit_the_plans)
 register('Dark Energy', _cc_dark_energy)
 register('Dioxis Fumes', _cc_dioxis_fumes)
+register('Take it Down', _cc_take_it_down)
+register('Sarlacc Sweep', _cc_sarlacc_sweep)
+register('Call the Vanguard', _cc_call_the_vanguard)
+register('Combat Resupply', _cc_combat_resupply)
+register('Behind Enemy Lines', _cc_behind_enemy_lines)
+register('Against the Odds', _cc_against_the_odds)
+register('Ballistics Matrix', _cc_ballistics_matrix)
+register('Blood Feud', _cc_blood_feud)
+register('Balancing Force', _cc_balancing_force)
 
 
 def registered_cc_effects() -> list:
