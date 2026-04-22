@@ -71,6 +71,10 @@ import {
   applyCortosisWeave,
 } from '../game/cortosis-weave-helpers.js';
 import {
+  hasFindWeaknessAbility,
+  applyFindWeaknessEvade,
+} from '../game/find-weakness-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1875,8 +1879,9 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Find Weakness (Scout Trooper Elite): -1 Evade to defense results (accuracy handled via passives)
-  if (atkSpecialIds.includes('find_weakness')) {
-    game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) - 1;
+  if (hasFindWeaknessAbility(atkSpecialIds)) {
+    const r = applyFindWeaknessEvade(game.pendingCombat);
+    game.pendingCombat.bonusEvade = r.bonusEvade;
     await thread.send('**Find Weakness** — −1 Evade applied to defense results.');
   }
 
