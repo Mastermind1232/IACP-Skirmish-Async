@@ -110,6 +110,11 @@ import {
   applyHunkerDownEvade,
 } from '../game/hunker-down-helpers.js';
 import {
+  hasRelentlessAbility,
+  relentlessInRange,
+  RELENTLESS_STRAIN_AMOUNT,
+} from '../game/relentless-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1813,9 +1818,8 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Relentless (Trandoshan Hunter, IG-88, Fifth Brother): 1 Strain to target within 3
-  const relentlessIds = ['relentless_trandoshan_elite', 'relentless_trandoshan_reg', 'relentless_ig88', 'fifth_brother_relentless'];
-  if (atkSpecialIds.some(id => relentlessIds.includes(id)) && distanceToTarget <= 3) {
-    await applyStrainToFigure(game, defenderPlayerNum, target.figureKey, 1, 'Relentless', meta.dcName, ctx, thread);
+  if (hasRelentlessAbility(atkSpecialIds) && relentlessInRange(distanceToTarget)) {
+    await applyStrainToFigure(game, defenderPlayerNum, target.figureKey, RELENTLESS_STRAIN_AMOUNT, 'Relentless', meta.dcName, ctx, thread);
   }
 
   // Advanced Targeting Computer (Dark Trooper Mk III): auto-Focus on declare
