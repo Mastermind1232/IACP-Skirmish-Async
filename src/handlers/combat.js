@@ -75,6 +75,11 @@ import {
   applyFindWeaknessEvade,
 } from '../game/find-weakness-helpers.js';
 import {
+  hasExploitWeaknessAbility,
+  defenderHasHarmfulCondition,
+  applyExploitWeaknessSurge,
+} from '../game/exploit-weakness-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1886,11 +1891,11 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Exploit Weakness (Scout Trooper Elite): +1 Surge if defender has a harmful condition
-  if (atkSpecialIds.includes('exploit_weakness')) {
-    const harmfulConds = ['Bleed', 'Stun', 'Weaken'];
+  if (hasExploitWeaknessAbility(atkSpecialIds)) {
     const defConds = game.figureConditions?.[target.figureKey] || [];
-    if (defConds.some(c => harmfulConds.includes(c))) {
-      game.pendingCombat.surgeBonus = (game.pendingCombat.surgeBonus || 0) + 1;
+    if (defenderHasHarmfulCondition(defConds)) {
+      const r = applyExploitWeaknessSurge(game.pendingCombat);
+      game.pendingCombat.surgeBonus = r.surgeBonus;
       await thread.send('**Exploit Weakness** — defender has a harmful condition, +1 Surge.');
     }
   }
