@@ -62,6 +62,11 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument('--workers', type=int, default=0,
                     help='N worker processes for distributed self-play '
                          '(0 = single-process; 2-4 fills a single GPU)')
+    ap.add_argument('--arch', choices=('v1', 'v2'), default='v2',
+                    help='v1 = per-worker GPU copies (time-sliced); '
+                         'v2 = central inference server (true batching, default)')
+    ap.add_argument('--max-inference-batch', type=int, default=128,
+                    help='v2 only: max rows per GPU forward pass on the inference server')
     return ap.parse_args()
 
 
@@ -82,9 +87,33 @@ def _load_checkpoint(path: Path, net: SkirboCNN) -> int:
 
 
 def _run_distributed(args):
-    from python.mcts.distributed import DistributedConfig, run_distributed_training
     device = args.device or str(select_device())
     games_per_worker = args.parallel or 8
+    if args.arch == 'v2':
+        from python.mcts.distributed_v2 import DistributedV2Config, run_distributed_v2
+        config = DistributedV2Config(
+            n_workers=args.workers,
+            games_per_worker=games_per_worker,
+            n_iterations=args.iters,
+            mcts_simulations=args.sims,
+            training_steps_per_iter=args.train_steps,
+            batch_size=args.batch_size,
+            buffer_capacity=args.buffer,
+            learning_rate=args.lr,
+            weight_decay=args.weight_decay,
+            max_moves_per_game=args.max_moves,
+            temperature_moves=args.tau_moves,
+            seed=args.seed,
+            device=device,
+            n_channels=args.n_channels,
+            n_res_blocks=args.n_res_blocks,
+            checkpoint_every=args.checkpoint_every,
+            max_inference_batch=args.max_inference_batch,
+        )
+        run_distributed_v2(config, resume=args.resume)
+        return
+
+    from python.mcts.distributed import DistributedConfig, run_distributed_training
     config = DistributedConfig(
         n_workers=args.workers,
         games_per_worker=games_per_worker,

@@ -34,6 +34,7 @@ from python.mcts.actions import (
     legal_actions,
     policy_index_to_action,
 )
+from python.mcts.inference_backend import InferenceBackend, LocalInferenceBackend
 from python.mcts.search import DEFAULT_C_PUCT, Node, _deep_copy_state, _terminal_reward_p1
 
 
@@ -42,33 +43,36 @@ class BatchedMCTS:
 
     def __init__(
         self,
-        net,
+        net=None,
         device: Optional[torch.device] = None,
         c_puct: float = DEFAULT_C_PUCT,
         max_depth: int = 200,
         attack_rng_seed: int = 0,
         n_policy: int = 4096,
+        backend: Optional[InferenceBackend] = None,
     ) -> None:
-        self.net = net
-        self.device = device or torch.device('cpu')
+        """Either `net` (+ optional device) or `backend` must be supplied.
+        Supplying `net` constructs a LocalInferenceBackend internally."""
+        if backend is None:
+            if net is None:
+                raise ValueError('BatchedMCTS: must provide net or backend')
+            backend = LocalInferenceBackend(net, device or torch.device('cpu'))
+        self.backend = backend
         self.c_puct = c_puct
         self.max_depth = max_depth
         self.n_policy = n_policy
         self._attack_rng = _random.Random(attack_rng_seed)
-        self.net.eval()
 
     # ------------------------------------------------------------------
     # Batched NN evaluation
     # ------------------------------------------------------------------
 
-    @torch.no_grad()
     def _batch_evaluate(
         self, states: List[GameState],
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Encode each state from its active player's POV, stack, forward.
-
-        Returns (logits_batch [N, n_policy], values_batch [N, 1]) on CPU.
-        """
+        """Encode each state from its active player's POV, forward via
+        the configured backend. Returns (logits [N, n_policy], values
+        [N, 1]) on CPU."""
         if not states:
             return torch.empty(0, self.n_policy), torch.empty(0, 1)
         sps: List[torch.Tensor] = []
@@ -78,10 +82,9 @@ class BatchedMCTS:
             sp, sc = encode_state(s, pov)
             sps.append(sp)
             scs.append(sc)
-        sp_batch = torch.stack(sps).to(self.device, non_blocking=True)
-        sc_batch = torch.stack(scs).to(self.device, non_blocking=True)
-        logits, values = self.net(sp_batch, sc_batch)
-        return logits.cpu(), values.cpu()
+        sp_batch = torch.stack(sps)
+        sc_batch = torch.stack(scs)
+        return self.backend.evaluate(sp_batch, sc_batch)
 
     def _expand_with_eval(
         self,
