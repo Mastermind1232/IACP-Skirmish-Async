@@ -1301,3 +1301,41 @@ def _handle_ee3_pick_skip(game: GameState, action: Action) -> GameState:
 
 register(ActionType.EE3_PICK_DIE, _handle_ee3_pick_die)
 register(ActionType.EE3_PICK_SKIP, _handle_ee3_pick_skip)
+
+
+# ---------------------------------------------------------------------------
+# Spread the Pain — condition pick (stun / weaken / bleed / skip)
+# ---------------------------------------------------------------------------
+
+def _handle_spread_pain_cond(game: GameState, action: Action) -> GameState:
+    """Spread the Pain: attacker picks a condition to apply post-combat.
+
+    Required param:
+        cond (str) — one of 'stun', 'weaken', 'bleed', 'skip'.
+
+    Effects:
+        - On non-skip: appends capitalized condition to
+          game.pendingCombat.spreadThePainConditions.
+        - Clears game.pendingSpreadThePainCondPick either way.
+    """
+    cond = str(action.params.get('cond') or '').lower()
+    if cond not in ('stun', 'weaken', 'bleed', 'skip'):
+        raise ValueError(
+            f"spread_pain_cond: cond must be stun|weaken|bleed|skip, got {cond!r}"
+        )
+    if not game.data.get('pendingSpreadThePainCondPick'):
+        raise ValueError('spread_pain_cond: no pending pick open')
+
+    game.data['pendingSpreadThePainCondPick'] = None
+    if cond != 'skip':
+        combat = game.data.get('pendingCombat') or {}
+        if isinstance(combat, Mapping):
+            combat_mut = dict(combat)
+            existing = list(combat_mut.get('spreadThePainConditions') or [])
+            existing.append(cond.capitalize())
+            combat_mut['spreadThePainConditions'] = existing
+            game.data['pendingCombat'] = combat_mut
+    return game
+
+
+register(ActionType.SPREAD_PAIN_COND, _handle_spread_pain_cond)

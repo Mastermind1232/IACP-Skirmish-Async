@@ -919,6 +919,44 @@ def test_ee3_pick_skip_just_stamps_decided():
     assert new_g.data.get('movementBank') is None
 
 
+def test_spread_pain_cond_appends_to_combat_conditions():
+    g = create_game()
+    g.data['pendingSpreadThePainCondPick'] = {'attackerPlayerNum': 1}
+    g.data['pendingCombat'] = {'attackerPlayerNum': 1}
+    new_g = step(g, Action(
+        type=ActionType.SPREAD_PAIN_COND, player=1,
+        params={'cond': 'stun'},
+    ))
+    assert new_g.data['pendingCombat']['spreadThePainConditions'] == ['Stun']
+    assert new_g.data['pendingSpreadThePainCondPick'] is None
+
+
+def test_spread_pain_cond_skip_no_append_clears_pending():
+    g = create_game()
+    g.data['pendingSpreadThePainCondPick'] = {'attackerPlayerNum': 1}
+    g.data['pendingCombat'] = {'attackerPlayerNum': 1}
+    new_g = step(g, Action(
+        type=ActionType.SPREAD_PAIN_COND, player=1,
+        params={'cond': 'skip'},
+    ))
+    assert new_g.data['pendingSpreadThePainCondPick'] is None
+    assert new_g.data['pendingCombat'].get('spreadThePainConditions') in (None, [])
+
+
+def test_spread_pain_cond_rejects_bad_value():
+    g = create_game()
+    g.data['pendingSpreadThePainCondPick'] = {'attackerPlayerNum': 1}
+    try:
+        step(g, Action(
+            type=ActionType.SPREAD_PAIN_COND, player=1,
+            params={'cond': 'nonsense'},
+        ))
+    except ValueError as e:
+        assert 'stun' in str(e).lower()
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -981,6 +1019,9 @@ def main():
         ('ee3_pick_die_deducts_mp_and_swaps', test_ee3_pick_die_deducts_mp_and_swaps_color_to_red),
         ('ee3_pick_die_rejects_invalid_color', test_ee3_pick_die_rejects_invalid_color),
         ('ee3_pick_skip_stamps_decided', test_ee3_pick_skip_just_stamps_decided),
+        ('spread_pain_cond_appends', test_spread_pain_cond_appends_to_combat_conditions),
+        ('spread_pain_cond_skip', test_spread_pain_cond_skip_no_append_clears_pending),
+        ('spread_pain_cond_rejects_bad_value', test_spread_pain_cond_rejects_bad_value),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
