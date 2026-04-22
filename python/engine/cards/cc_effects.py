@@ -3086,6 +3086,127 @@ def _cc_there_is_no_try(game, pending, ctx):
     return {'applied': True, 'side': side}
 
 
+def _cc_generic_condition(game, pending, ctx, condition):
+    """Shared: apply a condition to ctx.target_figure_key."""
+    target_fk = (ctx or {}).get('target_figure_key')
+    if not target_fk:
+        raise ValueError(f'requires ctx.target_figure_key')
+    _apply_condition_to_target(game, target_fk, condition)
+    return {'applied': True, 'targetFigureKey': target_fk, 'condition': condition}
+
+
+def _cc_generic_damage(game, pending, ctx, amount):
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    if not target_fk or target_pn not in (1, 2):
+        raise ValueError('requires target_figure_key + target_player_num')
+    _apply_hp_damage_via_health_state(game, target_fk, target_pn, amount)
+    return {'applied': True, 'targetFigureKey': target_fk, 'damage': amount}
+
+
+def _cc_generic_mp(game, pending, ctx, amount):
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, amount)
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': amount}
+
+
+def _cc_generic_combat_bonus(game, pending, ctx, field, amount):
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c[field] = int(c.get(field) or 0) + amount
+    data['pendingCombat'] = c
+    return {'applied': True, field: amount}
+
+
+def _cc_generic_tokens(game, pending, ctx, token_type, count):
+    from python.engine.mechanics.tokens import grant_power_tokens
+    data = game.data if hasattr(game, 'data') else game
+    fk = (ctx or {}).get('figure_key')
+    if not fk:
+        raise ValueError('requires ctx.figure_key')
+    grant_power_tokens(data, fk, token_type, count)
+    return {'applied': True, 'figureKey': fk, 'tokenType': token_type, 'count': count}
+
+
+def _cc_generic_heal(game, pending, ctx, amount):
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import parse_figure_key
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    player_num = pending.get('playerNum')
+    if not figure_key or not msg_id or player_num not in (1, 2):
+        raise ValueError('requires figure_key + msg_id + playerNum')
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    dc_health_state = data.get('dcHealthState')
+    if isinstance(dc_health_state, dict):
+        heal_hp(dc_health_state, data, msg_id, fig_idx, amount, player_num)
+    return {'applied': True, 'figureKey': figure_key, 'healed': amount}
+
+
+# Register many cards via generic handlers — cuts code size dramatically.
+# Format: (cardName, lambda wrapping generic)
+
+_CC_SIMPLE_REGISTRATIONS = [
+    ('Agility', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusEvade', 2)),
+    ('Anticipate', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusBlock', 2)),
+    ('Assured Victory', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 2)),
+    ('Backup Muscle', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
+    ('Barrage', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('Bastion', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusBlock', 1)),
+    ('Blinding Light', lambda g, p, c: _cc_generic_condition(g, p, c, 'Weaken')),
+    ('Calculated Advance', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
+    ('Crash Course', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
+    ('Critical Hit', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('Dead Weight', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
+    ('Deadly Aim', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusAccuracy', 2)),
+    ('Driven to Succeed', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
+    ('Elevated Ground', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusAccuracy', 1)),
+    ('Fake Retreat', lambda g, p, c: _cc_generic_mp(g, p, c, 3)),
+    ('Flash Suppression', lambda g, p, c: _cc_generic_condition(g, p, c, 'Stun')),
+    ('Frag Out', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
+    ('Harass', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
+    ('High Impact', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('Hollow Threat', lambda g, p, c: _cc_generic_condition(g, p, c, 'Stun')),
+    ('Honed Reflexes', lambda g, p, c: _cc_generic_tokens(g, p, c, 'Evade', 1)),
+    ('Knockdown', lambda g, p, c: _cc_generic_condition(g, p, c, 'Stun')),
+    ('Leading Shot', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('Martial Prowess', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusSurges', 1)),
+    ('Medpac', lambda g, p, c: _cc_generic_heal(g, p, c, 3)),
+    ('Motivation', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
+    ('Nimble Feet', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
+    ('Patience', lambda g, p, c: _cc_generic_tokens(g, p, c, 'Block', 1)),
+    ('Pinned Down', lambda g, p, c: _cc_generic_condition(g, p, c, 'Weaken')),
+    ('Power of the Dark Side', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('Precise Shot', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusPierce', 1)),
+    ('Precision Fire', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusAccuracy', 2)),
+    ('Press the Advantage', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('Punishing Blows', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 2)),
+    ('Rallying Leader', lambda g, p, c: _cc_generic_heal(g, p, c, 2)),
+    ('Return Fire', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('Run and Gun', lambda g, p, c: _cc_generic_mp(g, p, c, 3)),
+    ('Smoke Grenade', lambda g, p, c: _cc_generic_condition(g, p, c, 'Hide')),
+    ('Speed Boost', lambda g, p, c: _cc_generic_mp(g, p, c, 3)),
+    ('Steady On', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusBlock', 2)),
+    ('Survive Another Day', lambda g, p, c: _cc_generic_heal(g, p, c, 2)),
+    ('Tactical Retreat', lambda g, p, c: _cc_generic_mp(g, p, c, 3)),
+    ('Tech Disruption', lambda g, p, c: _cc_generic_condition(g, p, c, 'Weaken')),
+    ('Thermal Detonator', lambda g, p, c: _cc_generic_damage(g, p, c, 3)),
+    ('Tough Target', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusBlock', 2)),
+    ('Vengeful Strike', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 2)),
+    ('Vibro-Sword Mastery', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusSurges', 1)),
+    ('Vital Strike', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusPierce', 2)),
+    ('Walker Assault', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
+    ('Watchful Eye', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusAccuracy', 1)),
+]
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -3293,6 +3414,11 @@ register('Change Their Minds', _cc_change_their_minds)
 register('Overcharged Weapons', _cc_overcharged_weapons)
 register('Protect the Old Ways', _cc_protect_the_old_ways)
 register('There Is No Try', _cc_there_is_no_try)
+
+# Bulk-register simple CCs via the generic helpers
+for _name, _fn in _CC_SIMPLE_REGISTRATIONS:
+    if _name not in _CC_EFFECTS:
+        register(_name, _fn)
 
 
 def registered_cc_effects() -> list:
