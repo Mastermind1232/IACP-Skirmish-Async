@@ -3,6 +3,7 @@
  */
 import { getDcEffects, getDcKeywords, getCcEffect, getCcEffectsData, getAbilityLibrary } from '../data-loader.js';
 import { modularDiscountDelta } from './modular-hse-helpers.js';
+import { scavengedStockExcusals, SCAVENGED_STOCK_JAWA_NAME } from './scavenged-stock-helpers.js';
 
 /**
  * Check whether any DC in `armyDcNames` has a passive whose library entry
@@ -574,7 +575,7 @@ export function validateArmyAffiliation(squad) {
   const hasBibFortuna = nameSet.has('Bib Fortuna');
   const hasSaskaTeft = nameSet.has('Saska Teft');
   const hasDoctorAphra = nameSet.has('Doctor Aphra') || nameSet.has('Dr. Aphra');
-  const hasEliteJawaScavenger = nameSet.has('Jawa Scavenger (Elite)');
+  const hasEliteJawaScavenger = nameSet.has(SCAVENGED_STOCK_JAWA_NAME);
   const hasHeavyStormtrooperElite = nameSet.has('Heavy Stormtrooper (Elite)');
   // Temporary Alliance: auto-resolve unqualified "[Temporary Alliance]" based on primary affiliation
   const hasUnqualifiedTA = nameSet.has('[Temporary Alliance]') || nameSet.has('Temporary Alliance');
@@ -643,16 +644,8 @@ export function validateArmyAffiliation(squad) {
 
   // Jawa Scavenger (Elite) — Scavenged Stock: up to 3 cross-affiliation DROID DCs allowed
   if (hasEliteJawaScavenger) {
-    let droidExcusedCount = 0;
-    for (const dc of resolved) {
-      if (dc.affiliation !== primaryAffiliation && dc.affiliation !== 'Any' && !excused.has(dc.name)) {
-        if (dc.keywords.some((k) => String(k).toUpperCase() === 'DROID')) {
-          if (droidExcusedCount < 3) {
-            excused.add(dc.name);
-            droidExcusedCount++;
-          }
-        }
-      }
+    for (const name of scavengedStockExcusals(resolved, primaryAffiliation, excused)) {
+      excused.add(name);
     }
   }
 
