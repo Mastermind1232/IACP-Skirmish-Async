@@ -1136,6 +1136,61 @@ def test_comm_disruption_play_requires_prompt():
     raise AssertionError('expected ValueError')
 
 
+def test_dc_ability_choice_clears_pending_and_records_result():
+    g = create_game()
+    g.data['pendingDcAbilityChoice'] = {
+        'hl1dc0_0': {
+            'gameId': g.data.get('gameId'),
+            'playerNum': 1,
+            'abilityId': 'totally_unknown_ability',
+            'figureIndex': 0,
+            'specialIdx': 0,
+            'choiceOptions': ['Option A', 'Option B'],
+        },
+    }
+    new_g = step(g, Action(
+        type=ActionType.DC_ABILITY_CHOICE, player=1,
+        params={'msg_id': 'hl1dc0', 'special_idx': 0, 'choice_index': 1},
+    ))
+    # Unknown ability is tolerated — result records reason
+    assert new_g.data['pendingDcAbilityChoice'] is None
+    assert new_g.data['lastDcAbilityChoiceResult']['abilityId'] == 'totally_unknown_ability'
+    assert new_g.data['lastDcAbilityChoiceResult']['choiceIndex'] == 1
+    assert new_g.data['lastDcAbilityChoiceResult']['result']['reason'] == 'unknown_ability'
+
+
+def test_dc_ability_choice_requires_pending():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.DC_ABILITY_CHOICE, player=1,
+            params={'msg_id': 'hl1dc0', 'special_idx': 0, 'choice_index': 0},
+        ))
+    except ValueError as e:
+        assert 'no pending choice' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_dc_ability_choice_rejects_out_of_range():
+    g = create_game()
+    g.data['pendingDcAbilityChoice'] = {
+        'hl1dc0_0': {
+            'playerNum': 1, 'abilityId': 'x',
+            'choiceOptions': ['A'],
+        },
+    }
+    try:
+        step(g, Action(
+            type=ActionType.DC_ABILITY_CHOICE, player=1,
+            params={'msg_id': 'hl1dc0', 'special_idx': 0, 'choice_index': 5},
+        ))
+    except ValueError as e:
+        assert 'out of range' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1217,6 +1272,9 @@ def main():
         ('comm_disruption_play_cancels_cc', test_comm_disruption_play_cancels_pending_cc),
         ('comm_disruption_play_requires_card', test_comm_disruption_play_requires_card_in_hand),
         ('comm_disruption_play_requires_prompt', test_comm_disruption_play_requires_prompt),
+        ('dc_ability_choice_clears_pending', test_dc_ability_choice_clears_pending_and_records_result),
+        ('dc_ability_choice_requires_pending', test_dc_ability_choice_requires_pending),
+        ('dc_ability_choice_rejects_out_of_range', test_dc_ability_choice_rejects_out_of_range),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

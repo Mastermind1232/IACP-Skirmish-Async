@@ -1524,3 +1524,90 @@ def _handle_comm_disruption_play(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.COMM_DISRUPTION_PLAY, _handle_comm_disruption_play)
+
+
+# ---------------------------------------------------------------------------
+# DC_ABILITY_CHOICE — choose one of multiple options for a pending ability
+# ---------------------------------------------------------------------------
+
+def _handle_dc_ability_choice(game: GameState, action: Action) -> GameState:
+    """Resolve a pending DC ability that required a chooseOne picker.
+
+    Required params:
+        msg_id (str) — DC message id.
+        special_idx (int) — ability slot index.
+        choice_index (int) — selected option from pendingDcAbilityChoice.choiceOptions.
+
+    Looks up game.pendingDcAbilityChoice[f'{msg_id}_{special_idx}'] for the
+    abilityId + playerNum + choiceOptions, dispatches through
+    abilities.dispatch.resolve with the choice baked into ctx, then clears
+    the pending entry.
+
+    Records the dispatch result on game.lastDcAbilityChoiceResult.
+    """
+    from python.engine.abilities import dispatch as ability_dispatch
+
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    special_idx = action.params.get('special_idx')
+    if special_idx is None:
+        special_idx = action.params.get('specialIdx')
+    choice_index = action.params.get('choice_index')
+    if choice_index is None:
+        choice_index = action.params.get('choiceIndex')
+    if not msg_id or not isinstance(special_idx, int) or not isinstance(choice_index, int):
+        raise ValueError(
+            'dc_ability_choice requires msg_id + int special_idx + int choice_index'
+        )
+    if choice_index < 0:
+        raise ValueError('dc_ability_choice: choice_index must be non-negative')
+
+    pending_map = game.data.get('pendingDcAbilityChoice') or {}
+    key = f'{msg_id}_{special_idx}'
+    pending = pending_map.get(key)
+    if not pending:
+        raise ValueError(
+            f'dc_ability_choice: no pending choice for key {key!r}'
+        )
+
+    ability_id = pending.get('abilityId')
+    player_num = pending.get('playerNum')
+    choice_options = pending.get('choiceOptions') or []
+    if choice_index >= len(choice_options):
+        raise ValueError(
+            f'dc_ability_choice: choice_index {choice_index} out of range '
+            f'({len(choice_options)} options)'
+        )
+    target_figure_keys = pending.get('targetFigureKeys') or []
+    target_fk = (
+        target_figure_keys[choice_index]
+        if 0 <= choice_index < len(target_figure_keys) else None
+    )
+
+    ctx: Dict[str, Any] = {
+        'msg_id': msg_id,
+        'special_idx': special_idx,
+        'player_num': player_num,
+        'choice_index': choice_index,
+        'chosen_option': choice_options[choice_index],
+        'target_figure_key': target_fk,
+        'figure_index': pending.get('figureIndex'),
+    }
+    try:
+        result = ability_dispatch.resolve(game.data, ability_id, ctx)
+    except ability_dispatch.UnknownAbility:
+        result = {'applied': False, 'reason': 'unknown_ability'}
+    except ability_dispatch.PatternNotImplemented as e:
+        result = {'applied': False, 'reason': 'pattern_not_implemented', 'message': str(e)}
+
+    del pending_map[key]
+    game.data['pendingDcAbilityChoice'] = pending_map if pending_map else None
+    game.data['lastDcAbilityChoiceResult'] = {
+        'abilityId': ability_id,
+        'playerNum': player_num,
+        'choiceIndex': choice_index,
+        'result': result,
+    }
+    return game
+
+
+register(ActionType.DC_ABILITY_CHOICE, _handle_dc_ability_choice)
