@@ -568,4 +568,115 @@ register(ActionType.ACTIVATE_DC, _handle_activate_dc)
 register(ActionType.DC_END_ACTIVATION, _handle_dc_end_activation)
 register(ActionType.MOVE_PICK_SPACE, _handle_move_pick_space)
 register(ActionType.ATTACK_TARGET, _handle_attack_target)
+# ---------------------------------------------------------------------------
+# Auto-deploy (headless game start)
+# ---------------------------------------------------------------------------
+
+def _coord_row(coord: str) -> int:
+    """Extract the numeric row from a coord like 'a12'."""
+    for i, ch in enumerate(coord):
+        if ch.isdigit():
+            try:
+                return int(coord[i:])
+            except ValueError:
+                return 0
+    return 0
+
+
+def _handle_auto_deploy(game: GameState, action: Action) -> GameState:
+    """Place every figure in each player's squad onto the map, then start
+    round 1. Picks low-row cells for p1, high-row cells for p2 so the
+    sides start apart.
+
+    Reads:
+        game['player1Squad']['deploymentCards']: list of DC names.
+        game['player2Squad']['deploymentCards']: list of DC names.
+        game['selectedMap'] (or game['mapId']).
+
+    Multi-figure groups: a DC with `figures=N` in dc-effects gets N
+    figure keys (-0-0, -0-1, ... -0-(N-1)) and one shared group index.
+    Duplicate DC entries in the squad list spawn separate groups (group
+    index increments).
+
+    Effects:
+        figurePositions populated for both sides.
+        round = 1, roundPhase = 'activation', phase = 'round_active'.
+        activationsRemaining set from board.
+        mapId mirrored from selectedMap if missing.
+    """
+    map_id = game.get('mapId') or game.get('selectedMap')
+    if not map_id:
+        raise ValueError('auto_deploy: no map_id / selectedMap on game')
+    if 'mapId' not in game.data:
+        game['mapId'] = map_id
+    map_data = get_map_spaces(map_id)
+    spaces = map_data.get('spaces') if isinstance(map_data, Mapping) else None
+    if not spaces:
+        raise ValueError(f'auto_deploy: no spaces for map {map_id!r}')
+
+    sorted_by_row = sorted(spaces, key=lambda c: (_coord_row(c), c))
+    p1_pool = list(sorted_by_row)                 # low rows first
+    p2_pool = list(reversed(sorted_by_row))       # high rows first
+    used = set()
+
+    def _take(pool):
+        while pool:
+            cell = pool.pop(0)
+            if cell not in used:
+                used.add(cell)
+                return cell
+        return None
+
+    def _build_positions(squad_key: str, pool) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        squad = game.get(squad_key) or {}
+        dcs = squad.get('deploymentCards') if isinstance(squad, Mapping) else None
+        if not isinstance(dcs, (list, tuple)):
+            return out
+        group_counts: Dict[str, int] = {}
+        for dc_name in dcs:
+            if not isinstance(dc_name, str) or not dc_name:
+                continue
+            if dc_name.startswith('[') and dc_name.endswith(']'):
+                continue  # attachment/upgrade — no figure on board
+            group_idx = group_counts.get(dc_name, 0)
+            group_counts[dc_name] = group_idx + 1
+            effect = get_dc_effect(dc_name) or {}
+            n_figs = effect.get('figures')
+            if not isinstance(n_figs, int) or n_figs < 1:
+                n_figs = 1
+            for fig_idx in range(n_figs):
+                cell = _take(pool)
+                if cell is None:
+                    raise ValueError(
+                        f'auto_deploy: ran out of cells placing {dc_name!r}'
+                    )
+                key = f'{dc_name}-{group_idx}-{fig_idx}'
+                out[key] = cell
+        return out
+
+    p1_pos = _build_positions('player1Squad', p1_pool)
+    p2_pos = _build_positions('player2Squad', p2_pool)
+    game['figurePositions'] = {1: p1_pos, 2: p2_pos}
+
+    game['round'] = 1
+    game['currentRound'] = 1
+    game['phase'] = 'round_active'
+    game['roundPhase'] = 'activation'
+    game['activePlayer'] = 1
+    game['initiativeHolder'] = 1
+    game['activationsRemaining'] = {
+        1: _count_activations_from_board(game, 1),
+        2: _count_activations_from_board(game, 2),
+    }
+    game['figuresMovedThisRound'] = []
+    game['figureAttacksThisActivation'] = {}
+    game['figureDamageThisActivation'] = {}
+    game['activeFigureKeys'] = []
+    game['activationStartPositions'] = {}
+    game['movementPoints'] = 0
+    return game
+
+
 register(ActionType.END_END_OF_ROUND, _handle_end_end_of_round)
+register(ActionType.AUTO_DEPLOY, _handle_auto_deploy)

@@ -305,6 +305,80 @@ def test_attack_target_kills_and_awards_vp():
     raise AssertionError('no kill in 500 seeds — dice distribution broken')
 
 
+def test_auto_deploy_places_figures_and_starts_round():
+    g = create_game(
+        map_id='mos-eisley-outskirts',
+        p1_squad={'affiliation': 'Rebel', 'cost': 20,
+                  'deploymentCards': ['Rebel Trooper (Regular)']},
+        p2_squad={'affiliation': 'Imperial', 'cost': 22,
+                  'deploymentCards': ['Stormtrooper (Regular)']},
+    )
+    new_g = step(g, Action(type=ActionType.AUTO_DEPLOY, player=0))
+    # 3 figures per group (Regular has figures=3).
+    p1 = new_g.data['figurePositions'][1]
+    p2 = new_g.data['figurePositions'][2]
+    assert len(p1) == 3, p1
+    assert len(p2) == 3, p2
+    # All cells distinct.
+    all_cells = list(p1.values()) + list(p2.values())
+    assert len(set(all_cells)) == len(all_cells)
+    assert new_g.data['round'] == 1
+    assert new_g.data['phase'] == 'round_active'
+    assert new_g.data['roundPhase'] == 'activation'
+    # One deployment group each -> 1 activation each.
+    assert new_g.data['activationsRemaining'] == {1: 1, 2: 1}
+
+
+def test_auto_deploy_separates_sides_by_row():
+    g = create_game(
+        map_id='mos-eisley-outskirts',
+        p1_squad={'affiliation': 'Rebel', 'cost': 20,
+                  'deploymentCards': ['Rebel Trooper (Regular)']},
+        p2_squad={'affiliation': 'Imperial', 'cost': 22,
+                  'deploymentCards': ['Stormtrooper (Regular)']},
+    )
+    new_g = step(g, Action(type=ActionType.AUTO_DEPLOY, player=0))
+    p1_rows = [int(c[1:]) for c in new_g.data['figurePositions'][1].values()]
+    p2_rows = [int(c[1:]) for c in new_g.data['figurePositions'][2].values()]
+    # p1 on low rows, p2 on high rows.
+    assert max(p1_rows) < min(p2_rows), f'p1 rows {p1_rows} vs p2 rows {p2_rows}'
+
+
+def test_auto_deploy_skips_bracketed_upgrades():
+    """[Heroic Effort]-style attachments must not get a board slot."""
+    g = create_game(
+        map_id='mos-eisley-outskirts',
+        p1_squad={'affiliation': 'Rebel', 'cost': 20,
+                  'deploymentCards': ['Rebel Trooper (Regular)', '[Heroic Effort]']},
+        p2_squad={'affiliation': 'Imperial', 'cost': 22,
+                  'deploymentCards': ['Stormtrooper (Regular)']},
+    )
+    new_g = step(g, Action(type=ActionType.AUTO_DEPLOY, player=0))
+    p1 = new_g.data['figurePositions'][1]
+    # Only the Rebel Trooper (3 figures); no bracketed key.
+    assert all('Rebel Trooper' in k for k in p1)
+    assert len(p1) == 3
+
+
+def test_auto_deploy_multiple_dcs_distinct_groups():
+    """Same DC twice in deploymentCards => group indices 0 and 1."""
+    g = create_game(
+        map_id='mos-eisley-outskirts',
+        p1_squad={'affiliation': 'Rebel', 'cost': 40,
+                  'deploymentCards': ['Rebel Trooper (Regular)', 'Rebel Trooper (Regular)']},
+        p2_squad={'affiliation': 'Imperial', 'cost': 22,
+                  'deploymentCards': ['Stormtrooper (Regular)']},
+    )
+    new_g = step(g, Action(type=ActionType.AUTO_DEPLOY, player=0))
+    p1_keys = list(new_g.data['figurePositions'][1].keys())
+    # 2 groups * 3 figs = 6 keys.
+    assert len(p1_keys) == 6
+    groups = {k.rsplit('-', 2)[1] for k in p1_keys}
+    assert groups == {'0', '1'}, groups
+    # 2 activations for p1.
+    assert new_g.data['activationsRemaining'][1] == 2
+
+
 def test_end_end_of_round_refreshes_activations():
     g = _two_figure_game()
     g.data['round'] = 1
@@ -378,6 +452,10 @@ def main():
         ('end_end_of_round_refreshes_activations', test_end_end_of_round_refreshes_activations),
         ('end_end_of_round_detects_game_over', test_end_end_of_round_detects_game_over),
         ('end_end_of_round_counts_multi_figure_group_as_one', test_end_end_of_round_counts_multi_figure_group_as_one),
+        ('auto_deploy_places_figures_and_starts_round', test_auto_deploy_places_figures_and_starts_round),
+        ('auto_deploy_separates_sides_by_row', test_auto_deploy_separates_sides_by_row),
+        ('auto_deploy_skips_bracketed_upgrades', test_auto_deploy_skips_bracketed_upgrades),
+        ('auto_deploy_multiple_dcs_distinct_groups', test_auto_deploy_multiple_dcs_distinct_groups),
     ]
     failures = []
     for name, fn in cases:
