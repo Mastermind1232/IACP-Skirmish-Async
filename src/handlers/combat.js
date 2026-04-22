@@ -62,6 +62,11 @@ import {
 } from '../game/squad-training-helpers.js';
 import { hasQueryAbility, applyQueryBonus } from '../game/query-hk47-helpers.js';
 import {
+  hasBespinSecurityAbility,
+  attackerQualifiesForBespin,
+  applyBespinSecurityReroll,
+} from '../game/bespin-security-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -2051,9 +2056,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Bespin Security (Wing Guard Elite): adjacent friendly LEADER or SCUM TROOPER attacker gets +1 reroll
   if (mapSpaces) {
     const atkPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
-    const atkKws = (atkEff?.keywords || []).map(k => String(k).toUpperCase());
-    const isLeaderOrScumTrooper = atkKws.includes('LEADER') || (atkKws.includes('TROOPER') && atkEff?.affiliation === 'Scum');
-    if (isLeaderOrScumTrooper && atkPos) {
+    if (attackerQualifiesForBespin(atkEff?.keywords || [], atkEff?.affiliation) && atkPos) {
       const adjToAtk = new Set((mapSpaces.adjacency?.[String(atkPos).toLowerCase()] || []).map(s => String(s).toLowerCase()));
       const friendlyPos = game.figurePositions?.[attackerPlayerNum] || {};
       let bespinApplied = false;
@@ -2063,8 +2066,9 @@ export async function handleAttackTarget(interaction, ctx) {
         if (!adjToAtk.has(String(pos).toLowerCase())) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-        if ((fkEff?.specialAbilityIds || []).includes('bespin_security')) {
-          game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
+        if (hasBespinSecurityAbility(fkEff?.specialAbilityIds)) {
+          const r = applyBespinSecurityReroll(game.pendingCombat);
+          game.pendingCombat.rerollOneAttackDie = r.rerollOneAttackDie;
           await thread.send(`**Bespin Security** (${fkDcName}) — adjacent to attacker, +1 attack reroll.`);
           bespinApplied = true;
         }
