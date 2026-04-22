@@ -1433,3 +1433,53 @@ register(ActionType.RUSH_PUSH_SKIP, _handle_rush_push_skip)
 register(ActionType.SHOULDER_RUSH_SKIP, _handle_shoulder_rush_skip)
 register(ActionType.FALSE_ORDERS_SKIP, _handle_false_orders_skip)
 register(ActionType.MISSILE_SALVO_DONE, _handle_missile_salvo_done)
+
+
+# ---------------------------------------------------------------------------
+# POWER_TOKEN_CHOICE — player picks type for a pending token grant
+# ---------------------------------------------------------------------------
+
+_POWER_TOKEN_CHOICE_TYPES = frozenset({'Damage', 'Surge', 'Block', 'Evade'})
+
+
+def _handle_power_token_choice(game: GameState, action: Action) -> GameState:
+    """Resolve a pending power-token-grant: apply chosen token type to each figure.
+
+    Required param:
+        type (str) — one of 'Damage' | 'Surge' | 'Block' | 'Evade' (also
+            accepts lowercase / 'hit' as alias for Damage).
+
+    Consumes game.pendingPowerTokenGrant.grants (list of
+    {figureKey, figName, count}); for each grant, calls
+    grant_power_tokens(figureKey, type, count). Clears pendingPowerTokenGrant.
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    raw = action.params.get('type') or action.params.get('tokenType')
+    if not raw:
+        raise ValueError('power_token_choice requires type param')
+    type_lower = str(raw).lower()
+    if type_lower == 'hit':
+        type_lower = 'damage'
+    token_type = type_lower.capitalize()
+    if token_type not in _POWER_TOKEN_CHOICE_TYPES:
+        raise ValueError(
+            f'power_token_choice: type must be Damage|Surge|Block|Evade, got {raw!r}'
+        )
+
+    pending = game.data.get('pendingPowerTokenGrant')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('power_token_choice: no pendingPowerTokenGrant open')
+    grants = pending.get('grants') or []
+    for g in grants:
+        if not isinstance(g, Mapping):
+            continue
+        fk = g.get('figureKey')
+        count = int(g.get('count') or 0)
+        if fk and count > 0:
+            grant_power_tokens(game.data, fk, token_type, count)
+    game.data['pendingPowerTokenGrant'] = None
+    return game
+
+
+register(ActionType.POWER_TOKEN_CHOICE, _handle_power_token_choice)

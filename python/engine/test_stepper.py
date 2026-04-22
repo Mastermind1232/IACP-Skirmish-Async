@@ -1039,6 +1039,59 @@ def test_skip_handlers_require_pending_window():
         raise AssertionError(f'{action_type}: expected ValueError')
 
 
+def test_power_token_choice_applies_type_to_all_grants():
+    g = create_game()
+    g.data['pendingPowerTokenGrant'] = {
+        'grants': [
+            {'figureKey': 'Luke-0-0', 'figName': 'Luke', 'count': 2},
+            {'figureKey': 'Han-0-0', 'figName': 'Han', 'count': 1},
+        ],
+        'playerNum': 1,
+    }
+    new_g = step(g, Action(
+        type=ActionType.POWER_TOKEN_CHOICE, player=1,
+        params={'type': 'Surge'},
+    ))
+    assert new_g.data['figurePowerTokens']['Luke-0-0'] == ['Surge', 'Surge']
+    assert new_g.data['figurePowerTokens']['Han-0-0'] == ['Surge']
+    assert new_g.data['pendingPowerTokenGrant'] is None
+
+
+def test_power_token_choice_accepts_hit_as_damage_alias():
+    g = create_game()
+    g.data['pendingPowerTokenGrant'] = {
+        'grants': [{'figureKey': 'Luke-0-0', 'figName': 'Luke', 'count': 1}],
+    }
+    new_g = step(g, Action(
+        type=ActionType.POWER_TOKEN_CHOICE, player=1,
+        params={'type': 'hit'},
+    ))
+    assert new_g.data['figurePowerTokens']['Luke-0-0'] == ['Damage']
+
+
+def test_power_token_choice_rejects_invalid_type():
+    g = create_game()
+    g.data['pendingPowerTokenGrant'] = {'grants': [], 'playerNum': 1}
+    try:
+        step(g, Action(type=ActionType.POWER_TOKEN_CHOICE, player=1,
+                        params={'type': 'nonsense'}))
+    except ValueError as e:
+        assert 'Damage' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_power_token_choice_requires_pending():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.POWER_TOKEN_CHOICE, player=1,
+                        params={'type': 'Surge'}))
+    except ValueError as e:
+        assert 'pendingPowerTokenGrant' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1113,6 +1166,10 @@ def main():
         ('false_orders_skip_clears_pending', test_false_orders_skip_clears_pending),
         ('missile_salvo_done_clears_pending', test_missile_salvo_done_clears_pending),
         ('skip_handlers_require_pending_window', test_skip_handlers_require_pending_window),
+        ('power_token_choice_applies_to_grants', test_power_token_choice_applies_type_to_all_grants),
+        ('power_token_choice_hit_alias', test_power_token_choice_accepts_hit_as_damage_alias),
+        ('power_token_choice_rejects_invalid', test_power_token_choice_rejects_invalid_type),
+        ('power_token_choice_requires_pending', test_power_token_choice_requires_pending),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
