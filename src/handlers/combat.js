@@ -98,6 +98,13 @@ import {
   applyCunningFlag,
 } from '../game/cunning-helpers.js';
 import {
+  hasKtpEliteAbility,
+  hasKtpRegularAbility,
+  buildKtpRoundKey,
+  isKtpAlreadyUsed,
+  KTP_STRAIN_AMOUNT,
+} from '../game/keep-the-peace-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -2062,17 +2069,16 @@ export async function handleAttackTarget(interaction, ctx) {
       const fkAbilityIds = fkEff?.specialAbilityIds || [];
       if (!adjToTargetKP.has(String(pos).toLowerCase())) continue;
       // Elite: automatic, limit 1 per group activation
-      if (fkAbilityIds.includes('keep_the_peace_elite')) {
-        const ktpKey = `${fkDcName}_ktp_${game.currentRound || 0}`;
-        if (!game.roundFigureAbilityUsed?.[ktpKey]) {
+      if (hasKtpEliteAbility(fkAbilityIds)) {
+        if (!isKtpAlreadyUsed(game.roundFigureAbilityUsed, fkDcName, game.currentRound)) {
           if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
-          game.roundFigureAbilityUsed[ktpKey] = true;
-          await applyStrainToFigure(game, attackerPlayerNum, attackerFigureKey, 1, 'Keep the Peace', fkDcName, ctx, thread);
+          game.roundFigureAbilityUsed[buildKtpRoundKey(fkDcName, game.currentRound)] = true;
+          await applyStrainToFigure(game, attackerPlayerNum, attackerFigureKey, KTP_STRAIN_AMOUNT, 'Keep the Peace', fkDcName, ctx, thread);
           ktpApplied = true;
         }
       }
       // Regular: optional — remind defender they may spend 1 Strain to deal 1 Strain to attacker
-      if (!ktpApplied && fkAbilityIds.includes('keep_the_peace_regular')) {
+      if (!ktpApplied && hasKtpRegularAbility(fkAbilityIds)) {
         // Check: target space must not contain a friendly GUARDIAN
         const targetFigKws = (defEff?.keywords || []).map(k => String(k).toUpperCase());
         if (!targetFigKws.includes('GUARDIAN')) {
