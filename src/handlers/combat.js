@@ -142,6 +142,13 @@ import {
   tripodBlocksAttack,
 } from '../game/tripod-eweb-helpers.js';
 import {
+  hasMuchToLearnAbility,
+  muchToLearnInRange,
+  isUniqueFriendly,
+  isForceUserFriendly,
+  applyMuchToLearnReroll,
+} from '../game/much-to-learn-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -2031,7 +2038,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Much to Learn (Ezra Bridger): +1 reroll if friendly unique within 3 spaces
-  if (atkSpecialIds.includes('much_to_learn') && _csRawMs) {
+  if (hasMuchToLearnAbility(atkSpecialIds) && _csRawMs) {
     const atkPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     if (atkPos) {
       const friendlyPos = game.figurePositions?.[attackerPlayerNum] || {};
@@ -2039,11 +2046,11 @@ export async function handleAttackTarget(interaction, ctx) {
         if (fk === attackerFigureKey) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-        if (!fkEff?.unique) continue;
-        if (countSpaces(_csRawMs, atkPos, pos, _csClosedDoorEdges) > 3) continue;
-        game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
-        const isFU = (fkEff?.keywords || []).map(k => String(k).toUpperCase()).includes('FORCE USER');
-        const note = isFU ? ' (FORCE USER nearby — may turn die to any side instead)' : '';
+        if (!isUniqueFriendly(fkEff)) continue;
+        if (!muchToLearnInRange(countSpaces(_csRawMs, atkPos, pos, _csClosedDoorEdges))) continue;
+        const r = applyMuchToLearnReroll(game.pendingCombat);
+        game.pendingCombat.rerollOneAttackDie = r.rerollOneAttackDie;
+        const note = isForceUserFriendly(fkEff) ? ' (FORCE USER nearby — may turn die to any side instead)' : '';
         await thread.send(`**Much to Learn** — ${fkDcName} is within 3 spaces, +1 attack reroll${note}.`);
         break;
       }
