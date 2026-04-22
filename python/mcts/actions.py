@@ -287,6 +287,56 @@ def action_to_policy_index(action: Action, game: GameState) -> int:
     raise ValueError(f'no policy-index mapping for {t.value}')
 
 
+def policy_index_to_action(idx: int, game: GameState) -> Action:
+    """Inverse of action_to_policy_index — rebuilds an Action from an
+    index + the current state (needed to resolve figure-key references).
+    Raises ValueError if idx isn't legal in this state.
+    """
+    active = int(game.get('activePlayer') or 1)
+    if _MOVE_BASE <= idx < _MOVE_BASE + _MOVE_SPAN:
+        off = idx - _MOVE_BASE
+        y, x = divmod(off, BOARD_W)
+        coord = _xy_to_coord(y, x)
+        active_keys = game.get('activeFigureKeys') or []
+        figure_key = active_keys[0] if active_keys else None
+        params = {'coord': coord}
+        if figure_key:
+            params['figure_key'] = figure_key
+        return Action(type=ActionType.MOVE_PICK_SPACE, player=active, params=params)
+    if _ATTACK_BASE <= idx < _ATTACK_BASE + _ATTACK_SPAN:
+        opp = 2 if active == 1 else 1
+        opp_figs = _sorted_figures(game, opp)
+        off = idx - _ATTACK_BASE
+        if off >= len(opp_figs):
+            raise ValueError(f'attack index {off} out of roster (size {len(opp_figs)})')
+        target_key = opp_figs[off][0]
+        active_keys = game.get('activeFigureKeys') or []
+        if not active_keys:
+            raise ValueError('attack index but no active figure')
+        return Action(
+            type=ActionType.ATTACK_TARGET, player=active,
+            params={'attacker_key': active_keys[0], 'target_key': target_key},
+        )
+    if _ACTIVATE_BASE <= idx < _ACTIVATE_BASE + _ACTIVATE_SPAN:
+        own_figs = _sorted_figures(game, active)
+        off = idx - _ACTIVATE_BASE
+        if off >= len(own_figs):
+            raise ValueError(f'activate index {off} out of roster (size {len(own_figs)})')
+        return Action(
+            type=ActionType.ACTIVATE_DC, player=active,
+            params={'figure_key': own_figs[off][0]},
+        )
+    if idx == _IDX_DC_END_ACTIVATION:
+        return Action(type=ActionType.DC_END_ACTIVATION, player=active)
+    if idx == _IDX_PASS_ACTIVATION_TURN:
+        return Action(type=ActionType.PASS_ACTIVATION_TURN, player=active)
+    if idx == _IDX_END_ACTIVATION_PHASE:
+        return Action(type=ActionType.END_ACTIVATION_PHASE, player=active)
+    if idx == _IDX_END_END_OF_ROUND:
+        return Action(type=ActionType.END_END_OF_ROUND, player=0)
+    raise ValueError(f'policy index {idx} not mapped')
+
+
 def legal_action_mask(game: GameState, n_policy: int) -> List[bool]:
     """Return a len-`n_policy` bool list — True for indices of legal actions."""
     mask = [False] * n_policy
