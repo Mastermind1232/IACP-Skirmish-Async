@@ -54,6 +54,7 @@ import {
   chargeGeneratorsApplies,
   applyChargeGeneratorsBonus,
 } from '../game/charge-generators-helpers.js';
+import { hasSprayFireAbility, applySprayFire } from '../game/spray-fire-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2176,9 +2177,10 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Spray Fire (Heavy Stormtrooper Elite): -3 Accuracy, +1 Surge (always beneficial at melee range)
-  if (atkSpecialIds.includes('spray_fire_heavy_stormtrooper')) {
-    game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) - 3;
-    game.pendingCombat.surgeBonus = (game.pendingCombat.surgeBonus || 0) + 1;
+  if (hasSprayFireAbility(atkSpecialIds)) {
+    const bump = applySprayFire(game.pendingCombat);
+    game.pendingCombat.bonusAccuracy = bump.bonusAccuracy;
+    game.pendingCombat.surgeBonus = bump.surgeBonus;
     await thread.send('**Spray Fire** — -3 Accuracy, +1 Surge applied.');
   }
 
