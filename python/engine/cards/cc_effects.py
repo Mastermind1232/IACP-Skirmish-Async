@@ -2755,6 +2755,187 @@ def _cc_choke(game, pending, ctx):
     return {'applied': True, 'targetFigureKey': target_fk, 'strain': 2}
 
 
+def _cc_battle_meditation_cc(game, pending, ctx):
+    """Battle Meditation: friendly FORCE USER within 3 performs a move + attack.
+
+    Required: ctx.target_msg_id.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    if not target_msg_id:
+        raise ValueError('battle_meditation: requires ctx.target_msg_id')
+    data['battleMeditationPending'] = {
+        'targetMsgId': target_msg_id,
+        'playerNum': pending.get('playerNum'),
+    }
+    return {'applied': True, 'targetMsgId': target_msg_id}
+
+
+def _cc_preservation_protocol(game, pending, ctx):
+    """Preservation Protocol: when at 0 health, recover 4 HP.
+
+    Required: ctx.figure_key + ctx.msg_id.
+    """
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import parse_figure_key
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    player_num = pending.get('playerNum')
+    if not figure_key or not msg_id or player_num not in (1, 2):
+        raise ValueError('preservation_protocol: requires figure_key + msg_id + playerNum')
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    dc_health_state = data.get('dcHealthState')
+    if isinstance(dc_health_state, dict):
+        heal_hp(dc_health_state, data, msg_id, fig_idx, 4, player_num)
+    return {'applied': True, 'figureKey': figure_key, 'healed': 4}
+
+
+def _cc_dirty_trick(game, pending, ctx):
+    """Dirty Trick (whenHostileFigureEntersAdjacentSpace): hostile Stunned and
+    Weakened.
+
+    Required: ctx.target_figure_key.
+    """
+    target_fk = (ctx or {}).get('target_figure_key')
+    if not target_fk:
+        raise ValueError('dirty_trick: requires ctx.target_figure_key')
+    _apply_condition_to_target(game, target_fk, 'Stun')
+    _apply_condition_to_target(game, target_fk, 'Weaken')
+    return {'applied': True, 'targetFigureKey': target_fk}
+
+
+def _cc_parting_blow(game, pending, ctx):
+    """Parting Blow (whenHostileFigureExitsAdjacentSpace): perform a free attack
+    against the exiting figure.
+
+    Queues pendingTriggeredAttack for the attack flow.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    attacker_fk = (ctx or {}).get('attacker_figure_key')
+    target_fk = (ctx or {}).get('target_figure_key')
+    if not attacker_fk or not target_fk:
+        raise ValueError('parting_blow: requires attacker_figure_key + target_figure_key')
+    data['pendingTriggeredAttack'] = {
+        'attackerFigureKey': attacker_fk,
+        'targetFigureKey': target_fk,
+        'playerNum': pending.get('playerNum'),
+    }
+    return {'applied': True, 'attackerFigureKey': attacker_fk, 'targetFigureKey': target_fk}
+
+
+def _cc_extra_protection(game, pending, ctx):
+    """Extra Protection: adjacent friendly that suffered 3+ damage recovers 2 HP.
+
+    Required: ctx.figure_key + ctx.msg_id.
+    """
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import parse_figure_key
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    player_num = pending.get('playerNum')
+    if not figure_key or not msg_id or player_num not in (1, 2):
+        raise ValueError('extra_protection: requires figure_key + msg_id + playerNum')
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    dc_health_state = data.get('dcHealthState')
+    if isinstance(dc_health_state, dict):
+        heal_hp(dc_health_state, data, msg_id, fig_idx, 2, player_num)
+    return {'applied': True, 'figureKey': figure_key, 'healed': 2}
+
+
+def _cc_final_stand(game, pending, ctx):
+    """Final Stand: friendly at 0 health restores to 1 (prevents defeat).
+
+    Required: ctx.figure_key + ctx.msg_id.
+    """
+    from python.engine.mechanics.dc_helpers import parse_figure_key
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    if not figure_key or not msg_id:
+        raise ValueError('final_stand: requires figure_key + msg_id')
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    dc_health_state = data.get('dcHealthState')
+    if isinstance(dc_health_state, dict):
+        hs = dc_health_state.get(msg_id) or []
+        if fig_idx < len(hs):
+            entry = hs[fig_idx]
+            if isinstance(entry, list) and len(entry) >= 2:
+                entry[0] = max(1, entry[0])
+                dc_health_state[msg_id] = hs
+    return {'applied': True, 'figureKey': figure_key}
+
+
+def _cc_get_behind_me(game, pending, ctx):
+    """Get Behind Me!: redirect attack from SMALL friendly to self.
+
+    Required: ctx.new_target_figure_key (self), ctx.original_target (small friend).
+    """
+    data = game.data if hasattr(game, 'data') else game
+    new_target = (ctx or {}).get('new_target_figure_key')
+    original = (ctx or {}).get('original_target')
+    if not new_target:
+        raise ValueError('get_behind_me: requires ctx.new_target_figure_key')
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['redirectedTargetFigureKey'] = new_target
+    c['originalTarget'] = original
+    data['pendingCombat'] = c
+    return {'applied': True, 'newTarget': new_target}
+
+
+def _cc_crush(game, pending, ctx):
+    """Crush (whenYouEndMovementInSpacesWithOtherFigures): chosen SMALL figure
+    suffers 4 Damage.
+
+    Required: ctx.target_figure_key + ctx.target_player_num.
+    """
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    if not target_fk or target_pn not in (1, 2):
+        raise ValueError('crush: requires target_figure_key + target_player_num')
+    _apply_hp_damage_via_health_state(game, target_fk, target_pn, 4)
+    return {'applied': True, 'targetFigureKey': target_fk, 'damage': 4}
+
+
+def _cc_self_defense(game, pending, ctx):
+    """Self-Defense (whenHostileFigureEntersAdjacentSpace): hostile suffers
+    2 Damage + becomes Stunned.
+
+    Required: ctx.target_figure_key + ctx.target_player_num.
+    """
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    if not target_fk or target_pn not in (1, 2):
+        raise ValueError('self_defense: requires target_figure_key + target_player_num')
+    _apply_hp_damage_via_health_state(game, target_fk, target_pn, 2)
+    _apply_condition_to_target(game, target_fk, 'Stun')
+    return {'applied': True, 'targetFigureKey': target_fk, 'damage': 2}
+
+
+def _cc_slippery_target(game, pending, ctx):
+    """Slippery Target (whenHostileFigureEntersAdjacentSpace): gain +1 Evade
+    this round + Hide.
+
+    Required: ctx.figure_key.
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('slippery_target: requires ctx.figure_key')
+    grant_power_tokens(data, figure_key, 'Evade', 1)
+    _apply_condition_to_target(game, figure_key, 'Hide')
+    return {'applied': True, 'figureKey': figure_key}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -2942,6 +3123,16 @@ register('Field Medic', _cc_field_medic)
 register('In the Crosshairs', _cc_in_the_crosshairs)
 register('Throw', _cc_throw)
 register('Choke', _cc_choke)
+register('Battle Meditation', _cc_battle_meditation_cc)
+register('Preservation Protocol', _cc_preservation_protocol)
+register('Dirty Trick', _cc_dirty_trick)
+register('Parting Blow', _cc_parting_blow)
+register('Extra Protection', _cc_extra_protection)
+register('Final Stand', _cc_final_stand)
+register('Get Behind Me!', _cc_get_behind_me)
+register('Crush', _cc_crush)
+register('Self-Defense', _cc_self_defense)
+register('Slippery Target', _cc_slippery_target)
 
 
 def registered_cc_effects() -> list:
