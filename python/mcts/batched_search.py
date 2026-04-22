@@ -50,9 +50,18 @@ class BatchedMCTS:
         attack_rng_seed: int = 0,
         n_policy: int = 4096,
         backend: Optional[InferenceBackend] = None,
+        dirichlet_alpha: float = 0.3,
+        dirichlet_weight: float = 0.25,
+        add_dirichlet_noise: bool = True,
     ) -> None:
         """Either `net` (+ optional device) or `backend` must be supplied.
-        Supplying `net` constructs a LocalInferenceBackend internally."""
+        Supplying `net` constructs a LocalInferenceBackend internally.
+
+        Dirichlet noise: added to the root-node priors at search start
+        (standard AlphaZero trick). Forces the searcher to occasionally
+        try actions whose net-prior is low — crucial when the policy
+        collapses onto one action class and never generates varied data.
+        """
         if backend is None:
             if net is None:
                 raise ValueError('BatchedMCTS: must provide net or backend')
@@ -61,7 +70,11 @@ class BatchedMCTS:
         self.c_puct = c_puct
         self.max_depth = max_depth
         self.n_policy = n_policy
+        self.dirichlet_alpha = dirichlet_alpha
+        self.dirichlet_weight = dirichlet_weight
+        self.add_dirichlet_noise = add_dirichlet_noise
         self._attack_rng = _random.Random(attack_rng_seed)
+        self._noise_rng = _random.Random(attack_rng_seed ^ 0xABCDEF)
 
     # ------------------------------------------------------------------
     # Batched NN evaluation
@@ -92,9 +105,13 @@ class BatchedMCTS:
         state: GameState,
         logits: torch.Tensor,
         value_from_active: float,
+        is_root: bool = False,
     ) -> float:
         """Populate node.children from a pre-computed NN eval. Returns
-        value in player-1 POV."""
+        value in player-1 POV.
+
+        When `is_root` and dirichlet noise is enabled, root priors are
+        mixed with Dirichlet(alpha) noise to force exploration."""
         node.state = state
         node.to_act = int(state.get('activePlayer') or 1)
 
@@ -111,6 +128,15 @@ class BatchedMCTS:
         if legal_idx:
             legal_logits = logits[torch.tensor(legal_idx)]
             probs = torch.softmax(legal_logits, dim=0).tolist()
+            if is_root and self.add_dirichlet_noise and len(legal_idx) > 1:
+                # Sample Dirichlet noise (via gamma/normalize so we only
+                # need python's random module).
+                alpha = self.dirichlet_alpha
+                samples = [self._noise_rng.gammavariate(alpha, 1.0) for _ in legal_idx]
+                total = sum(samples) or 1.0
+                noise = [s / total for s in samples]
+                w = self.dirichlet_weight
+                probs = [(1.0 - w) * p + w * n for p, n in zip(probs, noise)]
             for pi, p in zip(legal_idx, probs):
                 node.children[pi] = Node(prior=p)
 
@@ -213,6 +239,7 @@ class BatchedMCTS:
                 self._expand_with_eval(
                     r, expand_states[k],
                     logits_batch[k], float(values_batch[k, 0]),
+                    is_root=True,
                 )
 
         # Lockstep simulations.

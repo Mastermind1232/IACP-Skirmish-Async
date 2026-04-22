@@ -91,6 +91,9 @@ class PipelinedBatchedMCTS:
         n_policy: int = 4096,
         backend: Optional[InferenceBackend] = None,
         pipeline_depth: int = 4,
+        dirichlet_alpha: float = 0.3,
+        dirichlet_weight: float = 0.25,
+        add_dirichlet_noise: bool = True,
     ) -> None:
         if backend is None:
             if net is None:
@@ -101,7 +104,11 @@ class PipelinedBatchedMCTS:
         self.max_depth = max_depth
         self.n_policy = n_policy
         self.pipeline_depth = max(1, int(pipeline_depth))
+        self.dirichlet_alpha = dirichlet_alpha
+        self.dirichlet_weight = dirichlet_weight
+        self.add_dirichlet_noise = add_dirichlet_noise
         self._attack_rng = _random.Random(attack_rng_seed)
+        self._noise_rng = _random.Random(attack_rng_seed ^ 0xABCDEF)
 
     # ------------------------------------------------------------------
     # Batched evaluation (same interface as BatchedMCTS)
@@ -129,6 +136,7 @@ class PipelinedBatchedMCTS:
         state: GameState,
         logits: torch.Tensor,
         value_from_active: float,
+        is_root: bool = False,
     ) -> float:
         node.state = state
         node.to_act = int(state.get('activePlayer') or 1)
@@ -144,6 +152,13 @@ class PipelinedBatchedMCTS:
         if legal_idx:
             legal_logits = logits[torch.tensor(legal_idx)]
             probs = torch.softmax(legal_logits, dim=0).tolist()
+            if is_root and self.add_dirichlet_noise and len(legal_idx) > 1:
+                alpha = self.dirichlet_alpha
+                samples = [self._noise_rng.gammavariate(alpha, 1.0) for _ in legal_idx]
+                total = sum(samples) or 1.0
+                noise = [s / total for s in samples]
+                w = self.dirichlet_weight
+                probs = [(1.0 - w) * p + w * n for p, n in zip(probs, noise)]
             for pi, p in zip(legal_idx, probs):
                 node.children[pi] = Node(prior=p)
         return value_from_active if node.to_act == 1 else -value_from_active
@@ -244,6 +259,7 @@ class PipelinedBatchedMCTS:
                 self._expand_with_eval(
                     r, expand_states[k],
                     logits_batch[k], float(values_batch[k, 0]),
+                    is_root=True,
                 )
 
         # Pipelined simulation loop.
