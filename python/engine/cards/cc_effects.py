@@ -868,6 +868,189 @@ def _cc_stimulants(game, pending, ctx):
     }
 
 
+def _cc_mitigate(game, pending, ctx):
+    """Mitigate: reroll 1 attack die. Records intent on pendingCombat."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['attackerRerollCount'] = int(c.get('attackerRerollCount') or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'rerolls': 1}
+
+
+def _cc_hard_to_hit(game, pending, ctx):
+    """Hard to Hit: reroll 1 defense die."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['defenderRerollCount'] = int(c.get('defenderRerollCount') or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'rerolls': 1}
+
+
+def _cc_brace_for_impact(game, pending, ctx):
+    """Brace for Impact: add 1 black die to defense pool."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    extra = list(c.get('bonusDefenseDice') or [])
+    extra.append('black')
+    c['bonusDefenseDice'] = extra
+    data['pendingCombat'] = c
+    return {'applied': True, 'dieAdded': 'black'}
+
+
+def _cc_stealth_tactics(game, pending, ctx):
+    """Stealth Tactics: add 1 white die to defense pool."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    extra = list(c.get('bonusDefenseDice') or [])
+    extra.append('white')
+    c['bonusDefenseDice'] = extra
+    data['pendingCombat'] = c
+    return {'applied': True, 'dieAdded': 'white'}
+
+
+def _cc_lock_on(game, pending, ctx):
+    """Lock On: +3 Accuracy OR -1 Dodge OR -1 Evade (ctx.effect)."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    effect = (ctx or {}).get('effect', 'accuracy').lower()
+    if effect not in ('accuracy', 'dodge', 'evade'):
+        raise ValueError("lock_on: ctx.effect must be 'accuracy', 'dodge', or 'evade'")
+    c = dict(combat)
+    if effect == 'accuracy':
+        c['bonusAccuracy'] = int(c.get('bonusAccuracy') or 0) + 3
+    elif effect == 'dodge':
+        c['dodgeReduction'] = int(c.get('dodgeReduction') or 0) + 1
+    else:
+        c['evadeReduction'] = int(c.get('evadeReduction') or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'effect': effect}
+
+
+def _cc_forward_march(game, pending, ctx):
+    """Forward March: +1 MP to each friendly within 2 spaces.
+
+    Required: ctx.friendly_msg_ids (list of msgIds within range — caller
+    computes adjacency).
+    """
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    msg_ids = (ctx or {}).get('friendly_msg_ids') or []
+    if not isinstance(msg_ids, list):
+        raise ValueError('forward_march: requires ctx.friendly_msg_ids list')
+    for mid in msg_ids:
+        grant_movement_bank(game, mid, 1)
+    return {'applied': True, 'grantedTo': list(msg_ids)}
+
+
+def _cc_ready_weapons(game, pending, ctx):
+    """Ready Weapons: distribute 3 Hit Tokens (Damage type) among group figures.
+
+    Required: ctx.distribution — list of {figureKey, count} entries summing to 3.
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    dist = (ctx or {}).get('distribution') or []
+    if not isinstance(dist, list):
+        raise ValueError('ready_weapons: requires ctx.distribution list')
+    total = sum(int(e.get('count', 0)) for e in dist if isinstance(e, dict))
+    if total != 3:
+        raise ValueError(f'ready_weapons: distribution must sum to 3 (got {total})')
+    applied = []
+    for entry in dist:
+        fk = entry.get('figureKey')
+        count = int(entry.get('count', 0))
+        if fk and count > 0:
+            grant_power_tokens(data, fk, 'Damage', count)
+            applied.append({'figureKey': fk, 'count': count})
+    return {'applied': True, 'grants': applied}
+
+
+def _cc_roar(game, pending, ctx):
+    """Roar: if self has suffered ≥3 damage, up to 3 adjacent hostiles become
+    Stunned.
+
+    Required: ctx.self_damage_suffered (int), ctx.target_figure_keys (list).
+    """
+    damage_suffered = int((ctx or {}).get('self_damage_suffered') or 0)
+    if damage_suffered < 3:
+        return {'applied': False, 'reason': 'below_3_damage_threshold'}
+    targets = (ctx or {}).get('target_figure_keys') or []
+    if not isinstance(targets, list):
+        raise ValueError('roar: requires ctx.target_figure_keys list')
+    if len(targets) > 3:
+        raise ValueError('roar: at most 3 targets')
+    stunned = []
+    for fk in targets:
+        if _apply_condition_to_target(game, fk, 'Stun'):
+            stunned.append(fk)
+    return {'applied': True, 'stunned': stunned}
+
+
+def _cc_reposition(game, pending, ctx):
+    """Reposition: push a SMALL friendly figure within 3 up to 3 spaces.
+
+    Required: ctx.target_figure_key + ctx.destination.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    destination = (ctx or {}).get('destination')
+    if not target_fk or not destination:
+        raise ValueError('reposition: requires ctx.target_figure_key + destination')
+    positions_all = data.get('figurePositions') or {}
+    for pn in (1, 2):
+        pos_map = positions_all.get(pn)
+        if isinstance(pos_map, dict) and target_fk in pos_map:
+            pos_mut = dict(pos_map)
+            pos_mut[target_fk] = str(destination).lower()
+            positions_all[pn] = pos_mut
+            data['figurePositions'] = positions_all
+            return {
+                'applied': True,
+                'targetFigureKey': target_fk,
+                'destination': str(destination).lower(),
+            }
+    return {'applied': False, 'reason': 'target_not_found'}
+
+
+def _cc_regroup(game, pending, ctx):
+    """Regroup: discard all HARMFUL conditions from adjacent friendly figures.
+
+    Required: ctx.friendly_figure_keys (list) — adjacent friendlies.
+    """
+    from python.engine.mechanics.conditions import filter_condition
+
+    harmful_conditions = ['Stun', 'Weaken', 'Bleed', 'Hide', 'Focus']
+    # Only Stun/Weaken/Bleed are HARMFUL; Hide/Focus are beneficial.
+    harmful_only = ['Stun', 'Weaken', 'Bleed']
+    data = game.data if hasattr(game, 'data') else game
+    figures = (ctx or {}).get('friendly_figure_keys') or []
+    if not isinstance(figures, list):
+        raise ValueError('regroup: requires ctx.friendly_figure_keys list')
+    removed = []
+    fig_conds = data.get('figureConditions') or {}
+    for fk in figures:
+        for cond in list(fig_conds.get(fk) or []):
+            if cond in harmful_only:
+                filter_condition(game, fk, cond)
+                removed.append({'figureKey': fk, 'condition': cond})
+    return {'applied': True, 'removed': removed}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -953,6 +1136,16 @@ register('Hour of Need', _cc_hour_of_need)
 register('Force Push', _cc_force_push)
 register('Grisly Contest', _cc_grisly_contest)
 register('Stimulants', _cc_stimulants)
+register('Mitigate', _cc_mitigate)
+register('Hard to Hit', _cc_hard_to_hit)
+register('Brace for Impact', _cc_brace_for_impact)
+register('Stealth Tactics', _cc_stealth_tactics)
+register('Lock On', _cc_lock_on)
+register('Forward March', _cc_forward_march)
+register('Ready Weapons', _cc_ready_weapons)
+register('Roar', _cc_roar)
+register('Reposition', _cc_reposition)
+register('Regroup', _cc_regroup)
 
 
 def registered_cc_effects() -> list:

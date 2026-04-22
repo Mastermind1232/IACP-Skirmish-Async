@@ -518,6 +518,144 @@ def test_stimulants_damage_mp_and_focus():
     assert 'Focus' in g['figureConditions']['Han-0-0']
 
 
+def test_mitigate_bumps_attacker_reroll_count():
+    g = {
+        'pendingCcEffect': {'cardName': 'Mitigate', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['attackerRerollCount'] == 1
+
+
+def test_hard_to_hit_bumps_defender_reroll_count():
+    g = {
+        'pendingCcEffect': {'cardName': 'Hard to Hit', 'playerNum': 2},
+        'pendingCombat': {'defenderPlayerNum': 2},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['defenderRerollCount'] == 1
+
+
+def test_brace_for_impact_adds_black_die():
+    g = {
+        'pendingCcEffect': {'cardName': 'Brace for Impact', 'playerNum': 2},
+        'pendingCombat': {'defenderPlayerNum': 2},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusDefenseDice'] == ['black']
+
+
+def test_stealth_tactics_adds_white_die():
+    g = {
+        'pendingCcEffect': {'cardName': 'Stealth Tactics', 'playerNum': 2},
+        'pendingCombat': {'defenderPlayerNum': 2},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusDefenseDice'] == ['white']
+
+
+def test_lock_on_accuracy_variant():
+    g = {
+        'pendingCcEffect': {'cardName': 'Lock On', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g, {'effect': 'accuracy'})
+    assert g['pendingCombat']['bonusAccuracy'] == 3
+
+
+def test_lock_on_dodge_variant():
+    g = {
+        'pendingCcEffect': {'cardName': 'Lock On', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g, {'effect': 'dodge'})
+    assert g['pendingCombat']['dodgeReduction'] == 1
+
+
+def test_forward_march_grants_mp_to_list():
+    g = {'pendingCcEffect': {'cardName': 'Forward March', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'friendly_msg_ids': ['hl1dc0', 'hl1dc1']})
+    assert g['movementBank']['hl1dc0']['total'] == 1
+    assert g['movementBank']['hl1dc1']['total'] == 1
+
+
+def test_ready_weapons_distributes_3_hits():
+    g = {'pendingCcEffect': {'cardName': 'Ready Weapons', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {
+        'distribution': [
+            {'figureKey': 'Luke-0-0', 'count': 2},
+            {'figureKey': 'Han-0-0', 'count': 1},
+        ],
+    })
+    assert r['applied'] is True
+    assert g['figurePowerTokens']['Luke-0-0'] == ['Damage', 'Damage']
+    assert g['figurePowerTokens']['Han-0-0'] == ['Damage']
+
+
+def test_ready_weapons_rejects_wrong_total():
+    g = {'pendingCcEffect': {'cardName': 'Ready Weapons', 'playerNum': 1}}
+    try:
+        resolve_pending_cc_effect(g, {
+            'distribution': [{'figureKey': 'Luke-0-0', 'count': 2}],
+        })
+    except ValueError as e:
+        assert 'sum to 3' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_roar_stuns_targets_when_damaged():
+    g = {'pendingCcEffect': {'cardName': 'Roar', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {
+        'self_damage_suffered': 3,
+        'target_figure_keys': ['Vader-0-0', 'Trooper-0-0'],
+    })
+    assert r['applied'] is True
+    assert 'Stun' in g['figureConditions']['Vader-0-0']
+    assert 'Stun' in g['figureConditions']['Trooper-0-0']
+
+
+def test_roar_no_op_below_threshold():
+    g = {'pendingCcEffect': {'cardName': 'Roar', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {
+        'self_damage_suffered': 2,
+        'target_figure_keys': ['Vader-0-0'],
+    })
+    assert r['applied'] is False
+    assert r['reason'] == 'below_3_damage_threshold'
+
+
+def test_reposition_moves_friendly():
+    g = {
+        'pendingCcEffect': {'cardName': 'Reposition', 'playerNum': 1},
+        'figurePositions': {1: {'Han-0-0': 'a1'}, 2: {}},
+    }
+    r = resolve_pending_cc_effect(g, {
+        'target_figure_key': 'Han-0-0', 'destination': 'D5',
+    })
+    assert r['applied'] is True
+    assert g['figurePositions'][1]['Han-0-0'] == 'd5'
+
+
+def test_regroup_removes_only_harmful_conditions():
+    g = {
+        'pendingCcEffect': {'cardName': 'Regroup', 'playerNum': 1},
+        'figureConditions': {
+            'Luke-0-0': ['Stun', 'Focus', 'Bleed'],
+            'Han-0-0': ['Weaken', 'Hide'],
+        },
+    }
+    r = resolve_pending_cc_effect(g, {
+        'friendly_figure_keys': ['Luke-0-0', 'Han-0-0'],
+    })
+    assert r['applied'] is True
+    assert 'Stun' not in g['figureConditions']['Luke-0-0']
+    assert 'Bleed' not in g['figureConditions']['Luke-0-0']
+    assert 'Focus' in g['figureConditions']['Luke-0-0']  # beneficial preserved
+    assert 'Weaken' not in g['figureConditions']['Han-0-0']
+    assert 'Hide' in g['figureConditions']['Han-0-0']
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -587,6 +725,19 @@ def main():
         ('force_push_moves_target', test_force_push_moves_target_either_side),
         ('grisly_contest_both_sides', test_grisly_contest_deals_dmg_both_sides),
         ('stimulants_dmg_mp_focus', test_stimulants_damage_mp_and_focus),
+        ('mitigate_bumps_attacker_reroll', test_mitigate_bumps_attacker_reroll_count),
+        ('hard_to_hit_bumps_defender_reroll', test_hard_to_hit_bumps_defender_reroll_count),
+        ('brace_for_impact_black_die', test_brace_for_impact_adds_black_die),
+        ('stealth_tactics_white_die', test_stealth_tactics_adds_white_die),
+        ('lock_on_accuracy', test_lock_on_accuracy_variant),
+        ('lock_on_dodge', test_lock_on_dodge_variant),
+        ('forward_march_grants_mp', test_forward_march_grants_mp_to_list),
+        ('ready_weapons_distributes_3', test_ready_weapons_distributes_3_hits),
+        ('ready_weapons_rejects_wrong_total', test_ready_weapons_rejects_wrong_total),
+        ('roar_stuns_when_damaged', test_roar_stuns_targets_when_damaged),
+        ('roar_no_op_below_threshold', test_roar_no_op_below_threshold),
+        ('reposition_moves_friendly', test_reposition_moves_friendly),
+        ('regroup_removes_harmful_only', test_regroup_removes_only_harmful_conditions),
     ]
     failures = []
     for name, fn in cases:
