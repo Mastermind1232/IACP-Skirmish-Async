@@ -29,3 +29,24 @@ def get_cc_effects() -> Dict[str, Any]:
             raw = json.load(f)
         _cc_effects = raw.get('cards', {}) if isinstance(raw, dict) else {}
     return _cc_effects
+
+
+def get_cc_effect(card_name: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Lookup a CC effect by name with faction-suffix fallback.
+
+    Mirrors src/data-loader.js:getCcEffect — tries exact match first, then
+    strips trailing " (Mercenary|Imperial|Rebel)" and retries. Returns
+    None on miss.
+    """
+    if not card_name:
+        return None
+    effects = get_cc_effects()
+    hit = effects.get(card_name)
+    if hit is not None:
+        return hit
+    import re
+    stripped = re.sub(r'\s+\((?:Mercenary|Imperial|Rebel)\)$', '', card_name,
+                      flags=re.IGNORECASE).strip()
+    if stripped and stripped != card_name:
+        return effects.get(stripped)
+    return None
