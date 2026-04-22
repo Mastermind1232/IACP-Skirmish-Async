@@ -159,6 +159,53 @@ def test_blaze_of_glory_readies_dc_and_queues_eor_damage():
     }
 
 
+def test_adrenaline_stamps_round_wookiee_health_bonus():
+    g = {'pendingCcEffect': {'cardName': 'Adrenaline', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g)
+    assert r['bonus'] == 5
+    assert g['roundWookieeHealthBonus'][1] == 5
+
+
+def test_armed_escort_sets_active_marker():
+    g = {'pendingCcEffect': {'cardName': 'Armed Escort', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0'})
+    assert r['applied'] is True
+    assert g['armedEscortActive'] == {
+        'playerNum': 1, 'anchorMsgId': 'hl1dc0', 'bonusEvade': 1,
+    }
+
+
+def test_beatdown_queues_bonus_hits_for_two_attacks():
+    g = {'pendingCcEffect': {'cardName': 'Beatdown', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g)
+    assert r['attacksBoosted'] == 2
+    assert g['nextAttacksBonusHits'][1]['count'] == 2
+
+
+def test_close_and_personal_stamps_damage_bonus():
+    g = {'pendingCcEffect': {'cardName': 'Close and Personal', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g)
+    assert r['bonusDamage'] == 2
+    assert g['nextAttackBonusDamage'][1] == 2
+    assert g['closeAndPersonalActive']['meleeOnly'] is True
+
+
+def test_primary_target_applies_to_pending_combat():
+    g = {
+        'pendingCcEffect': {'cardName': 'Primary Target', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusHits'] == 1
+    assert g['pendingCombat']['bonusAccuracy'] == 2
+
+
+def test_primary_target_queues_for_next_attack_without_combat():
+    g = {'pendingCcEffect': {'cardName': 'Primary Target', 'playerNum': 2}}
+    resolve_pending_cc_effect(g)
+    assert g['nextAttackBonuses'][2] == {'bonusHits': 1, 'bonusAccuracy': 2}
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -189,6 +236,12 @@ def main():
         ('battle_scars_2_tokens_after_3_damage', test_battle_scars_grants_2_tokens_after_3_plus_damage),
         ('blaze_of_glory_readies_and_queues_damage', test_blaze_of_glory_readies_dc_and_queues_eor_damage),
         ('blaze_of_glory_noop_unknown_target', test_blaze_of_glory_no_op_when_target_unknown),
+        ('adrenaline_wookiee_health_bonus', test_adrenaline_stamps_round_wookiee_health_bonus),
+        ('armed_escort_active_marker', test_armed_escort_sets_active_marker),
+        ('beatdown_queues_bonus_hits', test_beatdown_queues_bonus_hits_for_two_attacks),
+        ('close_and_personal_damage_bonus', test_close_and_personal_stamps_damage_bonus),
+        ('primary_target_on_pending_combat', test_primary_target_applies_to_pending_combat),
+        ('primary_target_queued_no_combat', test_primary_target_queues_for_next_attack_without_combat),
     ]
     failures = []
     for name, fn in cases:

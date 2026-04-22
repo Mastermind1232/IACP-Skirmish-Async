@@ -198,6 +198,86 @@ def _cc_battle_scars(game: Any, pending: Dict[str, Any],
     }
 
 
+def _cc_adrenaline(game: Any, pending: Dict[str, Any],
+                   ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Adrenaline: apply +5 Health to each WOOKIEE for this round.
+
+    Sets game.roundWookieeHealthBonus[playerNum] = 5 which the health
+    lookup engine + damage_helpers consume for the round.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    bonus_map = dict(data.get('roundWookieeHealthBonus') or {})
+    bonus_map[player_num] = 5
+    data['roundWookieeHealthBonus'] = bonus_map
+    return {'applied': True, 'playerNum': player_num, 'bonus': 5}
+
+
+def _cc_armed_escort(game: Any, pending: Dict[str, Any],
+                     ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Armed Escort: +1 Evade to other friendlies within 2 of self this round."""
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('armed_escort: requires ctx.msg_id')
+    data['armedEscortActive'] = {
+        'playerNum': player_num, 'anchorMsgId': msg_id, 'bonusEvade': 1,
+    }
+    return {'applied': True, 'anchorMsgId': msg_id}
+
+
+def _cc_beatdown(game: Any, pending: Dict[str, Any],
+                 ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Beatdown: +1 Hit to the next 2 attacks during this activation."""
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    pending_map = dict(data.get('nextAttacksBonusHits') or {})
+    existing = int(pending_map.get(player_num) or 0)
+    pending_map[player_num] = {'count': 2, 'bonusHits': 1, 'existing': existing}
+    data['nextAttacksBonusHits'] = pending_map
+    return {'applied': True, 'attacksBoosted': 2, 'bonusHits': 1}
+
+
+def _cc_close_and_personal(game: Any, pending: Dict[str, Any],
+                           ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Close and Personal: +2 Damage to the next attack (melee only)."""
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    bonus_map = dict(data.get('nextAttackBonusDamage') or {})
+    bonus_map[player_num] = int(bonus_map.get(player_num) or 0) + 2
+    data['nextAttackBonusDamage'] = bonus_map
+    data['closeAndPersonalActive'] = {
+        'playerNum': player_num, 'meleeOnly': True,
+    }
+    return {'applied': True, 'playerNum': player_num, 'bonusDamage': 2}
+
+
+def _cc_primary_target(game: Any, pending: Dict[str, Any],
+                       ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Primary Target: +1 Hit, +2 Accuracy to the next attack vs highest-cost
+    hostile. Marks the bonus on pendingCombat when present, otherwise queues
+    it for the next attack.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    combat = data.get('pendingCombat')
+    if isinstance(combat, dict):
+        combat_mut = dict(combat)
+        combat_mut['bonusHits'] = int(combat_mut.get('bonusHits') or 0) + 1
+        combat_mut['bonusAccuracy'] = int(combat_mut.get('bonusAccuracy') or 0) + 2
+        data['pendingCombat'] = combat_mut
+    else:
+        pending_map = dict(data.get('nextAttackBonuses') or {})
+        existing = pending_map.get(player_num) or {}
+        pending_map[player_num] = {
+            'bonusHits': int(existing.get('bonusHits') or 0) + 1,
+            'bonusAccuracy': int(existing.get('bonusAccuracy') or 0) + 2,
+        }
+        data['nextAttackBonuses'] = pending_map
+    return {'applied': True, 'bonusHits': 1, 'bonusAccuracy': 2}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -248,6 +328,11 @@ register('Blitz', _cc_blitz)
 register('Advance Warning', _cc_advance_warning)
 register('Battle Scars', _cc_battle_scars)
 register('Blaze of Glory', _cc_blaze_of_glory)
+register('Adrenaline', _cc_adrenaline)
+register('Armed Escort', _cc_armed_escort)
+register('Beatdown', _cc_beatdown)
+register('Close and Personal', _cc_close_and_personal)
+register('Primary Target', _cc_primary_target)
 
 
 def registered_cc_effects() -> list:
