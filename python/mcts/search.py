@@ -62,13 +62,20 @@ def _deep_copy_state(game: GameState) -> GameState:
 
 
 def _terminal_reward_p1(game: GameState) -> float:
-    """Reward from player-1's perspective for a terminal state.
-    +1 p1 wins, -1 p1 loses, 0 draw."""
+    """Reward from player-1's perspective. Works for both fully-terminated
+    games (phase=='game_over') AND move-cap truncations — VP margin is
+    always a valid signal, and giving 0 reward to move-cap games teaches
+    the net to stall.
+
+    Returns in [-1, +1]:
+      * Elimination dominates: wiped side = -1, survivor = +1.
+      * Otherwise sign(p1_vp - p2_vp): wins (margin>0) = +1, loses = -1.
+      * Exact VP tie and both sides alive = 0.
+    """
     p1_vp = (game.get('player1VP') or {}).get('total', 0) or 0
     p2_vp = (game.get('player2VP') or {}).get('total', 0) or 0
     p1_alive = bool((game.get('figurePositions') or {}).get(1))
     p2_alive = bool((game.get('figurePositions') or {}).get(2))
-    # Elimination dominates VP for game-over by wipe.
     if not p1_alive and p2_alive:
         return -1.0
     if p1_alive and not p2_alive:

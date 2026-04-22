@@ -146,7 +146,10 @@ def play_one_game(
             }
         g = step(g, action)
 
-    reward_p1 = _terminal_reward_p1(g) if g.get('phase') == 'game_over' else 0.0
+    # Reward on VP margin regardless of whether the game fully terminated.
+    # Truncated-to-move-cap games still have a valid VP delta; treating them
+    # as draws teaches the net to stall.
+    reward_p1 = _terminal_reward_p1(g)
 
     # Stamp value targets — from each acting player's perspective.
     for ex, actor in zip(history, played_by):

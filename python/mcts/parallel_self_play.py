@@ -126,7 +126,8 @@ def play_batch(
     # Stamp terminal values per example.
     all_examples: List[TrainingExample] = []
     for game, history, actor_list in zip(games, histories, actors):
-        reward_p1 = _terminal_reward_p1(game) if game.get('phase') == 'game_over' else 0.0
+        # VP-margin reward regardless of phase — move-cap games still carry signal.
+        reward_p1 = _terminal_reward_p1(game)
         for ex, actor in zip(history, actor_list):
             ex.value = reward_p1 if actor == 1 else -reward_p1
             all_examples.append(ex)
