@@ -156,6 +156,12 @@ import {
   ADV_TARGETING_COMPUTER_BONUS_DIE,
 } from '../game/adv-targeting-computer-helpers.js';
 import {
+  hasShockAndAweAbility,
+  buildShockAndAweRoundKey,
+  isShockAndAweAlreadyUsed,
+  applyShockAndAweDieSwap,
+} from '../game/shock-and-awe-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1887,15 +1893,12 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Shock and Awe (Cara Dune): once per round, replace 1 Yellow die with Red
-  if (atkSpecialIds.includes('shock_and_awe')) {
-    const sawKey = attackerFigureKey + '_shock_and_awe';
-    if (!game.roundFigureAbilityUsed?.[sawKey]) {
-      const dice = game.pendingCombat.attackInfo.dice || [];
-      const yellIdx = dice.findIndex(d => d === 'yellow');
-      if (yellIdx >= 0) {
-        const newDice = [...dice];
-        newDice[yellIdx] = 'red';
-        game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: newDice };
+  if (hasShockAndAweAbility(atkSpecialIds)) {
+    const sawKey = buildShockAndAweRoundKey(attackerFigureKey);
+    if (!isShockAndAweAlreadyUsed(game.roundFigureAbilityUsed, sawKey)) {
+      const r = applyShockAndAweDieSwap(game.pendingCombat.attackInfo.dice || []);
+      if (r.applied) {
+        game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: r.dice };
         if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
         game.roundFigureAbilityUsed[sawKey] = true;
         await thread.send('**Shock and Awe** — 1 Yellow die replaced with Red.');
