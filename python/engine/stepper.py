@@ -1085,3 +1085,48 @@ def _handle_end_start_of_round(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.END_START_OF_ROUND, _handle_end_start_of_round)
+
+
+# ---------------------------------------------------------------------------
+# Celebration (C-23 CC) — attacker chooses to play or pass after a kill
+# ---------------------------------------------------------------------------
+
+def _handle_celebration_play(game: GameState, action: Action) -> GameState:
+    """Play Celebration from hand after defeating a hostile: +4 objective VP.
+
+    Requires:
+        - game.pendingCelebration present with attackerPlayerNum.
+        - 'Celebration' in the attacker's hand.
+
+    Effects:
+        - Removes 'Celebration' from hand, pushes to discard.
+        - Awards 4 objective VP to attackerPlayerNum.
+        - Clears game.pendingCelebration.
+    """
+    from python.engine.cards.deck import discard_from_hand
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+
+    pending = game.data.get('pendingCelebration')
+    if not pending:
+        raise ValueError('celebration_play: no pendingCelebration window open')
+    attacker_pn = pending.get('attackerPlayerNum')
+    if attacker_pn not in (1, 2):
+        raise ValueError('celebration_play: pendingCelebration missing attackerPlayerNum')
+    if not discard_from_hand(game, attacker_pn, 'Celebration'):
+        raise ValueError('celebration_play: Celebration not in hand')
+    award_objective_vp(game, attacker_pn, 4)
+    game.data['pendingCelebration'] = None
+    return game
+
+
+def _handle_celebration_pass(game: GameState, action: Action) -> GameState:
+    """Pass on the Celebration window — just clears pendingCelebration."""
+    pending = game.data.get('pendingCelebration')
+    if not pending:
+        raise ValueError('celebration_pass: no pendingCelebration window open')
+    game.data['pendingCelebration'] = None
+    return game
+
+
+register(ActionType.CELEBRATION_PLAY, _handle_celebration_play)
+register(ActionType.CELEBRATION_PASS, _handle_celebration_pass)

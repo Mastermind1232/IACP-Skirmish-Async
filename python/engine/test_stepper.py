@@ -766,6 +766,48 @@ def test_end_start_of_round_preserves_game_over_phase():
     assert new_g.data['roundPhase'] == 'game_over'
 
 
+def test_celebration_play_awards_4_vp_and_discards():
+    g = create_game()
+    g.data['player1CcHand'] = ['Celebration', 'Other Card']
+    g.data['pendingCelebration'] = {'attackerPlayerNum': 1}
+    new_g = step(g, Action(type=ActionType.CELEBRATION_PLAY, player=1))
+    assert new_g.data['player1CcHand'] == ['Other Card']
+    assert new_g.data['player1CcDiscard'] == ['Celebration']
+    assert new_g.data['player1VP'] == {'total': 4, 'kills': 0, 'objectives': 4}
+    assert new_g.data['pendingCelebration'] is None
+
+
+def test_celebration_play_requires_window():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.CELEBRATION_PLAY, player=1))
+    except ValueError as e:
+        assert 'pendingCelebration' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_celebration_play_requires_card_in_hand():
+    g = create_game()
+    g.data['pendingCelebration'] = {'attackerPlayerNum': 1}
+    g.data['player1CcHand'] = ['Other']
+    try:
+        step(g, Action(type=ActionType.CELEBRATION_PLAY, player=1))
+    except ValueError as e:
+        assert 'not in hand' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_celebration_pass_clears_window_no_vp():
+    g = create_game()
+    g.data['pendingCelebration'] = {'attackerPlayerNum': 1}
+    prior_vp = dict(g.data.get('player1VP') or {})
+    new_g = step(g, Action(type=ActionType.CELEBRATION_PASS, player=1))
+    assert new_g.data['pendingCelebration'] is None
+    assert (new_g.data.get('player1VP') or {}) == prior_vp  # unchanged
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -815,6 +857,10 @@ def main():
         ('end_start_of_round_clears_window', test_end_start_of_round_clears_window_and_transitions),
         ('end_start_of_round_runs_mission_sor_rules', test_end_start_of_round_runs_mission_sor_rules),
         ('end_start_of_round_preserves_game_over', test_end_start_of_round_preserves_game_over_phase),
+        ('celebration_play_awards_vp', test_celebration_play_awards_4_vp_and_discards),
+        ('celebration_play_requires_window', test_celebration_play_requires_window),
+        ('celebration_play_requires_card_in_hand', test_celebration_play_requires_card_in_hand),
+        ('celebration_pass_clears_window', test_celebration_pass_clears_window_no_vp),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
