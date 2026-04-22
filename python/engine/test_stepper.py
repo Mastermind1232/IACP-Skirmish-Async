@@ -24,11 +24,11 @@ from python.engine.stepper import (
 
 def test_unknown_action_raises():
     g = create_game()
-    # PLAY_CC is not yet registered — use it as the unimplemented sentinel
+    # DC_SPECIAL is not yet registered — use it as the unimplemented sentinel
     try:
-        step(g, Action(type=ActionType.PLAY_CC, player=1))
+        step(g, Action(type=ActionType.DC_SPECIAL, player=1))
     except NotImplementedError as e:
-        assert 'play_cc' in str(e)
+        assert 'dc_special' in str(e)
         return
     raise AssertionError('expected NotImplementedError')
 
@@ -89,7 +89,8 @@ def test_is_implemented_reports_correctly():
     assert is_implemented(ActionType.ATTACK_TARGET)
     assert is_implemented(ActionType.CC_DRAW)
     assert is_implemented(ActionType.INTERACT)
-    assert not is_implemented(ActionType.PLAY_CC)
+    assert is_implemented(ActionType.PLAY_CC)
+    assert not is_implemented(ActionType.DC_SPECIAL)
 
 
 def _two_figure_game():
@@ -597,6 +598,91 @@ def test_cc_draw_invalid_player_raises():
     raise AssertionError('expected ValueError')
 
 
+def test_play_cc_moves_hand_to_discard_and_records_pending():
+    from python.engine.data import cc_effects_loader, dc_effects_loader
+    cc_effects_loader._cc_effects = {
+        'Hold On': {'timing': 'duringActivation', 'playableBy': 'Any Figure'},
+    }
+    dc_effects_loader._dc_effects = {}
+    try:
+        g = create_game()
+        g.data['player1Id'] = 'alice'
+        g.data['player2Id'] = 'bob'
+        g.data['currentActivationTurnPlayerId'] = 'alice'
+        g.data['player1CcHand'] = ['Hold On', 'Other Card']
+        new_g = step(g, Action(
+            type=ActionType.PLAY_CC, player=1,
+            params={'card': 'Hold On'},
+        ))
+        assert new_g.data['player1CcHand'] == ['Other Card']
+        assert new_g.data['player1CcDiscard'] == ['Hold On']
+        assert new_g.data['pendingCcEffect']['cardName'] == 'Hold On'
+        assert new_g.data['pendingCcEffect']['playerNum'] == 1
+        assert new_g.data['lastPlayedCc'] == {'cardName': 'Hold On', 'playerNum': 1}
+    finally:
+        cc_effects_loader.reset_cache()
+        dc_effects_loader.reset_cache()
+
+
+def test_play_cc_rejects_card_not_in_hand():
+    from python.engine.data import cc_effects_loader
+    cc_effects_loader._cc_effects = {'Hold On': {'timing': 'duringActivation'}}
+    try:
+        g = create_game()
+        g.data['player1CcHand'] = []
+        try:
+            step(g, Action(type=ActionType.PLAY_CC, player=1, params={'card': 'Hold On'}))
+        except ValueError as e:
+            assert 'not in' in str(e)
+            return
+        raise AssertionError('expected ValueError')
+    finally:
+        cc_effects_loader.reset_cache()
+
+
+def test_play_cc_rejects_timing_mismatch():
+    from python.engine.data import cc_effects_loader, dc_effects_loader
+    cc_effects_loader._cc_effects = {
+        'SoR Only': {'timing': 'startOfRound', 'playableBy': 'Any Figure'},
+    }
+    dc_effects_loader._dc_effects = {}
+    try:
+        g = create_game()
+        g.data['player1Id'] = 'alice'
+        g.data['player1CcHand'] = ['SoR Only']
+        # No startOfRoundWhoseTurn → not playable now
+        try:
+            step(g, Action(type=ActionType.PLAY_CC, player=1, params={'card': 'SoR Only'}))
+        except ValueError as e:
+            assert 'not playable now' in str(e)
+            return
+        raise AssertionError('expected ValueError')
+    finally:
+        cc_effects_loader.reset_cache()
+        dc_effects_loader.reset_cache()
+
+
+def test_play_cc_force_bypasses_gates():
+    from python.engine.data import cc_effects_loader, dc_effects_loader
+    cc_effects_loader._cc_effects = {
+        'SoR Only': {'timing': 'startOfRound', 'playableBy': 'Imperial'},
+    }
+    dc_effects_loader._dc_effects = {}
+    try:
+        g = create_game()
+        g.data['player1CcHand'] = ['SoR Only']
+        # Timing and restriction both fail but force=True bypasses
+        new_g = step(g, Action(
+            type=ActionType.PLAY_CC, player=1,
+            params={'card': 'SoR Only', 'force': True},
+        ))
+        assert new_g.data['player1CcHand'] == []
+        assert new_g.data['player1CcDiscard'] == ['SoR Only']
+    finally:
+        cc_effects_loader.reset_cache()
+        dc_effects_loader.reset_cache()
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -636,6 +722,10 @@ def main():
         ('cc_draw_reshuffle_from_discard_when_empty', test_cc_draw_reshuffle_from_discard_when_deck_empty),
         ('cc_draw_target_hand_size_precedence', test_cc_draw_target_hand_size_takes_precedence),
         ('cc_draw_invalid_player_raises', test_cc_draw_invalid_player_raises),
+        ('play_cc_moves_hand_to_discard', test_play_cc_moves_hand_to_discard_and_records_pending),
+        ('play_cc_rejects_not_in_hand', test_play_cc_rejects_card_not_in_hand),
+        ('play_cc_rejects_timing_mismatch', test_play_cc_rejects_timing_mismatch),
+        ('play_cc_force_bypasses_gates', test_play_cc_force_bypasses_gates),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

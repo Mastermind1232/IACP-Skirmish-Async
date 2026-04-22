@@ -874,3 +874,86 @@ def _handle_cc_draw(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.CC_DRAW, _handle_cc_draw)
+
+
+# ---------------------------------------------------------------------------
+# Play Command Card (P7 / C5-A)
+# ---------------------------------------------------------------------------
+
+def _handle_play_cc(game: GameState, action: Action) -> GameState:
+    """Play a CC from hand: validate → move hand → discard → record pending effect.
+
+    Required params:
+        card (str) — CC name in the player's hand.
+    Optional params:
+        force (bool) — skip timing + restriction gates (test / scripted path).
+
+    Effects:
+        - Validates card is in hand.
+        - Enforces is_cc_playable_now + is_cc_play_legal_by_restriction
+          unless force=True.
+        - Moves the card from hand → discard.
+        - Sets game.pendingCcEffect = {cardName, playerNum, timing,
+          playableBy} so the downstream per-CC resolver (Phase 5-D) can
+          apply the effect when it lands.
+        - Stamps game.lastPlayedCc for triggers (whenCommandCardPlayed).
+
+    Individual CC effects (game-state changes per-card) live in Phase 5-D
+    batch work — this handler owns the common play-pipeline.
+    """
+    from python.engine.cards.deck import discard_from_hand, hand_size
+    from python.engine.data.cc_effects_loader import get_cc_effect
+    from python.engine.mechanics.cc_timing import (
+        is_cc_play_legal_by_restriction,
+        is_cc_playable_now,
+    )
+
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        raise ValueError('play_cc requires player ∈ {1, 2}')
+
+    card = action.params.get('card') or action.params.get('cardName')
+    if not card or not isinstance(card, str):
+        raise ValueError('play_cc requires card param (str)')
+
+    hand_key = 'player1CcHand' if player == 1 else 'player2CcHand'
+    hand = game.data.get(hand_key) or []
+    if card not in hand:
+        raise ValueError(f'play_cc: {card!r} not in P{player} hand')
+
+    force = bool(action.params.get('force'))
+    effect = get_cc_effect(card)
+    if effect is None:
+        raise ValueError(f'play_cc: unknown card {card!r}')
+
+    if not force:
+        if not is_cc_playable_now(game, player, card):
+            raise ValueError(
+                f'play_cc: {card!r} not playable now (timing={effect.get("timing")!r})'
+            )
+        verdict = is_cc_play_legal_by_restriction(game, player, card)
+        if not verdict.get('legal'):
+            raise ValueError(
+                f'play_cc: {card!r} restriction fails — {verdict.get("reason")}'
+            )
+
+    # Move hand → discard
+    moved = discard_from_hand(game, player, card)
+    if not moved:
+        # Shouldn't happen (we just checked); defensive
+        raise ValueError(f'play_cc: failed to move {card!r} from hand')
+
+    game.data['pendingCcEffect'] = {
+        'cardName': card,
+        'playerNum': player,
+        'timing': effect.get('timing'),
+        'playableBy': effect.get('playableBy'),
+    }
+    game.data['lastPlayedCc'] = {
+        'cardName': card,
+        'playerNum': player,
+    }
+    return game
+
+
+register(ActionType.PLAY_CC, _handle_play_cc)
