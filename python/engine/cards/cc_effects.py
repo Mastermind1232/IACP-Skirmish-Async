@@ -1245,6 +1245,216 @@ def _cc_take_position(game, pending, ctx):
     return {'applied': True, 'figureKey': figure_key}
 
 
+def _cc_camouflage(game, pending, ctx):
+    """Camouflage: defender becomes Hidden when an attack is declared against them.
+
+    Required: ctx.figure_key (self).
+    """
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('camouflage: requires ctx.figure_key')
+    _apply_condition_to_target(game, figure_key, 'Hide')
+    return {'applied': True, 'figureKey': figure_key}
+
+
+def _cc_celebration_cc(game, pending, ctx):
+    """Celebration (CC effect path): +4 VP after defeating a unique hostile.
+
+    Note: the CELEBRATION_PLAY stepper handler already provides this via
+    pendingCelebration. This CC-effect variant is for when Celebration is
+    resolved from the pendingCcEffect pipeline.
+    """
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    if player_num not in (1, 2):
+        raise ValueError('celebration: pending missing playerNum')
+    award_objective_vp(game, player_num, 4)
+    return {'applied': True, 'vpAwarded': 4, 'playerNum': player_num}
+
+
+def _cc_cut_lines(game, pending, ctx):
+    """Cut Lines: neither player may draw Command cards this round."""
+    data = game.data if hasattr(game, 'data') else game
+    data['cutLinesActive'] = True
+    return {'applied': True}
+
+
+def _cc_deadly_precision(game, pending, ctx):
+    """Deadly Precision: -1 Dodge to defense results this round (while attacking)."""
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    bonus = dict(data.get('roundDodgeReduction') or {})
+    bonus[player_num] = int(bonus.get(player_num) or 0) + 1
+    data['roundDodgeReduction'] = bonus
+    return {'applied': True, 'playerNum': player_num}
+
+
+def _cc_debts_repaid(game, pending, ctx):
+    """Debts Repaid: when a friendly figure is defeated, ready own DC + Focus.
+
+    Required: ctx.msg_id + ctx.figure_key.
+    """
+    from python.engine.mechanics.player_helpers import (
+        get_activated_dc_indices, set_activated_dc_indices,
+    )
+
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    figure_key = (ctx or {}).get('figure_key')
+    player_num = pending.get('playerNum')
+    if not msg_id or not figure_key or player_num not in (1, 2):
+        raise ValueError('debts_repaid: requires msg_id + figure_key + playerNum')
+    _apply_condition_to_target(game, figure_key, 'Focus')
+    ids_list = (data.get('p1DcMessageIds') if player_num == 1
+                else data.get('p2DcMessageIds')) or []
+    if msg_id in ids_list:
+        idx = ids_list.index(msg_id)
+        activated = get_activated_dc_indices(game, player_num) or []
+        if idx in activated:
+            set_activated_dc_indices(
+                game, player_num, [i for i in activated if i != idx],
+            )
+    return {'applied': True, 'msgId': msg_id, 'figureKey': figure_key}
+
+
+def _cc_disengage_cc(game, pending, ctx):
+    """Disengage: +3 MP when a hostile enters within 3 spaces."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('disengage: requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, 3)
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': 3}
+
+
+def _cc_force_rush(game, pending, ctx):
+    """Force Rush: +2 MP at the start of activation."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('force_rush: requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, 2)
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': 2}
+
+
+def _cc_force_illusion(game, pending, ctx):
+    """Force Illusion: defender becomes Hidden (while attacker in LOS is attacking)."""
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('force_illusion: requires ctx.figure_key')
+    _apply_condition_to_target(game, figure_key, 'Hide')
+    return {'applied': True, 'figureKey': figure_key}
+
+
+def _cc_furious_charge(game, pending, ctx):
+    """Furious Charge: if ≥3 damage suffered this attack, ready own DC.
+
+    Required: ctx.damage_suffered, ctx.msg_id.
+    """
+    from python.engine.mechanics.player_helpers import (
+        get_activated_dc_indices, set_activated_dc_indices,
+    )
+
+    data = game.data if hasattr(game, 'data') else game
+    damage_suffered = int((ctx or {}).get('damage_suffered') or 0)
+    msg_id = (ctx or {}).get('msg_id')
+    player_num = pending.get('playerNum')
+    if not msg_id or player_num not in (1, 2):
+        raise ValueError('furious_charge: requires msg_id + playerNum')
+    if damage_suffered < 3:
+        return {'applied': False, 'reason': 'below_3_damage_threshold'}
+    ids_list = (data.get('p1DcMessageIds') if player_num == 1
+                else data.get('p2DcMessageIds')) or []
+    if msg_id in ids_list:
+        idx = ids_list.index(msg_id)
+        activated = get_activated_dc_indices(game, player_num) or []
+        if idx in activated:
+            set_activated_dc_indices(
+                game, player_num, [i for i in activated if i != idx],
+            )
+    return {'applied': True, 'readiedMsgId': msg_id}
+
+
+def _cc_explosive_weaponry(game, pending, ctx):
+    """Explosive Weaponry: attack gains Blast 1."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusBlast'] = int(c.get('bonusBlast') or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'blast': 1}
+
+
+def _cc_glory_of_the_kill(game, pending, ctx):
+    """Glory of the Kill: if defender was defeated, recover 3 damage.
+
+    Required: ctx.defeated (bool), ctx.figure_key.
+    """
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import (
+        dc_name_from_figure_key, parse_figure_key,
+    )
+
+    data = game.data if hasattr(game, 'data') else game
+    defeated = bool((ctx or {}).get('defeated'))
+    if not defeated:
+        return {'applied': False, 'reason': 'defender_not_defeated'}
+    figure_key = (ctx or {}).get('figure_key')
+    player_num = pending.get('playerNum')
+    if not figure_key or player_num not in (1, 2):
+        raise ValueError('glory_of_the_kill: requires figure_key + playerNum')
+
+    dc_name = dc_name_from_figure_key(figure_key)
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    ids_list = (data.get('p1DcMessageIds') if player_num == 1
+                else data.get('p2DcMessageIds')) or []
+    dc_list = (data.get('p1DcList') if player_num == 1
+               else data.get('p2DcList')) or []
+    msg_id = None
+    for mid, entry in zip(ids_list, dc_list):
+        if isinstance(entry, dict) and entry.get('dcName') == dc_name:
+            msg_id = mid
+            break
+    if not msg_id:
+        return {'applied': False, 'reason': 'dc_not_found'}
+    dc_health_state = data.get('dcHealthState')
+    if not isinstance(dc_health_state, dict):
+        return {'applied': False, 'reason': 'no_health_state'}
+    heal_hp(dc_health_state, data, msg_id, fig_idx, 3, player_num)
+    return {'applied': True, 'figureKey': figure_key, 'healed': 3}
+
+
+def _cc_hold_ground(game, pending, ctx):
+    """Hold Ground: SMALL hostiles can't voluntarily exit adjacent spaces this round."""
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('hold_ground: requires ctx.figure_key')
+    hg_map = dict(data.get('holdGroundActive') or {})
+    hg_map[figure_key] = True
+    data['holdGroundActive'] = hg_map
+    return {'applied': True, 'anchorFigureKey': figure_key}
+
+
+def _cc_hunter_protocol(game, pending, ctx):
+    """Hunter Protocol: may trigger the same Surge ability up to twice this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['duplicateSurgesAllowed'] = True
+    data['pendingCombat'] = c
+    return {'applied': True}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -1350,6 +1560,19 @@ register('Expose Weakness', _cc_expose_weakness)
 register('Veteran Instincts', _cc_veteran_instincts)
 register('Toxic Dart', _cc_toxic_dart)
 register('Take Position', _cc_take_position)
+register('Camouflage', _cc_camouflage)
+register('Celebration', _cc_celebration_cc)
+register('Cut Lines', _cc_cut_lines)
+register('Deadly Precision', _cc_deadly_precision)
+register('Debts Repaid', _cc_debts_repaid)
+register('Disengage', _cc_disengage_cc)
+register('Force Rush', _cc_force_rush)
+register('Force Illusion', _cc_force_illusion)
+register('Furious Charge', _cc_furious_charge)
+register('Explosive Weaponry', _cc_explosive_weaponry)
+register('Glory of the Kill', _cc_glory_of_the_kill)
+register('Hold Ground', _cc_hold_ground)
+register('Hunter Protocol', _cc_hunter_protocol)
 
 
 def registered_cc_effects() -> list:

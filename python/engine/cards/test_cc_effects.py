@@ -749,6 +749,83 @@ def test_take_position_marks_push_immune():
     }
 
 
+def test_camouflage_applies_hide():
+    g = {'pendingCcEffect': {'cardName': 'Camouflage', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'figure_key': 'L-0-0'})
+    assert 'Hide' in g['figureConditions']['L-0-0']
+
+
+def test_celebration_cc_awards_4_objective_vp():
+    g = {'pendingCcEffect': {'cardName': 'Celebration', 'playerNum': 1}}
+    resolve_pending_cc_effect(g)
+    assert g['player1VP']['objectives'] == 4
+
+
+def test_cut_lines_sets_round_flag():
+    g = {'pendingCcEffect': {'cardName': 'Cut Lines', 'playerNum': 1}}
+    resolve_pending_cc_effect(g)
+    assert g['cutLinesActive'] is True
+
+
+def test_deadly_precision_stamps_round_dodge_reduction():
+    g = {'pendingCcEffect': {'cardName': 'Deadly Precision', 'playerNum': 1}}
+    resolve_pending_cc_effect(g)
+    assert g['roundDodgeReduction'][1] == 1
+
+
+def test_disengage_cc_grants_3_mp():
+    g = {'pendingCcEffect': {'cardName': 'Disengage', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0'})
+    assert g['movementBank']['hl1dc0']['total'] == 3
+
+
+def test_furious_charge_readies_when_damage_over_3():
+    g = {
+        'pendingCcEffect': {'cardName': 'Furious Charge', 'playerNum': 1},
+        'p1DcMessageIds': ['hl1dc0'],
+        'p1ActivatedDcIndices': [0],
+    }
+    r = resolve_pending_cc_effect(g, {'damage_suffered': 5, 'msg_id': 'hl1dc0'})
+    assert r['applied'] is True
+    assert g['p1ActivatedDcIndices'] == []
+
+
+def test_furious_charge_below_threshold():
+    g = {'pendingCcEffect': {'cardName': 'Furious Charge', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'damage_suffered': 1, 'msg_id': 'hl1dc0'})
+    assert r['applied'] is False
+
+
+def test_explosive_weaponry_adds_blast():
+    g = {
+        'pendingCcEffect': {'cardName': 'Explosive Weaponry', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusBlast'] == 1
+
+
+def test_glory_of_the_kill_heals_on_defeat():
+    g = {
+        'pendingCcEffect': {'cardName': 'Glory of the Kill', 'playerNum': 1},
+        'p1DcMessageIds': ['hl1dc0'],
+        'p1DcList': [{'dcName': 'Vader'}],
+        'dcHealthState': {'hl1dc0': [[5, 12]]},
+    }
+    r = resolve_pending_cc_effect(g, {'defeated': True, 'figure_key': 'Vader-0-0'})
+    assert r['healed'] == 3
+    assert g['dcHealthState']['hl1dc0'][0][0] == 8
+
+
+def test_hunter_protocol_allows_duplicate_surges():
+    g = {
+        'pendingCcEffect': {'cardName': 'Hunter Protocol', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['duplicateSurgesAllowed'] is True
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -841,6 +918,16 @@ def main():
         ('veteran_instincts_both_tokens', test_veteran_instincts_grants_both_tokens),
         ('toxic_dart_strain_weaken', test_toxic_dart_strain_and_weaken),
         ('take_position_push_immune', test_take_position_marks_push_immune),
+        ('camouflage_hide', test_camouflage_applies_hide),
+        ('celebration_cc_vp', test_celebration_cc_awards_4_objective_vp),
+        ('cut_lines_flag', test_cut_lines_sets_round_flag),
+        ('deadly_precision_dodge_reduction', test_deadly_precision_stamps_round_dodge_reduction),
+        ('disengage_cc_3_mp', test_disengage_cc_grants_3_mp),
+        ('furious_charge_readies', test_furious_charge_readies_when_damage_over_3),
+        ('furious_charge_below_threshold', test_furious_charge_below_threshold),
+        ('explosive_weaponry_blast', test_explosive_weaponry_adds_blast),
+        ('glory_of_the_kill_heals', test_glory_of_the_kill_heals_on_defeat),
+        ('hunter_protocol_duplicate_surges', test_hunter_protocol_allows_duplicate_surges),
     ]
     failures = []
     for name, fn in cases:
