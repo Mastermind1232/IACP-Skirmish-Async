@@ -839,6 +839,86 @@ def test_cover_fire_skip_clears_pending():
     assert new_g.data['pendingCoverFire'] is None
 
 
+def test_bo_rifle_use_sets_melee_override():
+    g = create_game()
+    g.data['pendingBoRifle'] = {'hl1dc0': {'meleeDice': ['red', 'green']}}
+    new_g = step(g, Action(
+        type=ActionType.BO_RIFLE_USE, player=1,
+        params={'msg_id': 'hl1dc0'},
+    ))
+    assert new_g.data['pendingOverrideAttackDice']['hl1dc0'] == {
+        'dice': ['red', 'green'], 'type': 'melee',
+    }
+    assert new_g.data['pendingBoRifle'] is None
+
+
+def test_bo_rifle_skip_clears_pending():
+    g = create_game()
+    g.data['pendingBoRifle'] = {'hl1dc0': {'meleeDice': ['red']}}
+    new_g = step(g, Action(
+        type=ActionType.BO_RIFLE_SKIP, player=1,
+        params={'msg_id': 'hl1dc0'},
+    ))
+    assert new_g.data['pendingBoRifle'] is None
+    # No override set
+    assert new_g.data.get('pendingOverrideAttackDice') is None
+
+
+def test_bo_rifle_use_requires_pending():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.BO_RIFLE_USE, player=1,
+            params={'msg_id': 'hl1dc0'},
+        ))
+    except ValueError as e:
+        assert 'pendingBoRifle' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_ee3_pick_die_deducts_mp_and_swaps_color_to_red():
+    g = create_game()
+    g.data['movementBank'] = {'hl1dc0': {'total': 4, 'remaining': 4}}
+    new_g = step(g, Action(
+        type=ActionType.EE3_PICK_DIE, player=1,
+        params={
+            'msg_id': 'hl1dc0', 'color': 'blue',
+            'base_dice': ['blue', 'green', 'yellow'],
+        },
+    ))
+    assert new_g.data['movementBank']['hl1dc0']['remaining'] == 2
+    assert new_g.data['pendingOverrideAttackDice']['hl1dc0']['dice'] == [
+        'red', 'green', 'yellow',
+    ]
+    assert new_g.data['pendingEe3Carbine']['hl1dc0'] == 'decided'
+
+
+def test_ee3_pick_die_rejects_invalid_color():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.EE3_PICK_DIE, player=1,
+            params={'msg_id': 'hl1dc0', 'color': 'red',
+                    'base_dice': ['blue']},
+        ))
+    except ValueError as e:
+        assert 'color' in str(e).lower()
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_ee3_pick_skip_just_stamps_decided():
+    g = create_game()
+    new_g = step(g, Action(
+        type=ActionType.EE3_PICK_SKIP, player=1,
+        params={'msg_id': 'hl1dc0'},
+    ))
+    assert new_g.data['pendingEe3Carbine']['hl1dc0'] == 'decided'
+    assert new_g.data.get('pendingOverrideAttackDice') is None
+    assert new_g.data.get('movementBank') is None
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -895,6 +975,12 @@ def main():
         ('cover_fire_block_grants_token', test_cover_fire_block_grants_token_and_clears_pending),
         ('cover_fire_block_requires_window', test_cover_fire_block_requires_window),
         ('cover_fire_skip_clears_pending', test_cover_fire_skip_clears_pending),
+        ('bo_rifle_use_sets_melee_override', test_bo_rifle_use_sets_melee_override),
+        ('bo_rifle_skip_clears_pending', test_bo_rifle_skip_clears_pending),
+        ('bo_rifle_use_requires_pending', test_bo_rifle_use_requires_pending),
+        ('ee3_pick_die_deducts_mp_and_swaps', test_ee3_pick_die_deducts_mp_and_swaps_color_to_red),
+        ('ee3_pick_die_rejects_invalid_color', test_ee3_pick_die_rejects_invalid_color),
+        ('ee3_pick_skip_stamps_decided', test_ee3_pick_skip_just_stamps_decided),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

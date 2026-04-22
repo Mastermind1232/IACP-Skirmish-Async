@@ -1168,3 +1168,136 @@ def _handle_cover_fire_skip(game: GameState, action: Action) -> GameState:
 
 register(ActionType.COVER_FIRE_BLOCK, _handle_cover_fire_block)
 register(ActionType.COVER_FIRE_SKIP, _handle_cover_fire_skip)
+
+
+# ---------------------------------------------------------------------------
+# Bo-Rifle mode pick (melee vs. ranged) — pre-attack decision window
+# ---------------------------------------------------------------------------
+
+def _handle_bo_rifle_use(game: GameState, action: Action) -> GameState:
+    """Use Bo-Rifle in melee mode: swap attack dice to pendingBoRifle.meleeDice.
+
+    Required params:
+        msg_id (str) — DC message id (the Discord msgId for the attacking DC).
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    if not msg_id:
+        raise ValueError('bo_rifle_use requires msg_id param')
+    pending = game.data.get('pendingBoRifle') or {}
+    entry = pending.get(msg_id)
+    if not entry:
+        raise ValueError(f'bo_rifle_use: no pendingBoRifle for msgId {msg_id!r}')
+    melee_dice = entry.get('meleeDice') or []
+    override = game.data.get('pendingOverrideAttackDice') or {}
+    override[msg_id] = {'dice': list(melee_dice), 'type': 'melee'}
+    game.data['pendingOverrideAttackDice'] = override
+    del pending[msg_id]
+    game.data['pendingBoRifle'] = pending if pending else None
+    return game
+
+
+def _handle_bo_rifle_skip(game: GameState, action: Action) -> GameState:
+    """Skip Bo-Rifle melee mode: clear pendingBoRifle for the msgId."""
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    if not msg_id:
+        raise ValueError('bo_rifle_skip requires msg_id param')
+    pending = game.data.get('pendingBoRifle') or {}
+    if msg_id in pending:
+        del pending[msg_id]
+    game.data['pendingBoRifle'] = pending if pending else None
+    return game
+
+
+register(ActionType.BO_RIFLE_USE, _handle_bo_rifle_use)
+register(ActionType.BO_RIFLE_SKIP, _handle_bo_rifle_skip)
+
+
+# ---------------------------------------------------------------------------
+# EE-3 Carbine die-color upgrade pick
+# ---------------------------------------------------------------------------
+
+def _handle_ee3_pick_die(game: GameState, action: Action) -> GameState:
+    """EE-3 Carbine: upgrade one attack die to red (2 MP cost).
+
+    Required params:
+        msg_id (str) — DC message id for the attacking DC.
+        color (str) — die color to upgrade ('blue', 'green', 'yellow').
+    Optional param:
+        base_dice (list[str]) — the attacker's base attack dice list.
+          Falls back to dc_effects.attack.dice when absent.
+
+    Effects:
+        - Deducts 2 MP from game.movementBank[msg_id].remaining (clamped).
+        - Sets pendingOverrideAttackDice[msg_id] = {'dice': [...], 'type': 'range'}
+          with the first `color` die swapped to 'red'.
+        - Stamps pendingEe3Carbine[msg_id] = 'decided'.
+    """
+    from python.engine.data.dc_effects_loader import get_dc_effects
+
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    color = action.params.get('color')
+    if not msg_id or not color:
+        raise ValueError('ee3_pick_die requires msg_id + color params')
+    if color not in ('blue', 'green', 'yellow'):
+        raise ValueError(
+            f'ee3_pick_die: color must be blue|green|yellow, got {color!r}'
+        )
+
+    base_dice = action.params.get('base_dice') or action.params.get('baseDice')
+    if base_dice is None:
+        # Fall back to lookup via msgId → dcName
+        dc_name = None
+        for pn in (1, 2):
+            msg_ids = game.data.get('p1DcMessageIds' if pn == 1 else 'p2DcMessageIds') or []
+            dc_list = game.data.get('p1DcList' if pn == 1 else 'p2DcList') or []
+            if msg_id in msg_ids:
+                idx = msg_ids.index(msg_id)
+                if idx < len(dc_list) and isinstance(dc_list[idx], Mapping):
+                    dc_name = dc_list[idx].get('dcName')
+                break
+        if not dc_name:
+            raise ValueError(f'ee3_pick_die: no DC found for msg_id {msg_id!r}')
+        effect = (get_dc_effects() or {}).get(dc_name) or {}
+        attack = effect.get('attack') or {}
+        base_dice = list(attack.get('dice') or ['red'])
+    else:
+        base_dice = list(base_dice)
+
+    # Deduct 2 MP
+    bank_all = game.data.get('movementBank') or {}
+    bank = bank_all.get(msg_id)
+    if isinstance(bank, Mapping):
+        bank_mut = dict(bank)
+        bank_mut['remaining'] = max(0, int(bank_mut.get('remaining') or 0) - 2)
+        bank_all[msg_id] = bank_mut
+        game.data['movementBank'] = bank_all
+
+    # Swap first matching die to red
+    if color in base_dice:
+        swap_idx = base_dice.index(color)
+        base_dice[swap_idx] = 'red'
+
+    override = game.data.get('pendingOverrideAttackDice') or {}
+    override[msg_id] = {'dice': base_dice}
+    game.data['pendingOverrideAttackDice'] = override
+
+    pending = game.data.get('pendingEe3Carbine') or {}
+    pending[msg_id] = 'decided'
+    game.data['pendingEe3Carbine'] = pending
+
+    return game
+
+
+def _handle_ee3_pick_skip(game: GameState, action: Action) -> GameState:
+    """Skip EE-3 die upgrade — just stamp pendingEe3Carbine[msgId] = 'decided'."""
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    if not msg_id:
+        raise ValueError('ee3_pick_skip requires msg_id param')
+    pending = game.data.get('pendingEe3Carbine') or {}
+    pending[msg_id] = 'decided'
+    game.data['pendingEe3Carbine'] = pending
+    return game
+
+
+register(ActionType.EE3_PICK_DIE, _handle_ee3_pick_die)
+register(ActionType.EE3_PICK_SKIP, _handle_ee3_pick_skip)
