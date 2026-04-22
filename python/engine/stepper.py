@@ -528,12 +528,19 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
     """Close out the round and set up the next one.
 
     Effects:
+      - Fire end-of-round DC passives (Regenerate, etc.) before the round
+        number ticks.
       - round/currentRound += 1.
       - activationsRemaining[p] = count of live deployment groups.
       - Clear per-round tracking (moved, attacks, damage, active, starts).
       - roundPhase -> 'activation'.
       - If either side has zero groups: phase -> 'game_over'.
     """
+    from python.engine.mechanics.round_effects import apply_end_of_round_dc_effects
+    eor_events = apply_end_of_round_dc_effects(game)
+    if eor_events:
+        game.data['lastEndOfRoundDcEvents'] = eor_events
+
     cur_round = int(game.get('round') or game.get('currentRound') or 1)
     game['round'] = cur_round + 1
     # Keep currentRound in sync if it was being used.
