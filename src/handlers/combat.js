@@ -35,6 +35,11 @@ import {
   gamorreanHonorGuardApplies,
   applyGamorreanHonorGuardBonus,
 } from '../game/gamorrean-honor-guard-helpers.js';
+import {
+  hasOverpowerAbility,
+  applyOverpowerAttackerReroll,
+  applyOverpowerDefenderReroll,
+} from '../game/overpower-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2681,8 +2686,8 @@ export async function handleCombatRoll(interaction, ctx) {
     const tcIds = ['targeting_computer_hk_elite', 'targeting_computer_ig11', 'targeting_computer_probe_elite', 'targeting_computer_sentry_elite', 'targeting_computer_sentry_reg', 'targeting_computer_atst', 'adv_targeting_computer_dark_trooper'];
     if (atkSIds.some(id => tcIds.includes(id))) atkSpecialReroll += 1;
     // Overpower (Royal Guard Champion): +1 atk reroll when attacking, +1 def reroll when defending
-    if (atkSIds.includes('overpower')) atkSpecialReroll += 1;
-    if (defSIds.includes('overpower')) defSpecialReroll += 1;
+    if (hasOverpowerAbility(atkSIds)) atkSpecialReroll = applyOverpowerAttackerReroll(atkSpecialReroll);
+    if (hasOverpowerAbility(defSIds)) defSpecialReroll = applyOverpowerDefenderReroll(defSpecialReroll);
     // Foresight (Darth Vader defending): +1 def reroll
     if (defSIds.includes('foresight')) defSpecialReroll += 1;
     // Defensive Stance (Diala Passil defending): +1 def reroll
