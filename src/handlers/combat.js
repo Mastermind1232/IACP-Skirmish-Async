@@ -49,6 +49,11 @@ import {
   hasTargetingComputerAbility,
   applyTargetingComputerReroll,
 } from '../game/targeting-computer-helpers.js';
+import {
+  hasChargeGeneratorsAbility,
+  chargeGeneratorsApplies,
+  applyChargeGeneratorsBonus,
+} from '../game/charge-generators-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2703,11 +2708,15 @@ export async function handleCombatRoll(interaction, ctx) {
     // (Dodge-conversion clause lives in later phase, see ~line 4400)
     if (hasDefensiveStanceAbility(defSIds)) defSpecialReroll = applyDefensiveReroll(defSpecialReroll);
     // Charge Generators (AT-DP attacking): +1 atk reroll + +1 Hit if < 9 damage suffered
-    if (atkSIds.includes('charge_generators')) {
+    if (hasChargeGeneratorsAbility(atkSIds)) {
       const atkHpA = dcHS?.get(combat.attackerMsgId) || [];
       const atkFHp = atkHpA[combat.attackerFigureIndex ?? 0];
       const atkDs = atkFHp ? Math.max(0, (atkFHp[1] ?? atkFHp[0] ?? 0) - (atkFHp[0] ?? 0)) : 0;
-      if (atkDs < 9) { atkSpecialReroll += 1; combat.bonusHits = (combat.bonusHits || 0) + 1; }
+      if (chargeGeneratorsApplies(atkDs)) {
+        const { bonusHits, atkSpecialReroll: newReroll } = applyChargeGeneratorsBonus(combat, atkSpecialReroll);
+        combat.bonusHits = bonusHits;
+        atkSpecialReroll = newReroll;
+      }
     }
     // Inspiring (Luke Skywalker on attacker's team): +1 atk reroll for another friendly within 3 spaces
     {
