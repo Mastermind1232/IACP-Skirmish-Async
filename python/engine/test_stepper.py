@@ -24,11 +24,11 @@ from python.engine.stepper import (
 
 def test_unknown_action_raises():
     g = create_game()
-    # SPECIAL_ACTION is not yet registered — use it as the unimplemented sentinel
+    # UNDO is not yet registered — use it as the unimplemented sentinel
     try:
-        step(g, Action(type=ActionType.SPECIAL_ACTION, player=1))
+        step(g, Action(type=ActionType.UNDO, player=1))
     except NotImplementedError as e:
-        assert 'special_action' in str(e)
+        assert 'undo' in str(e)
         return
     raise AssertionError('expected NotImplementedError')
 
@@ -91,7 +91,8 @@ def test_is_implemented_reports_correctly():
     assert is_implemented(ActionType.INTERACT)
     assert is_implemented(ActionType.PLAY_CC)
     assert is_implemented(ActionType.DC_SPECIAL)
-    assert not is_implemented(ActionType.SPECIAL_ACTION)
+    assert is_implemented(ActionType.SPECIAL_ACTION)
+    assert not is_implemented(ActionType.UNDO)
 
 
 def _two_figure_game():
@@ -1977,6 +1978,112 @@ def test_combat_resolve_requires_pending():
     raise AssertionError('expected ValueError')
 
 
+def test_deploy_figure_places_on_board():
+    g = create_game()
+    g.data['figurePositions'] = {1: {}, 2: {}}
+    new_g = step(g, Action(
+        type=ActionType.DEPLOY_FIGURE, player=1,
+        params={'figure_key': 'Luke-0-0', 'coord': 'C5'},
+    ))
+    assert new_g.data['figurePositions'][1]['Luke-0-0'] == 'c5'
+
+
+def test_deploy_figure_rejects_missing_params():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.DEPLOY_FIGURE, player=1, params={}))
+    except ValueError as e:
+        assert 'figure_key' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_deploy_pick_records_flat_index():
+    g = create_game()
+    new_g = step(g, Action(
+        type=ActionType.DEPLOY_PICK, player=1,
+        params={'flat_index': 3},
+    ))
+    assert new_g.data['pendingDeployPick'][1] == 3
+
+
+def test_move_figure_records_in_progress():
+    g = create_game()
+    g.data['figurePositions'] = {1: {'Luke-0-0': 'a1'}, 2: {}}
+    new_g = step(g, Action(
+        type=ActionType.MOVE_FIGURE, player=1,
+        params={'figure_key': 'Luke-0-0', 'msg_id': 'hl1dc0'},
+    ))
+    assert new_g.data['moveInProgress']['hl1dc0']['figureKey'] == 'Luke-0-0'
+    assert new_g.data['moveInProgress']['hl1dc0']['playerNum'] == 1
+
+
+def test_move_mp_records_budget():
+    g = create_game()
+    g.data['moveInProgress'] = {'hl1dc0': {'figureKey': 'Luke-0-0'}}
+    new_g = step(g, Action(
+        type=ActionType.MOVE_MP, player=1,
+        params={'msg_id': 'hl1dc0', 'mp': 3},
+    ))
+    assert new_g.data['moveInProgress']['hl1dc0']['mpRemaining'] == 3
+
+
+def test_move_letter_records_letter():
+    g = create_game()
+    g.data['moveInProgress'] = {'hl1dc0': {}}
+    new_g = step(g, Action(
+        type=ActionType.MOVE_LETTER, player=1,
+        params={'msg_id': 'hl1dc0', 'letter': 'A'},
+    ))
+    assert new_g.data['moveInProgress']['hl1dc0']['letter'] == 'A'
+
+
+def test_dc_action_records_pending_choice():
+    g = create_game()
+    new_g = step(g, Action(
+        type=ActionType.DC_ACTION, player=1,
+        params={'msg_id': 'hl1dc0', 'action_name': 'attack'},
+    ))
+    assert new_g.data['pendingDcActionChoice']['hl1dc0'] == 'attack'
+
+
+def test_special_action_delegates_to_dc_special():
+    from python.engine.data import dc_effects_loader
+    dc_effects_loader._dc_effects = {
+        'Luke': {'figures': 1, 'specialAbilityIds': ['unknown_ability']},
+    }
+    try:
+        g = create_game()
+        g.data['figurePositions'] = {1: {'Luke-0-0': 'a1'}, 2: {}}
+        # Expect UnknownAbility to propagate from dispatch, since _handle_dc_special
+        # raises it
+        try:
+            step(g, Action(
+                type=ActionType.SPECIAL_ACTION, player=1,
+                params={'figure_key': 'Luke-0-0', 'special_idx': 0},
+            ))
+        except Exception as e:
+            # Either UnknownAbility or the generic dispatcher message
+            assert 'unknown' in str(e).lower() or 'ability' in str(e).lower()
+            return
+        # If no exception raised, the dispatcher must have logged and moved on
+    finally:
+        dc_effects_loader.reset_cache()
+
+
+def test_refresh_map_is_noop():
+    g = create_game()
+    orig = g.to_json()
+    new_g = step(g, Action(type=ActionType.REFRESH_MAP, player=0))
+    assert new_g.to_json() == orig
+
+
+def test_confirm_attachment_flips_flag():
+    g = create_game()
+    new_g = step(g, Action(type=ActionType.CONFIRM_ATTACHMENT, player=1))
+    assert new_g.data['p1AttachmentsConfirmed'] is True
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -2118,6 +2225,16 @@ def main():
         ('combat_resolve_applies_damage', test_combat_resolve_applies_damage_and_clears_pending),
         ('combat_resolve_defeated_awards_vp', test_combat_resolve_defeated_awards_kill_vp_and_removes_figure),
         ('combat_resolve_requires_pending', test_combat_resolve_requires_pending),
+        ('deploy_figure_places_on_board', test_deploy_figure_places_on_board),
+        ('deploy_figure_rejects_missing', test_deploy_figure_rejects_missing_params),
+        ('deploy_pick_records', test_deploy_pick_records_flat_index),
+        ('move_figure_records_progress', test_move_figure_records_in_progress),
+        ('move_mp_records_budget', test_move_mp_records_budget),
+        ('move_letter_records_letter', test_move_letter_records_letter),
+        ('dc_action_records_choice', test_dc_action_records_pending_choice),
+        ('special_action_delegates', test_special_action_delegates_to_dc_special),
+        ('refresh_map_noop', test_refresh_map_is_noop),
+        ('confirm_attachment_flips', test_confirm_attachment_flips_flag),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

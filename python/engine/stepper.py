@@ -2599,3 +2599,191 @@ register(ActionType.COMBAT_SKIP_SURGES, _handle_combat_skip_surges)
 register(ActionType.COMBAT_PASSIVE, _handle_combat_passive)
 register(ActionType.COMBAT_TOKEN, _handle_combat_token)
 register(ActionType.COMBAT_RESOLVE, _handle_combat_resolve)
+
+
+# ---------------------------------------------------------------------------
+# DEPLOY_FIGURE (setup) — place a figure at a coord
+# ---------------------------------------------------------------------------
+
+def _handle_deploy_figure(game: GameState, action: Action) -> GameState:
+    """Place a figure on the board.
+
+    Required params:
+        figure_key (str), coord (str).
+
+    The stepper collapses the JS two-click "pick figure → pick space"
+    flow into one atomic placement. Params carry both pieces.
+
+    Effects:
+        - Sets game.figurePositions[player_num][figure_key] = coord.lower()
+        - Validates player_num ∈ {1, 2}.
+    """
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        raise ValueError('deploy_figure requires player ∈ {1, 2}')
+    figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+    coord = action.params.get('coord') or action.params.get('space')
+    if not figure_key or not coord:
+        raise ValueError('deploy_figure requires figure_key + coord params')
+    positions = game.data.get('figurePositions') or {1: {}, 2: {}}
+    # JSON keys can come back as strings when serialized
+    for k in (1, 2):
+        if str(k) in positions and k not in positions:
+            positions[k] = positions.pop(str(k))
+    player_positions = dict(positions.get(player) or {})
+    player_positions[figure_key] = str(coord).lower()
+    positions[player] = player_positions
+    game.data['figurePositions'] = positions
+    return game
+
+
+register(ActionType.DEPLOY_FIGURE, _handle_deploy_figure)
+
+
+# ---------------------------------------------------------------------------
+# UI-trigger shims: DEPLOY_PICK, DEPLOY_ROW, MOVE_FIGURE, MOVE_MP, MOVE_LETTER,
+# DC_ACTION, SPECIAL_ACTION, REFRESH_MAP, CONFIRM_ATTACHMENT
+#
+# These are button-open-picker events in the JS flow. The stepper version
+# just records the player's intent (or no-ops). Follow-up actions carry the
+# actual state change.
+# ---------------------------------------------------------------------------
+
+def _handle_deploy_pick(game: GameState, action: Action) -> GameState:
+    """Record which figure slot was selected for deployment (UI shim).
+
+    Optional param: flat_index (int) — the squad position being deployed.
+    Sets game.pendingDeployPick[player_num] = flat_index.
+    """
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        raise ValueError('deploy_pick requires player ∈ {1, 2}')
+    flat_index = action.params.get('flat_index')
+    if flat_index is None:
+        flat_index = action.params.get('flatIndex')
+    pending = game.data.get('pendingDeployPick') or {}
+    pending[player] = flat_index
+    game.data['pendingDeployPick'] = pending
+    return game
+
+
+def _handle_deploy_row(game: GameState, action: Action) -> GameState:
+    """Record row filter choice during deployment (UI shim)."""
+    row = action.params.get('row')
+    pending = game.data.get('pendingDeployPick') or {}
+    pending['row'] = row
+    game.data['pendingDeployPick'] = pending
+    return game
+
+
+def _handle_move_figure(game: GameState, action: Action) -> GameState:
+    """Open movement for a specific figure (UI shim).
+
+    Required params: figure_key, msg_id.
+    Records game.moveInProgress[msg_id] = {figureKey, playerNum}. Real
+    MP consumption happens via MOVE_PICK_SPACE.
+    """
+    figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    if not figure_key or not msg_id:
+        raise ValueError('move_figure requires figure_key + msg_id params')
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        player, _ = _find_figure(game, figure_key)
+        if player is None:
+            raise ValueError(f'move_figure: figure {figure_key!r} not on board')
+    move_in_progress = game.data.get('moveInProgress') or {}
+    move_in_progress[msg_id] = {'figureKey': figure_key, 'playerNum': player}
+    game.data['moveInProgress'] = move_in_progress
+    return game
+
+
+def _handle_move_mp(game: GameState, action: Action) -> GameState:
+    """Set MP budget for the in-progress move (UI shim).
+
+    Required params: msg_id, mp (int).
+    Updates game.moveInProgress[msg_id].mpRemaining.
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    mp = action.params.get('mp')
+    if not msg_id or not isinstance(mp, int) or mp < 0:
+        raise ValueError('move_mp requires msg_id + non-negative int mp params')
+    move_in_progress = game.data.get('moveInProgress') or {}
+    entry = dict(move_in_progress.get(msg_id) or {})
+    entry['mpRemaining'] = mp
+    move_in_progress[msg_id] = entry
+    game.data['moveInProgress'] = move_in_progress
+    return game
+
+
+def _handle_move_letter(game: GameState, action: Action) -> GameState:
+    """Record letter pick for multi-figure group movement (UI shim).
+
+    Required params: msg_id, letter (str).
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    letter = action.params.get('letter')
+    if not msg_id or not letter:
+        raise ValueError('move_letter requires msg_id + letter params')
+    move_in_progress = game.data.get('moveInProgress') or {}
+    entry = dict(move_in_progress.get(msg_id) or {})
+    entry['letter'] = letter
+    move_in_progress[msg_id] = entry
+    game.data['moveInProgress'] = move_in_progress
+    return game
+
+
+def _handle_dc_action(game: GameState, action: Action) -> GameState:
+    """Dispatcher wrapper: a DC's generic action button (Attack / Move / Special).
+
+    Required params: msg_id, action_name (str).
+    Records game.pendingDcActionChoice[msg_id] = action_name so follow-up
+    actions (ATTACK_TARGET, MOVE_PICK_SPACE, etc.) know the activation
+    slot being consumed.
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    action_name = action.params.get('action_name') or action.params.get('actionName')
+    if not msg_id or not action_name:
+        raise ValueError('dc_action requires msg_id + action_name params')
+    pending = game.data.get('pendingDcActionChoice') or {}
+    pending[msg_id] = action_name
+    game.data['pendingDcActionChoice'] = pending
+    return game
+
+
+def _handle_special_action(game: GameState, action: Action) -> GameState:
+    """Thin relay to DC_SPECIAL via the stepper.
+
+    Required params: figure_key, special_idx.
+    """
+    return _handle_dc_special(game, action)
+
+
+def _handle_refresh_map(game: GameState, action: Action) -> GameState:
+    """Discord map-refresh trigger (no-op in the headless stepper)."""
+    return game
+
+
+def _handle_confirm_attachment(game: GameState, action: Action) -> GameState:
+    """Mark attachments as confirmed for a player.
+
+    Required: action.player ∈ {1, 2}.
+    Sets game.p{n}AttachmentsConfirmed = True.
+    """
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        raise ValueError('confirm_attachment requires player ∈ {1, 2}')
+    key = 'p1AttachmentsConfirmed' if player == 1 else 'p2AttachmentsConfirmed'
+    game.data[key] = True
+    return game
+
+
+register(ActionType.DEPLOY_PICK, _handle_deploy_pick)
+register(ActionType.DEPLOY_ROW, _handle_deploy_row)
+register(ActionType.MOVE_FIGURE, _handle_move_figure)
+register(ActionType.MOVE_MP, _handle_move_mp)
+register(ActionType.MOVE_LETTER, _handle_move_letter)
+register(ActionType.DC_ACTION, _handle_dc_action)
+register(ActionType.SPECIAL_ACTION, _handle_special_action)
+register(ActionType.REFRESH_MAP, _handle_refresh_map)
+register(ActionType.CONFIRM_ATTACHMENT, _handle_confirm_attachment)
