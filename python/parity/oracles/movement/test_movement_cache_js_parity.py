@@ -91,9 +91,9 @@ def _profile_from_js_dict(d: dict) -> MovementProfile:
     )
 
 
-def test_movement_cache_parity_200_fuzz_cases():
-    cases = _run_js(count=200, seed=42)
-    assert len(cases) == 200, f'Expected 200 JS cases, got {len(cases)}'
+def test_movement_cache_parity_500_fuzz_cases():
+    cases = _run_js(count=500, seed=42)
+    assert len(cases) == 500, f'Expected 500 JS cases, got {len(cases)}'
     failures = []
     for case in cases:
         map_spaces = _build_grid_map(
@@ -128,7 +128,7 @@ def test_movement_cache_parity_200_fuzz_cases():
         + '\n  '.join(failures[:5]))
 
 
-ALL_TESTS = [test_movement_cache_parity_200_fuzz_cases]
+ALL_TESTS = [test_movement_cache_parity_500_fuzz_cases]
 
 
 def _main():
