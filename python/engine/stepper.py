@@ -953,6 +953,31 @@ def _handle_play_cc(game: GameState, action: Action) -> GameState:
         'cardName': card,
         'playerNum': player,
     }
+
+    # Auto-resolve: when params.auto_resolve=True (default for AI self-play),
+    # immediately invoke the CC effect resolver with ctx. Tests / Discord
+    # flow can opt out to keep pendingCcEffect around for choice UI.
+    auto = action.params.get('auto_resolve', True)
+    if auto:
+        from python.engine.cards.cc_effects import (
+            UnknownCcEffect, resolve_pending_cc_effect,
+        )
+        cc_ctx = action.params.get('cc_ctx') or {}
+        try:
+            resolve_pending_cc_effect(game, cc_ctx)
+        except UnknownCcEffect:
+            # Unknown-card guard belongs to the pipeline; we already
+            # validated via get_cc_effect above, so this branch is
+            # unreachable except for registry drift. Swallow and let the
+            # pendingCcEffect linger — the card still got discarded.
+            pass
+        except ValueError:
+            # Per-card handlers raise ValueError when required ctx keys
+            # are missing (target_figure_key, etc.). For non-auto paths
+            # the Discord UI supplies them; for AI self-play without the
+            # UI, the placeholder/no-op branches let play proceed.
+            pass
+
     return game
 
 
