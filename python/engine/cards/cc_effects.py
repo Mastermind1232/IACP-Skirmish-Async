@@ -1834,6 +1834,169 @@ def _cc_of_no_importance(game, pending, ctx):
     return {'applied': True, 'opponentVpReduction': amount}
 
 
+def _cc_i_make_my_own_luck(game, pending, ctx):
+    """I Make My Own Luck: claim initiative token this round (Han-only).
+
+    Sets game.initiativeOverride = playerNum. Mentioned: Han Solo must
+    activate first — caller enforces that ordering separately.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    data['initiativeOverride'] = player_num
+    data['mustActivateFirst'] = 'Han Solo'
+    return {'applied': True, 'playerNum': player_num}
+
+
+def _cc_hunt_them_down(game, pending, ctx):
+    """Hunt Them Down: +2 Accuracy + Cleave 2 on Lightsaber Throw attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusAccuracy'] = int(c.get('bonusAccuracy') or 0) + 2
+    c['bonusCleave'] = int(c.get('bonusCleave') or 0) + 2
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusAccuracy': 2, 'cleave': 2}
+
+
+def _cc_cruel_strike(game, pending, ctx):
+    """Cruel Strike: attack gains Surge: Pierce 1, Weaken.
+
+    Adds to pendingCombat.bonusSurgeAbilities.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    bonus_abilities = list(c.get('bonusSurgeAbilities') or [])
+    bonus_abilities.append('cruel_strike')  # {pierce 1, weaken}
+    c['bonusSurgeAbilities'] = bonus_abilities
+    data['pendingCombat'] = c
+    return {'applied': True, 'ability': 'cruel_strike'}
+
+
+def _cc_face_to_face(game, pending, ctx):
+    """Face to Face (specialAction): move up to 2, then attack adjacent.
+
+    Grants 2 MP and flags the figure as "must attack adjacent" via
+    faceToFaceActive[msg_id].
+    """
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('face_to_face: requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, 2)
+    flag = dict(data.get('faceToFaceActive') or {})
+    flag[msg_id] = True
+    data['faceToFaceActive'] = flag
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': 2}
+
+
+def _cc_negation(game, pending, ctx):
+    """Negation: cancel an opponent's played 0-cost CC.
+
+    Required: ctx.cancelled_card (the CC being cancelled).
+    """
+    from python.engine.cards.deck import discard_from_hand
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    cancelled = (ctx or {}).get('cancelled_card')
+    if not cancelled or player_num not in (1, 2):
+        raise ValueError('negation: requires cancelled_card + playerNum')
+    data['pendingCcEffect'] = None
+    data['lastCancelledCc'] = {
+        'cardName': cancelled,
+        'byPlayerNum': player_num,
+        'method': 'negation',
+    }
+    return {'applied': True, 'cancelled': cancelled}
+
+
+def _cc_change_of_plans(game, pending, ctx):
+    """Change of Plans: switch next round's initiative to self."""
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    data['initiativeSwapNextRound'] = {'toPlayerNum': player_num}
+    return {'applied': True, 'toPlayerNum': player_num}
+
+
+def _cc_price_on_their_heads(game, pending, ctx):
+    """Price on Their Heads: mark hostile DC; +4 VP when last figure defeated.
+
+    Required: ctx.target_msg_id — opponent's DC msgId.
+    Sets game.priceOnTheirHeadsTargets[target_msg_id] = {markerOwner: pn, bonus: 4}.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    player_num = pending.get('playerNum')
+    if not target_msg_id or player_num not in (1, 2):
+        raise ValueError('price_on_their_heads: requires target_msg_id + playerNum')
+    marks = dict(data.get('priceOnTheirHeadsTargets') or {})
+    marks[target_msg_id] = {'markerOwner': player_num, 'bonus': 4}
+    data['priceOnTheirHeadsTargets'] = marks
+    return {'applied': True, 'targetMsgId': target_msg_id}
+
+
+def _cc_strategic_shift(game, pending, ctx):
+    """Strategic Shift: chosen player shuffles hand into deck + draws 2.
+
+    Required: ctx.target_player_num.
+    """
+    from python.engine.cards.deck import draw_cc_cards, shuffle_deck
+
+    data = game.data if hasattr(game, 'data') else game
+    target_pn = (ctx or {}).get('target_player_num')
+    if target_pn not in (1, 2):
+        raise ValueError('strategic_shift: requires ctx.target_player_num')
+    hand_key = 'player1CcHand' if target_pn == 1 else 'player2CcHand'
+    deck_key = 'player1CcDeck' if target_pn == 1 else 'player2CcDeck'
+    hand = list(data.get(hand_key) or [])
+    deck = list(data.get(deck_key) or [])
+    deck.extend(hand)
+    data[deck_key] = deck
+    data[hand_key] = []
+    shuffle_deck(game, target_pn)
+    drew = draw_cc_cards(game, target_pn, 2)
+    return {'applied': True, 'targetPlayerNum': target_pn, 'drew': drew}
+
+
+def _cc_reduce_to_rubble(game, pending, ctx):
+    """Reduce to Rubble: apply +3 Hit if attack didn't miss due to accuracy."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    if combat.get('hit') is False:
+        return {'applied': False, 'reason': 'attack_missed'}
+    c = dict(combat)
+    c['bonusHits'] = int(c.get('bonusHits') or 0) + 3
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusHits': 3}
+
+
+def _cc_size_advantage(game, pending, ctx):
+    """Size Advantage (specialAction): attack SMALL figure w/ +2 Hit and Weaken surge.
+
+    Queues on nextAttackBonuses for the attack handler.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    bonus = dict(data.get('nextAttackBonuses') or {})
+    existing = bonus.get(player_num) or {}
+    existing['bonusHits'] = int(existing.get('bonusHits') or 0) + 2
+    existing['bonusSurgeAbilities'] = list(existing.get('bonusSurgeAbilities') or []) + [
+        'weaken'
+    ]
+    bonus[player_num] = existing
+    data['nextAttackBonuses'] = bonus
+    return {'applied': True, 'playerNum': player_num, 'bonusHits': 2}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -1972,6 +2135,16 @@ register('Master Operative', _cc_master_operative)
 register('New Orders', _cc_new_orders)
 register('Iron Will', _cc_iron_will)
 register('Of No Importance', _cc_of_no_importance)
+register('I Make My Own Luck', _cc_i_make_my_own_luck)
+register('Hunt Them Down', _cc_hunt_them_down)
+register('Cruel Strike', _cc_cruel_strike)
+register('Face to Face', _cc_face_to_face)
+register('Negation', _cc_negation)
+register('Change of Plans', _cc_change_of_plans)
+register('Price on Their Heads', _cc_price_on_their_heads)
+register('Strategic Shift', _cc_strategic_shift)
+register('Reduce to Rubble', _cc_reduce_to_rubble)
+register('Size Advantage', _cc_size_advantage)
 
 
 def registered_cc_effects() -> list:

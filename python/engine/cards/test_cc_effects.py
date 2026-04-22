@@ -931,6 +931,52 @@ def test_of_no_importance_deducts_opponent_vp():
     assert g['player2VP']['total'] == 6
 
 
+def test_negation_cancels_pending_cc_effect():
+    g = {
+        'pendingCcEffect': {'cardName': 'Negation', 'playerNum': 2},
+    }
+    # Normally pendingCcEffect would be the triggering card; Negation is
+    # the response. After resolution, pendingCcEffect is cleared and
+    # lastCancelledCc records the method.
+    r = resolve_pending_cc_effect(g, {'cancelled_card': 'Reinforcements'})
+    assert r['applied'] is True
+    assert g['pendingCcEffect'] is None
+    assert g['lastCancelledCc'] == {
+        'cardName': 'Reinforcements', 'byPlayerNum': 2, 'method': 'negation',
+    }
+
+
+def test_strategic_shift_shuffles_target_hand():
+    g = {
+        'pendingCcEffect': {'cardName': 'Strategic Shift', 'playerNum': 1},
+        'player2CcHand': ['A', 'B'],
+        'player2CcDeck': ['C', 'D'],
+    }
+    resolve_pending_cc_effect(g, {'target_player_num': 2})
+    # Player 2's hand is shuffled into deck then draws 2
+    assert len(g['player2CcHand']) == 2
+    assert len(g['player2CcDeck']) == 2
+
+
+def test_reduce_to_rubble_no_op_on_miss():
+    g = {
+        'pendingCcEffect': {'cardName': 'Reduce to Rubble', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1, 'hit': False},
+    }
+    r = resolve_pending_cc_effect(g)
+    assert r['applied'] is False
+    assert r['reason'] == 'attack_missed'
+
+
+def test_price_on_their_heads_marks_target():
+    g = {'pendingCcEffect': {'cardName': 'Price on Their Heads', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'target_msg_id': 'hl2dc0'})
+    assert r['applied'] is True
+    assert g['priceOnTheirHeadsTargets']['hl2dc0'] == {
+        'markerOwner': 1, 'bonus': 4,
+    }
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -1042,6 +1088,10 @@ def main():
         ('espionage_mastery_returns_card', test_espionage_mastery_returns_card_and_draws),
         ('iron_will_caps_damage', test_iron_will_caps_incoming_damage),
         ('of_no_importance_deducts_vp', test_of_no_importance_deducts_opponent_vp),
+        ('negation_cancels_pending_cc', test_negation_cancels_pending_cc_effect),
+        ('strategic_shift_shuffles_hand', test_strategic_shift_shuffles_target_hand),
+        ('reduce_to_rubble_miss_no_op', test_reduce_to_rubble_no_op_on_miss),
+        ('price_on_their_heads_marks', test_price_on_their_heads_marks_target),
     ]
     failures = []
     for name, fn in cases:
