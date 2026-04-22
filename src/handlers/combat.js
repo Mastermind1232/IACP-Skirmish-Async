@@ -61,6 +61,11 @@ import {
   applySquadTrainingReroll,
 } from '../game/squad-training-helpers.js';
 import { hasQueryAbility, applyQueryBonus } from '../game/query-hk47-helpers.js';
+import {
+  hasDisposableAbility,
+  hasConclusionAbility,
+  applyEvadeDebuff,
+} from '../game/evade-debuff-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -1877,8 +1882,9 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Conclusion (HK-47): -1 Evade to defense results while attacking
-  if (atkSpecialIds.includes('conclusion')) {
-    game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) - 1;
+  if (hasConclusionAbility(atkSpecialIds)) {
+    const bump = applyEvadeDebuff(game.pendingCombat);
+    game.pendingCombat.bonusEvade = bump.bonusEvade;
     await thread.send('**Conclusion** — −1 Evade applied to defense results.');
   }
 
@@ -1891,8 +1897,9 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Disposable (Hired Gun Regular): -1 Evade to own defense results
-  if (defSpecialIds.includes('disposable')) {
-    game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) - 1;
+  if (hasDisposableAbility(defSpecialIds)) {
+    const bump = applyEvadeDebuff(game.pendingCombat);
+    game.pendingCombat.bonusEvade = bump.bonusEvade;
     await thread.send('**Disposable** — −1 Evade applied to defender\'s defense results.');
   }
 
