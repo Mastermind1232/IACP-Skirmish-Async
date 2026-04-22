@@ -162,6 +162,12 @@ import {
   applyShockAndAweDieSwap,
 } from '../game/shock-and-awe-helpers.js';
 import {
+  hasSharedIntuitionAbility,
+  sharedIntuitionInRange,
+  isHunterFriendly,
+  applySharedIntuitionHit,
+} from '../game/shared-intuition-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1929,7 +1935,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Shared Intuition (Tress Hacnua): +1 Hit while attacking if another friendly HUNTER within 3 has LOS to target
-  if (atkSpecialIds.includes('shared_intuition') && hasLineOfSight && mapSpaces && targetCoord) {
+  if (hasSharedIntuitionAbility(atkSpecialIds) && hasLineOfSight && mapSpaces && targetCoord) {
     const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     if (attackerPos) {
       const friendlyPoses = game.figurePositions?.[attackerPlayerNum] || {};
@@ -1938,11 +1944,11 @@ export async function handleAttackTarget(interaction, ctx) {
         if (found || fk === attackerFigureKey) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-        const fkKeywords = (fkEff?.keywords || []).map((k) => String(k).toUpperCase());
-        if (!fkKeywords.includes('HUNTER')) continue;
-        if (countSpaces(_csRawMs, attackerPos, pos, _csClosedDoorEdges) > 3) continue;
+        if (!isHunterFriendly(fkEff)) continue;
+        if (!sharedIntuitionInRange(countSpaces(_csRawMs, attackerPos, pos, _csClosedDoorEdges))) continue;
         if (!hasLineOfSight(pos, targetCoord, mapSpaces, null)) continue;
-        game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+        const r = applySharedIntuitionHit(game.pendingCombat);
+        game.pendingCombat.bonusHits = r.bonusHits;
         await thread.send(`**Shared Intuition** — ${fkDcName} (HUNTER) is within 3 spaces with LOS to target: +1 Hit.`);
         found = true;
       }
