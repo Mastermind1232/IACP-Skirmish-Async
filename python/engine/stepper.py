@@ -1752,3 +1752,109 @@ def _handle_play_cc_double(game: GameState, action: Action) -> GameState:
 
 register(ActionType.PLAY_CC_SPECIAL, _handle_play_cc_special)
 register(ActionType.PLAY_CC_DOUBLE, _handle_play_cc_double)
+
+
+# ---------------------------------------------------------------------------
+# SELECT_MAP (setup) — set selectedMap + selectedMission from missionId
+# ---------------------------------------------------------------------------
+
+def _handle_select_map(game: GameState, action: Action) -> GameState:
+    """Pick a map + variant from a missionId string.
+
+    Required param:
+        mission_id (str) — 'mapId:variant' e.g. 'mos-eisley-outskirts:a'.
+          Variant defaults to 'a' when omitted.
+
+    Effects:
+        - Sets game.selectedMap = {id, name} (imagePath omitted — Discord-only)
+        - Sets game.selectedMission = {variant, name, fullName, tokenLabel,
+          interactLabel, mechanics, rules}
+        - Sets game.mapId for backwards-compat with existing handlers
+        - Marks game.mapSelected = True
+
+    Raises ValueError if map_id / variant unknown in mission-cards.json.
+    """
+    from python.engine.data.mission_cards_loader import get_mission
+
+    mission_id = action.params.get('mission_id') or action.params.get('missionId')
+    if not mission_id:
+        raise ValueError('select_map requires mission_id param')
+    parts = str(mission_id).split(':')
+    map_id = parts[0]
+    variant = parts[1] if len(parts) > 1 else 'a'
+    if variant not in ('a', 'b'):
+        raise ValueError(f'select_map: variant must be a|b, got {variant!r}')
+
+    mission_data = get_mission(map_id, variant)
+    if not mission_data:
+        raise ValueError(
+            f'select_map: no mission data for {map_id!r}:{variant!r}'
+        )
+
+    game.data['selectedMap'] = {'id': map_id, 'name': mission_data.get('name') or map_id}
+    game.data['selectedMission'] = {
+        'variant': variant,
+        'name': mission_data.get('name'),
+        'fullName': f"{mission_data.get('name') or map_id}",
+        'tokenLabel': mission_data.get('tokenLabel') or '',
+        'interactLabel': mission_data.get('interactLabel') or '',
+        'mechanics': mission_data.get('mechanics') or {},
+        'rules': mission_data.get('rules') or {},
+    }
+    game.data['mapId'] = map_id
+    game.data['mapSelected'] = True
+    return game
+
+
+register(ActionType.SELECT_MAP, _handle_select_map)
+
+
+# ---------------------------------------------------------------------------
+# PICK_ZONE (setup) — deployment zone color pick
+# ---------------------------------------------------------------------------
+
+def _handle_pick_zone(game: GameState, action: Action) -> GameState:
+    """Initiative player picks which deployment zone color they get.
+
+    Required param: zone (str) ∈ {'red', 'blue'}.
+
+    Sets game.deploymentZoneChosen. The opposite color automatically goes
+    to the non-initiative player via get_player_deployment_zones.
+    """
+    zone = str(action.params.get('zone') or '').lower()
+    if zone not in ('red', 'blue'):
+        raise ValueError(f"pick_zone: zone must be 'red' or 'blue', got {zone!r}")
+    game.data['deploymentZoneChosen'] = zone
+    return game
+
+
+register(ActionType.PICK_ZONE, _handle_pick_zone)
+
+
+# ---------------------------------------------------------------------------
+# DETERMINE_INITIATIVE (setup) — random tiebreaker, or pick cheaper squad
+# ---------------------------------------------------------------------------
+
+def _handle_determine_initiative(game: GameState, action: Action) -> GameState:
+    """Set the initiative player.
+
+    Required param:
+        player (int) ∈ {1, 2} — the player with initiative.
+          (CRR Skirmish-Setup Step 2: lower-cost squad chooses; ties broken
+          randomly. The stepper takes the decision as input rather than
+          re-deriving it.)
+
+    Effects:
+        - Sets game.initiativePlayerId to player1Id or player2Id.
+        - Sets game.initiativeHolder = player (used by headless flow).
+    """
+    player = int(action.params.get('player') or 0)
+    if player not in (1, 2):
+        raise ValueError('determine_initiative requires player ∈ {1, 2}')
+    pid_key = 'player1Id' if player == 1 else 'player2Id'
+    game.data['initiativePlayerId'] = game.data.get(pid_key)
+    game.data['initiativeHolder'] = player
+    return game
+
+
+register(ActionType.DETERMINE_INITIATIVE, _handle_determine_initiative)

@@ -1328,6 +1328,97 @@ def test_play_cc_special_requires_params():
     raise AssertionError('expected ValueError')
 
 
+def test_select_map_sets_selected_map_and_mission():
+    g = create_game()
+    new_g = step(g, Action(
+        type=ActionType.SELECT_MAP, player=0,
+        params={'mission_id': 'mos-eisley-outskirts:a'},
+    ))
+    assert new_g.data['selectedMap']['id'] == 'mos-eisley-outskirts'
+    assert new_g.data['selectedMission']['variant'] == 'a'
+    assert new_g.data['selectedMission']['name']  # non-empty
+    assert new_g.data['mapId'] == 'mos-eisley-outskirts'
+    assert new_g.data['mapSelected'] is True
+
+
+def test_select_map_default_variant_a():
+    g = create_game()
+    new_g = step(g, Action(
+        type=ActionType.SELECT_MAP, player=0,
+        params={'mission_id': 'mos-eisley-outskirts'},
+    ))
+    assert new_g.data['selectedMission']['variant'] == 'a'
+
+
+def test_select_map_rejects_unknown_map():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.SELECT_MAP, player=0,
+            params={'mission_id': 'nonsense-map:a'},
+        ))
+    except ValueError as e:
+        assert 'no mission data' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_select_map_rejects_bad_variant():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.SELECT_MAP, player=0,
+            params={'mission_id': 'mos-eisley-outskirts:z'},
+        ))
+    except ValueError as e:
+        assert 'variant' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_pick_zone_sets_deployment_zone_chosen():
+    g = create_game()
+    new_g = step(g, Action(
+        type=ActionType.PICK_ZONE, player=1,
+        params={'zone': 'Red'},  # case-insensitive
+    ))
+    assert new_g.data['deploymentZoneChosen'] == 'red'
+
+
+def test_pick_zone_rejects_invalid_zone():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.PICK_ZONE, player=1,
+                        params={'zone': 'yellow'}))
+    except ValueError as e:
+        assert 'red' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_determine_initiative_sets_initiative_player():
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    new_g = step(g, Action(
+        type=ActionType.DETERMINE_INITIATIVE, player=0,
+        params={'player': 2},
+    ))
+    assert new_g.data['initiativePlayerId'] == 'bob'
+    assert new_g.data['initiativeHolder'] == 2
+
+
+def test_determine_initiative_rejects_bad_player():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.DETERMINE_INITIATIVE, player=0,
+                        params={'player': 3}))
+    except ValueError as e:
+        assert 'player' in str(e).lower()
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1419,6 +1510,14 @@ def main():
         ('play_cc_special_rejects_wrong_timing', test_play_cc_special_rejects_wrong_timing),
         ('play_cc_double_accepts_double_timing', test_play_cc_double_accepts_double_action_special_timing),
         ('play_cc_special_requires_params', test_play_cc_special_requires_params),
+        ('select_map_sets_selected', test_select_map_sets_selected_map_and_mission),
+        ('select_map_default_variant_a', test_select_map_default_variant_a),
+        ('select_map_rejects_unknown', test_select_map_rejects_unknown_map),
+        ('select_map_rejects_bad_variant', test_select_map_rejects_bad_variant),
+        ('pick_zone_sets_chosen', test_pick_zone_sets_deployment_zone_chosen),
+        ('pick_zone_rejects_invalid', test_pick_zone_rejects_invalid_zone),
+        ('determine_initiative_sets', test_determine_initiative_sets_initiative_player),
+        ('determine_initiative_rejects', test_determine_initiative_rejects_bad_player),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
