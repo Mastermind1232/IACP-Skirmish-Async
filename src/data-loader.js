@@ -5,6 +5,7 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { resolveAdaptiveSkills } from './game/adaptive-skills-helpers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
@@ -274,23 +275,12 @@ export function getDcKeywords(game) {
     }
 
     // ── Adaptive Skills (Mara Jade): inject trait based on army affiliation ──
-    const _asTraitMap = { imperial: 'Hunter', scum: 'Smuggler', rebel: 'Guardian' };
     for (const pn of [1, 2]) {
       const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
       if (!dcList) continue;
-      let maraName = null;
-      let armyAff = null;
-      for (const dc of dcList) {
-        const dn = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
-        if (!dn) continue;
-        const eff = dcEffects[dn];
-        if ((eff?.specialAbilityIds || []).includes('adaptive_skills_mara_jade')) maraName = dn;
-        const aff = (eff?.affiliation || '').toLowerCase();
-        if (aff && aff !== 'any' && !armyAff) armyAff = aff;
-      }
-      if (maraName && armyAff && _asTraitMap[armyAff]) {
+      const { dcName: maraName, trait } = resolveAdaptiveSkills(dcList, dcEffects);
+      if (maraName && trait) {
         if (!out[maraName]) out[maraName] = [];
-        const trait = _asTraitMap[armyAff];
         if (!out[maraName].some(k => String(k).toUpperCase() === trait.toUpperCase())) {
           out[maraName].push(trait);
         }

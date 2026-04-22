@@ -23,6 +23,7 @@ import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
 import { checkHandDiscardPassiveReshuffle } from '../game/cc-passive-redraw.js';
+import { ADAPTIVE_SKILLS_ABILITY_ID } from '../game/adaptive-skills-helpers.js';
 import { awardObjectiveVp } from '../game/index.js';
 import {
   getPlayerId, getHandChannelId, getSquad, getCcDiscard, getCcDeck, getCcHand,
@@ -386,7 +387,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     for (const dc of dcList2) {
       const dn = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
       const eff = getDcEffects()?.[dn];
-      if ((eff?.specialAbilityIds || []).includes('adaptive_skills_mara_jade')) {
+      if ((eff?.specialAbilityIds || []).includes(ADAPTIVE_SKILLS_ABILITY_ID)) {
         game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
         game.roundFigureAbilityUsed[`${dn}_fast_learner`] = true;
         break;

@@ -5,6 +5,7 @@
 import { getCcEffect, getDcKeywords, getDcEffects } from '../data-loader.js';
 import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, opponentPlayerNum } from './player-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
+import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
 
 /**
  * Derive current CC play context from game state.
@@ -374,7 +375,7 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
     const sIds = eff?.specialAbilityIds || [];
     if (sIds.includes('fallen_master_malicos')) hasFallenMaster = true;
     if (sIds.includes('devout_chirrut')) hasDevout = true;
-    if (sIds.includes('adaptive_skills_mara_jade')) adaptiveSkillsDc = dcName;
+    if (sIds.includes(ADAPTIVE_SKILLS_ABILITY_ID)) adaptiveSkillsDc = dcName;
     // Track army affiliation (most common non-Any affiliation)
     const aff = (eff?.affiliation || '').toLowerCase();
     if (aff && aff !== 'any' && !armyAffiliation) armyAffiliation = aff;
