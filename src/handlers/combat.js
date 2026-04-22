@@ -168,6 +168,12 @@ import {
   applySharedIntuitionHit,
 } from '../game/shared-intuition-helpers.js';
 import {
+  hasBattleMeditationAbility,
+  battleMeditationLabel,
+  BATTLE_MEDITATION_CONDITION,
+  BATTLE_MEDITATION_BONUS_DIE,
+} from '../game/battle-meditation-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1799,11 +1805,11 @@ export async function handleAttackTarget(interaction, ctx) {
   const atkDamageSuffered = atkFigHp ? Math.max(0, (atkFigHp[1] ?? atkFigHp[0] ?? 0) - (atkFigHp[0] ?? 0)) : 0;
 
   // Battle Meditation / Assassin (Diala Passil, BT-1): auto-Focus before attacking
-  if (atkSpecialIds.includes('battle_meditation')) {
-    const _bmResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
+  if (hasBattleMeditationAbility(atkSpecialIds)) {
+    const _bmResult = applyConditionWithDie(game, attackerFigureKey, BATTLE_MEDITATION_CONDITION, game.pendingCombat.attackInfo, BATTLE_MEDITATION_BONUS_DIE);
     if (_bmResult.applied) {
       game.pendingCombat.attackInfo = _bmResult.attackInfo;
-      const bm_label = meta.dcName === 'BT-1' ? 'Assassin' : 'Battle Meditation';
+      const bm_label = battleMeditationLabel(meta.dcName);
       await thread.send(`**${bm_label}** — **${meta.dcName}** is **Focused** before attacking (+1 green die).`);
     }
   }

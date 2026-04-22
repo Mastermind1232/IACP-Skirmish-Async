@@ -134,12 +134,21 @@ describe('ORACLE-CONDDICE-002: No remaining inline applyCondition+dice in Patter
 
 describe('ORACLE-CONDDICE-003: Pattern B sites use applyConditionWithDie', () => {
   it('Battle Meditation uses applyConditionWithDie', () => {
+    // Battle Meditation was extracted to
+    // src/game/battle-meditation-helpers.js during the medium-risk
+    // probe grind. Handler now delegates via hasBattleMeditationAbility,
+    // and Focus + green-die are named constants. The
+    // applyConditionWithDie contract is still enforced at the site.
     const src = readSrc('src/handlers/combat.js');
-    const idx = src.indexOf("atkSpecialIds.includes('battle_meditation')");
-    assert.ok(idx > 0, 'battle_meditation site found');
-    const block = src.slice(idx, idx + 300);
+    const idx = src.indexOf('hasBattleMeditationAbility(atkSpecialIds)');
+    assert.ok(idx > 0, 'Battle Meditation site found (post-extraction)');
+    const block = src.slice(idx, idx + 400);
     assert.ok(block.includes('applyConditionWithDie(game, attackerFigureKey'),
       'Battle Meditation must use applyConditionWithDie');
+    assert.ok(block.includes('BATTLE_MEDITATION_CONDITION'),
+      'Battle Meditation must pass BATTLE_MEDITATION_CONDITION constant');
+    assert.ok(block.includes('BATTLE_MEDITATION_BONUS_DIE'),
+      'Battle Meditation must pass BATTLE_MEDITATION_BONUS_DIE constant');
   });
 
   it('Full of Rage (late) uses applyConditionWithDie', () => {
