@@ -30,6 +30,11 @@ import {
   compositePlatingApplies,
   applyCompositePlatingBonus,
 } from '../game/composite-plating-helpers.js';
+import {
+  hasGamorreanHonorGuardAbility,
+  gamorreanHonorGuardApplies,
+  applyGamorreanHonorGuardBonus,
+} from '../game/gamorrean-honor-guard-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -1889,8 +1894,9 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Gamorrean Honor Guard: +1 Block while defending during Ranged attack
-  if (defSpecialIds.includes('gamorrean_honor_guard') && isRanged) {
-    game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+  if (hasGamorreanHonorGuardAbility(defSpecialIds) && gamorreanHonorGuardApplies(isRanged)) {
+    const { bonusBlock } = applyGamorreanHonorGuardBonus(game.pendingCombat);
+    game.pendingCombat.bonusBlock = bonusBlock;
     await thread.send('**Gamorrean Honor Guard** — +1 Block (defending against Ranged attack).');
   }
 
