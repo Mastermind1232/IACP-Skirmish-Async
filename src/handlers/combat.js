@@ -139,6 +139,9 @@ import {
   applyForestFightersHit,
 } from '../game/forest-fighters-helpers.js';
 import {
+  tripodBlocksAttack,
+} from '../game/tripod-eweb-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -2315,7 +2318,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Tripod (E-Web E/R): if figure has moved this activation, cannot attack
-  if (atkSpecialIds.includes('tripod_eweb') && game.figureMoved?.[attackerFigureKey]) {
+  if (tripodBlocksAttack({ specialAbilityIds: atkSpecialIds, moved: game.figureMoved?.[attackerFigureKey] })) {
     await thread.send('**Tripod** — Has exited space this activation. Cannot attack.');
     delete game.pendingCombat;
     saveGames();
