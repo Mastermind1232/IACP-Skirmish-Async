@@ -512,6 +512,37 @@ def test_interact_rejects_illegal_option():
         map_tokens_loader.reset_cache()
 
 
+def test_pt_overflow_discard_resolves_one_slot():
+    g = create_game()
+    g.data['figurePowerTokens'] = {'Luke-0-0': ['Block', 'Surge', 'Evade']}
+    g.data['pendingPowerTokenOverflow'] = [
+        {'figureKey': 'Luke-0-0', 'discardCount': 2},
+    ]
+    # Discard index 1 ('Surge') → queue entry drops to 1.
+    new_g = step(g, Action(
+        type=ActionType.PT_OVERFLOW_DISCARD, player=1,
+        params={'figure_key': 'Luke-0-0', 'token_index': 1},
+    ))
+    assert new_g.data['figurePowerTokens']['Luke-0-0'] == ['Block', 'Evade']
+    assert new_g.data['pendingPowerTokenOverflow'] == [
+        {'figureKey': 'Luke-0-0', 'discardCount': 1},
+    ]
+
+
+def test_pt_overflow_discard_clears_queue_when_drained():
+    g = create_game()
+    g.data['figurePowerTokens'] = {'Luke-0-0': ['Block']}
+    g.data['pendingPowerTokenOverflow'] = [
+        {'figureKey': 'Luke-0-0', 'discardCount': 1},
+    ]
+    new_g = step(g, Action(
+        type=ActionType.PT_OVERFLOW_DISCARD, player=1,
+        params={'figure_key': 'Luke-0-0', 'token_index': 0},
+    ))
+    assert new_g.data['figurePowerTokens']['Luke-0-0'] == []
+    assert new_g.data['pendingPowerTokenOverflow'] is None
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -544,6 +575,8 @@ def main():
         ('phase_gate_ready_no_gate_is_noop', test_phase_gate_ready_no_gate_is_noop),
         ('interact_open_door_dispatch', test_interact_open_door_dispatch),
         ('interact_rejects_illegal_option', test_interact_rejects_illegal_option),
+        ('pt_overflow_discard_resolves_one_slot', test_pt_overflow_discard_resolves_one_slot),
+        ('pt_overflow_discard_clears_queue_when_drained', test_pt_overflow_discard_clears_queue_when_drained),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

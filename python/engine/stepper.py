@@ -787,3 +787,32 @@ def _handle_interact(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.INTERACT, _handle_interact)
+
+
+# ---------------------------------------------------------------------------
+# Power-token overflow (P7)
+# ---------------------------------------------------------------------------
+
+def _handle_pt_overflow_discard(game: GameState, action: Action) -> GameState:
+    """Resolve one overflow slot by discarding a specific token.
+
+    Required params:
+        figure_key (or figureKey): the figure whose queue is being drained.
+        token_index (or tokenIndex): the index in figurePowerTokens[fk] to pop.
+    """
+    from python.engine.mechanics.tokens import resolve_overflow_discard
+
+    figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+    token_index = action.params.get('token_index')
+    if token_index is None:
+        token_index = action.params.get('tokenIndex')
+    if not figure_key:
+        raise ValueError('pt_overflow_discard requires figure_key param')
+    if not isinstance(token_index, int):
+        raise ValueError('pt_overflow_discard requires int token_index param')
+
+    resolve_overflow_discard(game.data, figure_key, token_index)
+    return game
+
+
+register(ActionType.PT_OVERFLOW_DISCARD, _handle_pt_overflow_discard)
