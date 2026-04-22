@@ -341,6 +341,70 @@ def test_second_chance_attaches_to_dc():
     assert 'Second Chance' in g['p1CcAttachments']['hl1dc0']
 
 
+def test_apex_predator_applies_bundle():
+    g = {'pendingCcEffect': {'cardName': 'Apex Predator', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {
+        'figure_key': 'Nexu-0-0', 'msg_id': 'hl1dc0', 'token_type': 'Damage',
+    })
+    assert r['applied'] is True
+    assert 'Focus' in g['figureConditions']['Nexu-0-0']
+    assert 'Hide' in g['figureConditions']['Nexu-0-0']
+    assert g['figurePowerTokens']['Nexu-0-0'] == ['Damage', 'Damage']
+    assert g['movementBank']['hl1dc0']['total'] == 2
+
+
+def test_burst_fire_queues_adjacent_stun():
+    g = {'pendingCcEffect': {'cardName': 'Burst Fire', 'playerNum': 1}}
+    resolve_pending_cc_effect(g)
+    assert g['nextAttackBonusConditions'][1] == [
+        {'condition': 'Stun', 'scope': 'adjacentOnDamage'},
+    ]
+
+
+def test_stealth_applies_hide():
+    g = {'pendingCcEffect': {'cardName': 'Stealth', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'figure_key': 'Boba-0-0'})
+    assert 'Hide' in g['figureConditions']['Boba-0-0']
+
+
+def test_sprint_grants_3_mp():
+    g = {'pendingCcEffect': {'cardName': 'Sprint', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0'})
+    assert r['mpGranted'] == 3
+    assert g['movementBank']['hl1dc0']['total'] == 3
+
+
+def test_reload_grants_2_tokens():
+    g = {'pendingCcEffect': {'cardName': 'Reload', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'figure_key': 'Han-0-0', 'token_type': 'Damage'})
+    assert r['tokensGranted'] == 2
+    assert g['figurePowerTokens']['Han-0-0'] == ['Damage', 'Damage']
+
+
+def test_swift_grants_3_mp():
+    g = {'pendingCcEffect': {'cardName': 'Swift', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0'})
+    assert g['movementBank']['hl1dc0']['total'] == 3
+
+
+def test_tough_luck_adds_bonus_block_to_combat():
+    g = {
+        'pendingCcEffect': {'cardName': 'Tough Luck', 'playerNum': 2},
+        'pendingCombat': {'defenderPlayerNum': 2, 'bonusBlock': 0},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusBlock'] == 1
+
+
+def test_pulse_targeting_adds_accuracy_to_combat():
+    g = {
+        'pendingCcEffect': {'cardName': 'Pulse Targeting', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusAccuracy'] == 2
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -392,6 +456,14 @@ def main():
         ('planning_leader_keeps_both', test_planning_leader_keeps_both_cards),
         ('rally_the_troops_readies', test_rally_the_troops_readies_target),
         ('second_chance_attaches', test_second_chance_attaches_to_dc),
+        ('apex_predator_bundle', test_apex_predator_applies_bundle),
+        ('burst_fire_queues_stun', test_burst_fire_queues_adjacent_stun),
+        ('stealth_applies_hide', test_stealth_applies_hide),
+        ('sprint_grants_3_mp', test_sprint_grants_3_mp),
+        ('reload_grants_2_tokens', test_reload_grants_2_tokens),
+        ('swift_grants_3_mp', test_swift_grants_3_mp),
+        ('tough_luck_bonus_block', test_tough_luck_adds_bonus_block_to_combat),
+        ('pulse_targeting_accuracy', test_pulse_targeting_adds_accuracy_to_combat),
     ]
     failures = []
     for name, fn in cases:

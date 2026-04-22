@@ -546,6 +546,129 @@ def _cc_second_chance(game: Any, pending: Dict[str, Any],
     return {'applied': True, 'msgId': msg_id, 'attachedTo': msg_id}
 
 
+def _cc_apex_predator(game: Any, pending: Dict[str, Any],
+                      ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Apex Predator: self becomes Focused + Hidden, gains 2 Power Tokens, 2 MP.
+
+    Requires ctx.figure_key + ctx.msg_id. token_type defaults to Surge.
+    """
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    if not figure_key or not msg_id:
+        raise ValueError('apex_predator: requires ctx.figure_key + ctx.msg_id')
+    token_type = (ctx or {}).get('token_type', 'Surge')
+    _apply_condition_to_target(game, figure_key, 'Focus')
+    _apply_condition_to_target(game, figure_key, 'Hide')
+    grant_power_tokens(data, figure_key, token_type, 2)
+    grant_movement_bank(game, msg_id, 2)
+    return {
+        'applied': True,
+        'figureKey': figure_key,
+        'msgId': msg_id,
+        'tokensGranted': 2,
+        'mpGranted': 2,
+    }
+
+
+def _cc_burst_fire(game: Any, pending: Dict[str, Any],
+                   ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Burst Fire: next attack this activation stuns figures adjacent to
+    target on damage.
+
+    Sets game.nextAttackBonusConditions[playerNum] including an
+    'adjacentOnDamage' payload. The attack resolver consumes it.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    pending_map = dict(data.get('nextAttackBonusConditions') or {})
+    existing = list(pending_map.get(player_num) or [])
+    existing.append({'condition': 'Stun', 'scope': 'adjacentOnDamage'})
+    pending_map[player_num] = existing
+    data['nextAttackBonusConditions'] = pending_map
+    return {'applied': True, 'playerNum': player_num}
+
+
+def _cc_stealth(game: Any, pending: Dict[str, Any],
+                ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Stealth: self becomes Hidden."""
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('stealth: requires ctx.figure_key')
+    added = _apply_condition_to_target(game, figure_key, 'Hide')
+    return {'applied': True, 'figureKey': figure_key, 'conditionAdded': added}
+
+
+def _cc_sprint(game: Any, pending: Dict[str, Any],
+               ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Sprint: +3 MP to activating DC."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('sprint: requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, 3)
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': 3}
+
+
+def _cc_reload(game: Any, pending: Dict[str, Any],
+               ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Reload: gain 2 Power Tokens.
+
+    Requires ctx.figure_key. token_type from ctx (defaults to Surge).
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('reload: requires ctx.figure_key')
+    token_type = (ctx or {}).get('token_type', 'Surge')
+    grant_power_tokens(data, figure_key, token_type, 2)
+    return {'applied': True, 'figureKey': figure_key, 'tokensGranted': 2}
+
+
+def _cc_swift(game: Any, pending: Dict[str, Any],
+              ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Swift: +3 MP."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('swift: requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, 3)
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': 3}
+
+
+def _cc_tough_luck(game: Any, pending: Dict[str, Any],
+                   ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Tough Luck: +1 Block to defense this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    combat_mut = dict(combat)
+    combat_mut['bonusBlock'] = int(combat_mut.get('bonusBlock') or 0) + 1
+    data['pendingCombat'] = combat_mut
+    return {'applied': True, 'bonusBlock': 1}
+
+
+def _cc_pulse_targeting(game: Any, pending: Dict[str, Any],
+                        ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Pulse Targeting: +2 Accuracy while attacking."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    combat_mut = dict(combat)
+    combat_mut['bonusAccuracy'] = int(combat_mut.get('bonusAccuracy') or 0) + 2
+    data['pendingCombat'] = combat_mut
+    return {'applied': True, 'bonusAccuracy': 2}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -614,6 +737,14 @@ register('Jump Jets', _cc_jump_jets)
 register('Planning', _cc_planning)
 register('Rally the Troops', _cc_rally_the_troops)
 register('Second Chance', _cc_second_chance)
+register('Apex Predator', _cc_apex_predator)
+register('Burst Fire', _cc_burst_fire)
+register('Stealth', _cc_stealth)
+register('Sprint', _cc_sprint)
+register('Reload', _cc_reload)
+register('Swift', _cc_swift)
+register('Tough Luck', _cc_tough_luck)
+register('Pulse Targeting', _cc_pulse_targeting)
 
 
 def registered_cc_effects() -> list:
