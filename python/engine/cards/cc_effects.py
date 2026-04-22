@@ -415,6 +415,137 @@ def _cc_inspiring_speech(game: Any, pending: Dict[str, Any],
     return {'applied': True, 'focused': focused}
 
 
+def _cc_cripple(game: Any, pending: Dict[str, Any],
+                ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Cripple: adjacent hostile cannot voluntarily exit its space this round.
+
+    Sets game.roundCannotVoluntarilyExit[target_figure_key] = True.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    if not target_fk:
+        raise ValueError('cripple: requires ctx.target_figure_key')
+    cripple_map = dict(data.get('roundCannotVoluntarilyExit') or {})
+    cripple_map[target_fk] = True
+    data['roundCannotVoluntarilyExit'] = cripple_map
+    return {'applied': True, 'targetFigureKey': target_fk}
+
+
+def _cc_disable(game: Any, pending: Dict[str, Any],
+                ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Disable: adjacent hostile can't use Surge abilities or Special actions
+    this round.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    if not target_fk:
+        raise ValueError('disable: requires ctx.target_figure_key')
+    disabled_map = dict(data.get('roundDisabledFigures') or {})
+    disabled_map[target_fk] = True
+    data['roundDisabledFigures'] = disabled_map
+    return {'applied': True, 'targetFigureKey': target_fk}
+
+
+def _cc_jump_jets(game: Any, pending: Dict[str, Any],
+                  ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Jump Jets: place self in an empty space within 5 spaces.
+
+    Requires ctx.figure_key + ctx.destination.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    destination = (ctx or {}).get('destination')
+    player_num = pending.get('playerNum')
+    if not figure_key or not destination or player_num not in (1, 2):
+        raise ValueError(
+            'jump_jets: requires ctx.figure_key + ctx.destination + pending.playerNum'
+        )
+    positions_all = data.get('figurePositions') or {}
+    player_positions = dict(positions_all.get(player_num) or {})
+    player_positions[figure_key] = str(destination).lower()
+    positions_all[player_num] = player_positions
+    data['figurePositions'] = positions_all
+    return {
+        'applied': True,
+        'figureKey': figure_key,
+        'destination': str(destination).lower(),
+    }
+
+
+def _cc_planning(game: Any, pending: Dict[str, Any],
+                 ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Planning: draw 2 CCs; if activating figure is not a LEADER, discard 1."""
+    from python.engine.cards.deck import discard_from_hand, draw_with_reshuffle
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    is_leader = bool((ctx or {}).get('is_leader'))
+    drew = draw_with_reshuffle(game, player_num, 2)
+    discarded = None
+    if not is_leader and drew:
+        # Default: discard the last-drawn (caller can override via
+        # ctx.discard_card). Real Discord UI would prompt.
+        discard_card = (ctx or {}).get('discard_card') or drew[-1]
+        if discard_from_hand(game, player_num, discard_card):
+            discarded = discard_card
+    return {
+        'applied': True, 'drew': drew, 'discarded': discarded,
+        'isLeader': is_leader,
+    }
+
+
+def _cc_rally_the_troops(game: Any, pending: Dict[str, Any],
+                         ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Rally the Troops: ready another friendly TROOPER within 3 spaces.
+
+    Requires ctx.target_msg_id. Removes that DC from activated indices.
+    """
+    from python.engine.mechanics.player_helpers import (
+        get_activated_dc_indices, set_activated_dc_indices,
+    )
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    if player_num not in (1, 2) or not target_msg_id:
+        raise ValueError('rally_the_troops: requires pending.playerNum + ctx.target_msg_id')
+    ids_list = (
+        data.get('p1DcMessageIds') if player_num == 1
+        else data.get('p2DcMessageIds')
+    ) or []
+    if target_msg_id not in ids_list:
+        return {'applied': False, 'reason': 'target_not_in_dc_list'}
+    idx = ids_list.index(target_msg_id)
+    activated = get_activated_dc_indices(game, player_num) or []
+    if idx in activated:
+        set_activated_dc_indices(
+            game, player_num, [i for i in activated if i != idx],
+        )
+    return {'applied': True, 'readiedMsgId': target_msg_id}
+
+
+def _cc_second_chance(game: Any, pending: Dict[str, Any],
+                      ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Second Chance: attach card as Attachment to own DC.
+
+    Requires ctx.msg_id — the target DC message id. Adds 'Second Chance'
+    to game.p{n}CcAttachments[msg_id].
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    msg_id = (ctx or {}).get('msg_id')
+    if player_num not in (1, 2) or not msg_id:
+        raise ValueError('second_chance: requires pending.playerNum + ctx.msg_id')
+    key = 'p1CcAttachments' if player_num == 1 else 'p2CcAttachments'
+    attachments = dict(data.get(key) or {})
+    card_list = list(attachments.get(msg_id) or [])
+    if 'Second Chance' not in card_list:
+        card_list.append('Second Chance')
+    attachments[msg_id] = card_list
+    data[key] = attachments
+    return {'applied': True, 'msgId': msg_id, 'attachedTo': msg_id}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -477,6 +608,12 @@ register('Hide in Plain Sight', _cc_hide_in_plain_sight)
 register('Take Cover', _cc_take_cover)
 register('Shadow Ops', _cc_shadow_ops)
 register('Inspiring Speech', _cc_inspiring_speech)
+register('Cripple', _cc_cripple)
+register('Disable', _cc_disable)
+register('Jump Jets', _cc_jump_jets)
+register('Planning', _cc_planning)
+register('Rally the Troops', _cc_rally_the_troops)
+register('Second Chance', _cc_second_chance)
 
 
 def registered_cc_effects() -> list:

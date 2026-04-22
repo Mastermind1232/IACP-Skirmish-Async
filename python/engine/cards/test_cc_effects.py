@@ -276,6 +276,71 @@ def test_inspiring_speech_rejects_too_many():
     raise AssertionError('expected ValueError')
 
 
+def test_cripple_marks_target_cannot_exit():
+    g = {'pendingCcEffect': {'cardName': 'Cripple', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'target_figure_key': 'Vader-0-0'})
+    assert r['applied'] is True
+    assert g['roundCannotVoluntarilyExit']['Vader-0-0'] is True
+
+
+def test_disable_marks_target_disabled():
+    g = {'pendingCcEffect': {'cardName': 'Disable', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'target_figure_key': 'Vader-0-0'})
+    assert g['roundDisabledFigures']['Vader-0-0'] is True
+
+
+def test_jump_jets_moves_figure():
+    g = {
+        'pendingCcEffect': {'cardName': 'Jump Jets', 'playerNum': 1},
+        'figurePositions': {1: {'Luke-0-0': 'a1'}, 2: {}},
+    }
+    r = resolve_pending_cc_effect(g, {
+        'figure_key': 'Luke-0-0', 'destination': 'E5',
+    })
+    assert r['destination'] == 'e5'
+    assert g['figurePositions'][1]['Luke-0-0'] == 'e5'
+
+
+def test_planning_draws_two_and_discards_one_for_non_leader():
+    g = {
+        'pendingCcEffect': {'cardName': 'Planning', 'playerNum': 1},
+        'player1CcDeck': ['A', 'B', 'C'],
+    }
+    r = resolve_pending_cc_effect(g, {'is_leader': False, 'discard_card': 'B'})
+    assert sorted(r['drew']) == ['A', 'B']
+    assert r['discarded'] == 'B'
+    assert g['player1CcHand'] == ['A']
+    assert g['player1CcDiscard'] == ['B']
+
+
+def test_planning_leader_keeps_both_cards():
+    g = {
+        'pendingCcEffect': {'cardName': 'Planning', 'playerNum': 1},
+        'player1CcDeck': ['A', 'B', 'C'],
+    }
+    r = resolve_pending_cc_effect(g, {'is_leader': True})
+    assert r['discarded'] is None
+    assert g['player1CcHand'] == ['A', 'B']
+
+
+def test_rally_the_troops_readies_target():
+    g = {
+        'pendingCcEffect': {'cardName': 'Rally the Troops', 'playerNum': 1},
+        'p1DcMessageIds': ['hl1dc0', 'hl1dc1'],
+        'p1ActivatedDcIndices': [0, 1],
+    }
+    r = resolve_pending_cc_effect(g, {'target_msg_id': 'hl1dc0'})
+    assert r['applied'] is True
+    assert g['p1ActivatedDcIndices'] == [1]
+
+
+def test_second_chance_attaches_to_dc():
+    g = {'pendingCcEffect': {'cardName': 'Second Chance', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0'})
+    assert r['applied'] is True
+    assert 'Second Chance' in g['p1CcAttachments']['hl1dc0']
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -320,6 +385,13 @@ def main():
         ('shadow_ops_blocks_opponent', test_shadow_ops_blocks_opponent_ccs),
         ('inspiring_speech_focuses', test_inspiring_speech_focuses_up_to_2),
         ('inspiring_speech_rejects_too_many', test_inspiring_speech_rejects_too_many),
+        ('cripple_marks_cannot_exit', test_cripple_marks_target_cannot_exit),
+        ('disable_marks_disabled', test_disable_marks_target_disabled),
+        ('jump_jets_moves_figure', test_jump_jets_moves_figure),
+        ('planning_draws_and_discards_non_leader', test_planning_draws_two_and_discards_one_for_non_leader),
+        ('planning_leader_keeps_both', test_planning_leader_keeps_both_cards),
+        ('rally_the_troops_readies', test_rally_the_troops_readies_target),
+        ('second_chance_attaches', test_second_chance_attaches_to_dc),
     ]
     failures = []
     for name, fn in cases:
