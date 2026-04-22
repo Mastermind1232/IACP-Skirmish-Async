@@ -94,6 +94,82 @@ def test_registered_cc_effects_lists_seeds():
     assert 'Take Initiative' in names
 
 
+def test_blitz_adds_bonus_surge_to_pending_combat():
+    g = {
+        'pendingCcEffect': {'cardName': 'Blitz', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1, 'bonusSurges': 0},
+    }
+    r = resolve_pending_cc_effect(g)
+    assert r['applied'] is True
+    assert g['pendingCombat']['bonusSurges'] == 1
+
+
+def test_blitz_no_op_without_pending_combat():
+    g = {'pendingCcEffect': {'cardName': 'Blitz', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g)
+    assert r['applied'] is False
+    assert r['reason'] == 'no_pending_combat'
+
+
+def test_advance_warning_grants_mp_self_and_adjacent():
+    g = {'pendingCcEffect': {'cardName': 'Advance Warning', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {
+        'msg_id': 'hl1dc0', 'adjacent_msg_id': 'hl1dc1',
+    })
+    assert g['movementBank']['hl1dc0']['total'] == 1
+    assert g['movementBank']['hl1dc1']['total'] == 1
+
+
+def test_advance_warning_no_adjacent_only_self_gains_mp():
+    g = {'pendingCcEffect': {'cardName': 'Advance Warning', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0'})
+    assert g['movementBank']['hl1dc0']['total'] == 1
+    assert 'hl1dc1' not in g.get('movementBank', {})
+
+
+def test_battle_scars_grants_1_token_below_threshold():
+    g = {'pendingCcEffect': {'cardName': 'Battle Scars', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'figure_key': 'Han-0-0', 'token_type': 'Surge'})
+    assert r['count'] == 1
+    assert g['figurePowerTokens']['Han-0-0'] == ['Surge']
+
+
+def test_battle_scars_grants_2_tokens_after_3_plus_damage():
+    g = {
+        'pendingCcEffect': {'cardName': 'Battle Scars', 'playerNum': 1},
+        'figureDamageThisActivation': {'Han-0-0': 4},
+    }
+    r = resolve_pending_cc_effect(g, {'figure_key': 'Han-0-0', 'token_type': 'Damage'})
+    assert r['count'] == 2
+    assert g['figurePowerTokens']['Han-0-0'] == ['Damage', 'Damage']
+
+
+def test_blaze_of_glory_readies_dc_and_queues_eor_damage():
+    g = {
+        'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
+        'p1DcMessageIds': ['hl1dc0', 'hl1dc1'],
+        'p1ActivatedDcIndices': [0, 1],
+    }
+    r = resolve_pending_cc_effect(g, {'target_msg_id': 'hl1dc1'})
+    assert r['applied'] is True
+    # hl1dc1's index (1) was removed from activated list
+    assert g['p1ActivatedDcIndices'] == [0]
+    assert g['blazeOfGloryEorDamage'] == {
+        'msgId': 'hl1dc1', 'playerNum': 1, 'amount': 3,
+    }
+
+
+def test_blaze_of_glory_no_op_when_target_unknown():
+    g = {
+        'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
+        'p1DcMessageIds': ['hl1dc0'],
+        'p1ActivatedDcIndices': [0],
+    }
+    r = resolve_pending_cc_effect(g, {'target_msg_id': 'hl2dc99'})
+    assert r['applied'] is False
+    assert r['reason'] == 'target_not_in_dc_list'
+
+
 def main():
     cases = [
         ('no_pending_no_op', test_no_pending_returns_no_op),
@@ -105,6 +181,14 @@ def main():
         ('take_initiative_sets_swap', test_take_initiative_sets_swap),
         ('hold_on_requires_target', test_hold_on_requires_target_figure_key),
         ('registered_effects_lists_seeds', test_registered_cc_effects_lists_seeds),
+        ('blitz_adds_bonus_surge', test_blitz_adds_bonus_surge_to_pending_combat),
+        ('blitz_no_op_without_combat', test_blitz_no_op_without_pending_combat),
+        ('advance_warning_self_and_adjacent', test_advance_warning_grants_mp_self_and_adjacent),
+        ('advance_warning_self_only', test_advance_warning_no_adjacent_only_self_gains_mp),
+        ('battle_scars_1_token_below_threshold', test_battle_scars_grants_1_token_below_threshold),
+        ('battle_scars_2_tokens_after_3_damage', test_battle_scars_grants_2_tokens_after_3_plus_damage),
+        ('blaze_of_glory_readies_and_queues_damage', test_blaze_of_glory_readies_dc_and_queues_eor_damage),
+        ('blaze_of_glory_noop_unknown_target', test_blaze_of_glory_no_op_when_target_unknown),
     ]
     failures = []
     for name, fn in cases:

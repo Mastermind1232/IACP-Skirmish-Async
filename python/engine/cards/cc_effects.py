@@ -136,6 +136,106 @@ def _cc_take_initiative(game: Any, pending: Dict[str, Any],
     return {'applied': True, 'toPlayerNum': player_num}
 
 
+def _cc_blitz(game: Any, pending: Dict[str, Any],
+              ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Blitz: +1 Surge to attack results (active pendingCombat)."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    combat_mut = dict(combat)
+    combat_mut['bonusSurges'] = int(combat_mut.get('bonusSurges') or 0) + 1
+    data['pendingCombat'] = combat_mut
+    return {'applied': True, 'bonusSurgesAdded': 1}
+
+
+def _cc_advance_warning(game: Any, pending: Dict[str, Any],
+                        ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Advance Warning: self and an adjacent friendly each gain 1 MP.
+
+    Requires ctx.msg_id (self DC) + ctx.adjacent_msg_id (the chosen
+    adjacent friendly DC).
+    """
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    msg_id = (ctx or {}).get('msg_id')
+    adjacent_msg_id = (ctx or {}).get('adjacent_msg_id')
+    if not msg_id:
+        raise ValueError('advance_warning: requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, 1)
+    if adjacent_msg_id:
+        grant_movement_bank(game, adjacent_msg_id, 1)
+    return {
+        'applied': True,
+        'selfMsgId': msg_id,
+        'adjacentMsgId': adjacent_msg_id,
+    }
+
+
+def _cc_battle_scars(game: Any, pending: Dict[str, Any],
+                     ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Battle Scars: grant 1 Power Token; 2 if figure suffered ≥3 damage
+    during the activation. Target type comes from ctx.token_type (defaults
+    to 'Surge' — caller should prompt via POWER_TOKEN_CHOICE).
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('battle_scars: requires ctx.figure_key')
+    damage_this_activation = int(
+        ((data.get('figureDamageThisActivation') or {}).get(figure_key)) or 0
+    )
+    token_count = 2 if damage_this_activation >= 3 else 1
+    token_type = (ctx or {}).get('token_type', 'Surge')
+    grant_power_tokens(data, figure_key, token_type, token_count)
+    return {
+        'applied': True,
+        'figureKey': figure_key,
+        'tokenType': token_type,
+        'count': token_count,
+    }
+
+
+def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
+                       ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
+    3-damage cost is queued as game.blazeOfGloryEorDamage for EoR.
+
+    Requires ctx.target_msg_id (the DC to re-ready).
+    """
+    from python.engine.mechanics.player_helpers import (
+        get_activated_dc_indices, set_activated_dc_indices,
+    )
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    if player_num not in (1, 2) or not target_msg_id:
+        raise ValueError('blaze_of_glory: requires pending.playerNum + ctx.target_msg_id')
+
+    ids_list = (
+        data.get('p1DcMessageIds') if player_num == 1
+        else data.get('p2DcMessageIds')
+    ) or []
+    if target_msg_id not in ids_list:
+        return {'applied': False, 'reason': 'target_not_in_dc_list'}
+    idx = ids_list.index(target_msg_id)
+    activated = get_activated_dc_indices(game, player_num) or []
+    if idx in activated:
+        set_activated_dc_indices(
+            game, player_num, [i for i in activated if i != idx],
+        )
+    # Queue 3-damage end-of-round penalty on the DC that played Blaze of Glory
+    data['blazeOfGloryEorDamage'] = {
+        'msgId': target_msg_id,
+        'playerNum': player_num,
+        'amount': 3,
+    }
+    return {'applied': True, 'readiedMsgId': target_msg_id, 'eorDamageQueued': 3}
+
+
 # ---------------------------------------------------------------------------
 # Registry install
 
@@ -144,6 +244,10 @@ register('Hold On', _cc_hold_on)
 register('Hit the Deck', _cc_hit_the_deck)
 register('Rally', _cc_rally)
 register('Take Initiative', _cc_take_initiative)
+register('Blitz', _cc_blitz)
+register('Advance Warning', _cc_advance_warning)
+register('Battle Scars', _cc_battle_scars)
+register('Blaze of Glory', _cc_blaze_of_glory)
 
 
 def registered_cc_effects() -> list:
