@@ -11,6 +11,7 @@ import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
 import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
 import { hasAimAbility, aimBonusApplies, applyAimBonus } from '../game/aim-rebel-trooper-helpers.js';
+import { hasTakeCoverAbility, applyTakeCoverBonus } from '../game/take-cover-jawa-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2098,10 +2099,13 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Take Cover (Jawa Scavenger E/R): while defending, +1 Block and -1 Evade
-  const takeCoverIds = ['take_cover_jawa_elite', 'take_cover_jawa_reg'];
-  if (defSpecialIds.some(id => takeCoverIds.includes(id))) {
-    game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
-    game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) - 1;
+  if (hasTakeCoverAbility(defSpecialIds)) {
+    const bump = applyTakeCoverBonus({
+      bonusBlock: game.pendingCombat.bonusBlock,
+      bonusEvade: game.pendingCombat.bonusEvade,
+    });
+    game.pendingCombat.bonusBlock = bump.bonusBlock;
+    game.pendingCombat.bonusEvade = bump.bonusEvade;
     await thread.send('**Take Cover** — Defender applies +1 Block, -1 Evade.');
   }
 
