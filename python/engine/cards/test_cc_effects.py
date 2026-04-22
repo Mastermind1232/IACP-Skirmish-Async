@@ -405,6 +405,119 @@ def test_pulse_targeting_adds_accuracy_to_combat():
     assert g['pendingCombat']['bonusAccuracy'] == 2
 
 
+def test_deadeye_adds_accuracy():
+    g = {
+        'pendingCcEffect': {'cardName': 'Deadeye', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusAccuracy'] == 2
+
+
+def test_positioning_advantage_adds_hit():
+    g = {
+        'pendingCcEffect': {'cardName': 'Positioning Advantage', 'playerNum': 1},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['bonusHits'] == 1
+
+
+def test_fleet_footed_grants_1_mp():
+    g = {'pendingCcEffect': {'cardName': 'Fleet Footed', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0'})
+    assert g['movementBank']['hl1dc0']['total'] == 1
+
+
+def test_heavy_armor_negates_pierce():
+    g = {
+        'pendingCcEffect': {'cardName': 'Heavy Armor', 'playerNum': 2},
+        'pendingCombat': {'defenderPlayerNum': 2},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['pierceNegated'] is True
+
+
+def test_parry_block_variant():
+    g = {
+        'pendingCcEffect': {'cardName': 'Parry', 'playerNum': 2},
+        'pendingCombat': {'defenderPlayerNum': 2},
+    }
+    resolve_pending_cc_effect(g, {'which': 'block'})
+    assert g['pendingCombat']['bonusBlock'] == 1
+
+
+def test_parry_evade_variant():
+    g = {
+        'pendingCcEffect': {'cardName': 'Parry', 'playerNum': 2},
+        'pendingCombat': {'defenderPlayerNum': 2},
+    }
+    resolve_pending_cc_effect(g, {'which': 'evade'})
+    assert g['pendingCombat']['bonusEvade'] == 1
+
+
+def test_hour_of_need_heals_by_round_number():
+    g = {
+        'pendingCcEffect': {'cardName': 'Hour of Need', 'playerNum': 1},
+        'round': 4,
+        'p1DcMessageIds': ['hl1dc0'],
+        'p1DcList': [{'dcName': 'Luke'}],
+        'dcHealthState': {'hl1dc0': [[3, 10]]},
+    }
+    r = resolve_pending_cc_effect(g, {'figure_key': 'Luke-0-0'})
+    assert r['healed'] == 4
+    assert g['dcHealthState']['hl1dc0'][0][0] == 7
+
+
+def test_force_push_moves_target_either_side():
+    g = {
+        'pendingCcEffect': {'cardName': 'Force Push', 'playerNum': 1},
+        'figurePositions': {1: {}, 2: {'Trooper-0-0': 'a1'}},
+    }
+    r = resolve_pending_cc_effect(g, {
+        'target_figure_key': 'Trooper-0-0', 'destination': 'c3',
+    })
+    assert r['applied'] is True
+    assert g['figurePositions'][2]['Trooper-0-0'] == 'c3'
+
+
+def test_grisly_contest_deals_dmg_both_sides():
+    g = {
+        'pendingCcEffect': {'cardName': 'Grisly Contest', 'playerNum': 1},
+        'p1DcMessageIds': ['hl1dc0'],
+        'p1DcList': [{'dcName': 'Han'}],
+        'p2DcMessageIds': ['hl2dc0'],
+        'p2DcList': [{'dcName': 'Vader'}],
+        'dcHealthState': {
+            'hl1dc0': [[10, 10]],
+            'hl2dc0': [[8, 8]],
+        },
+    }
+    resolve_pending_cc_effect(g, {
+        'target_figure_key': 'Vader-0-0',
+        'self_figure_key': 'Han-0-0',
+    })
+    assert g['dcHealthState']['hl2dc0'][0][0] == 6  # 8-2
+    assert g['dcHealthState']['hl1dc0'][0][0] == 8  # 10-2
+
+
+def test_stimulants_damage_mp_and_focus():
+    g = {
+        'pendingCcEffect': {'cardName': 'Stimulants', 'playerNum': 1},
+        'p1DcMessageIds': ['hl1dc0'],
+        'p1DcList': [{'dcName': 'Han'}],
+        'dcHealthState': {'hl1dc0': [[8, 8]]},
+    }
+    resolve_pending_cc_effect(g, {
+        'target_figure_key': 'Han-0-0',
+        'target_player_num': 1,
+        'target_msg_id': 'hl1dc0',
+    })
+    assert g['dcHealthState']['hl1dc0'][0][0] == 7  # 8-1
+    assert g['movementBank']['hl1dc0']['total'] == 1
+    assert 'Focus' in g['figureConditions']['Han-0-0']
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -464,6 +577,16 @@ def main():
         ('swift_grants_3_mp', test_swift_grants_3_mp),
         ('tough_luck_bonus_block', test_tough_luck_adds_bonus_block_to_combat),
         ('pulse_targeting_accuracy', test_pulse_targeting_adds_accuracy_to_combat),
+        ('deadeye_accuracy', test_deadeye_adds_accuracy),
+        ('positioning_advantage_hit', test_positioning_advantage_adds_hit),
+        ('fleet_footed_1_mp', test_fleet_footed_grants_1_mp),
+        ('heavy_armor_pierce_negated', test_heavy_armor_negates_pierce),
+        ('parry_block', test_parry_block_variant),
+        ('parry_evade', test_parry_evade_variant),
+        ('hour_of_need_heals_by_round', test_hour_of_need_heals_by_round_number),
+        ('force_push_moves_target', test_force_push_moves_target_either_side),
+        ('grisly_contest_both_sides', test_grisly_contest_deals_dmg_both_sides),
+        ('stimulants_dmg_mp_focus', test_stimulants_damage_mp_and_focus),
     ]
     failures = []
     for name, fn in cases:

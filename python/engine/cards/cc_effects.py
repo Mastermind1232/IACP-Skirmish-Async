@@ -669,6 +669,205 @@ def _cc_pulse_targeting(game: Any, pending: Dict[str, Any],
     return {'applied': True, 'bonusAccuracy': 2}
 
 
+def _cc_deadeye(game, pending, ctx):
+    """Deadeye: +2 Accuracy to attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusAccuracy'] = int(c.get('bonusAccuracy') or 0) + 2
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusAccuracy': 2}
+
+
+def _cc_positioning_advantage(game, pending, ctx):
+    """Positioning Advantage: +1 Hit while attacking."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusHits'] = int(c.get('bonusHits') or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusHits': 1}
+
+
+def _cc_fleet_footed(game, pending, ctx):
+    """Fleet Footed: +1 MP."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('fleet_footed: requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, 1)
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': 1}
+
+
+def _cc_heavy_armor(game, pending, ctx):
+    """Heavy Armor: Pierce has no effect this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['pierceNegated'] = True
+    data['pendingCombat'] = c
+    return {'applied': True, 'pierceNegated': True}
+
+
+def _cc_parry(game, pending, ctx):
+    """Parry: +1 Block OR +1 Evade (caller chooses via ctx.which)."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    which = (ctx or {}).get('which', 'block').lower()
+    if which not in ('block', 'evade'):
+        raise ValueError("parry: ctx.which must be 'block' or 'evade'")
+    c = dict(combat)
+    if which == 'block':
+        c['bonusBlock'] = int(c.get('bonusBlock') or 0) + 1
+    else:
+        c['bonusEvade'] = int(c.get('bonusEvade') or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusType': which}
+
+
+def _cc_hour_of_need(game, pending, ctx):
+    """Hour of Need: recover damage equal to current round number."""
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import (
+        dc_name_from_figure_key, parse_figure_key,
+    )
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    player_num = pending.get('playerNum')
+    if not figure_key or player_num not in (1, 2):
+        raise ValueError('hour_of_need: requires ctx.figure_key + playerNum')
+    amount = int(data.get('round') or data.get('currentRound') or 1)
+
+    dc_name = dc_name_from_figure_key(figure_key)
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    ids_list = (data.get('p1DcMessageIds') if player_num == 1
+                else data.get('p2DcMessageIds')) or []
+    dc_list = (data.get('p1DcList') if player_num == 1
+               else data.get('p2DcList')) or []
+    msg_id = None
+    for mid, entry in zip(ids_list, dc_list):
+        if isinstance(entry, dict) and entry.get('dcName') == dc_name:
+            msg_id = mid
+            break
+    if not msg_id:
+        return {'applied': False, 'reason': 'dc_not_found'}
+    dc_health_state = data.get('dcHealthState')
+    if not isinstance(dc_health_state, dict):
+        return {'applied': False, 'reason': 'no_health_state'}
+    heal_hp(dc_health_state, data, msg_id, fig_idx, amount, player_num)
+    return {'applied': True, 'figureKey': figure_key, 'healed': amount}
+
+
+def _cc_force_push(game, pending, ctx):
+    """Force Push: push a SMALL figure within 3 up to 2 spaces.
+
+    Required: ctx.target_figure_key + ctx.destination. Stepper doesn't
+    validate range/size here; caller should only pass valid targets.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    destination = (ctx or {}).get('destination')
+    if not target_fk or not destination:
+        raise ValueError('force_push: requires ctx.target_figure_key + destination')
+    # Target may be on either player's side; find and move them
+    positions_all = data.get('figurePositions') or {}
+    for pn in (1, 2):
+        pos_map = positions_all.get(pn)
+        if isinstance(pos_map, dict) and target_fk in pos_map:
+            pos_mut = dict(pos_map)
+            pos_mut[target_fk] = str(destination).lower()
+            positions_all[pn] = pos_mut
+            data['figurePositions'] = positions_all
+            return {
+                'applied': True,
+                'targetFigureKey': target_fk,
+                'destination': str(destination).lower(),
+            }
+    return {'applied': False, 'reason': 'target_not_found'}
+
+
+def _cc_grisly_contest(game, pending, ctx):
+    """Grisly Contest: adjacent hostile suffers 2 Damage; self suffers 2 Strain.
+
+    Required: ctx.target_figure_key (hostile), ctx.self_figure_key (activator).
+    """
+    target_fk = (ctx or {}).get('target_figure_key')
+    self_fk = (ctx or {}).get('self_figure_key')
+    player_num = pending.get('playerNum')
+    if not target_fk or not self_fk or player_num not in (1, 2):
+        raise ValueError('grisly_contest: requires target + self figure keys + playerNum')
+    opp = 2 if player_num == 1 else 1
+    _apply_hp_damage_via_health_state(game, target_fk, opp, 2)
+    _apply_hp_damage_via_health_state(game, self_fk, player_num, 2)
+    return {
+        'applied': True, 'targetFigureKey': target_fk,
+        'selfFigureKey': self_fk,
+    }
+
+
+def _apply_hp_damage_via_health_state(game, figure_key, player_num, damage):
+    """Local mini of stepper's _apply_hp_damage helper (kept here to avoid
+    circular import)."""
+    from python.engine.mechanics.damage_helpers import reduce_hp
+    from python.engine.mechanics.dc_helpers import (
+        dc_name_from_figure_key, parse_figure_key,
+    )
+
+    data = game.data if hasattr(game, 'data') else game
+    dc_name = dc_name_from_figure_key(figure_key)
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    ids_list = (data.get('p1DcMessageIds') if player_num == 1
+                else data.get('p2DcMessageIds')) or []
+    dc_list = (data.get('p1DcList') if player_num == 1
+               else data.get('p2DcList')) or []
+    msg_id = None
+    for mid, entry in zip(ids_list, dc_list):
+        if isinstance(entry, dict) and entry.get('dcName') == dc_name:
+            msg_id = mid
+            break
+    if not msg_id:
+        return {'newHp': 0, 'maxHp': 0, 'prevHp': 0, 'wasDefeated': False}
+    dc_health_state = data.get('dcHealthState')
+    if not isinstance(dc_health_state, dict):
+        return {'newHp': 0, 'maxHp': 0, 'prevHp': 0, 'wasDefeated': False}
+    return reduce_hp(dc_health_state, data, msg_id, fig_idx, damage, player_num)
+
+
+def _cc_stimulants(game, pending, ctx):
+    """Stimulants: adjacent figure (ally OR hostile) suffers 1 Damage, then
+    gains +1 MP and becomes Focused.
+
+    Required: ctx.target_figure_key, ctx.target_player_num, ctx.target_msg_id.
+    """
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    if not target_fk or target_pn not in (1, 2) or not target_msg_id:
+        raise ValueError(
+            'stimulants: requires target_figure_key + target_player_num + target_msg_id'
+        )
+    _apply_hp_damage_via_health_state(game, target_fk, target_pn, 1)
+    grant_movement_bank(game, target_msg_id, 1)
+    _apply_condition_to_target(game, target_fk, 'Focus')
+    return {
+        'applied': True,
+        'targetFigureKey': target_fk,
+        'damage': 1,
+        'mpGranted': 1,
+    }
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -745,6 +944,15 @@ register('Reload', _cc_reload)
 register('Swift', _cc_swift)
 register('Tough Luck', _cc_tough_luck)
 register('Pulse Targeting', _cc_pulse_targeting)
+register('Deadeye', _cc_deadeye)
+register('Positioning Advantage', _cc_positioning_advantage)
+register('Fleet Footed', _cc_fleet_footed)
+register('Heavy Armor', _cc_heavy_armor)
+register('Parry', _cc_parry)
+register('Hour of Need', _cc_hour_of_need)
+register('Force Push', _cc_force_push)
+register('Grisly Contest', _cc_grisly_contest)
+register('Stimulants', _cc_stimulants)
 
 
 def registered_cc_effects() -> list:
