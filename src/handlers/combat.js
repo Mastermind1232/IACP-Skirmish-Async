@@ -185,6 +185,10 @@ import {
   FURY_SURGE_BONUS,
 } from '../game/fury-helpers.js';
 import {
+  hasMonCalaSfLokuAbility,
+  MON_CALA_SF_LOKU_CONDITION,
+} from '../game/mon-cala-sf-loku-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -2431,8 +2435,8 @@ export async function handleAttackTarget(interaction, ctx) {
   }
   // Loku Recon Token: Mon Cala SF — Loku becomes Focused when attacking recon-tokened figure
   if (game.reconToken?.figureKey === target.figureKey && game.reconToken?.playerNum === attackerPlayerNum) {
-    if (atkSpecialIds.includes('mon_cala_sf_loku')) {
-      applyCondition(game, attackerFigureKey, 'Focus');
+    if (hasMonCalaSfLokuAbility(atkSpecialIds)) {
+      applyCondition(game, attackerFigureKey, MON_CALA_SF_LOKU_CONDITION);
       await thread.send('**Mon Cala Special Forces** — Loku gains Focus for attacking Recon-tokened figure.');
     }
   }
