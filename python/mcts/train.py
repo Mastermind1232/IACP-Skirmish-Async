@@ -23,6 +23,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import torch
 
+from python.mcts.parallel_self_play import play_batch
 from python.mcts.self_play import (
     ReplayBuffer,
     SelfPlayConfig,
@@ -55,6 +56,9 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument('--resume', action='store_true', help='load latest.pt if present')
     ap.add_argument('--n-channels', type=int, default=128)
     ap.add_argument('--n-res-blocks', type=int, default=6)
+    ap.add_argument('--parallel', type=int, default=0,
+                    help='play N games in parallel with batched MCTS inference '
+                         '(0 = serial; recommended values 8-32 on CUDA)')
     return ap.parse_args()
 
 
@@ -106,16 +110,34 @@ def main() -> None:
     for it in range(start_iter, start_iter + args.iters):
         it_start = time.perf_counter()
         game_examples = 0
-        for g in range(args.games):
-            examples = play_one_game(
-                net, device,
-                mcts_simulations=args.sims,
-                max_moves=args.max_moves,
-                temperature_moves=args.tau_moves,
-                seed=rng.randint(0, 1 << 30),
-            )
-            buffer.extend(examples)
-            game_examples += len(examples)
+        if args.parallel > 0:
+            # Parallel batched self-play: play --parallel games at once,
+            # looping until --games total games finish.
+            remaining = args.games
+            while remaining > 0:
+                n = min(args.parallel, remaining)
+                examples = play_batch(
+                    net, device,
+                    n_games=n,
+                    mcts_simulations=args.sims,
+                    max_moves=args.max_moves,
+                    temperature_moves=args.tau_moves,
+                    seed=rng.randint(0, 1 << 30),
+                )
+                buffer.extend(examples)
+                game_examples += len(examples)
+                remaining -= n
+        else:
+            for g in range(args.games):
+                examples = play_one_game(
+                    net, device,
+                    mcts_simulations=args.sims,
+                    max_moves=args.max_moves,
+                    temperature_moves=args.tau_moves,
+                    seed=rng.randint(0, 1 << 30),
+                )
+                buffer.extend(examples)
+                game_examples += len(examples)
         play_secs = time.perf_counter() - it_start
 
         train_start = time.perf_counter()
