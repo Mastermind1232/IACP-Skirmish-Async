@@ -1419,6 +1419,108 @@ def test_determine_initiative_rejects_bad_player():
     raise AssertionError('expected ValueError')
 
 
+def test_submit_squad_sets_player_squad():
+    g = create_game()
+    squad = {'name': 'Rebels', 'dcList': ['Luke'], 'ccList': ['Hold On']}
+    new_g = step(g, Action(
+        type=ActionType.SUBMIT_SQUAD, player=1,
+        params={'squad': squad},
+    ))
+    assert new_g.data['player1Squad'] == squad
+    assert new_g.data.get('player2Squad') in (None, {})
+
+
+def test_submit_squad_rejects_missing_squad():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.SUBMIT_SQUAD, player=1, params={}))
+    except ValueError as e:
+        assert 'squad' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_deploy_done_initiative_side():
+    g = create_game()
+    g.data['initiativeHolder'] = 1
+    new_g = step(g, Action(type=ActionType.DEPLOY_DONE, player=1))
+    assert new_g.data['initiativePlayerDeployed'] is True
+    assert new_g.data.get('nonInitiativePlayerDeployed') in (None, False)
+    assert new_g.data.get('deploymentComplete') is not True
+
+
+def test_deploy_done_non_initiative_side():
+    g = create_game()
+    g.data['initiativeHolder'] = 1
+    new_g = step(g, Action(type=ActionType.DEPLOY_DONE, player=2))
+    assert new_g.data['nonInitiativePlayerDeployed'] is True
+    assert new_g.data.get('initiativePlayerDeployed') in (None, False)
+
+
+def test_deploy_done_both_players_marks_complete():
+    g = create_game()
+    g.data['initiativeHolder'] = 1
+    g = step(g, Action(type=ActionType.DEPLOY_DONE, player=1))
+    g = step(g, Action(type=ActionType.DEPLOY_DONE, player=2))
+    assert g.data['deploymentComplete'] is True
+
+
+def test_draw_cc_initial_starting_hand():
+    g = create_game()
+    g.data['player1Squad'] = {'ccList': ['A', 'B', 'C', 'D', 'E']}
+    new_g = step(g, Action(
+        type=ActionType.DRAW_CC, player=1,
+        params={'rng_seed': 42, 'starting_size': 3},
+    ))
+    assert len(new_g.data['player1CcHand']) == 3
+    assert len(new_g.data['player1CcDeck']) == 2
+    assert new_g.data['player1CcDrawn'] is True
+
+
+def test_draw_cc_filters_attached_cards_from_deck():
+    g = create_game()
+    g.data['player1Squad'] = {'ccList': ['A', 'B', 'C', 'D', 'E']}
+    g.data['p1CcAttachments'] = {'hl1dc0': ['B', 'D']}
+    new_g = step(g, Action(
+        type=ActionType.DRAW_CC, player=1,
+        params={'rng_seed': 0, 'starting_size': 3},
+    ))
+    # B and D should NOT be in hand OR deck
+    all_cards = new_g.data['player1CcHand'] + new_g.data['player1CcDeck']
+    assert 'B' not in all_cards
+    assert 'D' not in all_cards
+    assert sorted(all_cards) == ['A', 'C', 'E']
+
+
+def test_draw_cc_rejects_double_draw():
+    g = create_game()
+    g.data['player1Squad'] = {'ccList': ['A', 'B', 'C']}
+    step(g, Action(type=ActionType.DRAW_CC, player=1,
+                    params={'rng_seed': 0, 'starting_size': 3}))
+    # Note: second step on same game triggers ValueError because the first
+    # mutation set player1CcDrawn; step() copies input so we need to re-apply
+    g2 = step(g, Action(type=ActionType.DRAW_CC, player=1,
+                        params={'rng_seed': 0, 'starting_size': 3}))
+    try:
+        step(g2, Action(type=ActionType.DRAW_CC, player=1,
+                        params={'rng_seed': 0, 'starting_size': 3}))
+    except ValueError as e:
+        assert 'already drawn' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_draw_cc_rejects_no_squad():
+    g = create_game()
+    g.data.pop('player1Squad', None)
+    try:
+        step(g, Action(type=ActionType.DRAW_CC, player=1, params={'rng_seed': 0}))
+    except ValueError as e:
+        assert 'no squad submitted' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1518,6 +1620,15 @@ def main():
         ('pick_zone_rejects_invalid', test_pick_zone_rejects_invalid_zone),
         ('determine_initiative_sets', test_determine_initiative_sets_initiative_player),
         ('determine_initiative_rejects', test_determine_initiative_rejects_bad_player),
+        ('submit_squad_sets_player_squad', test_submit_squad_sets_player_squad),
+        ('submit_squad_rejects_missing', test_submit_squad_rejects_missing_squad),
+        ('deploy_done_initiative_side', test_deploy_done_initiative_side),
+        ('deploy_done_non_initiative_side', test_deploy_done_non_initiative_side),
+        ('deploy_done_both_marks_complete', test_deploy_done_both_players_marks_complete),
+        ('draw_cc_initial_starting_hand', test_draw_cc_initial_starting_hand),
+        ('draw_cc_filters_attached', test_draw_cc_filters_attached_cards_from_deck),
+        ('draw_cc_rejects_double_draw', test_draw_cc_rejects_double_draw),
+        ('draw_cc_rejects_no_squad', test_draw_cc_rejects_no_squad),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

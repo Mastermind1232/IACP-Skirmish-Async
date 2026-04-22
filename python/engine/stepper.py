@@ -1858,3 +1858,135 @@ def _handle_determine_initiative(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.DETERMINE_INITIATIVE, _handle_determine_initiative)
+
+
+# ---------------------------------------------------------------------------
+# SUBMIT_SQUAD (setup) — player submits their deck for the game
+# ---------------------------------------------------------------------------
+
+def _handle_submit_squad(game: GameState, action: Action) -> GameState:
+    """Attach a player's squad (dcList + ccList) to the game.
+
+    Required params:
+        player (int) ∈ {1, 2}
+        squad (dict) — {name, dcList, ccList, ...} shape, stored as-is.
+    """
+    player = int(action.player or 0)
+    if player == 0:
+        player = int(action.params.get('player') or 0)
+    if player not in (1, 2):
+        raise ValueError('submit_squad requires player ∈ {1, 2}')
+
+    squad = action.params.get('squad')
+    if not isinstance(squad, Mapping):
+        raise ValueError('submit_squad requires squad (dict) param')
+
+    key = 'player1Squad' if player == 1 else 'player2Squad'
+    game.data[key] = dict(squad)
+    return game
+
+
+register(ActionType.SUBMIT_SQUAD, _handle_submit_squad)
+
+
+# ---------------------------------------------------------------------------
+# DEPLOY_DONE (setup) — player signals they've finished deploying
+# ---------------------------------------------------------------------------
+
+def _handle_deploy_done(game: GameState, action: Action) -> GameState:
+    """Mark a player as done deploying.
+
+    Required: action.player ∈ {1, 2}. Sets initiativePlayerDeployed when
+    the player is the initiative holder, otherwise
+    nonInitiativePlayerDeployed. When both are set, also sets
+    game.deploymentComplete = True.
+    """
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        raise ValueError('deploy_done requires player ∈ {1, 2}')
+    init_holder = game.data.get('initiativeHolder')
+    if init_holder is None:
+        # Fall back to deriving from initiativePlayerId
+        init_pid = game.data.get('initiativePlayerId')
+        init_holder = 1 if init_pid and init_pid == game.data.get('player1Id') else 2
+
+    if player == init_holder:
+        game.data['initiativePlayerDeployed'] = True
+    else:
+        game.data['nonInitiativePlayerDeployed'] = True
+
+    if (game.data.get('initiativePlayerDeployed')
+            and game.data.get('nonInitiativePlayerDeployed')):
+        game.data['deploymentComplete'] = True
+    return game
+
+
+register(ActionType.DEPLOY_DONE, _handle_deploy_done)
+
+
+# ---------------------------------------------------------------------------
+# DRAW_CC (setup) — player's initial starting-hand draw
+# ---------------------------------------------------------------------------
+
+def _handle_draw_cc(game: GameState, action: Action) -> GameState:
+    """Shuffle-and-draw starting hand for a player (setup-phase initial draw).
+
+    Required param: player ∈ {1, 2}.
+    Optional params:
+        starting_size (int, default 3) — cards to draw initially.
+        rng_seed (int) — seeds shuffle determinism.
+
+    Effects:
+        - Reads squad.ccList, filters out cards placed as attachments (via
+          p{n}CcAttachments), shuffles the remainder, sets as the deck.
+        - Draws starting_size cards from top into hand.
+        - Stamps p{n}CcDrawn = True (ccDrawnKey).
+
+    Raises ValueError if the player hasn't submitted a squad yet or the
+    starting hand has already been drawn.
+    """
+    from python.engine.cards.deck import draw_cc_cards, shuffle_deck
+    from python.engine.mechanics.player_helpers import (
+        cc_attachments_key,
+        cc_deck_key,
+        cc_drawn_key,
+    )
+
+    player = int(action.player or 0)
+    if player not in (1, 2):
+        raise ValueError('draw_cc requires player ∈ {1, 2}')
+    drawn_key = cc_drawn_key(player)
+    if game.data.get(drawn_key):
+        raise ValueError('draw_cc: starting hand already drawn')
+
+    squad = game.data.get('player1Squad' if player == 1 else 'player2Squad')
+    if not isinstance(squad, Mapping):
+        raise ValueError(f'draw_cc: no squad submitted for player {player}')
+    cc_list = squad.get('ccList') or []
+    if not isinstance(cc_list, list):
+        raise ValueError('draw_cc: squad.ccList must be a list')
+
+    attach_key = cc_attachments_key(player)
+    attach_map = game.data.get(attach_key) or {}
+    placed: List[str] = []
+    for attached in attach_map.values():
+        if isinstance(attached, list):
+            placed.extend(attached)
+
+    deck = [c for c in cc_list if c not in placed]
+    game.data[cc_deck_key(player)] = deck
+
+    seed = action.params.get('rng_seed')
+    rng = _random.Random(int(seed)) if seed is not None else None
+    shuffle_deck(game, player, rng=rng)
+
+    starting_size = int(action.params.get('starting_size', 3))
+    if starting_size < 0:
+        raise ValueError('draw_cc: starting_size must be non-negative')
+    drew = draw_cc_cards(game, player, starting_size)
+    game.data[drawn_key] = True
+    game.data['lastCcDraw'] = {'playerNum': player, 'cards': drew}
+    return game
+
+
+register(ActionType.DRAW_CC, _handle_draw_cc)
