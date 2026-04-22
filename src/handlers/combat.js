@@ -19,6 +19,12 @@ import {
   applyDeadPreciseBonus,
 } from '../game/dead-precise-kotun-helpers.js';
 import { hasAwkwardAbility, awkwardBlocks } from '../game/awkward-atst-helpers.js';
+import {
+  hasSniperAbility,
+  hasEliteSniperAbility,
+  sniperGateOpen,
+  applySniperRerolls,
+} from '../game/sniper-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -1890,14 +1896,16 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Sniper (Alliance Ranger Regular): forced +1 reroll at 5+ spaces (no "may")
-  if (atkSpecialIds.includes('sniper') && distanceToTarget >= 5) {
-    game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
+  if (hasSniperAbility(atkSpecialIds) && sniperGateOpen(distanceToTarget)) {
+    const { rerollOneAttackDie } = applySniperRerolls(game.pendingCombat, false);
+    game.pendingCombat.rerollOneAttackDie = rerollOneAttackDie;
     await thread.send(`**Sniper** — +1 attack reroll (target ${distanceToTarget} spaces away).`);
   }
 
   // Elite Sniper (Alliance Ranger Elite): +2 reroll at 5+ spaces
-  if (atkSpecialIds.includes('elite_sniper') && distanceToTarget >= 5) {
-    game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 2;
+  if (hasEliteSniperAbility(atkSpecialIds) && sniperGateOpen(distanceToTarget)) {
+    const { rerollOneAttackDie } = applySniperRerolls(game.pendingCombat, true);
+    game.pendingCombat.rerollOneAttackDie = rerollOneAttackDie;
     await thread.send(`**Elite Sniper** — +2 attack rerolls (target ${distanceToTarget} spaces away).`);
   }
 
