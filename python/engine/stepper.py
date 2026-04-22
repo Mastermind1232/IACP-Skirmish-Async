@@ -1091,6 +1091,7 @@ def _handle_end_start_of_round(game: GameState, action: Action) -> GameState:
     owns the data-driven mission layer + the window-closure state change.
     """
     from python.engine.mechanics.mission_rules import run_start_of_round_rules
+    from python.engine.mechanics.round_effects import apply_start_of_round_dc_effects
     from python.engine.data.dc_effects_loader import get_dc_effects
 
     data = game.data
@@ -1110,6 +1111,11 @@ def _handle_end_start_of_round(game: GameState, action: Action) -> GameState:
             sor_rules = rules.get('startOfRound')
             if isinstance(sor_rules, Mapping):
                 run_start_of_round_rules(game.data, map_id, variant, dict(sor_rules))
+
+    # DC-passive start-of-round effects (Brush, etc.)
+    sor_events = apply_start_of_round_dc_effects(game)
+    if sor_events:
+        data['lastStartOfRoundDcEvents'] = sor_events
 
     if data.get('roundPhase') not in ('activation', 'end', 'game_over'):
         data['roundPhase'] = 'activation'
