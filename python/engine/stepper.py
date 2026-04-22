@@ -1422,10 +1422,26 @@ def _handle_false_orders_skip(game: GameState, action: Action) -> GameState:
 
 
 def _handle_missile_salvo_done(game: GameState, action: Action) -> GameState:
-    """Finish Missile Salvo die-reroll picks — clears game.pendingMissileSalvo."""
-    if not game.data.get('pendingMissileSalvo'):
+    """Finish Missile Salvo extra-attacks for a specific DC.
+
+    Optional param: msg_id (str). When provided, clears just that msgId
+    from game.pendingMissileSalvo; collapses the map to None when empty.
+    Without msg_id, clears the whole map (backwards-compat).
+    """
+    pending = game.data.get('pendingMissileSalvo')
+    if not pending:
         raise ValueError('missile_salvo_done: no pendingMissileSalvo open')
-    game.data['pendingMissileSalvo'] = None
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    if msg_id:
+        if not isinstance(pending, Mapping) or msg_id not in pending:
+            raise ValueError(
+                f'missile_salvo_done: no pendingMissileSalvo for msg_id {msg_id!r}'
+            )
+        pending = dict(pending)
+        del pending[msg_id]
+        game.data['pendingMissileSalvo'] = pending if pending else None
+    else:
+        game.data['pendingMissileSalvo'] = None
     return game
 
 
@@ -2275,3 +2291,55 @@ register(ActionType.POUNCE_SPACE, _handle_pounce_space)
 register(ActionType.CC_CHOICE, _handle_cc_choice)
 register(ActionType.CC_SPACE, _handle_cc_space)
 register(ActionType.ARSENAL_PICK, _handle_arsenal_pick)
+
+
+# ---------------------------------------------------------------------------
+# MISSILE_SALVO_DIE — pick a color die for the bonus salvo attack
+# ---------------------------------------------------------------------------
+
+def _handle_missile_salvo_die(game: GameState, action: Action) -> GameState:
+    """Missile Salvo die pick: consume one color from diceAvailable and set
+    the next attack's override dice + +3 accuracy bonus.
+
+    Required params:
+        msg_id (str), color (str) — one of diceAvailable on the pending
+        entry.
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    color = action.params.get('color')
+    if not msg_id or not color:
+        raise ValueError('missile_salvo_die requires msg_id + color params')
+    color = str(color).lower()
+    pending_map = game.data.get('pendingMissileSalvo') or {}
+    pending = pending_map.get(msg_id)
+    if not pending:
+        raise ValueError(
+            f'missile_salvo_die: no pendingMissileSalvo for msg_id {msg_id!r}'
+        )
+    dice_available = list(pending.get('diceAvailable') or [])
+    if color not in dice_available:
+        raise ValueError(
+            f'missile_salvo_die: {color!r} not in diceAvailable '
+            f'{dice_available!r}'
+        )
+
+    dice_available.remove(color)
+    pending_mut = dict(pending)
+    pending_mut['diceAvailable'] = dice_available
+    pending_map = dict(pending_map)
+    pending_map[msg_id] = pending_mut
+    game.data['pendingMissileSalvo'] = pending_map
+
+    override = game.data.get('pendingOverrideAttackDice') or {}
+    override[msg_id] = {
+        'dice': [color], 'type': 'ranged', 'bonusAccuracy': 3,
+    }
+    game.data['pendingOverrideAttackDice'] = override
+
+    free_bonus = game.data.get('freeAttackBonusPending') or {}
+    free_bonus[msg_id] = True
+    game.data['freeAttackBonusPending'] = free_bonus
+    return game
+
+
+register(ActionType.MISSILE_SALVO_DIE, _handle_missile_salvo_die)

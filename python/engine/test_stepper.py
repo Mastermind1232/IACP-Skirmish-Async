@@ -1015,9 +1015,67 @@ def test_false_orders_skip_clears_pending():
 
 def test_missile_salvo_done_clears_pending():
     g = create_game()
-    g.data['pendingMissileSalvo'] = {'rerolledIndices': [0, 2]}
+    g.data['pendingMissileSalvo'] = {'hl1dc0': {'diceAvailable': ['red']}}
     new_g = step(g, Action(type=ActionType.MISSILE_SALVO_DONE, player=1))
     assert new_g.data['pendingMissileSalvo'] is None
+
+
+def test_missile_salvo_done_with_msg_id_clears_just_that_slot():
+    g = create_game()
+    g.data['pendingMissileSalvo'] = {
+        'hl1dc0': {'diceAvailable': ['red']},
+        'hl2dc0': {'diceAvailable': ['blue']},
+    }
+    new_g = step(g, Action(
+        type=ActionType.MISSILE_SALVO_DONE, player=1,
+        params={'msg_id': 'hl1dc0'},
+    ))
+    assert new_g.data['pendingMissileSalvo'] == {'hl2dc0': {'diceAvailable': ['blue']}}
+
+
+def test_missile_salvo_die_consumes_color_and_sets_override():
+    g = create_game()
+    g.data['pendingMissileSalvo'] = {
+        'hl1dc0': {'playerNum': 1, 'diceAvailable': ['red', 'green', 'blue']},
+    }
+    new_g = step(g, Action(
+        type=ActionType.MISSILE_SALVO_DIE, player=1,
+        params={'msg_id': 'hl1dc0', 'color': 'Red'},
+    ))
+    assert new_g.data['pendingMissileSalvo']['hl1dc0']['diceAvailable'] == ['green', 'blue']
+    assert new_g.data['pendingOverrideAttackDice']['hl1dc0'] == {
+        'dice': ['red'], 'type': 'ranged', 'bonusAccuracy': 3,
+    }
+    assert new_g.data['freeAttackBonusPending']['hl1dc0'] is True
+
+
+def test_missile_salvo_die_rejects_unavailable_color():
+    g = create_game()
+    g.data['pendingMissileSalvo'] = {
+        'hl1dc0': {'diceAvailable': ['red']},
+    }
+    try:
+        step(g, Action(
+            type=ActionType.MISSILE_SALVO_DIE, player=1,
+            params={'msg_id': 'hl1dc0', 'color': 'blue'},
+        ))
+    except ValueError as e:
+        assert 'diceAvailable' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_missile_salvo_die_requires_pending():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.MISSILE_SALVO_DIE, player=1,
+            params={'msg_id': 'hl1dc0', 'color': 'red'},
+        ))
+    except ValueError as e:
+        assert 'pendingMissileSalvo' in str(e)
+        return
+    raise AssertionError('expected ValueError')
 
 
 def test_skip_handlers_require_pending_window():
@@ -1856,6 +1914,10 @@ def main():
         ('cc_space_dispatches_valid', test_cc_space_dispatches_on_valid_pick),
         ('arsenal_pick_sets_override', test_arsenal_pick_sets_override_dice_and_clears_pending),
         ('arsenal_pick_requires_dice_list', test_arsenal_pick_requires_dice_list),
+        ('missile_salvo_done_with_msg_id', test_missile_salvo_done_with_msg_id_clears_just_that_slot),
+        ('missile_salvo_die_consumes_and_sets', test_missile_salvo_die_consumes_color_and_sets_override),
+        ('missile_salvo_die_rejects_unavailable', test_missile_salvo_die_rejects_unavailable_color),
+        ('missile_salvo_die_requires_pending', test_missile_salvo_die_requires_pending),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
