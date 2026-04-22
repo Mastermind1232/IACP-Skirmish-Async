@@ -24,11 +24,11 @@ from python.engine.stepper import (
 
 def test_unknown_action_raises():
     g = create_game()
-    # DC_SPECIAL is not yet registered — use it as the unimplemented sentinel
+    # SPECIAL_ACTION is not yet registered — use it as the unimplemented sentinel
     try:
-        step(g, Action(type=ActionType.DC_SPECIAL, player=1))
+        step(g, Action(type=ActionType.SPECIAL_ACTION, player=1))
     except NotImplementedError as e:
-        assert 'dc_special' in str(e)
+        assert 'special_action' in str(e)
         return
     raise AssertionError('expected NotImplementedError')
 
@@ -90,7 +90,8 @@ def test_is_implemented_reports_correctly():
     assert is_implemented(ActionType.CC_DRAW)
     assert is_implemented(ActionType.INTERACT)
     assert is_implemented(ActionType.PLAY_CC)
-    assert not is_implemented(ActionType.DC_SPECIAL)
+    assert is_implemented(ActionType.DC_SPECIAL)
+    assert not is_implemented(ActionType.SPECIAL_ACTION)
 
 
 def _two_figure_game():
@@ -683,6 +684,50 @@ def test_play_cc_force_bypasses_gates():
         dc_effects_loader.reset_cache()
 
 
+def test_dc_special_rejects_missing_figure():
+    g = create_game()
+    try:
+        step(g, Action(
+            type=ActionType.DC_SPECIAL, player=1,
+            params={'figure_key': 'Nobody-0-0', 'special_idx': 0},
+        ))
+    except ValueError as e:
+        assert 'not on board' in str(e)
+        return
+    raise AssertionError('expected ValueError for missing figure')
+
+
+def test_dc_special_rejects_out_of_range_idx():
+    from python.engine.data import dc_effects_loader
+    dc_effects_loader._dc_effects = {
+        'Luke Skywalker': {'figures': 1, 'specialAbilityIds': ['ability_a']},
+    }
+    try:
+        g = create_game()
+        g.data['figurePositions'] = {1: {'Luke Skywalker-0-0': 'a1'}, 2: {}}
+        try:
+            step(g, Action(
+                type=ActionType.DC_SPECIAL, player=1,
+                params={'figure_key': 'Luke Skywalker-0-0', 'special_idx': 5},
+            ))
+        except ValueError as e:
+            assert 'out of range' in str(e)
+            return
+        raise AssertionError('expected ValueError for out-of-range idx')
+    finally:
+        dc_effects_loader.reset_cache()
+
+
+def test_dc_special_requires_params():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.DC_SPECIAL, player=1, params={}))
+    except ValueError as e:
+        assert 'figure_key' in str(e)
+        return
+    raise AssertionError('expected ValueError for missing params')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -726,6 +771,9 @@ def main():
         ('play_cc_rejects_not_in_hand', test_play_cc_rejects_card_not_in_hand),
         ('play_cc_rejects_timing_mismatch', test_play_cc_rejects_timing_mismatch),
         ('play_cc_force_bypasses_gates', test_play_cc_force_bypasses_gates),
+        ('dc_special_rejects_missing_figure', test_dc_special_rejects_missing_figure),
+        ('dc_special_rejects_out_of_range_idx', test_dc_special_rejects_out_of_range_idx),
+        ('dc_special_requires_params', test_dc_special_requires_params),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

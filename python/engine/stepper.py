@@ -957,3 +957,79 @@ def _handle_play_cc(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.PLAY_CC, _handle_play_cc)
+
+
+# ---------------------------------------------------------------------------
+# DC Special Ability dispatch (P7 / P4-A)
+# ---------------------------------------------------------------------------
+
+def _handle_dc_special(game: GameState, action: Action) -> GameState:
+    """Resolve a DC's special ability via the abilities dispatcher.
+
+    Required params:
+        figure_key (str) — the activating figure.
+        special_idx (int) — index into dcEff.specialAbilityIds for the DC.
+
+    Effects:
+        - Looks up the DC's ability_id from dc-effects.json.
+        - Calls abilities.dispatch.resolve(game, ability_id, ctx).
+        - Stores the resolver result on game.lastDcSpecialResult for callers
+          to inspect/log.
+
+    Raises:
+        ValueError: figure_key missing from board, special_idx out of range.
+        UnknownAbility / PatternNotImplemented: propagated from dispatch.
+
+    Note: action-cost decrement is NOT handled here (stepper doesn't yet
+    model the dcActionsData.remaining field). Caller or a higher-level
+    orchestrator owns that until the full DC activation flow ports.
+    """
+    from python.engine.abilities import dispatch as ability_dispatch
+    from python.engine.data.dc_effects_loader import get_dc_effect
+
+    figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+    special_idx = action.params.get('special_idx')
+    if special_idx is None:
+        special_idx = action.params.get('specialIdx')
+    if not figure_key:
+        raise ValueError('dc_special requires figure_key param')
+    if not isinstance(special_idx, int) or special_idx < 0:
+        raise ValueError('dc_special requires non-negative int special_idx param')
+
+    player_num, pos = _find_figure(game, figure_key)
+    if player_num is None:
+        raise ValueError(f'dc_special: figure {figure_key!r} not on board')
+
+    dc_name = _dc_name_from_figure_key(figure_key)
+    effect = get_dc_effect(dc_name) or {}
+    ability_ids = effect.get('specialAbilityIds') or []
+    if special_idx >= len(ability_ids):
+        raise ValueError(
+            f'dc_special: special_idx {special_idx} out of range for '
+            f'{dc_name!r} (has {len(ability_ids)} specials)'
+        )
+
+    ability_id = ability_ids[special_idx]
+    ctx: Dict[str, Any] = {
+        'figure_key': figure_key,
+        'player_num': player_num,
+        'dc_name': dc_name,
+        'special_idx': special_idx,
+    }
+    try:
+        idx = int(figure_key.rsplit('-', 1)[-1])
+        ctx['figure_index'] = idx
+    except (ValueError, AttributeError):
+        pass
+
+    result = ability_dispatch.resolve(game.data, ability_id, ctx)
+    game.data['lastDcSpecialResult'] = {
+        'abilityId': ability_id,
+        'figureKey': figure_key,
+        'playerNum': player_num,
+        'result': result,
+    }
+    return game
+
+
+register(ActionType.DC_SPECIAL, _handle_dc_special)
