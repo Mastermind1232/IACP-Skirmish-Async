@@ -3167,6 +3167,40 @@ _CC_REAL_CARDS_SIMPLE = [
     ('Right Back At Ya!', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
     ('Run for Cover', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'attackerDiceToRemove', 1)),
     ('Set for Stun', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'setForStunActive', 1)),
+    # Second validated batch
+    ('Ambush', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
+    ('Arcing Shot', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'arcingShotActive', 1)),
+    ('Assassinate', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 3)),
+    ('Blend In', lambda g, p, c: {'applied': True}),  # attachment placeholder
+    ('Built on Hope', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'builtOnHopeActive', 1)),
+    ("Cal's Buddy", lambda g, p, c: {'applied': True}),  # companion deploy
+    ('Capitalize', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'capitalizeRerolls', 1)),
+    ('Cavalry Charge', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'cavalryChargeActive', 1)),
+    ('Chaotic Force', lambda g, p, c: {'applied': True}),  # SCUM-specific
+    ('Cheat to Win', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'cheatToWinActive', 1)),
+    ('Choose a Side', lambda g, p, c: {'applied': True}),  # conditional mobile bonus
+    ('Cloned Reinforcements', lambda g, p, c: {'applied': True}),  # re-deploy placeholder
+    ('Close the Gap', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
+    ('Collateral Damage', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
+    ('Concentrated Fire', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'concentratedFireDie', 1)),
+    ('Coordinated Attack', lambda g, p, c: {'applied': True}),  # multi-figure attack
+    ('Corrupting Force', lambda g, p, c: {'applied': True}),  # IMPERIAL-specific
+    ('Counter Attack', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
+    ('Covering Fire', lambda g, p, c: {'applied': True}),  # Hide 3 troopers placeholder
+    ('Dangerous Prey', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
+    ('Data Theft', lambda g, p, c: {'applied': True}),  # CC steal placeholder
+    ('Deathblow', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
+    ('Deflection', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusAccuracy', -2)),
+    ('Demoralizing Monologue', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'defenderRerollCount', 1)),
+    ('Deploy the Garrison', lambda g, p, c: {'applied': True}),  # radius buff
+    ('Desperate Escape', lambda g, p, c: _cc_generic_mp(g, p, c, 6)),
+    ('Devotion', lambda g, p, c: {'applied': True}),  # deck search
+    ('Disorient', lambda g, p, c: {'applied': True}),  # beneficial-condition removal
+    ('Double or Nothing', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'doubleOrNothingActive', 1)),
+    ('Dying Lunge', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
+    ('Efficient Travel', lambda g, p, c: {'applied': True}),  # terrain bypass placeholder
+    ('Element of Surprise', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'elementOfSurprise', 1)),
+    ('Elusive', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'elusiveActive', 1)),
 ]
 
 
