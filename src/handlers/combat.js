@@ -129,6 +129,11 @@ import {
   SHARPSHOOTER_BONUS_DIE,
 } from '../game/sharpshooter-helpers.js';
 import {
+  hasVanguardAbility,
+  vanguardInRange,
+  applyVanguardDieSwap,
+} from '../game/vanguard-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1877,14 +1882,11 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Vanguard (AT-RT): within 3 spaces, replace 1 non-red die with Red
-  if (atkSpecialIds.includes('vanguard') && distanceToTarget <= 3) {
-    const dice = game.pendingCombat.attackInfo.dice || [];
-    const nonRedIdx = dice.findIndex(d => d !== 'red');
-    if (nonRedIdx >= 0) {
-      const newDice = [...dice];
-      newDice[nonRedIdx] = 'red';
-      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: newDice };
-      await thread.send(`**Vanguard** — 1 ${dice[nonRedIdx]} die replaced with Red (target within ${distanceToTarget} spaces).`);
+  if (hasVanguardAbility(atkSpecialIds) && vanguardInRange(distanceToTarget)) {
+    const r = applyVanguardDieSwap(game.pendingCombat.attackInfo.dice || []);
+    if (r.applied) {
+      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: r.dice };
+      await thread.send(`**Vanguard** — 1 ${r.replacedKind} die replaced with Red (target within ${distanceToTarget} spaces).`);
     }
   }
 
