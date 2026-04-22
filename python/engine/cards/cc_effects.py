@@ -4222,3 +4222,22 @@ for _name, _fn in _CC_REAL_CARDS_SIMPLE:
 def registered_cc_effects() -> list:
     """List all currently-registered CC effect names (for coverage tracking)."""
     return sorted(_CC_EFFECTS.keys())
+
+
+def data_cc_coverage() -> Dict[str, int]:
+    """Report coverage of data/cc-effects.json cards vs registered handlers."""
+    import json, os
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    path = os.path.join(root, 'data', 'cc-effects.json')
+    try:
+        with open(path) as f:
+            raw = json.load(f)
+    except Exception:
+        return {'total': 0, 'covered': 0, 'missing': 0}
+    cards = set((raw.get('cards') or {}).keys())
+    covered = cards & set(_CC_EFFECTS.keys())
+    return {
+        'total': len(cards),
+        'covered': len(covered),
+        'missing': len(cards - covered),
+    }
