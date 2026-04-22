@@ -1611,6 +1611,127 @@ def test_end_turn_clears_pending_and_movement_bank_then_ends_activation():
     assert new_g.data['activePlayer'] == 2
 
 
+def test_pounce_space_dispatches_and_clears_pending():
+    g = create_game()
+    g.data['pendingPounceSpaceChoice'] = {
+        'hl1dc0': {
+            'abilityId': 'unknown_ability',
+            'playerNum': 1,
+            'validSpaces': ['a1', 'a2', 'b1'],
+            'targetFigureKey': 'Luke-0-0',
+            'figureIndex': 0,
+            'specialIdx': 0,
+        },
+    }
+    new_g = step(g, Action(
+        type=ActionType.POUNCE_SPACE, player=1,
+        params={'msg_id': 'hl1dc0', 'space': 'A2'},  # uppercase OK
+    ))
+    assert new_g.data['pendingPounceSpaceChoice'] is None
+    assert new_g.data['lastPounceResult']['chosenSpace'] == 'a2'
+    assert new_g.data['lastPounceResult']['result']['reason'] == 'unknown_ability'
+
+
+def test_pounce_space_rejects_invalid_space():
+    g = create_game()
+    g.data['pendingPounceSpaceChoice'] = {
+        'hl1dc0': {
+            'abilityId': 'x', 'playerNum': 1,
+            'validSpaces': ['a1'],
+        },
+    }
+    try:
+        step(g, Action(
+            type=ActionType.POUNCE_SPACE, player=1,
+            params={'msg_id': 'hl1dc0', 'space': 'z99'},
+        ))
+    except ValueError as e:
+        assert 'not a valid' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_cc_choice_dispatches_with_choice_index():
+    g = create_game()
+    g.data['pendingCcChoice'] = {
+        'abilityId': 'unknown_cc_ability',
+        'playerNum': 1,
+        'choiceOptions': ['Option A', 'Option B'],
+        'choiceValues': [None, 'Luke-0-0'],
+    }
+    new_g = step(g, Action(
+        type=ActionType.CC_CHOICE, player=1,
+        params={'choice_index': 1},
+    ))
+    assert new_g.data['pendingCcChoice'] is None
+    assert new_g.data['lastCcChoiceResult']['abilityId'] == 'unknown_cc_ability'
+
+
+def test_cc_choice_rejects_out_of_range():
+    g = create_game()
+    g.data['pendingCcChoice'] = {
+        'abilityId': 'x', 'playerNum': 1, 'choiceOptions': ['A'],
+    }
+    try:
+        step(g, Action(type=ActionType.CC_CHOICE, player=1,
+                        params={'choice_index': 5}))
+    except ValueError as e:
+        assert 'out of range' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_cc_space_validates_against_valid_spaces():
+    g = create_game()
+    g.data['pendingCcSpaceChoice'] = {
+        'abilityId': 'x', 'playerNum': 1,
+        'validSpaces': ['a1', 'b2'],
+    }
+    try:
+        step(g, Action(type=ActionType.CC_SPACE, player=1,
+                        params={'space': 'z99'}))
+    except ValueError as e:
+        assert 'not a valid' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_cc_space_dispatches_on_valid_pick():
+    g = create_game()
+    g.data['pendingCcSpaceChoice'] = {
+        'abilityId': 'unknown_cc', 'playerNum': 1,
+        'validSpaces': ['a1', 'b2'],
+    }
+    new_g = step(g, Action(type=ActionType.CC_SPACE, player=1,
+                            params={'space': 'a1'}))
+    assert new_g.data['pendingCcSpaceChoice'] is None
+    assert new_g.data['lastCcSpaceResult']['abilityId'] == 'unknown_cc'
+
+
+def test_arsenal_pick_sets_override_dice_and_clears_pending():
+    g = create_game()
+    g.data['pendingArsenalPick'] = {'hl1dc0': {'options': [['red', 'green']]}}
+    new_g = step(g, Action(
+        type=ActionType.ARSENAL_PICK, player=1,
+        params={'msg_id': 'hl1dc0', 'dice': ['red', 'blue']},
+    ))
+    assert new_g.data['pendingArsenalPick'] is None
+    assert new_g.data['pendingOverrideAttackDice']['hl1dc0'] == {
+        'dice': ['red', 'blue'],
+    }
+
+
+def test_arsenal_pick_requires_dice_list():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.ARSENAL_PICK, player=1,
+                        params={'msg_id': 'hl1dc0', 'dice': 'not a list'}))
+    except ValueError as e:
+        assert 'dice' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1727,6 +1848,14 @@ def main():
         ('map_go_back_clears_pending', test_map_go_back_clears_pending_selection),
         ('map_go_back_noop_when_confirmed', test_map_go_back_noop_once_confirmed),
         ('end_turn_clears_pending_and_ends', test_end_turn_clears_pending_and_movement_bank_then_ends_activation),
+        ('pounce_space_dispatches', test_pounce_space_dispatches_and_clears_pending),
+        ('pounce_space_rejects_invalid', test_pounce_space_rejects_invalid_space),
+        ('cc_choice_dispatches', test_cc_choice_dispatches_with_choice_index),
+        ('cc_choice_rejects_out_of_range', test_cc_choice_rejects_out_of_range),
+        ('cc_space_validates_spaces', test_cc_space_validates_against_valid_spaces),
+        ('cc_space_dispatches_valid', test_cc_space_dispatches_on_valid_pick),
+        ('arsenal_pick_sets_override', test_arsenal_pick_sets_override_dice_and_clears_pending),
+        ('arsenal_pick_requires_dice_list', test_arsenal_pick_requires_dice_list),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

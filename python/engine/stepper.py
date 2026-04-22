@@ -2080,3 +2080,198 @@ def _handle_end_turn(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.END_TURN, _handle_end_turn)
+
+
+# ---------------------------------------------------------------------------
+# Space-picker / choice-picker ability-dispatch batch
+# ---------------------------------------------------------------------------
+
+def _dispatch_ability_pick(game: GameState, action: Action, *,
+                           pending_key: str,
+                           ctx_params: Dict[str, Any],
+                           result_field: str,
+                           label: str) -> GameState:
+    """Shared dispatcher for space/choice pickers that resolve an ability.
+
+    Reads game.data[pending_key] for the active window, merges ctx_params
+    into the ability ctx, dispatches via abilities.dispatch.resolve,
+    stores the outcome on game.data[result_field], and clears the pending.
+
+    Raises ValueError on missing pending window. Tolerates
+    UnknownAbility / PatternNotImplemented (records reason on result).
+    """
+    from python.engine.abilities import dispatch as ability_dispatch
+
+    pending = game.data.get(pending_key)
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError(f'{label}: no {pending_key} open')
+    ability_id = pending.get('abilityId')
+    if not ability_id:
+        raise ValueError(f'{label}: {pending_key} missing abilityId')
+    ctx: Dict[str, Any] = {
+        'ability_id': ability_id,
+        'player_num': pending.get('playerNum'),
+    }
+    for k in ('msgId', 'figureIndex', 'card', 'specialIdx'):
+        if k in pending:
+            ctx[k] = pending[k]
+    ctx.update(ctx_params)
+    try:
+        result = ability_dispatch.resolve(game.data, ability_id, ctx)
+    except ability_dispatch.UnknownAbility:
+        result = {'applied': False, 'reason': 'unknown_ability'}
+    except ability_dispatch.PatternNotImplemented as e:
+        result = {
+            'applied': False,
+            'reason': 'pattern_not_implemented',
+            'message': str(e),
+        }
+    game.data[pending_key] = None
+    game.data[result_field] = {
+        'abilityId': ability_id,
+        'playerNum': pending.get('playerNum'),
+        'result': result,
+    }
+    return game
+
+
+def _handle_pounce_space(game: GameState, action: Action) -> GameState:
+    """Nexu Pounce: resolve after the player picks a landing space.
+
+    Required params: space (str). Consumes game.pendingPounceSpaceChoice[msgId].
+    """
+    space = action.params.get('space')
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    if not space or not msg_id:
+        raise ValueError('pounce_space requires space + msg_id params')
+    chosen = str(space).lower()
+    pending_map = game.data.get('pendingPounceSpaceChoice') or {}
+    pending = pending_map.get(msg_id)
+    if not pending:
+        raise ValueError(
+            f'pounce_space: no pendingPounceSpaceChoice for msg_id {msg_id!r}'
+        )
+    valid = [str(s).lower() for s in (pending.get('validSpaces') or [])]
+    if valid and chosen not in valid:
+        raise ValueError(f'pounce_space: {chosen!r} not a valid landing space')
+    # Inline dispatch (the pending state is keyed by msgId, not a flat slot)
+    from python.engine.abilities import dispatch as ability_dispatch
+
+    ability_id = pending.get('abilityId')
+    ctx: Dict[str, Any] = {
+        'msgId': msg_id,
+        'player_num': pending.get('playerNum'),
+        'chosen_space': chosen,
+        'target_figure_key': pending.get('targetFigureKey'),
+        'figureIndex': pending.get('figureIndex'),
+        'specialIdx': pending.get('specialIdx'),
+    }
+    try:
+        result = ability_dispatch.resolve(game.data, ability_id, ctx)
+    except ability_dispatch.UnknownAbility:
+        result = {'applied': False, 'reason': 'unknown_ability'}
+    except ability_dispatch.PatternNotImplemented as e:
+        result = {'applied': False, 'reason': 'pattern_not_implemented', 'message': str(e)}
+    del pending_map[msg_id]
+    game.data['pendingPounceSpaceChoice'] = pending_map if pending_map else None
+    game.data['lastPounceResult'] = {
+        'abilityId': ability_id,
+        'playerNum': pending.get('playerNum'),
+        'chosenSpace': chosen,
+        'result': result,
+    }
+    return game
+
+
+def _handle_cc_choice(game: GameState, action: Action) -> GameState:
+    """CC effect chooseOne resolver.
+
+    Required param: choice_index (int).
+    Consumes game.pendingCcChoice.
+    """
+    choice_index = action.params.get('choice_index')
+    if choice_index is None:
+        choice_index = action.params.get('choiceIndex')
+    if not isinstance(choice_index, int) or choice_index < 0:
+        raise ValueError('cc_choice requires non-negative int choice_index')
+    pending = game.data.get('pendingCcChoice')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('cc_choice: no pendingCcChoice open')
+    choice_options = pending.get('choiceOptions') or []
+    if choice_index >= len(choice_options):
+        raise ValueError(
+            f'cc_choice: choice_index {choice_index} out of range '
+            f'({len(choice_options)} options)'
+        )
+    choice_values = pending.get('choiceValues') or []
+    chosen_value = (
+        choice_values[choice_index]
+        if 0 <= choice_index < len(choice_values) else None
+    )
+    return _dispatch_ability_pick(
+        game, action,
+        pending_key='pendingCcChoice',
+        ctx_params={
+            'choice_index': choice_index,
+            'chosen_option': choice_options[choice_index],
+            'chosen_figure_key': chosen_value,
+        },
+        result_field='lastCcChoiceResult',
+        label='cc_choice',
+    )
+
+
+def _handle_cc_space(game: GameState, action: Action) -> GameState:
+    """CC effect space-picker resolver.
+
+    Required param: space (str).
+    Consumes game.pendingCcSpaceChoice.
+    """
+    space = action.params.get('space')
+    if not space:
+        raise ValueError('cc_space requires space param')
+    chosen = str(space).lower()
+    pending = game.data.get('pendingCcSpaceChoice')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('cc_space: no pendingCcSpaceChoice open')
+    valid = [str(s).lower() for s in (pending.get('validSpaces') or [])]
+    if valid and chosen not in valid:
+        raise ValueError(f'cc_space: {chosen!r} not a valid space')
+    return _dispatch_ability_pick(
+        game, action,
+        pending_key='pendingCcSpaceChoice',
+        ctx_params={
+            'chosen_space': chosen,
+            'chosen_figure_key': pending.get('chosenFigureKey'),
+        },
+        result_field='lastCcSpaceResult',
+        label='cc_space',
+    )
+
+
+def _handle_arsenal_pick(game: GameState, action: Action) -> GameState:
+    """Arsenal (Greedo et al) attack-dice loadout pick.
+
+    Required param: dice (list[str]) — the chosen attack dice pool.
+    Sets game.pendingOverrideAttackDice[msgId] and clears pendingArsenalPick.
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    dice = action.params.get('dice')
+    if not msg_id:
+        raise ValueError('arsenal_pick requires msg_id param')
+    if not isinstance(dice, list) or not all(isinstance(d, str) for d in dice):
+        raise ValueError('arsenal_pick requires dice (list[str]) param')
+    pending = game.data.get('pendingArsenalPick') or {}
+    if msg_id in pending:
+        del pending[msg_id]
+        game.data['pendingArsenalPick'] = pending if pending else None
+    override = game.data.get('pendingOverrideAttackDice') or {}
+    override[msg_id] = {'dice': list(dice)}
+    game.data['pendingOverrideAttackDice'] = override
+    return game
+
+
+register(ActionType.POUNCE_SPACE, _handle_pounce_space)
+register(ActionType.CC_CHOICE, _handle_cc_choice)
+register(ActionType.CC_SPACE, _handle_cc_space)
+register(ActionType.ARSENAL_PICK, _handle_arsenal_pick)
