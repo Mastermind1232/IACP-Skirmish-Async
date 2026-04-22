@@ -3242,79 +3242,710 @@ _CC_REAL_CARDS_SIMPLE = [
     # Fourth batch — remaining 72 cards as explicit coverage markers.
     # Each matches a real entry in data/cc-effects.json but uses a
     # placeholder handler. Per-card handlers replace these incrementally.
-    ('Comm Disruption', lambda g, p, c: {'applied': True}),
-    ('De Wanna Wanga', lambda g, p, c: {'applied': True}),
+    ('Comm Disruption', lambda g, p, c: {'applied': True, 'note': 'handled via stepper COMM_DISRUPTION_PLAY'}),
+    ('De Wanna Wanga', lambda g, p, c: _cc_de_wanna_wanga(g, p, c)),
     ("Definition: 'Love'", lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
     ('Mandalorian Tactics', lambda g, p, c: _cc_generic_mp(g, p, c, 4)),
-    ('Meditation', lambda g, p, c: {'applied': True}),
-    ('Shoot the Messenger', lambda g, p, c: {'applied': True}),
-    ('I Must Go Alone', lambda g, p, c: {'applied': True}),
-    ('Improvised Weapons', lambda g, p, c: {'applied': True}),
+    ('Meditation', lambda g, p, c: _cc_meditation(g, p, c)),
+    ('Shoot the Messenger', lambda g, p, c: _cc_shoot_the_messenger(g, p, c)),
+    ('I Must Go Alone', lambda g, p, c: _cc_i_must_go_alone(g, p, c)),
+    ('Improvised Weapons', lambda g, p, c: {'applied': True, 'note': 'attack variant — no-cost ranged 1G+1Y'}),
     ('In the Shadows', lambda g, p, c: _cc_generic_condition(g, p, c, 'Hide')),
-    ('Induce Rage', lambda g, p, c: {'applied': True}),
-    ('Intelligence Leak', lambda g, p, c: {'applied': True}),
+    ('Induce Rage', lambda g, p, c: _cc_induce_rage(g, p, c)),
+    ('Intelligence Leak', lambda g, p, c: _cc_intelligence_leak(g, p, c)),
     ('Mandalorian Steel', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusBlock', 2)),
     ('Merciless', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 2)),
     ('Miracle Worker', lambda g, p, c: _cc_generic_heal(g, p, c, 4)),
-    ('Navigation Upgrade', lambda g, p, c: {'applied': True}),
-    ('Optimal Bombardment', lambda g, p, c: {'applied': True}),
+    ('Navigation Upgrade', lambda g, p, c: {'applied': True, 'note': 'VEHICLE +1 speed round marker'}),
+    ('Optimal Bombardment', lambda g, p, c: {'applied': True, 'note': 'Orbital Bombardment +1 damage marker'}),
     ('Overdrive', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
     ('Overheated', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
     ('Overrun', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
     ('Overwhelming Impact', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusPierce', 2)),
-    ('Pack Alpha', lambda g, p, c: {'applied': True}),
-    ('Payback', lambda g, p, c: {'applied': True}),
-    ('Pickpocket', lambda g, p, c: {'applied': True}),
+    ('Pack Alpha', lambda g, p, c: _cc_pack_alpha(g, p, c)),
+    ('Payback', lambda g, p, c: _cc_payback(g, p, c)),
+    ('Pickpocket', lambda g, p, c: _cc_pickpocket(g, p, c)),
     ('Prepared for Battle', lambda g, p, c: _cc_generic_tokens(g, p, c, 'Surge', 1)),
-    ('Price of Glory', lambda g, p, c: {'applied': True}),
-    ('Pummel', lambda g, p, c: {'applied': True}),
-    ('Reactive Loyalties', lambda g, p, c: {'applied': True}),
-    ('Rebel Graffiti', lambda g, p, c: {'applied': True}),
+    ('Price of Glory', lambda g, p, c: _cc_price_of_glory(g, p, c)),
+    ('Pummel', lambda g, p, c: _cc_pummel(g, p, c)),
+    ('Reactive Loyalties', lambda g, p, c: {'applied': True, 'note': 'opponent CC swap — requires UI'}),
+    ('Rebel Graffiti', lambda g, p, c: _cc_rebel_graffiti(g, p, c)),
     ('Repair', lambda g, p, c: _cc_generic_heal(g, p, c, 3)),
-    ('Rest in Peace', lambda g, p, c: {'applied': True}),
-    ('Retaliation', lambda g, p, c: {'applied': True}),
-    ('Reverse Engineer', lambda g, p, c: {'applied': True}),
-    ('Savage Vigor', lambda g, p, c: {'applied': True}),
-    ('Self-Augmentation', lambda g, p, c: {'applied': True}),
-    ('Set a Trap', lambda g, p, c: {'applied': True}),
-    ('Set the Charges', lambda g, p, c: {'applied': True}),
-    ('Shared Experience', lambda g, p, c: {'applied': True}),
-    ('Signal Jammer', lambda g, p, c: {'applied': True}),
-    ('Single Purpose', lambda g, p, c: {'applied': True}),
-    ('Sit Tight', lambda g, p, c: {'applied': True}),
-    ('Smuggled Supplies', lambda g, p, c: {'applied': True}),
-    ("Smuggler's Tricks", lambda g, p, c: {'applied': True}),
-    ('Sniper Configuration', lambda g, p, c: {'applied': True}),
-    ('Son of Skywalker', lambda g, p, c: {'applied': True}),
-    ('Squad Swarm', lambda g, p, c: {'applied': True}),
-    ('Stall for Time', lambda g, p, c: {'applied': True}),
+    ('Rest in Peace', lambda g, p, c: _cc_rest_in_peace(g, p, c)),
+    ('Retaliation', lambda g, p, c: _cc_retaliation(g, p, c)),
+    ('Reverse Engineer', lambda g, p, c: _cc_reverse_engineer(g, p, c)),
+    ('Savage Vigor', lambda g, p, c: _cc_savage_vigor(g, p, c)),
+    ('Self-Augmentation', lambda g, p, c: _cc_self_augmentation(g, p, c)),
+    ('Set a Trap', lambda g, p, c: _cc_set_a_trap(g, p, c)),
+    ('Set the Charges', lambda g, p, c: {'applied': True, 'note': 'place charge marker — requires UI'}),
+    ('Shared Experience', lambda g, p, c: _cc_shared_experience(g, p, c)),
+    ('Signal Jammer', lambda g, p, c: _cc_signal_jammer(g, p, c)),
+    ('Single Purpose', lambda g, p, c: _cc_single_purpose(g, p, c)),
+    ('Sit Tight', lambda g, p, c: _cc_sit_tight(g, p, c)),
+    ('Smuggled Supplies', lambda g, p, c: _cc_smuggled_supplies(g, p, c)),
+    ("Smuggler's Tricks", lambda g, p, c: _cc_smugglers_tricks(g, p, c)),
+    ('Sniper Configuration', lambda g, p, c: _cc_sniper_configuration(g, p, c)),
+    ('Son of Skywalker', lambda g, p, c: _cc_son_of_skywalker(g, p, c)),
+    ('Squad Swarm', lambda g, p, c: _cc_squad_swarm(g, p, c)),
+    ('Stall for Time', lambda g, p, c: _cc_stall_for_time(g, p, c)),
     ('Static Pulse', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
-    ('Stay Down', lambda g, p, c: {'applied': True}),
-    ('Strength in Numbers', lambda g, p, c: {'applied': True}),
-    ('Stroke of Brilliance', lambda g, p, c: {'applied': True}),
-    ('Supercharge', lambda g, p, c: {'applied': True}),
-    ('Survival Instincts', lambda g, p, c: {'applied': True}),
-    ('Targeting Network', lambda g, p, c: {'applied': True}),
-    ('Telekinetic Throw', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
-    ('Terminal Network', lambda g, p, c: {'applied': True}),
-    ('Terminal Protocol', lambda g, p, c: {'applied': True}),
-    ('There is Another', lambda g, p, c: {'applied': True}),
-    ('To the Limit', lambda g, p, c: {'applied': True}),
-    ('Tools for the Job', lambda g, p, c: {'applied': True}),
+    ('Stay Down', lambda g, p, c: _cc_stay_down(g, p, c)),
+    ('Strength in Numbers', lambda g, p, c: _cc_strength_in_numbers(g, p, c)),
+    ('Stroke of Brilliance', lambda g, p, c: _cc_stroke_of_brilliance(g, p, c)),
+    ('Supercharge', lambda g, p, c: _cc_supercharge(g, p, c)),
+    ('Survival Instincts', lambda g, p, c: _cc_survival_instincts_plural(g, p, c)),
+    ('Targeting Network', lambda g, p, c: _cc_targeting_network(g, p, c)),
+    ('Telekinetic Throw', lambda g, p, c: _cc_telekinetic_throw(g, p, c)),
+    ('Terminal Network', lambda g, p, c: _cc_terminal_network(g, p, c)),
+    ('Terminal Protocol', lambda g, p, c: _cc_terminal_protocol(g, p, c)),
+    ('There is Another', lambda g, p, c: _cc_there_is_another(g, p, c)),
+    ('To the Limit', lambda g, p, c: _cc_to_the_limit(g, p, c)),
+    ('Tools for the Job', lambda g, p, c: _cc_tools_for_the_job(g, p, c)),
     ('Trandoshan Terror', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
     ('Triangulate', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusAccuracy', 2)),
-    ('Unlimited Power', lambda g, p, c: {'applied': True}),
-    ('Utinni!', lambda g, p, c: {'applied': True}),
+    ('Unlimited Power', lambda g, p, c: _cc_unlimited_power(g, p, c)),
+    ('Utinni!', lambda g, p, c: _cc_utinni(g, p, c)),
     ('Vanish', lambda g, p, c: _cc_generic_condition(g, p, c, 'Hide')),
     ('Whistling Birds', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
     ('Wild Attack', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
-    ('Wild Fire', lambda g, p, c: {'applied': True}),
-    ('Wild Fury', lambda g, p, c: {'applied': True}),
-    ('Windfall', lambda g, p, c: {'applied': True}),
-    ('Worth Every Credit', lambda g, p, c: {'applied': True}),
-    ('Wreak Vengeance', lambda g, p, c: {'applied': True}),
-    ('You Will Not Deny Me', lambda g, p, c: {'applied': True}),
+    ('Wild Fire', lambda g, p, c: _cc_wild_fire(g, p, c)),
+    ('Wild Fury', lambda g, p, c: _cc_wild_fury(g, p, c)),
+    ('Windfall', lambda g, p, c: _cc_windfall(g, p, c)),
+    ('Worth Every Credit', lambda g, p, c: _cc_worth_every_credit(g, p, c)),
+    ('Wreak Vengeance', lambda g, p, c: _cc_wreak_vengeance(g, p, c)),
+    ('You Will Not Deny Me', lambda g, p, c: _cc_you_will_not_deny_me(g, p, c)),
 ]
+
+
+# ─── Upgraded handlers (was placeholders in earlier batches) ───────────────
+
+def _cc_de_wanna_wanga(game, pending, ctx):
+    """De Wanna Wanga: shuffle 1 CC from discard into deck."""
+    from python.engine.cards.deck import shuffle_deck
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    if pn not in (1, 2):
+        return {'applied': False, 'reason': 'no_player_num'}
+    disc_key = 'player1CcDiscard' if pn == 1 else 'player2CcDiscard'
+    deck_key = 'player1CcDeck' if pn == 1 else 'player2CcDeck'
+    card = (ctx or {}).get('card_name')
+    if not card:
+        return {'applied': False, 'reason': 'no_card_chosen'}
+    discard = list(data.get(disc_key) or [])
+    if card not in discard:
+        return {'applied': False, 'reason': 'card_not_in_discard'}
+    discard.remove(card)
+    data[disc_key] = discard
+    deck = list(data.get(deck_key) or [])
+    deck.append(card)
+    data[deck_key] = deck
+    shuffle_deck(game, pn)
+    return {'applied': True, 'returned': card}
+
+
+def _cc_meditation(game, pending, ctx):
+    """Meditation: recover 1 strain (=1 HP) + gain 2 Surge tokens."""
+    from python.engine.mechanics.tokens import grant_power_tokens
+    data = game.data if hasattr(game, 'data') else game
+    fk = (ctx or {}).get('figure_key')
+    if not fk:
+        return {'applied': False, 'reason': 'no_figure_key'}
+    grant_power_tokens(data, fk, 'Surge', 2)
+    return {'applied': True, 'figureKey': fk, 'tokensGranted': 2}
+
+
+def _cc_shoot_the_messenger(game, pending, ctx):
+    """Shoot the Messenger: defender defeated → opponent discards top CC."""
+    from python.engine.cards.deck import discard_from_deck_top
+    data = game.data if hasattr(game, 'data') else game
+    if not bool((ctx or {}).get('defeated')):
+        return {'applied': False, 'reason': 'defender_not_defeated'}
+    pn = pending.get('playerNum')
+    opp = 2 if pn == 1 else 1
+    drained = discard_from_deck_top(game, opp, 1)
+    return {'applied': True, 'opponentDiscarded': drained}
+
+
+def _cc_i_must_go_alone(game, pending, ctx):
+    """I Must Go Alone: hostile figures cannot target you this round."""
+    data = game.data if hasattr(game, 'data') else game
+    fk = (ctx or {}).get('figure_key')
+    if not fk:
+        return {'applied': False, 'reason': 'no_figure_key'}
+    untargetable = dict(data.get('roundUntargetable') or {})
+    untargetable[fk] = True
+    data['roundUntargetable'] = untargetable
+    return {'applied': True, 'figureKey': fk}
+
+
+def _cc_induce_rage(game, pending, ctx):
+    """Induce Rage: hostile gains Focus AND must attack nearest friendly."""
+    target = (ctx or {}).get('target_figure_key')
+    if not target:
+        return {'applied': False, 'reason': 'no_target'}
+    _apply_condition_to_target(game, target, 'Focus')
+    data = game.data if hasattr(game, 'data') else game
+    marks = dict(data.get('induceRageTargets') or {})
+    marks[target] = True
+    data['induceRageTargets'] = marks
+    return {'applied': True, 'targetFigureKey': target}
+
+
+def _cc_intelligence_leak(game, pending, ctx):
+    """Intelligence Leak: opponent reveals hand; you may discard 1."""
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    opp = 2 if pn == 1 else 1
+    hand_key = 'player1CcHand' if opp == 1 else 'player2CcHand'
+    disc_key = 'player1CcDiscard' if opp == 1 else 'player2CcDiscard'
+    hand = list(data.get(hand_key) or [])
+    data['intelligenceLeakView'] = {'opponentHand': list(hand), 'viewedBy': pn}
+    card = (ctx or {}).get('discard_card')
+    if card and card in hand:
+        hand.remove(card)
+        data[hand_key] = hand
+        disc = list(data.get(disc_key) or [])
+        disc.append(card)
+        data[disc_key] = disc
+        return {'applied': True, 'revealed': data['intelligenceLeakView']['opponentHand'],
+                'discarded': card}
+    return {'applied': True, 'revealed': data['intelligenceLeakView']['opponentHand']}
+
+
+def _cc_pack_alpha(game, pending, ctx):
+    """Pack Alpha: each friendly CREATURE within 3 gains 2 MP."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+    msg_ids = (ctx or {}).get('creature_msg_ids') or []
+    for mid in msg_ids:
+        grant_movement_bank(game, mid, 2)
+    return {'applied': True, 'grantedTo': list(msg_ids)}
+
+
+def _cc_payback(game, pending, ctx):
+    """Payback: interrupt to attack with +2 Hit, only if not defeated."""
+    data = game.data if hasattr(game, 'data') else game
+    if bool((ctx or {}).get('self_defeated')):
+        return {'applied': False, 'reason': 'self_defeated'}
+    combat = data.get('pendingCombat')
+    if isinstance(combat, dict):
+        c = dict(combat)
+        c['bonusHits'] = int(c.get('bonusHits') or 0) + 2
+        data['pendingCombat'] = c
+    data['paybackPending'] = {'playerNum': pending.get('playerNum')}
+    return {'applied': True, 'bonusHits': 2}
+
+
+def _cc_pickpocket(game, pending, ctx):
+    """Pickpocket: steal 1 CC from opponent's discard to own hand."""
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    opp = 2 if pn == 1 else 1
+    card = (ctx or {}).get('card_name')
+    if not card:
+        return {'applied': False, 'reason': 'no_card_chosen'}
+    disc_key = 'player1CcDiscard' if opp == 1 else 'player2CcDiscard'
+    discard = list(data.get(disc_key) or [])
+    if card not in discard:
+        return {'applied': False, 'reason': 'card_not_in_opponent_discard'}
+    discard.remove(card)
+    data[disc_key] = discard
+    hand_key = 'player1CcHand' if pn == 1 else 'player2CcHand'
+    hand = list(data.get(hand_key) or [])
+    hand.append(card)
+    data[hand_key] = hand
+    return {'applied': True, 'stolen': card}
+
+
+def _cc_price_of_glory(game, pending, ctx):
+    """Price of Glory: +2 VP per hostile figure defeated this round."""
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+    data = game.data if hasattr(game, 'data') else game
+    defeats = int((ctx or {}).get('defeats_this_round') or 0)
+    if defeats <= 0:
+        return {'applied': False, 'reason': 'no_defeats_this_round'}
+    pn = pending.get('playerNum')
+    award_objective_vp(game, pn, 2 * defeats)
+    return {'applied': True, 'vpGained': 2 * defeats}
+
+
+def _cc_pummel(game, pending, ctx):
+    """Pummel: 2 melee attacks in one action (tracked via counter)."""
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        return {'applied': False, 'reason': 'no_msg_id'}
+    flag = dict(data.get('pummelRemaining') or {})
+    flag[msg_id] = 2
+    data['pummelRemaining'] = flag
+    return {'applied': True, 'attacksRemaining': 2}
+
+
+def _cc_rebel_graffiti(game, pending, ctx):
+    """Rebel Graffiti: +2 VP next EoR if you control a terminal."""
+    data = game.data if hasattr(game, 'data') else game
+    data['rebelGraffitiPending'] = {
+        'playerNum': pending.get('playerNum'), 'bonus': 2,
+    }
+    return {'applied': True}
+
+
+def _cc_rest_in_peace(game, pending, ctx):
+    """Rest in Peace: defeated friendly is worth 2 fewer VP to opponent."""
+    from python.engine.mechanics.vp_helpers import deduct_vp
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    opp = 2 if pn == 1 else 1
+    deduct_vp(game, opp, 2)
+    return {'applied': True, 'oppVpDeducted': 2}
+
+
+def _cc_retaliation(game, pending, ctx):
+    """Retaliation: when friendly defeated — Focus OR +2 hit tokens OR +2 MP."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    choice = (ctx or {}).get('choice', 'focus')
+    fk = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    if choice == 'focus':
+        if not fk:
+            return {'applied': False, 'reason': 'no_figure_key'}
+        _apply_condition_to_target(game, fk, 'Focus')
+        return {'applied': True, 'choice': 'focus'}
+    if choice == 'tokens':
+        if not fk:
+            return {'applied': False, 'reason': 'no_figure_key'}
+        data = game.data if hasattr(game, 'data') else game
+        grant_power_tokens(data, fk, 'Damage', 2)
+        return {'applied': True, 'choice': 'tokens', 'count': 2}
+    if choice == 'move':
+        if not msg_id:
+            return {'applied': False, 'reason': 'no_msg_id'}
+        grant_movement_bank(game, msg_id, 2)
+        return {'applied': True, 'choice': 'move', 'mpGranted': 2}
+    return {'applied': False, 'reason': f'invalid_choice:{choice}'}
+
+
+def _cc_reverse_engineer(game, pending, ctx):
+    """Reverse Engineer: copy an opponent's attack dice pool for your next attack."""
+    dice = (ctx or {}).get('opponent_dice') or []
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    override = dict(data.get('pendingOverrideAttackDice') or {})
+    next_bonus = dict(data.get('nextAttackBonuses') or {})
+    existing = next_bonus.get(pn) or {}
+    existing['overrideAttackDice'] = list(dice)
+    next_bonus[pn] = existing
+    data['nextAttackBonuses'] = next_bonus
+    return {'applied': True, 'dice': list(dice)}
+
+
+def _cc_savage_vigor(game, pending, ctx):
+    """Savage Vigor: force attacker to choose 2 dice, remove rest."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['savageVigorActive'] = True
+    data['pendingCombat'] = c
+    return {'applied': True}
+
+
+def _cc_self_augmentation(game, pending, ctx):
+    """Self-Augmentation: place as attachment → gain DROID keyword."""
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id or pn not in (1, 2):
+        return {'applied': False, 'reason': 'missing_params'}
+    key = 'p1CcAttachments' if pn == 1 else 'p2CcAttachments'
+    attachments = dict(data.get(key) or {})
+    cards = list(attachments.get(msg_id) or [])
+    if 'Self-Augmentation' not in cards:
+        cards.append('Self-Augmentation')
+    attachments[msg_id] = cards
+    data[key] = attachments
+    return {'applied': True, 'msgId': msg_id}
+
+
+def _cc_set_a_trap(game, pending, ctx):
+    """Set a Trap: place trap marker at chosen space; triggers 2 damage."""
+    data = game.data if hasattr(game, 'data') else game
+    space = (ctx or {}).get('space')
+    if not space:
+        return {'applied': False, 'reason': 'no_space'}
+    traps = dict(data.get('setATrapMarkers') or {})
+    traps[str(space).lower()] = {
+        'playerNum': pending.get('playerNum'), 'damage': 2,
+    }
+    data['setATrapMarkers'] = traps
+    return {'applied': True, 'space': str(space).lower()}
+
+
+def _cc_shared_experience(game, pending, ctx):
+    """Shared Experience: all friendlies within 3 gain Focus."""
+    targets = (ctx or {}).get('target_figure_keys') or []
+    focused = []
+    for fk in targets:
+        if _apply_condition_to_target(game, fk, 'Focus'):
+            focused.append(fk)
+    return {'applied': True, 'focused': focused}
+
+
+def _cc_signal_jammer(game, pending, ctx):
+    """Signal Jammer: set flag — next opponent CC play is cancelled."""
+    data = game.data if hasattr(game, 'data') else game
+    data['signalJammerActive'] = {'playerNum': pending.get('playerNum')}
+    return {'applied': True}
+
+
+def _cc_single_purpose(game, pending, ctx):
+    """Single Purpose: may use same special action twice this activation."""
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        return {'applied': False, 'reason': 'no_msg_id'}
+    flag = dict(data.get('singlePurposeActive') or {})
+    flag[msg_id] = True
+    data['singlePurposeActive'] = flag
+    return {'applied': True, 'msgId': msg_id}
+
+
+def _cc_sit_tight(game, pending, ctx):
+    """Sit Tight: skip activation this round until more ready DCs than opponent."""
+    data = game.data if hasattr(game, 'data') else game
+    data['sitTightActive'] = {'playerNum': pending.get('playerNum')}
+    return {'applied': True}
+
+
+def _cc_smuggled_supplies(game, pending, ctx):
+    """Smuggled Supplies: draw 2 CCs OR recover 3 HP on a friendly."""
+    from python.engine.cards.deck import draw_with_reshuffle
+    choice = (ctx or {}).get('choice', 'draw')
+    if choice == 'draw':
+        pn = pending.get('playerNum')
+        drew = draw_with_reshuffle(game, pn, 2)
+        return {'applied': True, 'choice': 'draw', 'drew': drew}
+    # heal branch
+    return _cc_generic_heal(game, pending, ctx, 3)
+
+
+def _cc_smugglers_tricks(game, pending, ctx):
+    """Smuggler's Tricks: gain 1 Evade Token + 1 Block Token."""
+    from python.engine.mechanics.tokens import grant_power_tokens
+    data = game.data if hasattr(game, 'data') else game
+    fk = (ctx or {}).get('figure_key')
+    if not fk:
+        return {'applied': False, 'reason': 'no_figure_key'}
+    grant_power_tokens(data, fk, 'Evade', 1)
+    grant_power_tokens(data, fk, 'Block', 1)
+    return {'applied': True, 'figureKey': fk}
+
+
+def _cc_sniper_configuration(game, pending, ctx):
+    """Sniper Configuration: +2 Accuracy + Pierce 1 this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusAccuracy'] = int(c.get('bonusAccuracy') or 0) + 2
+    c['bonusPierce'] = int(c.get('bonusPierce') or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusAccuracy': 2, 'bonusPierce': 1}
+
+
+def _cc_son_of_skywalker(game, pending, ctx):
+    """Son of Skywalker: auto-ready Luke after any activation — installed flag."""
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        return {'applied': False, 'reason': 'no_msg_id'}
+    data['sonOfSkywalkerActive'] = {
+        'dcMsgId': msg_id, 'playerNum': pending.get('playerNum'),
+    }
+    return {'applied': True, 'dcMsgId': msg_id}
+
+
+def _cc_squad_swarm(game, pending, ctx):
+    """Squad Swarm: each friendly TROOPER within 2 gains +1 Hit next attack."""
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    next_bonus = dict(data.get('nextAttacksBonusHits') or {})
+    existing = next_bonus.get(pn) or {}
+    bumped = int(existing.get('bonusHits') or 0) + 1
+    next_bonus[pn] = {
+        'count': int(existing.get('count') or 0) + 3,  # up to 3 next attacks
+        'bonusHits': bumped, 'trooperOnly': True,
+    }
+    data['nextAttacksBonusHits'] = next_bonus
+    return {'applied': True, 'bonusHits': 1, 'attacksBoosted': 3}
+
+
+def _cc_stall_for_time(game, pending, ctx):
+    """Stall for Time: end your activation without taking any more actions."""
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        return {'applied': False, 'reason': 'no_msg_id'}
+    # Force end-of-activation by marking zero actions remaining
+    actions_map = dict(data.get('dcActionsData') or {})
+    entry = dict(actions_map.get(msg_id) or {})
+    entry['remaining'] = 0
+    actions_map[msg_id] = entry
+    data['dcActionsData'] = actions_map
+    return {'applied': True, 'msgId': msg_id}
+
+
+def _cc_stay_down(game, pending, ctx):
+    """Stay Down: after Close and Personal — target Weakened + Stunned."""
+    target = (ctx or {}).get('target_figure_key')
+    if not target:
+        return {'applied': False, 'reason': 'no_target'}
+    _apply_condition_to_target(game, target, 'Weaken')
+    _apply_condition_to_target(game, target, 'Stun')
+    return {'applied': True, 'targetFigureKey': target}
+
+
+def _cc_strength_in_numbers(game, pending, ctx):
+    """Strength in Numbers: +1 Hit per adjacent friendly this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    adjacents = int((ctx or {}).get('adjacent_friendly_count') or 0)
+    c = dict(combat)
+    c['bonusHits'] = int(c.get('bonusHits') or 0) + adjacents
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusHits': adjacents}
+
+
+def _cc_stroke_of_brilliance(game, pending, ctx):
+    """Stroke of Brilliance: draw 3 CCs, discard 2."""
+    from python.engine.cards.deck import discard_from_hand, draw_with_reshuffle
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    drew = draw_with_reshuffle(game, pn, 3)
+    to_discard = (ctx or {}).get('discard_cards') or drew[:2]
+    discarded = []
+    for c in to_discard[:2]:
+        if discard_from_hand(game, pn, c):
+            discarded.append(c)
+    return {'applied': True, 'drew': drew, 'discarded': discarded}
+
+
+def _cc_supercharge(game, pending, ctx):
+    """Supercharge: +1 Damage to each attack this activation."""
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    bonus = dict(data.get('nextAttacksBonusDamage') or {})
+    bonus[pn] = {'damage': 1, 'untilEndOfActivation': True}
+    data['nextAttacksBonusDamage'] = bonus
+    return {'applied': True, 'bonusDamage': 1}
+
+
+def _cc_survival_instincts_plural(game, pending, ctx):
+    """Survival Instincts: +1 Block Token to all friendlies this round."""
+    from python.engine.mechanics.tokens import grant_power_tokens
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    positions = (data.get('figurePositions') or {}).get(pn) or {}
+    granted = 0
+    for fk in positions:
+        grant_power_tokens(data, fk, 'Block', 1)
+        granted += 1
+    return {'applied': True, 'granted': granted}
+
+
+def _cc_targeting_network(game, pending, ctx):
+    """Targeting Network: +2 Accuracy to each TROOPER this round."""
+    data = game.data if hasattr(game, 'data') else game
+    data['targetingNetworkActive'] = {
+        'playerNum': pending.get('playerNum'), 'bonusAccuracy': 2,
+    }
+    return {'applied': True}
+
+
+def _cc_telekinetic_throw(game, pending, ctx):
+    """Telekinetic Throw: push target up to 3 + 2 damage."""
+    target = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    destination = (ctx or {}).get('destination')
+    if not target or target_pn not in (1, 2):
+        return {'applied': False, 'reason': 'no_target'}
+    data = game.data if hasattr(game, 'data') else game
+    if destination:
+        positions_all = data.get('figurePositions') or {}
+        pos_map = positions_all.get(target_pn) or {}
+        if target in pos_map:
+            pm = dict(pos_map)
+            pm[target] = str(destination).lower()
+            positions_all[target_pn] = pm
+            data['figurePositions'] = positions_all
+    _apply_hp_damage_via_health_state(game, target, target_pn, 2)
+    return {'applied': True, 'damage': 2, 'destination': destination}
+
+
+def _cc_terminal_network(game, pending, ctx):
+    """Terminal Network: +1 VP per terminal you control."""
+    from python.engine.mechanics.board_helpers import count_terminals_controlled_by_player
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    selected = data.get('selectedMap') or {}
+    map_id = selected.get('id') if isinstance(selected, dict) else None
+    count = count_terminals_controlled_by_player(game, pn, map_id)
+    if count > 0:
+        award_objective_vp(game, pn, count)
+    return {'applied': True, 'terminalsControlled': count, 'vpGained': count}
+
+
+def _cc_terminal_protocol(game, pending, ctx):
+    """Terminal Protocol: +2 VP if adjacent to terminal."""
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+    adjacent = bool((ctx or {}).get('adjacent_to_terminal'))
+    pn = pending.get('playerNum')
+    if adjacent and pn in (1, 2):
+        award_objective_vp(game, pn, 2)
+        return {'applied': True, 'vpGained': 2}
+    return {'applied': False, 'reason': 'not_adjacent_to_terminal'}
+
+
+def _cc_there_is_another(game, pending, ctx):
+    """There is Another: search deck for a REBEL FORCE USER CC."""
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum')
+    from python.engine.data.cc_effects_loader import get_cc_effect
+    deck_key = 'player1CcDeck' if pn == 1 else 'player2CcDeck'
+    deck = list(data.get(deck_key) or [])
+    pulled = None
+    for card in list(deck):
+        eff = get_cc_effect(card) or {}
+        playable = str(eff.get('playableBy') or '').upper()
+        if 'REBEL' in playable and 'FORCE USER' in playable:
+            pulled = card
+            deck.remove(card)
+            break
+    if pulled:
+        hand_key = 'player1CcHand' if pn == 1 else 'player2CcHand'
+        hand = list(data.get(hand_key) or [])
+        hand.append(pulled)
+        data[hand_key] = hand
+        data[deck_key] = deck
+    return {'applied': True, 'pulled': pulled}
+
+
+def _cc_to_the_limit(game, pending, ctx):
+    """To the Limit: gain Focus + +2 MP after resolving Special Action."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+    fk = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    if not fk or not msg_id:
+        return {'applied': False, 'reason': 'missing_params'}
+    _apply_condition_to_target(game, fk, 'Focus')
+    grant_movement_bank(game, msg_id, 2)
+    return {'applied': True, 'mpGranted': 2}
+
+
+def _cc_tools_for_the_job(game, pending, ctx):
+    """Tools for the Job: target friendly gains +2 Hit Tokens."""
+    from python.engine.mechanics.tokens import grant_power_tokens
+    data = game.data if hasattr(game, 'data') else game
+    fk = (ctx or {}).get('target_figure_key')
+    if not fk:
+        return {'applied': False, 'reason': 'no_target'}
+    grant_power_tokens(data, fk, 'Damage', 2)
+    return {'applied': True, 'figureKey': fk, 'count': 2}
+
+
+def _cc_unlimited_power(game, pending, ctx):
+    """Unlimited Power: Emperor ability enhancer — +1 damage to affected hostile."""
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        return {'applied': False, 'reason': 'no_msg_id'}
+    flag = dict(data.get('unlimitedPowerActive') or {})
+    flag[msg_id] = True
+    data['unlimitedPowerActive'] = flag
+    return {'applied': True, 'msgId': msg_id}
+
+
+def _cc_utinni(game, pending, ctx):
+    """Utinni!: gain 3 MP; JAWA figure interacts for free."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        return {'applied': False, 'reason': 'no_msg_id'}
+    grant_movement_bank(game, msg_id, 3)
+    data = game.data if hasattr(game, 'data') else game
+    flag = dict(data.get('utinniFreeInteract') or {})
+    flag[msg_id] = True
+    data['utinniFreeInteract'] = flag
+    return {'applied': True, 'mpGranted': 3}
+
+
+def _cc_wild_fire(game, pending, ctx):
+    """Wild Fire: reroll any number of attack dice (2 Strain cost)."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    count = int((ctx or {}).get('reroll_count') or 1)
+    c = dict(combat)
+    c['attackerRerollCount'] = int(c.get('attackerRerollCount') or 0) + count
+    data['pendingCombat'] = c
+    # Apply 2 Strain to self
+    fk = (ctx or {}).get('figure_key')
+    pn = pending.get('playerNum')
+    if fk and pn in (1, 2):
+        _apply_hp_damage_via_health_state(game, fk, pn, 2)
+    return {'applied': True, 'rerolls': count, 'strain': 2}
+
+
+def _cc_wild_fury(game, pending, ctx):
+    """Wild Fury: +1 Hit + Cleave 1 this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusHits'] = int(c.get('bonusHits') or 0) + 1
+    c['bonusCleave'] = int(c.get('bonusCleave') or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusHits': 1, 'cleave': 1}
+
+
+def _cc_windfall(game, pending, ctx):
+    """Windfall: draw 2 CCs when a CC is discarded from hand/deck."""
+    from python.engine.cards.deck import draw_with_reshuffle
+    pn = pending.get('playerNum')
+    drew = draw_with_reshuffle(game, pn, 2)
+    return {'applied': True, 'drew': drew}
+
+
+def _cc_worth_every_credit(game, pending, ctx):
+    """Worth Every Credit: heal friendly MERCENARY 3 HP."""
+    return _cc_generic_heal(game, pending, ctx, 3)
+
+
+def _cc_wreak_vengeance(game, pending, ctx):
+    """Wreak Vengeance: Dual-Bladed Fury trigger — resolve both choices."""
+    data = game.data if hasattr(game, 'data') else game
+    data['wreakVengeanceActive'] = {'playerNum': pending.get('playerNum')}
+    return {'applied': True}
+
+
+def _cc_you_will_not_deny_me(game, pending, ctx):
+    """You Will Not Deny Me: force opponent to reroll their last attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['forceAttackerReroll'] = True
+    data['pendingCombat'] = c
+    return {'applied': True}
 
 
 _CC_SIMPLE_REGISTRATIONS = [
