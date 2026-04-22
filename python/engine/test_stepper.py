@@ -1521,6 +1521,96 @@ def test_draw_cc_rejects_no_squad():
     raise AssertionError('expected ValueError')
 
 
+def test_map_type_choice_sets_selection_type():
+    g = create_game()
+    new_g = step(g, Action(
+        type=ActionType.MAP_TYPE_CHOICE, player=0,
+        params={'selection_type': 'Random'},  # case-insensitive
+    ))
+    assert new_g.data['mapSelectionType'] == 'random'
+
+
+def test_map_type_choice_rejects_invalid():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.MAP_TYPE_CHOICE, player=0,
+                        params={'selection_type': 'nonsense'}))
+    except ValueError as e:
+        assert 'selection_type' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_map_confirm_sets_map_selected_and_advances_phase():
+    g = create_game()
+    g.data['selectedMap'] = {'id': 'x', 'name': 'X'}
+    g.data['mapSelectionType'] = 'random'
+    new_g = step(g, Action(type=ActionType.MAP_CONFIRM, player=0))
+    assert new_g.data['mapSelected'] is True
+    assert new_g.data['phase'] == 'initiative'
+    assert new_g.data.get('mapSelectionType') is None
+
+
+def test_map_confirm_requires_selected_map():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.MAP_CONFIRM, player=0))
+    except ValueError as e:
+        assert 'no map selected' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_map_confirm_idempotent_when_already_confirmed():
+    g = create_game()
+    g.data['selectedMap'] = {'id': 'x'}
+    g.data['mapSelected'] = True
+    new_g = step(g, Action(type=ActionType.MAP_CONFIRM, player=0))
+    # No change; no error
+    assert new_g.data['mapSelected'] is True
+
+
+def test_map_go_back_clears_pending_selection():
+    g = create_game()
+    g.data['selectedMap'] = {'id': 'x'}
+    g.data['selectedMission'] = {'variant': 'a'}
+    g.data['mapSelectionType'] = 'draw'
+    g.data['mapId'] = 'x'
+    new_g = step(g, Action(type=ActionType.MAP_GO_BACK, player=0))
+    assert 'selectedMap' not in new_g.data
+    assert 'selectedMission' not in new_g.data
+    assert 'mapSelectionType' not in new_g.data
+    assert 'mapId' not in new_g.data
+
+
+def test_map_go_back_noop_once_confirmed():
+    g = create_game()
+    g.data['selectedMap'] = {'id': 'x'}
+    g.data['mapSelected'] = True
+    new_g = step(g, Action(type=ActionType.MAP_GO_BACK, player=0))
+    assert new_g.data['selectedMap'] == {'id': 'x'}
+
+
+def test_end_turn_clears_pending_and_movement_bank_then_ends_activation():
+    g = create_game()
+    g.data['activeFigureKeys'] = ['Luke-0-0']
+    g.data['movementPoints'] = 3
+    g.data['activePlayer'] = 1
+    g.data['pendingEndTurn'] = {'hl1dc0': {'displayName': 'Luke'}}
+    g.data['movementBank'] = {'hl1dc0': {'total': 4, 'remaining': 2}}
+    new_g = step(g, Action(
+        type=ActionType.END_TURN, player=1,
+        params={'msg_id': 'hl1dc0'},
+    ))
+    # END_TURN clears the specific msg_id from both maps
+    assert new_g.data['pendingEndTurn'] is None
+    assert new_g.data['movementBank'] is None
+    # And delegates to DC_END_ACTIVATION state changes
+    assert new_g.data['activeFigureKeys'] == []
+    assert new_g.data['movementPoints'] == 0
+    assert new_g.data['activePlayer'] == 2
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1629,6 +1719,14 @@ def main():
         ('draw_cc_filters_attached', test_draw_cc_filters_attached_cards_from_deck),
         ('draw_cc_rejects_double_draw', test_draw_cc_rejects_double_draw),
         ('draw_cc_rejects_no_squad', test_draw_cc_rejects_no_squad),
+        ('map_type_choice_sets_selection', test_map_type_choice_sets_selection_type),
+        ('map_type_choice_rejects_invalid', test_map_type_choice_rejects_invalid),
+        ('map_confirm_sets_selected', test_map_confirm_sets_map_selected_and_advances_phase),
+        ('map_confirm_requires_map', test_map_confirm_requires_selected_map),
+        ('map_confirm_idempotent', test_map_confirm_idempotent_when_already_confirmed),
+        ('map_go_back_clears_pending', test_map_go_back_clears_pending_selection),
+        ('map_go_back_noop_when_confirmed', test_map_go_back_noop_once_confirmed),
+        ('end_turn_clears_pending_and_ends', test_end_turn_clears_pending_and_movement_bank_then_ends_activation),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

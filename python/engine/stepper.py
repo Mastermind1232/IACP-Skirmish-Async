@@ -1990,3 +1990,93 @@ def _handle_draw_cc(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.DRAW_CC, _handle_draw_cc)
+
+
+# ---------------------------------------------------------------------------
+# Map-selection helpers (MAP_TYPE_CHOICE / MAP_CONFIRM / MAP_GO_BACK)
+# ---------------------------------------------------------------------------
+
+_MAP_SELECTION_TYPES = frozenset({'random', 'draw', 'pick'})
+
+
+def _handle_map_type_choice(game: GameState, action: Action) -> GameState:
+    """Record the map-selection type the user chose in the pre-confirm UI.
+
+    Required param:
+        selection_type (str) ∈ {'random', 'draw', 'pick'}.
+    """
+    sel = str(action.params.get('selection_type') or '').lower()
+    if sel not in _MAP_SELECTION_TYPES:
+        raise ValueError(
+            f"map_type_choice: selection_type must be one of "
+            f"{sorted(_MAP_SELECTION_TYPES)}, got {sel!r}"
+        )
+    game.data['mapSelectionType'] = sel
+    return game
+
+
+def _handle_map_confirm(game: GameState, action: Action) -> GameState:
+    """Confirm the currently-selected map/mission and advance the setup phase.
+
+    Requires game.selectedMap to be present. Idempotent no-op if already
+    mapSelected.
+    """
+    if game.data.get('mapSelected'):
+        return game
+    if not game.data.get('selectedMap'):
+        raise ValueError('map_confirm: no map selected yet (call SELECT_MAP first)')
+    game.data['mapSelected'] = True
+    game.data.pop('mapSelectionType', None)
+    # Advance phase marker
+    game.data['phase'] = 'initiative'
+    return game
+
+
+def _handle_map_go_back(game: GameState, action: Action) -> GameState:
+    """Clear the pending map selection so the user can pick again.
+
+    No-op once mapSelected=True (confirmed maps cannot be rolled back here).
+    """
+    if game.data.get('mapSelected'):
+        return game
+    for k in ('selectedMap', 'selectedMission', 'mapSelectionType', 'mapId'):
+        game.data.pop(k, None)
+    return game
+
+
+register(ActionType.MAP_TYPE_CHOICE, _handle_map_type_choice)
+register(ActionType.MAP_CONFIRM, _handle_map_confirm)
+register(ActionType.MAP_GO_BACK, _handle_map_go_back)
+
+
+# ---------------------------------------------------------------------------
+# END_TURN — alias for DC_END_ACTIVATION in the headless stepper
+# ---------------------------------------------------------------------------
+
+def _handle_end_turn(game: GameState, action: Action) -> GameState:
+    """End the current DC's turn.
+
+    In JS this is two buttons (in the thread vs. the general channel);
+    in the headless stepper we collapse both onto DC_END_ACTIVATION
+    semantics. Additionally:
+      - Clears game.pendingEndTurn[msg_id] when msg_id is provided.
+      - Clears next-attack bonus scratch fields and movement bank for the
+        msg_id (mirrors the JS cleanup on END_TURN).
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+
+    if msg_id:
+        pending = game.data.get('pendingEndTurn') or {}
+        if msg_id in pending:
+            del pending[msg_id]
+            game.data['pendingEndTurn'] = pending if pending else None
+        mb = game.data.get('movementBank') or {}
+        if msg_id in mb:
+            del mb[msg_id]
+            game.data['movementBank'] = mb if mb else None
+
+    # Delegate to DC_END_ACTIVATION's state change
+    return _handle_dc_end_activation(game, action)
+
+
+register(ActionType.END_TURN, _handle_end_turn)
