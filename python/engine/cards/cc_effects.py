@@ -2936,6 +2936,156 @@ def _cc_slippery_target(game, pending, ctx):
     return {'applied': True, 'figureKey': figure_key}
 
 
+def _cc_survival_instinct(game, pending, ctx):
+    """Survival Instinct: prevent defeat + heal 3 HP on friendly within 3.
+
+    Required: ctx.figure_key + ctx.msg_id.
+    """
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import parse_figure_key
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    player_num = pending.get('playerNum')
+    if not figure_key or not msg_id or player_num not in (1, 2):
+        raise ValueError('survival_instinct: requires figure_key + msg_id + playerNum')
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    dc_health_state = data.get('dcHealthState')
+    if isinstance(dc_health_state, dict):
+        hs = dc_health_state.get(msg_id) or []
+        if fig_idx < len(hs):
+            entry = hs[fig_idx]
+            if isinstance(entry, list) and len(entry) >= 2:
+                entry[0] = max(1, entry[0])
+                dc_health_state[msg_id] = hs
+        heal_hp(dc_health_state, data, msg_id, fig_idx, 3, player_num)
+    return {'applied': True, 'figureKey': figure_key, 'healed': 3}
+
+
+def _cc_no_cheating(game, pending, ctx):
+    """No Cheating (atStartOfActivationOfHostileFigureInYourLineOfSight):
+    hostile becomes Stunned."""
+    target_fk = (ctx or {}).get('target_figure_key')
+    if not target_fk:
+        raise ValueError('no_cheating: requires ctx.target_figure_key')
+    _apply_condition_to_target(game, target_fk, 'Stun')
+    return {'applied': True, 'targetFigureKey': target_fk}
+
+
+def _cc_still_faster_than_you(game, pending, ctx):
+    """Still Faster Than You: +3 MP + Focus (duringActivation)."""
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    msg_id = (ctx or {}).get('msg_id')
+    figure_key = (ctx or {}).get('figure_key')
+    if not msg_id or not figure_key:
+        raise ValueError('still_faster_than_you: requires msg_id + figure_key')
+    grant_movement_bank(game, msg_id, 3)
+    _apply_condition_to_target(game, figure_key, 'Focus')
+    return {'applied': True, 'mpGranted': 3, 'figureKey': figure_key}
+
+
+def _cc_lord_of_the_sith(game, pending, ctx):
+    """Lord of the Sith: +4 VP when hostile is defeated outside your activation."""
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    award_objective_vp(game, player_num, 4)
+    return {'applied': True, 'vpGained': 4}
+
+
+def _cc_paid_in_beskar(game, pending, ctx):
+    """Paid in Beskar: when you defeat a hostile within 3, gain 2 objective VP."""
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    award_objective_vp(game, player_num, 2)
+    return {'applied': True, 'vpGained': 2}
+
+
+def _cc_rapid_recalibration(game, pending, ctx):
+    """Rapid Recalibration: reroll up to 3 attack dice (before defender rerolls)."""
+    data = game.data if hasattr(game, 'data') else game
+    count = int((ctx or {}).get('reroll_count') or 1)
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    if count > 3:
+        count = 3
+    c = dict(combat)
+    c['attackerRerollCount'] = int(c.get('attackerRerollCount') or 0) + count
+    data['pendingCombat'] = c
+    return {'applied': True, 'rerolls': count}
+
+
+def _cc_change_their_minds(game, pending, ctx):
+    """Change Their Minds: opponent changes their mind — effectively moves 1
+    figure of theirs.
+
+    Required: ctx.target_figure_key + ctx.destination.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    destination = (ctx or {}).get('destination')
+    target_pn = (ctx or {}).get('target_player_num')
+    if not target_fk or not destination or target_pn not in (1, 2):
+        raise ValueError(
+            'change_their_minds: requires target_figure_key + destination + target_player_num'
+        )
+    positions_all = data.get('figurePositions') or {}
+    pos_map = positions_all.get(target_pn)
+    if isinstance(pos_map, dict) and target_fk in pos_map:
+        pm = dict(pos_map)
+        pm[target_fk] = str(destination).lower()
+        positions_all[target_pn] = pm
+        data['figurePositions'] = positions_all
+    return {
+        'applied': True, 'targetFigureKey': target_fk,
+        'destination': str(destination).lower(),
+    }
+
+
+def _cc_overcharged_weapons(game, pending, ctx):
+    """Overcharged Weapons: +1 damage to next attack this activation."""
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    bonus_map = dict(data.get('nextAttackBonusDamage') or {})
+    bonus_map[player_num] = int(bonus_map.get(player_num) or 0) + 1
+    data['nextAttackBonusDamage'] = bonus_map
+    return {'applied': True, 'bonusDamage': 1}
+
+
+def _cc_protect_the_old_ways(game, pending, ctx):
+    """Protect the Old Ways: friendly within 3 defends with +1 Block."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['bonusBlock'] = int(c.get('bonusBlock') or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusBlock': 1}
+
+
+def _cc_there_is_no_try(game, pending, ctx):
+    """There Is No Try: reroll all dice in a friendly REBEL FORCE USER's pool."""
+    data = game.data if hasattr(game, 'data') else game
+    side = (ctx or {}).get('side', 'attacker').lower()
+    if side not in ('attacker', 'defender'):
+        raise ValueError("there_is_no_try: side must be 'attacker' or 'defender'")
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    key = 'attackerRerollAllEnabled' if side == 'attacker' else 'defenderRerollAllEnabled'
+    c[key] = True
+    data['pendingCombat'] = c
+    return {'applied': True, 'side': side}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -3133,6 +3283,16 @@ register('Get Behind Me!', _cc_get_behind_me)
 register('Crush', _cc_crush)
 register('Self-Defense', _cc_self_defense)
 register('Slippery Target', _cc_slippery_target)
+register('Survival Instinct', _cc_survival_instinct)
+register('No Cheating', _cc_no_cheating)
+register('Still Faster Than You', _cc_still_faster_than_you)
+register('Lord of the Sith', _cc_lord_of_the_sith)
+register('Paid in Beskar', _cc_paid_in_beskar)
+register('Rapid Recalibration', _cc_rapid_recalibration)
+register('Change Their Minds', _cc_change_their_minds)
+register('Overcharged Weapons', _cc_overcharged_weapons)
+register('Protect the Old Ways', _cc_protect_the_old_ways)
+register('There Is No Try', _cc_there_is_no_try)
 
 
 def registered_cc_effects() -> list:
