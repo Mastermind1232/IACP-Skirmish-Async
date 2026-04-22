@@ -278,6 +278,143 @@ def _cc_primary_target(game: Any, pending: Dict[str, Any],
     return {'applied': True, 'bonusHits': 1, 'bonusAccuracy': 2}
 
 
+def _cc_focus(game: Any, pending: Dict[str, Any],
+              ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Focus: self becomes Focused.
+
+    Requires ctx.figure_key (the activating figure).
+    """
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('focus: requires ctx.figure_key')
+    added = _apply_condition_to_target(game, figure_key, 'Focus')
+    return {'applied': True, 'figureKey': figure_key, 'conditionAdded': added}
+
+
+def _cc_recovery(game: Any, pending: Dict[str, Any],
+                 ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Recovery: recover 2 Damage (heal 2 HP to self).
+
+    Requires ctx.figure_key. Uses damage_helpers.heal_hp via the DC's
+    msgId, located via p{n}DcMessageIds.
+    """
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import (
+        dc_name_from_figure_key, parse_figure_key,
+    )
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    player_num = pending.get('playerNum')
+    if not figure_key or player_num not in (1, 2):
+        raise ValueError('recovery: requires ctx.figure_key + pending.playerNum')
+
+    dc_name = dc_name_from_figure_key(figure_key)
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    ids_list = (
+        data.get('p1DcMessageIds') if player_num == 1
+        else data.get('p2DcMessageIds')
+    ) or []
+    dc_list = (
+        data.get('p1DcList') if player_num == 1
+        else data.get('p2DcList')
+    ) or []
+    msg_id = None
+    for mid, entry in zip(ids_list, dc_list):
+        if isinstance(entry, dict) and entry.get('dcName') == dc_name:
+            msg_id = mid
+            break
+    if not msg_id:
+        return {'applied': False, 'reason': 'dc_not_found'}
+    dc_health_state = data.get('dcHealthState')
+    if not isinstance(dc_health_state, dict):
+        return {'applied': False, 'reason': 'no_health_state'}
+    heal_hp(dc_health_state, data, msg_id, fig_idx, 2, player_num)
+    return {'applied': True, 'figureKey': figure_key, 'healed': 2}
+
+
+def _cc_urgency(game: Any, pending: Dict[str, Any],
+                ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Urgency: gain MP equal to Speed + 2.
+
+    Requires ctx.msg_id + ctx.speed (activator's Speed stat). Marks
+    urgencyMustSpendAll[msg_id] = True.
+    """
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    speed = (ctx or {}).get('speed')
+    if not msg_id or not isinstance(speed, int):
+        raise ValueError('urgency: requires ctx.msg_id + int ctx.speed')
+    amount = speed + 2
+    grant_movement_bank(game, msg_id, amount)
+    urgency_map = dict(data.get('urgencyMustSpendAll') or {})
+    urgency_map[msg_id] = True
+    data['urgencyMustSpendAll'] = urgency_map
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': amount}
+
+
+def _cc_hide_in_plain_sight(game: Any, pending: Dict[str, Any],
+                            ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Hide in Plain Sight: self cannot be targeted this round."""
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('hide_in_plain_sight: requires ctx.figure_key')
+    untargetable = dict(data.get('roundUntargetable') or {})
+    untargetable[figure_key] = True
+    data['roundUntargetable'] = untargetable
+    return {'applied': True, 'figureKey': figure_key}
+
+
+def _cc_take_cover(game: Any, pending: Dict[str, Any],
+                   ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Take Cover: +1 Block, -2 Accuracy while defending this round."""
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('take_cover: requires ctx.figure_key')
+    cover_map = dict(data.get('takeCoverActive') or {})
+    cover_map[figure_key] = {'bonusBlock': 1, 'accuracyPenalty': 2}
+    data['takeCoverActive'] = cover_map
+    return {'applied': True, 'figureKey': figure_key}
+
+
+def _cc_shadow_ops(game: Any, pending: Dict[str, Any],
+                   ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Shadow Ops: opponent cannot play CCs this round.
+
+    Sets game.shadowOpsBlockedPlayer = opponent's player_num.
+    is_cc_playable_now already honors this flag.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    if player_num not in (1, 2):
+        raise ValueError('shadow_ops: pending missing playerNum')
+    opp = 2 if player_num == 1 else 1
+    data['shadowOpsBlockedPlayer'] = opp
+    return {'applied': True, 'blockedPlayerNum': opp}
+
+
+def _cc_inspiring_speech(game: Any, pending: Dict[str, Any],
+                         ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Inspiring Speech: up to 2 adjacent friendlies become Focused.
+
+    Requires ctx.target_figure_keys (list of 1-2 figure keys).
+    """
+    targets = (ctx or {}).get('target_figure_keys') or []
+    if not isinstance(targets, list) or not targets:
+        raise ValueError('inspiring_speech: requires ctx.target_figure_keys list')
+    if len(targets) > 2:
+        raise ValueError('inspiring_speech: at most 2 targets')
+    focused = []
+    for fk in targets:
+        if _apply_condition_to_target(game, fk, 'Focus'):
+            focused.append(fk)
+    return {'applied': True, 'focused': focused}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -333,6 +470,13 @@ register('Armed Escort', _cc_armed_escort)
 register('Beatdown', _cc_beatdown)
 register('Close and Personal', _cc_close_and_personal)
 register('Primary Target', _cc_primary_target)
+register('Focus', _cc_focus)
+register('Recovery', _cc_recovery)
+register('Urgency', _cc_urgency)
+register('Hide in Plain Sight', _cc_hide_in_plain_sight)
+register('Take Cover', _cc_take_cover)
+register('Shadow Ops', _cc_shadow_ops)
+register('Inspiring Speech', _cc_inspiring_speech)
 
 
 def registered_cc_effects() -> list:

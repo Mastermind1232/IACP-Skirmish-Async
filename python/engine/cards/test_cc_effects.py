@@ -206,6 +206,76 @@ def test_primary_target_queues_for_next_attack_without_combat():
     assert g['nextAttackBonuses'][2] == {'bonusHits': 1, 'bonusAccuracy': 2}
 
 
+def test_focus_adds_focus_condition():
+    g = {'pendingCcEffect': {'cardName': 'Focus', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'figure_key': 'Luke-0-0'})
+    assert r['applied'] is True
+    assert 'Focus' in g['figureConditions']['Luke-0-0']
+
+
+def test_recovery_heals_2_hp():
+    g = {
+        'pendingCcEffect': {'cardName': 'Recovery', 'playerNum': 1},
+        'p1DcMessageIds': ['hl1dc0'],
+        'p1DcList': [{'dcName': 'Luke'}],
+        'dcHealthState': {'hl1dc0': [[3, 8]]},
+    }
+    r = resolve_pending_cc_effect(g, {'figure_key': 'Luke-0-0'})
+    assert r['applied'] is True
+    assert g['dcHealthState']['hl1dc0'][0][0] == 5
+
+
+def test_urgency_grants_speed_plus_2_mp():
+    g = {'pendingCcEffect': {'cardName': 'Urgency', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {'msg_id': 'hl1dc0', 'speed': 4})
+    assert r['mpGranted'] == 6
+    assert g['movementBank']['hl1dc0']['total'] == 6
+    assert g['urgencyMustSpendAll']['hl1dc0'] is True
+
+
+def test_hide_in_plain_sight_marks_untargetable():
+    g = {'pendingCcEffect': {'cardName': 'Hide in Plain Sight', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'figure_key': 'Luke-0-0'})
+    assert g['roundUntargetable']['Luke-0-0'] is True
+
+
+def test_take_cover_sets_defense_bonus():
+    g = {'pendingCcEffect': {'cardName': 'Take Cover', 'playerNum': 1}}
+    resolve_pending_cc_effect(g, {'figure_key': 'Luke-0-0'})
+    assert g['takeCoverActive']['Luke-0-0'] == {
+        'bonusBlock': 1, 'accuracyPenalty': 2,
+    }
+
+
+def test_shadow_ops_blocks_opponent_ccs():
+    g = {'pendingCcEffect': {'cardName': 'Shadow Ops', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g)
+    assert g['shadowOpsBlockedPlayer'] == 2
+    assert r['blockedPlayerNum'] == 2
+
+
+def test_inspiring_speech_focuses_up_to_2():
+    g = {'pendingCcEffect': {'cardName': 'Inspiring Speech', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g, {
+        'target_figure_keys': ['Han-0-0', 'Chewbacca-0-0'],
+    })
+    assert len(r['focused']) == 2
+    assert 'Focus' in g['figureConditions']['Han-0-0']
+    assert 'Focus' in g['figureConditions']['Chewbacca-0-0']
+
+
+def test_inspiring_speech_rejects_too_many():
+    g = {'pendingCcEffect': {'cardName': 'Inspiring Speech', 'playerNum': 1}}
+    try:
+        resolve_pending_cc_effect(g, {
+            'target_figure_keys': ['A-0-0', 'B-0-0', 'C-0-0'],
+        })
+    except ValueError as e:
+        assert 'at most 2' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -242,6 +312,14 @@ def main():
         ('close_and_personal_damage_bonus', test_close_and_personal_stamps_damage_bonus),
         ('primary_target_on_pending_combat', test_primary_target_applies_to_pending_combat),
         ('primary_target_queued_no_combat', test_primary_target_queues_for_next_attack_without_combat),
+        ('focus_adds_focus_condition', test_focus_adds_focus_condition),
+        ('recovery_heals_2_hp', test_recovery_heals_2_hp),
+        ('urgency_grants_speed_plus_2', test_urgency_grants_speed_plus_2_mp),
+        ('hide_in_plain_sight_untargetable', test_hide_in_plain_sight_marks_untargetable),
+        ('take_cover_defense_bonus', test_take_cover_sets_defense_bonus),
+        ('shadow_ops_blocks_opponent', test_shadow_ops_blocks_opponent_ccs),
+        ('inspiring_speech_focuses', test_inspiring_speech_focuses_up_to_2),
+        ('inspiring_speech_rejects_too_many', test_inspiring_speech_rejects_too_many),
     ]
     failures = []
     for name, fn in cases:
