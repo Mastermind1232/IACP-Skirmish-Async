@@ -1191,6 +1191,65 @@ def test_dc_ability_choice_rejects_out_of_range():
     raise AssertionError('expected ValueError')
 
 
+def test_cc_confirm_play_delegates_to_play_cc():
+    from python.engine.data import cc_effects_loader, dc_effects_loader
+    cc_effects_loader._cc_effects = {
+        'Hold On': {'timing': 'duringActivation', 'playableBy': 'Any Figure'},
+    }
+    dc_effects_loader._dc_effects = {}
+    try:
+        g = create_game()
+        g.data['player1Id'] = 'alice'
+        g.data['currentActivationTurnPlayerId'] = 'alice'
+        g.data['player1CcHand'] = ['Hold On']
+        g.data['pendingCcConfirmation'] = {'playerNum': 1, 'card': 'Hold On'}
+        new_g = step(g, Action(type=ActionType.CC_CONFIRM_PLAY, player=1))
+        assert new_g.data['pendingCcConfirmation'] is None
+        assert new_g.data['player1CcHand'] == []
+        assert new_g.data['player1CcDiscard'] == ['Hold On']
+        assert new_g.data['pendingCcEffect']['cardName'] == 'Hold On'
+    finally:
+        cc_effects_loader.reset_cache()
+        dc_effects_loader.reset_cache()
+
+
+def test_cc_confirm_play_signal_jammer_cancels_both():
+    from python.engine.data import cc_effects_loader, dc_effects_loader
+    cc_effects_loader._cc_effects = {
+        'Hold On': {'timing': 'duringActivation', 'playableBy': 'Any Figure'},
+    }
+    dc_effects_loader._dc_effects = {}
+    try:
+        g = create_game()
+        g.data['player1CcHand'] = ['Hold On']
+        g.data['player2CcHand'] = ['Signal Jammer']
+        g.data['pendingCcConfirmation'] = {'playerNum': 1, 'card': 'Hold On'}
+        g.data['signalJammerActive'] = {'playerNum': 2}
+        new_g = step(g, Action(type=ActionType.CC_CONFIRM_PLAY, player=1))
+        # Both cards discarded
+        assert new_g.data['player1CcHand'] == []
+        assert new_g.data['player1CcDiscard'] == ['Hold On']
+        assert new_g.data['player2CcHand'] == []
+        assert new_g.data['player2CcDiscard'] == ['Signal Jammer']
+        assert new_g.data['signalJammerActive'] is None
+        assert new_g.data['lastCancelledCc']['method'] == 'signal_jammer'
+        # pendingCcEffect NOT set (card was cancelled, not played)
+        assert new_g.data.get('pendingCcEffect') is None
+    finally:
+        cc_effects_loader.reset_cache()
+        dc_effects_loader.reset_cache()
+
+
+def test_cc_confirm_play_requires_pending():
+    g = create_game()
+    try:
+        step(g, Action(type=ActionType.CC_CONFIRM_PLAY, player=1))
+    except ValueError as e:
+        assert 'pendingCcConfirmation' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1275,6 +1334,9 @@ def main():
         ('dc_ability_choice_clears_pending', test_dc_ability_choice_clears_pending_and_records_result),
         ('dc_ability_choice_requires_pending', test_dc_ability_choice_requires_pending),
         ('dc_ability_choice_rejects_out_of_range', test_dc_ability_choice_rejects_out_of_range),
+        ('cc_confirm_play_delegates', test_cc_confirm_play_delegates_to_play_cc),
+        ('cc_confirm_play_signal_jammer', test_cc_confirm_play_signal_jammer_cancels_both),
+        ('cc_confirm_play_requires_pending', test_cc_confirm_play_requires_pending),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

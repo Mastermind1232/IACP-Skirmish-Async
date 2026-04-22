@@ -1611,3 +1611,61 @@ def _handle_dc_ability_choice(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.DC_ABILITY_CHOICE, _handle_dc_ability_choice)
+
+
+# ---------------------------------------------------------------------------
+# CC_CONFIRM_PLAY — confirm the pending CC from the hand-pick window
+# ---------------------------------------------------------------------------
+
+def _handle_cc_confirm_play(game: GameState, action: Action) -> GameState:
+    """Resolve a pending CC confirmation: execute the play using PLAY_CC logic.
+
+    Requires game.pendingCcConfirmation = {playerNum, card}. Paired with
+    CC_CANCEL_PLAY (which simply clears the pending).
+
+    Signal Jammer intercept: when game.signalJammerActive is set and the
+    pending card is NOT 'Signal Jammer', both cards go to discard and the
+    played card is cancelled — byte-identical to JS behavior.
+
+    Otherwise delegates to the PLAY_CC pipeline (timing + restriction
+    checks, hand → discard, set pendingCcEffect).
+    """
+    from python.engine.cards.deck import discard_from_hand
+
+    pending = game.data.get('pendingCcConfirmation')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('cc_confirm_play: no pendingCcConfirmation open')
+    player_num = pending.get('playerNum')
+    card = pending.get('card')
+    if player_num not in (1, 2) or not isinstance(card, str):
+        raise ValueError(
+            'cc_confirm_play: pendingCcConfirmation missing playerNum or card'
+        )
+    game.data['pendingCcConfirmation'] = None
+
+    # Signal Jammer intercept
+    sj = game.data.get('signalJammerActive')
+    if sj and card != 'Signal Jammer':
+        jammer_owner = sj.get('playerNum') if isinstance(sj, Mapping) else None
+        game.data['signalJammerActive'] = None
+        # Discard played card from player's hand
+        discard_from_hand(game, player_num, card)
+        # Discard Signal Jammer from jammer owner's hand
+        if jammer_owner in (1, 2):
+            discard_from_hand(game, jammer_owner, 'Signal Jammer')
+        game.data['lastCancelledCc'] = {
+            'cardName': card,
+            'byPlayerNum': jammer_owner,
+            'method': 'signal_jammer',
+        }
+        return game
+
+    # Delegate to the PLAY_CC pipeline
+    play_action = Action(
+        type=ActionType.PLAY_CC, player=player_num,
+        params={'card': card},
+    )
+    return _handle_play_cc(game, play_action)
+
+
+register(ActionType.CC_CONFIRM_PLAY, _handle_cc_confirm_play)
