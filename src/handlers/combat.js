@@ -90,6 +90,10 @@ import {
   INSPIRING_RANGE,
 } from '../game/inspiring-helpers.js';
 import {
+  hasDistractingAbility,
+  applyDistractingEvade,
+} from '../game/distracting-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1754,7 +1758,6 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // Distracting (Han Solo, C-3PO): if this figure is adjacent to the targeted space, +1 Evade for defender
   // "Friendly figure defending" — check if any friendly figure with distracting is adjacent to target.coord
-  const distractingIds = ['distracting_han', 'distracting_c3po'];
   const mapSpaces = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
   const targetCoord = target.coord ? String(target.coord).toLowerCase() : null;
   if (mapSpaces && targetCoord) {
@@ -1764,13 +1767,14 @@ export async function handleAttackTarget(interaction, ctx) {
     for (const [fk, pos] of Object.entries(defenderFigPositions)) {
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-      if (!(fkEff?.specialAbilityIds || []).some(id => distractingIds.includes(id))) continue;
+      if (!hasDistractingAbility(fkEff?.specialAbilityIds)) continue;
       if (!adjToTarget.has(String(pos).toLowerCase())) continue;
       // Rogue Smuggler: "You lose Distracting" — skip if this figure's DC has the attachment
       const _distMsgId = findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, fk);
       const _distUpg = _distMsgId ? (game.p1DcAttachments?.[_distMsgId] || game.p2DcAttachments?.[_distMsgId] || []) : [];
       if (cardNameIncludes(_distUpg, 'Rogue Smuggler')) continue;
-      game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) + 1;
+      const r = applyDistractingEvade(game.pendingCombat);
+      game.pendingCombat.bonusEvade = r.bonusEvade;
       await thread.send(`**Distracting** (${fkDcName}) — adjacent to target, +1 Evade for defender.`);
       break; // only one Distracting bonus
     }
