@@ -1632,6 +1632,208 @@ def _cc_collect_intel(game, pending, ctx):
     return {'applied': True, 'opponentHand': opp_hand}
 
 
+def _cc_dangerous_bargains(game, pending, ctx):
+    """Dangerous Bargains: if you have ≤30 VP, both players gain 3 VP."""
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    vp_key = 'player1VP' if player_num == 1 else 'player2VP'
+    cur = int((data.get(vp_key) or {}).get('total') or 0)
+    if cur > 30:
+        return {'applied': False, 'reason': 'vp_too_high'}
+    award_objective_vp(game, 1, 3)
+    award_objective_vp(game, 2, 3)
+    return {'applied': True, 'vpGrantedEach': 3}
+
+
+def _cc_eerie_visage(game, pending, ctx):
+    """Eerie Visage: each hostile in LOS suffers 1 Strain + becomes Weakened.
+
+    Required: ctx.target_figure_keys (list of hostile fks in LOS) + their
+    player_num via ctx.target_player_num.
+    """
+    targets = (ctx or {}).get('target_figure_keys') or []
+    target_pn = (ctx or {}).get('target_player_num')
+    if not isinstance(targets, list) or target_pn not in (1, 2):
+        raise ValueError('eerie_visage: requires target_figure_keys + target_player_num')
+    affected = []
+    for fk in targets:
+        _apply_hp_damage_via_health_state(game, fk, target_pn, 1)
+        _apply_condition_to_target(game, fk, 'Weaken')
+        affected.append(fk)
+    return {'applied': True, 'affected': affected}
+
+
+def _cc_espionage_mastery(game, pending, ctx):
+    """Espionage Mastery: return discarded CC to hand + draw 1.
+
+    Required: ctx.card_name — the CC to pull from discard to hand.
+    """
+    from python.engine.cards.deck import draw_cc_cards
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    card = (ctx or {}).get('card_name')
+    if not card or player_num not in (1, 2):
+        raise ValueError('espionage_mastery: requires card_name + playerNum')
+    disc_key = 'player1CcDiscard' if player_num == 1 else 'player2CcDiscard'
+    hand_key = 'player1CcHand' if player_num == 1 else 'player2CcHand'
+    discard = list(data.get(disc_key) or [])
+    if card not in discard:
+        return {'applied': False, 'reason': 'card_not_in_discard'}
+    discard.remove(card)
+    data[disc_key] = discard
+    hand = list(data.get(hand_key) or [])
+    hand.append(card)
+    data[hand_key] = hand
+    drew = draw_cc_cards(game, player_num, 1)
+    return {'applied': True, 'returned': card, 'drew': drew}
+
+
+def _cc_flurry_of_blades(game, pending, ctx):
+    """Flurry of Blades: perform 3 attacks (double action special).
+
+    Records game.flurryOfBladesRemaining[msg_id] = 3 for the attack
+    handler to consume (decrementing on each attack).
+    """
+    data = game.data if hasattr(game, 'data') else game
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('flurry_of_blades: requires ctx.msg_id')
+    flurry = dict(data.get('flurryOfBladesRemaining') or {})
+    flurry[msg_id] = 3
+    data['flurryOfBladesRemaining'] = flurry
+    return {'applied': True, 'msgId': msg_id, 'attacksRemaining': 3}
+
+
+def _cc_maximum_firepower(game, pending, ctx):
+    """Maximum Firepower: perform attack with +4 Hit.
+
+    Queues the bonus for the next attack.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    bonus = dict(data.get('nextAttackBonuses') or {})
+    existing = bonus.get(player_num) or {}
+    bonus[player_num] = {
+        'bonusHits': int(existing.get('bonusHits') or 0) + 4,
+    }
+    data['nextAttackBonuses'] = bonus
+    return {'applied': True, 'playerNum': player_num, 'bonusHits': 4}
+
+
+def _cc_marksman(game, pending, ctx):
+    """Marksman: figures do not block LOS for this attack."""
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if isinstance(combat, dict):
+        c = dict(combat)
+        c['ignoreFigureLOS'] = True
+        data['pendingCombat'] = c
+        return {'applied': True}
+    # Queue for next attack
+    player_num = pending.get('playerNum')
+    queued = dict(data.get('nextAttackFlags') or {})
+    existing = queued.get(player_num) or {}
+    existing['ignoreFigureLOS'] = True
+    queued[player_num] = existing
+    data['nextAttackFlags'] = queued
+    return {'applied': True, 'queued': True}
+
+
+def _cc_opportunistic(game, pending, ctx):
+    """Opportunistic: +3 MP after a hostile suffers damage.
+
+    Required: ctx.msg_id.
+    """
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        raise ValueError('opportunistic: requires ctx.msg_id')
+    grant_movement_bank(game, msg_id, 3)
+    return {'applied': True, 'msgId': msg_id, 'mpGranted': 3}
+
+
+def _cc_master_operative(game, pending, ctx):
+    """Master Operative: become Focused + +1 Surge when declaring Close Quarters.
+
+    Required: ctx.figure_key.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    if not figure_key:
+        raise ValueError('master_operative: requires ctx.figure_key')
+    _apply_condition_to_target(game, figure_key, 'Focus')
+    combat = data.get('pendingCombat')
+    if isinstance(combat, dict):
+        c = dict(combat)
+        c['bonusSurges'] = int(c.get('bonusSurges') or 0) + 1
+        data['pendingCombat'] = c
+    return {'applied': True, 'figureKey': figure_key, 'bonusSurge': 1}
+
+
+def _cc_new_orders(game, pending, ctx):
+    """New Orders (doubleActionSpecial): ready an adjacent friendly's DC.
+
+    Required: ctx.target_msg_id.
+    """
+    from python.engine.mechanics.player_helpers import (
+        get_activated_dc_indices, set_activated_dc_indices,
+    )
+
+    data = game.data if hasattr(game, 'data') else game
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    player_num = pending.get('playerNum')
+    if not target_msg_id or player_num not in (1, 2):
+        raise ValueError('new_orders: requires target_msg_id + playerNum')
+    ids_list = (data.get('p1DcMessageIds') if player_num == 1
+                else data.get('p2DcMessageIds')) or []
+    if target_msg_id not in ids_list:
+        return {'applied': False, 'reason': 'target_not_in_dc_list'}
+    idx = ids_list.index(target_msg_id)
+    activated = get_activated_dc_indices(game, player_num) or []
+    if idx in activated:
+        set_activated_dc_indices(
+            game, player_num, [i for i in activated if i != idx],
+        )
+    return {'applied': True, 'readiedMsgId': target_msg_id}
+
+
+def _cc_iron_will(game, pending, ctx):
+    """Iron Will: cannot suffer more than 3 Damage from this attack.
+
+    Sets pendingCombat.maxIncomingDamage = 3.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    c = dict(combat)
+    c['maxIncomingDamage'] = 3
+    data['pendingCombat'] = c
+    return {'applied': True, 'maxIncomingDamage': 3}
+
+
+def _cc_of_no_importance(game, pending, ctx):
+    """Of No Importance: defeated non-unique figure is worth 4 fewer VPs (min 0).
+
+    Modifies game.lastCombatResult retroactively OR marks the attacker's
+    VP reduction via game.pendingVpReduction.
+
+    Required: ctx.reduction_amount (normally 4).
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    opp = 2 if player_num == 1 else 1
+    amount = int((ctx or {}).get('reduction_amount', 4))
+    # Deduct opponent's VP (they got the kill VP earlier)
+    from python.engine.mechanics.vp_helpers import deduct_vp
+    deduct_vp(game, opp, amount)
+    return {'applied': True, 'opponentVpReduction': amount}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -1759,6 +1961,17 @@ register('Support Specialist', _cc_support_specialist)
 register('Brace Yourself', _cc_brace_yourself)
 register('Battlefield Awareness', _cc_battlefield_awareness)
 register('Collect Intel', _cc_collect_intel)
+register('Dangerous Bargains', _cc_dangerous_bargains)
+register('Eerie Visage', _cc_eerie_visage)
+register('Espionage Mastery', _cc_espionage_mastery)
+register('Flurry of Blades', _cc_flurry_of_blades)
+register('Maximum Firepower', _cc_maximum_firepower)
+register('Marksman', _cc_marksman)
+register('Opportunistic', _cc_opportunistic)
+register('Master Operative', _cc_master_operative)
+register('New Orders', _cc_new_orders)
+register('Iron Will', _cc_iron_will)
+register('Of No Importance', _cc_of_no_importance)
 
 
 def registered_cc_effects() -> list:

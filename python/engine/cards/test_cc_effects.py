@@ -882,6 +882,55 @@ def test_collect_intel_reveals_opponent_hand():
     assert g['collectIntelView']['viewedBy'] == 1
 
 
+def test_dangerous_bargains_both_players_gain_3_when_low_vp():
+    g = {'pendingCcEffect': {'cardName': 'Dangerous Bargains', 'playerNum': 1}}
+    r = resolve_pending_cc_effect(g)
+    assert r['applied'] is True
+    assert g['player1VP']['total'] == 3
+    assert g['player2VP']['total'] == 3
+
+
+def test_dangerous_bargains_no_op_when_vp_too_high():
+    g = {
+        'pendingCcEffect': {'cardName': 'Dangerous Bargains', 'playerNum': 1},
+        'player1VP': {'total': 35, 'kills': 35, 'objectives': 0},
+    }
+    r = resolve_pending_cc_effect(g)
+    assert r['applied'] is False
+    assert r['reason'] == 'vp_too_high'
+
+
+def test_espionage_mastery_returns_card_and_draws():
+    g = {
+        'pendingCcEffect': {'cardName': 'Espionage Mastery', 'playerNum': 1},
+        'player1CcDiscard': ['X', 'Target'],
+        'player1CcDeck': ['Y'],
+    }
+    r = resolve_pending_cc_effect(g, {'card_name': 'Target'})
+    assert r['returned'] == 'Target'
+    assert 'Target' in g['player1CcHand']
+    assert 'Target' not in g['player1CcDiscard']
+
+
+def test_iron_will_caps_incoming_damage():
+    g = {
+        'pendingCcEffect': {'cardName': 'Iron Will', 'playerNum': 2},
+        'pendingCombat': {'defenderPlayerNum': 2},
+    }
+    resolve_pending_cc_effect(g)
+    assert g['pendingCombat']['maxIncomingDamage'] == 3
+
+
+def test_of_no_importance_deducts_opponent_vp():
+    g = {
+        'pendingCcEffect': {'cardName': 'Of No Importance', 'playerNum': 1},
+        'player2VP': {'total': 10, 'kills': 10, 'objectives': 0},
+    }
+    r = resolve_pending_cc_effect(g)
+    assert r['opponentVpReduction'] == 4
+    assert g['player2VP']['total'] == 6
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -988,6 +1037,11 @@ def main():
         ('black_market_prices_draws_vps', test_black_market_prices_draws_and_vps),
         ('brace_yourself_rejects_att_act', test_brace_yourself_rejects_in_attacker_activation),
         ('collect_intel_reveals', test_collect_intel_reveals_opponent_hand),
+        ('dangerous_bargains_both_gain', test_dangerous_bargains_both_players_gain_3_when_low_vp),
+        ('dangerous_bargains_no_op_high_vp', test_dangerous_bargains_no_op_when_vp_too_high),
+        ('espionage_mastery_returns_card', test_espionage_mastery_returns_card_and_draws),
+        ('iron_will_caps_damage', test_iron_will_caps_incoming_damage),
+        ('of_no_importance_deducts_vp', test_of_no_importance_deducts_opponent_vp),
     ]
     failures = []
     for name, fn in cases:
