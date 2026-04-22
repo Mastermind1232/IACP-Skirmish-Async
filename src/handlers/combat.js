@@ -180,6 +180,11 @@ import {
   FULL_OF_RAGE_BONUS_DIE,
 } from '../game/full-of-rage-helpers.js';
 import {
+  hasFuryAbility,
+  furyDamageTriggered,
+  FURY_SURGE_BONUS,
+} from '../game/fury-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1830,9 +1835,8 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Fury (Wookiee Warriors): +1 Surge if 5+ damage
-  const furyIds = ['fury_wookiee_elite', 'fury_wookiee_reg'];
-  if (atkSpecialIds.some(id => furyIds.includes(id)) && atkDamageSuffered >= 5) {
-    game.pendingCombat.furyBonus = 1;
+  if (hasFuryAbility(atkSpecialIds) && furyDamageTriggered(atkDamageSuffered)) {
+    game.pendingCombat.furyBonus = FURY_SURGE_BONUS;
     await thread.send(`**Fury** — Wookiee Warrior is **Furious** (+1 Surge, having suffered ${atkDamageSuffered} damage).`);
   }
 
