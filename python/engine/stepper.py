@@ -680,3 +680,110 @@ def _handle_auto_deploy(game: GameState, action: Action) -> GameState:
 
 register(ActionType.END_END_OF_ROUND, _handle_end_end_of_round)
 register(ActionType.AUTO_DEPLOY, _handle_auto_deploy)
+
+
+# ---------------------------------------------------------------------------
+# Phase gate handlers (P7)
+# ---------------------------------------------------------------------------
+
+def _user_id_for_player(game: GameState, player: int) -> str:
+    """Convert stepper player number → Discord-style user id for phase-gate helpers."""
+    if player == 1:
+        return str(game.get('player1Id') or 'p1')
+    return str(game.get('player2Id') or 'p2')
+
+
+def _handle_phase_gate_ready(game: GameState, action: Action) -> GameState:
+    """A player clicks "I'm ready" on the current phase gate.
+
+    Required: action.player ∈ {1, 2}. If no gate exists, the helper
+    returns a no-op shape; we just mirror that (state unchanged).
+    Advances through the gate when both players have readied — callers
+    (round-flow handlers) read phaseGate.p1Ready / p2Ready to trigger
+    the transition.
+    """
+    from python.engine.mechanics.phase_gate import record_phase_gate_ready
+    user_id = _user_id_for_player(game, int(action.player or 0))
+    record_phase_gate_ready(game, user_id)
+    return game
+
+
+def _handle_phase_gate_unready(game: GameState, action: Action) -> GameState:
+    """A player un-readies from the current phase gate."""
+    from python.engine.mechanics.phase_gate import record_phase_gate_unready
+    user_id = _user_id_for_player(game, int(action.player or 0))
+    record_phase_gate_unready(game, user_id)
+    return game
+
+
+register(ActionType.PHASE_GATE_READY, _handle_phase_gate_ready)
+register(ActionType.PHASE_GATE_UNREADY, _handle_phase_gate_unready)
+
+
+# ---------------------------------------------------------------------------
+# Interact handler (P7)
+# ---------------------------------------------------------------------------
+
+def _handle_interact(game: GameState, action: Action) -> GameState:
+    """Resolve an interact option (retrieve_contraband, use_terminal,
+    open_door_*, launch_panel_*).
+
+    Required params:
+        figure_key (or figureKey): the figure performing the interact.
+        option_id (or optionId): the interact option string.
+
+    Preconditions:
+        - option_id must be in get_legal_interact_options for the figure.
+
+    Effects:
+        - Dispatches through interact.resolve_interact_option (door-open,
+          panel-flip, contraband-pickup).
+        - Decrements actionsRemaining when present on the active DC.
+
+    Returns the mutated state. Raises ValueError on invalid option_id,
+    missing figure_key, or figure not on the board.
+    """
+    from python.engine.mechanics.board_helpers import get_legal_interact_options
+    from python.engine.mechanics.interact import (
+        UnknownInteractOption,
+        resolve_interact_option,
+    )
+
+    figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+    option_id = action.params.get('option_id') or action.params.get('optionId')
+    if not figure_key:
+        raise ValueError('interact requires figure_key param')
+    if not option_id:
+        raise ValueError('interact requires option_id param')
+
+    player_num = int(action.player or 0)
+    if player_num not in (1, 2):
+        # Fall back: find the figure on the board
+        player_num, _ = _find_figure(game, figure_key)
+        if player_num is None:
+            raise ValueError(f'interact: figure {figure_key!r} not on board')
+
+    map_id = game.get('mapId')
+    if not map_id:
+        selected = game.get('selectedMap') or {}
+        map_id = selected.get('id') if isinstance(selected, Mapping) else None
+    if not map_id:
+        raise ValueError('interact: no mapId / selectedMap on game')
+
+    legal_options = get_legal_interact_options(game, player_num, figure_key, map_id)
+    legal_ids = {opt['id'] for opt in legal_options}
+    if option_id not in legal_ids:
+        raise ValueError(
+            f'interact: option {option_id!r} not legal for {figure_key!r} '
+            f'(legal: {sorted(legal_ids)})'
+        )
+
+    try:
+        resolve_interact_option(game, player_num, figure_key, map_id, option_id)
+    except UnknownInteractOption as e:
+        raise ValueError(f'interact: {e}') from e
+
+    return game
+
+
+register(ActionType.INTERACT, _handle_interact)

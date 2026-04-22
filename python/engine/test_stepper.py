@@ -418,6 +418,100 @@ def test_end_end_of_round_counts_multi_figure_group_as_one():
     assert new_g.data['activationsRemaining'] == {1: 1, 2: 1}
 
 
+def test_phase_gate_ready_marks_player_ready():
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    # Install a gate
+    from python.engine.mechanics.phase_gate import create_phase_gate
+    create_phase_gate(g, 'deploy_done')
+
+    g2 = step(g, Action(type=ActionType.PHASE_GATE_READY, player=1))
+    assert g2.data['phaseGate']['p1Ready'] is True
+    assert g2.data['phaseGate']['p2Ready'] is False
+
+    g3 = step(g2, Action(type=ActionType.PHASE_GATE_READY, player=2))
+    assert g3.data['phaseGate']['p1Ready'] is True
+    assert g3.data['phaseGate']['p2Ready'] is True
+
+
+def test_phase_gate_unready_flips_back():
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    from python.engine.mechanics.phase_gate import create_phase_gate, record_phase_gate_ready
+    create_phase_gate(g, 'deploy_done')
+    record_phase_gate_ready(g, 'alice')
+    assert g.data['phaseGate']['p1Ready'] is True
+
+    g2 = step(g, Action(type=ActionType.PHASE_GATE_UNREADY, player=1))
+    assert g2.data['phaseGate']['p1Ready'] is False
+
+
+def test_phase_gate_ready_no_gate_is_noop():
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    # No phaseGate installed — record_ready returns no-op shape; state unchanged
+    g2 = step(g, Action(type=ActionType.PHASE_GATE_READY, player=1))
+    assert g2.data.get('phaseGate') is None
+
+
+def test_interact_open_door_dispatch():
+    from python.engine.data import map_spaces_loader, map_tokens_loader, dc_effects_loader
+    dc_effects_loader._dc_effects = {'Luke': {'figures': 1, 'speed': 4}}
+    map_spaces_loader._map_spaces = {'utest': {
+        'adjacency': {'a1': ['a2'], 'a2': ['a1']},
+        'spaces': ['a1', 'a2'],
+        'blocking': [], 'impassableEdges': [], 'movementBlockingEdges': [],
+    }}
+    map_tokens_loader._cache = {'utest': {
+        'terminals': [], 'doors': [['a1', 'a2']],
+    }}
+    try:
+        g = create_game()
+        g.data['mapId'] = 'utest'
+        g.data['selectedMap'] = {'id': 'utest'}
+        g.data['figurePositions'] = {1: {'Luke-0-0': 'a1'}, 2: {}}
+        new_g = step(g, Action(
+            type=ActionType.INTERACT, player=1,
+            params={'figure_key': 'Luke-0-0', 'option_id': 'open_door_a1|a2'},
+        ))
+        assert new_g.data['openedDoors'] == ['a1|a2']
+    finally:
+        dc_effects_loader.reset_cache()
+        map_spaces_loader.reset_cache()
+        map_tokens_loader.reset_cache()
+
+
+def test_interact_rejects_illegal_option():
+    from python.engine.data import map_spaces_loader, map_tokens_loader, dc_effects_loader
+    dc_effects_loader._dc_effects = {'Luke': {'figures': 1}}
+    map_spaces_loader._map_spaces = {'utest': {
+        'adjacency': {'a1': ['a2']},
+        'spaces': ['a1', 'a2'],
+        'blocking': [], 'impassableEdges': [],
+    }}
+    map_tokens_loader._cache = {'utest': {'terminals': [], 'doors': []}}
+    try:
+        g = create_game()
+        g.data['mapId'] = 'utest'
+        g.data['selectedMap'] = {'id': 'utest'}
+        g.data['figurePositions'] = {1: {'Luke-0-0': 'a1'}, 2: {}}
+        try:
+            step(g, Action(
+                type=ActionType.INTERACT, player=1,
+                params={'figure_key': 'Luke-0-0', 'option_id': 'open_door_z9|z10'},
+            ))
+        except ValueError as e:
+            assert 'not legal' in str(e)
+            return
+        raise AssertionError('expected ValueError for illegal interact option')
+    finally:
+        dc_effects_loader.reset_cache()
+        map_spaces_loader.reset_cache()
+        map_tokens_loader.reset_cache()
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -445,6 +539,11 @@ def main():
         ('move_pick_space_updates_position_and_charges_mp', test_move_pick_space_updates_position_and_charges_mp),
         ('move_pick_space_rejects_insufficient_mp', test_move_pick_space_rejects_insufficient_mp),
         ('dc_end_activation_clears_active_and_swaps_player', test_dc_end_activation_clears_active_and_swaps_player),
+        ('phase_gate_ready_marks_player_ready', test_phase_gate_ready_marks_player_ready),
+        ('phase_gate_unready_flips_back', test_phase_gate_unready_flips_back),
+        ('phase_gate_ready_no_gate_is_noop', test_phase_gate_ready_no_gate_is_noop),
+        ('interact_open_door_dispatch', test_interact_open_door_dispatch),
+        ('interact_rejects_illegal_option', test_interact_rejects_illegal_option),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
