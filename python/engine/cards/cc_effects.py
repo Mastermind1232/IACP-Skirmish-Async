@@ -1455,6 +1455,183 @@ def _cc_hunter_protocol(game, pending, ctx):
     return {'applied': True}
 
 
+def _cc_heart_of_freedom(game, pending, ctx):
+    """Heart of Freedom: discard 1 HARMFUL condition, recover 2 HP, +2 MP."""
+    from python.engine.mechanics.conditions import filter_condition
+    from python.engine.mechanics.damage_helpers import heal_hp
+    from python.engine.mechanics.dc_helpers import (
+        dc_name_from_figure_key, parse_figure_key,
+    )
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    data = game.data if hasattr(game, 'data') else game
+    figure_key = (ctx or {}).get('figure_key')
+    msg_id = (ctx or {}).get('msg_id')
+    condition = (ctx or {}).get('condition')  # one of Stun/Weaken/Bleed
+    player_num = pending.get('playerNum')
+    if not figure_key or not msg_id or player_num not in (1, 2):
+        raise ValueError('heart_of_freedom: requires figure_key + msg_id + playerNum')
+    if condition:
+        filter_condition(game, figure_key, condition)
+    # Heal 2
+    fig_idx = parse_figure_key(figure_key).get('figureIndex', 0)
+    dc_health_state = data.get('dcHealthState')
+    if isinstance(dc_health_state, dict):
+        heal_hp(dc_health_state, data, msg_id, fig_idx, 2, player_num)
+    grant_movement_bank(game, msg_id, 2)
+    return {
+        'applied': True, 'figureKey': figure_key, 'conditionRemoved': condition,
+        'healed': 2, 'mpGranted': 2,
+    }
+
+
+def _cc_marked_territory(game, pending, ctx):
+    """Marked Territory: +1 Power Token to self, +1 to a group figure in an
+    exterior space.
+
+    Required: ctx.self_figure_key + optional ctx.exterior_figure_key.
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    data = game.data if hasattr(game, 'data') else game
+    self_fk = (ctx or {}).get('self_figure_key')
+    exterior_fk = (ctx or {}).get('exterior_figure_key')
+    token_type = (ctx or {}).get('token_type', 'Surge')
+    if not self_fk:
+        raise ValueError('marked_territory: requires ctx.self_figure_key')
+    grant_power_tokens(data, self_fk, token_type, 1)
+    if exterior_fk:
+        grant_power_tokens(data, exterior_fk, token_type, 1)
+    return {'applied': True, 'selfFk': self_fk, 'exteriorFk': exterior_fk}
+
+
+def _cc_out_of_time(game, pending, ctx):
+    """Out of Time: hostile within 3 + LOS suffers Strain = current round."""
+    data = game.data if hasattr(game, 'data') else game
+    target_fk = (ctx or {}).get('target_figure_key')
+    target_pn = (ctx or {}).get('target_player_num')
+    if not target_fk or target_pn not in (1, 2):
+        raise ValueError('out_of_time: requires target_figure_key + target_player_num')
+    round_num = int(data.get('round') or data.get('currentRound') or 1)
+    _apply_hp_damage_via_health_state(game, target_fk, target_pn, round_num)
+    return {'applied': True, 'targetFigureKey': target_fk, 'strain': round_num}
+
+
+def _cc_officers_training(game, pending, ctx):
+    """Officer's Training: reroll 1 attack die; if LEADER, draw 1 CC."""
+    from python.engine.cards.deck import draw_cc_cards
+
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if isinstance(combat, dict):
+        c = dict(combat)
+        c['attackerRerollCount'] = int(c.get('attackerRerollCount') or 0) + 1
+        data['pendingCombat'] = c
+    is_leader = bool((ctx or {}).get('is_leader'))
+    player_num = pending.get('playerNum')
+    drew = []
+    if is_leader and player_num in (1, 2):
+        drew = draw_cc_cards(game, player_num, 1)
+    return {'applied': True, 'rerolls': 1, 'drew': drew, 'isLeader': is_leader}
+
+
+def _cc_black_market_prices(game, pending, ctx):
+    """Black Market Prices: draw 2 CCs, discard 1; gain VP = discarded cost."""
+    from python.engine.cards.deck import discard_from_hand, draw_with_reshuffle
+    from python.engine.data.cc_effects_loader import get_cc_effect
+    from python.engine.mechanics.vp_helpers import award_objective_vp
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    if player_num not in (1, 2):
+        raise ValueError('black_market_prices: pending missing playerNum')
+    drew = draw_with_reshuffle(game, player_num, 2)
+    # ctx.discard_card or pick highest-cost drawn
+    discard_card = (ctx or {}).get('discard_card')
+    if not discard_card and drew:
+        costs = [(c, (get_cc_effect(c) or {}).get('cost', 0) or 0) for c in drew]
+        discard_card = max(costs, key=lambda x: x[1])[0]
+    vp_gained = 0
+    if discard_card and discard_from_hand(game, player_num, discard_card):
+        cost = (get_cc_effect(discard_card) or {}).get('cost', 0) or 0
+        vp_gained = int(cost)
+        if vp_gained > 0:
+            award_objective_vp(game, player_num, vp_gained)
+    return {
+        'applied': True, 'drew': drew, 'discarded': discard_card,
+        'vpGained': vp_gained,
+    }
+
+
+def _cc_support_specialist(game, pending, ctx):
+    """Support Specialist: choose a friendly DROID/TECHNICIAN/TROOPER within 3
+    to interrupt and perform a move.
+
+    Records intent on game.supportSpecialistPending for the move handler.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    target_msg_id = (ctx or {}).get('target_msg_id')
+    if not target_msg_id:
+        raise ValueError('support_specialist: requires ctx.target_msg_id')
+    data['supportSpecialistPending'] = {
+        'targetMsgId': target_msg_id,
+        'playerNum': pending.get('playerNum'),
+    }
+    return {'applied': True, 'targetMsgId': target_msg_id}
+
+
+def _cc_brace_yourself(game, pending, ctx):
+    """Brace Yourself: +2 Block if not in the attacker's activation.
+
+    Required: ctx.is_attackers_activation (bool).
+    """
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    is_att_act = bool((ctx or {}).get('is_attackers_activation'))
+    if is_att_act:
+        return {'applied': False, 'reason': 'in_attackers_activation'}
+    c = dict(combat)
+    c['bonusBlock'] = int(c.get('bonusBlock') or 0) + 2
+    data['pendingCombat'] = c
+    return {'applied': True, 'bonusBlock': 2}
+
+
+def _cc_battlefield_awareness(game, pending, ctx):
+    """Battlefield Awareness: reroll 1 die of any kind for a friendly in LOS.
+
+    Required: ctx.side ('attacker' or 'defender').
+    """
+    data = game.data if hasattr(game, 'data') else game
+    combat = data.get('pendingCombat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'reason': 'no_pending_combat'}
+    side = (ctx or {}).get('side')
+    if side not in ('attacker', 'defender'):
+        raise ValueError("battlefield_awareness: ctx.side must be 'attacker' or 'defender'")
+    c = dict(combat)
+    key = 'attackerRerollCount' if side == 'attacker' else 'defenderRerollCount'
+    c[key] = int(c.get(key) or 0) + 1
+    data['pendingCombat'] = c
+    return {'applied': True, 'side': side}
+
+
+def _cc_collect_intel(game, pending, ctx):
+    """Collect Intel: look at opponent's hand (info-only, no state change).
+
+    Records game.collectIntelView = {opponentHand} for the caller.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    player_num = pending.get('playerNum')
+    opp = 2 if player_num == 1 else 1
+    opp_hand = list(
+        data.get('player2CcHand' if opp == 2 else 'player1CcHand') or []
+    )
+    data['collectIntelView'] = {'opponentHand': opp_hand, 'viewedBy': player_num}
+    return {'applied': True, 'opponentHand': opp_hand}
+
+
 def _cc_blaze_of_glory(game: Any, pending: Dict[str, Any],
                        ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Blaze of Glory: ready a DC (remove from activatedDcIndices). The
@@ -1573,6 +1750,15 @@ register('Explosive Weaponry', _cc_explosive_weaponry)
 register('Glory of the Kill', _cc_glory_of_the_kill)
 register('Hold Ground', _cc_hold_ground)
 register('Hunter Protocol', _cc_hunter_protocol)
+register('Heart of Freedom', _cc_heart_of_freedom)
+register('Marked Territory', _cc_marked_territory)
+register('Out of Time', _cc_out_of_time)
+register("Officer's Training", _cc_officers_training)
+register('Black Market Prices', _cc_black_market_prices)
+register('Support Specialist', _cc_support_specialist)
+register('Brace Yourself', _cc_brace_yourself)
+register('Battlefield Awareness', _cc_battlefield_awareness)
+register('Collect Intel', _cc_collect_intel)
 
 
 def registered_cc_effects() -> list:

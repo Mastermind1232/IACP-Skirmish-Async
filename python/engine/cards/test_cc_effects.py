@@ -826,6 +826,62 @@ def test_hunter_protocol_allows_duplicate_surges():
     assert g['pendingCombat']['duplicateSurgesAllowed'] is True
 
 
+def test_heart_of_freedom_triple_effect():
+    g = {
+        'pendingCcEffect': {'cardName': 'Heart of Freedom', 'playerNum': 1},
+        'dcHealthState': {'hl1dc0': [[5, 10]]},
+        'figureConditions': {'L-0-0': ['Stun', 'Focus']},
+    }
+    r = resolve_pending_cc_effect(g, {
+        'figure_key': 'L-0-0', 'msg_id': 'hl1dc0', 'condition': 'Stun',
+    })
+    assert r['applied'] is True
+    assert 'Stun' not in g['figureConditions']['L-0-0']
+    assert 'Focus' in g['figureConditions']['L-0-0']
+    assert g['dcHealthState']['hl1dc0'][0][0] == 7  # 5 + 2
+    assert g['movementBank']['hl1dc0']['total'] == 2
+
+
+def test_black_market_prices_draws_and_vps():
+    from python.engine.data import cc_effects_loader
+    cc_effects_loader._cc_effects = {
+        'Card A': {'cost': 3},
+        'Card B': {'cost': 1},
+    }
+    try:
+        g = {
+            'pendingCcEffect': {'cardName': 'Black Market Prices', 'playerNum': 1},
+            'player1CcDeck': ['Card A', 'Card B'],
+        }
+        r = resolve_pending_cc_effect(g)
+        # Default: highest-cost card discarded (Card A = 3)
+        assert r['discarded'] == 'Card A'
+        assert r['vpGained'] == 3
+        assert g['player1VP']['objectives'] == 3
+    finally:
+        cc_effects_loader.reset_cache()
+
+
+def test_brace_yourself_rejects_in_attacker_activation():
+    g = {
+        'pendingCcEffect': {'cardName': 'Brace Yourself', 'playerNum': 2},
+        'pendingCombat': {'attackerPlayerNum': 1},
+    }
+    r = resolve_pending_cc_effect(g, {'is_attackers_activation': True})
+    assert r['applied'] is False
+    assert r['reason'] == 'in_attackers_activation'
+
+
+def test_collect_intel_reveals_opponent_hand():
+    g = {
+        'pendingCcEffect': {'cardName': 'Collect Intel', 'playerNum': 1},
+        'player2CcHand': ['X', 'Y', 'Z'],
+    }
+    r = resolve_pending_cc_effect(g)
+    assert r['opponentHand'] == ['X', 'Y', 'Z']
+    assert g['collectIntelView']['viewedBy'] == 1
+
+
 def test_blaze_of_glory_no_op_when_target_unknown():
     g = {
         'pendingCcEffect': {'cardName': 'Blaze of Glory', 'playerNum': 1},
@@ -928,6 +984,10 @@ def main():
         ('explosive_weaponry_blast', test_explosive_weaponry_adds_blast),
         ('glory_of_the_kill_heals', test_glory_of_the_kill_heals_on_defeat),
         ('hunter_protocol_duplicate_surges', test_hunter_protocol_allows_duplicate_surges),
+        ('heart_of_freedom_triple', test_heart_of_freedom_triple_effect),
+        ('black_market_prices_draws_vps', test_black_market_prices_draws_and_vps),
+        ('brace_yourself_rejects_att_act', test_brace_yourself_rejects_in_attacker_activation),
+        ('collect_intel_reveals', test_collect_intel_reveals_opponent_hand),
     ]
     failures = []
     for name, fn in cases:
