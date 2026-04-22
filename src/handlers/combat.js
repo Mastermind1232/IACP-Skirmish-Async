@@ -45,6 +45,10 @@ import {
   hasDefensiveStanceAbility,
   applyDefensiveReroll,
 } from '../game/defensive-reroll-helpers.js';
+import {
+  hasTargetingComputerAbility,
+  applyTargetingComputerReroll,
+} from '../game/targeting-computer-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2687,9 +2691,9 @@ export async function handleCombatRoll(interaction, ctx) {
     const defSIds = defEffR?.specialAbilityIds || [];
     let atkSpecialReroll = 0;
     let defSpecialReroll = 0;
-    // Targeting Computer (HK Assassin elite, IG-11, Probe Droid elite, Sentry Droid elite/reg): +1 atk reroll
-    const tcIds = ['targeting_computer_hk_elite', 'targeting_computer_ig11', 'targeting_computer_probe_elite', 'targeting_computer_sentry_elite', 'targeting_computer_sentry_reg', 'targeting_computer_atst', 'adv_targeting_computer_dark_trooper'];
-    if (atkSIds.some(id => tcIds.includes(id))) atkSpecialReroll += 1;
+    // Targeting Computer family (HK Assassin Elite, IG-11, Probe Droid Elite,
+    // Sentry Droid Elite/Reg, AT-ST, Dark Trooper Mk III ATC): +1 atk reroll
+    if (hasTargetingComputerAbility(atkSIds)) atkSpecialReroll = applyTargetingComputerReroll(atkSpecialReroll);
     // Overpower (Royal Guard Champion): +1 atk reroll when attacking, +1 def reroll when defending
     if (hasOverpowerAbility(atkSIds)) atkSpecialReroll = applyOverpowerAttackerReroll(atkSpecialReroll);
     if (hasOverpowerAbility(defSIds)) defSpecialReroll = applyOverpowerDefenderReroll(defSpecialReroll);
