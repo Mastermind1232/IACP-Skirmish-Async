@@ -67,6 +67,10 @@ import {
   applyBespinSecurityReroll,
 } from '../game/bespin-security-helpers.js';
 import {
+  hasCortosisWeaveAbility,
+  applyCortosisWeave,
+} from '../game/cortosis-weave-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1921,8 +1925,9 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Cortosis Weave (Echo Base Trooper Elite): reduce Pierce by 2
-  if (defSpecialIds.includes('cortosis_weave')) {
-    game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) - 2;
+  if (hasCortosisWeaveAbility(defSpecialIds)) {
+    const r = applyCortosisWeave(game.pendingCombat);
+    game.pendingCombat.bonusPierce = r.bonusPierce;
     await thread.send('**Cortosis Weave** — Pierce reduced by 2 (min 0).');
   }
 
