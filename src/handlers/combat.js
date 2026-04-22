@@ -174,6 +174,12 @@ import {
   BATTLE_MEDITATION_BONUS_DIE,
 } from '../game/battle-meditation-helpers.js';
 import {
+  hasFullOfRageAbility,
+  fullOfRageDamageTriggered,
+  FULL_OF_RAGE_CONDITION,
+  FULL_OF_RAGE_BONUS_DIE,
+} from '../game/full-of-rage-helpers.js';
+import {
   hasDisposableAbility,
   hasConclusionAbility,
   applyEvadeDebuff,
@@ -1247,12 +1253,12 @@ export async function handleAttackTarget(interaction, ctx) {
   // Full of Rage (Krrsantan): auto-Focus before attacking if 3+ damage suffered
   let _fullOfRageFired = false;
   let _fullOfRageDmg = 0;
-  if ((_atkEff?.specialAbilityIds || []).includes('full_of_rage') && !attackerConds.includes('Focus')) {
+  if (hasFullOfRageAbility(_atkEff?.specialAbilityIds || []) && !attackerConds.includes('Focus')) {
     const _forHpArr = dcHealthState?.get(msgId) || [];
     const _forFigHp = _forHpArr[figureIndex];
     _fullOfRageDmg = _forFigHp ? Math.max(0, (_forFigHp[1] ?? _forFigHp[0] ?? 0) - (_forFigHp[0] ?? 0)) : 0;
-    if (_fullOfRageDmg >= 3) {
-      ({ attackInfo, applied: _fullOfRageFired } = applyConditionWithDie(game, attackerFigureKey, 'Focus', attackInfo, 'green'));
+    if (fullOfRageDamageTriggered(_fullOfRageDmg)) {
+      ({ attackInfo, applied: _fullOfRageFired } = applyConditionWithDie(game, attackerFigureKey, FULL_OF_RAGE_CONDITION, attackInfo, FULL_OF_RAGE_BONUS_DIE));
     }
   }
   // Fly-By (Jet Trooper Elite): if target within 2 spaces, add 1 blue die
@@ -1815,8 +1821,8 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Full of Rage (Krrsantan): auto-Focus if 3+ damage suffered
-  if (atkSpecialIds.includes('full_of_rage') && atkDamageSuffered >= 3) {
-    const _forResult = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
+  if (hasFullOfRageAbility(atkSpecialIds) && fullOfRageDamageTriggered(atkDamageSuffered)) {
+    const _forResult = applyConditionWithDie(game, attackerFigureKey, FULL_OF_RAGE_CONDITION, game.pendingCombat.attackInfo, FULL_OF_RAGE_BONUS_DIE);
     if (_forResult.applied) {
       game.pendingCombat.attackInfo = _forResult.attackInfo;
       await thread.send(`**Full of Rage** — Krrsantan is **Focused** before attacking (${atkDamageSuffered} damage suffered, +1 green die).`);

@@ -152,15 +152,25 @@ describe('ORACLE-CONDDICE-003: Pattern B sites use applyConditionWithDie', () =>
   });
 
   it('Full of Rage (late) uses applyConditionWithDie', () => {
+    // Full of Rage was extracted to src/game/full-of-rage-helpers.js
+    // during the medium-risk probe grind. Both the early (pre-
+    // pendingCombat) and late (post-pendingCombat) sites now
+    // delegate via hasFullOfRageAbility + fullOfRageDamageTriggered,
+    // and Focus + green-die are named constants. The
+    // applyConditionWithDie contract is still enforced at the late
+    // site.
     const src = readSrc('src/handlers/combat.js');
-    // The late Full of Rage site is after the pendingCombat write (~line 1637+)
     const pcIdx = src.indexOf('game.pendingCombat = {');
     const region = src.slice(pcIdx);
-    const forIdx = region.indexOf("atkSpecialIds.includes('full_of_rage')");
-    assert.ok(forIdx > 0, 'Full of Rage late site found');
-    const block = region.slice(forIdx, forIdx + 300);
+    const forIdx = region.indexOf('hasFullOfRageAbility(atkSpecialIds)');
+    assert.ok(forIdx > 0, 'Full of Rage late site found (post-extraction)');
+    const block = region.slice(forIdx, forIdx + 400);
     assert.ok(block.includes('applyConditionWithDie(game, attackerFigureKey'),
       'Full of Rage (late) must use applyConditionWithDie');
+    assert.ok(block.includes('FULL_OF_RAGE_CONDITION'),
+      'Full of Rage (late) must pass FULL_OF_RAGE_CONDITION constant');
+    assert.ok(block.includes('FULL_OF_RAGE_BONUS_DIE'),
+      'Full of Rage (late) must pass FULL_OF_RAGE_BONUS_DIE constant');
   });
 
   it('Advanced Targeting Computer uses applyConditionWithDie', () => {
