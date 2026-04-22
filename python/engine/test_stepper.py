@@ -978,6 +978,67 @@ def test_overwatch_space_requires_params():
     raise AssertionError('expected ValueError')
 
 
+def test_cc_cancel_play_clears_pending_confirmation():
+    g = create_game()
+    g.data['pendingCcConfirmation'] = {'playerNum': 1, 'card': 'Hold On'}
+    new_g = step(g, Action(type=ActionType.CC_CANCEL_PLAY, player=1))
+    assert new_g.data['pendingCcConfirmation'] is None
+
+
+def test_comm_disruption_skip_clears_prompt():
+    g = create_game()
+    g.data['pendingCommDisruptionPrompt'] = {'targetPlayerNum': 2, 'playedCard': 'X'}
+    new_g = step(g, Action(type=ActionType.COMM_DISRUPTION_SKIP, player=2))
+    assert new_g.data['pendingCommDisruptionPrompt'] is None
+
+
+def test_rush_push_skip_clears_pending():
+    g = create_game()
+    g.data['pendingRushPush'] = {'playerNum': 1}
+    new_g = step(g, Action(type=ActionType.RUSH_PUSH_SKIP, player=1))
+    assert new_g.data['pendingRushPush'] is None
+
+
+def test_shoulder_rush_skip_clears_pending():
+    g = create_game()
+    g.data['pendingShoulderRush'] = {'playerNum': 1}
+    new_g = step(g, Action(type=ActionType.SHOULDER_RUSH_SKIP, player=1))
+    assert new_g.data['pendingShoulderRush'] is None
+
+
+def test_false_orders_skip_clears_pending():
+    g = create_game()
+    g.data['pendingFalseOrders'] = {'playerNum': 1}
+    new_g = step(g, Action(type=ActionType.FALSE_ORDERS_SKIP, player=1))
+    assert new_g.data['pendingFalseOrders'] is None
+
+
+def test_missile_salvo_done_clears_pending():
+    g = create_game()
+    g.data['pendingMissileSalvo'] = {'rerolledIndices': [0, 2]}
+    new_g = step(g, Action(type=ActionType.MISSILE_SALVO_DONE, player=1))
+    assert new_g.data['pendingMissileSalvo'] is None
+
+
+def test_skip_handlers_require_pending_window():
+    cases = [
+        (ActionType.CC_CANCEL_PLAY, 'pendingCcConfirmation'),
+        (ActionType.COMM_DISRUPTION_SKIP, 'pendingCommDisruptionPrompt'),
+        (ActionType.RUSH_PUSH_SKIP, 'pendingRushPush'),
+        (ActionType.SHOULDER_RUSH_SKIP, 'pendingShoulderRush'),
+        (ActionType.FALSE_ORDERS_SKIP, 'pendingFalseOrders'),
+        (ActionType.MISSILE_SALVO_DONE, 'pendingMissileSalvo'),
+    ]
+    for action_type, expected_msg in cases:
+        g = create_game()
+        try:
+            step(g, Action(type=action_type, player=1))
+        except ValueError as e:
+            assert expected_msg in str(e), f'{action_type}: {e}'
+            continue
+        raise AssertionError(f'{action_type}: expected ValueError')
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -1045,6 +1106,13 @@ def main():
         ('spread_pain_cond_rejects_bad_value', test_spread_pain_cond_rejects_bad_value),
         ('overwatch_space_places_token', test_overwatch_space_places_token_and_clears_pending),
         ('overwatch_space_requires_params', test_overwatch_space_requires_params),
+        ('cc_cancel_play_clears_pending', test_cc_cancel_play_clears_pending_confirmation),
+        ('comm_disruption_skip_clears_prompt', test_comm_disruption_skip_clears_prompt),
+        ('rush_push_skip_clears_pending', test_rush_push_skip_clears_pending),
+        ('shoulder_rush_skip_clears_pending', test_shoulder_rush_skip_clears_pending),
+        ('false_orders_skip_clears_pending', test_false_orders_skip_clears_pending),
+        ('missile_salvo_done_clears_pending', test_missile_salvo_done_clears_pending),
+        ('skip_handlers_require_pending_window', test_skip_handlers_require_pending_window),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),

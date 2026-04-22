@@ -1367,3 +1367,69 @@ def _handle_overwatch_space(game: GameState, action: Action) -> GameState:
 
 
 register(ActionType.OVERWATCH_SPACE, _handle_overwatch_space)
+
+
+# ---------------------------------------------------------------------------
+# Pending-window cancels (CC confirm flow, Comm Disruption skip)
+# ---------------------------------------------------------------------------
+
+def _handle_cc_cancel_play(game: GameState, action: Action) -> GameState:
+    """Cancel a pending CC play (clears game.pendingCcConfirmation)."""
+    if not game.data.get('pendingCcConfirmation'):
+        raise ValueError('cc_cancel_play: no pendingCcConfirmation open')
+    game.data['pendingCcConfirmation'] = None
+    return game
+
+
+def _handle_comm_disruption_skip(game: GameState, action: Action) -> GameState:
+    """Skip playing Comm Disruption — clears the prompt so the target CC resolves."""
+    if not game.data.get('pendingCommDisruptionPrompt'):
+        raise ValueError('comm_disruption_skip: no pendingCommDisruptionPrompt open')
+    game.data['pendingCommDisruptionPrompt'] = None
+    return game
+
+
+register(ActionType.CC_CANCEL_PLAY, _handle_cc_cancel_play)
+register(ActionType.COMM_DISRUPTION_SKIP, _handle_comm_disruption_skip)
+
+
+# ---------------------------------------------------------------------------
+# Shoulder Rush / Rush Push skip handlers (decline to push)
+# ---------------------------------------------------------------------------
+
+def _handle_rush_push_skip(game: GameState, action: Action) -> GameState:
+    """Decline the Rush Push option — clears game.pendingRushPush."""
+    if not game.data.get('pendingRushPush'):
+        raise ValueError('rush_push_skip: no pendingRushPush open')
+    game.data['pendingRushPush'] = None
+    return game
+
+
+def _handle_shoulder_rush_skip(game: GameState, action: Action) -> GameState:
+    """Decline the Shoulder Rush option — clears game.pendingShoulderRush."""
+    if not game.data.get('pendingShoulderRush'):
+        raise ValueError('shoulder_rush_skip: no pendingShoulderRush open')
+    game.data['pendingShoulderRush'] = None
+    return game
+
+
+def _handle_false_orders_skip(game: GameState, action: Action) -> GameState:
+    """Skip False Orders — clears game.pendingFalseOrders."""
+    if not game.data.get('pendingFalseOrders'):
+        raise ValueError('false_orders_skip: no pendingFalseOrders open')
+    game.data['pendingFalseOrders'] = None
+    return game
+
+
+def _handle_missile_salvo_done(game: GameState, action: Action) -> GameState:
+    """Finish Missile Salvo die-reroll picks — clears game.pendingMissileSalvo."""
+    if not game.data.get('pendingMissileSalvo'):
+        raise ValueError('missile_salvo_done: no pendingMissileSalvo open')
+    game.data['pendingMissileSalvo'] = None
+    return game
+
+
+register(ActionType.RUSH_PUSH_SKIP, _handle_rush_push_skip)
+register(ActionType.SHOULDER_RUSH_SKIP, _handle_shoulder_rush_skip)
+register(ActionType.FALSE_ORDERS_SKIP, _handle_false_orders_skip)
+register(ActionType.MISSILE_SALVO_DONE, _handle_missile_salvo_done)
