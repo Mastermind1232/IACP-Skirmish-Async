@@ -56,6 +56,10 @@ import {
 } from '../game/charge-generators-helpers.js';
 import { hasSprayFireAbility, applySprayFire } from '../game/spray-fire-helpers.js';
 import { hasRaiderAbility, buildRaiderForcedReroll } from '../game/raider-weequay-helpers.js';
+import {
+  hasSquadTrainingAbility,
+  applySquadTrainingReroll,
+} from '../game/squad-training-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
@@ -2774,8 +2778,7 @@ export async function handleCombatRoll(interaction, ctx) {
     }
 
     // Squad Training (Shoretrooper E, Stormtrooper E/R): +1 atk reroll if adjacent friendly TROOPER
-    const squadTrainingIds = ['squad_training_shoretrooper_elite', 'squad_training_shoretrooper_reg', 'squad_training_stormtrooper_elite', 'squad_training_stormtrooper_reg'];
-    if (atkSIds.some(id => squadTrainingIds.includes(id))) {
+    if (hasSquadTrainingAbility(atkSIds)) {
       const stFigs = game.figurePositions?.[attackerPlayerNum] || {};
       const stMap = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
       const stPos = stFigs[combat.attackerFigureKey];
@@ -2787,7 +2790,7 @@ export async function handleCombatRoll(interaction, ctx) {
           const fn = dcNameFromFigureKey(fk);
           const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
           if ((fe?.keywords || []).some(k => String(k).toUpperCase() === 'TROOPER')) {
-            atkSpecialReroll += 1; break;
+            atkSpecialReroll = applySquadTrainingReroll(atkSpecialReroll); break;
           }
         }
       }
