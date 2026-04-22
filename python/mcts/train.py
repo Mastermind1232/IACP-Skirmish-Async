@@ -59,6 +59,9 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument('--parallel', type=int, default=0,
                     help='play N games in parallel with batched MCTS inference '
                          '(0 = serial; recommended values 8-32 on CUDA)')
+    ap.add_argument('--workers', type=int, default=0,
+                    help='N worker processes for distributed self-play '
+                         '(0 = single-process; 2-4 fills a single GPU)')
     return ap.parse_args()
 
 
@@ -78,8 +81,38 @@ def _load_checkpoint(path: Path, net: SkirboCNN) -> int:
     return int(payload.get('iteration', 0))
 
 
+def _run_distributed(args):
+    from python.mcts.distributed import DistributedConfig, run_distributed_training
+    device = args.device or str(select_device())
+    games_per_worker = args.parallel or 8
+    config = DistributedConfig(
+        n_workers=args.workers,
+        games_per_worker=games_per_worker,
+        n_iterations=args.iters,
+        mcts_simulations=args.sims,
+        training_steps_per_iter=args.train_steps,
+        batch_size=args.batch_size,
+        buffer_capacity=args.buffer,
+        learning_rate=args.lr,
+        weight_decay=args.weight_decay,
+        max_moves_per_game=args.max_moves,
+        temperature_moves=args.tau_moves,
+        seed=args.seed,
+        device=device,
+        n_channels=args.n_channels,
+        n_res_blocks=args.n_res_blocks,
+        checkpoint_every=args.checkpoint_every,
+    )
+    run_distributed_training(config, resume=args.resume)
+
+
 def main() -> None:
     args = _parse_args()
+
+    if args.workers > 0:
+        _run_distributed(args)
+        return
+
     device = torch.device(args.device) if args.device else select_device()
 
     net_cfg = CNNConfig(n_channels=args.n_channels, n_res_blocks=args.n_res_blocks)
