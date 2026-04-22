@@ -2787,3 +2787,375 @@ register(ActionType.DC_ACTION, _handle_dc_action)
 register(ActionType.SPECIAL_ACTION, _handle_special_action)
 register(ActionType.REFRESH_MAP, _handle_refresh_map)
 register(ActionType.CONFIRM_ATTACHMENT, _handle_confirm_attachment)
+
+
+# ---------------------------------------------------------------------------
+# Rush / Shoulder Rush accept handlers — push target + mutual 1 damage
+# ---------------------------------------------------------------------------
+
+def _apply_hp_damage_via_health_state(game: GameState, figure_key: str,
+                                      player_num: int, damage: int) -> Dict[str, Any]:
+    """Apply damage to a figure via dcHealthState; returns reduce_hp result.
+
+    Returns {'newHp', 'maxHp', 'prevHp', 'wasDefeated'} with zeros on miss.
+    """
+    from python.engine.mechanics.damage_helpers import reduce_hp
+
+    dc_ids = (
+        game.data.get('p1DcMessageIds') if player_num == 1
+        else game.data.get('p2DcMessageIds')
+    ) or []
+    dc_list = (
+        game.data.get('p1DcList') if player_num == 1
+        else game.data.get('p2DcList')
+    ) or []
+
+    from python.engine.mechanics.dc_helpers import (
+        dc_name_from_figure_key, parse_figure_key,
+    )
+    dc_name = dc_name_from_figure_key(figure_key)
+    parsed = parse_figure_key(figure_key)
+    fig_idx = parsed.get('figureIndex', 0)
+
+    msg_id = None
+    for mid, entry in zip(dc_ids, dc_list):
+        if isinstance(entry, Mapping) and entry.get('dcName') == dc_name:
+            msg_id = mid
+            break
+    if not msg_id:
+        return {'newHp': 0, 'maxHp': 0, 'prevHp': 0, 'wasDefeated': False}
+
+    dc_health_state = game.data.get('dcHealthState')
+    if not isinstance(dc_health_state, dict):
+        return {'newHp': 0, 'maxHp': 0, 'prevHp': 0, 'wasDefeated': False}
+    return reduce_hp(dc_health_state, game.data, msg_id, fig_idx, damage, player_num)
+
+
+def _handle_rush_push(game: GameState, action: Action) -> GameState:
+    """Rush (Onar): push a hostile to an adjacent space, mutual 1 damage.
+
+    Required params:
+        target_figure_key (str)
+        destination (str) — coord for the target (can equal current pos = no push)
+    Effects:
+        - Moves target to destination in figurePositions.
+        - Both activator + target take 1 HP damage via dcHealthState.
+        - Clears game.pendingRushPush.
+    """
+    target_fk = action.params.get('target_figure_key') or action.params.get('targetFigureKey')
+    dest = action.params.get('destination') or action.params.get('space')
+    if not target_fk or not dest:
+        raise ValueError('rush_push_fig requires target_figure_key + destination params')
+    pending = game.data.get('pendingRushPush')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('rush_push_fig: no pendingRushPush open')
+
+    activator_pn = pending.get('playerNum')
+    activator_fk = pending.get('activatorFigureKey')
+    opp_pn = 2 if activator_pn == 1 else 1
+
+    # Move target to destination
+    positions_all = game.data.get('figurePositions') or {}
+    opp_positions = dict(positions_all.get(opp_pn) or {})
+    opp_positions[target_fk] = str(dest).lower()
+    positions_all[opp_pn] = opp_positions
+    game.data['figurePositions'] = positions_all
+
+    # Apply 1 damage to both figures
+    if target_fk:
+        _apply_hp_damage_via_health_state(game, target_fk, opp_pn, 1)
+    if activator_fk and activator_pn:
+        _apply_hp_damage_via_health_state(game, activator_fk, activator_pn, 1)
+
+    game.data['pendingRushPush'] = None
+    return game
+
+
+def _handle_shoulder_rush(game: GameState, action: Action) -> GameState:
+    """Shoulder Rush: push target, apply damage from pending.damage (default 2).
+
+    Required params: target_figure_key, destination.
+    """
+    target_fk = action.params.get('target_figure_key') or action.params.get('targetFigureKey')
+    dest = action.params.get('destination') or action.params.get('space')
+    if not target_fk or not dest:
+        raise ValueError('shoulder_rush_fig requires target_figure_key + destination params')
+    pending = game.data.get('pendingShoulderRush')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('shoulder_rush_fig: no pendingShoulderRush open')
+
+    activator_pn = pending.get('playerNum')
+    opp_pn = 2 if activator_pn == 1 else 1
+    damage = int(pending.get('damage', 2))
+
+    positions_all = game.data.get('figurePositions') or {}
+    opp_positions = dict(positions_all.get(opp_pn) or {})
+    opp_positions[target_fk] = str(dest).lower()
+    positions_all[opp_pn] = opp_positions
+    game.data['figurePositions'] = positions_all
+
+    _apply_hp_damage_via_health_state(game, target_fk, opp_pn, damage)
+
+    game.data['pendingShoulderRush'] = None
+    return game
+
+
+register(ActionType.RUSH_PUSH_FIG, _handle_rush_push)
+register(ActionType.SHOULDER_RUSH_FIG, _handle_shoulder_rush)
+
+
+# ---------------------------------------------------------------------------
+# False Orders — accept "Move" or "Attack" for the controlled figure
+# ---------------------------------------------------------------------------
+
+def _handle_false_orders_move(game: GameState, action: Action) -> GameState:
+    """False Orders: controlled figure moves to destination.
+
+    Required param: destination (str).
+    Uses pendingFalseOrders.controlledFigureKey + controlledPlayerNum.
+    Clears pendingFalseOrders.
+    """
+    dest = action.params.get('destination') or action.params.get('space')
+    if not dest:
+        raise ValueError('false_orders_move requires destination param')
+    pending = game.data.get('pendingFalseOrders')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('false_orders_move: no pendingFalseOrders open')
+    controlled_fk = pending.get('controlledFigureKey')
+    controlled_pn = pending.get('controlledPlayerNum')
+    if not controlled_fk or controlled_pn not in (1, 2):
+        raise ValueError('false_orders_move: pending missing controlled fields')
+
+    positions_all = game.data.get('figurePositions') or {}
+    player_positions = dict(positions_all.get(controlled_pn) or {})
+    player_positions[controlled_fk] = str(dest).lower()
+    positions_all[controlled_pn] = player_positions
+    game.data['figurePositions'] = positions_all
+    game.data['pendingFalseOrders'] = None
+    return game
+
+
+def _handle_false_orders_attack(game: GameState, action: Action) -> GameState:
+    """False Orders: controlled figure attacks a target.
+
+    Required param: target_figure_key (str).
+    Records the attack intent on game.pendingFalseOrdersAttack; downstream
+    combat handlers consume it when the attack resolves.
+    Clears pendingFalseOrders.
+    """
+    target_fk = action.params.get('target_figure_key') or action.params.get('targetFigureKey')
+    if not target_fk:
+        raise ValueError('false_orders_attack requires target_figure_key param')
+    pending = game.data.get('pendingFalseOrders')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('false_orders_attack: no pendingFalseOrders open')
+
+    game.data['pendingFalseOrdersAttack'] = {
+        'controlledFigureKey': pending.get('controlledFigureKey'),
+        'controlledPlayerNum': pending.get('controlledPlayerNum'),
+        'targetFigureKey': target_fk,
+        'controllerPlayerNum': pending.get('controllerPlayerNum'),
+    }
+    game.data['pendingFalseOrders'] = None
+    return game
+
+
+register(ActionType.FALSE_ORDERS_MOVE, _handle_false_orders_move)
+register(ActionType.FALSE_ORDERS_ATTACK, _handle_false_orders_attack)
+
+
+# ---------------------------------------------------------------------------
+# Strain choice — apply strain damage or discard CCs from deck top
+# ---------------------------------------------------------------------------
+
+def _handle_strain_choice_alldmg(game: GameState, action: Action) -> GameState:
+    """Take all strain damage as HP damage on the strained figure.
+
+    Consumes pendingStrainChoice.{amount, figureKey, playerNum}.
+    Reduces HP via dcHealthState; clears pendingStrainChoice.
+    """
+    pending = game.data.get('pendingStrainChoice')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('strain_choice_alldmg: no pendingStrainChoice open')
+    amount = int(pending.get('amount') or 0)
+    fk = pending.get('figureKey')
+    pn = pending.get('playerNum')
+    if fk and pn in (1, 2) and amount > 0:
+        _apply_hp_damage_via_health_state(game, fk, pn, amount)
+    game.data['pendingStrainChoice'] = None
+    return game
+
+
+def _handle_strain_choice_discard(game: GameState, action: Action) -> GameState:
+    """Discard N CCs from deck top to prevent strain damage.
+
+    Required param: discard_count (int) — the number of CC discards chosen.
+    ccCostPerStrain (default 1) is read from pending — under-duress effect
+    raises it.
+
+    Effects:
+        - Drains discard_count * ccCostPerStrain CCs from deck top to discard
+        - Remaining un-prevented strain applies as HP damage
+        - Clears pendingStrainChoice
+    """
+    from python.engine.cards.deck import deck_size, discard_from_deck_top
+
+    discard_count = action.params.get('discard_count')
+    if discard_count is None:
+        discard_count = action.params.get('discardCount')
+    if not isinstance(discard_count, int) or discard_count < 0:
+        raise ValueError('strain_choice_discard requires non-negative int discard_count')
+    pending = game.data.get('pendingStrainChoice')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('strain_choice_discard: no pendingStrainChoice open')
+
+    amount = int(pending.get('amount') or 0)
+    cc_cost_per_strain = max(1, int(pending.get('ccCostPerStrain', 1)))
+    fk = pending.get('figureKey')
+    pn = pending.get('playerNum')
+
+    total_to_drain = discard_count * cc_cost_per_strain
+    if pn in (1, 2):
+        available = deck_size(game, pn)
+        actual_drain = min(total_to_drain, available)
+        if actual_drain > 0:
+            discard_from_deck_top(game, pn, actual_drain)
+        strain_prevented = actual_drain // cc_cost_per_strain
+    else:
+        strain_prevented = 0
+
+    remaining_strain = max(0, amount - strain_prevented)
+    if fk and pn in (1, 2) and remaining_strain > 0:
+        _apply_hp_damage_via_health_state(game, fk, pn, remaining_strain)
+    game.data['pendingStrainChoice'] = None
+    game.data['lastStrainChoice'] = {
+        'amount': amount,
+        'strainPrevented': strain_prevented,
+        'hpDamage': remaining_strain,
+    }
+    return game
+
+
+register(ActionType.STRAIN_CHOICE_ALLDMG, _handle_strain_choice_alldmg)
+register(ActionType.STRAIN_CHOICE_DISCARD, _handle_strain_choice_discard)
+
+
+# ---------------------------------------------------------------------------
+# Bomb Drop / Orbital Bombardment space pickers — damage figures on coord(s)
+# ---------------------------------------------------------------------------
+
+def _apply_damage_to_figures_on_coord(game: GameState, coord: str,
+                                      damage: int) -> List[Dict[str, Any]]:
+    """Apply `damage` to every figure on `coord` (both players). Returns
+    a list of {figureKey, playerNum, newHp, defeated} for the caller.
+    """
+    results = []
+    coord_lc = str(coord).lower()
+    positions_all = game.data.get('figurePositions') or {}
+    for pn in (1, 2):
+        poses = positions_all.get(pn) or {}
+        for fk, pos in list(poses.items()):
+            if not pos or str(pos).lower() != coord_lc:
+                continue
+            r = _apply_hp_damage_via_health_state(game, fk, pn, damage)
+            results.append({
+                'figureKey': fk, 'playerNum': pn,
+                'newHp': r.get('newHp'), 'defeated': r.get('wasDefeated'),
+            })
+    return results
+
+
+def _handle_bomb_drop_space(game: GameState, action: Action) -> GameState:
+    """Bomb Drop: apply pending damage to figures on chosen space.
+
+    Required params: msg_id, space.
+    Consumes pendingBombDrop[msg_id].damage (default 2).
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    space = action.params.get('space')
+    if not msg_id or not space:
+        raise ValueError('bomb_drop_space requires msg_id + space params')
+    pending_map = game.data.get('pendingBombDrop') or {}
+    pending = pending_map.get(msg_id)
+    if not pending:
+        raise ValueError(
+            f'bomb_drop_space: no pendingBombDrop for msg_id {msg_id!r}'
+        )
+    damage = int(pending.get('damage', 2))
+    hits = _apply_damage_to_figures_on_coord(game, space, damage)
+    pending_map = dict(pending_map)
+    del pending_map[msg_id]
+    game.data['pendingBombDrop'] = pending_map if pending_map else None
+    game.data['lastBombDropHits'] = {'msgId': msg_id, 'hits': hits}
+    return game
+
+
+def _handle_ob_space(game: GameState, action: Action) -> GameState:
+    """Orbital Bombardment: apply damage to figures on chosen space.
+
+    Required params: msg_id, space.
+    Tracks pendingOrbitalBombardment.{spacesChosen, spacesRemaining, damage}.
+    On last space: applies damage to figures on all chosen spaces and
+    clears the pending state.
+    """
+    msg_id = action.params.get('msg_id') or action.params.get('msgId')
+    space = action.params.get('space')
+    if not msg_id or not space:
+        raise ValueError('ob_space requires msg_id + space params')
+    pending = game.data.get('pendingOrbitalBombardment')
+    if not pending or not isinstance(pending, Mapping):
+        raise ValueError('ob_space: no pendingOrbitalBombardment open')
+    spaces_chosen = list(pending.get('spacesChosen') or [])
+    spaces_remaining = int(pending.get('spacesRemaining') or 1)
+    damage = int(pending.get('damage', 2))
+    spaces_chosen.append(str(space).lower())
+
+    pending_mut = dict(pending)
+    pending_mut['spacesChosen'] = spaces_chosen
+    game.data['pendingOrbitalBombardment'] = pending_mut
+
+    if len(spaces_chosen) >= spaces_remaining:
+        all_hits = []
+        for sp in spaces_chosen:
+            all_hits.extend(_apply_damage_to_figures_on_coord(game, sp, damage))
+        game.data['pendingOrbitalBombardment'] = None
+        game.data['lastOrbitalBombardmentHits'] = {
+            'msgId': msg_id, 'hits': all_hits, 'spaces': spaces_chosen,
+        }
+    return game
+
+
+register(ActionType.BOMB_DROP_SPACE, _handle_bomb_drop_space)
+register(ActionType.OB_SPACE, _handle_ob_space)
+
+
+# ---------------------------------------------------------------------------
+# DRAFT_RANDOM + UNDO — remaining setup / utility handlers
+# ---------------------------------------------------------------------------
+
+def _handle_draft_random(game: GameState, action: Action) -> GameState:
+    """Record that a random draft was requested.
+
+    Required params:
+        player (int) ∈ {1, 2}
+        squad (dict) — the randomly-drafted squad (caller generates it).
+
+    Effects: equivalent to SUBMIT_SQUAD; stamps game.p{n}DraftedRandom = True
+    so the caller can log the provenance.
+    """
+    player = int(action.player or 0)
+    if player == 0:
+        player = int(action.params.get('player') or 0)
+    if player not in (1, 2):
+        raise ValueError('draft_random requires player ∈ {1, 2}')
+    squad = action.params.get('squad')
+    if not isinstance(squad, Mapping):
+        raise ValueError('draft_random requires squad (dict) param')
+    key = 'player1Squad' if player == 1 else 'player2Squad'
+    game.data[key] = dict(squad)
+    drafted_key = 'p1DraftedRandom' if player == 1 else 'p2DraftedRandom'
+    game.data[drafted_key] = True
+    return game
+
+
+register(ActionType.DRAFT_RANDOM, _handle_draft_random)

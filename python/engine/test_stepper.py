@@ -2084,6 +2084,201 @@ def test_confirm_attachment_flips_flag():
     assert new_g.data['p1AttachmentsConfirmed'] is True
 
 
+def test_rush_push_fig_moves_target_and_applies_damage():
+    g = create_game()
+    g.data['figurePositions'] = {
+        1: {'Onar-0-0': 'a1'},
+        2: {'Stormtrooper-0-0': 'a2'},
+    }
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+    g.data['p2DcMessageIds'] = ['hl2dc0']
+    g.data['p1DcList'] = [{'dcName': 'Onar'}]
+    g.data['p2DcList'] = [{'dcName': 'Stormtrooper'}]
+    g.data['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[5, 5]],
+    }
+    g.data['pendingRushPush'] = {
+        'playerNum': 1,
+        'activatorFigureKey': 'Onar-0-0',
+        'msgId': 'hl1dc0',
+    }
+    new_g = step(g, Action(
+        type=ActionType.RUSH_PUSH_FIG, player=1,
+        params={'target_figure_key': 'Stormtrooper-0-0', 'destination': 'a3'},
+    ))
+    assert new_g.data['figurePositions'][2]['Stormtrooper-0-0'] == 'a3'
+    # Both suffer 1 damage
+    assert new_g.data['dcHealthState']['hl1dc0'][0][0] == 9
+    assert new_g.data['dcHealthState']['hl2dc0'][0][0] == 4
+    assert new_g.data['pendingRushPush'] is None
+
+
+def test_shoulder_rush_fig_applies_pending_damage():
+    g = create_game()
+    g.data['figurePositions'] = {1: {}, 2: {'Trooper-0-0': 'a1'}}
+    g.data['p2DcMessageIds'] = ['hl2dc0']
+    g.data['p2DcList'] = [{'dcName': 'Trooper'}]
+    g.data['dcHealthState'] = {'hl2dc0': [[8, 8]]}
+    g.data['pendingShoulderRush'] = {'playerNum': 1, 'damage': 3}
+    new_g = step(g, Action(
+        type=ActionType.SHOULDER_RUSH_FIG, player=1,
+        params={'target_figure_key': 'Trooper-0-0', 'destination': 'b2'},
+    ))
+    assert new_g.data['figurePositions'][2]['Trooper-0-0'] == 'b2'
+    assert new_g.data['dcHealthState']['hl2dc0'][0][0] == 5  # 8 - 3
+    assert new_g.data['pendingShoulderRush'] is None
+
+
+def test_false_orders_move_moves_controlled_figure():
+    g = create_game()
+    g.data['figurePositions'] = {2: {'Trooper-0-0': 'a1'}}
+    g.data['pendingFalseOrders'] = {
+        'controlledFigureKey': 'Trooper-0-0',
+        'controlledPlayerNum': 2,
+        'controllerPlayerNum': 1,
+    }
+    new_g = step(g, Action(
+        type=ActionType.FALSE_ORDERS_MOVE, player=1,
+        params={'destination': 'B2'},
+    ))
+    assert new_g.data['figurePositions'][2]['Trooper-0-0'] == 'b2'
+    assert new_g.data['pendingFalseOrders'] is None
+
+
+def test_false_orders_attack_records_intent():
+    g = create_game()
+    g.data['pendingFalseOrders'] = {
+        'controlledFigureKey': 'Trooper-0-0',
+        'controlledPlayerNum': 2,
+        'controllerPlayerNum': 1,
+    }
+    new_g = step(g, Action(
+        type=ActionType.FALSE_ORDERS_ATTACK, player=1,
+        params={'target_figure_key': 'Luke-0-0'},
+    ))
+    assert new_g.data['pendingFalseOrdersAttack'] == {
+        'controlledFigureKey': 'Trooper-0-0',
+        'controlledPlayerNum': 2,
+        'targetFigureKey': 'Luke-0-0',
+        'controllerPlayerNum': 1,
+    }
+    assert new_g.data['pendingFalseOrders'] is None
+
+
+def test_strain_choice_alldmg_applies_full_hp_damage():
+    g = create_game()
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+    g.data['p1DcList'] = [{'dcName': 'Luke'}]
+    g.data['dcHealthState'] = {'hl1dc0': [[8, 8]]}
+    g.data['pendingStrainChoice'] = {
+        'amount': 3, 'figureKey': 'Luke-0-0', 'playerNum': 1,
+    }
+    new_g = step(g, Action(type=ActionType.STRAIN_CHOICE_ALLDMG, player=1))
+    assert new_g.data['dcHealthState']['hl1dc0'][0][0] == 5  # 8 - 3
+    assert new_g.data['pendingStrainChoice'] is None
+
+
+def test_strain_choice_discard_prevents_strain_via_deck_drain():
+    g = create_game()
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+    g.data['p1DcList'] = [{'dcName': 'Luke'}]
+    g.data['dcHealthState'] = {'hl1dc0': [[8, 8]]}
+    g.data['player1CcDeck'] = ['A', 'B', 'C', 'D', 'E']
+    g.data['pendingStrainChoice'] = {
+        'amount': 3, 'figureKey': 'Luke-0-0', 'playerNum': 1,
+        'ccCostPerStrain': 1,
+    }
+    new_g = step(g, Action(
+        type=ActionType.STRAIN_CHOICE_DISCARD, player=1,
+        params={'discard_count': 2},
+    ))
+    # 2 CCs discarded prevent 2 strain; 1 remaining → HP damage
+    assert new_g.data['player1CcDeck'] == ['C', 'D', 'E']
+    assert new_g.data['player1CcDiscard'] == ['A', 'B']
+    assert new_g.data['dcHealthState']['hl1dc0'][0][0] == 7  # 8 - 1
+    assert new_g.data['lastStrainChoice'] == {
+        'amount': 3, 'strainPrevented': 2, 'hpDamage': 1,
+    }
+
+
+def test_strain_choice_discard_under_duress_doubles_cost():
+    g = create_game()
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+    g.data['p1DcList'] = [{'dcName': 'Luke'}]
+    g.data['dcHealthState'] = {'hl1dc0': [[8, 8]]}
+    g.data['player1CcDeck'] = ['A', 'B', 'C', 'D']
+    g.data['pendingStrainChoice'] = {
+        'amount': 2, 'figureKey': 'Luke-0-0', 'playerNum': 1,
+        'ccCostPerStrain': 2,
+    }
+    new_g = step(g, Action(
+        type=ActionType.STRAIN_CHOICE_DISCARD, player=1,
+        params={'discard_count': 2},
+    ))
+    # 2 discards × 2-per-strain = 4 CCs drained (all of deck); prevents 2 strain
+    assert new_g.data['player1CcDeck'] == []
+    assert len(new_g.data['player1CcDiscard']) == 4
+    # No HP damage (all prevented)
+    assert new_g.data['dcHealthState']['hl1dc0'][0][0] == 8
+
+
+def test_bomb_drop_space_damages_figures_on_coord():
+    g = create_game()
+    g.data['figurePositions'] = {
+        1: {'Luke-0-0': 'a1'},
+        2: {'Vader-0-0': 'a1'},  # same space as Luke
+    }
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+    g.data['p2DcMessageIds'] = ['hl2dc0']
+    g.data['p1DcList'] = [{'dcName': 'Luke'}]
+    g.data['p2DcList'] = [{'dcName': 'Vader'}]
+    g.data['dcHealthState'] = {'hl1dc0': [[10, 10]], 'hl2dc0': [[12, 12]]}
+    g.data['pendingBombDrop'] = {'hl1dc0': {'damage': 3}}
+    new_g = step(g, Action(
+        type=ActionType.BOMB_DROP_SPACE, player=1,
+        params={'msg_id': 'hl1dc0', 'space': 'a1'},
+    ))
+    assert new_g.data['dcHealthState']['hl1dc0'][0][0] == 7
+    assert new_g.data['dcHealthState']['hl2dc0'][0][0] == 9
+    assert new_g.data['pendingBombDrop'] is None
+    assert len(new_g.data['lastBombDropHits']['hits']) == 2
+
+
+def test_ob_space_accumulates_and_finalizes_on_last_space():
+    g = create_game()
+    g.data['figurePositions'] = {1: {}, 2: {'Trooper-0-0': 'b2'}}
+    g.data['p2DcMessageIds'] = ['hl2dc0']
+    g.data['p2DcList'] = [{'dcName': 'Trooper'}]
+    g.data['dcHealthState'] = {'hl2dc0': [[5, 5]]}
+    g.data['pendingOrbitalBombardment'] = {
+        'msgId': 'hl1dc0', 'playerNum': 1,
+        'spacesRemaining': 2, 'spacesChosen': [], 'damage': 2,
+    }
+    # First pick: no resolution yet
+    g = step(g, Action(type=ActionType.OB_SPACE, player=1,
+                        params={'msg_id': 'hl1dc0', 'space': 'a1'}))
+    assert g.data['pendingOrbitalBombardment']['spacesChosen'] == ['a1']
+    assert g.data['dcHealthState']['hl2dc0'][0][0] == 5  # not yet applied
+    # Second pick: resolve
+    g = step(g, Action(type=ActionType.OB_SPACE, player=1,
+                        params={'msg_id': 'hl1dc0', 'space': 'B2'}))
+    assert g.data['pendingOrbitalBombardment'] is None
+    assert g.data['dcHealthState']['hl2dc0'][0][0] == 3
+    assert g.data['lastOrbitalBombardmentHits']['spaces'] == ['a1', 'b2']
+
+
+def test_draft_random_sets_squad_and_flag():
+    g = create_game()
+    squad = {'name': 'Random', 'dcList': ['Rebel Trooper']}
+    new_g = step(g, Action(
+        type=ActionType.DRAFT_RANDOM, player=1,
+        params={'squad': squad},
+    ))
+    assert new_g.data['player1Squad'] == squad
+    assert new_g.data['p1DraftedRandom'] is True
+
+
 def test_dc_end_activation_clears_active_and_swaps_player():
     g = _two_figure_game()
     g = step(g, Action(
@@ -2235,6 +2430,16 @@ def main():
         ('special_action_delegates', test_special_action_delegates_to_dc_special),
         ('refresh_map_noop', test_refresh_map_is_noop),
         ('confirm_attachment_flips', test_confirm_attachment_flips_flag),
+        ('rush_push_fig_moves_and_damages', test_rush_push_fig_moves_target_and_applies_damage),
+        ('shoulder_rush_fig_applies_damage', test_shoulder_rush_fig_applies_pending_damage),
+        ('false_orders_move_moves_figure', test_false_orders_move_moves_controlled_figure),
+        ('false_orders_attack_records', test_false_orders_attack_records_intent),
+        ('strain_choice_alldmg', test_strain_choice_alldmg_applies_full_hp_damage),
+        ('strain_choice_discard', test_strain_choice_discard_prevents_strain_via_deck_drain),
+        ('strain_choice_discard_under_duress', test_strain_choice_discard_under_duress_doubles_cost),
+        ('bomb_drop_space_damages', test_bomb_drop_space_damages_figures_on_coord),
+        ('ob_space_accumulates_then_resolves', test_ob_space_accumulates_and_finalizes_on_last_space),
+        ('draft_random_sets_squad', test_draft_random_sets_squad_and_flag),
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
