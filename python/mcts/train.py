@@ -78,6 +78,12 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument('--compile', action='store_true',
                     help='apply torch.compile to the CNN (slow first call, '
                          '1.5-2x forward speedup after)')
+    ap.add_argument('--eval-every', type=int, default=5,
+                    help='v2 only: play eval match vs initial baseline every N iterations')
+    ap.add_argument('--eval-games', type=int, default=10,
+                    help='v2 only: games per eval match')
+    ap.add_argument('--eval-sims', type=int, default=10,
+                    help='v2 only: MCTS sims during eval')
     return ap.parse_args()
 
 
@@ -124,6 +130,9 @@ def _run_distributed(args):
             pipeline_depth=args.pipeline_depth,
             fp16_inference=not args.no_fp16,
             compile_net=args.compile,
+            eval_every=args.eval_every,
+            eval_games=args.eval_games,
+            eval_simulations=args.eval_sims,
         )
         run_distributed_v2(config, resume=args.resume)
         return

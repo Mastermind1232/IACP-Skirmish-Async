@@ -42,6 +42,7 @@ import torch.multiprocessing as mp
 
 CHECKPOINT_DIR = Path(__file__).resolve().parent / 'checkpoints'
 LATEST_PATH = CHECKPOINT_DIR / 'latest.pt'
+INITIAL_PATH = CHECKPOINT_DIR / 'initial.pt'
 
 
 @dataclass
@@ -69,6 +70,9 @@ class DistributedV2Config:
     pipeline_depth: int = 1    # >1 enables virtual-loss pipelined MCTS
     fp16_inference: bool = True   # autocast inference forward in float16
     compile_net: bool = False  # torch.compile the trained net (slow first call)
+    eval_every: int = 5        # every N iters, play eval match vs initial
+    eval_games: int = 10       # N games per eval match
+    eval_simulations: int = 10 # MCTS sims during eval
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +310,11 @@ def run_distributed_v2(config: DistributedV2Config, resume: bool = False) -> Non
         f'sims={config.mcts_simulations} max_batch={config.max_inference_batch}'
     )
 
+    # Snapshot the initial net (pre-training) as the evaluation baseline.
+    if not INITIAL_PATH.exists() and start_iter == 0:
+        _save_checkpoint(INITIAL_PATH, net, -1, config)
+        print(f'[trainer] saved initial baseline to {INITIAL_PATH.name}', flush=True)
+
     use_shared = (config.transport == 'shared')
     if use_shared:
         from python.mcts.shared_inference import SharedPool
@@ -470,6 +479,32 @@ def run_distributed_v2(config: DistributedV2Config, resume: bool = False) -> Non
                 _save_checkpoint(
                     CHECKPOINT_DIR / f'skirbo_iter_{it:04d}.pt', net, it, config,
                 )
+
+            # Evaluation: play N games vs the initial baseline.
+            if (config.eval_every and INITIAL_PATH.exists()
+                    and (it + 1) % config.eval_every == 0):
+                try:
+                    from python.mcts.evaluate import run_match
+                    summary = run_match(
+                        LATEST_PATH, INITIAL_PATH,
+                        n_games=config.eval_games,
+                        n_simulations=config.eval_simulations,
+                        max_moves=config.max_moves_per_game,
+                        device=device,
+                        seed=rng.randint(0, 1 << 30),
+                    )
+                    print(
+                        f'[eval  ] iter={it:03d} vs initial: '
+                        f'wins={summary["new_wins"]}/{summary["n_games"]} '
+                        f'losses={summary["old_wins"]} '
+                        f'draws={summary["draws"]} '
+                        f'win_rate={summary["win_rate_new"]:.3f} '
+                        f'avg_len={summary["avg_game_length"]:.1f} '
+                        f'vp_margin={summary["avg_vp_margin"]:+.2f}',
+                        flush=True,
+                    )
+                except Exception as e:
+                    print(f'[eval  ] iter={it:03d} evaluation failed: {e}', flush=True)
 
     finally:
         signal.signal(signal.SIGINT, original_sigint)
