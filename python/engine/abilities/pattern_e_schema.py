@@ -315,28 +315,126 @@ def handle_schema_chain(game: Any, ability_id: str,
         }
         effects.append({'effect': 'pushTargetWithinRange'})
 
-    # targetFriendlyFigureAdjacent — pick an adjacent friendly to apply the
-    # effect (e.g., heal, focus).
+    # targetFriendlyFigureAdjacent — pick an adjacent friendly figure,
+    # apply Focus or heal. When ctx has target_figure_key OR we can
+    # auto-pick an adjacent ally, resolve inline.
     tff = entry.get('targetFriendlyFigureAdjacent')
     if tff:
-        data['pendingTargetFriendlyAdjacent'] = {
-            'abilityId': ability_id,
-            'spec': dict(tff) if isinstance(tff, dict) else {'value': tff},
-            'figureKey': ctx.get('figure_key'),
-            'playerNum': ctx.get('player_num'),
-            'msgId': msg_id,
-        }
-        effects.append({'effect': 'targetFriendlyFigureAdjacent'})
+        spec = dict(tff) if isinstance(tff, dict) else {'value': tff}
+        target_fk = ctx.get('target_figure_key') or ctx.get('targetFigureKey')
+        player_num_cur = ctx.get('player_num')
+        figure_key_self = ctx.get('figure_key')
+        # Auto-pick first adjacent friendly when no explicit target.
+        if not target_fk and player_num_cur in (1, 2) and figure_key_self:
+            try:
+                from python.engine.mechanics.adjacency import (
+                    is_chebyshev_adjacent,
+                )
+                fp = data.get('figurePositions') or {}
+                own_positions = fp.get(player_num_cur) or {}
+                self_coord = own_positions.get(figure_key_self)
+                if self_coord:
+                    for fk, coord in own_positions.items():
+                        if fk == figure_key_self or not coord:
+                            continue
+                        if is_chebyshev_adjacent(self_coord, coord):
+                            target_fk = fk
+                            break
+            except Exception:
+                pass
+        if target_fk and player_num_cur in (1, 2):
+            applied_sub: List[Dict[str, Any]] = []
+            if spec.get('applyFocus'):
+                try:
+                    from python.engine.mechanics.conditions import apply_condition
+                    apply_condition(game, target_fk, 'Focus')
+                    applied_sub.append({'effect': 'applyFocus', 'target': target_fk})
+                except Exception:
+                    pass
+            heal = int(spec.get('heal') or spec.get('recoverDamage') or 0)
+            if heal > 0:
+                try:
+                    from python.engine.mechanics.figure_lookup import (
+                        find_dc_message_id_for_figure, parse_figure_key,
+                    )
+                    from python.engine.mechanics.damage_helpers import heal_hp
+                    dc_meta = data.get('dcMessageMeta')
+                    if dc_meta:
+                        tmsg = find_dc_message_id_for_figure(
+                            data.get('gameId'), player_num_cur,
+                            target_fk, dc_meta,
+                        )
+                        if tmsg:
+                            parsed = parse_figure_key(target_fk)
+                            fig_idx = parsed[2] if parsed else 0
+                            dc_health = data.get('dcHealthState') or {}
+                            heal_hp(dc_health, data, tmsg, fig_idx,
+                                     heal, player_num_cur)
+                            applied_sub.append({
+                                'effect': 'heal', 'target': target_fk,
+                                'amount': heal,
+                            })
+                except Exception:
+                    pass
+            effects.append({
+                'effect': 'targetFriendlyFigureAdjacent_resolved',
+                'target': target_fk,
+                'applied': applied_sub,
+            })
+        else:
+            data['pendingTargetFriendlyAdjacent'] = {
+                'abilityId': ability_id,
+                'spec': spec,
+                'figureKey': ctx.get('figure_key'),
+                'playerNum': ctx.get('player_num'),
+                'msgId': msg_id,
+            }
+            effects.append({'effect': 'targetFriendlyFigureAdjacent'})
 
-    # chooseFriendlyToFocus — add Focus token to a chosen friendly.
+    # chooseFriendlyToFocus — auto-pick first adjacent friendly and apply
+    # Focus condition (IACP: Hold On-style abilities).
     if entry.get('chooseFriendlyToFocus'):
-        data['pendingChooseFriendlyFocus'] = {
-            'abilityId': ability_id,
-            'figureKey': ctx.get('figure_key'),
-            'playerNum': ctx.get('player_num'),
-            'msgId': msg_id,
-        }
-        effects.append({'effect': 'chooseFriendlyToFocus'})
+        player_num_cur = ctx.get('player_num')
+        figure_key_self = ctx.get('figure_key')
+        focus_target = ctx.get('target_figure_key') or ctx.get('targetFigureKey')
+        if not focus_target and player_num_cur in (1, 2) and figure_key_self:
+            try:
+                from python.engine.mechanics.adjacency import (
+                    is_chebyshev_adjacent,
+                )
+                fp = data.get('figurePositions') or {}
+                own_positions = fp.get(player_num_cur) or {}
+                self_coord = own_positions.get(figure_key_self)
+                if self_coord:
+                    for fk, coord in own_positions.items():
+                        if fk == figure_key_self or not coord:
+                            continue
+                        if is_chebyshev_adjacent(self_coord, coord):
+                            focus_target = fk
+                            break
+            except Exception:
+                pass
+            if not focus_target:
+                # Fall back to self.
+                focus_target = figure_key_self
+        if focus_target:
+            try:
+                from python.engine.mechanics.conditions import apply_condition
+                apply_condition(game, focus_target, 'Focus')
+                effects.append({
+                    'effect': 'chooseFriendlyToFocus_resolved',
+                    'target': focus_target,
+                })
+            except Exception:
+                pass
+        else:
+            data['pendingChooseFriendlyFocus'] = {
+                'abilityId': ability_id,
+                'figureKey': ctx.get('figure_key'),
+                'playerNum': ctx.get('player_num'),
+                'msgId': msg_id,
+            }
+            effects.append({'effect': 'chooseFriendlyToFocus'})
 
     # freeAction — boolean hint; surface on the payload so stepper/UI can
     # restore the spent action counter.
