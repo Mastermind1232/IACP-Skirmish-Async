@@ -576,27 +576,29 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     atk_log = dict(game.get('figureAttacksThisActivation') or {})
     patk = dict(atk_log.get(atk_player, atk_log.get(str(atk_player), {})))
     already = patk.get(attacker_key, 0)
+
+    # Resolve attacker's msg_id early — consumers (free-attack-bonus,
+    # override-attack-dice, next-attack-bonus-hits, payback-surge,
+    # conditions) all need it regardless of attack number.
+    from python.engine.mechanics.figure_lookup import parse_figure_key
+    dc_list_key = 'p1DcList' if atk_player == 1 else 'p2DcList'
+    msg_ids_key = 'p1DcMessageIds' if atk_player == 1 else 'p2DcMessageIds'
+    dc_list_early = game.get(dc_list_key) or []
+    msg_ids_early = game.get(msg_ids_key) or []
     atk_msg_id = None
+    parsed_early = parse_figure_key(attacker_key)
+    if parsed_early is not None:
+        target_name, target_group, _ = parsed_early
+        for i, dc in enumerate(dc_list_early):
+            if not isinstance(dc, Mapping):
+                continue
+            if (dc.get('dcName') == target_name
+                    and int(dc.get('dgIndex') or 0) == target_group
+                    and i < len(msg_ids_early)):
+                atk_msg_id = msg_ids_early[i]
+                break
+
     if already >= 1:
-        # Resolve attacker's msg_id to check for free-attack-bonus.
-        from python.engine.mechanics.figure_lookup import parse_figure_key
-        dc_list_key = 'p1DcList' if atk_player == 1 else 'p2DcList'
-        msg_ids_key = 'p1DcMessageIds' if atk_player == 1 else 'p2DcMessageIds'
-        dc_list = game.data.get(dc_list_key) if hasattr(game, 'data') else game.get(dc_list_key) or []
-        if not dc_list:
-            dc_list = game.get(dc_list_key) or []
-        msg_ids = game.get(msg_ids_key) or []
-        parsed = parse_figure_key(attacker_key)
-        if parsed is not None:
-            target_name, target_group, _ = parsed
-            for i, dc in enumerate(dc_list):
-                if not isinstance(dc, Mapping):
-                    continue
-                if (dc.get('dcName') == target_name
-                        and int(dc.get('dgIndex') or 0) == target_group
-                        and i < len(msg_ids)):
-                    atk_msg_id = msg_ids[i]
-                    break
         free_attack_map = game.get('freeAttackBonusPending') or {}
         if atk_msg_id and atk_msg_id in free_attack_map:
             # Consume one free-attack credit; do NOT increment the
@@ -623,9 +625,26 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
 
     attack_spec = atk_effect.get('attack') or {}
     dice_colors = attack_spec.get('dice') or []
+    attack_type = attack_spec.get('type') or 'range'
+
+    # Consume pendingOverrideAttackDice[atk_msg_id] if set (Arsenal,
+    # Saber Orbit, etc.). Overrides both dice + attackType for this
+    # one attack, then clears.
+    if atk_msg_id:
+        override_map = game.data.get('pendingOverrideAttackDice') or {}
+        override = override_map.get(atk_msg_id)
+        if isinstance(override, Mapping):
+            overridden_dice = override.get('dice')
+            if isinstance(overridden_dice, list) and overridden_dice:
+                dice_colors = list(overridden_dice)
+            if override.get('type'):
+                attack_type = str(override['type'])
+            new_map = dict(override_map)
+            new_map.pop(atk_msg_id, None)
+            game.data['pendingOverrideAttackDice'] = new_map if new_map else None
+
     if not dice_colors:
         raise ValueError(f'attack_target: {atk_dc!r} has no attack dice')
-    attack_type = attack_spec.get('type') or 'range'
 
     err = _attack_legal(game, atk_coord, def_coord, attack_type)
     if err:
@@ -654,24 +673,7 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     # Consume nextAttacksBonusHits[atk_msg_id] → apply {bonus} to attackRoll
     # and decrement the count (remove entry at 0).
     bonus_hits = 0
-    if atk_msg_id is None:
-        # Resolve attacker msg_id (same lookup as free-attack block).
-        from python.engine.mechanics.figure_lookup import parse_figure_key
-        dc_list_key = 'p1DcList' if atk_player == 1 else 'p2DcList'
-        msg_ids_key = 'p1DcMessageIds' if atk_player == 1 else 'p2DcMessageIds'
-        dc_list = game.get(dc_list_key) or []
-        msg_ids = game.get(msg_ids_key) or []
-        parsed = parse_figure_key(attacker_key)
-        if parsed is not None:
-            target_name, target_group, _ = parsed
-            for i, dc in enumerate(dc_list):
-                if not isinstance(dc, Mapping):
-                    continue
-                if (dc.get('dcName') == target_name
-                        and int(dc.get('dgIndex') or 0) == target_group
-                        and i < len(msg_ids)):
-                    atk_msg_id = msg_ids[i]
-                    break
+    # atk_msg_id was resolved early (before free-attack-bonus check).
     if atk_msg_id:
         nab_map = dict(game.get('nextAttacksBonusHits') or {})
         entry = nab_map.get(atk_msg_id)
