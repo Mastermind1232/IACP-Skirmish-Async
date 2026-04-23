@@ -314,14 +314,13 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
     # Expertise, Charge, Mortar Launcher, Strategize, Wisdom, etc.
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         from python.engine.data.dc_effects_loader import get_dc_effect as _gef
         for fk in group_figs:
             dc_name_fk = _dc_name_from_figure_key(fk)
             eff_fk = _gef(dc_name_fk) or {}
             for aid in (eff_fk.get('specialAbilityIds') or []):
-                abil_entry = get_ability(aid) or {}
-                trig = abil_entry.get('trigger')
+                trig = get_trigger_for(aid)
                 if trig in ('activation', 'activation-start'):
                     try:
                         fire_ability(game.data, aid, {
@@ -345,8 +344,7 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
                 dc_name_other = _dc_name_from_figure_key(other_fk)
                 eff_other = _gef(dc_name_other) or {}
                 for aid in (eff_other.get('specialAbilityIds') or []):
-                    abil_entry = get_ability(aid) or {}
-                    trig = abil_entry.get('trigger')
+                    trig = get_trigger_for(aid)
                     if trig == 'friendly-activation' and pn == player:
                         try:
                             fire_ability(game.data, aid, {
@@ -396,7 +394,7 @@ def _handle_dc_end_activation(game: GameState, action: Action) -> GameState:
     # in the group before clearing state.
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         from python.engine.data.dc_effects_loader import get_dc_effect
         active_player = int(game.get('activePlayer') or 1)
         all_figs = active_keys + [
@@ -416,8 +414,7 @@ def _handle_dc_end_activation(game: GameState, action: Action) -> GameState:
             for aid in (eff_fk.get('specialAbilityIds') or []):
                 if aid in fired_for:
                     continue
-                abil_entry = get_ability(aid) or {}
-                trig = abil_entry.get('trigger')
+                trig = get_trigger_for(aid)
                 if trig in ('end-of-activation', 'activation-end'):
                     fired_for.add(aid)
                     try:
@@ -548,13 +545,12 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
     #     movement-exit and is triggered by this move.
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         # Self-mover triggers.
         moving_dc = _dc_name_from_figure_key(figure_key)
         moving_eff = get_dc_effect(moving_dc) or {}
         for aid in (moving_eff.get('specialAbilityIds') or []):
-            abil_entry = get_ability(aid) or {}
-            trig = abil_entry.get('trigger')
+            trig = get_trigger_for(aid)
             if trig == 'movement':
                 try:
                     fire_ability(game.data, aid, {
@@ -575,8 +571,7 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
                 other_dc = _dc_name_from_figure_key(other_fk)
                 other_eff = get_dc_effect(other_dc) or {}
                 for aid in (other_eff.get('specialAbilityIds') or []):
-                    abil_entry = get_ability(aid) or {}
-                    trig = abil_entry.get('trigger')
+                    trig = get_trigger_for(aid)
                     if trig in ('movement-adjacent', 'movement-exit'):
                         try:
                             fire_ability(game.data, aid, {
@@ -906,10 +901,9 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     # Fire pre-attack / attack-declare triggers (attacker-side).
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         for aid in atk_sids:
-            abil_entry = get_ability(aid) or {}
-            trig = abil_entry.get('trigger')
+            trig = get_trigger_for(aid)
             if trig in ('pre-attack', 'attack-declare', 'declare-attack',
                         'whenAttackDeclared'):
                 try:
@@ -928,7 +922,7 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     # Fire friendly-attack triggers on attacker's teammates.
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         ally_positions = (game.data.get('figurePositions') or {}).get(
             atk_player, {},
         ) or {}
@@ -938,8 +932,7 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
             ally_dc = _dc_name_from_figure_key(ally_fk)
             ally_eff = get_dc_effect(ally_dc) or {}
             for aid in (ally_eff.get('specialAbilityIds') or []):
-                abil_entry = get_ability(aid) or {}
-                if abil_entry.get('trigger') == 'friendly-attack':
+                if get_trigger_for(aid) == 'friendly-attack':
                     try:
                         fire_ability(game.data, aid, {
                             'figure_key': ally_fk,
@@ -957,10 +950,9 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     # triggers on defender abilities.
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         for aid in def_sids:
-            abil_entry = get_ability(aid) or {}
-            trig = abil_entry.get('trigger')
+            trig = get_trigger_for(aid)
             if trig == 'when-targeted':
                 try:
                     fire_ability(game.data, aid, {
@@ -997,10 +989,9 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     # Fury, Inspiring, Soresu Form, Shared Intuition, etc.).
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         for aid in list(atk_sids) + list(def_sids):
-            abil_entry = get_ability(aid) or {}
-            if abil_entry.get('trigger') == 'combat-dice':
+            if get_trigger_for(aid) == 'combat-dice':
                 try:
                     fire_ability(game.data, aid, {
                         'attacker_figure_key': attacker_key,
@@ -1032,11 +1023,10 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         # Fire Pattern D on-damage triggers on the defender's abilities.
         try:
             from python.engine.abilities.pattern_d import fire_ability
-            from python.engine.data.ability_library_loader import get_ability
+            from python.engine.data.ability_library_loader import get_ability, get_trigger_for
             def_sids = def_effect.get('specialAbilityIds') or []
             for aid in def_sids:
-                abil_entry = get_ability(aid) or {}
-                if abil_entry.get('trigger') == 'on-damage':
+                if get_trigger_for(aid) == 'on-damage':
                     try:
                         fire_ability(game.data, aid, {
                             'figure_key': target_key,
@@ -1052,11 +1042,10 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
             # Pre-defeat triggers.
             try:
                 from python.engine.abilities.pattern_d import fire_ability
-                from python.engine.data.ability_library_loader import get_ability
+                from python.engine.data.ability_library_loader import get_ability, get_trigger_for
                 def_sids = def_effect.get('specialAbilityIds') or []
                 for aid in def_sids:
-                    abil_entry = get_ability(aid) or {}
-                    if abil_entry.get('trigger') == 'pre-defeat':
+                    if get_trigger_for(aid) == 'pre-defeat':
                         try:
                             fire_ability(game.data, aid, {
                                 'figure_key': target_key,
@@ -1077,11 +1066,10 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
             # On-defeat triggers on the defeated figure.
             try:
                 from python.engine.abilities.pattern_d import fire_ability
-                from python.engine.data.ability_library_loader import get_ability
+                from python.engine.data.ability_library_loader import get_ability, get_trigger_for
                 def_sids = def_effect.get('specialAbilityIds') or []
                 for aid in def_sids:
-                    abil_entry = get_ability(aid) or {}
-                    if abil_entry.get('trigger') in ('on-defeat', 'onDefeat'):
+                    if get_trigger_for(aid) in ('on-defeat', 'onDefeat'):
                         try:
                             fire_ability(game.data, aid, {
                                 'figure_key': target_key,
@@ -1095,7 +1083,7 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
             # friendly-defeat triggers on surviving defender-side figures.
             try:
                 from python.engine.abilities.pattern_d import fire_ability
-                from python.engine.data.ability_library_loader import get_ability
+                from python.engine.data.ability_library_loader import get_ability, get_trigger_for
                 def_positions = (game.data.get('figurePositions') or {}).get(
                     def_player, {},
                 ) or {}
@@ -1105,8 +1093,7 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
                     friend_dc = _dc_name_from_figure_key(friend_fk)
                     friend_eff = get_dc_effect(friend_dc) or {}
                     for fab in (friend_eff.get('specialAbilityIds') or []):
-                        abil_entry = get_ability(fab) or {}
-                        if abil_entry.get('trigger') == 'friendly-defeat':
+                        if get_trigger_for(fab) == 'friendly-defeat':
                             try:
                                 fire_ability(game.data, fab, {
                                     'figure_key': friend_fk,
@@ -1121,10 +1108,9 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
             # on-hostile-defeat triggers on attacker-side figures.
             try:
                 from python.engine.abilities.pattern_d import fire_ability
-                from python.engine.data.ability_library_loader import get_ability
+                from python.engine.data.ability_library_loader import get_ability, get_trigger_for
                 for fab in (atk_effect.get('specialAbilityIds') or []):
-                    abil_entry = get_ability(fab) or {}
-                    if abil_entry.get('trigger') == 'on-hostile-defeat':
+                    if get_trigger_for(fab) == 'on-hostile-defeat':
                         try:
                             fire_ability(game.data, fab, {
                                 'figure_key': attacker_key,
@@ -1149,12 +1135,11 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     # Return Fire, Wanton Destruction, After-attack auras.
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         atk_post_triggers = ('combat-after', 'after-attack', 'after-ranged-attack')
         def_post_triggers = ('combat-after-defending', 'return-fire')
         for aid in (atk_effect.get('specialAbilityIds') or []):
-            abil_entry = get_ability(aid) or {}
-            trig = abil_entry.get('trigger')
+            trig = get_trigger_for(aid)
             if trig in atk_post_triggers:
                 if trig == 'after-ranged-attack' and attack_type != 'range':
                     continue
@@ -1167,8 +1152,7 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
                 except NotImplementedError:
                     pass
         for aid in (def_effect.get('specialAbilityIds') or []):
-            abil_entry = get_ability(aid) or {}
-            trig = abil_entry.get('trigger')
+            trig = get_trigger_for(aid)
             if trig in def_post_triggers:
                 try:
                     fire_ability(game.data, aid, {
@@ -1188,8 +1172,7 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
             ally_dc = _dc_name_from_figure_key(ally_fk)
             ally_eff = get_dc_effect(ally_dc) or {}
             for aid in (ally_eff.get('specialAbilityIds') or []):
-                abil_entry = get_ability(aid) or {}
-                if abil_entry.get('trigger') == 'after-friendly-attack':
+                if get_trigger_for(aid) == 'after-friendly-attack':
                     try:
                         fire_ability(game.data, aid, {
                             'figure_key': ally_fk,
@@ -1489,7 +1472,7 @@ def _handle_auto_deploy(game: GameState, action: Action) -> GameState:
     # Fire Pattern D post-deploy, setup, mission-start triggers.
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         from python.engine.data.dc_effects_loader import (
             get_dc_effect as _gde,
         )
@@ -1498,8 +1481,7 @@ def _handle_auto_deploy(game: GameState, action: Action) -> GameState:
                 dc_name_fk = _dc_name_from_figure_key(fk)
                 eff_fk = _gde(dc_name_fk) or {}
                 for aid in (eff_fk.get('specialAbilityIds') or []):
-                    abil_entry = get_ability(aid) or {}
-                    trig = abil_entry.get('trigger')
+                    trig = get_trigger_for(aid)
                     if trig in ('post-deploy', 'setup', 'mission-start'):
                         try:
                             fire_ability(game.data, aid, {
@@ -1622,12 +1604,11 @@ def _handle_interact(game: GameState, action: Action) -> GameState:
     # Fire Pattern D post-interact triggers on the interacting figure.
     try:
         from python.engine.abilities.pattern_d import fire_ability
-        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.ability_library_loader import get_ability, get_trigger_for
         dc_name_int = _dc_name_from_figure_key(figure_key)
         eff_int = get_dc_effect(dc_name_int) or {}
         for aid in (eff_int.get('specialAbilityIds') or []):
-            abil_entry = get_ability(aid) or {}
-            if abil_entry.get('trigger') == 'post-interact':
+            if get_trigger_for(aid) == 'post-interact':
                 try:
                     fire_ability(game.data, aid, {
                         'figure_key': figure_key,

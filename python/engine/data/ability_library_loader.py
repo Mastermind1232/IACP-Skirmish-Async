@@ -36,3 +36,20 @@ def get_ability_library() -> Dict[str, Any]:
 
 def get_ability(ability_id: str) -> Optional[Dict[str, Any]]:
     return get_ability_library().get(ability_id)
+
+
+# Cache of ability_id → trigger string for fast filtering in hot
+# trigger-firing loops. Populated lazily via get_trigger_for.
+_trigger_cache: Optional[Dict[str, Optional[str]]] = None
+
+
+def get_trigger_for(ability_id: str) -> Optional[str]:
+    """Return ability_id's trigger (string or None). Cached."""
+    global _trigger_cache
+    if _trigger_cache is None:
+        lib = get_ability_library()
+        _trigger_cache = {}
+        for aid, entry in lib.items():
+            if isinstance(entry, dict):
+                _trigger_cache[aid] = entry.get('trigger')
+    return _trigger_cache.get(ability_id)
