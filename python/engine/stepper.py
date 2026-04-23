@@ -720,7 +720,36 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         'defenseRoll': defense_roll,
         'attackerConds': atk_conds,
         'defenderConds': def_conds,
+        'attackerFigureKey': attacker_key,
+        'defenderFigureKey': target_key,
+        'attackerPlayerNum': atk_player,
+        'defenderPlayerNum': def_player,
+        'attackInfo': {'dice': list(dice_colors)},
     }
+
+    # Fire Pattern D combat-declare triggers (ability bonuses stamped
+    # before dice are evaluated: Weighted Thrust, Precise Targeting, etc.)
+    try:
+        from python.engine.mechanics.combat_declare import (
+            fire_combat_declare_triggers,
+        )
+        atk_sids = atk_effect.get('specialAbilityIds') or []
+        def_sids = def_effect.get('specialAbilityIds') or []
+        if atk_sids or def_sids:
+            fire_combat_declare_triggers(
+                game.data, combat, atk_sids, attacker_key,
+                defender_special_ids=def_sids,
+                ctx={
+                    'attacker_figure_key': attacker_key,
+                    'defender_figure_key': target_key,
+                    'defender_player_num': def_player,
+                    'is_ranged': attack_type == 'range',
+                },
+            )
+    except (NotImplementedError, RuntimeError, Exception):
+        # Trigger firing must not crash the attack. Pattern D stubs
+        # raise NotImplementedError; UnregisteredPatternD is RuntimeError.
+        pass
     pending_combat = game.get('pendingCombat')
     if isinstance(pending_combat, Mapping):
         for k in ('bonusHits', 'bonusBlock', 'bonusEvade', 'bonusAccuracy',
