@@ -256,8 +256,59 @@ def _handle_extra_armor_cancel(interaction: Any,
     return {'ok': True, 'noop': True}
 
 
+def _handle_sor_mission_reveal(interaction: Any,
+                                ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """sor_mission_reveal_{gameId} — either player reveals the mission's
+    set-aside start-of-round tokens. Clears pendingMissionSorReveal and
+    runs the mission's startOfRound rules if present.
+
+    JS site: src/handlers/round.js:1035-1061.
+    """
+    from python.engine.mechanics.mission_rules import run_start_of_round_rules
+
+    cid = _cid(interaction)
+    if not cid.startswith('sor_mission_reveal_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id = cid[len('sor_mission_reveal_'):]
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    user_id = _uid(interaction)
+    if user_id and str(user_id) not in (str(data.get('player1Id') or ''),
+                                          str(data.get('player2Id') or '')):
+        return {'ok': False, 'reason': 'not_a_player_in_game'}
+    if not data.get('pendingMissionSorReveal'):
+        return {'ok': False, 'reason': 'already_revealed'}
+
+    data['pendingMissionSorReveal'] = False
+
+    selected_mission = data.get('selectedMission') or {}
+    selected_map = data.get('selectedMap') or {}
+    map_id = data.get('mapId') or (
+        selected_map.get('id') if isinstance(selected_map, dict) else None
+    )
+    variant = selected_mission.get('variant') if isinstance(selected_mission, dict) else None
+    mission_rules = selected_mission.get('rules') if isinstance(selected_mission, dict) else None
+    sor_rules = None
+    if isinstance(mission_rules, dict):
+        sor_rules = mission_rules.get('startOfRound')
+    if isinstance(sor_rules, dict):
+        run_start_of_round_rules(data, map_id, variant or 'a', dict(sor_rules))
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'mapId': map_id, 'variant': variant,
+        'ranSorRules': isinstance(sor_rules, dict),
+    }
+
+
 register('end_end_of_round_', _handle_end_end_of_round, 'round')
 register('end_start_of_round_', _handle_end_start_of_round, 'round')
 register('extra_armor_pick_', _handle_extra_armor_pick, 'round')
 register('extra_armor_confirm_', _handle_extra_armor_confirm, 'round')
 register('extra_armor_cancel_', _handle_extra_armor_cancel, 'round')
+register('sor_mission_reveal_', _handle_sor_mission_reveal, 'round')

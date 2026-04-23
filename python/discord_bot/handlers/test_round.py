@@ -28,6 +28,7 @@ def _fresh_registry():
     handlers.register('extra_armor_pick_', rd._handle_extra_armor_pick, 'round')
     handlers.register('extra_armor_confirm_', rd._handle_extra_armor_confirm, 'round')
     handlers.register('extra_armor_cancel_', rd._handle_extra_armor_cancel, 'round')
+    handlers.register('sor_mission_reveal_', rd._handle_sor_mission_reveal, 'round')
 
 
 def _two_figure_game(round_num=1):
@@ -241,6 +242,65 @@ def test_extra_armor_cancel_is_noop():
     assert result['noop'] is True
 
 
+# ── sor_mission_reveal ─────────────────────────────────────────────────────
+
+def test_sor_mission_reveal_clears_flag():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingMissionSorReveal'] = True
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('sor_mission_reveal_G1')
+        result = handler(
+            _Interaction('sor_mission_reveal_G1', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert g.data.get('pendingMissionSorReveal') is False
+    finally:
+        _cleanup()
+
+
+def test_sor_mission_reveal_rejects_non_player():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingMissionSorReveal'] = True
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('sor_mission_reveal_G1')
+        result = handler(
+            _Interaction('sor_mission_reveal_G1', user_id='stranger'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'not_a_player_in_game'
+    finally:
+        _cleanup()
+
+
+def test_sor_mission_reveal_rejects_when_already_revealed():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingMissionSorReveal'] = False
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('sor_mission_reveal_G1')
+        result = handler(
+            _Interaction('sor_mission_reveal_G1', user_id='alice'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'already_revealed'
+    finally:
+        _cleanup()
+
+
 def main():
     cases = [
         ('eor_advances_round', test_end_end_of_round_advances_round),
@@ -253,6 +313,9 @@ def main():
         ('ea_confirm_budget', test_extra_armor_confirm_requires_budget_exhausted),
         ('ea_confirm_applies', test_extra_armor_confirm_applies_block_tokens),
         ('ea_cancel_noop', test_extra_armor_cancel_is_noop),
+        ('sor_reveal_clears', test_sor_mission_reveal_clears_flag),
+        ('sor_reveal_non_player', test_sor_mission_reveal_rejects_non_player),
+        ('sor_reveal_already', test_sor_mission_reveal_rejects_when_already_revealed),
     ]
     failures = []
     for name, fn in cases:
