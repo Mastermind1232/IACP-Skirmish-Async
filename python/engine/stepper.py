@@ -292,7 +292,30 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
     if not map_spaces:
         raise ValueError(f'move_pick_space: no map spaces for mapId={map_id!r}')
 
-    occupied = _occupied_cells(game, exclude_key=figure_key)
+    # Resolve this figure's msg_id to check mobileMovementActive.
+    from python.engine.mechanics.figure_lookup import parse_figure_key
+    mm_active_map = game.get('mobileMovementActive') or {}
+    mobile_active = False
+    if mm_active_map:
+        dc_list_key = 'p1DcList' if player == 1 else 'p2DcList'
+        msg_ids_key = 'p1DcMessageIds' if player == 1 else 'p2DcMessageIds'
+        dc_list = game.get(dc_list_key) or []
+        msg_ids = game.get(msg_ids_key) or []
+        parsed = parse_figure_key(figure_key)
+        if parsed is not None:
+            tname, tgroup, _ = parsed
+            for i, dc in enumerate(dc_list):
+                if not isinstance(dc, Mapping):
+                    continue
+                if (dc.get('dcName') == tname
+                        and int(dc.get('dgIndex') or 0) == tgroup
+                        and i < len(msg_ids)):
+                    if msg_ids[i] in mm_active_map:
+                        mobile_active = True
+                    break
+
+    # Mobile movement ignores blocking figures (empty occupied_set).
+    occupied = [] if mobile_active else _occupied_cells(game, exclude_key=figure_key)
     cost = get_path_cost(start_coord, coord, map_spaces, occupied)
     if cost == float('inf'):
         raise ValueError(f'move_pick_space: {coord} unreachable from {start_coord}')
