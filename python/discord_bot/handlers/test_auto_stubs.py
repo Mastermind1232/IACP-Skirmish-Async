@@ -53,6 +53,9 @@ def _load_py_prefixes():
     import python.discord_bot.handlers.game_tools  # noqa: F401
     import python.discord_bot.handlers.lobby  # noqa: F401
     import python.discord_bot.handlers.requests  # noqa: F401
+    import python.discord_bot.handlers.favorites  # noqa: F401
+    import python.discord_bot.handlers.space_picker  # noqa: F401
+    import python.discord_bot.handlers.fast_forward  # noqa: F401
     import python.discord_bot.handlers.stepper_bridge  # noqa: F401
     import python.discord_bot.handlers.auto_stubs  # noqa: F401
     return {p for p, _, _ in H._REGISTRY}
@@ -68,23 +71,21 @@ def test_every_js_prefix_has_a_python_handler():
 def test_stub_handler_returns_ok_stub_true():
     py = _load_py_prefixes()  # ensure auto_stubs installed
     from python.discord_bot.handlers import find_handler
-    # fav_save_ is not yet concrete — should still route to a stub.
-    _, handler, _ = find_handler('fav_save_G1_1')
-    result = handler(_Interaction('fav_save_G1_1'), {})
+    # ctf_pick_ remains a stub (complex Channel the Force flow).
+    _, handler, _ = find_handler('ctf_pick_G1_1_0')
+    result = handler(_Interaction('ctf_pick_G1_1_0'), {})
     assert result['ok'] is True
     assert result['stub'] is True
-    assert result['prefix'] == 'fav_save_'
+    assert result['prefix'] == 'ctf_pick_'
     assert result['gameId'] == 'G1'
 
 
 def test_stub_handler_malformed_cid_rejected():
     py = _load_py_prefixes()
     from python.discord_bot.handlers import find_handler
-    # fav_remove_ is still a stub.
-    _, handler, _ = find_handler('fav_remove_G1_1')
-    # Empty prefix match still returns ok (just no tail)
-    result = handler(_Interaction('fav_remove_'), {})
-    # Note: stub returns ok with gameId='' when there's no tail
+    # doubt_fig_ is still a stub.
+    _, handler, _ = find_handler('doubt_fig_G1_1_skip')
+    result = handler(_Interaction('doubt_fig_'), {})
     assert result['ok'] is True
     assert result['stub'] is True
 
@@ -96,9 +97,9 @@ def test_stub_does_not_mutate_state():
     g = create_game()
     g.data['player1Id'] = 'alice'
     before = dict(g.data)
-    _, handler, _ = find_handler('fav_save_G1_1')
+    _, handler, _ = find_handler('pd_pick_G1_1_0')
     ctx = {'get_game': lambda gid: g, 'save_games': lambda: None}
-    result = handler(_Interaction('fav_save_G1_1'), ctx)
+    result = handler(_Interaction('pd_pick_G1_1_0'), ctx)
     assert result['stub'] is True
     # No state mutation
     assert g.data == before
