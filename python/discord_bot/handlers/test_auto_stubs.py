@@ -59,6 +59,9 @@ def _load_py_prefixes():
     import python.discord_bot.handlers.post_deploy_picks  # noqa: F401
     import python.discord_bot.handlers.blitz_deploy  # noqa: F401
     import python.discord_bot.handlers.setup_extras  # noqa: F401
+    import python.discord_bot.handlers.activation_picks  # noqa: F401
+    import python.discord_bot.handlers.combat_picks  # noqa: F401
+    import python.discord_bot.handlers.interrupts_extras  # noqa: F401
     import python.discord_bot.handlers.stepper_bridge  # noqa: F401
     import python.discord_bot.handlers.auto_stubs  # noqa: F401
     return {p for p, _, _ in H._REGISTRY}
@@ -75,20 +78,21 @@ def test_stub_handler_returns_ok_stub_true():
     py = _load_py_prefixes()  # ensure auto_stubs installed
     from python.discord_bot.handlers import find_handler
     # ctf_pick_ remains a stub (complex Channel the Force flow).
-    _, handler, _ = find_handler('ctf_pick_G1_1_0')
-    result = handler(_Interaction('ctf_pick_G1_1_0'), {})
+    # kill_game_ remains a stub (destructive Discord channel deletion).
+    _, handler, _ = find_handler('kill_game_G1')
+    result = handler(_Interaction('kill_game_G1'), {})
     assert result['ok'] is True
     assert result['stub'] is True
-    assert result['prefix'] == 'ctf_pick_'
+    assert result['prefix'] == 'kill_game_'
     assert result['gameId'] == 'G1'
 
 
 def test_stub_handler_malformed_cid_rejected():
     py = _load_py_prefixes()
     from python.discord_bot.handlers import find_handler
-    # doubt_fig_ is still a stub.
-    _, handler, _ = find_handler('doubt_fig_G1_1_skip')
-    result = handler(_Interaction('doubt_fig_'), {})
+    # dc_unactivate_ remains a stub (heavy activation cleanup).
+    _, handler, _ = find_handler('dc_unactivate_hl1dc0')
+    result = handler(_Interaction('dc_unactivate_'), {})
     assert result['ok'] is True
     assert result['stub'] is True
 
@@ -141,7 +145,10 @@ def test_stub_count_matches_installed():
     # _INSTALLED_COUNT drops. Anchor to the floor we care about: at least
     # one stub still installs (the bot currently doesn't cover every
     # flow end-to-end).
-    assert auto_stubs._INSTALLED_COUNT >= 100
+    # After batch backfills, stub count drops toward 0. Assert the
+    # floor is at least some stubs still exist (complex orchestrator
+    # buttons remain). This assertion decays as backfills continue.
+    assert auto_stubs._INSTALLED_COUNT >= 20
 
 
 def main():
