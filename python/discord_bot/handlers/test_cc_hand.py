@@ -41,6 +41,7 @@ def _fresh_registry():
     handlers.register('cc_draw_', ch._handle_cc_draw, 'ccHand')
     handlers.register('cc_close_discard_', ch._handle_cc_close_discard, 'ccHand')
     handlers.register('negation_let_resolve_', ch._handle_negation_let_resolve, 'ccHand')
+    handlers.register('cc_discard_', ch._handle_cc_discard_open_picker, 'ccHand')
 
 
 def _basic_game():
@@ -399,6 +400,41 @@ def test_negation_let_resolve_clears_pending():
     assert 'pendingNegation' not in g.data
 
 
+def test_cc_discard_opens_picker_when_hand_non_empty():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['player1CcHand'] = ['Focus', 'Hold On']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_discard_G1')
+    result = handler(
+        _Interaction('cc_discard_G1', user_id='alice', channel_id='HAND_P1'),
+        ctx,
+    )
+    assert result['ok'] is True
+    assert result['handSize'] == 2
+    assert result['playerNum'] == 1
+
+
+def test_cc_discard_rejects_empty_hand():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['player1CcHand'] = []
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_discard_G1')
+    result = handler(
+        _Interaction('cc_discard_G1', user_id='alice', channel_id='HAND_P1'),
+        ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'hand_empty'
+
+
 def test_negation_let_resolve_no_pending():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -508,6 +544,8 @@ def main():
         ('cc_close_discard_malformed', test_cc_close_discard_malformed),
         ('negation_let_resolve_clears', test_negation_let_resolve_clears_pending),
         ('negation_let_resolve_no_pending', test_negation_let_resolve_no_pending),
+        ('cc_discard_opens', test_cc_discard_opens_picker_when_hand_non_empty),
+        ('cc_discard_empty', test_cc_discard_rejects_empty_hand),
     ]
     failures = []
     for name, fn in cases:

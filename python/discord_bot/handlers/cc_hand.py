@@ -278,6 +278,38 @@ def _handle_squad_cancel(interaction: Any,
     }
 
 
+def _handle_cc_discard_open_picker(interaction: Any,
+                                     ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """cc_discard_{gameId} — opens the 'pick a card to discard' select
+    menu. Validates ownership + hand is non-empty; no state mutation.
+    The actual discard lands when the select fires cc_discard_select_.
+    Mirrors src/handlers/cc-hand.js:1647-1680.
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('cc_discard_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id = cid[len('cc_discard_'):]
+    if not game_id:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    player_num = _player_num_from_channel(interaction, game)
+    if player_num not in (1, 2):
+        return {'ok': False, 'reason': 'wrong_channel'}
+
+    data = game.data if hasattr(game, 'data') else game
+    hand = data.get(f'player{player_num}CcHand') or []
+    if not hand:
+        return {'ok': False, 'reason': 'hand_empty'}
+    return {
+        'ok': True, 'gameId': game_id, 'playerNum': player_num,
+        'handSize': len(hand),
+    }
+
+
 def _handle_cc_close_discard(interaction: Any,
                                ctx: Dict[str, Any]) -> Dict[str, Any]:
     """cc_close_discard_{gameId}_{playerNum} — UI-only close-discard
@@ -474,3 +506,4 @@ register('squad_cancel_', _handle_squad_cancel, 'ccHand')
 register('cc_draw_', _handle_cc_draw, 'ccHand')
 register('cc_close_discard_', _handle_cc_close_discard, 'ccHand')
 register('negation_let_resolve_', _handle_negation_let_resolve, 'ccHand')
+register('cc_discard_', _handle_cc_discard_open_picker, 'ccHand')
