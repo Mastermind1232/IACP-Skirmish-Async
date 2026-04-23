@@ -123,6 +123,37 @@ def test_vp_threshold_triggers_game_over():
     assert g.get('winner') == 1
 
 
+def test_full_game_via_run_setup_completes():
+    """Setup via run_setup() → random play → eventual game_over.
+
+    Verifies the full Python flow (setup chain + round loop + win
+    conditions) works end-to-end without the AUTO_DEPLOY shortcut.
+    """
+    from python.engine.setup import run_setup
+    random.seed(7)
+    g = create_game(map_id='mos-eisley-outskirts')
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g = run_setup(
+        g,
+        {'deploymentCards': ['Luke Skywalker', 'Rebel Trooper (Regular)']},
+        {'deploymentCards': ['Stormtrooper (Regular)', 'Stormtrooper (Regular)']},
+        'mos-eisley-outskirts',
+    )
+    steps = 0
+    while g.get('phase') != 'game_over' and steps < 5000:
+        actions = legal_actions(g)
+        if not actions:
+            break
+        g = step(g, random.choice(actions))
+        steps += 1
+    # Game must end (elimination or VP) within 5000 steps.
+    assert g.get('phase') == 'game_over', (
+        f'Game did not end in 5000 steps (round={g.get("round")})'
+    )
+    assert g.data.get('gameEndedReason'), 'Missing game-end reason'
+
+
 def test_figure_elimination_triggers_game_over():
     """Wiping one side's figures triggers elimination win."""
     from python.engine.mechanics.defeat import remove_figure_position
@@ -144,6 +175,7 @@ def main():
         ('cc_draw_refreshes', test_cc_draw_refreshes_hand_at_round_start),
         ('round_state_clears', test_round_scoped_state_clears_on_eor),
         ('vp_triggers_game_over', test_vp_threshold_triggers_game_over),
+        ('full_game_completes', test_full_game_via_run_setup_completes),
         ('elimination_triggers_game_over', test_figure_elimination_triggers_game_over),
     ]
     failures = []
