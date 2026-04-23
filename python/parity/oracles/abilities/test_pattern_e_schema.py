@@ -242,7 +242,7 @@ def test_schema_coverage_count():
     if total == 0:
         return
     ratio = match / total
-    assert ratio >= 0.40, (
+    assert ratio >= 0.50, (
         f'dcSpecial Pattern E schema match ratio too low: {ratio:.2%} '
         f'({match}/{total})'
     )
