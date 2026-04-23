@@ -1,5 +1,10 @@
-"""Tests for the auto-generated stub module that guarantees 100%
-JS→Python dispatcher coverage."""
+"""Tests for the auto-stubs module + 100% dispatcher coverage.
+
+Every JS handler prefix now has a concrete Python handler. The
+auto_stubs module remains as a safety net — if a JS prefix were added
+without a Python port, auto_stubs would catch it. Today, 0 stubs
+install because every prefix is claimed by a concrete module first.
+"""
 from __future__ import annotations
 
 import re
@@ -22,7 +27,6 @@ class _Interaction:
 
 
 def _load_js_prefixes():
-    """Parse every register('prefix_', ...) call from JS index.js."""
     path = REPO_ROOT / 'src' / 'handlers' / 'index.js'
     with open(path) as f:
         code = f.read()
@@ -30,9 +34,7 @@ def _load_js_prefixes():
 
 
 def _load_py_prefixes():
-    """Load all concrete + bridge + auto_stub handler registrations."""
     from python.discord_bot import handlers as H
-    # Force import of every Python handler module
     import python.discord_bot.handlers.setup  # noqa: F401
     import python.discord_bot.handlers.activation  # noqa: F401
     import python.discord_bot.handlers.combat  # noqa: F401
@@ -62,6 +64,7 @@ def _load_py_prefixes():
     import python.discord_bot.handlers.activation_picks  # noqa: F401
     import python.discord_bot.handlers.combat_picks  # noqa: F401
     import python.discord_bot.handlers.interrupts_extras  # noqa: F401
+    import python.discord_bot.handlers.final_validators  # noqa: F401
     import python.discord_bot.handlers.stepper_bridge  # noqa: F401
     import python.discord_bot.handlers.auto_stubs  # noqa: F401
     return {p for p, _, _ in H._REGISTRY}
@@ -74,55 +77,40 @@ def test_every_js_prefix_has_a_python_handler():
     assert not missing, f'JS prefixes with no Python handler: {sorted(missing)}'
 
 
-def test_stub_handler_returns_ok_stub_true():
-    py = _load_py_prefixes()  # ensure auto_stubs installed
-    from python.discord_bot.handlers import find_handler
-    # ctf_pick_ remains a stub (complex Channel the Force flow).
-    # kill_game_ remains a stub (destructive Discord channel deletion).
-    _, handler, _ = find_handler('kill_game_G1')
-    result = handler(_Interaction('kill_game_G1'), {})
-    assert result['ok'] is True
-    assert result['stub'] is True
-    assert result['prefix'] == 'kill_game_'
-    assert result['gameId'] == 'G1'
+def test_zero_stubs_installed():
+    """All prefixes are concrete — auto_stubs installs nothing."""
+    _load_py_prefixes()
+    from python.discord_bot.handlers import auto_stubs
+    assert auto_stubs._INSTALLED_COUNT == 0
 
 
-def test_stub_handler_malformed_cid_rejected():
+def test_no_stub_handlers_in_registry():
+    """No registered handler's __name__ starts with _stub_."""
+    _load_py_prefixes()
+    from python.discord_bot import handlers as H
+    stub_prefixes = [
+        p for p, h, _ in H._REGISTRY
+        if h.__name__.startswith('_stub_')
+    ]
+    assert not stub_prefixes, \
+        f'Stub handlers still registered: {stub_prefixes}'
+
+
+def test_concrete_count_matches_js():
+    """Python concrete-handler count meets or exceeds JS prefix count."""
+    js = _load_js_prefixes()
     py = _load_py_prefixes()
-    from python.discord_bot.handlers import find_handler
-    # dc_unactivate_ remains a stub (heavy activation cleanup).
-    _, handler, _ = find_handler('dc_unactivate_hl1dc0')
-    result = handler(_Interaction('dc_unactivate_'), {})
-    assert result['ok'] is True
-    assert result['stub'] is True
+    # Python may have extra prefixes (bridge duplicates), but should
+    # cover every JS one.
+    assert py >= js, f'Missing JS prefixes: {sorted(js - py)}'
 
 
-def test_stub_does_not_mutate_state():
-    py = _load_py_prefixes()
-    from python.discord_bot.handlers import find_handler
-    from python.engine.creation import create_game
-    g = create_game()
-    g.data['player1Id'] = 'alice'
-    before = dict(g.data)
-    _, handler, _ = find_handler('kill_game_G1')
-    ctx = {'get_game': lambda gid: g, 'save_games': lambda: None}
-    result = handler(_Interaction('kill_game_G1'), ctx)
-    assert result['stub'] is True
-    # No state mutation
-    assert g.data == before
-
-
-def test_concrete_handlers_shadow_stubs():
-    """Verify concrete ports (e.g. in dc_play_area.py) take precedence
-    over auto_stubs. If a concrete handler exists for a prefix, the
-    stub must not shadow it.
-    """
+def test_concrete_handler_shadow_precedence():
+    """A concrete handler for a prefix is selected by the router, not
+    the auto_stub fallback. Verified via a handler that has state-aware
+    behavior (extra_armor_pick_)."""
     _load_py_prefixes()
     from python.discord_bot.handlers import find_handler
-    # extra_armor_pick_ has a concrete handler in round.py; it should
-    # NOT return stub=True.
-    _, handler, _ = find_handler('extra_armor_pick_G1_1_Luke-0-0')
-    # Run it against a game and expect state-aware behavior, not stub
     from python.engine.creation import create_game
     g = create_game()
     g.data['player1Id'] = 'alice'
@@ -130,35 +118,21 @@ def test_concrete_handlers_shadow_stubs():
     g.data['pendingExtraArmor_p1'] = {'total': 4, 'allocation': {}}
     store = {'G1': g}
     ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('extra_armor_pick_G1_1_Luke-0-0')
     result = handler(_Interaction('extra_armor_pick_G1_1_Luke-0-0',
                                     user_id='alice'), ctx)
-    # Real handler path — returns tokenCount, not stub
+    # Real handler returns tokenCount; no 'stub' key.
     assert result.get('stub') is not True
     assert 'tokenCount' in result
-
-
-def test_stub_count_matches_installed():
-    from python.discord_bot.handlers import auto_stubs
-    _load_py_prefixes()
-    # _STUB_PREFIXES has 212 entries; only prefixes not already claimed
-    # by a concrete handler get installed. As more concrete ports land,
-    # _INSTALLED_COUNT drops. Anchor to the floor we care about: at least
-    # one stub still installs (the bot currently doesn't cover every
-    # flow end-to-end).
-    # After batch backfills, stub count drops toward 0. Assert the
-    # floor is at least some stubs still exist (complex orchestrator
-    # buttons remain). This assertion decays as backfills continue.
-    assert auto_stubs._INSTALLED_COUNT >= 20
 
 
 def main():
     cases = [
         ('100pct_coverage', test_every_js_prefix_has_a_python_handler),
-        ('stub_returns_ok', test_stub_handler_returns_ok_stub_true),
-        ('stub_empty_tail', test_stub_handler_malformed_cid_rejected),
-        ('stub_no_mutation', test_stub_does_not_mutate_state),
-        ('concrete_shadows_stubs', test_concrete_handlers_shadow_stubs),
-        ('install_count_pinned', test_stub_count_matches_installed),
+        ('zero_stubs_installed', test_zero_stubs_installed),
+        ('no_stub_handlers_in_registry', test_no_stub_handlers_in_registry),
+        ('concrete_count_matches_js', test_concrete_count_matches_js),
+        ('concrete_shadow_precedence', test_concrete_handler_shadow_precedence),
     ]
     failures = []
     for name, fn in cases:
