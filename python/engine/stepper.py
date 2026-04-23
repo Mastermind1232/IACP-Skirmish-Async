@@ -816,6 +816,68 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         # raise NotImplementedError; UnregisteredPatternD is RuntimeError.
         pass
 
+    # Fire pre-attack / attack-declare triggers (attacker-side).
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        for aid in atk_sids:
+            abil_entry = get_ability(aid) or {}
+            trig = abil_entry.get('trigger')
+            if trig in ('pre-attack', 'attack-declare', 'declare-attack',
+                        'whenAttackDeclared'):
+                try:
+                    fire_ability(game.data, aid, {
+                        'figure_key': attacker_key,
+                        'attacker_figure_key': attacker_key,
+                        'defender_figure_key': target_key,
+                        'combat': combat,
+                        'trigger': trig,
+                    })
+                except NotImplementedError:
+                    pass
+    except Exception:
+        pass
+
+    # Fire when-targeted / attack-declared-on-you / ranged-attack-declared-on-you
+    # triggers on defender abilities.
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        for aid in def_sids:
+            abil_entry = get_ability(aid) or {}
+            trig = abil_entry.get('trigger')
+            if trig == 'when-targeted':
+                try:
+                    fire_ability(game.data, aid, {
+                        'figure_key': target_key,
+                        'attacker_figure_key': attacker_key,
+                        'defender_figure_key': target_key,
+                        'combat': combat,
+                        'trigger': trig,
+                    })
+                except NotImplementedError:
+                    pass
+            elif trig == 'attack-declared-on-you':
+                try:
+                    fire_ability(game.data, aid, {
+                        'figure_key': target_key,
+                        'combat': combat,
+                        'trigger': trig,
+                    })
+                except NotImplementedError:
+                    pass
+            elif trig == 'ranged-attack-declared-on-you' and attack_type == 'range':
+                try:
+                    fire_ability(game.data, aid, {
+                        'figure_key': target_key,
+                        'combat': combat,
+                        'trigger': trig,
+                    })
+                except NotImplementedError:
+                    pass
+    except Exception:
+        pass
+
     # Fire Pattern D combat-dice triggers (post-roll dice surgery:
     # Fury, Inspiring, Soresu Form, Shared Intuition, etc.).
     try:
