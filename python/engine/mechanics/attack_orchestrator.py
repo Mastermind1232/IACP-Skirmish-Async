@@ -441,13 +441,75 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         except Exception:
             pass
 
-        # ── Phase 9-11: DEFEAT ─────────────────────────────────────────
+        # ── Phase 9: PRE-DEFEAT triggers ────────────────────────────────
+        if defeated:
+            try:
+                from python.engine.abilities.pattern_d import fire_ability
+                from python.engine.data.ability_library_loader import get_ability
+                for ability_id in defender_sids:
+                    entry = get_ability(ability_id) or {}
+                    if entry.get('trigger') in ('pre-defeat',):
+                        try:
+                            r = fire_ability(data, ability_id, {
+                                'figure_key': target_key,
+                                'trigger': 'pre-defeat',
+                            })
+                            triggered.append({'ability_id': ability_id,
+                                              **(r or {})})
+                        except NotImplementedError:
+                            pass
+            except Exception:
+                pass
+
+        # ── Phase 10: DEFEAT ───────────────────────────────────────────
         if defeated:
             _remove_figure(data, def_player, target_key)
             vp = calculate_kill_vp(def_dc)
             if vp:
                 award_kill_vp(data, atk_player, vp)
                 vp_gained = int(vp)
+
+            # ── Phase 11: ON-DEFEAT + friendly-defeat triggers ──────────
+            try:
+                from python.engine.abilities.pattern_d import fire_ability
+                from python.engine.data.ability_library_loader import get_ability
+                # on-defeat on the defeated figure itself
+                for ability_id in defender_sids:
+                    entry = get_ability(ability_id) or {}
+                    if entry.get('trigger') in ('on-defeat', 'onDefeat'):
+                        try:
+                            r = fire_ability(data, ability_id, {
+                                'figure_key': target_key,
+                                'trigger': entry.get('trigger'),
+                            })
+                            triggered.append({'ability_id': ability_id,
+                                              **(r or {})})
+                        except NotImplementedError:
+                            pass
+
+                # friendly-defeat on other surviving friendlies
+                def_friends = (data.get('figurePositions') or {}).get(
+                    def_player, {},
+                ) or {}
+                for friend_fk in list(def_friends.keys()):
+                    if friend_fk == target_key:
+                        continue
+                    friend_dc = _dc_name_from_figure_key(friend_fk)
+                    friend_eff = get_dc_effect(friend_dc) or {}
+                    for fab in (friend_eff.get('specialAbilityIds') or []):
+                        entry = get_ability(fab) or {}
+                        if entry.get('trigger') == 'friendly-defeat':
+                            try:
+                                r = fire_ability(data, fab, {
+                                    'figure_key': friend_fk,
+                                    'defeated_figure_key': target_key,
+                                    'trigger': 'friendly-defeat',
+                                })
+                                triggered.append({'ability_id': fab, **(r or {})})
+                            except NotImplementedError:
+                                pass
+            except Exception:
+                pass
 
     # ── Phase 12: POST (clear pending + record attacks) ─────────────────
     # Record attack on attacker

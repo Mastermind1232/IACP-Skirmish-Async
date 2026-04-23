@@ -393,6 +393,12 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     Optional params:
         rng_seed (int): deterministic dice stream. Defaults to Python's
             module random if absent.
+        orchestrated (bool): when True, route through the full combat
+            orchestrator (Pattern D triggers, Focus/Hide consumption,
+            reroll window, token spends, post-defeat triggers). When
+            False (default), use the lightweight MVP path below.
+        surge_spends, attacker_rerolls, defender_rerolls, spent_tokens:
+            forwarded to the orchestrator when orchestrated=True.
 
     Scope (MVP):
         - Validates adjacency for melee, LOS for range.
@@ -401,6 +407,29 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         - Tracks figureAttacksThisActivation; one attack per activation.
         - On defeat: removes figure, awards kill VP (+ Jabba bonus).
     """
+    if action.params.get('orchestrated'):
+        from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+        attacker_key = (
+            action.params.get('attacker_key') or action.params.get('attackerKey')
+        )
+        target_key = (
+            action.params.get('target_key') or action.params.get('targetKey')
+        )
+        if not attacker_key or not target_key:
+            raise ValueError(
+                'attack_target requires attacker_key and target_key',
+            )
+        seed = action.params.get('rng_seed')
+        rng = _random.Random(seed) if seed is not None else None
+        result = orchestrate_attack(
+            game, attacker_key, target_key, rng=rng,
+            surge_spends=action.params.get('surge_spends'),
+            attacker_rerolls=int(action.params.get('attacker_rerolls') or 0),
+            defender_rerolls=int(action.params.get('defender_rerolls') or 0),
+            spent_tokens=action.params.get('spent_tokens'),
+        )
+        game.data['lastAttackOrchestration'] = result
+        return game
     attacker_key = action.params.get('attacker_key') or action.params.get('attackerKey')
     target_key = action.params.get('target_key') or action.params.get('targetKey')
     if not attacker_key or not target_key:
