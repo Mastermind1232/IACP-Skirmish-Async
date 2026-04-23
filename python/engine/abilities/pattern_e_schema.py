@@ -172,19 +172,83 @@ def handle_schema_chain(game: Any, ability_id: str,
             }
             effects.append({'effect': 'targetHostileFigure'})
 
-    # fixedAreaEffect — pending area-of-effect pick (damage/strain/condition).
+    # fixedAreaEffect — if ctx supplies target_coord, iterate every
+    # figure within fixedAreaRange and apply damage/strain/conditions.
+    # Otherwise stamp pendingFixedArea for UI/AI to resolve.
     if entry.get('fixedAreaEffect'):
-        data['pendingFixedArea'] = {
-            'abilityId': ability_id,
-            'range': int(entry.get('fixedAreaRange') or 0),
-            'damage': int(entry.get('fixedAreaDamage') or 0),
-            'strain': int(entry.get('fixedAreaStrain') or 0),
-            'conditions': list(entry.get('fixedAreaConditions') or []),
-            'figureKey': ctx.get('figure_key'),
-            'playerNum': ctx.get('player_num'),
-            'msgId': msg_id,
-        }
-        effects.append({'effect': 'fixedAreaEffect'})
+        area_range = int(entry.get('fixedAreaRange') or 0)
+        area_damage = int(entry.get('fixedAreaDamage') or 0)
+        area_strain = int(entry.get('fixedAreaStrain') or 0)
+        area_conditions = list(entry.get('fixedAreaConditions') or [])
+        target_coord = ctx.get('target_coord') or ctx.get('targetCoord')
+        caster_pn = ctx.get('player_num')
+        if target_coord and area_range > 0 and caster_pn in (1, 2):
+            try:
+                from python.engine.mechanics.board_helpers import count_game_spaces
+                fp = data.get('figurePositions') or {}
+                dc_health = data.get('dcHealthState') or {}
+                dc_meta = data.get('dcMessageMeta') or {}
+                hits: List[Dict[str, Any]] = []
+                for pn in (1, 2):
+                    for fk, coord in (fp.get(pn) or {}).items():
+                        if not coord:
+                            continue
+                        dist = count_game_spaces(game, target_coord, coord)
+                        if dist <= area_range:
+                            # Apply damage via reduce_hp if we can find msg_id
+                            target_msg = None
+                            from python.engine.mechanics.figure_lookup import (
+                                find_dc_message_id_for_figure,
+                                parse_figure_key,
+                            )
+                            target_msg = find_dc_message_id_for_figure(
+                                data.get('gameId'), pn, fk, dc_meta,
+                            )
+                            if area_damage > 0 and target_msg:
+                                parsed = parse_figure_key(fk)
+                                fig_idx = parsed[2] if parsed else 0
+                                try:
+                                    from python.engine.mechanics.damage_helpers import reduce_hp
+                                    reduce_hp(dc_health, data, target_msg, fig_idx, area_damage, pn)
+                                except Exception:
+                                    pass
+                            for cond in area_conditions:
+                                try:
+                                    from python.engine.mechanics.conditions import apply_condition
+                                    apply_condition(game, fk, cond)
+                                except Exception:
+                                    pass
+                            hits.append({
+                                'figureKey': fk, 'playerNum': pn,
+                                'distance': int(dist),
+                                'damageDealt': area_damage,
+                                'conditions': list(area_conditions),
+                            })
+                effects.append({
+                    'effect': 'fixedAreaEffect_resolved',
+                    'center': target_coord,
+                    'range': area_range,
+                    'hitsCount': len(hits),
+                    'hits': hits,
+                })
+            except Exception:
+                data['pendingFixedArea'] = {
+                    'abilityId': ability_id,
+                    'range': area_range, 'damage': area_damage,
+                    'strain': area_strain, 'conditions': area_conditions,
+                    'figureKey': ctx.get('figure_key'),
+                    'playerNum': caster_pn, 'msgId': msg_id,
+                }
+                effects.append({'effect': 'fixedAreaEffect'})
+        else:
+            data['pendingFixedArea'] = {
+                'abilityId': ability_id,
+                'range': area_range, 'damage': area_damage,
+                'strain': area_strain, 'conditions': area_conditions,
+                'figureKey': ctx.get('figure_key'),
+                'playerNum': caster_pn, 'msgId': msg_id,
+            }
+            effects.append({'effect': 'fixedAreaEffect'})
 
     # rollOneDie — if ctx.target_figure_key provided, roll a single attack
     # die and apply damage equal to the hit count to the target. Otherwise
