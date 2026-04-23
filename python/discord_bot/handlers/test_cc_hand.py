@@ -38,6 +38,9 @@ def _fresh_registry():
     handlers.register('cc_discard_select_', ch._handle_cc_discard_select, 'ccHand')
     handlers.register('cc_play_select_', ch._handle_cc_play_select, 'ccHand')
     handlers.register('squad_cancel_', ch._handle_squad_cancel, 'ccHand')
+    handlers.register('cc_draw_', ch._handle_cc_draw, 'ccHand')
+    handlers.register('cc_close_discard_', ch._handle_cc_close_discard, 'ccHand')
+    handlers.register('negation_let_resolve_', ch._handle_negation_let_resolve, 'ccHand')
 
 
 def _basic_game():
@@ -327,6 +330,103 @@ def test_squad_cancel_rejects_non_owner():
     assert result['reason'] == 'not_owner'
 
 
+def test_cc_draw_pulls_top_card_from_deck():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['player1CcDeck'] = ['Focus', 'Hold On', 'Reinforcements']
+    g.data['player1CcHand'] = []
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_draw_G1')
+    result = handler(
+        _Interaction('cc_draw_G1', user_id='alice', channel_id='HAND_P1'), ctx,
+    )
+    assert result['ok'] is True
+    assert result['card'] == 'Focus'
+    assert result['deckRemaining'] == 2
+    assert g.data['player1CcHand'] == ['Focus']
+    assert g.data['player1CcDeck'] == ['Hold On', 'Reinforcements']
+
+
+def test_cc_draw_empty_deck():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['player1CcDeck'] = []
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_draw_G1')
+    result = handler(
+        _Interaction('cc_draw_G1', user_id='alice', channel_id='HAND_P1'), ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'deck_empty'
+
+
+def test_cc_close_discard_parses():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('cc_close_discard_G1_1')
+    result = handler(_Interaction('cc_close_discard_G1_1'), {})
+    assert result['ok'] is True
+    assert result['gameId'] == 'G1'
+    assert result['playerNum'] == 1
+
+
+def test_cc_close_discard_malformed():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('cc_close_discard_G1_xyz')
+    result = handler(_Interaction('cc_close_discard_G1_xyz'), {})
+    assert result['ok'] is False
+    assert result['reason'] == 'malformed_custom_id'
+
+
+def test_negation_let_resolve_clears_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['pendingNegation'] = {'card': 'Focus', 'playedBy': 1}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('negation_let_resolve_G1')
+    result = handler(_Interaction('negation_let_resolve_G1'), ctx)
+    assert result['ok'] is True
+    assert result['clearedCard'] == 'Focus'
+    assert 'pendingNegation' not in g.data
+
+
+def test_negation_let_resolve_no_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('negation_let_resolve_G1')
+    result = handler(_Interaction('negation_let_resolve_G1'), ctx)
+    assert result['ok'] is False
+    assert result['reason'] == 'no_pending_negation'
+
+
+def test_cc_draw_wrong_channel():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['player1CcDeck'] = ['Focus']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_draw_G1')
+    result = handler(
+        _Interaction('cc_draw_G1', user_id='alice', channel_id='NOT_HAND'), ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'wrong_channel'
+
+
 def test_squad_cancel_no_pending_is_ok():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -401,6 +501,13 @@ def main():
         ('squad_cancel_drops', test_squad_cancel_drops_pending_entry),
         ('squad_cancel_non_owner', test_squad_cancel_rejects_non_owner),
         ('squad_cancel_no_pending', test_squad_cancel_no_pending_is_ok),
+        ('cc_draw_pulls', test_cc_draw_pulls_top_card_from_deck),
+        ('cc_draw_empty', test_cc_draw_empty_deck),
+        ('cc_draw_wrong_channel', test_cc_draw_wrong_channel),
+        ('cc_close_discard_parses', test_cc_close_discard_parses),
+        ('cc_close_discard_malformed', test_cc_close_discard_malformed),
+        ('negation_let_resolve_clears', test_negation_let_resolve_clears_pending),
+        ('negation_let_resolve_no_pending', test_negation_let_resolve_no_pending),
     ]
     failures = []
     for name, fn in cases:

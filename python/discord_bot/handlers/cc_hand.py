@@ -278,6 +278,91 @@ def _handle_squad_cancel(interaction: Any,
     }
 
 
+def _handle_cc_close_discard(interaction: Any,
+                               ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """cc_close_discard_{gameId}_{playerNum} — UI-only close-discard
+    prompt (triggers archiving the discard thread). No state mutation.
+    Mirrors src/handlers/cc-hand.js:1620-1650.
+    """
+    import re
+    cid = _cid(interaction)
+    m = re.match(r'^cc_close_discard_([^_]+)_([12])$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    return {'ok': True, 'gameId': m.group(1), 'playerNum': int(m.group(2))}
+
+
+def _handle_negation_let_resolve(interaction: Any,
+                                   ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """negation_let_resolve_{gameId} — opponent declines to negate a
+    played CC. Clears game.pendingNegation. Mirrors
+    src/handlers/cc-hand.js:1066-1095 state-mutation half; the
+    resolveAbility continuation lives in the combat orchestrator port.
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('negation_let_resolve_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id = cid[len('negation_let_resolve_'):]
+    if not game_id:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    data = game.data if hasattr(game, 'data') else game
+    pending = data.pop('pendingNegation', None)
+    if pending is None:
+        return {'ok': False, 'reason': 'no_pending_negation'}
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {'ok': True, 'game': game, 'clearedCard': pending.get('card')}
+
+
+def _handle_cc_draw(interaction: Any,
+                     ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """cc_draw_{gameId} — pull top card from the player's CC deck and
+    push it into their hand. Channel-based ownership via
+    _player_num_from_channel. Mirrors src/handlers/cc-hand.js:1517-1553.
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('cc_draw_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id = cid[len('cc_draw_'):]
+    if not game_id:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    player_num = _player_num_from_channel(interaction, game)
+    if player_num not in (1, 2):
+        return {'ok': False, 'reason': 'wrong_channel'}
+
+    data = game.data if hasattr(game, 'data') else game
+    deck_key = f'player{player_num}CcDeck'
+    hand_key = f'player{player_num}CcHand'
+    deck = list(data.get(deck_key) or [])
+    if not deck:
+        return {'ok': False, 'reason': 'deck_empty'}
+
+    card = deck.pop(0)
+    hand = list(data.get(hand_key) or [])
+    hand.append(card)
+    data[deck_key] = deck
+    data[hand_key] = hand
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'playerNum': player_num, 'card': card,
+        'deckRemaining': len(deck),
+    }
+
+
 def _handle_cc_play_select(interaction: Any,
                              ctx: Dict[str, Any]) -> Dict[str, Any]:
     """cc_play_select_{gameId} — select-menu counterpart to `play_cc_`:
@@ -386,3 +471,6 @@ register('cc_space_', _handle_cc_space, 'ccHand')
 register('cc_discard_select_', _handle_cc_discard_select, 'ccHand')
 register('cc_play_select_', _handle_cc_play_select, 'ccHand')
 register('squad_cancel_', _handle_squad_cancel, 'ccHand')
+register('cc_draw_', _handle_cc_draw, 'ccHand')
+register('cc_close_discard_', _handle_cc_close_discard, 'ccHand')
+register('negation_let_resolve_', _handle_negation_let_resolve, 'ccHand')
