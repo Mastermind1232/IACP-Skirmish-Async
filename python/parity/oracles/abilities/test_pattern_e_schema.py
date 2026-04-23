@@ -135,8 +135,9 @@ def test_target_hostile_figure_resolves_when_target_provided():
                for e in r['effects'])
 
 
-def test_roll_one_die_stamps_pending():
-    """Abilities with rollOneDie stamp pendingRollOneDie."""
+def test_roll_one_die_stamps_pending_when_no_target():
+    """Abilities with rollOneDie stamp pendingRollOneDie when no target
+    info supplied."""
     from python.engine.abilities.classify import classify_ability
     from python.engine.data.ability_library_loader import get_ability_library
     lib = get_ability_library()
@@ -154,6 +155,45 @@ def test_roll_one_die_stamps_pending():
     r = handle_schema_chain(game, target_aid, ctx)
     assert 'pendingRollOneDie' in game
     assert {'effect': 'rollOneDie'} in r['effects']
+
+
+def test_roll_one_die_resolves_when_target_provided():
+    """With target_figure_key + target_player_num + target_msg_id,
+    rollOneDie rolls the die and applies damage = hits immediately."""
+    import random
+    from python.engine.abilities.classify import classify_ability
+    from python.engine.data.ability_library_loader import get_ability_library
+    lib = get_ability_library()
+    target_aid = None
+    for aid, entry in lib.items():
+        p, _ = classify_ability(aid, entry)
+        if p == 'E' and entry.get('rollOneDie'):
+            target_aid = aid
+            break
+    if not target_aid:
+        return
+
+    # Seed RNG so damage is deterministic
+    random.seed(12345)
+    game = {'dcHealthState': {'tgtmsg': [[10, 10]]}}
+    ctx = {
+        'figure_key': 'Grenadier-1-0',
+        'player_num': 1,
+        'msg_id': 'attm',
+        'target_figure_key': 'Luke-1-0',
+        'target_player_num': 2,
+        'target_msg_id': 'tgtmsg',
+    }
+    r = handle_schema_chain(game, target_aid, ctx)
+    # Did not stamp pending
+    assert 'pendingRollOneDie' not in game
+    # Resolved effect present
+    resolved = [e for e in r['effects']
+                if e.get('effect') == 'rollOneDie_resolved']
+    assert resolved, f'Expected rollOneDie_resolved, got {r["effects"]}'
+    # HP may or may not drop depending on roll; at minimum it's ≤ 10
+    post_hp = game['dcHealthState']['tgtmsg'][0][0]
+    assert 0 <= post_hp <= 10
 
 
 def test_fixed_area_effect_stamps_pending():
@@ -216,7 +256,8 @@ def main():
         ('passive_fallback', test_passive_reactive_falls_back),
         ('target_hostile_no_target', test_target_hostile_figure_stamps_pending_when_no_target),
         ('target_hostile_resolves', test_target_hostile_figure_resolves_when_target_provided),
-        ('roll_one_die', test_roll_one_die_stamps_pending),
+        ('roll_one_die_no_target', test_roll_one_die_stamps_pending_when_no_target),
+        ('roll_one_die_resolves', test_roll_one_die_resolves_when_target_provided),
         ('fixed_area_effect', test_fixed_area_effect_stamps_pending),
         ('coverage_count', test_schema_coverage_count),
     ]

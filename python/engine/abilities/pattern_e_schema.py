@@ -186,18 +186,56 @@ def handle_schema_chain(game: Any, ability_id: str,
         }
         effects.append({'effect': 'fixedAreaEffect'})
 
-    # rollOneDie — stamp pending die-roll with target semantics.
-    if entry.get('rollOneDie'):
-        data['pendingRollOneDie'] = {
-            'abilityId': ability_id,
-            'targetMode': entry.get('rollOneDieTarget'),
-            'range': int(entry.get('rollOneDieRange') or 0),
-            'maxTargets': int(entry.get('rollOneDieMaxTargets') or 0),
-            'figureKey': ctx.get('figure_key'),
-            'playerNum': ctx.get('player_num'),
-            'msgId': msg_id,
-        }
-        effects.append({'effect': 'rollOneDie'})
+    # rollOneDie — if ctx.target_figure_key provided, roll a single attack
+    # die and apply damage equal to the hit count to the target. Otherwise
+    # stamp pendingRollOneDie for UI/AI to resolve.
+    roll_spec = entry.get('rollOneDie')
+    if roll_spec:
+        target_fk = ctx.get('target_figure_key') or ctx.get('targetFigureKey')
+        target_pn = ctx.get('target_player_num') or ctx.get('targetPlayerNum')
+        target_msg = ctx.get('target_msg_id') or ctx.get('targetMsgId')
+        if target_fk and target_pn in (1, 2) and target_msg:
+            try:
+                from python.engine.mechanics.dice import roll_attack_dice
+                from python.engine.mechanics.damage_helpers import reduce_hp
+                from python.engine.mechanics.figure_lookup import parse_figure_key
+                die_color = roll_spec if isinstance(roll_spec, str) else 'red'
+                roll_result = roll_attack_dice([die_color])
+                hits = int(roll_result.get('dmg') or 0)
+                if hits > 0:
+                    parsed = parse_figure_key(target_fk)
+                    fig_idx = parsed[2] if parsed else 0
+                    dc_health = data.get('dcHealthState') or {}
+                    reduce_hp(dc_health, data, target_msg, fig_idx, hits, target_pn)
+                effects.append({
+                    'effect': 'rollOneDie_resolved',
+                    'dieColor': die_color,
+                    'hits': hits,
+                    'target': target_fk,
+                    'damage': hits,
+                })
+            except Exception:
+                data['pendingRollOneDie'] = {
+                    'abilityId': ability_id,
+                    'targetMode': entry.get('rollOneDieTarget'),
+                    'range': int(entry.get('rollOneDieRange') or 0),
+                    'maxTargets': int(entry.get('rollOneDieMaxTargets') or 0),
+                    'figureKey': ctx.get('figure_key'),
+                    'playerNum': ctx.get('player_num'),
+                    'msgId': msg_id,
+                }
+                effects.append({'effect': 'rollOneDie'})
+        else:
+            data['pendingRollOneDie'] = {
+                'abilityId': ability_id,
+                'targetMode': entry.get('rollOneDieTarget'),
+                'range': int(entry.get('rollOneDieRange') or 0),
+                'maxTargets': int(entry.get('rollOneDieMaxTargets') or 0),
+                'figureKey': ctx.get('figure_key'),
+                'playerNum': ctx.get('player_num'),
+                'msgId': msg_id,
+            }
+            effects.append({'effect': 'rollOneDie'})
 
     # pushTargetWithinRange — stamp pending push (handled concretely by
     # force_throw/wrist_cord/mandalorian_whip; this is for the remaining
