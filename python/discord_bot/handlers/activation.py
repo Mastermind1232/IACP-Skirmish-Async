@@ -271,6 +271,73 @@ def _handle_end_turn(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
 
 # ─── Cancel / confirm activation ──────────────────────────────────────────
 
+def _handle_heroic_effort_return(interaction: Any,
+                                    ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """heroic_effort_return_{gameId}_{playerNum}_{cardIdx} — places a
+    card from hand on the bottom of the player's CC deck. Clears the
+    per-player pendingHeroicEffortReturn key; drops the outer key if the
+    last entry was removed. Mirrors src/handlers/activation.js:2093-2125.
+    """
+    cid = _extract_custom_id(interaction)
+    if not cid.startswith('heroic_effort_return_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    rest = cid[len('heroic_effort_return_'):]
+    parts = rest.split('_', 2)
+    if len(parts) != 3:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str, card_idx_str = parts
+    try:
+        player_num = int(player_num_str)
+        card_idx = int(card_idx_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    get_game = ctx.get('get_game')
+    game = get_game(game_id) if callable(get_game) else None
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    pending_map = data.get('pendingHeroicEffortReturn') or {}
+    # JSON round-trips may stringify int keys — accept both.
+    pending = pending_map.get(player_num) or pending_map.get(str(player_num))
+    if not pending:
+        return {'ok': False, 'reason': 'no_pending_heroic_effort'}
+
+    hand_key = f'player{player_num}CcHand'
+    deck_key = f'player{player_num}CcDeck'
+    hand = list(data.get(hand_key) or [])
+    if card_idx < 0 or card_idx >= len(hand):
+        return {'ok': False, 'reason': 'card_index_out_of_range'}
+    card = hand.pop(card_idx)
+    deck = list(data.get(deck_key) or [])
+    deck.append(card)
+    data[hand_key] = hand
+    data[deck_key] = deck
+
+    new_pending = dict(pending_map)
+    new_pending.pop(player_num, None)
+    new_pending.pop(str(player_num), None)
+    if new_pending:
+        data['pendingHeroicEffortReturn'] = new_pending
+    else:
+        data.pop('pendingHeroicEffortReturn', None)
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    log = ctx.get('log_game_action')
+    if callable(log):
+        log(format_log_line(
+            f'**Heroic Effort** — P{player_num} returned 1 Command card '
+            f'to deck bottom.',
+            phase='ROUND', icon='activate',
+        ), {})
+    return {
+        'ok': True, 'game': game, 'playerNum': player_num, 'card': card,
+    }
+
+
 def _handle_scav_weapon_transfer(interaction: Any,
                                     ctx: Dict[str, Any]) -> Dict[str, Any]:
     """scav_weapon_transfer_{gameId}_{playerNum}_{targetIdx} — Scavenged
@@ -401,3 +468,4 @@ register('cancel_activate_', _handle_cancel_activate, 'activation')
 register('hair_trigger_skip_', _handle_hair_trigger_skip, 'activation')
 register('iwba_skip_', _handle_iwba_skip, 'activation')
 register('scav_weapon_transfer_', _handle_scav_weapon_transfer, 'activation')
+register('heroic_effort_return_', _handle_heroic_effort_return, 'activation')

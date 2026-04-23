@@ -32,6 +32,7 @@ def _fresh_registry():
     handlers.register('hair_trigger_skip_', act._handle_hair_trigger_skip, 'activation')
     handlers.register('iwba_skip_', act._handle_iwba_skip, 'activation')
     handlers.register('scav_weapon_transfer_', act._handle_scav_weapon_transfer, 'activation')
+    handlers.register('heroic_effort_return_', act._handle_heroic_effort_return, 'activation')
 
 
 def _game_with_rebel_trooper(round_phase='activation'):
@@ -298,6 +299,68 @@ def test_scav_weapon_transfer_rejects_wrong_player():
     assert result['reason'] == 'no_pending_transfer'
 
 
+def test_heroic_effort_return_moves_to_bottom():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['pendingHeroicEffortReturn'] = {1: True}
+    g.data['player1CcHand'] = ['A', 'B', 'C']
+    g.data['player1CcDeck'] = ['D', 'E']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('heroic_effort_return_G1_1_1')  # 'B'
+    result = handler(
+        _Interaction('heroic_effort_return_G1_1_1', user_id='alice'), ctx,
+    )
+    assert result['ok'] is True
+    assert result['card'] == 'B'
+    assert g.data['player1CcHand'] == ['A', 'C']
+    assert g.data['player1CcDeck'] == ['D', 'E', 'B']
+    # Pending cleared entirely (last entry)
+    assert 'pendingHeroicEffortReturn' not in g.data
+
+
+def test_heroic_effort_return_preserves_other_player_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['pendingHeroicEffortReturn'] = {1: True, 2: True}
+    g.data['player1CcHand'] = ['A']
+    g.data['player1CcDeck'] = []
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('heroic_effort_return_G1_1_0')
+    result = handler(
+        _Interaction('heroic_effort_return_G1_1_0', user_id='alice'), ctx,
+    )
+    assert result['ok'] is True
+    # Player 2 pending still present
+    assert g.data['pendingHeroicEffortReturn'] == {2: True}
+
+
+def test_heroic_effort_return_no_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('heroic_effort_return_G1_1_0')
+    result = handler(
+        _Interaction('heroic_effort_return_G1_1_0', user_id='alice'), ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'no_pending_heroic_effort'
+
+
 def test_scav_weapon_transfer_out_of_range():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -345,6 +408,9 @@ def main():
         ('scav_weapon_transfer_applies', test_scav_weapon_transfer_applies),
         ('scav_weapon_transfer_wrong_player', test_scav_weapon_transfer_rejects_wrong_player),
         ('scav_weapon_transfer_out_of_range', test_scav_weapon_transfer_out_of_range),
+        ('heroic_effort_return_bottom', test_heroic_effort_return_moves_to_bottom),
+        ('heroic_effort_return_preserves_other', test_heroic_effort_return_preserves_other_player_pending),
+        ('heroic_effort_return_no_pending', test_heroic_effort_return_no_pending),
     ]
     failures = []
     for name, fn in cases:
