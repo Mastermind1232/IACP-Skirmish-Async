@@ -28,6 +28,7 @@ def _fresh_registry():
     handlers.register('end_activation_phase_', act._handle_end_activation_phase, 'activation')
     handlers.register('dc_end_activation_', act._handle_dc_end_activation, 'activation')
     handlers.register('end_turn_', act._handle_end_turn, 'activation')
+    handlers.register('cancel_activate_', act._handle_cancel_activate, 'activation')
 
 
 def _game_with_rebel_trooper(round_phase='activation'):
@@ -200,6 +201,28 @@ def test_end_turn_rejects_non_owner():
         _cleanup()
 
 
+def test_cancel_activate_owner_ok_and_non_owner_blocked():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('cancel_activate_G1_alice')
+    ok = handler(_Interaction('cancel_activate_G1_alice', user_id='alice'), {})
+    assert ok['ok'] is True
+    assert ok['ownerId'] == 'alice'
+    nope = handler(_Interaction('cancel_activate_G1_alice', user_id='bob'), {})
+    assert nope['ok'] is False
+    assert nope['reason'] == 'not_owner'
+
+
+def test_cancel_activate_malformed():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('cancel_activate_')
+    # Empty tail → re.match fails → malformed.
+    result = handler(_Interaction('cancel_activate_'), {})
+    assert result['ok'] is False
+    assert result['reason'] == 'malformed_custom_id'
+
+
 def main():
     cases = [
         ('activate_dc_happy', test_activate_dc_happy_path),
@@ -210,6 +233,8 @@ def main():
         ('dc_end_activation_clears_and_swaps', test_dc_end_activation_clears_active_and_swaps),
         ('end_turn_clears_pending', test_end_turn_clears_pending_and_ends_activation),
         ('end_turn_rejects_non_owner', test_end_turn_rejects_non_owner),
+        ('cancel_activate_owner_gate', test_cancel_activate_owner_ok_and_non_owner_blocked),
+        ('cancel_activate_malformed', test_cancel_activate_malformed),
     ]
     failures = []
     for name, fn in cases:

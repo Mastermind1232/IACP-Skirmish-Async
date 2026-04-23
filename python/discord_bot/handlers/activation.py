@@ -269,6 +269,25 @@ def _handle_end_turn(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ─── Cancel / confirm activation ──────────────────────────────────────────
+
+def _handle_cancel_activate(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """cancel_activate_{gameId}_{ownerId} — dismiss the pending activate
+    confirmation. No state mutation; just validates that the presser is
+    the activation's owner. Mirrors src/handlers/activation.js:1054-1060.
+    """
+    import re
+    cid = _extract_custom_id(interaction)
+    m = re.match(r'^cancel_activate_([^_]+)_(.+)$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, owner_id = m.group(1), m.group(2)
+    user_id = _extract_user_id(interaction)
+    if user_id and user_id != owner_id:
+        return {'ok': False, 'reason': 'not_owner'}
+    return {'ok': True, 'gameId': game_id, 'ownerId': owner_id}
+
+
 # ─── Registration ─────────────────────────────────────────────────────────
 
 register('activate_dc_', _handle_activate_dc, 'activation')
@@ -276,3 +295,4 @@ register('pass_activation_turn_', _handle_pass_activation_turn, 'activation')
 register('end_activation_phase_', _handle_end_activation_phase, 'activation')
 register('dc_end_activation_', _handle_dc_end_activation, 'activation')
 register('end_turn_', _handle_end_turn, 'activation')
+register('cancel_activate_', _handle_cancel_activate, 'activation')
