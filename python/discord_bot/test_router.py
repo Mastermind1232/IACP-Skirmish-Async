@@ -271,6 +271,14 @@ def test_slash_command_dispatch_starts_game():
     assert 'g1' in store
 
 
+def test_wire_slash_commands_no_tree_returns_zero():
+    """Bot without a tree attribute (plain discord.Client) → no-op."""
+    from python.discord_bot.main import wire_slash_commands
+    class _Stub: pass
+    count = wire_slash_commands(_Stub(), {})
+    assert count == 0
+
+
 def main():
     cases = [
         ('build_context_unknown_group_raises', test_build_context_unknown_group_raises),
@@ -292,6 +300,7 @@ def main():
         ('main_register_all_handlers', test_main_module_register_all_handlers_imports_without_error),
         ('slash_command_registry', test_slash_command_registry),
         ('slash_command_dispatch_starts_game', test_slash_command_dispatch_starts_game),
+        ('wire_slash_no_tree', test_wire_slash_commands_no_tree_returns_zero),
     ]
     failures = []
     for name, fn in cases:

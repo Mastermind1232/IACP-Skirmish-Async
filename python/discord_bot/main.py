@@ -125,6 +125,55 @@ def slash_command_dispatch(name: str, user_id: str, deps: Dict[str, Any],
     raise ValueError(f'unknown slash command: {name!r}')
 
 
+def wire_slash_commands(bot: Any, deps: Dict[str, Any]) -> int:
+    """Register every slash command on the given discord.py Client.
+
+    The bot must expose a `tree` attribute (discord.Client + commands.Bot
+    both do). Each command dispatches to the matching cmd_* via
+    slash_command_dispatch.
+
+    Returns the number of commands registered. Graceful no-op if the bot
+    doesn't have a tree attribute (test environments).
+    """
+    tree = getattr(bot, 'tree', None)
+    if tree is None:
+        return 0
+
+    try:
+        import discord  # type: ignore[import]
+        from discord import app_commands  # type: ignore[import]
+    except ImportError:
+        return 0
+
+    registered_count = 0
+
+    for cmd_name, desc, _cmd_attr, _params in _SLASH_COMMANDS:
+        # Build a closure per command so each keeps its own name.
+        def _make(name: str, description: str):
+            @tree.command(name=name, description=description)
+            async def _runner(interaction: 'discord.Interaction', **kwargs: Any):
+                user_id = str(interaction.user.id)
+                try:
+                    result = slash_command_dispatch(name, user_id, deps, **kwargs)
+                except ValueError as e:
+                    await interaction.response.send_message(
+                        f'Error: {e}', ephemeral=True,
+                    )
+                    return
+                # Short reply; rich embeds go in followup channels.
+                content = (
+                    f'✓ {name}: {result}' if result.get('ok')
+                    else f'✗ {name}: {result.get("reason") or result}'
+                )
+                await interaction.response.send_message(content, ephemeral=True)
+            return _runner
+
+        _make(cmd_name, desc)
+        registered_count += 1
+
+    return registered_count
+
+
 async def run_bot() -> None:
     """Boot the bot with discord.py and hand button events to the router.
 
@@ -132,6 +181,7 @@ async def run_bot() -> None:
     import-time errors in the rest of the package surface before this.
     """
     import discord  # type: ignore[import]
+    from discord.ext import commands as _commands  # type: ignore[import]
 
     token = os.environ.get('DISCORD_BOT_TOKEN')
     if not token:
@@ -139,7 +189,8 @@ async def run_bot() -> None:
 
     intents = discord.Intents.default()
     intents.message_content = True
-    bot = discord.Client(intents=intents)
+    # Use commands.Bot so we get a `tree` for slash-command registration.
+    bot = _commands.Bot(command_prefix='!', intents=intents)
 
     # Self-register all handler modules
     registered = register_all_handlers()
@@ -149,14 +200,25 @@ async def run_bot() -> None:
     game_store: Dict[str, Any] = {}
     deps = build_deps(game_store, bot)
 
+    # Register slash commands on the bot's tree.
+    slash_count = wire_slash_commands(bot, deps)
+    _LOG.info('Registered %d slash commands', slash_count)
+
     @bot.event
     async def on_interaction_event(interaction):  # noqa: D401
+        # Only route non-slash interactions (buttons, modals) through the
+        # router. Slash commands are dispatched via the tree above.
+        itype = getattr(interaction, 'type', None)
+        if itype is None or str(itype).endswith('application_command'):
+            return
         result = await on_interaction(interaction, deps)
         if not result.get('ok'):
             _LOG.warning('Route failed: %s', result)
 
     @bot.event
     async def on_ready():  # noqa: D401
-        _LOG.info('Bot ready: %s', bot.user)
+        await bot.tree.sync()
+        _LOG.info('Bot ready: %s (synced %d commands)',
+                  bot.user, slash_count)
 
     await bot.start(token)
