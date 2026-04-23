@@ -20,7 +20,9 @@ Policy-index layout (n_policy = 4096, see python/net/skirbo_cnn.py):
     1089      PASS_ACTIVATION_TURN
     1090      END_ACTIVATION_PHASE
     1091      END_END_OF_ROUND
-    1092..    reserved (future actions)
+    1092..1107 DC_SPECIAL      (special_idx 0..15 on current DC)
+    1108..1363 PLAY_CC         (hand_idx within active player's CC hand)
+    1364..    reserved (future actions)
 """
 from __future__ import annotations
 
@@ -52,7 +54,13 @@ _IDX_PASS_ACTIVATION_TURN = _IDX_DC_END_ACTIVATION + 1      # 1089
 _IDX_END_ACTIVATION_PHASE = _IDX_DC_END_ACTIVATION + 2      # 1090
 _IDX_END_END_OF_ROUND = _IDX_DC_END_ACTIVATION + 3          # 1091
 
-POLICY_INDEX_FIRST_RESERVED = _IDX_END_END_OF_ROUND + 1     # 1092
+_SPECIAL_BASE = _IDX_END_END_OF_ROUND + 1                   # 1092
+_SPECIAL_SPAN = 16                                          # 16 specials per DC
+
+_PLAY_CC_BASE = _SPECIAL_BASE + _SPECIAL_SPAN               # 1108
+_PLAY_CC_SPAN = 256                                         # hand index
+
+POLICY_INDEX_FIRST_RESERVED = _PLAY_CC_BASE + _PLAY_CC_SPAN  # 1364
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +323,26 @@ def action_to_policy_index(action: Action, game: GameState) -> int:
         return _IDX_END_ACTIVATION_PHASE
     if t == ActionType.END_END_OF_ROUND:
         return _IDX_END_END_OF_ROUND
+    if t == ActionType.DC_SPECIAL:
+        special_idx = action.params.get('special_idx')
+        if special_idx is None:
+            special_idx = action.params.get('specialIdx', 0)
+        special_idx = int(special_idx)
+        if special_idx < 0 or special_idx >= _SPECIAL_SPAN:
+            raise ValueError(f'special_idx {special_idx} exceeds SPECIAL span')
+        return _SPECIAL_BASE + special_idx
+    if t == ActionType.PLAY_CC:
+        card = action.params.get('card') or action.params.get('cardName')
+        if not card:
+            raise ValueError('PLAY_CC missing card')
+        hand_key = 'player1CcHand' if action.player == 1 else 'player2CcHand'
+        hand = game.get(hand_key) or []
+        for i, c in enumerate(hand):
+            if c == card:
+                if i >= _PLAY_CC_SPAN:
+                    raise ValueError(f'hand idx {i} exceeds PLAY_CC span')
+                return _PLAY_CC_BASE + i
+        raise ValueError(f'PLAY_CC card {card!r} not in hand')
     raise ValueError(f'no policy-index mapping for {t.value}')
 
 
@@ -365,6 +393,25 @@ def policy_index_to_action(idx: int, game: GameState) -> Action:
         return Action(type=ActionType.END_ACTIVATION_PHASE, player=active)
     if idx == _IDX_END_END_OF_ROUND:
         return Action(type=ActionType.END_END_OF_ROUND, player=0)
+    if _SPECIAL_BASE <= idx < _SPECIAL_BASE + _SPECIAL_SPAN:
+        off = idx - _SPECIAL_BASE
+        active_keys = game.get('activeFigureKeys') or []
+        if not active_keys:
+            raise ValueError('DC_SPECIAL index but no active figure')
+        return Action(
+            type=ActionType.DC_SPECIAL, player=active,
+            params={'figure_key': active_keys[0], 'special_idx': off},
+        )
+    if _PLAY_CC_BASE <= idx < _PLAY_CC_BASE + _PLAY_CC_SPAN:
+        off = idx - _PLAY_CC_BASE
+        hand_key = 'player1CcHand' if active == 1 else 'player2CcHand'
+        hand = game.get(hand_key) or []
+        if off >= len(hand):
+            raise ValueError(f'PLAY_CC hand idx {off} out of range (size {len(hand)})')
+        return Action(
+            type=ActionType.PLAY_CC, player=active,
+            params={'card': hand[off]},
+        )
     raise ValueError(f'policy index {idx} not mapped')
 
 
