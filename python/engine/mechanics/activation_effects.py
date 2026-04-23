@@ -315,6 +315,28 @@ def apply_end_of_activation_effects(game: Any, *, dc_name: str, player_num: int,
             'message': f'**Weakened** — **{dc_name_from_figure_key(fk)}** discarded Weaken at end of activation.',
         })
 
+    # Bleed damage: figures with Bleed take 1 damage at end of activation.
+    # JS rule: Bleed is not auto-discarded (must be cleared via a CC or
+    # ability). Each bleeding figure suffers 1 damage per end-of-activation.
+    bleed_victims: List[str] = []
+    for fk in figure_keys:
+        fk_cond = conditions_map.get(fk) or []
+        if 'Bleed' not in fk_cond:
+            continue
+        fig_idx = parse_figure_key(fk).get('figureIndex', 0)
+        dc_health_state = data.get('dcHealthState')
+        if isinstance(dc_health_state, dict):
+            reduce_hp(dc_health_state, data, msg_id, fig_idx, 1, player_num)
+        bleed_victims.append(dc_name_from_figure_key(fk))
+    if bleed_victims:
+        applied.append({
+            'effect': 'Bleed',
+            'message': (
+                f'**Bleed** — {", ".join(bleed_victims)} suffered '
+                f'1 Damage at end of activation.'
+            ),
+        })
+
     # Shield (Riot Trooper E/R): grant Block token if none held
     passives = dc_eff.get('passives') or []
     if 'Shield' in passives:
