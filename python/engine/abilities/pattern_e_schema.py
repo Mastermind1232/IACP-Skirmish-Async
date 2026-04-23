@@ -403,9 +403,20 @@ def handle_schema_chain(game: Any, ability_id: str,
             }
             effects.append({'effect': 'targetFriendlyFigureAdjacent'})
 
-    # chooseFriendlyToFocus — auto-pick first adjacent friendly and apply
-    # Focus condition (IACP: Hold On-style abilities).
-    if entry.get('chooseFriendlyToFocus'):
+    # applyFocus (self) — add Focus to the activating figure (Get Into
+    # Position-style abilities that combine MP grant + self-Focus).
+    if entry.get('applyFocus') is True and ctx.get('figure_key'):
+        try:
+            from python.engine.mechanics.conditions import apply_condition
+            apply_condition(game, ctx['figure_key'], 'Focus')
+            effects.append({'effect': 'applyFocus',
+                            'figureKey': ctx['figure_key']})
+        except Exception:
+            pass
+
+    # chooseFriendlyToFocus (or focusFriendlyAdjacent) — auto-pick first
+    # adjacent friendly and apply Focus (Inform, Hold On-style abilities).
+    if entry.get('chooseFriendlyToFocus') or entry.get('focusFriendlyAdjacent'):
         player_num_cur = ctx.get('player_num')
         figure_key_self = ctx.get('figure_key')
         focus_target = ctx.get('target_figure_key') or ctx.get('targetFigureKey')
