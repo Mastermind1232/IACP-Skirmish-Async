@@ -36,6 +36,7 @@ def _fresh_registry():
     handlers.register('cc_choice_', ch._handle_cc_choice, 'ccHand')
     handlers.register('cc_space_', ch._handle_cc_space, 'ccHand')
     handlers.register('cc_discard_select_', ch._handle_cc_discard_select, 'ccHand')
+    handlers.register('cc_play_select_', ch._handle_cc_play_select, 'ccHand')
 
 
 def _basic_game():
@@ -251,6 +252,64 @@ def test_cc_discard_select_card_not_in_hand():
     assert result['reason'] == 'card_not_in_hand'
 
 
+def test_cc_play_select_stages_confirmation():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['player1CcHand'] = ['Hold On', 'Focus']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_play_select_G1')
+    result = handler(
+        _Interaction('cc_play_select_G1', user_id='alice',
+                      values=['Focus'], channel_id='HAND_P1'),
+        ctx,
+    )
+    assert result['ok'] is True
+    assert result['card'] == 'Focus'
+    pending = g.data.get('pendingCcConfirmation') or {}
+    assert pending.get('card') == 'Focus'
+    assert pending.get('playerNum') == 1
+
+
+def test_cc_play_select_wrong_channel():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['p2HandId'] = 'HAND_P2'
+    g.data['player1CcHand'] = ['Focus']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_play_select_G1')
+    result = handler(
+        _Interaction('cc_play_select_G1', user_id='alice',
+                      values=['Focus'], channel_id='NOT_HAND'),
+        ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'wrong_channel'
+
+
+def test_cc_play_select_card_not_in_hand():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['player1CcHand'] = ['Focus']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_play_select_G1')
+    result = handler(
+        _Interaction('cc_play_select_G1', user_id='alice',
+                      values=['Reinforcements'], channel_id='HAND_P1'),
+        ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'card_not_in_hand'
+
+
 def test_cc_discard_select_empty_values():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -285,6 +344,9 @@ def main():
         ('cc_discard_select_wrong_channel', test_cc_discard_select_wrong_channel),
         ('cc_discard_select_not_in_hand', test_cc_discard_select_card_not_in_hand),
         ('cc_discard_select_no_value', test_cc_discard_select_empty_values),
+        ('cc_play_select_stages', test_cc_play_select_stages_confirmation),
+        ('cc_play_select_wrong_channel', test_cc_play_select_wrong_channel),
+        ('cc_play_select_not_in_hand', test_cc_play_select_card_not_in_hand),
     ]
     failures = []
     for name, fn in cases:

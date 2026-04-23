@@ -239,6 +239,55 @@ def _player_num_from_channel(interaction: Any, game: Any) -> Optional[int]:
     return None
 
 
+def _handle_cc_play_select(interaction: Any,
+                             ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """cc_play_select_{gameId} — select-menu counterpart to `play_cc_`:
+    the chosen card arrives via `interaction.values[0]` instead of a
+    per-card button. Stages game.pendingCcConfirmation (caller confirms
+    via cc_confirm_play_). Mirrors src/handlers/cc-hand.js:249-267.
+
+    Ownership check: interaction.channel.id must match p1HandId /
+    p2HandId on the game state.
+    """
+    import time
+    cid = _cid(interaction)
+    if not cid.startswith('cc_play_select_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id = cid[len('cc_play_select_'):]
+    if not game_id:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    player_num = _player_num_from_channel(interaction, game)
+    if player_num not in (1, 2):
+        return {'ok': False, 'reason': 'wrong_channel'}
+
+    values = getattr(interaction, 'values', None) or []
+    if not values:
+        return {'ok': False, 'reason': 'no_card_selected'}
+    card = values[0]
+
+    data = game.data if hasattr(game, 'data') else game
+    hand = data.get(f'player{player_num}CcHand') or []
+    if card not in hand:
+        return {'ok': False, 'reason': 'card_not_in_hand'}
+
+    data['pendingCcConfirmation'] = {
+        'playerNum': player_num, 'card': card,
+        'ts': int(time.time() * 1000),
+    }
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'playerNum': player_num, 'card': card,
+    }
+
+
 def _handle_cc_discard_select(interaction: Any,
                                 ctx: Dict[str, Any]) -> Dict[str, Any]:
     """cc_discard_select_{gameId} — select-menu handler for discarding a
@@ -296,3 +345,4 @@ register('cc_shuffle_draw_', _handle_cc_shuffle_draw, 'ccHand')
 register('cc_choice_', _handle_cc_choice, 'ccHand')
 register('cc_space_', _handle_cc_space, 'ccHand')
 register('cc_discard_select_', _handle_cc_discard_select, 'ccHand')
+register('cc_play_select_', _handle_cc_play_select, 'ccHand')
