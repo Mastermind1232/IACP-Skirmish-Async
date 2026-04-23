@@ -36,6 +36,7 @@ def _fresh_registry():
     handlers.register('special_done_', dp._handle_special_done, 'dcPlayArea')
     handlers.register('dc_deplete_', dp._handle_dc_deplete, 'dcPlayArea')
     handlers.register('dc_remove_stun_', dp._handle_dc_remove_stun, 'dcPlayArea')
+    handlers.register('ob_skip_', dp._handle_ob_skip, 'dcPlayArea')
 
 
 def _basic_game():
@@ -348,6 +349,25 @@ def test_dc_remove_stun_rejects_no_actions():
     assert result['reason'] == 'no_actions_remaining'
 
 
+def test_ob_skip_parses():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('ob_skip_G1_hl1dc0')
+    result = handler(_Interaction('ob_skip_G1_hl1dc0'), {})
+    assert result['ok'] is True
+    assert result['gameId'] == 'G1'
+    assert result['msgId'] == 'hl1dc0'
+
+
+def test_ob_skip_malformed():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('ob_skip_G1')
+    result = handler(_Interaction('ob_skip_G1'), {})
+    assert result['ok'] is False
+    assert result['reason'] == 'malformed_custom_id'
+
+
 def test_special_done_parses_clean():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -387,6 +407,8 @@ def main():
         ('dc_remove_stun_spends', test_dc_remove_stun_spends_action_and_clears_stun),
         ('dc_remove_stun_not_stunned', test_dc_remove_stun_rejects_when_not_stunned),
         ('dc_remove_stun_no_actions', test_dc_remove_stun_rejects_no_actions),
+        ('ob_skip_parses', test_ob_skip_parses),
+        ('ob_skip_malformed', test_ob_skip_malformed),
     ]
     failures = []
     for name, fn in cases:

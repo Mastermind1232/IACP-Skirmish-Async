@@ -526,6 +526,18 @@ def _handle_dc_remove_stun(interaction: Any,
     }
 
 
+def _handle_ob_skip(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """ob_skip_{gameId}_{msgId} — Orbital Bombardment skip. Mirrors
+    src/handlers/dc-play-area.js:3534-3542. Pure UI dismiss.
+    """
+    import re
+    cid = _cid(interaction)
+    m = re.match(r'^ob_skip_([^_]+)_([^_]+)$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    return {'ok': True, 'gameId': m.group(1), 'msgId': m.group(2)}
+
+
 def _handle_special_done(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
     """special_done_{gameId}_{msgId} — dismiss the 'Resolve manually +
     click Done' banner after a DC special ability. No state mutation.
@@ -554,3 +566,4 @@ register('ob_space_', _handle_ob_space, 'dcPlayArea')
 register('special_done_', _handle_special_done, 'dcPlayArea')
 register('dc_deplete_', _handle_dc_deplete, 'dcPlayArea')
 register('dc_remove_stun_', _handle_dc_remove_stun, 'dcPlayArea')
+register('ob_skip_', _handle_ob_skip, 'dcPlayArea')
