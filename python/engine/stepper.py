@@ -1350,10 +1350,20 @@ def _handle_dc_special(game: GameState, action: Action) -> GameState:
         tval = action.params.get(tkey)
         if tval is not None:
             ctx[tkey] = tval
+
+    # Auto-default target to first opponent figure (for headless AI self-play
+    # where the caller emits bare DC_SPECIAL actions without target info).
+    if not ctx.get('target_figure_key'):
+        opp = 2 if player_num == 1 else 1
+        opp_positions = (game.data.get('figurePositions') or {}).get(opp) or {}
+        if opp_positions:
+            ctx['target_figure_key'] = next(iter(opp_positions))
+            ctx['target_player_num'] = opp
+
     if ctx.get('target_figure_key') and ctx.get('target_player_num') \
             and not ctx.get('target_msg_id'):
         from python.engine.mechanics.figure_lookup import (
-            find_dc_message_id_for_figure,
+            find_dc_message_id_for_figure, parse_figure_key,
         )
         dc_meta = game.data.get('dcMessageMeta')
         if dc_meta:
@@ -1365,6 +1375,24 @@ def _handle_dc_special(game: GameState, action: Action) -> GameState:
             )
             if resolved_tmsg:
                 ctx['target_msg_id'] = resolved_tmsg
+        # Fallback: lookup in p{N}DcList/MessageIds directly.
+        if not ctx.get('target_msg_id'):
+            tpn = int(ctx['target_player_num'])
+            dc_list_key = 'p1DcList' if tpn == 1 else 'p2DcList'
+            msg_ids_key = 'p1DcMessageIds' if tpn == 1 else 'p2DcMessageIds'
+            t_dc_list = game.data.get(dc_list_key) or []
+            t_msg_ids = game.data.get(msg_ids_key) or []
+            parsed_t = parse_figure_key(str(ctx['target_figure_key']))
+            if parsed_t is not None:
+                tname, tgroup, _ = parsed_t
+                for i, dc in enumerate(t_dc_list):
+                    if not isinstance(dc, Mapping):
+                        continue
+                    if (dc.get('dcName') == tname
+                            and int(dc.get('dgIndex') or 0) == tgroup
+                            and i < len(t_msg_ids)):
+                        ctx['target_msg_id'] = t_msg_ids[i]
+                        break
 
     # Resolve msg_id from the DC list — handlers that need it (Charge,
     # Wall Run) can pull it out of ctx instead of re-deriving.
