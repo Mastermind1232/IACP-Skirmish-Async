@@ -406,16 +406,36 @@ def handle_deference_protocol(game, ability_id, ctx):
 
 def _make_pending_active_ability(ability_id_: str, pending_key: str,
                                     label: str):
+    """Handler factory for trigger-bus abilities that need both:
+      (a) a pending marker so downstream UI/AI can surface choices, and
+      (b) any real schema effects from the ability-library entry.
+
+    Applies the Pattern E schema handler FIRST (so freeMoveBonus,
+    freeAttackBonus, mpBonus, applyFocus, etc. actually land on state)
+    THEN stamps the pending marker.
+    """
+    from python.engine.abilities.pattern_e_schema import handle_schema_chain
+
     def _handler(game, ability_id, ctx):
         data = game if isinstance(game, dict) else getattr(game, 'data', game)
-        figure_key = ctx.get('figure_key')
+        # Apply any schema-driven state changes first.
+        schema_result = handle_schema_chain(game, ability_id, ctx or {})
+        # Then stamp the trigger-level pending marker.
+        figure_key = (ctx or {}).get('figure_key')
         pending = dict(data.get(pending_key) or {})
         pending[figure_key or ability_id] = {
             'abilityId': ability_id, 'figureKey': figure_key,
         }
         data[pending_key] = pending
-        return {'applied': True,
-                'log_message': f'**{label}** — pending target pick queued.'}
+        effects = schema_result.get('effects') or []
+        return {
+            'applied': True,
+            'schemaEffects': effects,
+            'log_message': (
+                schema_result.get('log_message')
+                or f'**{label}** — pending target pick queued.'
+            ),
+        }
     _handler.__name__ = f'_handle_{ability_id_}'
     return _handler
 
