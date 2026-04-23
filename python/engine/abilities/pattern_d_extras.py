@@ -395,6 +395,73 @@ def handle_deference_protocol(game, ability_id, ctx):
             'log_message': f'**Deference Protocol** — {figure_key} gains 1 Block token.'}
 
 
+# ── activation active abilities (pending-state markers) ────────────────────
+# Each fires on dc_special click. The real mechanic often needs target
+# selection UI — for the Python engine, we stamp a pending* key keyed
+# on ability_id so AI / Discord can pick a target and resolve later.
+# This at minimum:
+#   - Marks the ability as runnable (no more TriggerNotImplemented)
+#   - Records that the ability fired (log_message)
+#   - Preserves state for follow-up resolution
+
+def _make_pending_active_ability(ability_id_: str, pending_key: str,
+                                    label: str):
+    def _handler(game, ability_id, ctx):
+        data = game if isinstance(game, dict) else getattr(game, 'data', game)
+        figure_key = ctx.get('figure_key')
+        pending = dict(data.get(pending_key) or {})
+        pending[figure_key or ability_id] = {
+            'abilityId': ability_id, 'figureKey': figure_key,
+        }
+        data[pending_key] = pending
+        return {'applied': True,
+                'log_message': f'**{label}** — pending target pick queued.'}
+    _handler.__name__ = f'_handle_{ability_id_}'
+    return _handler
+
+
+def handle_sustained_by_rage(game, ability_id, ctx):
+    """Sustained by Rage: cannot recover damage; cannot be defeated if
+    no activation resolved this round. Stamps a flag per figure."""
+    data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    figure_key = ctx.get('figure_key')
+    if not figure_key:
+        return {'applied': False, 'gated_by': 'missing-figure-key'}
+    flags = dict(data.get('sustainedByRageFlags') or {})
+    flags[figure_key] = True
+    data['sustainedByRageFlags'] = flags
+    return {'applied': True,
+            'log_message': f'**Sustained by Rage** — {figure_key} cannot recover/be defeated this round.'}
+
+
+def handle_heroic(game, ability_id, ctx):
+    """Heroic: gain a free attack action this activation. Stamps
+    freeAttackBonusPending[msgId] = True (same mechanism as Charge)."""
+    data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    msg_id = ctx.get('msg_id') or ctx.get('msgId')
+    if not msg_id:
+        return {'applied': False, 'gated_by': 'missing-msg-id'}
+    pending = dict(data.get('freeAttackBonusPending') or {})
+    pending[msg_id] = True
+    data['freeAttackBonusPending'] = pending
+    return {'applied': True,
+            'log_message': '**Heroic** — free attack action queued.'}
+
+
+def handle_expertise(game, ability_id, ctx):
+    """Expertise: after a Special Action, you may perform an additional
+    action. Limit once per activation. Stamps expertisePendingExtraAction."""
+    data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    msg_id = ctx.get('msg_id') or ctx.get('msgId')
+    if not msg_id:
+        return {'applied': False, 'gated_by': 'missing-msg-id'}
+    pending = dict(data.get('expertisePendingExtraAction') or {})
+    pending[msg_id] = True
+    data['expertisePendingExtraAction'] = pending
+    return {'applied': True,
+            'log_message': '**Expertise** — extra action queued after next Special.'}
+
+
 # ── Bulk wiring ────────────────────────────────────────────────────────────
 
 def install_pattern_d_batch2() -> Dict[str, Any]:
@@ -494,5 +561,82 @@ def install_pattern_d_batch2() -> Dict[str, Any]:
     register_trigger('movement-adjacent', 'deference_protocol',
                       handle_deference_protocol)
     installed.append('deference_protocol')
+
+    # activation active abilities: stamp a pending-* key per-figure so
+    # downstream target selection can resolve. Each ability gets its own
+    # pending map keyed by figure_key so multiple can co-exist.
+    _ACTIVATION_PENDING_STAMPERS = [
+        ('arms_distribution_kotun', 'pendingArmsDistribution', 'Arms Distribution'),
+        ('battlefield_leadership', 'pendingBattlefieldLeadership', 'Battlefield Leadership'),
+        ('bo_rifle_staff_strike', 'pendingBoRifleStaffStrike', 'BO Rifle Staff Strike'),
+        ('bombardment_sorin', 'pendingBombardmentSorin', 'Bombardment'),
+        ('consider_it_my_payment_asajj', 'pendingConsiderItMyPayment', 'Consider it My Payment'),
+        ('demolish', 'pendingDemolish', 'Demolish'),
+        ('electrified_knuckledusters', 'pendingElectrifiedKnuckledusters', 'Electrified Knuckledusters'),
+        ('emperor_interrupt', 'pendingEmperorInterrupt', 'Emperor Interrupt'),
+        ('executive_order', 'pendingExecutiveOrder', 'Executive Order'),
+        ('firing_squad', 'pendingFiringSquad', 'Firing Squad'),
+        ('force_heal', 'pendingForceHeal', 'Force Heal'),
+        ('force_vision_kanan', 'pendingForceVision', 'Force Vision'),
+        ('generals_orders_weiss', 'pendingGeneralsOrders', "General's Orders"),
+        ('indiscriminate_fire', 'pendingIndiscriminateFire', 'Indiscriminate Fire'),
+        ('long_laid_plans_thrawn', 'pendingLongLaidPlans', 'Long-Laid Plans'),
+        ('missile_salvo', 'pendingMissileSalvo', 'Missile Salvo'),
+        ('officer_order', 'pendingOfficerOrder', 'Officer Order'),
+        ('on_my_mark', 'pendingOnMyMark', 'On My Mark'),
+        ('parting_gift', 'pendingPartingGift', 'Parting Gift'),
+        ('rapid_fire_ig11', 'pendingRapidFire', 'Rapid Fire'),
+        ('rapid_fire_vinto', 'pendingRapidFire', 'Rapid Fire'),
+        ('self_destruct_protocol', 'pendingSelfDestructProtocol', 'Self-Destruct Protocol'),
+        ('smash', 'pendingSmash', 'Smash'),
+        ('strategize_thrawn', 'pendingStrategize', 'Strategize'),
+        ('tactical_maneuver', 'pendingTacticalManeuver', 'Tactical Maneuver'),
+        ('tempt', 'pendingTempt', 'Tempt'),
+        ('wisdom_yoda', 'pendingWisdom', 'Wisdom'),
+        ('wrist_flamethrower', 'pendingWristFlamethrower', 'Wrist Flamethrower'),
+    ]
+    for aid, pk, label in _ACTIVATION_PENDING_STAMPERS:
+        register_trigger('activation', aid,
+                           _make_pending_active_ability(aid, pk, label))
+        installed.append(aid)
+
+    # activation-start variants (same pattern, different trigger)
+    register_trigger('activation-start', 'arms_distribution_kotun',
+                       _make_pending_active_ability(
+                           'arms_distribution_kotun',
+                           'pendingArmsDistribution', 'Arms Distribution'))
+    register_trigger('activation-start', 'consider_it_my_payment_asajj',
+                       _make_pending_active_ability(
+                           'consider_it_my_payment_asajj',
+                           'pendingConsiderItMyPayment',
+                           'Consider it My Payment'))
+    register_trigger('activation-start', 'force_vision_kanan',
+                       _make_pending_active_ability(
+                           'force_vision_kanan', 'pendingForceVision',
+                           'Force Vision'))
+    register_trigger('activation-start', 'generals_orders_weiss',
+                       _make_pending_active_ability(
+                           'generals_orders_weiss',
+                           'pendingGeneralsOrders', "General's Orders"))
+    register_trigger('activation-start', 'long_laid_plans_thrawn',
+                       _make_pending_active_ability(
+                           'long_laid_plans_thrawn',
+                           'pendingLongLaidPlans', 'Long-Laid Plans'))
+    register_trigger('activation-start', 'strategize_thrawn',
+                       _make_pending_active_ability(
+                           'strategize_thrawn', 'pendingStrategize',
+                           'Strategize'))
+    register_trigger('activation-start', 'wisdom_yoda',
+                       _make_pending_active_ability(
+                           'wisdom_yoda', 'pendingWisdom', 'Wisdom'))
+
+    # Real state mutations on activation:
+    register_trigger('activation', 'sustained_by_rage',
+                      handle_sustained_by_rage)
+    installed.append('sustained_by_rage')
+    register_trigger('activation', 'heroic', handle_heroic)
+    installed.append('heroic')
+    register_trigger('activation', 'expertise', handle_expertise)
+    installed.append('expertise')
 
     return {'installed': installed, 'count': len(installed)}
