@@ -216,6 +216,123 @@ class PostgresStore:
         with self._engine.connect() as conn:
             return [row[0] for row in conn.execute(stmt)]
 
+    # ── completed_games — stats history ────────────────────────────────────
+
+    def _ensure_completed_table(self):
+        """Lazy-create the completed_games table (matches JS schema)."""
+        try:
+            from sqlalchemy import (  # type: ignore[import]
+                Column, DateTime, Integer, MetaData, String, Table, func,
+            )
+            from sqlalchemy.dialects.postgresql import JSONB  # type: ignore[import]
+        except ImportError as e:
+            raise RuntimeError(
+                'PostgresStore requires sqlalchemy + psycopg: pip install '
+                'sqlalchemy psycopg'
+            ) from e
+        if getattr(self, '_completed_table', None) is not None:
+            return self._completed_table
+        self._ensure_engine()
+        completed = Table(
+            'completed_games', self._metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('game_id', String),
+            Column('winner_id', String),
+            Column('player1_id', String, nullable=False),
+            Column('player2_id', String, nullable=False),
+            Column('player1_affiliation', String),
+            Column('player2_affiliation', String),
+            Column('player1_army_json', JSONB),
+            Column('player2_army_json', JSONB),
+            Column('map_id', String),
+            Column('mission_id', String),
+            Column('deployment_zone_winner', String),
+            Column('ended_at', DateTime(timezone=True),
+                   server_default=func.now()),
+            Column('round_count', Integer),
+            extend_existing=True,
+        )
+        completed.create(self._engine, checkfirst=True)
+        self._completed_table = completed
+        return completed
+
+    def insert_completed_game(self, game: GameState) -> bool:
+        """Write a completed-games row when a game ends.
+
+        Mirrors src/db.js:insertCompletedGame byte-for-byte.
+        Returns True on insert, False if the game didn't signal a completion.
+        """
+        data = game.data if hasattr(game, 'data') else game
+        if not (data.get('ended') or data.get('phase') == 'game_over'):
+            return False
+        try:
+            completed = self._ensure_completed_table()
+            p1_squad = data.get('player1Squad') or {}
+            p2_squad = data.get('player2Squad') or {}
+            map_info = data.get('selectedMap') or {}
+            mission = data.get('selectedMission') or {}
+            map_id = map_info.get('id')
+            mission_id = (
+                f'{map_id or ""}:{mission.get("variant", "a")}'
+                if mission else None
+            )
+            winner_num = data.get('winner')
+            winner_id = None
+            if winner_num == 1:
+                winner_id = data.get('player1Id')
+            elif winner_num == 2:
+                winner_id = data.get('player2Id')
+            else:
+                winner_id = data.get('winnerId')
+            deployment_zone_winner = None
+            if data.get('deploymentZoneChosen'):
+                init_holder = data.get('initiativeHolder')
+                if init_holder == 1:
+                    deployment_zone_winner = data.get('player1Id')
+                elif init_holder == 2:
+                    deployment_zone_winner = data.get('player2Id')
+
+            stmt = completed.insert().values(
+                game_id=data.get('gameId'),
+                winner_id=winner_id,
+                player1_id=str(data.get('player1Id') or ''),
+                player2_id=str(data.get('player2Id') or ''),
+                player1_affiliation=p1_squad.get('affiliation'),
+                player2_affiliation=p2_squad.get('affiliation'),
+                player1_army_json=p1_squad,
+                player2_army_json=p2_squad,
+                map_id=map_id,
+                mission_id=mission_id,
+                deployment_zone_winner=deployment_zone_winner,
+                round_count=data.get('currentRound') or data.get('round'),
+            )
+            with self._engine.begin() as conn:
+                conn.execute(stmt)
+            return True
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger('skirbo.db').warning(
+                'insert_completed_game failed: %s', e,
+            )
+            return False
+
+    def get_total_games(self) -> Dict[str, int]:
+        """Return {total, draws} from completed_games."""
+        try:
+            completed = self._ensure_completed_table()
+            from sqlalchemy import func, select  # type: ignore[import]
+            with self._engine.connect() as conn:
+                total = conn.execute(
+                    select(func.count()).select_from(completed),
+                ).scalar() or 0
+                draws = conn.execute(
+                    select(func.count()).select_from(completed)
+                    .where(completed.c.winner_id.is_(None)),
+                ).scalar() or 0
+            return {'total': int(total), 'draws': int(draws)}
+        except Exception:
+            return {'total': 0, 'draws': 0}
+
 
 # ── Factory: pick by env ──────────────────────────────────────────────────
 

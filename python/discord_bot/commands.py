@@ -279,6 +279,14 @@ def cmd_step_action(user_id: str, deps: Dict[str, Any], *,
     _log_step_event(game_id, before, new_game, action_type,
                      action_params or {}, player_num, deps)
 
+    # On game-over transitions, write a completed_games row for stats.
+    b_phase = (before.data if hasattr(before, 'data') else before).get('phase')
+    a_phase = (
+        new_game.data if hasattr(new_game, 'data') else new_game
+    ).get('phase')
+    if a_phase == 'game_over' and b_phase != 'game_over':
+        _write_completed_game(new_game, deps)
+
     # Refresh the Discord board message + both hand messages. No-op when
     # the bot hasn't tracked channels for this game yet (headless tests).
     _refresh_discord_views(game_id, new_game, deps)
@@ -300,6 +308,22 @@ def _refresh_discord_views(game_id: str, game: Any,
         gc.refresh_game_view(game_id, game, backend=backend)
         gc.refresh_hand_view(game_id, 1, game, backend=backend)
         gc.refresh_hand_view(game_id, 2, game, backend=backend)
+    except Exception:
+        pass
+
+
+def _write_completed_game(game: Any, deps: Dict[str, Any]) -> None:
+    """Write a completed_games row via PostgresStore.insert_completed_game
+    when the underlying store supports it. Silent no-op otherwise.
+    """
+    store = deps.get('game_store') or deps.get('_store')
+    if store is None:
+        return
+    insert = getattr(store, 'insert_completed_game', None)
+    if not callable(insert):
+        return
+    try:
+        insert(game)
     except Exception:
         pass
 
