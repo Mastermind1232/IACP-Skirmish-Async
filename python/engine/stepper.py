@@ -1205,6 +1205,32 @@ def _handle_auto_deploy(game: GameState, action: Action) -> GameState:
     game['activeFigureKeys'] = []
     game['activationStartPositions'] = {}
     game['movementPoints'] = 0
+
+    # Fire Pattern D post-deploy, setup, mission-start triggers.
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.dc_effects_loader import (
+            get_dc_effect as _gde,
+        )
+        for pn, positions in ((1, p1_pos), (2, p2_pos)):
+            for fk in positions.keys():
+                dc_name_fk = _dc_name_from_figure_key(fk)
+                eff_fk = _gde(dc_name_fk) or {}
+                for aid in (eff_fk.get('specialAbilityIds') or []):
+                    abil_entry = get_ability(aid) or {}
+                    trig = abil_entry.get('trigger')
+                    if trig in ('post-deploy', 'setup', 'mission-start'):
+                        try:
+                            fire_ability(game.data, aid, {
+                                'figure_key': fk,
+                                'player_num': pn,
+                                'trigger': trig,
+                            })
+                        except NotImplementedError:
+                            pass
+    except Exception:
+        pass
     return game
 
 
