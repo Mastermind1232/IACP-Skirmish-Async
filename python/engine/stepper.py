@@ -714,6 +714,19 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
     game['movementPoints'] = 0
     game['p1ActivationPhaseEnded'] = False
     game['p2ActivationPhaseEnded'] = False
+    # Clear round-scoped CC/ability state: Fuel Upgrade, Elusive,
+    # Cheat to Win, Covering Fire, Built on Hope, Arcing Shot, etc.
+    # These set roundDefenseBonus*, activeCardEffects flags, or
+    # *Active fields that should reset at round boundary.
+    game['pendingCombat'] = None
+    game['nextAttacksBonusHits'] = None
+    game['nextAttacksBonusAcc'] = None
+    game['freeAttackBonusPending'] = None
+    game['mobileMovementActive'] = None
+    game['activeCardEffects'] = None
+    game['fluctuationSwappedThisRound'] = []
+    game['paybackBonusSurge'] = None
+    game['reinforcementsPlayedThisSor'] = False
 
     return game
 
