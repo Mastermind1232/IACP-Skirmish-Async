@@ -963,6 +963,46 @@ def _handle_auto_deploy(game: GameState, action: Action) -> GameState:
     p2_pos = _build_positions('player2Squad', p2_pool)
     game['figurePositions'] = {1: p1_pos, 2: p2_pos}
 
+    # Seed CC decks from squad config (if supplied) and fall back to a
+    # random starter pool from data/cc-effects.json. Each player starts
+    # with 2 CCs in hand (per IACP round-1 default).
+    for pn_key, squad_key, deck_key, hand_key in (
+        (1, 'player1Squad', 'player1CcDeck', 'player1CcHand'),
+        (2, 'player2Squad', 'player2CcDeck', 'player2CcHand'),
+    ):
+        squad = game.data.get(squad_key) or {}
+        cc_cards = list(squad.get('ccCards') or squad.get('commandCards') or [])
+        if not cc_cards:
+            # Fallback: use a pool of affiliation-neutral CCs so the
+            # game still has CC plays available in headless/AI mode.
+            # Prioritise duringActivation / startOfActivation timings
+            # so the AI has broadly-playable CCs in hand.
+            from python.engine.data.cc_effects_loader import get_cc_effects
+            all_cc = get_cc_effects() or {}
+            generic = [
+                (name, eff) for name, eff in all_cc.items()
+                if isinstance(eff, dict)
+                and eff.get('playableBy') in (None, 'Any Figure', 'Any')
+            ]
+            # Bucket by timing, prefer broadly-playable ones first.
+            broad_timings = (
+                'duringActivation', 'startOfActivation',
+                'beforeYouDeclareAttack',
+            )
+            broad = [n for n, e in generic if e.get('timing') in broad_timings]
+            rest = [n for n, e in generic if e.get('timing') not in broad_timings]
+            cc_cards = (broad + rest)[:10]
+        if cc_cards:
+            import random as _r
+            rng = _r.Random(42 + pn_key)
+            shuffled = list(cc_cards)
+            rng.shuffle(shuffled)
+            initial_hand = shuffled[:2]
+            remaining_deck = shuffled[2:]
+            game.data[hand_key] = initial_hand
+            game.data[deck_key] = remaining_deck
+            game.data[f'player{pn_key}CcDiscard'] = []
+
     game['round'] = 1
     game['currentRound'] = 1
     game['phase'] = 'round_active'

@@ -75,11 +75,21 @@ def get_cc_play_context(game: Any, player_num: int) -> Dict[str, Any]:
 
     in_sor_window = bool(data.get('startOfRoundWhoseTurn'))
     start_of_round = bool(data.get('currentRound') and in_sor_window)
+    # Primary (Discord) path: check currentActivationTurnPlayerId.
+    # Headless fallback: use activePlayer + activeFigureKeys to detect
+    # whether this player is mid-activation.
     during_activation = (
         not in_sor_window
         and data.get('currentActivationTurnPlayerId') == player_id
         and not data.get('endOfRoundWhoseTurn')
     )
+    if not during_activation and not in_sor_window:
+        active_player = data.get('activePlayer')
+        active_figs = data.get('activeFigureKeys') or []
+        if (int(active_player or 0) == int(player_num)
+                and active_figs
+                and not data.get('endOfRoundWhoseTurn')):
+            during_activation = True
     end_of_round = data.get('endOfRoundWhoseTurn') == player_id
     combat = data.get('combat') or data.get('pendingCombat')
     during_attack = bool(combat)
