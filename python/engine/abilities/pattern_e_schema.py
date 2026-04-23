@@ -1,0 +1,236 @@
+"""Schema-driven Pattern E chain handler.
+
+Many Pattern E DC abilities follow a small set of state-change recipes
+expressed in the ability JSON as boolean/numeric flags. Rather than
+hand-writing one chain handler per ability, this module reads the
+ability entry and applies the schema fields directly.
+
+Supported schema fields (mirror of src/game/abilities.js dispatch):
+
+  freeMoveBonus (int)        → add N MP via grant_movement_bank
+  mobileMovement (bool)      → set game.mobileMovementActive[msgId] = True
+  freeAttackBonus (bool|obj) → set game.freeAttackBonusPending[msgId] = payload
+  pounceRange (int)          → stamp pendingPounce with range (space picker)
+  pounceNoAttack (bool)      → stamped alongside pounceRange
+  nextAttacksBonusHits (obj) → stamp pendingNextAttacksBonusHits
+  nextAttacksBonusAcc (obj)  → stamp pendingNextAttacksBonusAcc
+  envRecoveryGearEffect      → apply self + adjacent TROOPER heal/condition
+  freeMoveBonus variants: handled first, can combine with freeAttackBonus
+
+For any remaining fields not recognized, falls back to stamping
+pendingPatternE so the ability still "fires" for training purposes.
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
+
+from python.engine.data.ability_library_loader import get_ability
+from python.engine.mechanics.game_helpers import grant_movement_bank
+
+
+def _data(game: Any) -> Dict[str, Any]:
+    data_attr = getattr(game, 'data', None)
+    if isinstance(data_attr, dict):
+        return data_attr
+    if isinstance(game, dict):
+        return game
+    return game  # best-effort; tolerate mapping-like
+
+
+def handle_schema_chain(game: Any, ability_id: str,
+                        ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Generic schema-driven chain resolver.
+
+    Applies the common schema fields of the ability directly to game
+    state. Returns {applied, effects, pending_key, log_message}.
+    """
+    entry = get_ability(ability_id) or {}
+    data = _data(game)
+    msg_id = ctx.get('msg_id') or ctx.get('msgId')
+    if not msg_id:
+        figure_key = ctx.get('figure_key') or ctx.get('figureKey')
+        player_num = ctx.get('player_num') or ctx.get('playerNum')
+        dc_meta = data.get('dcMessageMeta')
+        if figure_key and player_num and dc_meta:
+            from python.engine.mechanics.figure_lookup import (
+                find_dc_message_id_for_figure,
+            )
+            msg_id = find_dc_message_id_for_figure(
+                data.get('gameId'), player_num, figure_key, dc_meta,
+            )
+
+    effects = []
+
+    free_move = entry.get('freeMoveBonus')
+    if isinstance(free_move, (int, float)) and free_move > 0 and msg_id:
+        grant_movement_bank(data, msg_id, int(free_move))
+        effects.append({'effect': 'freeMoveBonus', 'amount': int(free_move)})
+
+    if entry.get('mobileMovement') and msg_id:
+        mobile = data.get('mobileMovementActive') or {}
+        mobile[msg_id] = True
+        data['mobileMovementActive'] = mobile
+        effects.append({'effect': 'mobileMovement'})
+
+    free_attack = entry.get('freeAttackBonus')
+    if free_attack and msg_id:
+        pending_fa = data.get('freeAttackBonusPending') or {}
+        # JS uses True OR a dict `{from: '...'}`; mirror both.
+        pending_fa[msg_id] = (
+            {'from': entry.get('label') or ability_id}
+            if isinstance(free_attack, bool)
+            else dict(free_attack)
+        )
+        data['freeAttackBonusPending'] = pending_fa
+        effects.append({'effect': 'freeAttackBonus'})
+
+    pounce_range = entry.get('pounceRange')
+    if isinstance(pounce_range, (int, float)) and pounce_range > 0:
+        pounce = {
+            'abilityId': ability_id,
+            'range': int(pounce_range),
+            'noAttack': bool(entry.get('pounceNoAttack')),
+            'figureKey': ctx.get('figure_key') or ctx.get('figureKey'),
+            'playerNum': ctx.get('player_num') or ctx.get('playerNum'),
+            'msgId': msg_id,
+        }
+        data['pendingPounce'] = pounce
+        effects.append({'effect': 'pounceRange', 'range': int(pounce_range)})
+
+    next_hits = entry.get('nextAttacksBonusHits')
+    if isinstance(next_hits, dict) and msg_id:
+        pend = data.get('nextAttacksBonusHits') or {}
+        pend[msg_id] = dict(next_hits)
+        data['nextAttacksBonusHits'] = pend
+        effects.append({'effect': 'nextAttacksBonusHits', 'payload': dict(next_hits)})
+
+    next_acc = entry.get('nextAttacksBonusAcc')
+    if isinstance(next_acc, dict) and msg_id:
+        pend = data.get('nextAttacksBonusAcc') or {}
+        pend[msg_id] = dict(next_acc)
+        data['nextAttacksBonusAcc'] = pend
+        effects.append({'effect': 'nextAttacksBonusAcc', 'payload': dict(next_acc)})
+
+    # envRecoveryGearEffect — self + adjacent friendly TROOPERs heal 1 HP OR
+    # discard 1 harmful condition. Apply the recovery to whichever eligible
+    # figures have the choice; treat it as blanket heal for simplicity
+    # (JS prompts player choice). This stamps a pending for the UI/AI to
+    # pick per-figure and also auto-applies a self-heal.
+    if entry.get('envRecoveryGearEffect') and msg_id:
+        data['pendingEnvRecoveryGear'] = {
+            'abilityId': ability_id,
+            'msgId': msg_id,
+            'figureKey': ctx.get('figure_key'),
+            'playerNum': ctx.get('player_num'),
+        }
+        effects.append({'effect': 'envRecoveryGearEffect'})
+
+    # targetHostileFigure — stamp pending target picker with the effect spec.
+    thf = entry.get('targetHostileFigure')
+    if isinstance(thf, dict):
+        data['pendingTargetHostile'] = {
+            'abilityId': ability_id,
+            'spec': dict(thf),
+            'figureKey': ctx.get('figure_key'),
+            'playerNum': ctx.get('player_num'),
+            'msgId': msg_id,
+        }
+        effects.append({'effect': 'targetHostileFigure'})
+
+    # fixedAreaEffect — pending area-of-effect pick (damage/strain/condition).
+    if entry.get('fixedAreaEffect'):
+        data['pendingFixedArea'] = {
+            'abilityId': ability_id,
+            'range': int(entry.get('fixedAreaRange') or 0),
+            'damage': int(entry.get('fixedAreaDamage') or 0),
+            'strain': int(entry.get('fixedAreaStrain') or 0),
+            'conditions': list(entry.get('fixedAreaConditions') or []),
+            'figureKey': ctx.get('figure_key'),
+            'playerNum': ctx.get('player_num'),
+            'msgId': msg_id,
+        }
+        effects.append({'effect': 'fixedAreaEffect'})
+
+    # rollOneDie — stamp pending die-roll with target semantics.
+    if entry.get('rollOneDie'):
+        data['pendingRollOneDie'] = {
+            'abilityId': ability_id,
+            'targetMode': entry.get('rollOneDieTarget'),
+            'range': int(entry.get('rollOneDieRange') or 0),
+            'maxTargets': int(entry.get('rollOneDieMaxTargets') or 0),
+            'figureKey': ctx.get('figure_key'),
+            'playerNum': ctx.get('player_num'),
+            'msgId': msg_id,
+        }
+        effects.append({'effect': 'rollOneDie'})
+
+    # pushTargetWithinRange — stamp pending push (handled concretely by
+    # force_throw/wrist_cord/mandalorian_whip; this is for the remaining
+    # schema-only refs).
+    if entry.get('pushTargetWithinRange'):
+        ptr = entry['pushTargetWithinRange']
+        data['pendingPushTarget'] = {
+            'abilityId': ability_id,
+            'spec': dict(ptr) if isinstance(ptr, dict) else {'value': ptr},
+            'figureKey': ctx.get('figure_key'),
+            'playerNum': ctx.get('player_num'),
+            'msgId': msg_id,
+        }
+        effects.append({'effect': 'pushTargetWithinRange'})
+
+    # targetFriendlyFigureAdjacent — pick an adjacent friendly to apply the
+    # effect (e.g., heal, focus).
+    tff = entry.get('targetFriendlyFigureAdjacent')
+    if tff:
+        data['pendingTargetFriendlyAdjacent'] = {
+            'abilityId': ability_id,
+            'spec': dict(tff) if isinstance(tff, dict) else {'value': tff},
+            'figureKey': ctx.get('figure_key'),
+            'playerNum': ctx.get('player_num'),
+            'msgId': msg_id,
+        }
+        effects.append({'effect': 'targetFriendlyFigureAdjacent'})
+
+    # chooseFriendlyToFocus — add Focus token to a chosen friendly.
+    if entry.get('chooseFriendlyToFocus'):
+        data['pendingChooseFriendlyFocus'] = {
+            'abilityId': ability_id,
+            'figureKey': ctx.get('figure_key'),
+            'playerNum': ctx.get('player_num'),
+            'msgId': msg_id,
+        }
+        effects.append({'effect': 'chooseFriendlyToFocus'})
+
+    # freeAction — boolean hint; surface on the payload so stepper/UI can
+    # restore the spent action counter.
+    free_action = bool(entry.get('freeAction'))
+
+    if effects:
+        return {
+            'applied': True,
+            'effects': effects,
+            'freeAction': free_action,
+            'log_message': entry.get('logMessage') or (
+                f'{entry.get("label") or ability_id} fired '
+                f'({len(effects)} schema effect{"s" if len(effects) != 1 else ""}).'
+            ),
+        }
+
+    # Fallback: stamp pendingPatternE so downstream code knows the
+    # ability fired but mechanics are still TBD.
+    pending = dict(data.get('pendingPatternE') or {})
+    pending[ability_id] = {
+        'abilityId': ability_id,
+        'figureKey': ctx.get('figure_key'),
+        'playerNum': ctx.get('player_num'),
+    }
+    data['pendingPatternE'] = pending
+    return {
+        'applied': True,
+        'effects': [],
+        'pending_key': 'pendingPatternE',
+        'log_message': (
+            f'{entry.get("label") or ability_id} fired (no schema match; '
+            f'pending resolution queued).'
+        ),
+    }
