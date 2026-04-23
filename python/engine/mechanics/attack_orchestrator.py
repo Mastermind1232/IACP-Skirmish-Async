@@ -47,7 +47,7 @@ from python.engine.mechanics.combat_declare import fire_combat_declare_triggers
 from python.engine.mechanics.combat_defense_friends import (
     fire_combat_defense_friends_triggers,
 )
-from python.engine.mechanics.conditions import apply_condition
+from python.engine.mechanics.conditions import apply_condition, filter_condition
 from python.engine.mechanics.damage_helpers import reduce_hp
 from python.engine.mechanics.dice import roll_attack_dice, roll_defense_dice
 from python.engine.mechanics.defeat import calculate_kill_vp
@@ -194,6 +194,24 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     atk_cur_hp, atk_max_hp = _get_hp(data, atk_msg_id or '', atk_fig_idx)
     attacker_damage_suffered = _damage_suffered(atk_cur_hp, atk_max_hp)
 
+    # Consume attacker Focus (adds a green die, per standard IA rules).
+    atk_conds = list((data.get('figureConditions') or {}).get(attacker_key) or [])
+    attacker_conds = list(atk_conds)
+    focus_consumed = False
+    if 'Focus' in atk_conds:
+        filter_condition(data, attacker_key, 'Focus')
+        dice_colors = list(dice_colors) + ['green']
+        focus_consumed = True
+
+    # Check defender Hide: imposes +1 accuracy requirement to hit.
+    def_conds = list((data.get('figureConditions') or {}).get(target_key) or [])
+    defender_conds = list(def_conds)
+    hide_consumed = False
+    if 'Hide' in def_conds:
+        # Consume Hide on attack target (defender loses Hide even if miss)
+        filter_condition(data, target_key, 'Hide')
+        hide_consumed = True
+
     combat: Dict[str, Any] = {
         'attackerFigureKey': attacker_key,
         'defenderFigureKey': target_key,
@@ -201,13 +219,22 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         'defenderPlayerNum': def_player,
         'attackType': 'range' if is_ranged else 'melee',
         'attackInfo': {'dice': list(dice_colors)},
+        'attackerConds': attacker_conds,
+        'defenderConds': defender_conds,
         'bonusHits': 0, 'bonusAccuracy': 0, 'bonusPierce': 0,
         'bonusBlock': 0, 'bonusEvade': 0, 'bonusDamage': 0,
         'surgeBonus': 0, 'attackerDiceToRemove': 0,
         'bonusConditions': [],
         'triggered': [],
         'spentTokens': [],
+        'focusConsumed': focus_consumed,
+        'hideConsumed': hide_consumed,
     }
+    if hide_consumed:
+        # Hide imposes +1 to the accuracy requirement. compute_combat_result
+        # already reads accuracy/distance; we encode the extra requirement as
+        # an additional bonusAccuracy deduction from the attacker side.
+        combat['hideAccuracyPenalty'] = 1
     data['pendingCombat'] = combat
 
     # ── Phase 2: PRE-ATTACK triggers ─────────────────────────────────────

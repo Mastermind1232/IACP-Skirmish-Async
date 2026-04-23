@@ -219,6 +219,46 @@ def test_defeated_figure_removed_and_vp_awarded():
         _cleanup()
 
 
+def test_focus_consumed_and_adds_green_die():
+    """Attacker with Focus consumes the condition and adds a green die
+    to the attack pool."""
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    try:
+        g = _game_with_attack()
+        g.data['figureConditions'] = {'Stormtrooper (Regular)-0-0': ['Focus']}
+        result = orchestrate_attack(
+            g, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(3),
+        )
+        # Focus was consumed
+        conds = (g.data.get('figureConditions') or {}).get('Stormtrooper (Regular)-0-0') or []
+        assert 'Focus' not in conds
+        assert result['combat']['focusConsumed'] is True
+        # Attack pool got a green die appended
+        assert 'green' in result['combat']['attackInfo']['dice']
+    finally:
+        _cleanup()
+
+
+def test_hide_consumed_on_defender_when_targeted():
+    """Attacking a Hidden defender consumes Hide and flags the penalty."""
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    try:
+        g = _game_with_attack()
+        g.data['figureConditions'] = {'Rebel Trooper (Regular)-0-0': ['Hide']}
+        result = orchestrate_attack(
+            g, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(3),
+        )
+        conds = (g.data.get('figureConditions') or {}).get('Rebel Trooper (Regular)-0-0') or []
+        assert 'Hide' not in conds
+        assert result['combat']['hideConsumed'] is True
+    finally:
+        _cleanup()
+
+
 def test_melee_adjacency_gate():
     """Melee attacks require adjacency. Distance 2 with melee should fail."""
     from python.engine.mechanics.attack_orchestrator import (
@@ -254,6 +294,8 @@ def main():
         ('multi_ability_smoke', test_stealthy_davith_registered_via_orchestrator_attack),
         ('defeat_awards_vp', test_defeated_figure_removed_and_vp_awarded),
         ('melee_smoke', test_melee_adjacency_gate),
+        ('focus_consumed', test_focus_consumed_and_adds_green_die),
+        ('hide_consumed', test_hide_consumed_on_defender_when_targeted),
     ]
     failures = []
     for name, fn in cases:
