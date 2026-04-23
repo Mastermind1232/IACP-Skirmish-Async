@@ -136,6 +136,9 @@ def install_default_handlers() -> None:
         install_mission_start_handlers,
         install_on_damage_handlers,
     )
+    from python.engine.abilities.pattern_d_extras import (
+        install_pattern_d_batch2,
+    )
     from python.engine.abilities.pattern_e import (
         install_default_chain_handlers,
         resolve_pattern_e,
@@ -153,6 +156,7 @@ def install_default_handlers() -> None:
     install_on_damage_handlers()
     install_forest_fighters_handler()
     install_fury_handlers()
+    install_pattern_d_batch2()
     install_default_chain_handlers()
 
 
