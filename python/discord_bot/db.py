@@ -130,10 +130,13 @@ def _json_default(o: Any) -> Any:
 class PostgresStore:
     """SQLAlchemy-backed game store targeting Postgres.
 
-    Schema (matches src/db.js):
+    Schema (matches the existing JS src/db.js schema byte-for-byte, so
+    the Python bot can read games saved by the Node bot without
+    migration):
+
         games (
           game_id TEXT PRIMARY KEY,
-          data JSONB NOT NULL,
+          game_data JSONB NOT NULL,
           updated_at TIMESTAMPTZ DEFAULT NOW()
         )
 
@@ -152,8 +155,9 @@ class PostgresStore:
             return
         try:
             from sqlalchemy import (  # type: ignore[import]
-                JSON, Column, DateTime, MetaData, String, Table, create_engine, func,
+                Column, DateTime, MetaData, String, Table, create_engine, func,
             )
+            from sqlalchemy.dialects.postgresql import JSONB  # type: ignore[import]
         except ImportError as e:
             raise RuntimeError(
                 'PostgresStore requires sqlalchemy + psycopg: pip install '
@@ -163,16 +167,20 @@ class PostgresStore:
         self._metadata = MetaData()
         self._table = Table(
             'games', self._metadata,
+            # Column names match the existing JS schema verbatim.
             Column('game_id', String, primary_key=True),
-            Column('data', JSON, nullable=False),
-            Column('updated_at', DateTime(timezone=True), server_default=func.now()),
+            Column('game_data', JSONB, nullable=False),
+            Column('updated_at', DateTime(timezone=True),
+                   server_default=func.now()),
         )
         self._metadata.create_all(self._engine)
 
     def get(self, game_id: str) -> Optional[GameState]:
         self._ensure_engine()
         from sqlalchemy import select  # type: ignore[import]
-        stmt = select(self._table.c.data).where(self._table.c.game_id == game_id)
+        stmt = select(self._table.c.game_data).where(
+            self._table.c.game_id == game_id,
+        )
         with self._engine.connect() as conn:
             row = conn.execute(stmt).first()
         if not row:
@@ -185,11 +193,11 @@ class PostgresStore:
     def save(self, game_id: str, game: GameState) -> None:
         self._ensure_engine()
         from sqlalchemy.dialects.postgresql import insert  # type: ignore[import]
-        payload = {'game_id': game_id, 'data': game.data}
+        payload = {'game_id': game_id, 'game_data': game.data}
         stmt = insert(self._table).values(**payload)
         stmt = stmt.on_conflict_do_update(
             index_elements=['game_id'],
-            set_={'data': payload['data']},
+            set_={'game_data': payload['game_data']},
         )
         with self._engine.begin() as conn:
             conn.execute(stmt)
