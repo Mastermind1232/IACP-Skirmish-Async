@@ -267,6 +267,109 @@ def _handle_deployment_done(interaction, ctx) -> Dict[str, Any]:
     }
 
 
+# ─── Attachment phase: reselect / done-confirm ────────────────────────────
+
+def _uid(interaction: Any) -> str:
+    user = getattr(interaction, 'user', None)
+    if user is not None:
+        uid = getattr(user, 'id', None)
+        if uid is not None:
+            return str(uid)
+    return ''
+
+
+def _resolve_game(ctx: Dict[str, Any], game_id: str) -> Any:
+    get_game = ctx.get('get_game')
+    if not callable(get_game):
+        return None
+    return get_game(game_id)
+
+
+def _handle_attach_reselect(interaction: Any,
+                              ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """attach_reselect_{gameId}_{playerNum} — clear the pending attach
+    confirmation so the dropdown can be re-sent. Mirrors
+    src/handlers/setup.js:2298-2322 (the state-mutation half only; the
+    re-send of the dropdown lands with UI scaffolding).
+    """
+    import re
+    cid = _extract_custom_id(interaction)
+    m = re.match(r'^attach_reselect_([^_]+)_([12])$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str = m.group(1), m.group(2)
+    try:
+        player_num = int(player_num_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    if not data.get('setupAttachmentPhase') or not data.get('setupAttachmentPending'):
+        return {'ok': False, 'reason': 'not_in_attachment_phase'}
+
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    confirm_map = dict(data.get('pendingAttachConfirm') or {})
+    confirm_map.pop(player_num, None)
+    confirm_map.pop(str(player_num), None)
+    if confirm_map:
+        data['pendingAttachConfirm'] = confirm_map
+    else:
+        data.pop('pendingAttachConfirm', None)
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {'ok': True, 'game': game, 'playerNum': player_num}
+
+
+def _handle_attach_done_confirm(interaction: Any,
+                                  ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """attach_done_confirm_{gameId}_{playerNum} — mark the player as
+    finished with the setup attachment phase. Mirrors
+    src/handlers/setup.js:2327-2360 state-mutation half.
+    """
+    import re
+    cid = _extract_custom_id(interaction)
+    m = re.match(r'^attach_done_confirm_([^_]+)_([12])$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str = m.group(1), m.group(2)
+    try:
+        player_num = int(player_num_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    if not data.get('setupAttachmentPhase'):
+        return {'ok': False, 'reason': 'not_in_attachment_phase'}
+
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    confirmed = dict(data.get('setupAttachmentConfirmed') or {})
+    confirmed[player_num] = True
+    data['setupAttachmentConfirmed'] = confirmed
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {'ok': True, 'game': game, 'playerNum': player_num}
+
+
 # ─── Registration ──────────────────────────────────────────────────────────
 
 register('map_confirm_', _handle_map_confirm, 'setup')
@@ -276,3 +379,5 @@ register('deployment_zone_', _handle_deployment_zone, 'setup')
 register('draft_random_', _handle_draft_random, 'setup')
 register('determine_initiative_', _handle_determine_initiative, 'setup')
 register('deployment_done_', _handle_deployment_done, 'setup')
+register('attach_reselect_', _handle_attach_reselect, 'setup')
+register('attach_done_confirm_', _handle_attach_done_confirm, 'setup')

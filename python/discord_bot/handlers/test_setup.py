@@ -30,6 +30,8 @@ def _fresh_registry():
     handlers.register('draft_random_', stp._handle_draft_random, 'setup')
     handlers.register('determine_initiative_', stp._handle_determine_initiative, 'setup')
     handlers.register('deployment_done_', stp._handle_deployment_done, 'setup')
+    handlers.register('attach_reselect_', stp._handle_attach_reselect, 'setup')
+    handlers.register('attach_done_confirm_', stp._handle_attach_done_confirm, 'setup')
 
 
 def _new_game(**overrides):
@@ -201,6 +203,105 @@ def test_deployment_done_rejects_non_player():
     assert result['reason'] == 'not_a_player_in_game'
 
 
+def test_attach_reselect_clears_pending_confirm():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _new_game()
+    g.data['setupAttachmentPhase'] = True
+    g.data['setupAttachmentPending'] = {1: ['Card A']}
+    g.data['pendingAttachConfirm'] = {1: {'card': 'Card A', 'dcMsgId': 'hl1dc0'}}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('attach_reselect_G1_1')
+    result = handler(
+        _Interaction('attach_reselect_G1_1', user_id='alice'), ctx,
+    )
+    assert result['ok'] is True
+    assert 'pendingAttachConfirm' not in g.data
+
+
+def test_attach_reselect_preserves_other_player_entry():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _new_game()
+    g.data['setupAttachmentPhase'] = True
+    g.data['setupAttachmentPending'] = {1: ['A'], 2: ['B']}
+    g.data['pendingAttachConfirm'] = {
+        1: {'card': 'A', 'dcMsgId': 'hl1dc0'},
+        2: {'card': 'B', 'dcMsgId': 'hl2dc0'},
+    }
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('attach_reselect_G1_1')
+    result = handler(
+        _Interaction('attach_reselect_G1_1', user_id='alice'), ctx,
+    )
+    assert result['ok'] is True
+    # P2 entry preserved
+    assert 2 in g.data['pendingAttachConfirm']
+
+
+def test_attach_reselect_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _new_game()
+    g.data['setupAttachmentPhase'] = True
+    g.data['setupAttachmentPending'] = {1: ['A']}
+    g.data['pendingAttachConfirm'] = {1: {'card': 'A', 'dcMsgId': 'hl1dc0'}}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('attach_reselect_G1_1')
+    result = handler(
+        _Interaction('attach_reselect_G1_1', user_id='bob'), ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'not_owner'
+
+
+def test_attach_reselect_not_in_attachment_phase():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _new_game()
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('attach_reselect_G1_1')
+    result = handler(
+        _Interaction('attach_reselect_G1_1', user_id='alice'), ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'not_in_attachment_phase'
+
+
+def test_attach_done_confirm_marks_player():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _new_game()
+    g.data['setupAttachmentPhase'] = True
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('attach_done_confirm_G1_1')
+    result = handler(
+        _Interaction('attach_done_confirm_G1_1', user_id='alice'), ctx,
+    )
+    assert result['ok'] is True
+    assert g.data['setupAttachmentConfirmed'][1] is True
+
+
+def test_attach_done_confirm_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _new_game()
+    g.data['setupAttachmentPhase'] = True
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('attach_done_confirm_G1_2')
+    result = handler(
+        _Interaction('attach_done_confirm_G1_2', user_id='alice'), ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'not_owner'
+
+
 def main():
     cases = [
         ('map_confirm_advances', test_map_confirm_advances_phase),
@@ -215,6 +316,12 @@ def main():
         ('determine_init_sets', test_determine_initiative_sets),
         ('deploy_done_both', test_deployment_done_marks_player_and_completes),
         ('deploy_done_rejects_non_player', test_deployment_done_rejects_non_player),
+        ('attach_reselect_clears', test_attach_reselect_clears_pending_confirm),
+        ('attach_reselect_preserves_other', test_attach_reselect_preserves_other_player_entry),
+        ('attach_reselect_non_owner', test_attach_reselect_rejects_non_owner),
+        ('attach_reselect_wrong_phase', test_attach_reselect_not_in_attachment_phase),
+        ('attach_done_confirm_marks', test_attach_done_confirm_marks_player),
+        ('attach_done_confirm_non_owner', test_attach_done_confirm_rejects_non_owner),
     ]
     failures = []
     for name, fn in cases:
