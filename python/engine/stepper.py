@@ -630,6 +630,12 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         atk_log[atk_player] = patk
         game['figureAttacksThisActivation'] = atk_log
 
+    # Clear one-shot pendingCombat after the attack resolves (bonuses
+    # from CCs/abilities were single-attack unless tagged round-scoped).
+    pc = game.get('pendingCombat')
+    if isinstance(pc, Mapping) and not pc.get('roundScoped'):
+        game['pendingCombat'] = None
+
     # Record damage-this-activation.
     dmg_log = dict(game.get('figureDamageThisActivation') or {})
     pdmg = dict(dmg_log.get(atk_player, dmg_log.get(str(atk_player), {})))
