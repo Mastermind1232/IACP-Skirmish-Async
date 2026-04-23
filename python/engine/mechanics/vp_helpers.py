@@ -31,17 +31,30 @@ def _ensure_vp(game: Any, player_num: int) -> Dict[str, int]:
 
 
 def award_kill_vp(game: Any, player_num: int, amount: int) -> None:
-    """Award VP for a figure kill — increments kills + total."""
+    """Award VP for a figure kill — increments kills + total. Triggers
+    win-condition check if total crosses the 40 VP threshold."""
     vp = _ensure_vp(game, player_num)
     vp['kills'] = (vp.get('kills') or 0) + amount
     vp['total'] = (vp.get('total') or 0) + amount
+    _check_win(game)
 
 
 def award_objective_vp(game: Any, player_num: int, amount: int) -> None:
-    """Award VP for an objective (mission, surge, etc.) — increments objectives + total."""
+    """Award VP for an objective (mission, surge, etc.) — increments
+    objectives + total. Triggers win check if threshold crossed."""
     vp = _ensure_vp(game, player_num)
     vp['objectives'] = (vp.get('objectives') or 0) + amount
     vp['total'] = (vp.get('total') or 0) + amount
+    _check_win(game)
+
+
+def _check_win(game: Any) -> None:
+    """Delayed import to avoid cycles. Safe no-op if game isn't dict-like."""
+    try:
+        from python.engine.mechanics.win_conditions import check_win_conditions
+        check_win_conditions(game)
+    except Exception:
+        pass
 
 
 def check_nefarious_gains(game: Any, defeated_owner_pn: int) -> Optional[Dict[str, Any]]:
