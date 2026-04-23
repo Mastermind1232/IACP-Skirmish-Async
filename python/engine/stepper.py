@@ -234,7 +234,38 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
     speed = effect.get('speed')
     if not isinstance(speed, (int, float)):
         speed = 4
-    game['movementPoints'] = int(speed)
+    mp = int(speed)
+
+    # Pull bonus MP from movementBank[msg_id] if the figure's DC has a
+    # message-id entry. Covers abilities like Lift Off (freeMoveBonus=4)
+    # and CCs like On the Lam / Close the Gap.
+    from python.engine.mechanics.figure_lookup import parse_figure_key
+    dc_list_key = 'p1DcList' if player == 1 else 'p2DcList'
+    msg_ids_key = 'p1DcMessageIds' if player == 1 else 'p2DcMessageIds'
+    dc_list = game.get(dc_list_key) or []
+    msg_ids = game.get(msg_ids_key) or []
+    parsed = parse_figure_key(figure_key)
+    if parsed is not None:
+        tname, tgroup, _ = parsed
+        for i, dc in enumerate(dc_list):
+            if not isinstance(dc, Mapping):
+                continue
+            if (dc.get('dcName') == tname
+                    and int(dc.get('dgIndex') or 0) == tgroup
+                    and i < len(msg_ids)):
+                msg_id_cur = msg_ids[i]
+                bank_all = dict(game.get('movementBank') or {})
+                entry = bank_all.get(msg_id_cur)
+                if isinstance(entry, Mapping):
+                    bonus = int(entry.get('remaining') or 0)
+                    if bonus > 0:
+                        mp += bonus
+                        bank_all[msg_id_cur] = {
+                            **entry, 'remaining': 0,
+                        }
+                        game['movementBank'] = bank_all
+                break
+    game['movementPoints'] = mp
 
     # Clear per-activation damage counter for this figure.
     dmg = dict(game.get('figureDamageThisActivation') or {})
