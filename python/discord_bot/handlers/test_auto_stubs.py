@@ -48,6 +48,7 @@ def _load_py_prefixes():
     import python.discord_bot.handlers.post_combat  # noqa: F401
     import python.discord_bot.handlers.combat_reactions  # noqa: F401
     import python.discord_bot.handlers.botmenu  # noqa: F401
+    import python.discord_bot.handlers.interrupts  # noqa: F401
     import python.discord_bot.handlers.stepper_bridge  # noqa: F401
     import python.discord_bot.handlers.auto_stubs  # noqa: F401
     return {p for p, _, _ in H._REGISTRY}

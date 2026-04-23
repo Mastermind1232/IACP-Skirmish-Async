@@ -94,6 +94,18 @@ _handle_strike_me_down_no = _make_reaction_skip(
 _handle_slow_on_draw_no = _make_reaction_skip(
     'slow_on_draw_no_', 'pendingSlowOnTheDraw',
 )
+_handle_power_converter_skip = _make_reaction_skip(
+    'power_converter_skip_', 'pendingPowerConverter',
+)
+_handle_illicit_arms_skip = _make_reaction_skip(
+    'illicit_arms_skip_', 'pendingIllicitArms',
+)
+_handle_doubt_reroll_skip = _make_reaction_skip(
+    'doubt_reroll_skip_', 'pendingDoubtReroll',
+)
+_handle_force_exhaustion_no = _make_reaction_skip(
+    'force_exhaustion_no_', 'pendingForceExhaustion',
+)
 
 
 register('there_is_no_try_skip_', _handle_there_is_no_try_skip, 'core')
@@ -101,3 +113,7 @@ register('tough_luck_skip_', _handle_tough_luck_skip, 'core')
 register('hunter_protocol_skip_', _handle_hunter_protocol_skip, 'core')
 register('strike_me_down_no_', _handle_strike_me_down_no, 'core')
 register('slow_on_draw_no_', _handle_slow_on_draw_no, 'core')
+register('power_converter_skip_', _handle_power_converter_skip, 'core')
+register('illicit_arms_skip_', _handle_illicit_arms_skip, 'core')
+register('doubt_reroll_skip_', _handle_doubt_reroll_skip, 'core')
+register('force_exhaustion_no_', _handle_force_exhaustion_no, 'core')
