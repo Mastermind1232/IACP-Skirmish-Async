@@ -238,6 +238,23 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         # already reads accuracy/distance; we encode the extra requirement as
         # an additional bonusAccuracy deduction from the attacker side.
         combat['hideAccuracyPenalty'] = 1
+    # Pull prior pendingCombat stamps (CC/ability bonuses from the
+    # pre-attack window) into the new combat dict. Preserves bonusHits,
+    # bonusAccuracy, bonusBlock, etc. that CCs like Heavy Ordnance /
+    # Feint / Bodyguard stamped before the attack declaration.
+    prior_pc = data.get('pendingCombat')
+    if isinstance(prior_pc, dict):
+        for _k in ('bonusHits', 'bonusBlock', 'bonusEvade', 'bonusAccuracy',
+                   'bonusPierce', 'bonusSurges', 'bonusBlast', 'bonusCleave',
+                   'bonusDamage', 'defenseDiceRemoved', 'attackerDiceToRemove',
+                   'attackerBonusDice', 'defenderBonusDice',
+                   'attackerRerollCount', 'defenderRerollCount',
+                   'bonusConditions'):
+            if _k in prior_pc and prior_pc[_k]:
+                if _k == 'bonusConditions':
+                    combat[_k] = list(combat.get(_k) or []) + list(prior_pc[_k] or [])
+                else:
+                    combat[_k] = int(combat.get(_k) or 0) + int(prior_pc[_k] or 0)
     data['pendingCombat'] = combat
 
     # ── Phase 2: PRE-ATTACK triggers ─────────────────────────────────────
