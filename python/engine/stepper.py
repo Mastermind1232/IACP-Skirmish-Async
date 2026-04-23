@@ -1197,7 +1197,66 @@ def _handle_play_cc(game: GameState, action: Action) -> GameState:
         from python.engine.cards.cc_effects import (
             UnknownCcEffect, resolve_pending_cc_effect,
         )
-        cc_ctx = action.params.get('cc_ctx') or {}
+        cc_ctx = dict(action.params.get('cc_ctx') or {})
+
+        # Auto-populate ctx from the active figure if caller didn't supply
+        # figure_key / msg_id. Lets CCs that need a self-figure (mpBonus,
+        # applyFocus, applyHide, recoverDamage) fire without the caller
+        # threading every field.
+        active_keys = game.data.get('activeFigureKeys') or []
+        if not cc_ctx.get('figure_key') and active_keys:
+            cc_ctx['figure_key'] = active_keys[0]
+        if not cc_ctx.get('msg_id') and cc_ctx.get('figure_key'):
+            from python.engine.mechanics.figure_lookup import (
+                parse_figure_key,
+            )
+            dc_list_key = 'p1DcList' if player == 1 else 'p2DcList'
+            msg_ids_key = 'p1DcMessageIds' if player == 1 else 'p2DcMessageIds'
+            dc_list = game.data.get(dc_list_key) or []
+            msg_ids = game.data.get(msg_ids_key) or []
+            parsed = parse_figure_key(cc_ctx['figure_key'])
+            if parsed is not None:
+                tname, tgroup, _ = parsed
+                for i, dc in enumerate(dc_list):
+                    if not isinstance(dc, Mapping):
+                        continue
+                    if (dc.get('dcName') == tname
+                            and int(dc.get('dgIndex') or 0) == tgroup
+                            and i < len(msg_ids)):
+                        cc_ctx['msg_id'] = msg_ids[i]
+                        break
+
+        # Auto-pick target: if CC needs a target and none supplied, default
+        # to the first opponent figure within Chebyshev-adjacent range of
+        # the active figure (for chooseAdjacentHostileThen), or the first
+        # opponent on the board otherwise.
+        if not cc_ctx.get('target_figure_key'):
+            opp = 2 if player == 1 else 1
+            opp_positions = (game.data.get('figurePositions') or {}).get(opp) or {}
+            if opp_positions:
+                target_fk = next(iter(opp_positions))
+                cc_ctx['target_figure_key'] = target_fk
+                cc_ctx['target_player_num'] = opp
+                # Resolve target msg_id too.
+                dc_list_key = 'p2DcList' if opp == 2 else 'p1DcList'
+                msg_ids_key = 'p2DcMessageIds' if opp == 2 else 'p1DcMessageIds'
+                from python.engine.mechanics.figure_lookup import (
+                    parse_figure_key,
+                )
+                dc_list = game.data.get(dc_list_key) or []
+                msg_ids = game.data.get(msg_ids_key) or []
+                parsed = parse_figure_key(target_fk)
+                if parsed is not None:
+                    tname, tgroup, _ = parsed
+                    for i, dc in enumerate(dc_list):
+                        if not isinstance(dc, Mapping):
+                            continue
+                        if (dc.get('dcName') == tname
+                                and int(dc.get('dgIndex') or 0) == tgroup
+                                and i < len(msg_ids)):
+                            cc_ctx['target_msg_id'] = msg_ids[i]
+                            break
+
         try:
             resolve_pending_cc_effect(game, cc_ctx)
         except UnknownCcEffect:
