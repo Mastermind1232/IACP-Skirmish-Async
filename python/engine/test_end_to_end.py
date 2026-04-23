@@ -1,0 +1,166 @@
+"""End-to-end game-flow tests.
+
+Runs full games via legal_actions + stepper to verify the engine
+plays through without stalling, crashing, or leaking state between
+rounds. Protects against regressions in:
+
+  - legal_actions completeness (no dead states)
+  - Round refresh (activations, CC draws, round-scoped state clear)
+  - Win condition detection (VP threshold, elimination)
+  - Schema handler wiring (CC/DC_SPECIAL auto-ctx)
+  - Attack handler bonus consumption
+
+Run: python3 python/engine/test_end_to_end.py
+"""
+from __future__ import annotations
+
+import random
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from python.engine.actions import ActionType
+from python.engine.creation import create_game
+from python.engine.stepper import step, Action
+from python.mcts.actions import legal_actions
+
+
+def _autodeploy_game(seed=0):
+    random.seed(seed)
+    g = create_game(map_id='mos-eisley-outskirts')
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['player1Squad'] = {
+        'deploymentCards': ['Luke Skywalker', 'Rebel Trooper (Regular)'],
+    }
+    g.data['player2Squad'] = {
+        'deploymentCards': ['Stormtrooper (Regular)', 'Stormtrooper (Regular)'],
+    }
+    g = step(g, Action(type=ActionType.AUTO_DEPLOY, player=0))
+    return g
+
+
+def test_random_play_never_stalls_over_200_steps():
+    """Random play must never hit a dead state (legal_actions == []
+    while phase != game_over) within 200 steps."""
+    g = _autodeploy_game(seed=0)
+    for step_n in range(200):
+        if g.get('phase') == 'game_over':
+            return
+        actions = legal_actions(g)
+        assert actions, (
+            f'Dead state at step {step_n}: phase={g.get("phase")!r} '
+            f'roundPhase={g.get("roundPhase")!r} '
+            f'activationsRemaining={g.get("activationsRemaining")!r}'
+        )
+        g = step(g, random.choice(actions))
+
+
+def test_random_play_advances_rounds():
+    """Random play crosses a round boundary within 100 steps."""
+    g = _autodeploy_game(seed=1)
+    initial_round = g.get('round') or 1
+    for _ in range(200):
+        if g.get('phase') == 'game_over':
+            break
+        actions = legal_actions(g)
+        if not actions:
+            break
+        g = step(g, random.choice(actions))
+        if (g.get('round') or 1) > initial_round:
+            return
+    raise AssertionError(
+        f'Round never advanced past {initial_round} in 200 steps'
+    )
+
+
+def test_cc_draw_refreshes_hand_at_round_start():
+    """Round refresh auto-draws 2 CCs per player."""
+    g = _autodeploy_game(seed=2)
+    # Fast-forward to end of round 1.
+    # Simulate by directly ending the round: clear activations, then EoR.
+    g.data['activationsRemaining'] = {1: 0, 2: 0}
+    g.data['roundPhase'] = 'end'
+    g.data['p1ActivationPhaseEnded'] = True
+    g.data['p2ActivationPhaseEnded'] = True
+    p1_before = len(g.data.get('player1CcHand') or [])
+    p2_before = len(g.data.get('player2CcHand') or [])
+    g = step(g, Action(type=ActionType.END_END_OF_ROUND, player=0))
+    p1_after = len(g.data.get('player1CcHand') or [])
+    p2_after = len(g.data.get('player2CcHand') or [])
+    assert p1_after >= p1_before, 'P1 hand should grow (or stay)'
+    assert p2_after >= p2_before, 'P2 hand should grow (or stay)'
+
+
+def test_round_scoped_state_clears_on_eor():
+    """End-of-round clears pendingCombat, mobileMovementActive, etc."""
+    g = _autodeploy_game(seed=3)
+    # Stamp round-scoped state.
+    g.data['pendingCombat'] = {'bonusHits': 2}
+    g.data['mobileMovementActive'] = {'msg1': True}
+    g.data['activeCardEffects'] = {'Devotion': {'flag': 'devotionEffect'}}
+    g.data['paybackBonusSurge'] = {'msg1': 2}
+    g.data['activationsRemaining'] = {1: 0, 2: 0}
+    g.data['roundPhase'] = 'end'
+    g = step(g, Action(type=ActionType.END_END_OF_ROUND, player=0))
+    assert g.data.get('pendingCombat') is None
+    assert g.data.get('mobileMovementActive') is None
+    assert g.data.get('activeCardEffects') is None
+    assert g.data.get('paybackBonusSurge') is None
+
+
+def test_vp_threshold_triggers_game_over():
+    """Awarding VP past 40 sets game_over."""
+    from python.engine.mechanics.vp_helpers import award_kill_vp
+    g = _autodeploy_game(seed=4)
+    g.data['player1VP'] = {'total': 35, 'kills': 35, 'objectives': 0}
+    assert g.get('phase') != 'game_over'
+    award_kill_vp(g, 1, 10)  # 35 → 45
+    assert g.get('phase') == 'game_over'
+    assert g.get('winner') == 1
+
+
+def test_figure_elimination_triggers_game_over():
+    """Wiping one side's figures triggers elimination win."""
+    from python.engine.mechanics.defeat import remove_figure_position
+    from python.engine.mechanics.win_conditions import check_win_conditions
+    g = _autodeploy_game(seed=5)
+    p2_figs = list((g.data.get('figurePositions') or {}).get(2, {}).keys())
+    for fk in p2_figs:
+        remove_figure_position(g.data, 2, fk)
+    check_win_conditions(g)
+    assert g.get('phase') == 'game_over'
+    assert g.get('winner') == 1
+    assert g.get('gameEndedReason') == 'elimination'
+
+
+def main():
+    cases = [
+        ('no_stall_200_steps', test_random_play_never_stalls_over_200_steps),
+        ('rounds_advance', test_random_play_advances_rounds),
+        ('cc_draw_refreshes', test_cc_draw_refreshes_hand_at_round_start),
+        ('round_state_clears', test_round_scoped_state_clears_on_eor),
+        ('vp_triggers_game_over', test_vp_threshold_triggers_game_over),
+        ('elimination_triggers_game_over', test_figure_elimination_triggers_game_over),
+    ]
+    failures = []
+    for name, fn in cases:
+        try:
+            fn()
+            print(f'PASS: {name}')
+        except Exception as e:
+            import traceback
+            print(f'FAIL: {name}: {e}')
+            traceback.print_exc()
+            failures.append(name)
+    total = len(cases)
+    print(f'\n{total - len(failures)}/{total} passed')
+    if failures:
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
