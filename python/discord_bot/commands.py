@@ -124,6 +124,7 @@ def cmd_startbattle(user_id: str, deps: Dict[str, Any], *,
         return {'ok': False, 'reason': 'not_a_player_in_game'}
     game = setup_game(game, p1_squad, p2_squad, map_id, variant=variant, zone=zone)
     _save(deps, game_id, game)
+    _refresh_discord_views(game_id, game, deps)
     return {
         'ok': True, 'gameId': game_id,
         'phase': game.data.get('phase'),
@@ -198,6 +199,10 @@ def cmd_step_action(user_id: str, deps: Dict[str, Any], *,
     """Apply a single Action to the game via the stepper. Returns the
     updated status + whether the game ended.
 
+    After successful mutation, calls refresh_game_view to update the
+    Discord board message (via deps['channel_backend']) and
+    refresh_hand_view for both players (so CC draws / plays reflect).
+
     This is the slash-command front door to the game engine's step().
     Action parameters are validated by the stepper; illegal actions
     return {ok: False, reason: 'stepper_error', error: str}.
@@ -235,12 +240,30 @@ def cmd_step_action(user_id: str, deps: Dict[str, Any], *,
             'actionType': action_type,
         }
     _save(deps, game_id, new_game)
+
+    # Refresh the Discord board message + both hand messages. No-op when
+    # the bot hasn't tracked channels for this game yet (headless tests).
+    _refresh_discord_views(game_id, new_game, deps)
+
     return {
         'ok': True, 'gameId': game_id,
         'actionType': action_type,
         'status': format_game_status(new_game),
         'gameEnded': is_game_over(new_game),
     }
+
+
+def _refresh_discord_views(game_id: str, game: Any,
+                            deps: Dict[str, Any]) -> None:
+    """Refresh the main game view + both hand views. Silent on error."""
+    try:
+        from python.discord_bot import game_channels as gc
+        backend = deps.get('channel_backend')
+        gc.refresh_game_view(game_id, game, backend=backend)
+        gc.refresh_hand_view(game_id, 1, game, backend=backend)
+        gc.refresh_hand_view(game_id, 2, game, backend=backend)
+    except Exception:
+        pass
 
 
 def cmd_legal_actions(user_id: str, deps: Dict[str, Any], *,
