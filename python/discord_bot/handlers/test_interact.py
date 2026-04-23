@@ -24,6 +24,7 @@ def _fresh_registry():
     from python.discord_bot.handlers import interact as it
     handlers.reset_for_tests()
     handlers.register('interact_choice_', it._handle_interact, 'core')
+    handlers.register('interact_cancel_', it._handle_interact_cancel, 'core')
 
 
 def _game_with_door():
@@ -170,6 +171,70 @@ def test_interact_invalid_option_propagates_value_error():
         _cleanup()
 
 
+def test_interact_cancel_owner_ok():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game_with_door()
+    try:
+        store = {'G1': g}
+        ctx = {
+            'get_game': lambda gid: store.get(gid),
+            'dc_message_meta': {
+                'hl1dc0': {'gameId': 'G1', 'playerNum': 1, 'dcName': 'Luke Skywalker'},
+            },
+        }
+        _, handler, _ = find_handler('interact_cancel_G1_hl1dc0_0')
+        result = handler(
+            _Interaction('interact_cancel_G1_hl1dc0_0', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert result['playerNum'] == 1
+    finally:
+        _cleanup()
+
+
+def test_interact_cancel_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game_with_door()
+    try:
+        store = {'G1': g}
+        ctx = {
+            'get_game': lambda gid: store.get(gid),
+            'dc_message_meta': {
+                'hl1dc0': {'gameId': 'G1', 'playerNum': 1, 'dcName': 'Luke Skywalker'},
+            },
+        }
+        _, handler, _ = find_handler('interact_cancel_G1_hl1dc0_0')
+        result = handler(
+            _Interaction('interact_cancel_G1_hl1dc0_0', user_id='bob'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'not_owner'
+    finally:
+        _cleanup()
+
+
+def test_interact_cancel_missing_meta():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game_with_door()
+    try:
+        store = {'G1': g}
+        ctx = {
+            'get_game': lambda gid: store.get(gid),
+            'dc_message_meta': {},
+        }
+        _, handler, _ = find_handler('interact_cancel_G1_hl1dc0_0')
+        result = handler(
+            _Interaction('interact_cancel_G1_hl1dc0_0', user_id='alice'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'msg_id_meta_missing'
+    finally:
+        _cleanup()
+
+
 def main():
     cases = [
         ('happy_path_opens_door', test_interact_happy_path_opens_door),
@@ -178,6 +243,9 @@ def main():
         ('game_not_found', test_interact_game_not_found),
         ('figure_not_found', test_interact_figure_not_found),
         ('invalid_option_value_error', test_interact_invalid_option_propagates_value_error),
+        ('cancel_owner_ok', test_interact_cancel_owner_ok),
+        ('cancel_non_owner', test_interact_cancel_rejects_non_owner),
+        ('cancel_missing_meta', test_interact_cancel_missing_meta),
     ]
     failures = []
     for name, fn in cases:

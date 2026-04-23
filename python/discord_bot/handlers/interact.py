@@ -152,4 +152,38 @@ def _handle_interact(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _handle_interact_cancel(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """interact_cancel_{gameId}_{msgId}_{figureIdx} — dismiss the pending
+    interact picker. No state mutation; validates the presser owns the DC
+    via ctx.dc_message_meta lookup. Mirrors src/handlers/interact.js:15-27.
+    """
+    import re
+    cid = _extract_custom_id(interaction)
+    m = re.match(r'^interact_cancel_([^_]+)_(.+)_(\d+)$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, msg_id, fig_idx_str = m.group(1), m.group(2), m.group(3)
+
+    get_game = ctx.get('get_game')
+    game = get_game(game_id) if callable(get_game) else None
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    dcm = ctx.get('dc_message_meta') or {}
+    meta = dcm.get(msg_id) if hasattr(dcm, 'get') else None
+    if not meta or meta.get('gameId') != game_id:
+        return {'ok': False, 'reason': 'msg_id_meta_missing'}
+    player_num = meta.get('playerNum')
+    data = game.data if hasattr(game, 'data') else game
+    owner_id = data.get(f'player{player_num}Id')
+    user_id = _extract_user_id(interaction)
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+    return {
+        'ok': True, 'gameId': game_id, 'msgId': msg_id,
+        'figureIdx': int(fig_idx_str), 'playerNum': player_num,
+    }
+
+
 register('interact_choice_', _handle_interact, 'core')
+register('interact_cancel_', _handle_interact_cancel, 'core')
