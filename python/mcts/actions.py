@@ -299,6 +299,10 @@ def legal_actions(game: GameState) -> List[Action]:
             out2.append(Action(type=ActionType.PASS_ACTIVATION_TURN, player=active))
     if rem_active == 0 and rem_other == 0:
         out2.append(Action(type=ActionType.END_ACTIVATION_PHASE, player=active))
+    elif rem_active == 0 and rem_other > 0:
+        # Active player is out but opponent still has activations.
+        # Must pass the activation turn so the opponent can act.
+        out2.append(Action(type=ActionType.PASS_ACTIVATION_TURN, player=active))
     return out2
 
 
