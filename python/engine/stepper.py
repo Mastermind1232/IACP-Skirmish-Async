@@ -780,6 +780,17 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
     game['movementPoints'] = 0
     game['p1ActivationPhaseEnded'] = False
     game['p2ActivationPhaseEnded'] = False
+    # Start-of-round CC draw: each player draws 2 CCs (with reshuffle
+    # from discard when deck runs out). IACP standard rule. Skip when
+    # the game has ended.
+    if not win_result.get('ended'):
+        from python.engine.cards.deck import draw_with_reshuffle
+        for pn in (1, 2):
+            try:
+                draw_with_reshuffle(game, pn, 2)
+            except Exception:
+                pass
+
     # Clear round-scoped CC/ability state: Fuel Upgrade, Elusive,
     # Cheat to Win, Covering Fire, Built on Hope, Arcing Shot, etc.
     # These set roundDefenseBonus*, activeCardEffects flags, or
