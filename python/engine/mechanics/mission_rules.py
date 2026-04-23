@@ -621,7 +621,7 @@ def run_end_of_round_rules(game: Any, map_id: Optional[str], variant: str,
             coord = term if isinstance(term, str) else term.get('coord')
             if not coord:
                 continue
-            controller = get_space_controller(game, coord)
+            controller = get_space_controller(game, map_id, coord)
             if controller in (1, 2):
                 per_player_count[controller] += 1
         opened = data.get('openedDoors') or []
@@ -638,6 +638,47 @@ def run_end_of_round_rules(game: Any, map_id: Optional[str], variant: str,
                         _log(ctx, f'**Secure Munitions** — P{pn} opens door {key}.')
                         break
         data['openedDoors'] = opened
+
+    # pushControlledCratesUpTo (Devaron Garrison B — Crate Rush):
+    # At end of round, for each player, stamp a pending push prompt for
+    # every crate currently on a space the player controls. The actual
+    # push (up to `distance` spaces) is an interactive choice resolved
+    # downstream by the Discord UI / AI (`devaron_crate_push_*`).
+    cfg = rules.get('pushControlledCratesUpTo')
+    if cfg and map_id:
+        distance = int(cfg) if isinstance(cfg, int) else int(
+            (cfg or {}).get('distance') if isinstance(cfg, dict) else 0
+        )
+        tokens_data = (get_map_tokens_data() or {}).get(map_id) or {}
+        mission_b = tokens_data.get('missionB') or {}
+        positions_dict = mission_b.get('positions') or {}
+        all_orig = [
+            str(c).lower()
+            for coords in positions_dict.values()
+            if isinstance(coords, list)
+            for c in coords
+            if c
+        ]
+        if all_orig and distance > 0:
+            crate_positions = data.get('cratePositions') or {}
+            prompts: Dict[int, List[Dict[str, Any]]] = {1: [], 2: []}
+            for orig in all_orig:
+                cur = str(crate_positions.get(orig, orig)).lower()
+                controller = get_space_controller(game, map_id, cur)
+                if controller in (1, 2):
+                    prompts[controller].append({
+                        'origCoord': orig,
+                        'currentCoord': cur,
+                        'maxDistance': distance,
+                    })
+            pending = data.get('pendingCratePushPrompts') or {}
+            for pn, items in prompts.items():
+                if items:
+                    pending[pn] = items
+            if pending:
+                data['pendingCratePushPrompts'] = pending
+                total = sum(len(v) for v in prompts.values())
+                _log(ctx, f'**Crate Rush** — {total} controlled crate push prompt(s) queued (up to {distance} spaces each).')
 
     return {'gameEnded': False}
 

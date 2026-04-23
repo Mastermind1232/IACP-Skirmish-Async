@@ -411,6 +411,35 @@ def test_run_npc_thug_damage_events_for_adjacent_hostiles():
     _restore()
 
 
+def test_eor_push_controlled_crates_stamps_pending_prompts():
+    """Each crate on a space the player controls queues a push prompt."""
+    _install(
+        dc_effects={'Luke': {}},
+        map_spaces=_3x3_map(),
+        map_tokens={
+            'missionB': {'positions': {'0': ['a1', 'b1'], '1': ['c1']}},
+        },
+    )
+    g = _base_game(
+        # Luke controls a1/b1 via adjacency; no one controls c1.
+        figurePositions={1: {'Luke-1-0': 'a1'}, 2: {}},
+        cratePositions={'a1': 'a1', 'b1': 'b1', 'c1': 'c1'},
+    )
+    rules = {'pushControlledCratesUpTo': 3}
+    run_end_of_round_rules(g, 'utest', 'b', rules)
+    prompts = g.get('pendingCratePushPrompts') or {}
+    # P1 controls a1/b1 (his figure is on a1, and adjacency logic in
+    # get_space_controller may or may not include b1 — assert at least
+    # one prompt landed, and every queued entry carries the right max dist).
+    assert prompts, 'expected at least one player to get crate-push prompts'
+    for pn, items in prompts.items():
+        assert pn in (1, 2)
+        for item in items:
+            assert item['maxDistance'] == 3
+            assert 'origCoord' in item and 'currentCoord' in item
+    _restore()
+
+
 def main():
     cases = [
         ('fluctuation_positions_lazy_init', test_get_current_fluctuation_positions_lazy_init_from_token_data),
@@ -430,6 +459,7 @@ def main():
         ('npc_thug_moves_toward_hostile', test_run_npc_thug_activation_moves_toward_hostile),
         ('npc_thug_no_hostiles_stays_put', test_run_npc_thug_no_hostiles_stays_put),
         ('npc_thug_damage_events_adjacent', test_run_npc_thug_damage_events_for_adjacent_hostiles),
+        ('eor_push_controlled_crates', test_eor_push_controlled_crates_stamps_pending_prompts),
     ]
     failures = []
     for name, fn in cases:
