@@ -645,6 +645,10 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     }
     data.pop('pendingCombat', None)
 
+    # Check VP / elimination win conditions after every orchestrated attack.
+    from python.engine.mechanics.win_conditions import check_win_conditions
+    check_win_conditions(data)
+
     return {
         'damage': damage, 'hit': hit, 'defeated': defeated,
         'group_defeated': group_defeated,
