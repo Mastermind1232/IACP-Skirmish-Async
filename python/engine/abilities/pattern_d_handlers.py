@@ -1262,6 +1262,54 @@ def install_forest_fighters_handler() -> Dict[str, Any]:
     return {'installed': ['forest_fighters'], 'trigger': 'combat-declare'}
 
 
+# ── Fury (Wookiee Warrior Elite/Regular) ────────────────────────────────────
+
+FURY_MIN_DAMAGE = 5
+FURY_SURGE_BONUS = 1
+
+
+def handle_fury(game: Dict[str, Any],
+                 ability_id: str,
+                 ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Fury: while attacking, if attacker has suffered 5+ damage,
+    grant +1 Surge (sets combat.furyBonus = 1).
+
+    JS site: src/handlers/combat.js:1847-1851 + src/game/fury-helpers.js.
+    Library trigger in inventory is `combat-dice`, but the JS fire site
+    runs it inside the attack-declare pipeline — we register on
+    combat-dice to match the library and forward same ctx.
+    """
+    damage = ctx.get('attacker_damage_suffered') or 0
+    if not isinstance(damage, int) or damage < FURY_MIN_DAMAGE:
+        return {'applied': False, 'log_message': None,
+                'gated_by': f'atkDamageSuffered<{FURY_MIN_DAMAGE}'}
+    combat = ctx.get('combat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'missing-combat'}
+    combat['furyBonus'] = FURY_SURGE_BONUS
+    return {
+        'applied': True,
+        'log_message': (
+            f'**Fury** — Wookiee Warrior is **Furious** '
+            f'(+{FURY_SURGE_BONUS} Surge, having suffered {damage} damage).'
+        ),
+    }
+
+
+def install_fury_handlers() -> Dict[str, Any]:
+    """Wire fury_wookiee_elite and fury_wookiee_reg on combat-dice.
+
+    Both IDs share the `handle_fury` handler — same mechanic, two DCs.
+    """
+    register_trigger('combat-dice', 'fury_wookiee_elite', handle_fury)
+    register_trigger('combat-dice', 'fury_wookiee_reg', handle_fury)
+    return {
+        'installed': ['fury_wookiee_elite', 'fury_wookiee_reg'],
+        'trigger': 'combat-dice',
+    }
+
+
 def combat_defense_friends_ids() -> tuple:
     """Sorted tuple of D3.16 combat-defense-friends handler IDs (4).
 
