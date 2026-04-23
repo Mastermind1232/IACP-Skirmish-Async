@@ -100,7 +100,17 @@
         "setup": "",
         "persistent": "Kryknas are neutral figures (Health: 8, Defense: 2 Blocks). Krykna can suffer Damage and be targeted by attacks and abilities that can target hostile figures.\nWhen a player defeats a Krykna, that player gains 2 VPs and claims that Krykna.",
         "startOfRound": "",
-        "endOfRound": "In order of initiative, each player chooses and pushes a Krykna up to 3 spaces, ending in a space adjacent to the most non-Krykna figures possible. Repeat this process until all Krykna have been chosen. Then, each non-Krykna figure adjacent to a Krykna suffers 2 Damage. Then, each player may place 1 of his claimed Krykna in his opponents deployment zone."
+        "endOfRound": "In order of initiative, each player chooses and pushes a Krykna up to 3 spaces, ending in a space adjacent to the most non-Krykna figures possible. Repeat this process until all Krykna have been chosen. Then, each non-Krykna figure adjacent to a Krykna suffers 2 Damage. Then, each player may place 1 of his claimed Krykna in his opponents deployment zone.",
+        "rules": {
+          "startOfRound": {},
+          "endOfRound": {
+            "npcKryknaActivation": true,
+            "damageAdjacentToNpc": {
+              "npcTag": "Krykna",
+              "damage": 2
+            }
+          }
+        }
       },
       "b": {
         "name": "Powered Perimeter",
@@ -190,7 +200,14 @@
         "setup": "",
         "persistent": "Doors are locked.\n\nA figure can attack a crate (Health: 5, Defense: 1 Block). When a crate is destroyed, all figures and objects on or adjacent to that crate suffer 2 Damage.\n\nFor each crate in a player's deployment zone, that player counts as having 6 additional VPs.",
         "startOfRound": "",
-        "endOfRound": "For each terminal a player controls, that player chooses and opens 1 door. Then, each player pushes each crate they control up to 3 spaces."
+        "endOfRound": "For each terminal a player controls, that player chooses and opens 1 door. Then, each player pushes each crate they control up to 3 spaces.",
+        "rules": {
+          "startOfRound": {},
+          "endOfRound": {
+            "openDoorPerTerminal": true,
+            "pushControlledCratesUpTo": 3
+          }
+        }
       }
     },
     "anchorhead-cantina-bar": {
@@ -199,14 +216,22 @@
         "tokenLabel": "Mission Token",
         "imagePath": "vassal_extracted/images/mission-cards/Anchorhead Bar-A-Gaining Favor.jpg",
         "setup": "The player with initiative claims 4 red mission tokens. Then, his opponent claims 4 blue mission tokens.",
-        "persistent": "A figure can interact with a patron its player controls to place 1 of its player's mission tokens on that patron. Each player counts as having a number of VPs based on the number of patrons with 1 of his mission tokens: 1=2 VPs, 2=5 VPs, 3=10 VPs, 4=20 VPs."
+        "persistent": "A figure can interact with a patron its player controls to place 1 of its player's mission tokens on that patron. Each player counts as having a number of VPs based on the number of patrons with 1 of his mission tokens: 1=2 VPs, 2=5 VPs, 3=10 VPs, 4=20 VPs.",
+        "rules": {
+          "startOfRound": {},
+          "endOfRound": {}
+        }
       },
       "b": {
         "name": "Line of Fire",
         "tokenLabel": "Crate",
         "imagePath": "vassal_extracted/images/mission-cards/Anchorhead Bar-B-Line of Fire.jpg",
         "setup": "",
-        "persistent": "A figure can retrieve a crate. Each figure can carry only 1 crate. A small figure carrying a crate cannot attack.\n\nCrates have 5 Health. When an attack targeting a small figure is declared, that figure may choose for a crate it is carrying to suffer up to 3 Block. Then, apply +X Damage to the results, where X is the Block the crate just suffered.\n\nWhen a figure carrying a crate enters the extraction point, discard that crate and that figure scores 10 VPs minus 2 VPs for each Block that crate has suffered."
+        "persistent": "A figure can retrieve a crate. Each figure can carry only 1 crate. A small figure carrying a crate cannot attack.\n\nCrates have 5 Health. When an attack targeting a small figure is declared, that figure may choose for a crate it is carrying to suffer up to 3 Block. Then, apply +X Damage to the results, where X is the Block the crate just suffered.\n\nWhen a figure carrying a crate enters the extraction point, discard that crate and that figure scores 10 VPs minus 2 VPs for each Block that crate has suffered.",
+        "rules": {
+          "startOfRound": {},
+          "endOfRound": {}
+        }
       }
     },
     "development-facility": {
@@ -215,14 +240,22 @@
         "tokenLabel": "Droid Prototype",
         "imagePath": "vassal_extracted/images/mission-cards/Development Facility-A-The Art of.jpg",
         "setup": "",
-        "persistent": "End of each Round: For each terminal he controls, each player may choose 1 Droid prototype and move it up to 4 spaces. Then, each player who controls at least 1 Droid prototype gains 8 VPs."
+        "persistent": "End of each Round: For each terminal he controls, each player may choose 1 Droid prototype and move it up to 4 spaces. Then, each player who controls at least 1 Droid prototype gains 8 VPs.",
+        "rules": {
+          "startOfRound": {},
+          "endOfRound": {}
+        }
       },
       "b": {
         "name": "Experimental Weapons",
         "tokenLabel": "Weapon Prototype",
         "imagePath": "vassal_extracted/images/mission-cards/Development Facility-B-Experiment.jpg",
         "setup": "",
-        "persistent": "A figure can retrieve a weapon prototype. A figure can carry only 1 weapon prototype.\n\nA figure carrying a weapon prototype applies -1 Block to its defense results and gains: Surge: Perform an attack. Before performing the attack, you become Focused. Hit+Hit: Gain 3 VPs. Hit+Hit: Move up to 4 spaces and recover 3 Strain."
+        "persistent": "A figure can retrieve a weapon prototype. A figure can carry only 1 weapon prototype.\n\nA figure carrying a weapon prototype applies -1 Block to its defense results and gains: Surge: Perform an attack. Before performing the attack, you become Focused. Hit+Hit: Gain 3 VPs. Hit+Hit: Move up to 4 spaces and recover 3 Strain.",
+        "rules": {
+          "startOfRound": {},
+          "endOfRound": {}
+        }
       }
     },
     "hoth-battle-station": {
@@ -237,8 +270,12 @@
         "rules": {
           "persistent": {
             "defenseModifierByZone": {
-              "ownZone": { "blockBonus": -1 },
-              "opponentZone": { "evadeBonus": 1 }
+              "ownZone": {
+                "blockBonus": -1
+              },
+              "opponentZone": {
+                "evadeBonus": 1
+              }
             }
           },
           "endOfRound": {
