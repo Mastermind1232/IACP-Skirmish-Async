@@ -33,6 +33,7 @@ def _fresh_registry():
     handlers.register('iwba_skip_', act._handle_iwba_skip, 'activation')
     handlers.register('scav_weapon_transfer_', act._handle_scav_weapon_transfer, 'activation')
     handlers.register('heroic_effort_return_', act._handle_heroic_effort_return, 'activation')
+    handlers.register('dc_switch_fig_', act._handle_dc_switch_fig, 'activation')
 
 
 def _game_with_rebel_trooper(round_phase='activation'):
@@ -344,6 +345,65 @@ def test_heroic_effort_return_preserves_other_player_pending():
     assert g.data['pendingHeroicEffortReturn'] == {2: True}
 
 
+def test_dc_switch_fig_clears_selected_figure():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['dcActionsData'] = {
+        'hl1dc0': {'selectedFigure': 'Luke-0-1', 'remaining': 2},
+    }
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'dc_message_meta': {
+            'hl1dc0': {'gameId': 'G1', 'playerNum': 1, 'dcName': 'Luke'},
+        },
+    }
+    _, handler, _ = find_handler('dc_switch_fig_hl1dc0')
+    result = handler(_Interaction('dc_switch_fig_hl1dc0', user_id='alice'), ctx)
+    assert result['ok'] is True
+    assert g.data['dcActionsData']['hl1dc0']['selectedFigure'] is None
+    # Remaining count preserved
+    assert g.data['dcActionsData']['hl1dc0']['remaining'] == 2
+
+
+def test_dc_switch_fig_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['dcActionsData'] = {'hl1dc0': {'selectedFigure': 'Luke-0-0'}}
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'dc_message_meta': {
+            'hl1dc0': {'gameId': 'G1', 'playerNum': 1, 'dcName': 'Luke'},
+        },
+    }
+    _, handler, _ = find_handler('dc_switch_fig_hl1dc0')
+    result = handler(_Interaction('dc_switch_fig_hl1dc0', user_id='bob'), ctx)
+    assert result['ok'] is False
+    assert result['reason'] == 'not_owner'
+
+
+def test_dc_switch_fig_missing_meta():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    ctx = {'get_game': lambda gid: None, 'save_games': lambda: None,
+           'dc_message_meta': {}}
+    _, handler, _ = find_handler('dc_switch_fig_hl1dc0')
+    result = handler(_Interaction('dc_switch_fig_hl1dc0'), ctx)
+    assert result['ok'] is False
+    assert result['reason'] == 'msg_id_meta_missing'
+
+
 def test_heroic_effort_return_no_pending():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -411,6 +471,9 @@ def main():
         ('heroic_effort_return_bottom', test_heroic_effort_return_moves_to_bottom),
         ('heroic_effort_return_preserves_other', test_heroic_effort_return_preserves_other_player_pending),
         ('heroic_effort_return_no_pending', test_heroic_effort_return_no_pending),
+        ('dc_switch_fig_clears', test_dc_switch_fig_clears_selected_figure),
+        ('dc_switch_fig_non_owner', test_dc_switch_fig_rejects_non_owner),
+        ('dc_switch_fig_missing_meta', test_dc_switch_fig_missing_meta),
     ]
     failures = []
     for name, fn in cases:

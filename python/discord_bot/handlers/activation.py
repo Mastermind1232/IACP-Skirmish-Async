@@ -271,6 +271,54 @@ def _handle_end_turn(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
 
 # ─── Cancel / confirm activation ──────────────────────────────────────────
 
+def _handle_dc_switch_fig(interaction: Any,
+                            ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """dc_switch_fig_{msgId} — clear the selectedFigure inside the DC's
+    actions-data record so the UI can re-pick. Mirrors
+    src/handlers/activation.js:719-739.
+    """
+    cid = _extract_custom_id(interaction)
+    if not cid.startswith('dc_switch_fig_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    msg_id = cid[len('dc_switch_fig_'):]
+    if not msg_id:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    dcm = ctx.get('dc_message_meta') or {}
+    meta = dcm.get(msg_id) if hasattr(dcm, 'get') else None
+    if not meta:
+        return {'ok': False, 'reason': 'msg_id_meta_missing'}
+    game_id = meta.get('gameId')
+    if not game_id:
+        return {'ok': False, 'reason': 'meta_missing_game_id'}
+
+    get_game = ctx.get('get_game')
+    game = get_game(game_id) if callable(get_game) else None
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = meta.get('playerNum')
+    user_id = _extract_user_id(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    dc_actions = data.get('dcActionsData') or {}
+    entry = dc_actions.get(msg_id)
+    if isinstance(entry, dict):
+        entry['selectedFigure'] = None
+        dc_actions[msg_id] = entry
+        data['dcActionsData'] = dc_actions
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'msgId': msg_id, 'playerNum': player_num,
+    }
+
+
 def _handle_heroic_effort_return(interaction: Any,
                                     ctx: Dict[str, Any]) -> Dict[str, Any]:
     """heroic_effort_return_{gameId}_{playerNum}_{cardIdx} — places a
@@ -469,3 +517,4 @@ register('hair_trigger_skip_', _handle_hair_trigger_skip, 'activation')
 register('iwba_skip_', _handle_iwba_skip, 'activation')
 register('scav_weapon_transfer_', _handle_scav_weapon_transfer, 'activation')
 register('heroic_effort_return_', _handle_heroic_effort_return, 'activation')
+register('dc_switch_fig_', _handle_dc_switch_fig, 'activation')
