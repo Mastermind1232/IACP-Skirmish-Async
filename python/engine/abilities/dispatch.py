@@ -132,6 +132,7 @@ def install_default_handlers() -> None:
         install_combat_defense_friends_handlers,
         install_free_move_equal_to_speed_handlers,
         install_mission_start_handlers,
+        install_on_damage_handlers,
     )
     from python.engine.abilities.pattern_e import (
         install_default_chain_handlers,
@@ -147,6 +148,7 @@ def install_default_handlers() -> None:
     install_combat_defense_friends_handlers()
     install_mission_start_handlers()
     install_free_move_equal_to_speed_handlers()
+    install_on_damage_handlers()
     install_default_chain_handlers()
 
 

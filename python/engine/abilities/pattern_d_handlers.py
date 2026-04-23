@@ -1174,6 +1174,44 @@ def install_free_move_equal_to_speed_handlers() -> Dict[str, Any]:
     }
 
 
+# ── On-damage: self-Focus family ────────────────────────────────────────────
+
+def _handle_self_preservation(game: Dict[str, Any],
+                               ability_id: str,
+                               ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """self_preservation / self_preservation_hired_gun_elite — when the
+    figure suffers Damage, it becomes Focused.
+
+    JS effect: `applyCondition(game, damagedFigureKey, 'Focus')`. No die
+    append (on-damage fires OUTSIDE combat, so there's no attack pool to
+    modify). ctx must supply `figure_key` (the damaged figure).
+    """
+    figure_key = ctx.get('figure_key') or ctx.get('damaged_figure_key')
+    if not figure_key:
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'missing-figure-key'}
+    added = apply_condition(game, figure_key, 'Focus')
+    if not added:
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'already-focused'}
+    return {
+        'applied': True,
+        'log_message': f'**Self-Preservation** — {figure_key} becomes Focused after suffering damage.',
+        'figureKey': figure_key,
+    }
+
+
+def install_on_damage_handlers() -> Dict[str, Any]:
+    """Wire the on-damage self-Focus pair."""
+    register_trigger('on-damage', 'self_preservation', _handle_self_preservation)
+    register_trigger('on-damage', 'self_preservation_hired_gun_elite',
+                      _handle_self_preservation)
+    return {
+        'installed': ['self_preservation', 'self_preservation_hired_gun_elite'],
+        'trigger': 'on-damage',
+    }
+
+
 def combat_defense_friends_ids() -> tuple:
     """Sorted tuple of D3.16 combat-defense-friends handler IDs (4).
 

@@ -1162,15 +1162,15 @@ def test_all_four_registered_on_combat_defense_trigger():
 def test_pattern_d_runnable_count_is_24_after_D3_16():
     runnable = pattern_d_runnable_ids()
     # Post-D3.17 (stealthy_davith mission-start) count = 25.
-    assert len(runnable) == 27, (
-        f'expected 27 runnable Pattern D handlers post-D3.17, got {len(runnable)}'
+    assert len(runnable) == 29, (
+        f'expected 29 runnable Pattern D handlers post-D3.17, got {len(runnable)}'
     )
 
 
 def test_pattern_d_stub_count_is_137_after_D3_16():
     stubs = pattern_d_stub_ids()
     # Post-D3.17 (stealthy_davith mission-start) count = 136.
-    assert len(stubs) == 134, (
+    assert len(stubs) == 132, (
         f'expected 136 Pattern D stubs post-D3.17, got {len(stubs)}'
     )
 
