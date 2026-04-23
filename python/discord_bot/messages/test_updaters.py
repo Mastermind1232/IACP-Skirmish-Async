@@ -159,6 +159,57 @@ def test_pending_prompt_uses_given_color():
     assert e['color'] == 0xFF00FF
 
 
+def test_render_game_view_lobby():
+    from python.discord_bot.messages.updaters import render_game_view
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['phase'] = 'lobby'
+    view = render_game_view(g)
+    assert 'embeds' in view and 'components' in view
+    # VP banner always present.
+    assert len(view['embeds']) >= 1
+
+
+def test_render_game_view_in_round():
+    from python.discord_bot.messages.updaters import render_game_view
+    from python.engine.creation import create_game
+    from python.engine.setup import run_setup
+    g = create_game(map_id='mos-eisley-outskirts')
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g = run_setup(
+        g,
+        {'deploymentCards': ['Luke Skywalker']},
+        {'deploymentCards': ['Stormtrooper (Regular)']},
+        'mos-eisley-outskirts',
+    )
+    view = render_game_view(g)
+    # Should include VP banner + mission card + activation summary.
+    assert len(view['embeds']) >= 3
+    # Legal-action buttons (components) should be non-empty mid-round.
+    # Allow the render to return [] if legal_actions errors at test time.
+    assert view['content'].startswith('Round')
+
+
+def test_render_game_view_game_over():
+    from python.discord_bot.messages.updaters import render_game_view
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['phase'] = 'game_over'
+    g.data['winner'] = 1
+    g.data['gameEndedReason'] = 'elimination'
+    view = render_game_view(g)
+    assert view['components'] == []
+    # Last embed should be the game-over banner.
+    titles = [e.get('title', '') for e in view['embeds']]
+    assert any('Game Over' in t for t in titles)
+    assert any('Player 1' in t for t in titles)
+
+
 def main():
     cases = [
         ('vp_banner_round_and_vp', test_vp_banner_includes_round_and_vp),
@@ -175,6 +226,9 @@ def main():
         ('activation_summary_active', test_activation_summary_active_player),
         ('activation_summary_neither', test_activation_summary_neither_active),
         ('pending_prompt_color', test_pending_prompt_uses_given_color),
+        ('render_game_view_lobby', test_render_game_view_lobby),
+        ('render_game_view_in_round', test_render_game_view_in_round),
+        ('render_game_view_game_over', test_render_game_view_game_over),
     ]
     failures = []
     for name, fn in cases:

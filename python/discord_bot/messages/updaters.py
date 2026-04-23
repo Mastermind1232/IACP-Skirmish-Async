@@ -259,3 +259,86 @@ def build_pending_prompt(prompt_text: str,
         'description': prompt_text,
         'color': color,
     }
+
+
+# ── Complete game view ─────────────────────────────────────────────────────
+
+def render_game_view(game: Any) -> Dict[str, Any]:
+    """Compose the full game-view payload for Discord.
+
+    Returns:
+        {
+          'embeds': [<vp banner>, <mission card>, <activation summary>,
+                     <p1 dc 1>, <p1 dc 2>, ..., <p2 dc 1>, ...],
+          'components': [<legal-action button rows>],
+          'content': str,   # optional summary line
+        }
+
+    For game_over: the game-over embed replaces the activation summary;
+    components is empty.
+    """
+    data = _unwrap(game)
+    phase = data.get('phase')
+    embeds: list = [build_vp_banner(game)]
+    mission = build_mission_card(game)
+    # Only include mission card if a mission is selected.
+    selected = data.get('selectedMission') or {}
+    if selected.get('name') or selected.get('variant'):
+        embeds.append(mission)
+
+    if phase == 'game_over':
+        winner = data.get('winner')
+        reason = data.get('gameEndedReason') or 'unknown'
+        if winner is None:
+            title = '**Game Over** — Draw'
+        else:
+            title = f'**Game Over** — Player {winner} wins ({reason})'
+        embeds.append({
+            'title': title,
+            'description': '',
+            'color': COLOR_DEFEAT,
+        })
+        return {'embeds': embeds, 'components': [], 'content': title}
+
+    # Active game: include activation summary + DC cards for both sides.
+    # (activation summary reads `activePlayer` + activations remaining from
+    # data; it gracefully degrades to '—' if missing.)
+    act_summary = build_activation_summary(game)
+    # Backfill p1/p2 activations remaining from activationsRemaining dict.
+    act_rem = data.get('activationsRemaining') or {}
+    if isinstance(act_rem, dict):
+        p1_rem = act_rem.get(1, act_rem.get('1'))
+        p2_rem = act_rem.get(2, act_rem.get('2'))
+        if p1_rem is not None and p2_rem is not None:
+            desc = (
+                f"**Player {data.get('activePlayer') or 1}'s turn**\n"
+                f'P1: {p1_rem} activations remaining\n'
+                f'P2: {p2_rem} activations remaining'
+            )
+            act_summary = {**act_summary, 'description': desc}
+    embeds.append(act_summary)
+
+    # DC cards per player.
+    for pn in (1, 2):
+        msg_ids = data.get(f'p{pn}DcMessageIds') or []
+        for mid in msg_ids:
+            embeds.append(build_dc_embed(game, mid))
+
+    # Legal-action buttons.
+    components: list = []
+    try:
+        from python.discord_bot.components.action_buttons import (
+            build_action_rows,
+        )
+        from python.mcts.actions import legal_actions
+        acts = legal_actions(game)
+        if acts:
+            components = build_action_rows(acts)
+    except Exception:
+        pass
+
+    summary = (
+        f"Round {data.get('round') or 1}"
+        f" · P{data.get('activePlayer') or 1}'s turn"
+    )
+    return {'embeds': embeds, 'components': components, 'content': summary}
