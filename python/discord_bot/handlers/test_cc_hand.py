@@ -37,6 +37,7 @@ def _fresh_registry():
     handlers.register('cc_space_', ch._handle_cc_space, 'ccHand')
     handlers.register('cc_discard_select_', ch._handle_cc_discard_select, 'ccHand')
     handlers.register('cc_play_select_', ch._handle_cc_play_select, 'ccHand')
+    handlers.register('squad_cancel_', ch._handle_squad_cancel, 'ccHand')
 
 
 def _basic_game():
@@ -292,6 +293,56 @@ def test_cc_play_select_wrong_channel():
     assert result['reason'] == 'wrong_channel'
 
 
+def test_squad_cancel_drops_pending_entry():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    pending_squad = {'G1_1': {'timestamp': 123, 'squadString': 'Luke + Chewie'}}
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'pending_squad_confirm': pending_squad,
+    }
+    _, handler, _ = find_handler('squad_cancel_G1_1')
+    result = handler(_Interaction('squad_cancel_G1_1', user_id='alice'), ctx)
+    assert result['ok'] is True
+    assert result['cleared'] is True
+    assert 'G1_1' not in pending_squad
+
+
+def test_squad_cancel_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'pending_squad_confirm': {},
+    }
+    _, handler, _ = find_handler('squad_cancel_G1_1')
+    result = handler(_Interaction('squad_cancel_G1_1', user_id='bob'), ctx)
+    assert result['ok'] is False
+    assert result['reason'] == 'not_owner'
+
+
+def test_squad_cancel_no_pending_is_ok():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'pending_squad_confirm': {},
+    }
+    _, handler, _ = find_handler('squad_cancel_G1_1')
+    result = handler(_Interaction('squad_cancel_G1_1', user_id='alice'), ctx)
+    assert result['ok'] is True
+    assert result['cleared'] is False
+
+
 def test_cc_play_select_card_not_in_hand():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -347,6 +398,9 @@ def main():
         ('cc_play_select_stages', test_cc_play_select_stages_confirmation),
         ('cc_play_select_wrong_channel', test_cc_play_select_wrong_channel),
         ('cc_play_select_not_in_hand', test_cc_play_select_card_not_in_hand),
+        ('squad_cancel_drops', test_squad_cancel_drops_pending_entry),
+        ('squad_cancel_non_owner', test_squad_cancel_rejects_non_owner),
+        ('squad_cancel_no_pending', test_squad_cancel_no_pending_is_ok),
     ]
     failures = []
     for name, fn in cases:

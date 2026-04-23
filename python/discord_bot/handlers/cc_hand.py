@@ -239,6 +239,45 @@ def _player_num_from_channel(interaction: Any, game: Any) -> Optional[int]:
     return None
 
 
+def _handle_squad_cancel(interaction: Any,
+                           ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """squad_cancel_{gameId}_{playerNum} — cancel a pending squad
+    submission. Mirrors src/handlers/cc-hand.js:1255-1267. State lives
+    in ctx.pending_squad_confirm (dict keyed by '{gameId}_{playerNum}')
+    rather than on the game object.
+    """
+    import re
+    cid = _cid(interaction)
+    m = re.match(r'^squad_cancel_([^_]+)_([12])$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str = m.group(1), m.group(2)
+    try:
+        player_num = int(player_num_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    pending_map = ctx.get('pending_squad_confirm')
+    key = f'{game_id}_{player_num}'
+    removed = False
+    if isinstance(pending_map, dict):
+        removed = pending_map.pop(key, None) is not None
+    return {
+        'ok': True, 'gameId': game_id, 'playerNum': player_num,
+        'cleared': removed,
+    }
+
+
 def _handle_cc_play_select(interaction: Any,
                              ctx: Dict[str, Any]) -> Dict[str, Any]:
     """cc_play_select_{gameId} — select-menu counterpart to `play_cc_`:
@@ -346,3 +385,4 @@ register('cc_choice_', _handle_cc_choice, 'ccHand')
 register('cc_space_', _handle_cc_space, 'ccHand')
 register('cc_discard_select_', _handle_cc_discard_select, 'ccHand')
 register('cc_play_select_', _handle_cc_play_select, 'ccHand')
+register('squad_cancel_', _handle_squad_cancel, 'ccHand')
