@@ -1094,6 +1094,31 @@ def _handle_dc_special(game: GameState, action: Action) -> GameState:
     except (ValueError, AttributeError):
         pass
 
+    # Pass-through target info: lets schema handlers resolve damage/
+    # effects inline instead of stamping pending markers when the caller
+    # (AI/headless loop) already knows the target. Resolves target msg_id
+    # automatically if target_figure_key + target_player_num supplied.
+    for tkey in ('target_figure_key', 'target_player_num',
+                 'target_msg_id', 'target_coord'):
+        tval = action.params.get(tkey)
+        if tval is not None:
+            ctx[tkey] = tval
+    if ctx.get('target_figure_key') and ctx.get('target_player_num') \
+            and not ctx.get('target_msg_id'):
+        from python.engine.mechanics.figure_lookup import (
+            find_dc_message_id_for_figure,
+        )
+        dc_meta = game.data.get('dcMessageMeta')
+        if dc_meta:
+            resolved_tmsg = find_dc_message_id_for_figure(
+                game.data.get('gameId'),
+                int(ctx['target_player_num']),
+                str(ctx['target_figure_key']),
+                dc_meta,
+            )
+            if resolved_tmsg:
+                ctx['target_msg_id'] = resolved_tmsg
+
     # Resolve msg_id from the DC list — handlers that need it (Charge,
     # Wall Run) can pull it out of ctx instead of re-deriving.
     from python.engine.mechanics.figure_lookup import parse_figure_key
