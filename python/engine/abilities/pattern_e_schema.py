@@ -125,17 +125,52 @@ def handle_schema_chain(game: Any, ability_id: str,
         }
         effects.append({'effect': 'envRecoveryGearEffect'})
 
-    # targetHostileFigure — stamp pending target picker with the effect spec.
+    # targetHostileFigure — if ctx supplies target_figure_key +
+    # target_player_num + target_msg_id, apply damage/strain/condition
+    # directly. Otherwise stamp pendingTargetHostile for the UI/AI to
+    # resolve.
     thf = entry.get('targetHostileFigure')
     if isinstance(thf, dict):
-        data['pendingTargetHostile'] = {
-            'abilityId': ability_id,
-            'spec': dict(thf),
-            'figureKey': ctx.get('figure_key'),
-            'playerNum': ctx.get('player_num'),
-            'msgId': msg_id,
-        }
-        effects.append({'effect': 'targetHostileFigure'})
+        target_fk = ctx.get('target_figure_key') or ctx.get('targetFigureKey')
+        target_pn = ctx.get('target_player_num') or ctx.get('targetPlayerNum')
+        target_msg = ctx.get('target_msg_id') or ctx.get('targetMsgId')
+        if target_fk and target_pn in (1, 2):
+            damage = int(thf.get('damage') or 0)
+            strain = int(thf.get('strain') or 0)
+            condition = thf.get('applyCondition')
+            if damage > 0 and target_msg:
+                from python.engine.mechanics.damage_helpers import reduce_hp
+                from python.engine.mechanics.figure_lookup import parse_figure_key
+                parsed = parse_figure_key(target_fk)
+                fig_idx = parsed[2] if parsed else 0
+                dc_health = data.get('dcHealthState') or {}
+                reduce_hp(dc_health, data, target_msg, fig_idx, damage, target_pn)
+            if strain > 0:
+                try:
+                    from python.engine.mechanics.strain import apply_strain_to_figure
+                    apply_strain_to_figure(data, target_fk, target_pn, strain)
+                except Exception:
+                    pass
+            if isinstance(condition, str) and condition:
+                try:
+                    from python.engine.mechanics.conditions import apply_condition
+                    apply_condition(game, target_fk, condition)
+                except Exception:
+                    pass
+            effects.append({
+                'effect': 'targetHostileFigure_resolved',
+                'target': target_fk, 'damage': damage, 'strain': strain,
+                'condition': condition,
+            })
+        else:
+            data['pendingTargetHostile'] = {
+                'abilityId': ability_id,
+                'spec': dict(thf),
+                'figureKey': ctx.get('figure_key'),
+                'playerNum': ctx.get('player_num'),
+                'msgId': msg_id,
+            }
+            effects.append({'effect': 'targetHostileFigure'})
 
     # fixedAreaEffect — pending area-of-effect pick (damage/strain/condition).
     if entry.get('fixedAreaEffect'):

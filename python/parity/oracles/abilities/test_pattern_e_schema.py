@@ -69,9 +69,9 @@ def test_passive_reactive_falls_back():
     assert 'twin_sabers_ahsoka' in (game.get('pendingPatternE') or {})
 
 
-def test_target_hostile_figure_stamps_pending():
-    """Any ability with targetHostileFigure dict stamps pendingTargetHostile."""
-    # Find one by scanning the library.
+def test_target_hostile_figure_stamps_pending_when_no_target():
+    """Ability with targetHostileFigure dict but no ctx target → stamps
+    pendingTargetHostile for UI/AI to resolve later."""
     from python.engine.abilities.classify import classify_ability
     from python.engine.data.ability_library_loader import get_ability_library
     lib = get_ability_library()
@@ -82,7 +82,7 @@ def test_target_hostile_figure_stamps_pending():
             target_aid = aid
             break
     if not target_aid:
-        return  # skip if no matching ability in library
+        return
 
     game = {}
     ctx = {'msg_id': 'm1', 'player_num': 1, 'figure_key': 'Vader-1-0'}
@@ -91,6 +91,48 @@ def test_target_hostile_figure_stamps_pending():
     assert pth.get('abilityId') == target_aid
     assert 'spec' in pth
     assert {'effect': 'targetHostileFigure'} in r['effects']
+
+
+def test_target_hostile_figure_resolves_when_target_provided():
+    """With target_figure_key + target_player_num + target_msg_id in
+    ctx, targetHostileFigure fires its damage immediately instead of
+    stamping pending."""
+    from python.engine.abilities.classify import classify_ability
+    from python.engine.data.ability_library_loader import get_ability_library
+    lib = get_ability_library()
+    # Find an ability with damage > 0
+    target_aid = None
+    for aid, entry in lib.items():
+        p, _ = classify_ability(aid, entry)
+        if p == 'E':
+            thf = entry.get('targetHostileFigure')
+            if isinstance(thf, dict) and int(thf.get('damage') or 0) > 0:
+                target_aid = aid
+                target_spec = thf
+                break
+    if not target_aid:
+        return
+
+    dmg = int(target_spec.get('damage'))
+    game = {
+        'dcHealthState': {'tgtmsg': [[10, 10]]},
+        'figureConditions': {},
+    }
+    ctx = {
+        'figure_key': 'Vader-1-0',
+        'player_num': 1,
+        'target_figure_key': 'Luke-1-0',
+        'target_player_num': 2,
+        'target_msg_id': 'tgtmsg',
+    }
+    r = handle_schema_chain(game, target_aid, ctx)
+    # Damage should have landed
+    assert game['dcHealthState']['tgtmsg'][0][0] == 10 - dmg
+    # And no pending-target should be stamped
+    assert 'pendingTargetHostile' not in game
+    # Effect labelled as resolved
+    assert any(e.get('effect') == 'targetHostileFigure_resolved'
+               for e in r['effects'])
 
 
 def test_roll_one_die_stamps_pending():
@@ -172,7 +214,8 @@ def main():
         ('free_move_and_attack', test_free_move_and_free_attack),
         ('pounce_range', test_pounce_range_stamps_pending),
         ('passive_fallback', test_passive_reactive_falls_back),
-        ('target_hostile_figure', test_target_hostile_figure_stamps_pending),
+        ('target_hostile_no_target', test_target_hostile_figure_stamps_pending_when_no_target),
+        ('target_hostile_resolves', test_target_hostile_figure_resolves_when_target_provided),
         ('roll_one_die', test_roll_one_die_stamps_pending),
         ('fixed_area_effect', test_fixed_area_effect_stamps_pending),
         ('coverage_count', test_schema_coverage_count),
