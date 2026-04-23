@@ -538,6 +538,47 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         'dodge': def_dodge,
     }
 
+    # Consume nextAttacksBonusHits[atk_msg_id] → apply {bonus} to attackRoll
+    # and decrement the count (remove entry at 0).
+    bonus_hits = 0
+    if atk_msg_id is None:
+        # Resolve attacker msg_id (same lookup as free-attack block).
+        from python.engine.mechanics.figure_lookup import parse_figure_key
+        dc_list_key = 'p1DcList' if atk_player == 1 else 'p2DcList'
+        msg_ids_key = 'p1DcMessageIds' if atk_player == 1 else 'p2DcMessageIds'
+        dc_list = game.get(dc_list_key) or []
+        msg_ids = game.get(msg_ids_key) or []
+        parsed = parse_figure_key(attacker_key)
+        if parsed is not None:
+            target_name, target_group, _ = parsed
+            for i, dc in enumerate(dc_list):
+                if not isinstance(dc, Mapping):
+                    continue
+                if (dc.get('dcName') == target_name
+                        and int(dc.get('dgIndex') or 0) == target_group
+                        and i < len(msg_ids)):
+                    atk_msg_id = msg_ids[i]
+                    break
+    if atk_msg_id:
+        nab_map = dict(game.get('nextAttacksBonusHits') or {})
+        entry = nab_map.get(atk_msg_id)
+        if isinstance(entry, Mapping):
+            bonus_hits = int(entry.get('bonus') or 0)
+            count = int(entry.get('count') or 1)
+            if count <= 1:
+                nab_map.pop(atk_msg_id, None)
+            else:
+                nab_map[atk_msg_id] = {
+                    **entry, 'count': count - 1,
+                }
+            game['nextAttacksBonusHits'] = nab_map
+
+    # Add bonus hits directly to attack_roll dmg so compute_combat_result
+    # sees the higher value.
+    if bonus_hits:
+        attack_roll = dict(attack_roll)
+        attack_roll['dmg'] = int(attack_roll.get('dmg') or 0) + bonus_hits
+
     combat = {
         'attackRoll': attack_roll,
         'defenseRoll': defense_roll,
