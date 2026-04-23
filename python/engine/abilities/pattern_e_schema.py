@@ -22,7 +22,7 @@ pendingPatternE so the ability still "fires" for training purposes.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from python.engine.data.ability_library_loader import get_ability
 from python.engine.mechanics.game_helpers import grant_movement_bank
@@ -435,6 +435,34 @@ def handle_schema_chain(game: Any, ability_id: str,
                 'msgId': msg_id,
             }
             effects.append({'effect': 'chooseFriendlyToFocus'})
+
+    # overrideAttackDice — stamp pendingOverrideAttackDice so the next
+    # attack uses the specified dice pool instead of the DC's base.
+    # Supports Arsenal-style swaps (e.g. saber_orbit uses green/red dice
+    # override to represent the telescoping saber attack).
+    oad = entry.get('overrideAttackDice')
+    if oad and msg_id:
+        override_type = entry.get('overrideAttackType')
+        if isinstance(oad, list):
+            dice_spec = list(oad)
+        elif isinstance(oad, Mapping):
+            dice_spec = list(oad.get('dice') or [])
+            if oad.get('type') and not override_type:
+                override_type = oad.get('type')
+        else:
+            dice_spec = []
+        if dice_spec:
+            pending = dict(data.get('pendingOverrideAttackDice') or {})
+            pending[msg_id] = {
+                'dice': dice_spec,
+                'type': override_type or 'range',
+            }
+            data['pendingOverrideAttackDice'] = pending
+            effects.append({
+                'effect': 'overrideAttackDice',
+                'dice': dice_spec,
+                'type': override_type or 'range',
+            })
 
     # applySelfCondition — add a condition to the activating figure (Prowl
     # applies Hide to self).
