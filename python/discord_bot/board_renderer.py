@@ -130,6 +130,43 @@ def render_board_png(game: Any,
             continue
         _draw_token(str(coord).lower(), npc_color, label='N')
 
+    # Mission tokens (yellow diamonds) + terminals (cyan squares).
+    try:
+        from python.engine.data.map_tokens_loader import get_map_tokens_data
+        tokens = (get_map_tokens_data() or {}).get(map_id) or {}
+        variant = (selected.get('variant') or 'a').lower()
+        mission_key = 'missionA' if variant == 'a' else 'missionB'
+        mission = tokens.get(mission_key) or {}
+        positions = mission.get('positions') or {}
+        for coords_list in positions.values():
+            for coord in (coords_list or []):
+                xy = _cell_xy(coord)
+                if xy is None:
+                    continue
+                col, row = xy
+                cx = margin + col * cell_size + cell_size // 2
+                cy = margin + row * cell_size + cell_size // 2
+                r = cell_size // 4
+                # Yellow diamond token.
+                pts = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
+                draw.polygon(pts, fill=(230, 200, 60),
+                              outline=(250, 230, 90))
+        for term in (tokens.get('terminals') or []):
+            coord = term if isinstance(term, str) else (term or {}).get('coord')
+            if not coord:
+                continue
+            xy = _cell_xy(coord)
+            if xy is None:
+                continue
+            col, row = xy
+            cx = margin + col * cell_size + cell_size // 2
+            cy = margin + row * cell_size + cell_size // 2
+            r = cell_size // 4
+            draw.rectangle([cx - r, cy - r, cx + r, cy + r],
+                            fill=(80, 200, 220), outline=(130, 230, 250))
+    except Exception:
+        pass
+
     # Output to PNG bytes.
     buf = io.BytesIO()
     img.save(buf, format='PNG')
