@@ -212,6 +212,189 @@ def handle_sidewinder_flag(game, ability_id, ctx):
             'log_message': '**Sidewinder** — move-2 prompt queued.'}
 
 
+# ── combat-after: Locked and Loaded (+2 Power Tokens) ──────────────────────
+
+def handle_locked_and_loaded(game, ability_id, ctx):
+    """Locked and Loaded: after resolving an attack, the attacker gains
+    2 Power Tokens (Surge).
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    attacker_key = ctx.get('attacker_figure_key')
+    if not attacker_key:
+        return {'applied': False, 'gated_by': 'missing-attacker'}
+    data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    grant_power_tokens(data, attacker_key, 'Surge', 2)
+    return {'applied': True,
+            'log_message': f'**Locked and Loaded** — {attacker_key} gains 2 Power Tokens.'}
+
+
+# ── friendly-attack: Air Support (Bodhi) ───────────────────────────────────
+
+def handle_air_support_bodhi(game, ability_id, ctx):
+    """Air Support: after a friendly attack resolves, if the target is
+    in Bodhi's LOS, the target suffers +1 damage. Applied post-hoc — we
+    need combat already resolved and the target's msgId for reduce_hp.
+    MVP: apply +1 damage unconditionally (LOS gate requires map data).
+    """
+    from python.engine.mechanics.damage_helpers import reduce_hp
+
+    data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    defender_key = ctx.get('defender_figure_key')
+    defender_pn = ctx.get('defender_player_num')
+    if not defender_key or defender_pn is None:
+        return {'applied': False, 'gated_by': 'missing-defender'}
+
+    # Find defender's msgId + figure idx
+    parts = defender_key.rsplit('-', 2)
+    if len(parts) != 3:
+        return {'applied': False, 'gated_by': 'malformed-defender-key'}
+    dc_name, group, fig_idx_str = parts
+    try:
+        fig_idx = int(fig_idx_str)
+    except ValueError:
+        return {'applied': False, 'gated_by': 'bad-fig-idx'}
+
+    dcs = data.get('dcHealthState') or {}
+    msg_ids = data.get(f'p{defender_pn}DcMessageIds') or []
+    dc_list = data.get(f'p{defender_pn}DcList') or []
+    msg_id = None
+    for i, dc in enumerate(dc_list):
+        if (isinstance(dc, dict)
+                and dc.get('dcName') == dc_name
+                and i < len(msg_ids)):
+            msg_id = msg_ids[i]
+            break
+    if not msg_id:
+        return {'applied': False, 'gated_by': 'no-msg-id'}
+
+    reduce_hp(dcs, data, msg_id, fig_idx, 1, defender_pn)
+    return {'applied': True,
+            'log_message': f'**Air Support** — {defender_key} suffers +1 damage.'}
+
+
+# ── after-attack: Distracting Fire (+group must activate next) ─────────────
+
+def handle_distracting_fire(game, ability_id, ctx):
+    """Distracting Fire: after a non-miss attack, target's group must
+    activate next. Stamp mustActivateNext on the defender's group.
+    """
+    data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    defender_key = ctx.get('defender_figure_key')
+    defender_pn = ctx.get('defender_player_num')
+    combat = ctx.get('combat') or {}
+    # Gate on non-miss (attack had any damage)
+    if not combat.get('damage') and combat.get('damage') != 0:
+        # Fallback: if damage wasn't annotated, still fire; Discord side
+        # would gate on hit status.
+        pass
+    if not defender_key or defender_pn is None:
+        return {'applied': False, 'gated_by': 'missing-defender'}
+
+    parts = defender_key.rsplit('-', 2)
+    if len(parts) != 3:
+        return {'applied': False}
+    dc_name, group, _ = parts
+    stash = data.get('mustActivateNextGroup') or {}
+    stash[defender_pn] = {'dcName': dc_name, 'group': int(group)}
+    data['mustActivateNextGroup'] = stash
+    return {'applied': True,
+            'log_message': f'**Distracting Fire** — P{defender_pn} {dc_name} group must activate next.'}
+
+
+# ── post-deploy: Infiltration (Rebel Pathfinder) ───────────────────────────
+
+def handle_infiltration(game, ability_id, ctx):
+    """Infiltration: after deploying, each friendly Pathfinder gains 6 MP.
+    Walks the caller's DC list and grants MP to every Pathfinder msgId.
+    """
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+
+    data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    player_num = ctx.get('player_num')
+    if player_num not in (1, 2):
+        return {'applied': False, 'gated_by': 'missing-player-num'}
+
+    dc_list = data.get(f'p{player_num}DcList') or []
+    msg_ids = data.get(f'p{player_num}DcMessageIds') or []
+    granted = 0
+    for i, dc in enumerate(dc_list):
+        if not isinstance(dc, dict):
+            continue
+        dc_name = str(dc.get('dcName') or '')
+        if 'Pathfinder' in dc_name and i < len(msg_ids):
+            grant_movement_bank(game, msg_ids[i], 6)
+            granted += 1
+    return {'applied': granted > 0,
+            'log_message': f'**Infiltration** — {granted} Pathfinder(s) gained 6 MP.'}
+
+
+# ── other-activation: I Make The Rules Now (legacy delegate) ───────────────
+
+# (handled by activation_effects.py; register as runnable marker)
+
+
+# ── end-of-round: Regenerate (Bossk) — legacy delegate ─────────────────────
+
+# (handled by round_effects.py; register as runnable marker)
+
+
+# ── Movement triggers: Cut and Run, Deference Protocol ─────────────────────
+
+def handle_cut_and_run_davith(game, ability_id, ctx):
+    """Cut and Run (Davith): when exiting a space containing a hostile
+    figure, that hostile suffers 1 damage. Limit once per figure per
+    activation — the gate lives in the caller; our handler just applies
+    the damage.
+    """
+    from python.engine.mechanics.damage_helpers import reduce_hp
+
+    data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    target_key = ctx.get('hostile_figure_key') or ctx.get('exited_hostile_key')
+    target_pn = ctx.get('hostile_player_num')
+    if not target_key or target_pn is None:
+        return {'applied': False, 'gated_by': 'missing-hostile'}
+
+    parts = target_key.rsplit('-', 2)
+    if len(parts) != 3:
+        return {'applied': False}
+    dc_name, _, fig_idx_str = parts
+    try:
+        fig_idx = int(fig_idx_str)
+    except ValueError:
+        return {'applied': False}
+    msg_ids = data.get(f'p{target_pn}DcMessageIds') or []
+    dc_list = data.get(f'p{target_pn}DcList') or []
+    msg_id = None
+    for i, dc in enumerate(dc_list):
+        if (isinstance(dc, dict) and dc.get('dcName') == dc_name
+                and i < len(msg_ids)):
+            msg_id = msg_ids[i]
+            break
+    if not msg_id:
+        return {'applied': False, 'gated_by': 'no-msg-id'}
+    dcs = data.get('dcHealthState') or {}
+    reduce_hp(dcs, data, msg_id, fig_idx, 1, target_pn)
+    return {'applied': True,
+            'log_message': f'**Cut and Run** — {target_key} suffers 1 damage.'}
+
+
+def handle_deference_protocol(game, ability_id, ctx):
+    """Deference Protocol: once per round, when a friendly LEADER enters
+    an adjacent space, gain 1 Block token. Handler grants the token.
+    The once-per-round gate lives in the caller.
+    """
+    from python.engine.mechanics.tokens import grant_power_tokens
+
+    figure_key = ctx.get('figure_key')
+    if not figure_key:
+        return {'applied': False, 'gated_by': 'missing-figure-key'}
+    data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    grant_power_tokens(data, figure_key, 'Block', 1)
+    return {'applied': True,
+            'log_message': f'**Deference Protocol** — {figure_key} gains 1 Block token.'}
+
+
 # ── Bulk wiring ────────────────────────────────────────────────────────────
 
 def install_pattern_d_batch2() -> Dict[str, Any]:
@@ -265,5 +448,51 @@ def install_pattern_d_batch2() -> Dict[str, Any]:
     ):
         register_trigger('post-combat', aid, fn)
         installed.append(aid)
+
+    # combat-after: locked_and_loaded grants 2 tokens post-attack
+    register_trigger('combat-after', 'locked_and_loaded',
+                      handle_locked_and_loaded)
+    installed.append('locked_and_loaded')
+
+    # friendly-attack: air_support_bodhi
+    register_trigger('friendly-attack', 'air_support_bodhi',
+                      handle_air_support_bodhi)
+    installed.append('air_support_bodhi')
+
+    # after-attack: distracting_fire
+    register_trigger('after-attack',
+                      'distracting_fire_rebel_pathfinder',
+                      handle_distracting_fire)
+    installed.append('distracting_fire_rebel_pathfinder')
+
+    # post-deploy: infiltration grants MP to Pathfinders
+    register_trigger('post-deploy', 'infiltration_rebel_pathfinder',
+                      handle_infiltration)
+    installed.append('infiltration_rebel_pathfinder')
+
+    # other-activation: i_make_the_rules_cad_bane (legacy delegate)
+    register_trigger('other-activation', 'i_make_the_rules_cad_bane',
+                      _noop_runnable)
+    installed.append('i_make_the_rules_cad_bane')
+
+    # end-of-round: regenerate_bossk (legacy delegate — fires via
+    # round_effects.apply_end_of_round_dc_effects)
+    register_trigger('end-of-round', 'regenerate_bossk', _noop_runnable)
+    installed.append('regenerate_bossk')
+
+    # start-of-round: brush_ezra (legacy delegate — fires via
+    # round_effects.apply_start_of_round_dc_effects)
+    register_trigger('start-of-round', 'brush_ezra', _noop_runnable)
+    installed.append('brush_ezra')
+
+    # movement-exit: cut_and_run_davith
+    register_trigger('movement-exit', 'cut_and_run_davith',
+                      handle_cut_and_run_davith)
+    installed.append('cut_and_run_davith')
+
+    # movement-adjacent: deference_protocol
+    register_trigger('movement-adjacent', 'deference_protocol',
+                      handle_deference_protocol)
+    installed.append('deference_protocol')
 
     return {'installed': installed, 'count': len(installed)}
