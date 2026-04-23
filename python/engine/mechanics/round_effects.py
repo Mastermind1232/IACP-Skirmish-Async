@@ -91,6 +91,35 @@ def apply_start_of_round_dc_effects(game: Any) -> List[Dict[str, Any]]:
                         f'**Brush** — **{dc_name}** gains **4 MP** at the start of the round.'
                     ),
                 })
+            # Fire all other Pattern D start-of-round triggers.
+            try:
+                from python.engine.abilities.pattern_d import fire_ability
+                from python.engine.data.ability_library_loader import (
+                    get_ability,
+                )
+                for aid in ability_ids:
+                    if aid == 'brush_ezra':
+                        continue
+                    abil_entry = get_ability(aid) or {}
+                    if abil_entry.get('trigger') == 'start-of-round':
+                        try:
+                            fire_ability(data, aid, {
+                                'figure_key': f'{dc_name}-{dc.get("dgIndex", 0)}-0',
+                                'msg_id': msg_id,
+                                'player_num': player_num,
+                                'trigger': 'start-of-round',
+                            })
+                            events.append({
+                                'abilityId': aid,
+                                'playerNum': player_num,
+                                'msgId': msg_id,
+                                'dcName': dc_name,
+                                'trigger': 'start-of-round',
+                            })
+                        except NotImplementedError:
+                            pass
+            except Exception:
+                pass
     return events
 
 

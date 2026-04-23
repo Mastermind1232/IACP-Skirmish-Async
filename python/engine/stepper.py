@@ -1024,6 +1024,16 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
                 draw_with_reshuffle(game, pn, 2)
             except Exception:
                 pass
+        # Fire start-of-round Pattern D triggers for every live DC.
+        try:
+            from python.engine.mechanics.round_effects import (
+                apply_start_of_round_dc_effects,
+            )
+            sor_events = apply_start_of_round_dc_effects(game)
+            if sor_events:
+                game.data['lastStartOfRoundDcEvents'] = sor_events
+        except Exception:
+            pass
 
     # Clear round-scoped CC/ability state: Fuel Upgrade, Elusive,
     # Cheat to Win, Covering Fire, Built on Hope, Arcing Shot, etc.
