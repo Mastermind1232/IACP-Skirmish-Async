@@ -13,6 +13,7 @@ Skip-button family (shared `_make_pending_skip_handler` factory):
   havoc_shot_skip_{gameId}           — clears pendingHavocShot
   deflect_skip_{gameId}              — clears pendingDeflect
   wanton_skip_{gameId}               — clears pendingWanton
+  heavy_fire_skip_{gameId}           — clears pendingHeavyFire
 """
 from __future__ import annotations
 
@@ -99,6 +100,9 @@ _handle_havoc_shot_skip = _make_pending_skip_handler(
 )
 _handle_deflect_skip = _make_pending_skip_handler('deflect_skip_', 'pendingDeflect')
 _handle_wanton_skip = _make_pending_skip_handler('wanton_skip_', 'pendingWanton')
+_handle_heavy_fire_skip = _make_pending_skip_handler(
+    'heavy_fire_skip_', 'pendingHeavyFire',
+)
 
 
 register('sidewinder_skip_', _handle_sidewinder_skip, 'core')
@@ -108,3 +112,4 @@ register('fighting_knife_skip_', _handle_fighting_knife_skip, 'core')
 register('havoc_shot_skip_', _handle_havoc_shot_skip, 'core')
 register('deflect_skip_', _handle_deflect_skip, 'core')
 register('wanton_skip_', _handle_wanton_skip, 'core')
+register('heavy_fire_skip_', _handle_heavy_fire_skip, 'core')

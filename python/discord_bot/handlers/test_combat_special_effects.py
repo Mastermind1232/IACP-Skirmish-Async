@@ -30,6 +30,7 @@ def _fresh_registry():
     handlers.register('havoc_shot_skip_', cse._handle_havoc_shot_skip, 'core')
     handlers.register('deflect_skip_', cse._handle_deflect_skip, 'core')
     handlers.register('wanton_skip_', cse._handle_wanton_skip, 'core')
+    handlers.register('heavy_fire_skip_', cse._handle_heavy_fire_skip, 'core')
 
 
 def _game():
@@ -134,6 +135,19 @@ def test_deflect_skip_clears_pending():
     assert 'pendingDeflect' not in g.data
 
 
+def test_heavy_fire_skip_clears_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game()
+    g.data['pendingHeavyFire'] = {'attackerPlayerNum': 1, 'picks': []}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('heavy_fire_skip_G1')
+    result = handler(_Interaction('heavy_fire_skip_G1'), ctx)
+    assert result['ok'] is True
+    assert 'pendingHeavyFire' not in g.data
+
+
 def test_wanton_skip_clears_pending():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -158,6 +172,7 @@ def main():
         ('havoc_shot_skip_clears', test_havoc_shot_skip_clears_pending),
         ('deflect_skip_clears', test_deflect_skip_clears_pending),
         ('wanton_skip_clears', test_wanton_skip_clears_pending),
+        ('heavy_fire_skip_clears', test_heavy_fire_skip_clears_pending),
     ]
     failures = []
     for name, fn in cases:
