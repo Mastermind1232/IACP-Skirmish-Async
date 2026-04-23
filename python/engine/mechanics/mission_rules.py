@@ -563,6 +563,82 @@ def run_end_of_round_rules(game: Any, map_id: Optional[str], variant: str,
                         if _ended():
                             return {'gameEnded': True}
 
+    # damageAdjacentToNpc (Chopper Base A — Krykna Infestation):
+    # each non-NPC figure adjacent to an NPC of a given tag suffers N damage.
+    cfg = rules.get('damageAdjacentToNpc')
+    if cfg and map_id:
+        from python.engine.mechanics.damage_helpers import reduce_hp
+        npc_tag = cfg.get('npcTag')
+        dmg = int(cfg.get('damage') or 0)
+        if npc_tag and dmg > 0:
+            ms = get_map_spaces(map_id) or {}
+            adjacency = ms.get('adjacency') or {}
+            npc_positions = (data.get('figurePositions') or {}).get('npc') or {}
+            npc_coords = {
+                coord for fk, coord in npc_positions.items()
+                if npc_tag.lower() in fk.lower() and coord
+            }
+            # For each non-NPC figure adjacent to any npc coord, apply damage.
+            dcs = data.get('dcHealthState') or {}
+            for pn in (1, 2):
+                positions = (data.get('figurePositions') or {}).get(pn) or {}
+                dc_list = data.get(f'p{pn}DcList') or []
+                msg_ids = data.get(f'p{pn}DcMessageIds') or []
+                for fk, coord in positions.items():
+                    if not coord:
+                        continue
+                    neighbors = set(adjacency.get(str(coord).lower()) or [])
+                    if not neighbors & npc_coords:
+                        continue
+                    parts = fk.rsplit('-', 2)
+                    if len(parts) != 3:
+                        continue
+                    dc_name, _, idx_str = parts
+                    try:
+                        fig_idx = int(idx_str)
+                    except ValueError:
+                        continue
+                    msg_id = None
+                    for i, dc in enumerate(dc_list):
+                        if (isinstance(dc, dict) and dc.get('dcName') == dc_name
+                                and i < len(msg_ids)):
+                            msg_id = msg_ids[i]
+                            break
+                    if msg_id:
+                        reduce_hp(dcs, data, msg_id, fig_idx, dmg, pn)
+            _log(ctx, f'**Krykna Infestation** — adjacent non-NPC figures suffered {dmg} damage.')
+
+    # openDoorPerTerminal (Devaron Garrison B — Secure Munitions):
+    # For each terminal a player controls, that player opens 1 door.
+    cfg = rules.get('openDoorPerTerminal')
+    if cfg and map_id:
+        tokens_data = (get_map_tokens_data() or {}).get(map_id) or {}
+        terminals = tokens_data.get('terminals') or []
+        doors = tokens_data.get('doors') or []
+        # Count controlled terminals per player via get_space_controller.
+        per_player_count = {1: 0, 2: 0}
+        for term in terminals:
+            coord = term if isinstance(term, str) else term.get('coord')
+            if not coord:
+                continue
+            controller = get_space_controller(game, coord)
+            if controller in (1, 2):
+                per_player_count[controller] += 1
+        opened = data.get('openedDoors') or []
+        for pn in (1, 2):
+            for _ in range(per_player_count.get(pn, 0)):
+                # Pick the first unopened door in the list.
+                for d in doors:
+                    if not isinstance(d, list) or len(d) < 2:
+                        continue
+                    key = f'{d[0]}|{d[1]}'.lower()
+                    rev = f'{d[1]}|{d[0]}'.lower()
+                    if key not in opened and rev not in opened:
+                        opened.append(key)
+                        _log(ctx, f'**Secure Munitions** — P{pn} opens door {key}.')
+                        break
+        data['openedDoors'] = opened
+
     return {'gameEnded': False}
 
 
