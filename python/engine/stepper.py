@@ -457,14 +457,51 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
             f'attack_target: cannot attack own figure (both p{atk_player})'
         )
 
-    # Enforce one attack per activation per figure.
+    # Enforce one attack per activation per figure, unless the attacker has
+    # a freeAttackBonusPending entry (Heroic, Charge, Vader's Finest, etc.)
+    # which grants an extra attack for free.
     atk_log = dict(game.get('figureAttacksThisActivation') or {})
     patk = dict(atk_log.get(atk_player, atk_log.get(str(atk_player), {})))
     already = patk.get(attacker_key, 0)
+    atk_msg_id = None
     if already >= 1:
-        raise ValueError(
-            f'attack_target: {attacker_key!r} already attacked this activation'
-        )
+        # Resolve attacker's msg_id to check for free-attack-bonus.
+        from python.engine.mechanics.figure_lookup import parse_figure_key
+        dc_list_key = 'p1DcList' if atk_player == 1 else 'p2DcList'
+        msg_ids_key = 'p1DcMessageIds' if atk_player == 1 else 'p2DcMessageIds'
+        dc_list = game.data.get(dc_list_key) if hasattr(game, 'data') else game.get(dc_list_key) or []
+        if not dc_list:
+            dc_list = game.get(dc_list_key) or []
+        msg_ids = game.get(msg_ids_key) or []
+        parsed = parse_figure_key(attacker_key)
+        if parsed is not None:
+            target_name, target_group, _ = parsed
+            for i, dc in enumerate(dc_list):
+                if not isinstance(dc, Mapping):
+                    continue
+                if (dc.get('dcName') == target_name
+                        and int(dc.get('dgIndex') or 0) == target_group
+                        and i < len(msg_ids)):
+                    atk_msg_id = msg_ids[i]
+                    break
+        free_attack_map = game.get('freeAttackBonusPending') or {}
+        if atk_msg_id and atk_msg_id in free_attack_map:
+            # Consume one free-attack credit; do NOT increment the
+            # per-activation attack counter.
+            entry = free_attack_map[atk_msg_id]
+            if isinstance(entry, int):
+                if entry > 1:
+                    free_attack_map[atk_msg_id] = entry - 1
+                else:
+                    del free_attack_map[atk_msg_id]
+            else:
+                # dict or True — consume fully.
+                del free_attack_map[atk_msg_id]
+            game['freeAttackBonusPending'] = free_attack_map
+        else:
+            raise ValueError(
+                f'attack_target: {attacker_key!r} already attacked this activation'
+            )
 
     atk_dc = _dc_name_from_figure_key(attacker_key)
     def_dc = _dc_name_from_figure_key(target_key)
@@ -522,10 +559,13 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
                 award_kill_vp(game.data, atk_player, vp)
             check_nefarious_gains(game.data, def_player)
 
-    # Record attack on attacker.
-    patk[attacker_key] = already + 1
-    atk_log[atk_player] = patk
-    game['figureAttacksThisActivation'] = atk_log
+    # Record attack on attacker — unless this was a free attack (already >= 1
+    # at entry AND a freeAttackBonusPending credit was consumed above, which
+    # would leave `already` unchanged since we skipped the raise path).
+    if already == 0:
+        patk[attacker_key] = already + 1
+        atk_log[atk_player] = patk
+        game['figureAttacksThisActivation'] = atk_log
 
     # Record damage-this-activation.
     dmg_log = dict(game.get('figureDamageThisActivation') or {})

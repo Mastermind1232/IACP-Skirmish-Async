@@ -297,6 +297,52 @@ def test_attack_target_rejects_second_attack_same_activation():
     raise AssertionError('expected ValueError on double attack')
 
 
+def test_attack_target_with_free_attack_bonus_allows_second_attack():
+    """When freeAttackBonusPending[msg_id] is set, a second attack in the
+    same activation is allowed and consumes one credit."""
+    g = _attack_ready_game()
+    g.data['dcHealthState'] = {'2:Stormtrooper (Regular)': [[50, 50]]}
+    # Populate p1 DC list + message ids so the attack handler can
+    # resolve attacker_msg_id for freeAttackBonusPending lookup.
+    g.data['p1DcList'] = [{'dcName': 'Rebel Trooper (Regular)', 'dgIndex': 0}]
+    g.data['p1DcMessageIds'] = ['atkmsg']
+    # First attack — normal.
+    g = step(g, Action(
+        type=ActionType.ATTACK_TARGET, player=1,
+        params={
+            'attacker_key': 'Rebel Trooper (Regular)-0-0',
+            'target_key': 'Stormtrooper (Regular)-0-0',
+            'rng_seed': 1,
+        },
+    ))
+    g.data['freeAttackBonusPending'] = {'atkmsg': True}
+    # Second attack via freeAttackBonus — should succeed.
+    g2 = step(g, Action(
+        type=ActionType.ATTACK_TARGET, player=1,
+        params={
+            'attacker_key': 'Rebel Trooper (Regular)-0-0',
+            'target_key': 'Stormtrooper (Regular)-0-0',
+            'rng_seed': 2,
+        },
+    ))
+    # Credit consumed.
+    assert 'atkmsg' not in (g2.data.get('freeAttackBonusPending') or {})
+    # Third attack without another credit → rejected.
+    try:
+        step(g2, Action(
+            type=ActionType.ATTACK_TARGET, player=1,
+            params={
+                'attacker_key': 'Rebel Trooper (Regular)-0-0',
+                'target_key': 'Stormtrooper (Regular)-0-0',
+                'rng_seed': 3,
+            },
+        ))
+    except ValueError as e:
+        assert 'already attacked' in str(e)
+        return
+    raise AssertionError('expected ValueError on 3rd attack')
+
+
 def test_attack_target_kills_and_awards_vp():
     """Walk seeds until one produces a lethal attack, then validate VP + removal."""
     base = _attack_ready_game()
@@ -2459,6 +2505,7 @@ def main():
         ('attack_target_requires_different_owner', test_attack_target_requires_different_owner),
         ('attack_target_is_deterministic_with_seed', test_attack_target_is_deterministic_with_seed),
         ('attack_target_rejects_second_attack_same_activation', test_attack_target_rejects_second_attack_same_activation),
+        ('attack_target_free_bonus_allows_second', test_attack_target_with_free_attack_bonus_allows_second_attack),
         ('attack_target_kills_and_awards_vp', test_attack_target_kills_and_awards_vp),
         ('end_end_of_round_refreshes_activations', test_end_end_of_round_refreshes_activations),
         ('end_end_of_round_detects_game_over', test_end_end_of_round_detects_game_over),
