@@ -190,6 +190,82 @@ def cmd_list_games(user_id: str, deps: Dict[str, Any]) -> Dict[str, Any]:
     return {'ok': True, 'userId': user_id, 'games': mine}
 
 
+def cmd_step_action(user_id: str, deps: Dict[str, Any], *,
+                    game_id: str,
+                    action_type: str,
+                    action_params: Optional[Mapping[str, Any]] = None,
+                    player_num: Optional[int] = None) -> Dict[str, Any]:
+    """Apply a single Action to the game via the stepper. Returns the
+    updated status + whether the game ended.
+
+    This is the slash-command front door to the game engine's step().
+    Action parameters are validated by the stepper; illegal actions
+    return {ok: False, reason: 'stepper_error', error: str}.
+    """
+    game = _get(deps, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    if game.data.get('phase') == 'game_over':
+        return {'ok': False, 'reason': 'game_already_ended'}
+    if user_id not in (game.data.get('player1Id'), game.data.get('player2Id')):
+        return {'ok': False, 'reason': 'not_a_player_in_game'}
+
+    # Resolve player_num from user_id if not explicit.
+    if player_num is None:
+        if user_id == game.data.get('player1Id'):
+            player_num = 1
+        else:
+            player_num = 2
+
+    from python.engine.actions import ActionType
+    from python.engine.stepper import Action, step
+    try:
+        at = ActionType(action_type)
+    except ValueError:
+        return {'ok': False, 'reason': 'unknown_action_type',
+                'actionType': action_type}
+    action = Action(type=at, player=player_num,
+                     params=dict(action_params or {}))
+    try:
+        new_game = step(game, action)
+    except Exception as e:
+        return {
+            'ok': False, 'reason': 'stepper_error',
+            'error': f'{type(e).__name__}: {e}',
+            'actionType': action_type,
+        }
+    _save(deps, game_id, new_game)
+    return {
+        'ok': True, 'gameId': game_id,
+        'actionType': action_type,
+        'status': format_game_status(new_game),
+        'gameEnded': is_game_over(new_game),
+    }
+
+
+def cmd_legal_actions(user_id: str, deps: Dict[str, Any], *,
+                      game_id: str) -> Dict[str, Any]:
+    """Return the list of legal actions for the active player."""
+    game = _get(deps, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    if is_game_over(game):
+        return {'ok': True, 'gameId': game_id, 'actions': []}
+    try:
+        from python.mcts.actions import legal_actions
+        actions = legal_actions(game)
+    except Exception as e:
+        return {'ok': False, 'reason': 'legal_actions_error',
+                'error': f'{type(e).__name__}: {e}'}
+    return {
+        'ok': True, 'gameId': game_id,
+        'actions': [
+            {'type': a.type.value, 'player': a.player, 'params': dict(a.params)}
+            for a in actions
+        ],
+    }
+
+
 def _default_game_id(p1: str, p2: str) -> str:
     """Deterministic short id for the {p1, p2} pair."""
     a, b = sorted([p1 or '_', p2 or '_'])

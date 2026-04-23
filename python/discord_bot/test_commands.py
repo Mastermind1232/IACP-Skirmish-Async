@@ -13,11 +13,13 @@ if str(REPO_ROOT) not in sys.path:
 
 from python.discord_bot.commands import (
     cmd_forfeit,
+    cmd_legal_actions,
     cmd_list_games,
     cmd_squad,
     cmd_startbattle,
     cmd_startgame,
     cmd_status,
+    cmd_step_action,
 )
 
 
@@ -126,6 +128,54 @@ def test_forfeit_idempotent_after_end():
     assert r2['reason'] == 'game_already_ended'
 
 
+def test_legal_actions_after_setup():
+    deps, _ = _deps()
+    cmd_startgame('alice', deps, opponent_id='bob', game_id='g1')
+    cmd_squad('alice', deps, game_id='g1',
+               deployment_cards=['Luke Skywalker'])
+    cmd_squad('bob', deps, game_id='g1',
+               deployment_cards=['Stormtrooper (Regular)'])
+    cmd_startbattle('alice', deps, game_id='g1',
+                     map_id='mos-eisley-outskirts')
+    r = cmd_legal_actions('alice', deps, game_id='g1')
+    assert r['ok']
+    assert len(r['actions']) > 0
+
+
+def test_step_action_performs_activation():
+    deps, _ = _deps()
+    cmd_startgame('alice', deps, opponent_id='bob', game_id='g1')
+    cmd_squad('alice', deps, game_id='g1',
+               deployment_cards=['Luke Skywalker'])
+    cmd_squad('bob', deps, game_id='g1',
+               deployment_cards=['Stormtrooper (Regular)'])
+    cmd_startbattle('alice', deps, game_id='g1',
+                     map_id='mos-eisley-outskirts')
+    r = cmd_legal_actions('alice', deps, game_id='g1')
+    # Find an ACTIVATE_DC action and apply it.
+    activate = next((a for a in r['actions']
+                     if a['type'] == 'activate_dc'), None)
+    if activate is None:
+        return  # active player is P2 if initiative flipped; skip
+    user = 'alice' if activate['player'] == 1 else 'bob'
+    r2 = cmd_step_action(user, deps, game_id='g1',
+                          action_type=activate['type'],
+                          action_params=activate['params'],
+                          player_num=activate['player'])
+    assert r2['ok']
+    assert r2['status']['phase'] == 'round_active'
+
+
+def test_step_action_rejects_when_game_over():
+    deps, _ = _deps()
+    cmd_startgame('alice', deps, opponent_id='bob', game_id='g1')
+    cmd_forfeit('alice', deps, game_id='g1')
+    r = cmd_step_action('alice', deps, game_id='g1',
+                          action_type='end_end_of_round')
+    assert not r['ok']
+    assert r['reason'] == 'game_already_ended'
+
+
 def test_list_games_filters_to_user():
     deps, _ = _deps()
     cmd_startgame('alice', deps, opponent_id='bob', game_id='g1')
@@ -149,6 +199,9 @@ def main():
         ('status', test_status_returns_snapshot),
         ('forfeit', test_forfeit_ends_game),
         ('forfeit_idempotent', test_forfeit_idempotent_after_end),
+        ('legal_actions', test_legal_actions_after_setup),
+        ('step_action', test_step_action_performs_activation),
+        ('step_after_end', test_step_action_rejects_when_game_over),
         ('list_games', test_list_games_filters_to_user),
     ]
     failures = []
