@@ -1,0 +1,14 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python -m python.discord_bot"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[deploy.envs]
+# Required:
+#   DISCORD_BOT_TOKEN
+#   DATABASE_URL       (Postgres DSN; Railway provides via plugin)
+# Optional:
+#   LOG_LEVEL          (default INFO)
