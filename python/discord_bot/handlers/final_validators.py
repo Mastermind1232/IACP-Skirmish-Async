@@ -134,7 +134,7 @@ _GAME_KEYED = [
     'boltslinger_target_',
     'concussive_bolt_push_',
     'deflect_pick_',
-    'devaron_door_open_', 'devaron_crate_push_',
+    'devaron_door_open_',  # devaron_crate_push_ handled in map_events.py
     'dio_follow_pick_',
     'fighting_knife_target_',
     'fluctuation_swap_',
@@ -142,7 +142,7 @@ _GAME_KEYED = [
     'heavy_fire_cond_', 'heavy_fire_tgt_', 'heavy_fire_tgt_done_',
     'heavy_fire_use_',
     'indiscriminate_die_',
-    'krykna_place_', 'krykna_place_pick_', 'krykna_push_',
+    'krykna_place_', 'krykna_place_pick_',  # krykna_push_ handled in map_events.py
     'massive_push_figure_', 'massive_push_space_',
     'move_pick_',
     'mvint_play_',

@@ -101,5 +101,160 @@ _handle_fluctuation_skip = _make_queue_shift_skip(
 )
 
 
+# ---------------------------------------------------------------------------
+# Concrete push handlers — perform the actual coordinate change.
+# ---------------------------------------------------------------------------
+def _split_game_coord(cid: str, prefix: str):
+    """Parse customId = {prefix}{gameId}_{origCoord} (devaron) or
+    {prefix}{gameId}_krykna-{N} (krykna). Returns (game_id, tail) or None.
+    """
+    if not cid.startswith(prefix):
+        return None
+    rest = cid[len(prefix):]
+    # Devaron: last underscore separates gameId and origCoord.
+    # Krykna: "krykna-" is a substring we can anchor on.
+    if 'krykna-' in rest:
+        idx = rest.index('krykna-')
+        # game_id_krykna-N → game_id is everything before "_krykna-"
+        if idx >= 1 and rest[idx - 1] == '_':
+            return rest[:idx - 1], rest[idx:]
+        return None
+    lu = rest.rfind('_')
+    if lu < 0:
+        return None
+    return rest[:lu], rest[lu + 1:]
+
+
+def _handle_devaron_crate_push(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Push a crate up to 3 spaces. Consumes `target_coord` from
+    interaction.data['target_coord'] (modal field) or ctx['target_coord'].
+    """
+    from python.engine.mechanics.board_helpers import count_game_spaces
+    cid = _cid(interaction)
+    parsed = _split_game_coord(cid, 'devaron_crate_push_')
+    if parsed is None:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, orig_coord = parsed
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    data = game.data if hasattr(game, 'data') else game
+
+    # Target coord comes from modal fields or ctx override for headless/AI.
+    target = None
+    inter_data = getattr(interaction, 'data', None)
+    if isinstance(inter_data, dict):
+        target = inter_data.get('target_coord')
+    if not target:
+        target = ctx.get('target_coord')
+    if not isinstance(target, str) or not target.strip():
+        return {'ok': False, 'reason': 'missing_target_coord'}
+    target = target.strip().lower()
+
+    crate_positions = data.get('cratePositions') or {}
+    cur_coord = str(crate_positions.get(orig_coord, orig_coord)).lower()
+    if cur_coord == target:
+        return {'ok': True, 'game': game, 'noChange': True}
+
+    dist = count_game_spaces(game, cur_coord, target)
+    if dist == float('inf'):
+        return {'ok': False, 'reason': 'unreachable', 'from': cur_coord, 'to': target}
+    if dist > 3:
+        return {'ok': False, 'reason': 'out_of_range', 'distance': int(dist), 'maxDistance': 3}
+
+    crate_positions[orig_coord] = target
+    data['cratePositions'] = crate_positions
+
+    # Pop the push prompt off pendingCratePushPrompts if present.
+    pending = data.get('pendingCratePushPrompts') or {}
+    for pn in (1, 2):
+        items = list(pending.get(pn) or [])
+        items = [x for x in items if (x or {}).get('origCoord') != orig_coord]
+        if items:
+            pending[pn] = items
+        else:
+            pending.pop(pn, None)
+    if pending:
+        data['pendingCratePushPrompts'] = pending
+    else:
+        data.pop('pendingCratePushPrompts', None)
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'gameId': game_id,
+        'origCoord': orig_coord, 'fromCoord': cur_coord,
+        'toCoord': target, 'distance': int(dist),
+    }
+
+
+def _handle_krykna_push(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Push a Krykna NPC up to 3 spaces. Consumes `target_coord` from
+    interaction/modal data or ctx."""
+    from python.engine.mechanics.board_helpers import count_game_spaces
+    cid = _cid(interaction)
+    parsed = _split_game_coord(cid, 'krykna_push_')
+    if parsed is None:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, krykna_id = parsed
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    data = game.data if hasattr(game, 'data') else game
+
+    queue = list(data.get('pendingKryknaPushQueue') or [])
+    if not queue:
+        return {'ok': False, 'reason': 'no_pending_push'}
+
+    npcs = list(data.get('npcKrykna') or [])
+    krykna = next((k for k in npcs if isinstance(k, dict) and k.get('id') == krykna_id), None)
+    if krykna is None or krykna.get('defeated'):
+        return {'ok': False, 'reason': 'krykna_not_found'}
+
+    target = None
+    inter_data = getattr(interaction, 'data', None)
+    if isinstance(inter_data, dict):
+        target = inter_data.get('target_coord')
+    if not target:
+        target = ctx.get('target_coord')
+    if not isinstance(target, str) or not target.strip():
+        return {'ok': False, 'reason': 'missing_target_coord'}
+    target = target.strip().lower()
+
+    cur_coord = str(krykna.get('coord') or '').lower()
+    if cur_coord == target:
+        return {'ok': True, 'game': game, 'noChange': True}
+    dist = count_game_spaces(game, cur_coord, target)
+    if dist == float('inf'):
+        return {'ok': False, 'reason': 'unreachable'}
+    if dist > 3:
+        return {'ok': False, 'reason': 'out_of_range', 'distance': int(dist)}
+
+    old_coord = krykna['coord']
+    krykna['coord'] = target
+    data['npcKrykna'] = npcs
+    pushed_ids = list(data.get('kryknaPushedIds') or [])
+    pushed_ids.append(krykna_id)
+    data['kryknaPushedIds'] = pushed_ids
+    queue.pop(0)
+    if queue:
+        data['pendingKryknaPushQueue'] = queue
+    else:
+        data.pop('pendingKryknaPushQueue', None)
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'gameId': game_id,
+        'kryknaId': krykna_id, 'fromCoord': old_coord,
+        'toCoord': target, 'distance': int(dist),
+        'queueRemaining': len(queue),
+    }
+
+
+register('devaron_crate_push_', _handle_devaron_crate_push, 'core')
+register('krykna_push_', _handle_krykna_push, 'core')
 register('krykna_place_skip_', _handle_krykna_place_skip, 'core')
 register('fluctuation_skip_', _handle_fluctuation_skip, 'core')
