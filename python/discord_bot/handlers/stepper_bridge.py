@@ -144,6 +144,20 @@ def _bridge_handler(interaction: Any, ctx: Dict[str, Any]) -> Any:
     save = ctx.get('save_games')
     if callable(save):
         save()
+    # Persist the updated state back to the store if we can.
+    save_game = ctx.get('save_game')
+    if callable(save_game):
+        save_game(game_id, new_game)
+
+    # Refresh the Discord board view + both hand views.
+    try:
+        from python.discord_bot import game_channels as gc
+        backend = ctx.get('channel_backend')
+        gc.refresh_game_view(game_id, new_game, backend=backend)
+        gc.refresh_hand_view(game_id, 1, new_game, backend=backend)
+        gc.refresh_hand_view(game_id, 2, new_game, backend=backend)
+    except Exception:
+        pass
 
     return {'ok': True, 'gameId': game_id, 'customId': custom_id, 'game': new_game}
 
