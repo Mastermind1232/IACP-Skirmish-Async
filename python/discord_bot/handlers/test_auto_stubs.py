@@ -68,20 +68,22 @@ def test_every_js_prefix_has_a_python_handler():
 def test_stub_handler_returns_ok_stub_true():
     py = _load_py_prefixes()  # ensure auto_stubs installed
     from python.discord_bot.handlers import find_handler
-    _, handler, _ = find_handler('lobby_join_G1_alice')
-    result = handler(_Interaction('lobby_join_G1_alice'), {})
+    # fav_save_ is not yet concrete — should still route to a stub.
+    _, handler, _ = find_handler('fav_save_G1_1')
+    result = handler(_Interaction('fav_save_G1_1'), {})
     assert result['ok'] is True
     assert result['stub'] is True
-    assert result['prefix'] == 'lobby_join_'
+    assert result['prefix'] == 'fav_save_'
     assert result['gameId'] == 'G1'
 
 
 def test_stub_handler_malformed_cid_rejected():
     py = _load_py_prefixes()
     from python.discord_bot.handlers import find_handler
-    _, handler, _ = find_handler('refresh_map_G1')
+    # fav_remove_ is still a stub.
+    _, handler, _ = find_handler('fav_remove_G1_1')
     # Empty prefix match still returns ok (just no tail)
-    result = handler(_Interaction('refresh_map_'), {})
+    result = handler(_Interaction('fav_remove_'), {})
     # Note: stub returns ok with gameId='' when there's no tail
     assert result['ok'] is True
     assert result['stub'] is True
