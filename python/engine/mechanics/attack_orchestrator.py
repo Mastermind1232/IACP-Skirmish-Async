@@ -530,17 +530,35 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     dmg_log[atk_player] = pdmg
     data['figureDamageThisActivation'] = dmg_log
 
+    # Group-defeated: if the defeated figure was the last of its group,
+    # decrement activationsRemaining for the defender side.
+    group_defeated = False
+    if defeated:
+        def_fp = (data.get('figurePositions') or {}).get(def_player, {}) or {}
+        parts = target_key.rsplit('-', 2)
+        if len(parts) == 3:
+            dc_prefix = f'{parts[0]}-{parts[1]}-'
+            survivors = [fk for fk in def_fp.keys() if fk.startswith(dc_prefix)]
+            if not survivors:
+                group_defeated = True
+                act = dict(data.get('activationsRemaining') or {})
+                cur = int(act.get(def_player, act.get(str(def_player), 0)) or 0)
+                act[def_player] = max(0, cur - 1)
+                data['activationsRemaining'] = act
+
     # Snapshot the final combat before clearing
     final_combat = dict(combat)
     data['lastCombatResult'] = {
         'attacker': attacker_key, 'defender': target_key,
         'damage': damage, 'hit': hit, 'defeated': defeated,
+        'groupDefeated': group_defeated,
         'vpGained': vp_gained,
     }
     data.pop('pendingCombat', None)
 
     return {
         'damage': damage, 'hit': hit, 'defeated': defeated,
+        'group_defeated': group_defeated,
         'vp_gained': vp_gained,
         'triggered_abilities': triggered,
         'conditions_applied': conditions_applied,

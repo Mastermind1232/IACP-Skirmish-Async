@@ -366,6 +366,43 @@ def test_attacker_focus_token_adds_accuracy():
         _cleanup()
 
 
+def test_group_defeated_decrements_activations():
+    """Last-figure-in-group kill decrements activationsRemaining."""
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    try:
+        g = _game_with_attack(
+            attacker_dice=('red', 'red', 'red', 'red'),
+            target_hp=1, target_max=1,
+        )
+        g.data['activationsRemaining'] = {1: 1, 2: 1}
+        # Seed that produces enough damage to kill
+        tries = 0
+        result = None
+        for seed in range(100):
+            from python.engine.data import dc_effects_loader, map_spaces_loader
+            dc_effects_loader.reset_cache()
+            map_spaces_loader.reset_cache()
+            g = _game_with_attack(
+                attacker_dice=('red', 'red', 'red', 'red'),
+                target_hp=1, target_max=1,
+            )
+            g.data['activationsRemaining'] = {1: 1, 2: 1}
+            result = orchestrate_attack(
+                g, 'Stormtrooper (Regular)-0-0',
+                'Rebel Trooper (Regular)-0-0',
+                rng=random.Random(seed),
+            )
+            if result['defeated']:
+                break
+            tries += 1
+        assert result and result['defeated'], 'never got a defeat in 100 tries'
+        assert result['group_defeated'] is True
+        # p2 activations decremented
+        assert g.data['activationsRemaining'][2] == 0
+    finally:
+        _cleanup()
+
+
 def test_melee_adjacency_gate():
     """Melee attacks require adjacency. Distance 2 with melee should fail."""
     from python.engine.mechanics.attack_orchestrator import (
@@ -408,6 +445,7 @@ def main():
         ('evade_token', test_evade_token_boosts_defender),
         ('dodge_token', test_dodge_token_forces_miss),
         ('focus_token', test_attacker_focus_token_adds_accuracy),
+        ('group_defeated', test_group_defeated_decrements_activations),
     ]
     failures = []
     for name, fn in cases:
