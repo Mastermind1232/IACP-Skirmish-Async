@@ -56,6 +56,9 @@ def _load_py_prefixes():
     import python.discord_bot.handlers.favorites  # noqa: F401
     import python.discord_bot.handlers.space_picker  # noqa: F401
     import python.discord_bot.handlers.fast_forward  # noqa: F401
+    import python.discord_bot.handlers.post_deploy_picks  # noqa: F401
+    import python.discord_bot.handlers.blitz_deploy  # noqa: F401
+    import python.discord_bot.handlers.setup_extras  # noqa: F401
     import python.discord_bot.handlers.stepper_bridge  # noqa: F401
     import python.discord_bot.handlers.auto_stubs  # noqa: F401
     return {p for p, _, _ in H._REGISTRY}
@@ -97,9 +100,9 @@ def test_stub_does_not_mutate_state():
     g = create_game()
     g.data['player1Id'] = 'alice'
     before = dict(g.data)
-    _, handler, _ = find_handler('pd_pick_G1_1_0')
+    _, handler, _ = find_handler('kill_game_G1')
     ctx = {'get_game': lambda gid: g, 'save_games': lambda: None}
-    result = handler(_Interaction('pd_pick_G1_1_0'), ctx)
+    result = handler(_Interaction('kill_game_G1'), ctx)
     assert result['stub'] is True
     # No state mutation
     assert g.data == before
