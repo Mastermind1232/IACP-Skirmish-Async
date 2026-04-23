@@ -144,6 +144,7 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                         defense_dice_override: Optional[List[str]] = None,
                         attacker_rerolls: int = 0,
                         defender_rerolls: int = 0,
+                        spent_tokens: Optional[List[Dict[str, str]]] = None,
                         ) -> Dict[str, Any]:
     """Run the full attack pipeline.
 
@@ -344,10 +345,50 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     combat['attackerRerolls'] = attacker_rerolls
     combat['defenderRerolls'] = defender_rerolls
 
-    # Surge pool (before bonuses). Number of surges rolled equals the
-    # 'surge' count in the attack roll.
+    # Surge pool: rolled surges + surgeBonus (may have been bumped by a
+    # Surge token spend above).
     rolled_surges = int(attack_roll.get('surge') or 0) + int(combat.get('surgeBonus') or 0)
     combat['surgeRemaining'] = rolled_surges
+
+    # ── Phase 4a: TOKEN spends ──────────────────────────────────────────
+    # Attacker may spend Focus (adds +1 accuracy), Surge (no-op here; used
+    # in surge phase). Defender may spend Evade (+1 evade), Block (+1 block),
+    # Dodge (entire attack misses).
+    tokens_spent_detail: List[Dict[str, str]] = []
+    force_miss = False
+    if spent_tokens:
+        tokens_map = data.get('figurePowerTokens') or {}
+        for spec in spent_tokens:
+            fk = spec.get('figure_key') or spec.get('figureKey')
+            tt = spec.get('token_type') or spec.get('tokenType')
+            if not fk or not tt:
+                continue
+            bucket = list(tokens_map.get(fk) or [])
+            if tt not in bucket:
+                continue
+            bucket.remove(tt)
+            if bucket:
+                tokens_map[fk] = bucket
+            else:
+                tokens_map.pop(fk, None)
+            # Apply effect
+            if fk == attacker_key:
+                if tt == 'Focus':
+                    combat['bonusAccuracy'] = int(combat.get('bonusAccuracy') or 0) + 1
+                elif tt == 'Surge':
+                    combat['surgeBonus'] = int(combat.get('surgeBonus') or 0) + 1
+            elif fk == target_key:
+                if tt == 'Evade':
+                    combat['bonusEvade'] = int(combat.get('bonusEvade') or 0) + 1
+                elif tt == 'Block':
+                    combat['bonusBlock'] = int(combat.get('bonusBlock') or 0) + 1
+                elif tt == 'Dodge':
+                    force_miss = True
+            tokens_spent_detail.append({'figure_key': fk, 'token_type': tt})
+        data['figurePowerTokens'] = tokens_map
+    if force_miss:
+        combat['forceMiss'] = True
+    combat['spentTokens'] = tokens_spent_detail
 
     # ── Phase 4: SURGE spends ────────────────────────────────────────────
     spent_surges: List[str] = []

@@ -301,6 +301,71 @@ def test_defender_reroll_tracked():
         _cleanup()
 
 
+def test_evade_token_boosts_defender():
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    try:
+        g = _game_with_attack()
+        g.data['figurePowerTokens'] = {
+            'Rebel Trooper (Regular)-0-0': ['Evade', 'Evade'],
+        }
+        result = orchestrate_attack(
+            g, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(2),
+            spent_tokens=[
+                {'figure_key': 'Rebel Trooper (Regular)-0-0', 'token_type': 'Evade'},
+            ],
+        )
+        assert result['combat']['bonusEvade'] >= 1
+        # Token consumed
+        tokens = g.data['figurePowerTokens']['Rebel Trooper (Regular)-0-0']
+        assert tokens.count('Evade') == 1
+    finally:
+        _cleanup()
+
+
+def test_dodge_token_forces_miss():
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    try:
+        g = _game_with_attack(attacker_dice=('red', 'red', 'red'))
+        g.data['figurePowerTokens'] = {
+            'Rebel Trooper (Regular)-0-0': ['Dodge'],
+        }
+        result = orchestrate_attack(
+            g, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(3),
+            spent_tokens=[
+                {'figure_key': 'Rebel Trooper (Regular)-0-0', 'token_type': 'Dodge'},
+            ],
+        )
+        # compute_combat_result reads forceMiss
+        assert result['hit'] is False
+        assert result['damage'] == 0
+    finally:
+        _cleanup()
+
+
+def test_attacker_focus_token_adds_accuracy():
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    try:
+        g = _game_with_attack()
+        g.data['figurePowerTokens'] = {
+            'Stormtrooper (Regular)-0-0': ['Focus'],
+        }
+        result = orchestrate_attack(
+            g, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(4),
+            spent_tokens=[
+                {'figure_key': 'Stormtrooper (Regular)-0-0', 'token_type': 'Focus'},
+            ],
+        )
+        assert result['combat']['bonusAccuracy'] >= 1
+    finally:
+        _cleanup()
+
+
 def test_melee_adjacency_gate():
     """Melee attacks require adjacency. Distance 2 with melee should fail."""
     from python.engine.mechanics.attack_orchestrator import (
@@ -340,6 +405,9 @@ def main():
         ('hide_consumed', test_hide_consumed_on_defender_when_targeted),
         ('attacker_reroll', test_attacker_reroll_recomputes_totals),
         ('defender_reroll', test_defender_reroll_tracked),
+        ('evade_token', test_evade_token_boosts_defender),
+        ('dodge_token', test_dodge_token_forces_miss),
+        ('focus_token', test_attacker_focus_token_adds_accuracy),
     ]
     failures = []
     for name, fn in cases:
