@@ -29,6 +29,7 @@ def _fresh_registry():
     handlers.register('extra_armor_confirm_', rd._handle_extra_armor_confirm, 'round')
     handlers.register('extra_armor_cancel_', rd._handle_extra_armor_cancel, 'round')
     handlers.register('sor_mission_reveal_', rd._handle_sor_mission_reveal, 'round')
+    handlers.register('rogue_one_return_', rd._handle_rogue_one_return, 'round')
 
 
 def _two_figure_game(round_num=1):
@@ -301,6 +302,115 @@ def test_sor_mission_reveal_rejects_when_already_revealed():
         _cleanup()
 
 
+# ── rogue_one_return ───────────────────────────────────────────────────────
+
+def test_rogue_one_return_moves_card_to_deck_top():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingRogueOne_p1'] = {'remaining': 2}
+    g.data['player1CcHand'] = ['A', 'B', 'C']
+    g.data['player1CcDeck'] = ['X', 'Y']
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('rogue_one_return_G1_1_1')  # card index 1 = 'B'
+        result = handler(
+            _Interaction('rogue_one_return_G1_1_1', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert result['card'] == 'B'
+        assert result['remaining'] == 1
+        assert g.data['player1CcHand'] == ['A', 'C']
+        assert g.data['player1CcDeck'] == ['B', 'X', 'Y']
+        # Pending still present with 1 remaining
+        assert g.data['pendingRogueOne_p1']['remaining'] == 1
+    finally:
+        _cleanup()
+
+
+def test_rogue_one_return_clears_pending_when_last_card():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingRogueOne_p1'] = {'remaining': 1}
+    g.data['player1CcHand'] = ['A', 'B']
+    g.data['player1CcDeck'] = []
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('rogue_one_return_G1_1_0')
+        result = handler(
+            _Interaction('rogue_one_return_G1_1_0', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert result['remaining'] == 0
+        assert g.data['pendingRogueOne_p1'] is None
+        assert g.data['player1CcDeck'] == ['A']
+    finally:
+        _cleanup()
+
+
+def test_rogue_one_return_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingRogueOne_p1'] = {'remaining': 2}
+    g.data['player1CcHand'] = ['A', 'B']
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('rogue_one_return_G1_1_0')
+        result = handler(
+            _Interaction('rogue_one_return_G1_1_0', user_id='bob'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'not_owner'
+    finally:
+        _cleanup()
+
+
+def test_rogue_one_return_rejects_out_of_range_index():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingRogueOne_p1'] = {'remaining': 2}
+    g.data['player1CcHand'] = ['A']
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('rogue_one_return_G1_1_5')
+        result = handler(
+            _Interaction('rogue_one_return_G1_1_5', user_id='alice'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'card_index_out_of_range'
+    finally:
+        _cleanup()
+
+
+def test_rogue_one_return_rejects_when_no_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('rogue_one_return_G1_1_0')
+        result = handler(
+            _Interaction('rogue_one_return_G1_1_0', user_id='alice'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'no_pending_rogue_one'
+    finally:
+        _cleanup()
+
+
 def main():
     cases = [
         ('eor_advances_round', test_end_end_of_round_advances_round),
@@ -316,6 +426,11 @@ def main():
         ('sor_reveal_clears', test_sor_mission_reveal_clears_flag),
         ('sor_reveal_non_player', test_sor_mission_reveal_rejects_non_player),
         ('sor_reveal_already', test_sor_mission_reveal_rejects_when_already_revealed),
+        ('ror_moves_to_top', test_rogue_one_return_moves_card_to_deck_top),
+        ('ror_clears_pending', test_rogue_one_return_clears_pending_when_last_card),
+        ('ror_non_owner', test_rogue_one_return_rejects_non_owner),
+        ('ror_out_of_range', test_rogue_one_return_rejects_out_of_range_index),
+        ('ror_no_pending', test_rogue_one_return_rejects_when_no_pending),
     ]
     failures = []
     for name, fn in cases:

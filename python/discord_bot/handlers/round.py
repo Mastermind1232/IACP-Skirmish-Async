@@ -256,6 +256,72 @@ def _handle_extra_armor_cancel(interaction: Any,
     return {'ok': True, 'noop': True}
 
 
+def _handle_rogue_one_return(interaction: Any,
+                              ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """rogue_one_return_{gameId}_{playerNum}_{cardIdx} — player picks a
+    card from hand to place on top of their deck (Rogue One SoR effect).
+
+    JS site: src/handlers/round.js:1773-1826. Pending state key:
+      game.pendingRogueOne_p{playerNum} = {'remaining': N}
+    Each press pops the card from hand, unshifts to deck, decrements
+    remaining. When remaining hits 0 the pending state is cleared.
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('rogue_one_return_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    rest = cid[len('rogue_one_return_'):]
+    parts = rest.split('_', 2)
+    if len(parts) != 3:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str, card_idx_str = parts
+    try:
+        player_num = int(player_num_str)
+        card_idx = int(card_idx_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    pending_key = f'pendingRogueOne_p{player_num}'
+    pending = data.get(pending_key)
+    if not pending or int(pending.get('remaining') or 0) <= 0:
+        return {'ok': False, 'reason': 'no_pending_rogue_one'}
+
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    hand_key = f'player{player_num}CcHand'
+    deck_key = f'player{player_num}CcDeck'
+    hand = list(data.get(hand_key) or [])
+    if card_idx < 0 or card_idx >= len(hand):
+        return {'ok': False, 'reason': 'card_index_out_of_range'}
+
+    card = hand.pop(card_idx)
+    deck = list(data.get(deck_key) or [])
+    deck.insert(0, card)
+    data[hand_key] = hand
+    data[deck_key] = deck
+    pending = dict(pending)
+    pending['remaining'] = int(pending.get('remaining') or 0) - 1
+    if pending['remaining'] <= 0:
+        data[pending_key] = None
+    else:
+        data[pending_key] = pending
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'card': card, 'playerNum': player_num,
+        'remaining': pending['remaining'],
+    }
+
+
 def _handle_sor_mission_reveal(interaction: Any,
                                 ctx: Dict[str, Any]) -> Dict[str, Any]:
     """sor_mission_reveal_{gameId} — either player reveals the mission's
@@ -312,3 +378,4 @@ register('extra_armor_pick_', _handle_extra_armor_pick, 'round')
 register('extra_armor_confirm_', _handle_extra_armor_confirm, 'round')
 register('extra_armor_cancel_', _handle_extra_armor_cancel, 'round')
 register('sor_mission_reveal_', _handle_sor_mission_reveal, 'round')
+register('rogue_one_return_', _handle_rogue_one_return, 'round')
