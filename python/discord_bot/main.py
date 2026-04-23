@@ -184,9 +184,22 @@ async def run_bot() -> None:
 
     Requires the DISCORD_BOT_TOKEN env var. Imports discord lazily so
     import-time errors in the rest of the package surface before this.
+
+    Picks a game store via db.make_store (DATABASE_URL → Postgres,
+    SKIRBO_GAMES_PATH → JSON, else InMemory). Wires a DiscordBackend
+    and DiscordFactoryBackend so channel posts + channel creation
+    go through discord.py.
     """
     import discord  # type: ignore[import]
     from discord.ext import commands as _commands  # type: ignore[import]
+
+    from python.discord_bot.channel_factory import (
+        DiscordFactoryBackend, set_default_factory,
+    )
+    from python.discord_bot.channels import (
+        DiscordBackend, set_default_backend,
+    )
+    from python.discord_bot.db import make_store
 
     token = os.environ.get('DISCORD_BOT_TOKEN')
     if not token:
@@ -201,9 +214,22 @@ async def run_bot() -> None:
     registered = register_all_handlers()
     _LOG.info('Registered %d handler modules', registered)
 
-    # Game store placeholder — production wires SQLAlchemy
-    game_store: Dict[str, Any] = {}
+    # Persistent store — Postgres / JSON file / in-memory.
+    game_store = make_store()
+    _LOG.info('Game store: %s', type(game_store).__name__)
+
+    # Wire discord.py-backed channel + factory backends as the defaults,
+    # so game_channels.refresh_game_view / create_game_channels post to
+    # real Discord.
+    channel_backend = DiscordBackend(bot)
+    set_default_backend(channel_backend)
+    set_default_factory(DiscordFactoryBackend(bot))
+
     deps = build_deps(game_store, bot)
+    deps['channel_backend'] = channel_backend
+    # Let handlers both read and write via the store.
+    if hasattr(game_store, 'save'):
+        deps['save_game'] = game_store.save
 
     # Register slash commands on the bot's tree.
     slash_count = wire_slash_commands(bot, deps)
