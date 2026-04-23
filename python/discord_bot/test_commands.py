@@ -15,6 +15,7 @@ from python.discord_bot.commands import (
     cmd_forfeit,
     cmd_legal_actions,
     cmd_list_games,
+    cmd_setup_channels,
     cmd_squad,
     cmd_startbattle,
     cmd_startgame,
@@ -128,6 +129,31 @@ def test_forfeit_idempotent_after_end():
     assert r2['reason'] == 'game_already_ended'
 
 
+def test_setup_channels_binds_game_id():
+    deps, _ = _deps()
+    cmd_startgame('alice', deps, opponent_id='bob', game_id='g1')
+    r = cmd_setup_channels(
+        'alice', deps, game_id='g1',
+        board_channel_id='chan-board',
+        p1_play_area_channel_id='chan-p1',
+        p2_play_area_channel_id='chan-p2',
+    )
+    assert r['ok']
+    ch = r['channels']
+    assert ch['board_channel_id'] == 'chan-board'
+    assert ch['p1_play_area_channel_id'] == 'chan-p1'
+    assert ch['p2_play_area_channel_id'] == 'chan-p2'
+
+
+def test_setup_channels_rejects_non_player():
+    deps, _ = _deps()
+    cmd_startgame('alice', deps, opponent_id='bob', game_id='g1')
+    r = cmd_setup_channels('carol', deps, game_id='g1',
+                             board_channel_id='chan-board')
+    assert not r['ok']
+    assert r['reason'] == 'not_a_player_in_game'
+
+
 def test_legal_actions_after_setup():
     deps, _ = _deps()
     cmd_startgame('alice', deps, opponent_id='bob', game_id='g1')
@@ -199,6 +225,8 @@ def main():
         ('status', test_status_returns_snapshot),
         ('forfeit', test_forfeit_ends_game),
         ('forfeit_idempotent', test_forfeit_idempotent_after_end),
+        ('setup_channels', test_setup_channels_binds_game_id),
+        ('setup_channels_non_player', test_setup_channels_rejects_non_player),
         ('legal_actions', test_legal_actions_after_setup),
         ('step_action', test_step_action_performs_activation),
         ('step_after_end', test_step_action_rejects_when_game_over),

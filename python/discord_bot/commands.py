@@ -266,6 +266,50 @@ def _refresh_discord_views(game_id: str, game: Any,
         pass
 
 
+def cmd_setup_channels(user_id: str, deps: Dict[str, Any], *,
+                        game_id: str,
+                        board_channel_id: Optional[str] = None,
+                        log_channel_id: Optional[str] = None,
+                        p1_play_area_channel_id: Optional[str] = None,
+                        p2_play_area_channel_id: Optional[str] = None,
+                        p1_hand_channel_id: Optional[str] = None,
+                        p2_hand_channel_id: Optional[str] = None
+                        ) -> Dict[str, Any]:
+    """Bind a game to a set of Discord channels.
+
+    Called once per game during setup — either by the setup-command
+    handler or a dedicated /setupchannels slash command. Only non-None
+    fields are updated; existing assignments are preserved.
+
+    After setup, cmd_step_action + cmd_startbattle can refresh the
+    board message automatically.
+    """
+    game = _get(deps, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    if user_id not in (game.data.get('player1Id'), game.data.get('player2Id')):
+        return {'ok': False, 'reason': 'not_a_player_in_game'}
+
+    from python.discord_bot import game_channels as gc
+    if board_channel_id is not None:
+        gc.set_board_message(game_id, board_channel_id, None)
+    if log_channel_id is not None:
+        gc.set_log_channel(game_id, log_channel_id)
+    if p1_play_area_channel_id is not None:
+        gc.set_play_area(game_id, 1, p1_play_area_channel_id)
+    if p2_play_area_channel_id is not None:
+        gc.set_play_area(game_id, 2, p2_play_area_channel_id)
+    if p1_hand_channel_id is not None:
+        gc.set_hand_channel(game_id, 1, p1_hand_channel_id)
+    if p2_hand_channel_id is not None:
+        gc.set_hand_channel(game_id, 2, p2_hand_channel_id)
+
+    return {
+        'ok': True, 'gameId': game_id,
+        'channels': gc.get_all(game_id),
+    }
+
+
 def cmd_legal_actions(user_id: str, deps: Dict[str, Any], *,
                       game_id: str) -> Dict[str, Any]:
     """Return the list of legal actions for the active player."""

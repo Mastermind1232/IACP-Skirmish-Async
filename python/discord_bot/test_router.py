@@ -250,6 +250,7 @@ def test_slash_command_registry():
     assert set(names) == {
         'startgame', 'squad', 'startbattle', 'status',
         'forfeit', 'listgames', 'legalactions', 'stepaction',
+        'setupchannels',
     }
     # Dispatch an unknown command.
     try:

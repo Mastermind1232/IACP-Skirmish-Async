@@ -97,6 +97,11 @@ _SLASH_COMMANDS = [
      'cmd_legal_actions', ['game_id']),
     ('stepaction', 'Apply a single action to a game.', 'cmd_step_action',
      ['game_id', 'action_type', 'action_params?', 'player_num?']),
+    ('setupchannels', 'Bind a game to its Discord channels.',
+     'cmd_setup_channels', ['game_id', 'board_channel_id?',
+                             'log_channel_id?', 'p1_play_area_channel_id?',
+                             'p2_play_area_channel_id?',
+                             'p1_hand_channel_id?', 'p2_hand_channel_id?']),
 ]
 
 
