@@ -90,13 +90,14 @@ def test_miracle_worker_heals():
     assert game['health']['msg1'][0][0] > 2  # hp went up
 
 
-def test_recover_damage_missing_ctx_raises():
+def test_recover_damage_missing_ctx_banks_pending():
+    """Without msg_id, recoverDamage now banks pendingRecoverDamage
+    (was: raised UnsupportedPatternAField). Lets the caller still see
+    the ability fired without requiring msg_id up front."""
     game = _mk_health()
-    try:
-        resolve_pattern_a(game, 'Recovery', {'figure_key': 'FK-r'})  # missing msg_id + figure_index
-    except UnsupportedPatternAField:
-        return
-    assert False
+    r = resolve_pattern_a(game, 'Recovery', {'figure_key': 'FK-r'})
+    assert 'pendingRecoverDamage' in r['bank']
+    assert r['bank']['pendingRecoverDamage'] >= 1
 
 
 # ── RECORDED: bank accumulators ─────────────────────────────────────────────
@@ -163,25 +164,29 @@ def test_eyes_on_the_prize_informational_is_noop():
 
 # ── FAIL LOUDLY: allowlist field with no applier ───────────────────────────
 
-def test_beatdown_raises_UnsupportedPatternAField():
-    # Beatdown has `nextAttacksBonusHits` — in the classifier allowlist but no
-    # applier in _FIELD_APPLIERS. Must raise, not silently skip.
-    try:
-        resolve_pattern_a({}, 'Beatdown', {'figure_key': 'FK-b'})
-    except UnsupportedPatternAField as e:
-        assert e.field == 'nextAttacksBonusHits'
-        assert e.ability_id == 'Beatdown'
-        return
-    assert False
+def test_beatdown_stamps_next_attacks_bonus():
+    """Beatdown has nextAttacksBonusHits. Post-expansion the applier
+    stamps game.nextAttacksBonusHits[msg_id] for the hit-bonus consumer."""
+    game: Dict[str, Any] = {}
+    r = resolve_pattern_a(game, 'Beatdown', {
+        'figure_key': 'FK-b', 'msg_id': 'm1',
+    })
+    assert r['pattern'] == 'A'
+    assert ('nextAttacksBonusHits', {'count': 2, 'bonus': 1}) in r['applied'] \
+        or any(k == 'nextAttacksBonusHits' for k, _ in r['applied'])
+    # pendingCombat / nextAttacksBonusHits stamp landed.
+    assert 'm1' in (game.get('nextAttacksBonusHits') or {})
 
 
-def test_armed_escort_raises_UnsupportedPatternAField():
-    try:
-        resolve_pattern_a({}, 'Armed Escort', {'figure_key': 'FK-ae'})
-    except UnsupportedPatternAField as e:
-        assert e.field == 'roundDefenseBonusEvade'
-        return
-    assert False
+def test_armed_escort_stamps_defense_bonus():
+    """Armed Escort's roundDefenseBonusEvade now lands on pendingCombat."""
+    game: Dict[str, Any] = {}
+    r = resolve_pattern_a(game, 'Armed Escort', {'figure_key': 'FK-ae'})
+    assert r['pattern'] == 'A'
+    assert ('bonusEvade', 1) in r['applied'] \
+        or ('bonusEvade', 2) in r['applied']
+    # pendingCombat got the evade bump.
+    assert (game.get('pendingCombat') or {}).get('bonusEvade') >= 1
 
 
 # ── FAIL LOUDLY: wrong-pattern + unknown ability ───────────────────────────

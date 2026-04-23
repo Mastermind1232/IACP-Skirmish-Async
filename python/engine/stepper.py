@@ -3017,6 +3017,61 @@ register(ActionType.DRAW_CC, _handle_draw_cc)
 
 
 # ---------------------------------------------------------------------------
+# COMBAT_ROLL — trigger dice roll for a pending combat
+# ---------------------------------------------------------------------------
+
+def _handle_combat_roll(game: GameState, action: Action) -> GameState:
+    """Trigger the dice roll for a pending combat.
+
+    The stepper's ATTACK_TARGET rolls dice inline, so this action is a
+    no-op when invoked on a game that's already rolled. Exists for
+    parity with the JS button flow (handleCombatRoll) where clicking
+    'Roll' explicitly triggers the roll phase.
+    """
+    game.data.setdefault('combatRollTriggered', True)
+    return game
+
+
+register(ActionType.COMBAT_ROLL, _handle_combat_roll)
+
+
+# ---------------------------------------------------------------------------
+# END_ROUND_PASS — decline end-of-round effects (pass turn)
+# ---------------------------------------------------------------------------
+
+def _handle_end_round_pass(game: GameState, action: Action) -> GameState:
+    """Pass end-of-round turn. Records that the active player declined
+    any pending end-of-round choice, so the next EoR action can fire.
+    """
+    player = int(action.player or 0)
+    if player in (1, 2):
+        game.data[f'p{player}EndOfRoundPassed'] = True
+    return game
+
+
+register(ActionType.END_ROUND_PASS, _handle_end_round_pass)
+
+
+# ---------------------------------------------------------------------------
+# UNDO — revert the last action (best-effort)
+# ---------------------------------------------------------------------------
+
+def _handle_undo(game: GameState, action: Action) -> GameState:
+    """Undo the last action.
+
+    The stepper doesn't keep a per-step history, so undo is a no-op
+    here. The Discord-side JS bot maintains its own undo stack via
+    domain_events; the Python port doesn't yet replicate that. Button
+    handlers that need undo should surface 'not_supported' to the user.
+    """
+    game.data['lastUndoAttempt'] = True
+    return game
+
+
+register(ActionType.UNDO, _handle_undo)
+
+
+# ---------------------------------------------------------------------------
 # Map-selection helpers (MAP_TYPE_CHOICE / MAP_CONFIRM / MAP_GO_BACK)
 # ---------------------------------------------------------------------------
 

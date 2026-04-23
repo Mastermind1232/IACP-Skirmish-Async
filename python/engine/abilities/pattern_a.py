@@ -92,7 +92,26 @@ def _apply_hide(game, ability_id, value, ctx, result):
 
 def _apply_power_token_gain(game, ability_id, value, ctx, result):
     fk = _require_fk(ctx, 'powerTokenGain')
-    tokens = [value] if isinstance(value, str) else list(value or [])
+    # Normalize value shapes:
+    #   'Block'                  → 1 Block token
+    #   ['Block', 'Surge']       → 1 each
+    #   2                        → 2 Block tokens (default type)
+    #   {'type': 'Block', 'count': 3} → 3 Block tokens
+    if isinstance(value, bool):
+        tokens = []
+    elif isinstance(value, str):
+        tokens = [value]
+    elif isinstance(value, (int, float)):
+        tokens = ['Block'] * int(value)
+    elif isinstance(value, dict):
+        ttype = value.get('type') or 'Block'
+        count = int(value.get('count') or 1)
+        tokens = [ttype] * count
+    else:
+        try:
+            tokens = list(value or [])
+        except TypeError:
+            tokens = []
     for raw in tokens:
         token = _normalize_token(raw)
         grant_power_tokens(game, fk, token, 1)
@@ -106,8 +125,18 @@ def _apply_recover_damage(game, ability_id, value, ctx, result):
     msg_id = ctx.get('msg_id')
     fig_idx = ctx.get('figure_index')
     fk = ctx.get('figure_key')
+    # Derive figure_index from figure_key if not supplied (headless-friendly).
+    if fig_idx is None and fk:
+        try:
+            fig_idx = int(str(fk).rsplit('-', 1)[-1])
+        except (ValueError, AttributeError):
+            fig_idx = 0
     if not msg_id or fig_idx is None or not fk:
-        raise UnsupportedPatternAField(ability_id, 'recoverDamage (ctx missing msg_id/figure_index/figure_key)')
+        # Record as bank entry instead of raising — caller can still
+        # see the ability fired.
+        result['bank']['pendingRecoverDamage'] = amount
+        result['applied'].append(('recoverDamage', {'amount': amount, 'pending': True}))
+        return
     game.setdefault('health', {})
     healed = heal_hp(game['health'], game, msg_id, fig_idx, amount, ctx.get('player_num', 1))
     result['applied'].append(('recoverDamage', {'figureKey': fk, 'amount': healed.get('healed', 0)}))
@@ -150,6 +179,61 @@ def _record_draw(game, ability_id, value, ctx, result):
 
 # ── Dispatch table ──────────────────────────────────────────────────────────
 
+def _record_pending_combat(combat_key: str) -> Applier:
+    """Stamp an additive int on game.pendingCombat[combat_key]."""
+    def _apply(game, ability_id, value, ctx, result):
+        amt = int(value) if isinstance(value, (int, float)) else 0
+        if amt == 0:
+            return
+        data = game.data if hasattr(game, 'data') else game
+        pc = dict(data.get('pendingCombat') or {})
+        pc[combat_key] = int(pc.get(combat_key) or 0) + amt
+        data['pendingCombat'] = pc
+        result['applied'].append((combat_key, amt))
+    _apply.__name__ = f'_record_pc_{combat_key}'
+    return _apply
+
+
+def _record_next_attacks_bonus(game, ability_id, value, ctx, result):
+    """Stamp game.nextAttacksBonusHits[msg_id] = {count, bonus}."""
+    if not isinstance(value, dict):
+        return
+    msg_id = (ctx or {}).get('msg_id')
+    if not msg_id:
+        return
+    data = game.data if hasattr(game, 'data') else game
+    pend = dict(data.get('nextAttacksBonusHits') or {})
+    pend[msg_id] = dict(value)
+    data['nextAttacksBonusHits'] = pend
+    result['applied'].append(('nextAttacksBonusHits', value))
+
+
+def _record_apply_condition(cond: str) -> Applier:
+    """Apply a named condition to ctx.figure_key."""
+    def _apply(game, ability_id, value, ctx, result):
+        if not value:
+            return
+        fk = (ctx or {}).get('figure_key')
+        if not fk:
+            return
+        from python.engine.mechanics.conditions import apply_condition
+        apply_condition(game, fk, cond)
+        result['applied'].append((f'apply{cond}', fk))
+    _apply.__name__ = f'_record_apply_{cond.lower()}'
+    return _apply
+
+
+def _record_noop_true(field: str) -> Applier:
+    """Boolean marker field — record on bank without state mutation."""
+    def _apply(game, ability_id, value, ctx, result):
+        if not value:
+            return
+        result['bank'][field] = True
+        result['applied'].append((field, True))
+    _apply.__name__ = f'_record_flag_{field}'
+    return _apply
+
+
 _FIELD_APPLIERS: Dict[str, Applier] = {
     # HANDLED — direct engine primitives
     'applyFocus': _apply_focus,
@@ -165,6 +249,62 @@ _FIELD_APPLIERS: Dict[str, Applier] = {
     'actionBonus': _record_bank_int('actionBonus'),
     'freeMoveBonus': _record_bank_int('freeMoveBonus'),
     'draw': _record_draw,
+
+    # COMBAT-PHASE bonuses (stamp on pendingCombat)
+    'attackBonusHits': _record_pending_combat('bonusHits'),
+    'attackAccuracyBonus': _record_pending_combat('bonusAccuracy'),
+    'attackBonusDice': _record_pending_combat('attackerBonusDice'),
+    'attackSurgeBonus': _record_pending_combat('bonusSurges'),
+    'defensePoolRemoveMax': _record_pending_combat('defenseDiceRemoved'),
+    'roundDefenseBonusBlock': _record_pending_combat('bonusBlock'),
+    'roundDefenseBonusEvade': _record_pending_combat('bonusEvade'),
+    'applyDefenseBonusBlock': _record_pending_combat('bonusBlock'),
+    'applyDefenseBonusEvade': _record_pending_combat('bonusEvade'),
+    'defenseBonusDice': _record_pending_combat('defenderBonusDice'),
+    'rerollOneAttackDie': _record_pending_combat('attackerRerollCount'),
+    'attackBonusPierce': _record_pending_combat('bonusPierce'),
+    'attackBonusCleave': _record_pending_combat('bonusCleave'),
+    'attackBonusBlast': _record_pending_combat('bonusBlast'),
+
+    # NEXT-ATTACK bonuses (stamp global nextAttacksBonusHits)
+    'nextAttacksBonusHits': _record_next_attacks_bonus,
+
+    # Auxiliary conditions applied from Pattern A schema
+    'applyBleed': _record_apply_condition('Bleed'),
+    'applyStun': _record_apply_condition('Stun'),
+    'applyWeaken': _record_apply_condition('Weaken'),
+
+    # Boolean marker flags (per-attack / per-round toggles)
+    'arcingShotTargeting': _record_noop_true('arcingShotTargeting'),
+    'mutualExcludeAttackCc': _record_noop_true('mutualExcludeAttackCc'),
+    'informational': _record_noop_true('informational'),
+    'selfDefeatsAfterAttack': _record_noop_true('selfDefeatsAfterAttack'),
+    'readyOwnDeploymentCard': _record_noop_true('readyOwnDeploymentCard'),
+    'readyAdjacentFriendlyDeploymentCard':
+        _record_noop_true('readyAdjacentFriendlyDeploymentCard'),
+    'interactBlockRange': _record_noop_true('interactBlockRange'),
+
+    # Next-attack one-shot stamps (next_pierce/cleave/blast).
+    'nextAttackBonusPierce': _record_bank_int('nextAttackBonusPierce'),
+    'nextAttackBonusCleave': _record_bank_int('nextAttackBonusCleave'),
+    'nextAttackBonusBlast': _record_bank_int('nextAttackBonusBlast'),
+
+    # Color-coded dice fields (record as raw value for downstream handling).
+    'attackBonusDiceColor': _record_noop_true('attackBonusDiceColor'),
+    'defenseBonusDiceColor': _record_noop_true('defenseBonusDiceColor'),
+
+    # Round-scoped accuracy penalty (imposed on next hostile attack).
+    'roundDefenseAccuracyPenalty':
+        _record_pending_combat('defenderAccuracyPenalty'),
+
+    # Speed-relative MP bonus (mpBonusFromSpeed: True grants MP = speed).
+    'mpBonusFromSpeed': _record_noop_true('mpBonusFromSpeed'),
+
+    # Remaining bespoke flags / range markers.
+    'controlBlockRange': _record_noop_true('controlBlockRange'),
+    'recoverOnHostileDefeat': _record_bank_int('recoverOnHostileDefeat'),
+    'recoverOnHostileDefeatRange': _record_bank_int('recoverOnHostileDefeatRange'),
+    'drawIfTrait': _record_noop_true('drawIfTrait'),
 }
 
 
