@@ -22,7 +22,8 @@ Policy-index layout (n_policy = 4096, see python/net/skirbo_cnn.py):
     1091      END_END_OF_ROUND
     1092..1107 DC_SPECIAL      (special_idx 0..15 on current DC)
     1108..1363 PLAY_CC         (hand_idx within active player's CC hand)
-    1364..    reserved (future actions)
+    1364..1395 INTERACT        (option_idx within legal interact list)
+    1396..    reserved (future actions)
 """
 from __future__ import annotations
 
@@ -60,7 +61,10 @@ _SPECIAL_SPAN = 16                                          # 16 specials per DC
 _PLAY_CC_BASE = _SPECIAL_BASE + _SPECIAL_SPAN               # 1108
 _PLAY_CC_SPAN = 256                                         # hand index
 
-POLICY_INDEX_FIRST_RESERVED = _PLAY_CC_BASE + _PLAY_CC_SPAN  # 1364
+_INTERACT_BASE = _PLAY_CC_BASE + _PLAY_CC_SPAN              # 1364
+_INTERACT_SPAN = 32                                         # option idx
+
+POLICY_INDEX_FIRST_RESERVED = _INTERACT_BASE + _INTERACT_SPAN  # 1396
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +249,29 @@ def legal_actions(game: GameState) -> List[Action]:
                 ))
         except Exception:
             pass
+
+        # INTERACT actions — one per legal interact option at current coord.
+        try:
+            from python.engine.mechanics.board_helpers import (
+                get_legal_interact_options,
+            )
+            map_id = game.get('mapId')
+            if not map_id:
+                sel = game.get('selectedMap') or {}
+                map_id = sel.get('id') if isinstance(sel, Mapping) else None
+            if map_id:
+                for opt in get_legal_interact_options(
+                        game, active, figure_key, map_id) or []:
+                    out.append(Action(
+                        type=ActionType.INTERACT,
+                        player=active,
+                        params={
+                            'figure_key': figure_key,
+                            'option_id': opt['id'],
+                        },
+                    ))
+        except Exception:
+            pass
         return out
 
     # Case: no active figure — choose which to activate, or pass / end phase.
@@ -343,6 +370,29 @@ def action_to_policy_index(action: Action, game: GameState) -> int:
                     raise ValueError(f'hand idx {i} exceeds PLAY_CC span')
                 return _PLAY_CC_BASE + i
         raise ValueError(f'PLAY_CC card {card!r} not in hand')
+    if t == ActionType.INTERACT:
+        option_id = action.params.get('option_id') or action.params.get('optionId')
+        figure_key = action.params.get('figure_key') or action.params.get('figureKey')
+        if not option_id or not figure_key:
+            raise ValueError('INTERACT missing option_id or figure_key')
+        try:
+            from python.engine.mechanics.board_helpers import (
+                get_legal_interact_options,
+            )
+            map_id = game.get('mapId')
+            if not map_id:
+                sel = game.get('selectedMap') or {}
+                map_id = sel.get('id') if isinstance(sel, Mapping) else None
+            opts = get_legal_interact_options(
+                game, action.player, figure_key, map_id) or []
+            for i, opt in enumerate(opts):
+                if opt.get('id') == option_id:
+                    if i >= _INTERACT_SPAN:
+                        raise ValueError(f'INTERACT idx {i} exceeds span')
+                    return _INTERACT_BASE + i
+        except Exception:
+            pass
+        raise ValueError(f'INTERACT option {option_id!r} not enumerable')
     raise ValueError(f'no policy-index mapping for {t.value}')
 
 
@@ -411,6 +461,26 @@ def policy_index_to_action(idx: int, game: GameState) -> Action:
         return Action(
             type=ActionType.PLAY_CC, player=active,
             params={'card': hand[off]},
+        )
+    if _INTERACT_BASE <= idx < _INTERACT_BASE + _INTERACT_SPAN:
+        off = idx - _INTERACT_BASE
+        active_keys = game.get('activeFigureKeys') or []
+        if not active_keys:
+            raise ValueError('INTERACT idx but no active figure')
+        figure_key = active_keys[0]
+        from python.engine.mechanics.board_helpers import (
+            get_legal_interact_options,
+        )
+        map_id = game.get('mapId')
+        if not map_id:
+            sel = game.get('selectedMap') or {}
+            map_id = sel.get('id') if isinstance(sel, Mapping) else None
+        opts = get_legal_interact_options(game, active, figure_key, map_id) or []
+        if off >= len(opts):
+            raise ValueError(f'INTERACT idx {off} out of range (size {len(opts)})')
+        return Action(
+            type=ActionType.INTERACT, player=active,
+            params={'figure_key': figure_key, 'option_id': opts[off]['id']},
         )
     raise ValueError(f'policy index {idx} not mapped')
 
