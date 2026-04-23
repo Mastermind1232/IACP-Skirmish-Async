@@ -410,6 +410,19 @@ def _handle_ob_space(interaction, ctx) -> Dict[str, Any]:
     return {'ok': True, 'game': new_game, 'msgId': msg_id, 'space': space}
 
 
+def _handle_special_done(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """special_done_{gameId}_{msgId} — dismiss the 'Resolve manually +
+    click Done' banner after a DC special ability. No state mutation.
+    Mirrors src/handlers/special.js:5-13.
+    """
+    import re
+    cid = _cid(interaction)
+    m = re.match(r'^special_done_(.+?)_(.+)$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    return {'ok': True, 'gameId': m.group(1), 'msgId': m.group(2)}
+
+
 # ─── Registration ─────────────────────────────────────────────────────────
 
 register('dc_action_', _handle_dc_action, 'dcPlayArea')
@@ -422,3 +435,4 @@ register('ee3_pick_die_', _handle_ee3_pick_die, 'dcPlayArea')
 register('overwatch_space_', _handle_overwatch_space, 'dcPlayArea')
 register('bomb_drop_space_', _handle_bomb_drop_space, 'dcPlayArea')
 register('ob_space_', _handle_ob_space, 'dcPlayArea')
+register('special_done_', _handle_special_done, 'dcPlayArea')

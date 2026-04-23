@@ -33,6 +33,7 @@ def _fresh_registry():
     handlers.register('overwatch_space_', dp._handle_overwatch_space, 'dcPlayArea')
     handlers.register('bomb_drop_space_', dp._handle_bomb_drop_space, 'dcPlayArea')
     handlers.register('ob_space_', dp._handle_ob_space, 'dcPlayArea')
+    handlers.register('special_done_', dp._handle_special_done, 'dcPlayArea')
 
 
 def _basic_game():
@@ -220,6 +221,25 @@ def test_bomb_drop_space_damages_figures():
     assert result['game'].data['dcHealthState']['hl2dc0'][0][0] == 3
 
 
+def test_special_done_parses_clean():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('special_done_G1_hl1dc0')
+    result = handler(_Interaction('special_done_G1_hl1dc0'), {})
+    assert result['ok'] is True
+    assert result['gameId'] == 'G1'
+    assert result['msgId'] == 'hl1dc0'
+
+
+def test_special_done_malformed():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('special_done_')
+    result = handler(_Interaction('special_done_'), {})
+    assert result['ok'] is False
+    assert result['reason'] == 'malformed_custom_id'
+
+
 def main():
     cases = [
         ('dc_action_records', test_dc_action_records_choice),
@@ -232,6 +252,8 @@ def main():
         ('ee3_skip', test_ee3_pick_die_skip),
         ('overwatch_space', test_overwatch_space_places_token),
         ('bomb_drop_space', test_bomb_drop_space_damages_figures),
+        ('special_done_parses', test_special_done_parses_clean),
+        ('special_done_malformed', test_special_done_malformed),
     ]
     failures = []
     for name, fn in cases:
