@@ -729,12 +729,12 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
 
     # Fire Pattern D combat-declare triggers (ability bonuses stamped
     # before dice are evaluated: Weighted Thrust, Precise Targeting, etc.)
+    atk_sids = atk_effect.get('specialAbilityIds') or []
+    def_sids = def_effect.get('specialAbilityIds') or []
     try:
         from python.engine.mechanics.combat_declare import (
             fire_combat_declare_triggers,
         )
-        atk_sids = atk_effect.get('specialAbilityIds') or []
-        def_sids = def_effect.get('specialAbilityIds') or []
         if atk_sids or def_sids:
             fire_combat_declare_triggers(
                 game.data, combat, atk_sids, attacker_key,
@@ -749,6 +749,26 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     except (NotImplementedError, RuntimeError, Exception):
         # Trigger firing must not crash the attack. Pattern D stubs
         # raise NotImplementedError; UnregisteredPatternD is RuntimeError.
+        pass
+
+    # Fire Pattern D combat-dice triggers (post-roll dice surgery:
+    # Fury, Inspiring, Soresu Form, Shared Intuition, etc.).
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        for aid in list(atk_sids) + list(def_sids):
+            abil_entry = get_ability(aid) or {}
+            if abil_entry.get('trigger') == 'combat-dice':
+                try:
+                    fire_ability(game.data, aid, {
+                        'attacker_figure_key': attacker_key,
+                        'defender_figure_key': target_key,
+                        'combat': combat,
+                        'trigger': 'combat-dice',
+                    })
+                except NotImplementedError:
+                    pass
+    except Exception:
         pass
     pending_combat = game.get('pendingCombat')
     if isinstance(pending_combat, Mapping):
