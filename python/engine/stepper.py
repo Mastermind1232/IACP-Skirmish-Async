@@ -573,11 +573,22 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
                 }
             game['nextAttacksBonusHits'] = nab_map
 
+    # Consume paybackBonusSurge[atk_msg_id] → +N surges on this attack.
+    bonus_surge = 0
+    if atk_msg_id:
+        pb_map = dict(game.get('paybackBonusSurge') or {})
+        if atk_msg_id in pb_map:
+            bonus_surge = int(pb_map.pop(atk_msg_id) or 0)
+            game['paybackBonusSurge'] = pb_map if pb_map else None
+
     # Add bonus hits directly to attack_roll dmg so compute_combat_result
-    # sees the higher value.
-    if bonus_hits:
+    # sees the higher value. Same for bonus surge.
+    if bonus_hits or bonus_surge:
         attack_roll = dict(attack_roll)
-        attack_roll['dmg'] = int(attack_roll.get('dmg') or 0) + bonus_hits
+        if bonus_hits:
+            attack_roll['dmg'] = int(attack_roll.get('dmg') or 0) + bonus_hits
+        if bonus_surge:
+            attack_roll['surge'] = int(attack_roll.get('surge') or 0) + bonus_surge
 
     combat = {
         'attackRoll': attack_roll,
