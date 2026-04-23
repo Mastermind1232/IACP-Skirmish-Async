@@ -144,6 +144,36 @@ def apply_cc_schema(card_name: str):
             }
             effects.append({'effect': 'chooseAdjacentHostileThen'})
 
+        # Combat-phase bonuses — stamp on pendingCombat if present.
+        _COMBAT_FIELDS = {
+            'attackBonusHits': 'bonusHits',
+            'attackAccuracyBonus': 'bonusAccuracy',
+            'attackBonusDice': 'attackerBonusDice',
+            'attackSurgeBonus': 'bonusSurges',
+            'defensePoolRemoveMax': 'defenseDiceRemoved',
+            'roundDefenseBonusBlock': 'bonusBlock',
+            'roundDefenseBonusEvade': 'bonusEvade',
+            'applyDefenseBonusBlock': 'bonusBlock',
+            'applyDefenseBonusEvade': 'bonusEvade',
+            'defenseBonusDice': 'defenderBonusDice',
+            'rerollOneAttackDie': 'attackerRerollCount',
+        }
+        combat = data.get('pendingCombat')
+        if isinstance(combat, dict):
+            c = None
+            for field, combat_key in _COMBAT_FIELDS.items():
+                val = entry.get(field)
+                if isinstance(val, (int, float)) and val:
+                    if c is None:
+                        c = dict(combat)
+                    c[combat_key] = int(c.get(combat_key) or 0) + int(val)
+                    effects.append({
+                        'effect': field, 'combatKey': combat_key,
+                        'delta': int(val),
+                    })
+            if c is not None:
+                data['pendingCombat'] = c
+
         # Boolean *Effect flags — stamp activeCardEffects so other systems
         # detect this card's effect is active (used for complex multi-turn
         # effects like coveringFireEffect, devotionEffect, etc.).
