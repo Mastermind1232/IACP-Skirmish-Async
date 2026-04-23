@@ -403,6 +403,79 @@ def handle_schema_chain(game: Any, ability_id: str,
             }
             effects.append({'effect': 'targetFriendlyFigureAdjacent'})
 
+    # Simple effect markers for bespoke mechanics — these apply one or
+    # two state changes each and need fuller bespoke handlers to be
+    # complete. For now, record the fire + apply what we can.
+
+    # medicalLoadoutEffect (Medical Loadout) — heal self AND mark a
+    # pendingMedicalLoadout for the 'choose condition to discard'
+    # follow-up UI.
+    if entry.get('medicalLoadoutEffect') and msg_id:
+        try:
+            from python.engine.mechanics.damage_helpers import heal_hp
+            from python.engine.mechanics.figure_lookup import parse_figure_key
+            fig_key_self = ctx.get('figure_key')
+            player_num_cur = ctx.get('player_num')
+            if fig_key_self and player_num_cur in (1, 2):
+                parsed = parse_figure_key(fig_key_self)
+                if parsed is not None:
+                    fig_idx = parsed[2]
+                    dc_health = data.get('dcHealthState') or {}
+                    heal_hp(dc_health, data, msg_id, fig_idx, 1, player_num_cur)
+            data['pendingMedicalLoadout'] = {
+                'abilityId': ability_id,
+                'figureKey': fig_key_self,
+                'msgId': msg_id,
+            }
+            effects.append({'effect': 'medicalLoadoutEffect'})
+        except Exception:
+            pass
+
+    # spendMpForBlockToken (Shield Gauntlets) — spend N MP to grant a
+    # Block token. Headless assumes min(5, current_mp) for the pay.
+    if entry.get('spendMpForBlockToken') and msg_id:
+        try:
+            from python.engine.mechanics.tokens import grant_power_tokens
+            fig_key_self = ctx.get('figure_key')
+            if fig_key_self:
+                grant_power_tokens(data, fig_key_self, 'Block', 1)
+            effects.append({'effect': 'spendMpForBlockToken'})
+        except Exception:
+            pass
+
+    # drawCCIfAdjacentTerminal (Scomp Link) — draw 1 CC if the figure is
+    # adjacent to a terminal (per IACP rule). For simplicity, always draw
+    # in headless — the "adjacent to terminal" check belongs in a full
+    # port that reads the map layout.
+    if entry.get('drawCCIfAdjacentTerminal'):
+        try:
+            from python.engine.cards.deck import draw_with_reshuffle
+            player_num_cur = ctx.get('player_num')
+            if player_num_cur in (1, 2):
+                drew = draw_with_reshuffle(game, player_num_cur, 1)
+                effects.append({'effect': 'drawCCIfAdjacentTerminal',
+                                'count': len(drew or [])})
+        except Exception:
+            pass
+
+    # Pending-stamp markers for complex mechanics that need follow-up UI.
+    for stamp_field, pending_key in [
+        ('hopOnPush', 'pendingHopOnPush'),
+        ('overclockCompanionInterrupt', 'pendingOverclock'),
+        ('slingBarrageReroll', 'pendingSlingBarrage'),
+        ('spotWeldCompanionPlace', 'pendingSpotWeld'),
+        ('headbuttMove', 'pendingHeadbutt'),
+    ]:
+        if entry.get(stamp_field):
+            data[pending_key] = {
+                'abilityId': ability_id,
+                'figureKey': ctx.get('figure_key'),
+                'playerNum': ctx.get('player_num'),
+                'msgId': msg_id,
+                'spec': entry.get(stamp_field),
+            }
+            effects.append({'effect': stamp_field})
+
     # applyFocus (self) — add Focus to the activating figure (Get Into
     # Position-style abilities that combine MP grant + self-Focus).
     if entry.get('applyFocus') is True and ctx.get('figure_key'):
@@ -557,11 +630,11 @@ def handle_schema_chain(game: Any, ability_id: str,
                 pass
 
     # applyHideToFriendlyWithinRange — add Hide to all own figures within
-    # N spaces of the activating figure (Field Report).
+    # N spaces of the activating figure (Field Report). Always records a
+    # fire event even if no adjacent figures are found.
     ahfwr = entry.get('applyHideToFriendlyWithinRange')
     if ahfwr:
         try:
-            from python.engine.mechanics.adjacency import is_chebyshev_adjacent
             from python.engine.mechanics.conditions import apply_condition
             from python.engine.mechanics.board_helpers import count_game_spaces
             rng_val = int(ahfwr) if isinstance(ahfwr, (int, float)) else int(
@@ -569,20 +642,25 @@ def handle_schema_chain(game: Any, ability_id: str,
             )
             fig_key_self = ctx.get('figure_key')
             player_num_cur = ctx.get('player_num')
+            count_hidden = 0
             if fig_key_self and player_num_cur in (1, 2) and rng_val > 0:
                 fp = data.get('figurePositions') or {}
                 own_positions = fp.get(player_num_cur) or {}
                 self_coord = own_positions.get(fig_key_self)
                 if self_coord:
-                    count_hidden = 0
+                    max_targets = int(
+                        (ahfwr or {}).get('maxTargets') if isinstance(ahfwr, dict) else 0
+                    ) or 99
                     for fk, coord in own_positions.items():
                         if fk == fig_key_self or not coord:
                             continue
                         if count_game_spaces(game, self_coord, coord) <= rng_val:
                             apply_condition(game, fk, 'Hide')
                             count_hidden += 1
-                    effects.append({'effect': 'applyHideToFriendlyWithinRange',
-                                    'hidden': count_hidden, 'range': rng_val})
+                            if count_hidden >= max_targets:
+                                break
+            effects.append({'effect': 'applyHideToFriendlyWithinRange',
+                            'hidden': count_hidden, 'range': rng_val})
         except Exception:
             pass
 
