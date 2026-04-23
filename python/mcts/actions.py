@@ -223,6 +223,20 @@ def legal_actions(game: GameState) -> List[Action]:
                 player=active,
                 params={'figure_key': figure_key, 'special_idx': idx},
             ))
+
+        # PLAY_CC actions — one per playable CC in hand (timing-filtered).
+        try:
+            from python.engine.mechanics.cc_timing import get_playable_cc_from_hand
+            hand_key = 'player1CcHand' if active == 1 else 'player2CcHand'
+            hand = game.get(hand_key) or []
+            for cc in get_playable_cc_from_hand(game, active, hand):
+                out.append(Action(
+                    type=ActionType.PLAY_CC,
+                    player=active,
+                    params={'card': cc},
+                ))
+        except Exception:
+            pass
         return out
 
     # Case: no active figure — choose which to activate, or pass / end phase.
