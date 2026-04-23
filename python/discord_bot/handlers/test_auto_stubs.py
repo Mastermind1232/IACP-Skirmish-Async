@@ -49,6 +49,7 @@ def _load_py_prefixes():
     import python.discord_bot.handlers.combat_reactions  # noqa: F401
     import python.discord_bot.handlers.botmenu  # noqa: F401
     import python.discord_bot.handlers.interrupts  # noqa: F401
+    import python.discord_bot.handlers.map_events  # noqa: F401
     import python.discord_bot.handlers.stepper_bridge  # noqa: F401
     import python.discord_bot.handlers.auto_stubs  # noqa: F401
     return {p for p, _, _ in H._REGISTRY}
@@ -126,8 +127,12 @@ def test_concrete_handlers_shadow_stubs():
 def test_stub_count_matches_installed():
     from python.discord_bot.handlers import auto_stubs
     _load_py_prefixes()
-    # Count should be >= 200 (adjust whenever more concrete ports land)
-    assert auto_stubs._INSTALLED_COUNT >= 200
+    # _STUB_PREFIXES has 212 entries; only prefixes not already claimed
+    # by a concrete handler get installed. As more concrete ports land,
+    # _INSTALLED_COUNT drops. Anchor to the floor we care about: at least
+    # one stub still installs (the bot currently doesn't cover every
+    # flow end-to-end).
+    assert auto_stubs._INSTALLED_COUNT >= 100
 
 
 def main():

@@ -15,6 +15,8 @@ Skip-button family (shared `_make_pending_skip_handler` factory):
   wanton_skip_{gameId}               — clears pendingWanton
   heavy_fire_skip_{gameId}           — clears pendingHeavyFire
   zillo_discard_skip_{gameId}        — clears pendingZilloDiscard
+  spread_pain_skip_{gameId}          — clears pendingSpreadPain
+  concussive_bolt_skip_{gameId}      — clears pendingConcussiveBolt
 """
 from __future__ import annotations
 
@@ -107,6 +109,12 @@ _handle_heavy_fire_skip = _make_pending_skip_handler(
 _handle_zillo_discard_skip = _make_pending_skip_handler(
     'zillo_discard_skip_', 'pendingZilloDiscard',
 )
+_handle_spread_pain_skip = _make_pending_skip_handler(
+    'spread_pain_skip_', 'pendingSpreadPain',
+)
+_handle_concussive_bolt_skip = _make_pending_skip_handler(
+    'concussive_bolt_skip_', 'pendingConcussiveBolt',
+)
 
 
 register('sidewinder_skip_', _handle_sidewinder_skip, 'core')
@@ -118,3 +126,5 @@ register('deflect_skip_', _handle_deflect_skip, 'core')
 register('wanton_skip_', _handle_wanton_skip, 'core')
 register('heavy_fire_skip_', _handle_heavy_fire_skip, 'core')
 register('zillo_discard_skip_', _handle_zillo_discard_skip, 'core')
+register('spread_pain_skip_', _handle_spread_pain_skip, 'core')
+register('concussive_bolt_skip_', _handle_concussive_bolt_skip, 'core')

@@ -32,6 +32,8 @@ def _fresh_registry():
     handlers.register('wanton_skip_', cse._handle_wanton_skip, 'core')
     handlers.register('heavy_fire_skip_', cse._handle_heavy_fire_skip, 'core')
     handlers.register('zillo_discard_skip_', cse._handle_zillo_discard_skip, 'core')
+    handlers.register('spread_pain_skip_', cse._handle_spread_pain_skip, 'core')
+    handlers.register('concussive_bolt_skip_', cse._handle_concussive_bolt_skip, 'core')
 
 
 def _game():
@@ -136,6 +138,32 @@ def test_deflect_skip_clears_pending():
     assert 'pendingDeflect' not in g.data
 
 
+def test_spread_pain_skip_clears_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game()
+    g.data['pendingSpreadPain'] = {'attackerPlayerNum': 1}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('spread_pain_skip_G1')
+    result = handler(_Interaction('spread_pain_skip_G1'), ctx)
+    assert result['ok'] is True
+    assert 'pendingSpreadPain' not in g.data
+
+
+def test_concussive_bolt_skip_clears_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game()
+    g.data['pendingConcussiveBolt'] = {'defenderFk': 'Luke-0-0'}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('concussive_bolt_skip_G1')
+    result = handler(_Interaction('concussive_bolt_skip_G1'), ctx)
+    assert result['ok'] is True
+    assert 'pendingConcussiveBolt' not in g.data
+
+
 def test_zillo_discard_skip_clears_pending():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -188,6 +216,8 @@ def main():
         ('wanton_skip_clears', test_wanton_skip_clears_pending),
         ('heavy_fire_skip_clears', test_heavy_fire_skip_clears_pending),
         ('zillo_discard_skip_clears', test_zillo_discard_skip_clears_pending),
+        ('spread_pain_skip_clears', test_spread_pain_skip_clears_pending),
+        ('concussive_bolt_skip_clears', test_concussive_bolt_skip_clears_pending),
     ]
     failures = []
     for name, fn in cases:
