@@ -47,6 +47,18 @@ def apply_cc_schema(card_name: str):
         ctx = ctx or {}
         pending = pending or {}
         entry = get_ability(card_name) or {}
+        # chooseOne: auto-pick option 0 (or ctx.choice_index) and merge
+        # its fields into the entry. Mirrors pattern_e_schema's same
+        # treatment.
+        choose_one = entry.get('chooseOne')
+        if isinstance(choose_one, list) and choose_one:
+            idx = int(ctx.get('choice_index') or 0)
+            if 0 <= idx < len(choose_one) and isinstance(choose_one[idx], dict):
+                merged = dict(entry)
+                merged.pop('chooseOne', None)
+                for k, v in choose_one[idx].items():
+                    merged[k] = v
+                entry = merged
         data = _data(game)
         effects = []
 
