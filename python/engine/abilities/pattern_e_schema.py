@@ -45,6 +45,18 @@ def handle_schema_chain(game: Any, ability_id: str,
     state. Returns {applied, effects, pending_key, log_message}.
     """
     entry = get_ability(ability_id) or {}
+    # chooseOne: auto-pick option 0 (or ctx.choice_index if supplied) and
+    # flatten its fields into the entry. Mirrors JS `entry.chooseOne[idx]`.
+    choose_one = entry.get('chooseOne')
+    if isinstance(choose_one, list) and choose_one:
+        idx = int((ctx or {}).get('choice_index') or 0)
+        if 0 <= idx < len(choose_one) and isinstance(choose_one[idx], Mapping):
+            # Merge the chosen option into the entry (non-destructive copy).
+            merged = dict(entry)
+            merged.pop('chooseOne', None)
+            for k, v in choose_one[idx].items():
+                merged[k] = v
+            entry = merged
     data = _data(game)
     msg_id = ctx.get('msg_id') or ctx.get('msgId')
     if not msg_id:
@@ -489,6 +501,35 @@ def handle_schema_chain(game: Any, ability_id: str,
         pend_combat['roundScoped'] = False  # single-attack scoped
         data['pendingCombat'] = pend_combat
         effects.append({'effect': 'multiFireDoubleAttack'})
+
+    # applyFocusToSelf — Focus the activating figure (used by
+    # Dual-Bladed Fury option 2).
+    if entry.get('applyFocusToSelf'):
+        fig_key = ctx.get('figure_key')
+        if fig_key:
+            try:
+                from python.engine.mechanics.conditions import apply_condition
+                apply_condition(game, fig_key, 'Focus')
+                effects.append({'effect': 'applyFocusToSelf',
+                                'figureKey': fig_key})
+            except Exception:
+                pass
+
+    # nextAttackCleave / nextAttackReach — stamp pendingCombat bonuses that
+    # apply to the figure's next attack. Supports Dual-Bladed Fury,
+    # Whirlwind-style nextAttack* grants.
+    n_cleave = entry.get('nextAttackCleave')
+    if isinstance(n_cleave, (int, float)) and n_cleave > 0:
+        pc = dict(data.get('pendingCombat') or {})
+        pc['bonusCleave'] = int(pc.get('bonusCleave') or 0) + int(n_cleave)
+        data['pendingCombat'] = pc
+        effects.append({'effect': 'nextAttackCleave', 'amount': int(n_cleave)})
+
+    if entry.get('nextAttackReach'):
+        pc = dict(data.get('pendingCombat') or {})
+        pc['nextAttackReach'] = True
+        data['pendingCombat'] = pc
+        effects.append({'effect': 'nextAttackReach'})
 
     # applySelfCondition — add a condition to the activating figure (Prowl
     # applies Hide to self).
