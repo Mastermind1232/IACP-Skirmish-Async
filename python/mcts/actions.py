@@ -179,7 +179,10 @@ def legal_actions(game: GameState) -> List[Action]:
         start_coord = coord_map.get(figure_key)
         if not start_coord:
             return out
-        mp = int(game.get('movementPoints') or 0)
+        # Per-figure MP takes precedence when set (multi-figure groups);
+        # fall back to global movementPoints.
+        per_mp = game.get('perFigureMp') or {}
+        mp = int(per_mp.get(figure_key, game.get('movementPoints') or 0) or 0)
         map_id = game.get('mapId') or game.get('selectedMap')
         map_spaces = get_map_spaces(map_id) if map_id else {}
         if mp > 0 and map_spaces:

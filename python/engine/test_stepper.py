@@ -190,6 +190,9 @@ def test_move_pick_space_rejects_insufficient_mp():
     ))
     # Manually clamp MP to 1 to force rejection on a 2-step move.
     g.data['movementPoints'] = 1
+    # Also clamp perFigureMp (takes precedence since multi-figure
+    # activation landed).
+    g.data['perFigureMp'] = {'Rebel Trooper (Regular)-0-0': 1}
     try:
         step(g, Action(
             type=ActionType.MOVE_PICK_SPACE, player=1,

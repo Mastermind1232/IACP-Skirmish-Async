@@ -221,14 +221,43 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
     rem[player] = int(cur) - 1
     game['activationsRemaining'] = rem
 
-    game['activeFigureKeys'] = [figure_key]
+    # Multi-figure group: activate every figure in the same group so they
+    # can all move/attack this activation. Group identity is derived from
+    # the figure-key's DC-name + group-index prefix.
+    from python.engine.mechanics.figure_lookup import parse_figure_key as _pfk
+    parsed_init = _pfk(figure_key)
+    group_figs = [figure_key]
+    all_figs = (game.data.get('figurePositions') or {}).get(player, {})
+    if parsed_init is not None:
+        grp_name, grp_idx, _ = parsed_init
+        for fk in all_figs.keys():
+            if fk == figure_key:
+                continue
+            p = _pfk(fk)
+            if p is None:
+                continue
+            if p[0] == grp_name and p[1] == grp_idx:
+                group_figs.append(fk)
+
+    game['activeFigureKeys'] = group_figs
     game['activePlayer'] = player
 
     starts = dict(game.get('activationStartPositions') or {})
     pstarts = dict(starts.get(player, starts.get(str(player), {})))
-    pstarts[figure_key] = coord
+    for fk in group_figs:
+        fk_coord = coord if fk == figure_key else all_figs.get(fk)
+        if fk_coord:
+            pstarts[fk] = fk_coord
     starts[player] = pstarts
     game['activationStartPositions'] = starts
+
+    # Per-figure MP pool for multi-figure groups. Each figure gets its
+    # own MP so they don't share a global bank. `movementPoints` stays
+    # as the "first figure" pool for backward compatibility with any
+    # code that reads it.
+    per_fig_mp: Dict[str, int] = {}
+    for fk in group_figs:
+        per_fig_mp[fk] = 0  # filled with speed below
 
     dc_name = _dc_name_from_figure_key(figure_key)
     effect = get_dc_effect(dc_name) or {}
@@ -267,6 +296,11 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
                         game['movementBank'] = bank_all
                 break
     game['movementPoints'] = mp
+    # Copy the same MP to every figure in the group (they each get a
+    # fresh speed pool).
+    for fk in group_figs:
+        per_fig_mp[fk] = mp
+    game['perFigureMp'] = per_fig_mp
 
     # Clear per-activation damage counter for this figure.
     dmg = dict(game.get('figureDamageThisActivation') or {})
@@ -279,14 +313,26 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
 
 
 def _handle_dc_end_activation(game: GameState, action: Action) -> GameState:
-    """End the currently-active figure's activation.
+    """End the current figure's activation.
 
-    Effects:
-      - Clear activeFigureKeys and movementPoints.
-      - Swap activePlayer (alternation).
+    For multi-figure groups: advances to the next figure in the group
+    (pops the leader off activeFigureKeys, updates global MP to the
+    next figure's pool). When no more figures remain, ends the whole
+    group activation and alternates player.
     """
+    active_keys = list(game.get('activeFigureKeys') or [])
+    if len(active_keys) > 1:
+        # Multi-figure group: advance to next figure.
+        active_keys.pop(0)
+        game['activeFigureKeys'] = active_keys
+        per_mp = game.get('perFigureMp') or {}
+        next_fk = active_keys[0]
+        game['movementPoints'] = int(per_mp.get(next_fk, 0) or 0)
+        return game
+    # Single figure (or last figure in a group): end group activation.
     game['activeFigureKeys'] = []
     game['movementPoints'] = 0
+    game['perFigureMp'] = None
     active = int(game.get('activePlayer') or 1)
     game['activePlayer'] = 2 if active == 1 else 1
     return game
@@ -318,7 +364,13 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
     if start_coord == coord:
         return game  # no-op
 
-    mp = int(game.get('movementPoints') or 0)
+    # Prefer per-figure MP for multi-figure groups; fall back to global
+    # movementPoints for single-figure activations.
+    per_mp_map = game.get('perFigureMp') or {}
+    if figure_key in per_mp_map:
+        mp = int(per_mp_map[figure_key] or 0)
+    else:
+        mp = int(game.get('movementPoints') or 0)
     map_id = game.get('mapId')
     map_spaces = get_map_spaces(map_id)
     if not map_spaces:
@@ -356,7 +408,13 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
             f'move_pick_space: insufficient MP (need {cost}, have {mp})'
         )
 
-    game['movementPoints'] = mp - int(cost)
+    new_mp = mp - int(cost)
+    # Update per-figure MP; sync global for single-figure compat.
+    if per_mp_map:
+        per_mp_map = dict(per_mp_map)
+        per_mp_map[figure_key] = new_mp
+        game['perFigureMp'] = per_mp_map
+    game['movementPoints'] = new_mp
 
     fp = dict(game.get('figurePositions') or {})
     ppos = dict(fp.get(player, fp.get(str(player), {})))
