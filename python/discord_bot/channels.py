@@ -169,17 +169,34 @@ class DiscordBackend:
 
 
 def _translate_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Convert our dict payload to discord.py Message.send kwargs."""
+    """Convert our dict payload to discord.py Message.send kwargs.
+
+    Translates:
+      - content: str          → content str
+      - embeds: [dict]        → [discord.Embed]
+      - files:  [{filename, content}] → [discord.File]
+      - components: [dict]    → skipped (caller builds Views)
+    """
     try:
         import discord  # type: ignore[import]
     except ImportError:
         return dict(payload)
+    import io as _io
     out: Dict[str, Any] = {}
     if 'content' in payload:
         out['content'] = payload['content']
     if payload.get('embeds'):
         out['embeds'] = [
             discord.Embed.from_dict(e) for e in payload['embeds']
+        ]
+    if payload.get('files'):
+        out['files'] = [
+            discord.File(
+                fp=_io.BytesIO(f['content']),
+                filename=f.get('filename') or 'attachment.bin',
+            )
+            for f in payload['files']
+            if isinstance(f, dict) and 'content' in f
         ]
     # Components require View objects — left to the caller to build.
     # For now, skip; a future pass will translate dict components to Views.
