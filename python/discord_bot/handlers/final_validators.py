@@ -137,12 +137,12 @@ _GAME_KEYED = [
     'devaron_door_open_',  # devaron_crate_push_ handled in map_events.py
     'dio_follow_pick_',
     'fighting_knife_target_',
-    'fluctuation_swap_',
+    # fluctuation_swap_ handled in map_events.py
     'havoc_shot_done_', 'havoc_shot_pick_', 'havoc_shot_use_',
     'heavy_fire_cond_', 'heavy_fire_tgt_', 'heavy_fire_tgt_done_',
     'heavy_fire_use_',
     'indiscriminate_die_',
-    'krykna_place_', 'krykna_place_pick_',  # krykna_push_ handled in map_events.py
+    'krykna_place_pick_',  # krykna_place_ + krykna_push_ in map_events.py
     'massive_push_figure_', 'massive_push_space_',
     'move_pick_',
     'mvint_play_',

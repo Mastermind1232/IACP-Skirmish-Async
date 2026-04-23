@@ -27,6 +27,8 @@ def _fresh_registry():
     handlers.register('fluctuation_skip_', me._handle_fluctuation_skip, 'core')
     handlers.register('devaron_crate_push_', me._handle_devaron_crate_push, 'core')
     handlers.register('krykna_push_', me._handle_krykna_push, 'core')
+    handlers.register('fluctuation_swap_', me._handle_fluctuation_swap, 'core')
+    handlers.register('krykna_place_', me._handle_krykna_place, 'core')
 
 
 def _game():
@@ -162,6 +164,64 @@ def test_devaron_crate_push_missing_target_coord():
     assert result['reason'] == 'missing_target_coord'
 
 
+def test_fluctuation_swap_first_pick_stamps_source():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game()
+    g.data['pendingFluctuationSwapQueue'] = [1]
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('fluctuation_swap_G1_a3')
+    result = handler(_Interaction('fluctuation_swap_G1_a3', user_id='alice'), ctx)
+    assert result['ok'] is True
+    assert result['step'] == 'first_pick'
+    assert g.data['pendingFluctuationSwapFirst'] == 'a3'
+
+
+def test_fluctuation_swap_second_pick_swaps_and_advances():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game()
+    g.data['pendingFluctuationSwapQueue'] = [1, 2]
+    g.data['pendingFluctuationSwapFirst'] = 'a3'
+    g.data['fluctuationPositions'] = {'type-1': ['a3', 'b5'], 'type-2': ['c7']}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('fluctuation_swap_G1_c7')
+    result = handler(_Interaction('fluctuation_swap_G1_c7', user_id='alice'), ctx)
+    assert result['ok'] is True
+    assert result['step'] == 'swap_executed'
+    # type-1 first entry was 'a3'; now should be 'c7'
+    assert g.data['fluctuationPositions']['type-1'][0] == 'c7'
+    assert g.data['fluctuationPositions']['type-2'][0] == 'a3'
+    assert 'a3' in g.data['fluctuationSwappedThisRound']
+    assert 'c7' in g.data['fluctuationSwappedThisRound']
+    assert g.data['pendingFluctuationSwapQueue'] == [2]
+    assert g.data['pendingFluctuationSwapFirst'] is None
+
+
+def test_krykna_place_appends_npc_and_decrements_claimed():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game()
+    g.data['pendingClaimedKryknaQueue'] = [1]
+    g.data['claimedKrykna'] = {1: 2, 2: 0}
+    g.data['npcKrykna'] = [{'id': 'krykna-1', 'coord': 'a1'}]
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'target_coord': 'd5',
+    }
+    _, handler, _ = find_handler('krykna_place_G1')
+    result = handler(_Interaction('krykna_place_G1'), ctx)
+    assert result['ok'] is True
+    assert result['kryknaId'] == 'krykna-2'
+    assert g.data['npcKrykna'][-1]['coord'] == 'd5'
+    assert g.data['claimedKrykna'][1] == 1
+    assert 'pendingClaimedKryknaQueue' not in g.data
+
+
 def test_krykna_push_no_pending_queue():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -190,6 +250,9 @@ def main():
         ('devaron_crate_push_out_of_range', test_devaron_crate_push_out_of_range),
         ('devaron_crate_push_missing', test_devaron_crate_push_missing_target_coord),
         ('krykna_push_no_queue', test_krykna_push_no_pending_queue),
+        ('fluctuation_first_pick', test_fluctuation_swap_first_pick_stamps_source),
+        ('fluctuation_second_pick', test_fluctuation_swap_second_pick_swaps_and_advances),
+        ('krykna_place', test_krykna_place_appends_npc_and_decrements_claimed),
     ]
     failures = []
     for name, fn in cases:

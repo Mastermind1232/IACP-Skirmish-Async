@@ -254,7 +254,164 @@ def _handle_krykna_push(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]
     }
 
 
+def _handle_fluctuation_swap(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Fluctuation swap pick handler. Two-click flow:
+      1st click: stamp pendingFluctuationSwapFirst = coord
+      2nd click: swap the two coords between token-type position arrays,
+                 mark both as swapped, advance queue.
+
+    customId: fluctuation_swap_{gameId}_{coord}
+    """
+    from python.engine.mechanics.coords import normalize_coord
+    cid = _cid(interaction)
+    parsed = _split_game_coord(cid, 'fluctuation_swap_')
+    if parsed is None:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, coord = parsed
+    coord = str(coord).lower()
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    data = game.data if hasattr(game, 'data') else game
+
+    queue = list(data.get('pendingFluctuationSwapQueue') or [])
+    if not queue:
+        return {'ok': False, 'reason': 'no_pending_swap'}
+    expected_pn = queue[0]
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{expected_pn}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {
+            'ok': False, 'reason': 'wrong_player_turn',
+            'expectedPlayerNum': expected_pn,
+        }
+
+    first = data.get('pendingFluctuationSwapFirst')
+    if not first:
+        data['pendingFluctuationSwapFirst'] = coord
+        save = ctx.get('save_games')
+        if callable(save):
+            save()
+        return {
+            'ok': True, 'game': game, 'gameId': game_id,
+            'step': 'first_pick', 'source': coord,
+        }
+
+    source = str(first).lower()
+    target = coord
+    data['pendingFluctuationSwapFirst'] = None
+
+    positions = data.get('fluctuationPositions') or {}
+    source_type = None
+    source_idx = -1
+    target_type = None
+    target_idx = -1
+    for tid, coords in positions.items():
+        if not isinstance(coords, list):
+            continue
+        for i, c in enumerate(coords):
+            nc = normalize_coord(c)
+            if nc == normalize_coord(source):
+                source_type = tid
+                source_idx = i
+            if nc == normalize_coord(target):
+                target_type = tid
+                target_idx = i
+
+    if source_type is None or target_type is None:
+        return {'ok': False, 'reason': 'token_position_not_found'}
+
+    positions[source_type][source_idx] = normalize_coord(target)
+    positions[target_type][target_idx] = normalize_coord(source)
+    data['fluctuationPositions'] = positions
+
+    swapped = list(data.get('fluctuationSwappedThisRound') or [])
+    swapped.extend([normalize_coord(source), normalize_coord(target)])
+    data['fluctuationSwappedThisRound'] = swapped
+
+    queue.pop(0)
+    if queue:
+        data['pendingFluctuationSwapQueue'] = queue
+    else:
+        data.pop('pendingFluctuationSwapQueue', None)
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'gameId': game_id,
+        'step': 'swap_executed', 'source': source, 'target': target,
+        'queueRemaining': len(queue),
+    }
+
+
+def _handle_krykna_place(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Place a claimed Krykna NPC at a coord. customId:
+    krykna_place_{gameId} — target coord supplied via ctx.target_coord
+    or interaction.data['target_coord'].
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('krykna_place_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id = cid[len('krykna_place_'):]
+    if not game_id:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    data = game.data if hasattr(game, 'data') else game
+
+    queue = list(data.get('pendingClaimedKryknaQueue') or [])
+    if not queue:
+        return {'ok': False, 'reason': 'no_pending_place'}
+    expected_pn = queue[0]
+
+    target = None
+    inter_data = getattr(interaction, 'data', None)
+    if isinstance(inter_data, dict):
+        target = inter_data.get('target_coord')
+    if not target:
+        target = ctx.get('target_coord')
+    if not isinstance(target, str) or not target.strip():
+        return {'ok': False, 'reason': 'missing_target_coord'}
+    target = target.strip().lower()
+
+    npcs = list(data.get('npcKrykna') or [])
+    next_id = 1 + max((int(k.get('id', 'krykna-0').split('-')[-1])
+                       for k in npcs if isinstance(k, dict)), default=0)
+    npcs.append({
+        'id': f'krykna-{next_id}',
+        'coord': target,
+        'defeated': False,
+        'claimed': True,
+        'owner': expected_pn,
+    })
+    data['npcKrykna'] = npcs
+
+    # Decrement claimed pool for this player.
+    claimed = dict(data.get('claimedKrykna') or {})
+    claimed[expected_pn] = max(0, int(claimed.get(expected_pn, 0)) - 1)
+    data['claimedKrykna'] = claimed
+
+    queue.pop(0)
+    if queue:
+        data['pendingClaimedKryknaQueue'] = queue
+    else:
+        data.pop('pendingClaimedKryknaQueue', None)
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'gameId': game_id,
+        'kryknaId': f'krykna-{next_id}', 'coord': target,
+        'owner': expected_pn, 'queueRemaining': len(queue),
+    }
+
+
 register('devaron_crate_push_', _handle_devaron_crate_push, 'core')
 register('krykna_push_', _handle_krykna_push, 'core')
+register('fluctuation_swap_', _handle_fluctuation_swap, 'core')
+register('krykna_place_', _handle_krykna_place, 'core')
 register('krykna_place_skip_', _handle_krykna_place_skip, 'core')
 register('fluctuation_skip_', _handle_fluctuation_skip, 'core')
