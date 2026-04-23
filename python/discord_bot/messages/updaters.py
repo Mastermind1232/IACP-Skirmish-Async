@@ -341,4 +341,20 @@ def render_game_view(game: Any) -> Dict[str, Any]:
         f"Round {data.get('round') or 1}"
         f" · P{data.get('activePlayer') or 1}'s turn"
     )
-    return {'embeds': embeds, 'components': components, 'content': summary}
+
+    # Optional: attach a PIL-rendered PNG of the board. Falls back to
+    # no image when PIL is missing or the map data isn't resolvable.
+    files: list = []
+    try:
+        from python.discord_bot.board_renderer import render_board_png
+        png = render_board_png(game)
+        if png:
+            files.append({
+                'filename': 'board.png',
+                'content': png,
+            })
+    except Exception:
+        pass
+
+    return {'embeds': embeds, 'components': components,
+             'content': summary, 'files': files}
