@@ -142,6 +142,8 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                         surge_spends: Optional[List[str]] = None,
                         attack_dice_override: Optional[List[str]] = None,
                         defense_dice_override: Optional[List[str]] = None,
+                        attacker_rerolls: int = 0,
+                        defender_rerolls: int = 0,
                         ) -> Dict[str, Any]:
     """Run the full attack pipeline.
 
@@ -287,18 +289,60 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     rng = rng or _random.Random()
     dice_colors = list(combat.get('attackInfo', {}).get('dice') or dice_colors)
     attack_roll = roll_attack_dice(dice_colors, rng=rng)
-    def_block = def_evade = 0
-    def_dodge = False
+    def_rolls: List[Dict[str, Any]] = []
     for color in defense_colors:
-        d = roll_defense_dice(color, rng=rng)
-        def_block += d.get('block', 0) or 0
-        def_evade += d.get('evade', 0) or 0
-        def_dodge = def_dodge or bool(d.get('dodge'))
+        def_rolls.append(roll_defense_dice(color, rng=rng))
+
+    # ── Reroll window ─────────────────────────────────────────────────────
+    # Simple model: reroll the worst `N` attack dice (lowest acc+dmg+surge
+    # sum) and the best `M` defense dice (highest block+evade). This
+    # approximates "reroll dice that didn't help." Real IA lets the user
+    # pick specific dice; caller can drive the interactive flow via the
+    # stepper handlers (combat_reroll) instead.
+    if attacker_rerolls > 0 and attack_roll.get('dice'):
+        atk_dice = list(attack_roll['dice'])
+        atk_dice.sort(key=lambda d: (d.get('acc') or 0) + (d.get('dmg') or 0)
+                                     + (d.get('surge') or 0))
+        n = min(attacker_rerolls, len(atk_dice))
+        for i in range(n):
+            old = atk_dice[i]
+            new_roll = roll_attack_dice([old.get('color', 'red')], rng=rng)
+            if new_roll.get('dice'):
+                atk_dice[i] = new_roll['dice'][0]
+        # Recompute aggregate totals
+        attack_roll = {
+            'acc': sum(d.get('acc') or 0 for d in atk_dice),
+            'dmg': sum(d.get('dmg') or 0 for d in atk_dice),
+            'surge': sum(d.get('surge') or 0 for d in atk_dice),
+            'dice': atk_dice,
+        }
+
+    if defender_rerolls > 0 and def_rolls:
+        # Defender rerolls the dice that gave the most (to reroll away good
+        # rolls for the defender is a bad play — so we reroll the WORST
+        # defender dice, i.e. low block+evade).
+        def_rolls_sorted = sorted(
+            def_rolls, key=lambda d: (d.get('block') or 0) + (d.get('evade') or 0)
+        )
+        n = min(defender_rerolls, len(def_rolls_sorted))
+        for i in range(n):
+            old = def_rolls_sorted[i]
+            def_rolls_sorted[i] = roll_defense_dice(
+                old.get('color', 'white'), rng=rng,
+            )
+        def_rolls = def_rolls_sorted
+
+    def_block = sum(d.get('block', 0) or 0 for d in def_rolls)
+    def_evade = sum(d.get('evade', 0) or 0 for d in def_rolls)
+    def_dodge = any(bool(d.get('dodge')) for d in def_rolls)
     combat['attackRoll'] = attack_roll
     combat['defenseRoll'] = {
         'color': defense_colors[0] if defense_colors else 'white',
         'block': def_block, 'evade': def_evade, 'dodge': def_dodge,
+        'dice': def_rolls,
     }
+    combat['attackerRerolls'] = attacker_rerolls
+    combat['defenderRerolls'] = defender_rerolls
 
     # Surge pool (before bonuses). Number of surges rolled equals the
     # 'surge' count in the attack roll.

@@ -259,6 +259,48 @@ def test_hide_consumed_on_defender_when_targeted():
         _cleanup()
 
 
+def test_attacker_reroll_recomputes_totals():
+    """Attacker with 1 reroll re-rolls the worst die."""
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    try:
+        g = _game_with_attack(attacker_dice=('red', 'red', 'red'))
+        result_no_reroll = orchestrate_attack(
+            g, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(100),
+        )
+        _cleanup()
+        g2 = _game_with_attack(attacker_dice=('red', 'red', 'red'))
+        result_with_reroll = orchestrate_attack(
+            g2, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(100),
+            attacker_rerolls=2,
+        )
+        # Rerolls tracked on the combat record
+        assert result_with_reroll['combat']['attackerRerolls'] == 2
+        # Re-rolled dice list has same length
+        assert len(result_with_reroll['combat']['attackRoll']['dice']) == 3
+    finally:
+        _cleanup()
+
+
+def test_defender_reroll_tracked():
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    try:
+        g = _game_with_attack(defender_defense=('white', 'white'))
+        result = orchestrate_attack(
+            g, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(50),
+            defender_rerolls=1,
+        )
+        assert result['combat']['defenderRerolls'] == 1
+        assert len(result['combat']['defenseRoll']['dice']) == 2
+    finally:
+        _cleanup()
+
+
 def test_melee_adjacency_gate():
     """Melee attacks require adjacency. Distance 2 with melee should fail."""
     from python.engine.mechanics.attack_orchestrator import (
@@ -296,6 +338,8 @@ def main():
         ('melee_smoke', test_melee_adjacency_gate),
         ('focus_consumed', test_focus_consumed_and_adds_green_die),
         ('hide_consumed', test_hide_consumed_on_defender_when_targeted),
+        ('attacker_reroll', test_attacker_reroll_recomputes_totals),
+        ('defender_reroll', test_defender_reroll_tracked),
     ]
     failures = []
     for name, fn in cases:
