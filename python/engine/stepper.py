@@ -309,6 +309,32 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
     dmg[player] = pdmg
     game['figureDamageThisActivation'] = dmg
 
+    # Fire Pattern D activation / activation-start triggers for each
+    # figure in the activated group. Covers Sustained by Rage, Heroic,
+    # Expertise, Charge, Mortar Launcher, Strategize, Wisdom, etc.
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.dc_effects_loader import get_dc_effect as _gef
+        for fk in group_figs:
+            dc_name_fk = _dc_name_from_figure_key(fk)
+            eff_fk = _gef(dc_name_fk) or {}
+            for aid in (eff_fk.get('specialAbilityIds') or []):
+                abil_entry = get_ability(aid) or {}
+                trig = abil_entry.get('trigger')
+                if trig in ('activation', 'activation-start'):
+                    try:
+                        fire_ability(game.data, aid, {
+                            'figure_key': fk,
+                            'msg_id': msg_id_cur if 'msg_id_cur' in locals() else None,
+                            'player_num': player,
+                            'trigger': trig,
+                        })
+                    except NotImplementedError:
+                        pass
+    except Exception:
+        pass
+
     return game
 
 
