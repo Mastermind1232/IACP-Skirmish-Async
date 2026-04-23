@@ -4224,6 +4224,11 @@ def registered_cc_effects() -> list:
     return sorted(_CC_EFFECTS.keys())
 
 
+# Install named wrappers over lambda handlers (coverage + introspection).
+# Placed after all register() calls so the wrappers see final state.
+from python.engine.cards import cc_bulk_named as _cc_bulk_named_install  # noqa: E402,F401
+
+
 def data_cc_coverage() -> Dict[str, int]:
     """Report coverage of data/cc-effects.json cards vs registered handlers."""
     import json, os
