@@ -48,11 +48,14 @@ def _get(deps: Dict[str, Any], game_id: str) -> Any:
 
 def cmd_startgame(user_id: str, deps: Dict[str, Any], *,
                   opponent_id: str,
-                  game_id: Optional[str] = None) -> Dict[str, Any]:
+                  game_id: Optional[str] = None,
+                  guild_id: Optional[str] = None) -> Dict[str, Any]:
     """Start a new game between user_id (P1) and opponent_id (P2).
 
-    Creates a GameState with phase='lobby'. Caller must follow up with
-    cmd_squad (both players) and cmd_startbattle to run setup.
+    Creates a GameState with phase='lobby'. When `guild_id` is supplied,
+    also creates the full Discord channel set (board, log, per-player
+    play areas, hand threads) and binds them to the game via
+    game_channels. Caller follows up with cmd_squad × 2 + cmd_startbattle.
     """
     if not user_id or not opponent_id:
         return {'ok': False, 'reason': 'missing_user_ids'}
@@ -63,9 +66,37 @@ def cmd_startgame(user_id: str, deps: Dict[str, Any], *,
         return {'ok': False, 'reason': 'game_id_taken', 'gameId': gid}
     g = new_game(user_id, opponent_id, game_id=gid)
     _save(deps, gid, g)
+
+    channels: Dict[str, Any] = {}
+    if guild_id:
+        try:
+            from python.discord_bot import game_channels as gc
+            from python.discord_bot.channel_factory import (
+                create_game_channels,
+            )
+            factory = deps.get('channel_factory')
+            channels = create_game_channels(
+                gid, guild_id, user_id, opponent_id, backend=factory,
+            )
+            if channels.get('board_channel_id'):
+                gc.set_board_message(gid, channels['board_channel_id'], None)
+            if channels.get('log_channel_id'):
+                gc.set_log_channel(gid, channels['log_channel_id'])
+            if channels.get('p1_play_area_channel_id'):
+                gc.set_play_area(gid, 1, channels['p1_play_area_channel_id'])
+            if channels.get('p2_play_area_channel_id'):
+                gc.set_play_area(gid, 2, channels['p2_play_area_channel_id'])
+            if channels.get('p1_hand_channel_id'):
+                gc.set_hand_channel(gid, 1, channels['p1_hand_channel_id'])
+            if channels.get('p2_hand_channel_id'):
+                gc.set_hand_channel(gid, 2, channels['p2_hand_channel_id'])
+        except Exception:
+            pass
+
     return {
         'ok': True, 'gameId': gid, 'player1Id': user_id,
         'player2Id': opponent_id, 'phase': 'lobby',
+        'channels': channels,
     }
 
 

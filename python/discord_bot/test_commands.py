@@ -129,6 +129,29 @@ def test_forfeit_idempotent_after_end():
     assert r2['reason'] == 'game_already_ended'
 
 
+def test_startgame_with_guild_creates_channels():
+    from python.discord_bot.channel_factory import InMemoryFactoryBackend
+    from python.discord_bot import game_channels as gc
+    gc._reset_for_tests()
+    deps, _ = _deps()
+    deps['channel_factory'] = InMemoryFactoryBackend()
+    r = cmd_startgame('alice', deps, opponent_id='bob', game_id='g1',
+                       guild_id='guild-99')
+    assert r['ok']
+    ch = r['channels']
+    assert ch['board_channel_id'] is not None
+    assert ch['p1_hand_channel_id'] is not None
+    # game_channels should now know where the board lives
+    assert gc.get_board_message('g1')[0] == ch['board_channel_id']
+
+
+def test_startgame_without_guild_no_channels():
+    deps, _ = _deps()
+    r = cmd_startgame('alice', deps, opponent_id='bob', game_id='g1')
+    assert r['ok']
+    assert r['channels'] == {}
+
+
 def test_setup_channels_binds_game_id():
     deps, _ = _deps()
     cmd_startgame('alice', deps, opponent_id='bob', game_id='g1')
@@ -225,6 +248,8 @@ def main():
         ('status', test_status_returns_snapshot),
         ('forfeit', test_forfeit_ends_game),
         ('forfeit_idempotent', test_forfeit_idempotent_after_end),
+        ('startgame_with_guild', test_startgame_with_guild_creates_channels),
+        ('startgame_no_guild', test_startgame_without_guild_no_channels),
         ('setup_channels', test_setup_channels_binds_game_id),
         ('setup_channels_non_player', test_setup_channels_rejects_non_player),
         ('legal_actions', test_legal_actions_after_setup),
