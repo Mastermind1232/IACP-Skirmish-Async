@@ -34,6 +34,8 @@ def _fresh_registry():
     handlers.register('bomb_drop_space_', dp._handle_bomb_drop_space, 'dcPlayArea')
     handlers.register('ob_space_', dp._handle_ob_space, 'dcPlayArea')
     handlers.register('special_done_', dp._handle_special_done, 'dcPlayArea')
+    handlers.register('dc_deplete_', dp._handle_dc_deplete, 'dcPlayArea')
+    handlers.register('dc_remove_stun_', dp._handle_dc_remove_stun, 'dcPlayArea')
 
 
 def _basic_game():
@@ -221,6 +223,131 @@ def test_bomb_drop_space_damages_figures():
     assert result['game'].data['dcHealthState']['hl2dc0'][0][0] == 3
 
 
+def test_dc_deplete_adds_msg_id_to_depleted_list():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'dc_message_meta': {
+            'hl1dc0': {'gameId': 'G1', 'playerNum': 1,
+                        'dcName': 'Boba Fett Elite', 'displayName': 'Boba Fett [DG 1]'},
+        },
+    }
+    _, handler, _ = find_handler('dc_deplete_hl1dc0')
+    result = handler(_Interaction('dc_deplete_hl1dc0', user_id='alice'), ctx)
+    assert result['ok'] is True
+    assert result['alreadyDepleted'] is False
+    assert g.data['p1DepletedDcMessageIds'] == ['hl1dc0']
+
+
+def test_dc_deplete_idempotent_when_already_depleted():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1DepletedDcMessageIds'] = ['hl1dc0']
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'dc_message_meta': {
+            'hl1dc0': {'gameId': 'G1', 'playerNum': 1, 'dcName': 'X'},
+        },
+    }
+    _, handler, _ = find_handler('dc_deplete_hl1dc0')
+    result = handler(_Interaction('dc_deplete_hl1dc0', user_id='alice'), ctx)
+    assert result['ok'] is True
+    assert result['alreadyDepleted'] is True
+    # No duplicate
+    assert g.data['p1DepletedDcMessageIds'] == ['hl1dc0']
+
+
+def test_dc_deplete_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'dc_message_meta': {
+            'hl1dc0': {'gameId': 'G1', 'playerNum': 1, 'dcName': 'X'},
+        },
+    }
+    _, handler, _ = find_handler('dc_deplete_hl1dc0')
+    result = handler(_Interaction('dc_deplete_hl1dc0', user_id='bob'), ctx)
+    assert result['ok'] is False
+    assert result['reason'] == 'not_owner'
+
+
+def test_dc_remove_stun_spends_action_and_clears_stun():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['dcActionsData'] = {'hl1dc0': {'remaining': 2, 'total': 2}}
+    g.data['figureConditions'] = {'Luke-1-0': ['Stun', 'Focus']}
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'dc_message_meta': {
+            'hl1dc0': {'gameId': 'G1', 'playerNum': 1,
+                        'dcName': 'Luke', 'displayName': 'Luke [DG 1]'},
+        },
+    }
+    _, handler, _ = find_handler('dc_remove_stun_hl1dc0_f0')
+    result = handler(_Interaction('dc_remove_stun_hl1dc0_f0', user_id='alice'), ctx)
+    assert result['ok'] is True
+    assert result['remaining'] == 1
+    conds = g.data['figureConditions']['Luke-1-0']
+    assert 'Stun' not in conds
+    assert 'Focus' in conds
+
+
+def test_dc_remove_stun_rejects_when_not_stunned():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['dcActionsData'] = {'hl1dc0': {'remaining': 2, 'total': 2}}
+    g.data['figureConditions'] = {'Luke-1-0': ['Focus']}
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'dc_message_meta': {
+            'hl1dc0': {'gameId': 'G1', 'playerNum': 1,
+                        'dcName': 'Luke', 'displayName': 'Luke [DG 1]'},
+        },
+    }
+    _, handler, _ = find_handler('dc_remove_stun_hl1dc0_f0')
+    result = handler(_Interaction('dc_remove_stun_hl1dc0_f0', user_id='alice'), ctx)
+    assert result['ok'] is False
+    assert result['reason'] == 'figure_not_stunned'
+
+
+def test_dc_remove_stun_rejects_no_actions():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['dcActionsData'] = {'hl1dc0': {'remaining': 0, 'total': 2}}
+    g.data['figureConditions'] = {'Luke-1-0': ['Stun']}
+    store = {'G1': g}
+    ctx = {
+        'get_game': lambda gid: store.get(gid),
+        'save_games': lambda: None,
+        'dc_message_meta': {
+            'hl1dc0': {'gameId': 'G1', 'playerNum': 1,
+                        'dcName': 'Luke', 'displayName': 'Luke [DG 1]'},
+        },
+    }
+    _, handler, _ = find_handler('dc_remove_stun_hl1dc0_f0')
+    result = handler(_Interaction('dc_remove_stun_hl1dc0_f0', user_id='alice'), ctx)
+    assert result['ok'] is False
+    assert result['reason'] == 'no_actions_remaining'
+
+
 def test_special_done_parses_clean():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -254,6 +381,12 @@ def main():
         ('bomb_drop_space', test_bomb_drop_space_damages_figures),
         ('special_done_parses', test_special_done_parses_clean),
         ('special_done_malformed', test_special_done_malformed),
+        ('dc_deplete_adds_to_list', test_dc_deplete_adds_msg_id_to_depleted_list),
+        ('dc_deplete_idempotent', test_dc_deplete_idempotent_when_already_depleted),
+        ('dc_deplete_non_owner', test_dc_deplete_rejects_non_owner),
+        ('dc_remove_stun_spends', test_dc_remove_stun_spends_action_and_clears_stun),
+        ('dc_remove_stun_not_stunned', test_dc_remove_stun_rejects_when_not_stunned),
+        ('dc_remove_stun_no_actions', test_dc_remove_stun_rejects_no_actions),
     ]
     failures = []
     for name, fn in cases:

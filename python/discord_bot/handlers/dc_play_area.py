@@ -34,6 +34,15 @@ def _cid(interaction: Any) -> str:
     )
 
 
+def _uid(interaction: Any) -> str:
+    user = getattr(interaction, 'user', None)
+    if user is not None:
+        uid = getattr(user, 'id', None)
+        if uid is not None:
+            return str(uid)
+    return ''
+
+
 def _game_of(ctx: Dict[str, Any], game_id: str) -> Optional[Any]:
     get_game = ctx.get('get_game')
     if not callable(get_game):
@@ -410,6 +419,113 @@ def _handle_ob_space(interaction, ctx) -> Dict[str, Any]:
     return {'ok': True, 'game': new_game, 'msgId': msg_id, 'space': space}
 
 
+def _handle_dc_deplete(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """dc_deplete_{msgId} — mark a one-shot upgrade as depleted
+    (removed from game). Mirrors src/handlers/dc-play-area.js:539-578.
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('dc_deplete_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    msg_id = cid[len('dc_deplete_'):]
+    if not msg_id:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    dcm = ctx.get('dc_message_meta') or {}
+    meta = dcm.get(msg_id) if hasattr(dcm, 'get') else None
+    if not meta:
+        return {'ok': False, 'reason': 'msg_id_meta_missing'}
+    game_id = meta.get('gameId')
+    game = _game_of(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = meta.get('playerNum')
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    dep_key = 'p1DepletedDcMessageIds' if player_num == 1 else 'p2DepletedDcMessageIds'
+    depleted = list(data.get(dep_key) or [])
+    already = msg_id in depleted
+    if not already:
+        depleted.append(msg_id)
+        data[dep_key] = depleted
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'msgId': msg_id,
+        'playerNum': player_num, 'alreadyDepleted': already,
+    }
+
+
+def _handle_dc_remove_stun(interaction: Any,
+                            ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """dc_remove_stun_{msgId}_f{figureIndex} — spend 1 DC action to
+    clear the Stun condition from a specific figure of this DC.
+    Mirrors src/handlers/dc-play-area.js:355-407.
+    """
+    import re
+    from python.engine.mechanics.conditions import filter_condition
+
+    cid = _cid(interaction)
+    m = re.match(r'^dc_remove_stun_(.+)_f(\d+)$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    msg_id = m.group(1)
+    figure_index = int(m.group(2))
+
+    dcm = ctx.get('dc_message_meta') or {}
+    meta = dcm.get(msg_id) if hasattr(dcm, 'get') else None
+    if not meta:
+        return {'ok': False, 'reason': 'msg_id_meta_missing'}
+    game_id = meta.get('gameId')
+    game = _game_of(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    player_num = meta.get('playerNum')
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    dc_actions = data.get('dcActionsData') or {}
+    entry = dc_actions.get(msg_id) or {}
+    remaining = int(entry.get('remaining', 2))
+    if remaining <= 0:
+        return {'ok': False, 'reason': 'no_actions_remaining'}
+
+    # Resolve dg_index from displayName '[DG N]' / '[Group N]'
+    dg_index = 1
+    display_name = meta.get('displayName') or ''
+    dg_match = re.search(r'\[(?:DG|Group) (\d+)\]', display_name)
+    if dg_match:
+        dg_index = int(dg_match.group(1))
+    figure_key = f'{meta.get("dcName")}-{dg_index}-{figure_index}'
+
+    conds = (data.get('figureConditions') or {}).get(figure_key) or []
+    if 'Stun' not in conds:
+        return {'ok': False, 'reason': 'figure_not_stunned'}
+
+    filter_condition(data, figure_key, 'Stun')
+    entry['remaining'] = max(0, remaining - 1)
+    dc_actions[msg_id] = entry
+    data['dcActionsData'] = dc_actions
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'figureKey': figure_key,
+        'msgId': msg_id, 'remaining': entry['remaining'],
+    }
+
+
 def _handle_special_done(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
     """special_done_{gameId}_{msgId} — dismiss the 'Resolve manually +
     click Done' banner after a DC special ability. No state mutation.
@@ -436,3 +552,5 @@ register('overwatch_space_', _handle_overwatch_space, 'dcPlayArea')
 register('bomb_drop_space_', _handle_bomb_drop_space, 'dcPlayArea')
 register('ob_space_', _handle_ob_space, 'dcPlayArea')
 register('special_done_', _handle_special_done, 'dcPlayArea')
+register('dc_deplete_', _handle_dc_deplete, 'dcPlayArea')
+register('dc_remove_stun_', _handle_dc_remove_stun, 'dcPlayArea')
