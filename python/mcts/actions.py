@@ -229,12 +229,32 @@ def legal_actions(game: GameState) -> List[Action]:
         dc_name_s = _dc_name_from_figure_key(figure_key)
         dc_eff_s = get_dc_effect(dc_name_s) or {}
         spec_ids = dc_eff_s.get('specialAbilityIds') or []
-        for idx, _aid in enumerate(spec_ids):
-            out.append(Action(
-                type=ActionType.DC_SPECIAL,
-                player=active,
-                params={'figure_key': figure_key, 'special_idx': idx},
-            ))
+        # Only emit DC_SPECIAL for active (Pattern E) abilities. Pattern
+        # A/B/C/D are passive or trigger-fired and aren't invokable via
+        # DC_SPECIAL button.
+        try:
+            from python.engine.abilities.classify import classify_ability
+            from python.engine.data.ability_library_loader import get_ability
+            for idx, aid in enumerate(spec_ids):
+                entry = get_ability(aid)
+                if entry is None:
+                    continue
+                p, _ = classify_ability(aid, entry)
+                if p != 'E':
+                    continue
+                out.append(Action(
+                    type=ActionType.DC_SPECIAL,
+                    player=active,
+                    params={'figure_key': figure_key, 'special_idx': idx},
+                ))
+        except Exception:
+            # Fallback: emit all specials (previous behavior).
+            for idx, _aid in enumerate(spec_ids):
+                out.append(Action(
+                    type=ActionType.DC_SPECIAL,
+                    player=active,
+                    params={'figure_key': figure_key, 'special_idx': idx},
+                ))
 
         # PLAY_CC actions — one per playable CC in hand (timing-filtered).
         try:
