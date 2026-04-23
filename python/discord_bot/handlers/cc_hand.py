@@ -278,6 +278,55 @@ def _handle_squad_cancel(interaction: Any,
     }
 
 
+def _player_num_from_play_area_channel(interaction: Any, game: Any) -> Optional[int]:
+    """Like _player_num_from_channel but checks p{N}PlayAreaId instead
+    of p{N}HandId."""
+    channel = getattr(interaction, 'channel', None)
+    channel_id = getattr(channel, 'id', None) if channel is not None else None
+    if channel_id is None:
+        return None
+    data = game.data if hasattr(game, 'data') else game
+    if str(channel_id) == str(data.get('p1PlayAreaId') or ''):
+        return 1
+    if str(channel_id) == str(data.get('p2PlayAreaId') or ''):
+        return 2
+    return None
+
+
+def _handle_cc_search_discard(interaction: Any,
+                                ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """cc_search_discard_{gameId}_{playerNum} — opens the discard pile
+    view. UI-only (bot layer renders the pile); Python side validates
+    channel + ownership. Mirrors src/handlers/cc-hand.js:1556-1580.
+    """
+    import re
+    cid = _cid(interaction)
+    m = re.match(r'^cc_search_discard_([^_]+)_([12])$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num = m.group(1), int(m.group(2))
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    channel_player = _player_num_from_play_area_channel(interaction, game)
+    if channel_player != player_num:
+        return {'ok': False, 'reason': 'wrong_channel'}
+
+    data = game.data if hasattr(game, 'data') else game
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    discard = data.get(f'player{player_num}CcDiscard') or []
+    return {
+        'ok': True, 'gameId': game_id, 'playerNum': player_num,
+        'discardSize': len(discard),
+    }
+
+
 def _handle_cc_discard_open_picker(interaction: Any,
                                      ctx: Dict[str, Any]) -> Dict[str, Any]:
     """cc_discard_{gameId} — opens the 'pick a card to discard' select
@@ -507,3 +556,4 @@ register('cc_draw_', _handle_cc_draw, 'ccHand')
 register('cc_close_discard_', _handle_cc_close_discard, 'ccHand')
 register('negation_let_resolve_', _handle_negation_let_resolve, 'ccHand')
 register('cc_discard_', _handle_cc_discard_open_picker, 'ccHand')
+register('cc_search_discard_', _handle_cc_search_discard, 'ccHand')

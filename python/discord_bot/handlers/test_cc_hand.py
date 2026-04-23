@@ -42,6 +42,7 @@ def _fresh_registry():
     handlers.register('cc_close_discard_', ch._handle_cc_close_discard, 'ccHand')
     handlers.register('negation_let_resolve_', ch._handle_negation_let_resolve, 'ccHand')
     handlers.register('cc_discard_', ch._handle_cc_discard_open_picker, 'ccHand')
+    handlers.register('cc_search_discard_', ch._handle_cc_search_discard, 'ccHand')
 
 
 def _basic_game():
@@ -400,6 +401,56 @@ def test_negation_let_resolve_clears_pending():
     assert 'pendingNegation' not in g.data
 
 
+def test_cc_search_discard_from_play_area():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1PlayAreaId'] = 'PLAY_P1'
+    g.data['player1CcDiscard'] = ['Focus', 'Hold On', 'Reinforcements']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_search_discard_G1_1')
+    result = handler(
+        _Interaction('cc_search_discard_G1_1', user_id='alice', channel_id='PLAY_P1'),
+        ctx,
+    )
+    assert result['ok'] is True
+    assert result['discardSize'] == 3
+
+
+def test_cc_search_discard_wrong_channel():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1PlayAreaId'] = 'PLAY_P1'
+    g.data['p2PlayAreaId'] = 'PLAY_P2'
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_search_discard_G1_1')
+    result = handler(
+        _Interaction('cc_search_discard_G1_1', user_id='alice', channel_id='PLAY_P2'),
+        ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'wrong_channel'
+
+
+def test_cc_search_discard_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1PlayAreaId'] = 'PLAY_P1'
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_search_discard_G1_1')
+    result = handler(
+        _Interaction('cc_search_discard_G1_1', user_id='bob', channel_id='PLAY_P1'),
+        ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'not_owner'
+
+
 def test_cc_discard_opens_picker_when_hand_non_empty():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -546,6 +597,9 @@ def main():
         ('negation_let_resolve_no_pending', test_negation_let_resolve_no_pending),
         ('cc_discard_opens', test_cc_discard_opens_picker_when_hand_non_empty),
         ('cc_discard_empty', test_cc_discard_rejects_empty_hand),
+        ('cc_search_discard_play_area', test_cc_search_discard_from_play_area),
+        ('cc_search_discard_wrong_channel', test_cc_search_discard_wrong_channel),
+        ('cc_search_discard_non_owner', test_cc_search_discard_rejects_non_owner),
     ]
     failures = []
     for name, fn in cases:
