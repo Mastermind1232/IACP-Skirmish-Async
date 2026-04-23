@@ -506,6 +506,57 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
         pending.extend(triggers)
         game['pendingInterrupts'] = pending
 
+    # Fire Pattern D movement triggers for:
+    #   - the moving figure's own abilities (trigger=movement)
+    #   - other figures whose ability has trigger=movement-adjacent /
+    #     movement-exit and is triggered by this move.
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        # Self-mover triggers.
+        moving_dc = _dc_name_from_figure_key(figure_key)
+        moving_eff = get_dc_effect(moving_dc) or {}
+        for aid in (moving_eff.get('specialAbilityIds') or []):
+            abil_entry = get_ability(aid) or {}
+            trig = abil_entry.get('trigger')
+            if trig == 'movement':
+                try:
+                    fire_ability(game.data, aid, {
+                        'figure_key': figure_key,
+                        'player_num': player,
+                        'start_coord': start_coord,
+                        'end_coord': coord,
+                        'trigger': 'movement',
+                    })
+                except NotImplementedError:
+                    pass
+        # Adjacency / exit triggers for OTHER figures.
+        all_fps = game.data.get('figurePositions') or {}
+        for pn in (1, 2):
+            for other_fk, other_coord in (all_fps.get(pn) or {}).items():
+                if other_fk == figure_key:
+                    continue
+                other_dc = _dc_name_from_figure_key(other_fk)
+                other_eff = get_dc_effect(other_dc) or {}
+                for aid in (other_eff.get('specialAbilityIds') or []):
+                    abil_entry = get_ability(aid) or {}
+                    trig = abil_entry.get('trigger')
+                    if trig in ('movement-adjacent', 'movement-exit'):
+                        try:
+                            fire_ability(game.data, aid, {
+                                'figure_key': other_fk,
+                                'observer_player_num': pn,
+                                'moved_figure_key': figure_key,
+                                'moved_player_num': player,
+                                'start_coord': start_coord,
+                                'end_coord': coord,
+                                'trigger': trig,
+                            })
+                        except NotImplementedError:
+                            pass
+    except Exception:
+        pass
+
     return game
 
 
