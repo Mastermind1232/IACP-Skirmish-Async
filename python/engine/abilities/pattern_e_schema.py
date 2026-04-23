@@ -436,6 +436,93 @@ def handle_schema_chain(game: Any, ability_id: str,
             }
             effects.append({'effect': 'chooseFriendlyToFocus'})
 
+    # applySelfCondition — add a condition to the activating figure (Prowl
+    # applies Hide to self).
+    asc = entry.get('applySelfCondition')
+    if isinstance(asc, str) and asc:
+        fig_key = ctx.get('figure_key')
+        if fig_key:
+            try:
+                from python.engine.mechanics.conditions import apply_condition
+                apply_condition(game, fig_key, asc)
+                effects.append({'effect': 'applySelfCondition', 'condition': asc,
+                                'figureKey': fig_key})
+            except Exception:
+                pass
+
+    # applyHideToFriendlyWithinRange — add Hide to all own figures within
+    # N spaces of the activating figure (Field Report).
+    ahfwr = entry.get('applyHideToFriendlyWithinRange')
+    if ahfwr:
+        try:
+            from python.engine.mechanics.adjacency import is_chebyshev_adjacent
+            from python.engine.mechanics.conditions import apply_condition
+            from python.engine.mechanics.board_helpers import count_game_spaces
+            rng_val = int(ahfwr) if isinstance(ahfwr, (int, float)) else int(
+                (ahfwr or {}).get('range') if isinstance(ahfwr, dict) else 0
+            )
+            fig_key_self = ctx.get('figure_key')
+            player_num_cur = ctx.get('player_num')
+            if fig_key_self and player_num_cur in (1, 2) and rng_val > 0:
+                fp = data.get('figurePositions') or {}
+                own_positions = fp.get(player_num_cur) or {}
+                self_coord = own_positions.get(fig_key_self)
+                if self_coord:
+                    count_hidden = 0
+                    for fk, coord in own_positions.items():
+                        if fk == fig_key_self or not coord:
+                            continue
+                        if count_game_spaces(game, self_coord, coord) <= rng_val:
+                            apply_condition(game, fk, 'Hide')
+                            count_hidden += 1
+                    effects.append({'effect': 'applyHideToFriendlyWithinRange',
+                                    'hidden': count_hidden, 'range': rng_val})
+        except Exception:
+            pass
+
+    # draw — draw N CCs for the active player (DC Pattern E equivalent of
+    # CC's draw field — scheme_jabba etc.).
+    draw_n = entry.get('draw')
+    if isinstance(draw_n, int) and draw_n > 0:
+        try:
+            from python.engine.cards.deck import draw_with_reshuffle
+            player_num_cur = ctx.get('player_num')
+            if player_num_cur in (1, 2):
+                drew = draw_with_reshuffle(game, player_num_cur, draw_n)
+                effects.append({'effect': 'draw', 'count': len(drew or [])})
+        except Exception:
+            pass
+
+    # healFriendlyAdjacent — heal self or an adjacent friendly figure by N.
+    # Auto-pick self first, then first adjacent ally as target.
+    hfa = entry.get('healFriendlyAdjacent') or entry.get('recoverSelfOrAdjacentFriendly')
+    if hfa:
+        try:
+            from python.engine.mechanics.adjacency import is_chebyshev_adjacent
+            from python.engine.mechanics.damage_helpers import heal_hp
+            from python.engine.mechanics.figure_lookup import (
+                find_dc_message_id_for_figure, parse_figure_key,
+            )
+            heal_amt = int(hfa) if isinstance(hfa, (int, float)) else int(
+                (hfa or {}).get('amount') or 1
+                if isinstance(hfa, dict) else 1
+            )
+            fig_key_self = ctx.get('figure_key')
+            player_num_cur = ctx.get('player_num')
+            if fig_key_self and player_num_cur in (1, 2) and msg_id:
+                dc_health = data.get('dcHealthState') or {}
+                # Heal self.
+                parsed = parse_figure_key(fig_key_self)
+                if parsed is not None:
+                    fig_idx = parsed[2]
+                    heal_hp(dc_health, data, msg_id, fig_idx, heal_amt,
+                             player_num_cur)
+                    effects.append({'effect': 'healFriendlyAdjacent',
+                                    'target': fig_key_self,
+                                    'amount': heal_amt})
+        except Exception:
+            pass
+
     # freeAction — boolean hint; surface on the payload so stepper/UI can
     # restore the spent action counter.
     free_action = bool(entry.get('freeAction'))
