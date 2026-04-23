@@ -332,6 +332,42 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
                         })
                     except NotImplementedError:
                         pass
+
+        # Fire friendly-activation / other-activation on OTHER figures.
+        # friendly-activation: a friendly ally's ability fires when a
+        # fellow friendly activates. other-activation: any other figure
+        # on either side fires when someone activates.
+        all_fps = game.data.get('figurePositions') or {}
+        for pn in (1, 2):
+            for other_fk in (all_fps.get(pn) or {}).keys():
+                if other_fk in group_figs:
+                    continue
+                dc_name_other = _dc_name_from_figure_key(other_fk)
+                eff_other = _gef(dc_name_other) or {}
+                for aid in (eff_other.get('specialAbilityIds') or []):
+                    abil_entry = get_ability(aid) or {}
+                    trig = abil_entry.get('trigger')
+                    if trig == 'friendly-activation' and pn == player:
+                        try:
+                            fire_ability(game.data, aid, {
+                                'figure_key': other_fk,
+                                'activating_figure_key': group_figs[0],
+                                'player_num': pn,
+                                'trigger': trig,
+                            })
+                        except NotImplementedError:
+                            pass
+                    elif trig == 'other-activation':
+                        try:
+                            fire_ability(game.data, aid, {
+                                'figure_key': other_fk,
+                                'activating_figure_key': group_figs[0],
+                                'activating_player_num': player,
+                                'observer_player_num': pn,
+                                'trigger': trig,
+                            })
+                        except NotImplementedError:
+                            pass
     except Exception:
         pass
 
@@ -1532,6 +1568,27 @@ def _handle_interact(game: GameState, action: Action) -> GameState:
         resolve_interact_option(game, player_num, figure_key, map_id, option_id)
     except UnknownInteractOption as e:
         raise ValueError(f'interact: {e}') from e
+
+    # Fire Pattern D post-interact triggers on the interacting figure.
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        dc_name_int = _dc_name_from_figure_key(figure_key)
+        eff_int = get_dc_effect(dc_name_int) or {}
+        for aid in (eff_int.get('specialAbilityIds') or []):
+            abil_entry = get_ability(aid) or {}
+            if abil_entry.get('trigger') == 'post-interact':
+                try:
+                    fire_ability(game.data, aid, {
+                        'figure_key': figure_key,
+                        'player_num': player_num,
+                        'option_id': option_id,
+                        'trigger': 'post-interact',
+                    })
+                except NotImplementedError:
+                    pass
+    except Exception:
+        pass
 
     return game
 
