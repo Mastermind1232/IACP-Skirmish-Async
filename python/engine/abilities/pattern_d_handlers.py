@@ -1212,6 +1212,56 @@ def install_on_damage_handlers() -> Dict[str, Any]:
     }
 
 
+# ── combat-declare: forest_fighters ────────────────────────────────────────
+
+def handle_forest_fighters(game: Dict[str, Any],
+                            ability_id: str,
+                            ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """`forest_fighters` (Ewok Warrior Elite): +1 Hit during melee attack
+    if attacker is Hidden.
+
+    JS site: src/handlers/combat.js:2102-2110. Gates are:
+      - isRanged == False (melee attack)
+      - attacker's figureConditions contains 'Hidden'
+    """
+    combat = ctx.get('combat')
+    if not isinstance(combat, dict):
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'missing-combat'}
+
+    # Melee gate: if the attack is ranged, skip
+    is_ranged = ctx.get('is_ranged')
+    if is_ranged is None:
+        # Fall back to distance (melee ~= adjacent)
+        dist = ctx.get('distance_to_target')
+        if isinstance(dist, int):
+            is_ranged = dist > 1
+    if is_ranged:
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'not-melee'}
+
+    attacker_key = ctx.get('attacker_figure_key')
+    if not attacker_key:
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'missing-attacker'}
+    conds = (game.get('figureConditions') or {}).get(attacker_key) or []
+    if 'Hidden' not in conds:
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'not-hidden'}
+
+    combat['bonusHits'] = (combat.get('bonusHits') or 0) + 1
+    return {
+        'applied': True,
+        'log_message': '**Forest Fighters** — +1 Hit (Hidden, Melee attack).',
+    }
+
+
+def install_forest_fighters_handler() -> Dict[str, Any]:
+    """Wire forest_fighters on the combat-declare trigger."""
+    register_trigger('combat-declare', 'forest_fighters', handle_forest_fighters)
+    return {'installed': ['forest_fighters'], 'trigger': 'combat-declare'}
+
+
 def combat_defense_friends_ids() -> tuple:
     """Sorted tuple of D3.16 combat-defense-friends handler IDs (4).
 
