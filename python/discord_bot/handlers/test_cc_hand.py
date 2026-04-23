@@ -13,10 +13,18 @@ class _User:
     def __init__(self, uid): self.id = uid
 
 
+class _Channel:
+    def __init__(self, cid): self.id = cid
+
+
 class _Interaction:
-    def __init__(self, custom_id, user_id='alice'):
+    def __init__(self, custom_id, user_id='alice', values=None, channel_id=None):
         self.custom_id = custom_id
         self.user = _User(user_id)
+        if values is not None:
+            self.values = values
+        if channel_id is not None:
+            self.channel = _Channel(channel_id)
 
 
 def _fresh_registry():
@@ -27,6 +35,7 @@ def _fresh_registry():
     handlers.register('cc_shuffle_draw_', ch._handle_cc_shuffle_draw, 'ccHand')
     handlers.register('cc_choice_', ch._handle_cc_choice, 'ccHand')
     handlers.register('cc_space_', ch._handle_cc_space, 'ccHand')
+    handlers.register('cc_discard_select_', ch._handle_cc_discard_select, 'ccHand')
 
 
 def _basic_game():
@@ -183,6 +192,83 @@ def test_cc_space_commits_valid_space():
     assert result['space'] == 'a1'
 
 
+def test_cc_discard_select_moves_card():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_CHANNEL_P1'
+    g.data['player1CcHand'] = ['Hold On', 'Focus', 'Reinforcements']
+    g.data['player1CcDiscard'] = []
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_discard_select_G1')
+    result = handler(
+        _Interaction('cc_discard_select_G1', user_id='alice',
+                      values=['Focus'], channel_id='HAND_CHANNEL_P1'),
+        ctx,
+    )
+    assert result['ok'] is True
+    assert result['card'] == 'Focus'
+    assert result['playerNum'] == 1
+    assert 'Focus' not in g.data['player1CcHand']
+    assert 'Focus' in g.data['player1CcDiscard']
+
+
+def test_cc_discard_select_wrong_channel():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['p2HandId'] = 'HAND_P2'
+    g.data['player1CcHand'] = ['Focus']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_discard_select_G1')
+    result = handler(
+        _Interaction('cc_discard_select_G1', user_id='alice',
+                      values=['Focus'], channel_id='SOME_OTHER_CHANNEL'),
+        ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'wrong_channel'
+
+
+def test_cc_discard_select_card_not_in_hand():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['player1CcHand'] = ['Focus']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_discard_select_G1')
+    result = handler(
+        _Interaction('cc_discard_select_G1', user_id='alice',
+                      values=['Reinforcements'], channel_id='HAND_P1'),
+        ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'card_not_in_hand'
+
+
+def test_cc_discard_select_empty_values():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _basic_game()
+    g.data['p1HandId'] = 'HAND_P1'
+    g.data['player1CcHand'] = ['Focus']
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('cc_discard_select_G1')
+    result = handler(
+        _Interaction('cc_discard_select_G1', user_id='alice',
+                      values=[], channel_id='HAND_P1'),
+        ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'no_card_selected'
+
+
 def main():
     cases = [
         ('play_cc_stages_confirm', test_play_cc_from_hand_stages_confirmation),
@@ -195,6 +281,10 @@ def main():
         ('cc_choice_unknown', test_cc_choice_unknown_option),
         ('cc_space_invalid', test_cc_space_validates_against_valid_spaces),
         ('cc_space_valid', test_cc_space_commits_valid_space),
+        ('cc_discard_select_moves', test_cc_discard_select_moves_card),
+        ('cc_discard_select_wrong_channel', test_cc_discard_select_wrong_channel),
+        ('cc_discard_select_not_in_hand', test_cc_discard_select_card_not_in_hand),
+        ('cc_discard_select_no_value', test_cc_discard_select_empty_values),
     ]
     failures = []
     for name, fn in cases:

@@ -221,9 +221,78 @@ def _handle_cc_space(interaction, ctx) -> Dict[str, Any]:
     return {'ok': True, 'game': new_game, 'space': space}
 
 
+def _player_num_from_channel(interaction: Any, game: Any) -> Optional[int]:
+    """Determine which player's hand channel the interaction came from.
+
+    Returns 1 / 2 / None. Matches JS's `channelId === game.p1HandId`
+    comparison. Uses interaction.channel.id when present.
+    """
+    channel = getattr(interaction, 'channel', None)
+    channel_id = getattr(channel, 'id', None) if channel is not None else None
+    if channel_id is None:
+        return None
+    data = game.data if hasattr(game, 'data') else game
+    if str(channel_id) == str(data.get('p1HandId') or ''):
+        return 1
+    if str(channel_id) == str(data.get('p2HandId') or ''):
+        return 2
+    return None
+
+
+def _handle_cc_discard_select(interaction: Any,
+                                ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """cc_discard_select_{gameId} — select-menu handler for discarding a
+    single CC from hand. The chosen card arrives via
+    `interaction.values[0]`. Mirrors src/handlers/cc-hand.js:1183-1230.
+
+    Ownership check: interaction.channel.id must match the acting
+    player's hand-channel id (p1HandId / p2HandId).
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('cc_discard_select_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id = cid[len('cc_discard_select_'):]
+    if not game_id:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    player_num = _player_num_from_channel(interaction, game)
+    if player_num not in (1, 2):
+        return {'ok': False, 'reason': 'wrong_channel'}
+
+    values = getattr(interaction, 'values', None) or []
+    if not values:
+        return {'ok': False, 'reason': 'no_card_selected'}
+    card = values[0]
+
+    data = game.data if hasattr(game, 'data') else game
+    hand_key = f'player{player_num}CcHand'
+    disc_key = f'player{player_num}CcDiscard'
+    hand = list(data.get(hand_key) or [])
+    if card not in hand:
+        return {'ok': False, 'reason': 'card_not_in_hand'}
+
+    hand.remove(card)
+    discard = list(data.get(disc_key) or [])
+    discard.append(card)
+    data[hand_key] = hand
+    data[disc_key] = discard
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'playerNum': player_num, 'card': card,
+    }
+
+
 # ─── Registration ────────────────────────────────────────────────────────
 
 register('play_cc_', _handle_play_cc_from_hand, 'ccHand')
 register('cc_shuffle_draw_', _handle_cc_shuffle_draw, 'ccHand')
 register('cc_choice_', _handle_cc_choice, 'ccHand')
 register('cc_space_', _handle_cc_space, 'ccHand')
+register('cc_discard_select_', _handle_cc_discard_select, 'ccHand')
