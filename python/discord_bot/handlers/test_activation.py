@@ -29,6 +29,8 @@ def _fresh_registry():
     handlers.register('dc_end_activation_', act._handle_dc_end_activation, 'activation')
     handlers.register('end_turn_', act._handle_end_turn, 'activation')
     handlers.register('cancel_activate_', act._handle_cancel_activate, 'activation')
+    handlers.register('hair_trigger_skip_', act._handle_hair_trigger_skip, 'activation')
+    handlers.register('iwba_skip_', act._handle_iwba_skip, 'activation')
 
 
 def _game_with_rebel_trooper(round_phase='activation'):
@@ -223,6 +225,40 @@ def test_cancel_activate_malformed():
     assert result['reason'] == 'malformed_custom_id'
 
 
+def test_hair_trigger_skip_ok():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('hair_trigger_skip_G1_Luke-0-0')
+    result = handler(_Interaction('hair_trigger_skip_G1_Luke-0-0'), {})
+    assert result['ok'] is True
+    assert result['gameId'] == 'G1'
+
+
+def test_iwba_skip_clears_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['pendingItWillBeAlright'] = {'figureKey': 'Cassian-0-0'}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('iwba_skip_G1_Cassian-0-0')
+    result = handler(_Interaction('iwba_skip_G1_Cassian-0-0'), ctx)
+    assert result['ok'] is True
+    assert 'pendingItWillBeAlright' not in g.data
+
+
+def test_iwba_skip_malformed_no_figure_key():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('iwba_skip_G1')
+    result = handler(_Interaction('iwba_skip_G1'), {})
+    assert result['ok'] is False
+    assert result['reason'] == 'malformed_custom_id'
+
+
 def main():
     cases = [
         ('activate_dc_happy', test_activate_dc_happy_path),
@@ -235,6 +271,9 @@ def main():
         ('end_turn_rejects_non_owner', test_end_turn_rejects_non_owner),
         ('cancel_activate_owner_gate', test_cancel_activate_owner_ok_and_non_owner_blocked),
         ('cancel_activate_malformed', test_cancel_activate_malformed),
+        ('hair_trigger_skip_ok', test_hair_trigger_skip_ok),
+        ('iwba_skip_clears', test_iwba_skip_clears_pending),
+        ('iwba_skip_malformed', test_iwba_skip_malformed_no_figure_key),
     ]
     failures = []
     for name, fn in cases:

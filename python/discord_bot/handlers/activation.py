@@ -271,6 +271,46 @@ def _handle_end_turn(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
 
 # ─── Cancel / confirm activation ──────────────────────────────────────────
 
+def _handle_hair_trigger_skip(interaction: Any,
+                                ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """hair_trigger_skip_{gameId}_{figureKey} — pure UI dismiss; JS
+    version only edits the message. Mirrors
+    src/handlers/activation.js:2259-2269.
+    """
+    cid = _extract_custom_id(interaction)
+    if not cid.startswith('hair_trigger_skip_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    rest = cid[len('hair_trigger_skip_'):]
+    parts = rest.split('_', 1)
+    if not parts or not parts[0]:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    return {'ok': True, 'gameId': parts[0]}
+
+
+def _handle_iwba_skip(interaction: Any,
+                       ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """iwba_skip_{gameId}_{figureKey} — 'It Will Be Alright' skip.
+    Clears game.pendingItWillBeAlright. Mirrors
+    src/handlers/activation.js:2340-2352.
+    """
+    import re
+    cid = _extract_custom_id(interaction)
+    m = re.match(r'^iwba_skip_([^_]+)_(.+)$', cid)
+    if not m:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id = m.group(1)
+    get_game = ctx.get('get_game')
+    game = get_game(game_id) if callable(get_game) else None
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    data = game.data if hasattr(game, 'data') else game
+    data.pop('pendingItWillBeAlright', None)
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {'ok': True, 'game': game, 'gameId': game_id}
+
+
 def _handle_cancel_activate(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
     """cancel_activate_{gameId}_{ownerId} — dismiss the pending activate
     confirmation. No state mutation; just validates that the presser is
@@ -296,3 +336,5 @@ register('end_activation_phase_', _handle_end_activation_phase, 'activation')
 register('dc_end_activation_', _handle_dc_end_activation, 'activation')
 register('end_turn_', _handle_end_turn, 'activation')
 register('cancel_activate_', _handle_cancel_activate, 'activation')
+register('hair_trigger_skip_', _handle_hair_trigger_skip, 'activation')
+register('iwba_skip_', _handle_iwba_skip, 'activation')
