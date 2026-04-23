@@ -31,6 +31,7 @@ def _fresh_registry():
     handlers.register('cancel_activate_', act._handle_cancel_activate, 'activation')
     handlers.register('hair_trigger_skip_', act._handle_hair_trigger_skip, 'activation')
     handlers.register('iwba_skip_', act._handle_iwba_skip, 'activation')
+    handlers.register('scav_weapon_transfer_', act._handle_scav_weapon_transfer, 'activation')
 
 
 def _game_with_rebel_trooper(round_phase='activation'):
@@ -250,6 +251,73 @@ def test_iwba_skip_clears_pending():
     assert 'pendingItWillBeAlright' not in g.data
 
 
+def test_scav_weapon_transfer_applies():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['pendingScavengedWeaponryTransfer'] = {
+        'playerNum': 1,
+        'eligible': [
+            {'msgId': 'hl1dc0', 'displayName': 'Rebel Trooper [DG 1]'},
+            {'msgId': 'hl1dc1', 'displayName': 'Rebel Saboteur [DG 1]'},
+        ],
+    }
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('scav_weapon_transfer_G1_1_1')
+    result = handler(
+        _Interaction('scav_weapon_transfer_G1_1_1', user_id='alice'), ctx,
+    )
+    assert result['ok'] is True
+    assert result['targetMsgId'] == 'hl1dc1'
+    atts = g.data['p1DcAttachments']
+    assert atts['hl1dc1'] == ['Scavenged Weaponry']
+    assert g.data.get('pendingScavengedWeaponryTransfer') is None
+
+
+def test_scav_weapon_transfer_rejects_wrong_player():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['pendingScavengedWeaponryTransfer'] = {
+        'playerNum': 2, 'eligible': [{'msgId': 'hl2dc0'}],
+    }
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('scav_weapon_transfer_G1_1_0')
+    result = handler(
+        _Interaction('scav_weapon_transfer_G1_1_0', user_id='alice'), ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'no_pending_transfer'
+
+
+def test_scav_weapon_transfer_out_of_range():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    from python.engine.creation import create_game
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['pendingScavengedWeaponryTransfer'] = {
+        'playerNum': 1, 'eligible': [{'msgId': 'hl1dc0'}],
+    }
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('scav_weapon_transfer_G1_1_5')
+    result = handler(
+        _Interaction('scav_weapon_transfer_G1_1_5', user_id='alice'), ctx,
+    )
+    assert result['ok'] is False
+    assert result['reason'] == 'target_index_out_of_range'
+
+
 def test_iwba_skip_malformed_no_figure_key():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -274,6 +342,9 @@ def main():
         ('hair_trigger_skip_ok', test_hair_trigger_skip_ok),
         ('iwba_skip_clears', test_iwba_skip_clears_pending),
         ('iwba_skip_malformed', test_iwba_skip_malformed_no_figure_key),
+        ('scav_weapon_transfer_applies', test_scav_weapon_transfer_applies),
+        ('scav_weapon_transfer_wrong_player', test_scav_weapon_transfer_rejects_wrong_player),
+        ('scav_weapon_transfer_out_of_range', test_scav_weapon_transfer_out_of_range),
     ]
     failures = []
     for name, fn in cases:

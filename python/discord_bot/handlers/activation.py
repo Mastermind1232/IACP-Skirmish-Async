@@ -271,6 +271,68 @@ def _handle_end_turn(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
 
 # ─── Cancel / confirm activation ──────────────────────────────────────────
 
+def _handle_scav_weapon_transfer(interaction: Any,
+                                    ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """scav_weapon_transfer_{gameId}_{playerNum}_{targetIdx} — Scavenged
+    Weaponry transfer: move the 'Scavenged Weaponry' attachment from a
+    defeated figure to a chosen eligible target. Mirrors
+    src/handlers/activation.js:2130-2158.
+    """
+    cid = _extract_custom_id(interaction)
+    if not cid.startswith('scav_weapon_transfer_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    rest = cid[len('scav_weapon_transfer_'):]
+    parts = rest.split('_', 2)
+    if len(parts) != 3:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str, target_idx_str = parts
+    try:
+        player_num = int(player_num_str)
+        target_idx = int(target_idx_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    get_game = ctx.get('get_game')
+    game = get_game(game_id) if callable(get_game) else None
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    pending = data.get('pendingScavengedWeaponryTransfer')
+    if not pending or pending.get('playerNum') != player_num:
+        return {'ok': False, 'reason': 'no_pending_transfer'}
+
+    eligible = pending.get('eligible') or []
+    if target_idx < 0 or target_idx >= len(eligible):
+        return {'ok': False, 'reason': 'target_index_out_of_range'}
+    target = eligible[target_idx]
+
+    att_key = 'p1DcAttachments' if player_num == 1 else 'p2DcAttachments'
+    atts = data.get(att_key) or {}
+    target_msg_id = target.get('msgId')
+    if not target_msg_id:
+        return {'ok': False, 'reason': 'target_missing_msg_id'}
+    atts[target_msg_id] = list(atts.get(target_msg_id) or []) + ['Scavenged Weaponry']
+    data[att_key] = atts
+    data.pop('pendingScavengedWeaponryTransfer', None)
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    log = ctx.get('log_game_action')
+    if callable(log):
+        log(format_log_line(
+            f'**Scavenged Weaponry** — Transferred to '
+            f'**{target.get("displayName") or target_msg_id}** after defeat.',
+            phase='ROUND', icon='activate',
+        ), {})
+    return {
+        'ok': True, 'game': game, 'playerNum': player_num,
+        'targetMsgId': target_msg_id,
+        'displayName': target.get('displayName'),
+    }
+
+
 def _handle_hair_trigger_skip(interaction: Any,
                                 ctx: Dict[str, Any]) -> Dict[str, Any]:
     """hair_trigger_skip_{gameId}_{figureKey} — pure UI dismiss; JS
@@ -338,3 +400,4 @@ register('end_turn_', _handle_end_turn, 'activation')
 register('cancel_activate_', _handle_cancel_activate, 'activation')
 register('hair_trigger_skip_', _handle_hair_trigger_skip, 'activation')
 register('iwba_skip_', _handle_iwba_skip, 'activation')
+register('scav_weapon_transfer_', _handle_scav_weapon_transfer, 'activation')
