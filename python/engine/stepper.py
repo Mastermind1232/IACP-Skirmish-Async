@@ -977,6 +977,50 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
             except Exception:
                 pass
 
+            # friendly-defeat triggers on surviving defender-side figures.
+            try:
+                from python.engine.abilities.pattern_d import fire_ability
+                from python.engine.data.ability_library_loader import get_ability
+                def_positions = (game.data.get('figurePositions') or {}).get(
+                    def_player, {},
+                ) or {}
+                for friend_fk in list(def_positions.keys()):
+                    if friend_fk == target_key:
+                        continue
+                    friend_dc = _dc_name_from_figure_key(friend_fk)
+                    friend_eff = get_dc_effect(friend_dc) or {}
+                    for fab in (friend_eff.get('specialAbilityIds') or []):
+                        abil_entry = get_ability(fab) or {}
+                        if abil_entry.get('trigger') == 'friendly-defeat':
+                            try:
+                                fire_ability(game.data, fab, {
+                                    'figure_key': friend_fk,
+                                    'defeated_figure_key': target_key,
+                                    'trigger': 'friendly-defeat',
+                                })
+                            except NotImplementedError:
+                                pass
+            except Exception:
+                pass
+
+            # on-hostile-defeat triggers on attacker-side figures.
+            try:
+                from python.engine.abilities.pattern_d import fire_ability
+                from python.engine.data.ability_library_loader import get_ability
+                for fab in (atk_effect.get('specialAbilityIds') or []):
+                    abil_entry = get_ability(fab) or {}
+                    if abil_entry.get('trigger') == 'on-hostile-defeat':
+                        try:
+                            fire_ability(game.data, fab, {
+                                'figure_key': attacker_key,
+                                'defeated_figure_key': target_key,
+                                'trigger': 'on-hostile-defeat',
+                            })
+                        except NotImplementedError:
+                            pass
+            except Exception:
+                pass
+
     # Record attack on attacker — unless this was a free attack (already >= 1
     # at entry AND a freeAttackBonusPending credit was consumed above, which
     # would leave `already` unchanged since we skipped the raise path).
