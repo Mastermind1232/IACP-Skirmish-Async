@@ -31,6 +31,8 @@ def _fresh_registry():
     handlers.register('sor_mission_reveal_', rd._handle_sor_mission_reveal, 'round')
     handlers.register('rogue_one_return_', rd._handle_rogue_one_return, 'round')
     handlers.register('imp_citadel_', rd._handle_imp_citadel, 'round')
+    handlers.register('rbf_discard_', rd._handle_rbf_discard, 'round')
+    handlers.register('prog_override_', rd._handle_prog_override, 'round')
 
 
 def _two_figure_game(round_num=1):
@@ -501,6 +503,125 @@ def test_imp_citadel_rejects_non_owner():
         _cleanup()
 
 
+# ── rbf_discard ────────────────────────────────────────────────────────────
+
+def test_rbf_discard_moves_card_to_discard():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['player1CcHand'] = ['A', 'B', 'C']
+    g.data['player1CcDiscard'] = ['Z']
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('rbf_discard_G1_1_1')  # card B
+        result = handler(
+            _Interaction('rbf_discard_G1_1_1', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert result['card'] == 'B'
+        assert g.data['player1CcHand'] == ['A', 'C']
+        assert g.data['player1CcDiscard'] == ['Z', 'B']
+    finally:
+        _cleanup()
+
+
+def test_rbf_discard_rejects_out_of_range():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['player1CcHand'] = ['A']
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('rbf_discard_G1_1_5')
+        result = handler(
+            _Interaction('rbf_discard_G1_1_5', user_id='alice'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'card_index_out_of_range'
+    finally:
+        _cleanup()
+
+
+def test_rbf_discard_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['player1CcHand'] = ['A']
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('rbf_discard_G1_1_0')
+        result = handler(
+            _Interaction('rbf_discard_G1_1_0', user_id='bob'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'not_owner'
+    finally:
+        _cleanup()
+
+
+# ── prog_override ──────────────────────────────────────────────────────────
+
+def test_prog_override_sets_trait():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('prog_override_G1_1_FORCE_USER')
+        result = handler(
+            _Interaction('prog_override_G1_1_FORCE_USER', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert result['trait'] == 'FORCE USER'
+        assert g.data['roundProgrammingOverrideTrait'][1] == 'FORCE USER'
+    finally:
+        _cleanup()
+
+
+def test_prog_override_single_word_trait():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('prog_override_G1_1_LEADER')
+        result = handler(
+            _Interaction('prog_override_G1_1_LEADER', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert result['trait'] == 'LEADER'
+    finally:
+        _cleanup()
+
+
+def test_prog_override_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('prog_override_G1_1_HUNTER')
+        result = handler(
+            _Interaction('prog_override_G1_1_HUNTER', user_id='bob'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'not_owner'
+    finally:
+        _cleanup()
+
+
 def main():
     cases = [
         ('eor_advances_round', test_end_end_of_round_advances_round),
@@ -526,6 +647,12 @@ def main():
         ('imp_citadel_focus_migrate', test_imp_citadel_migrates_legacy_focus_to_block),
         ('imp_citadel_invalid_type', test_imp_citadel_rejects_invalid_token_type),
         ('imp_citadel_non_owner', test_imp_citadel_rejects_non_owner),
+        ('rbf_moves', test_rbf_discard_moves_card_to_discard),
+        ('rbf_out_of_range', test_rbf_discard_rejects_out_of_range),
+        ('rbf_non_owner', test_rbf_discard_rejects_non_owner),
+        ('prog_override_multi', test_prog_override_sets_trait),
+        ('prog_override_single', test_prog_override_single_word_trait),
+        ('prog_override_non_owner', test_prog_override_rejects_non_owner),
     ]
     failures = []
     for name, fn in cases:

@@ -256,6 +256,105 @@ def _handle_extra_armor_cancel(interaction: Any,
     return {'ok': True, 'noop': True}
 
 
+def _handle_rbf_discard(interaction: Any,
+                         ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """rbf_discard_{gameId}_{playerNum}_{cardIdx} — Rule by Fear (Emperor
+    Palpatine): opponent picks a card from hand to discard. Mirrors
+    src/handlers/round.js:1738-1770.
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('rbf_discard_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    rest = cid[len('rbf_discard_'):]
+    parts = rest.split('_', 2)
+    if len(parts) != 3:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str, card_idx_str = parts
+    try:
+        player_num = int(player_num_str)
+        card_idx = int(card_idx_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    hand_key = f'player{player_num}CcHand'
+    disc_key = f'player{player_num}CcDiscard'
+    hand = list(data.get(hand_key) or [])
+    if card_idx < 0 or card_idx >= len(hand):
+        return {'ok': False, 'reason': 'card_index_out_of_range'}
+    card = hand.pop(card_idx)
+    discard = list(data.get(disc_key) or [])
+    discard.append(card)
+    data[hand_key] = hand
+    data[disc_key] = discard
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'card': card, 'playerNum': player_num,
+    }
+
+
+def _handle_prog_override(interaction: Any,
+                           ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """prog_override_{gameId}_{playerNum}_{TRAIT} — Programming Override
+    (4-LOM): 4-LOM gains the chosen TRAIT until end of round. Mirrors
+    src/handlers/round.js:2033-2048.
+
+    Trait segments are underscore-joined in the customId
+    (e.g. `FORCE_USER`) and collapsed to a single TRAIT string with
+    underscores → spaces to match the JS key format.
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('prog_override_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    rest = cid[len('prog_override_'):]
+    parts = rest.split('_')
+    if len(parts) < 3:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id = parts[0]
+    try:
+        player_num = int(parts[1])
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    trait = ' '.join(parts[2:])
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    trait_map = dict(data.get('roundProgrammingOverrideTrait') or {})
+    trait_map[player_num] = trait
+    data['roundProgrammingOverrideTrait'] = trait_map
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    log = ctx.get('log_game_action')
+    if callable(log):
+        log(format_log_line(
+            f'**Programming Override** — **4-LOM** gains **{trait}** until end of round.',
+            phase='ROUND', icon='round',
+        ), {})
+    return {'ok': True, 'game': game, 'playerNum': player_num, 'trait': trait}
+
+
 def _handle_imp_citadel(interaction: Any,
                          ctx: Dict[str, Any]) -> Dict[str, Any]:
     """imp_citadel_{gameId}_{playerNum}_{damage|block} — place one token
@@ -445,3 +544,5 @@ register('extra_armor_cancel_', _handle_extra_armor_cancel, 'round')
 register('sor_mission_reveal_', _handle_sor_mission_reveal, 'round')
 register('rogue_one_return_', _handle_rogue_one_return, 'round')
 register('imp_citadel_', _handle_imp_citadel, 'round')
+register('rbf_discard_', _handle_rbf_discard, 'round')
+register('prog_override_', _handle_prog_override, 'round')
