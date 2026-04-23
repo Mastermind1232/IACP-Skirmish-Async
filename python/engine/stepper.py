@@ -1054,6 +1054,25 @@ def _handle_dc_special(game: GameState, action: Action) -> GameState:
     except (ValueError, AttributeError):
         pass
 
+    # Resolve msg_id from the DC list — handlers that need it (Charge,
+    # Wall Run) can pull it out of ctx instead of re-deriving.
+    from python.engine.mechanics.figure_lookup import parse_figure_key
+    dc_list_key = 'p1DcList' if player_num == 1 else 'p2DcList'
+    msg_ids_key = 'p1DcMessageIds' if player_num == 1 else 'p2DcMessageIds'
+    dc_list = game.data.get(dc_list_key) or []
+    msg_ids = game.data.get(msg_ids_key) or []
+    parsed = parse_figure_key(figure_key) if isinstance(figure_key, str) else None
+    if parsed is not None:
+        target_name, target_group, _ = parsed
+        for i, dc in enumerate(dc_list):
+            if not isinstance(dc, Mapping):
+                continue
+            if (dc.get('dcName') == target_name
+                    and int(dc.get('dgIndex') or 0) == target_group
+                    and i < len(msg_ids)):
+                ctx['msg_id'] = msg_ids[i]
+                break
+
     try:
         result = ability_dispatch.resolve(game.data, ability_id, ctx)
     except ability_dispatch.UnknownAbility:

@@ -1113,6 +1113,67 @@ def install_mission_start_handlers() -> Dict[str, Any]:
     }
 
 
+# ── Activation active-abilities (freeMoveEqualToSpeed family) ──────────────
+
+def _handle_free_move_equal_to_speed(game: Dict[str, Any],
+                                      ability_id: str,
+                                      ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Grant MP equal to the DC's speed + optionally flag a free attack.
+
+    Mirrors src/game/abilities.js:1895-1910 (Wall Run, Charge). ctx must
+    supply `msg_id` and `dc_name` (or `meta.dcName`); the handler looks up
+    the DC's stats from dc-effects.json to determine speed.
+    """
+    from python.engine.data.dc_effects_loader import get_dc_effect
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+    from python.engine.data.ability_library_loader import get_ability
+
+    dc_name = ctx.get('dc_name')
+    msg_id = ctx.get('msg_id') or ctx.get('msgId')
+    if not dc_name or not msg_id:
+        return {'applied': False, 'log_message': None,
+                'gated_by': 'missing-dc-name-or-msg-id'}
+
+    effect = get_dc_effect(dc_name) or {}
+    speed = effect.get('speed')
+    if not isinstance(speed, int):
+        speed = 4
+    grant_movement_bank(game, msg_id, speed)
+
+    entry = get_ability(ability_id) or {}
+    free_attack = bool(entry.get('freeAttackBonus'))
+    if free_attack:
+        pending = game.get('freeAttackBonusPending') or {}
+        pending[msg_id] = True
+        game['freeAttackBonusPending'] = pending
+
+    label = entry.get('label') or ability_id
+    tail = (' Then your next attack costs no action.'
+            if free_attack
+            else ' You may ignore terrain adjacent to walls during this movement.')
+    log_template = entry.get('logMessage')
+    log = log_template or f'**{label}** — Gained {speed} free MP (your Speed).{tail}'
+    return {
+        'applied': True,
+        'log_message': log,
+        'mpGranted': speed,
+        'freeAttackPending': free_attack,
+        'msgId': msg_id,
+    }
+
+
+def install_free_move_equal_to_speed_handlers() -> Dict[str, Any]:
+    """Wire `charge` and `wall_run` via the shared freeMoveEqualToSpeed
+    handler. Both fire on the `activation` trigger per the ability library.
+    """
+    register_trigger('activation', 'charge', _handle_free_move_equal_to_speed)
+    register_trigger('activation', 'wall_run', _handle_free_move_equal_to_speed)
+    return {
+        'installed': ['charge', 'wall_run'],
+        'trigger': 'activation',
+    }
+
+
 def combat_defense_friends_ids() -> tuple:
     """Sorted tuple of D3.16 combat-defense-friends handler IDs (4).
 
