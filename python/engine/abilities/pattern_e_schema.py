@@ -534,6 +534,53 @@ def handle_schema_chain(game: Any, ability_id: str,
         except Exception:
             pass
 
+    # searchDeckForCC — auto-pick the first eligible CC from own deck
+    # (cost ≤ maxCost, matching playableBy tag), move to hand, shuffle deck.
+    sdfcc = entry.get('searchDeckForCC')
+    if isinstance(sdfcc, Mapping):
+        try:
+            from python.engine.data.cc_effects_loader import get_cc_effect
+            player_num_cur = ctx.get('player_num')
+            if player_num_cur in (1, 2):
+                deck_key = (
+                    'player1CcDeck' if player_num_cur == 1
+                    else 'player2CcDeck'
+                )
+                hand_key = (
+                    'player1CcHand' if player_num_cur == 1
+                    else 'player2CcHand'
+                )
+                deck = list(data.get(deck_key) or [])
+                max_cost = sdfcc.get('maxCost')
+                playable_by_filter = sdfcc.get('playableBy')
+                pb_tags = []
+                if isinstance(playable_by_filter, list):
+                    pb_tags = [str(x).lower() for x in playable_by_filter]
+                elif isinstance(playable_by_filter, str):
+                    pb_tags = [playable_by_filter.lower()]
+                eligible = []
+                for cn in deck:
+                    cc = get_cc_effect(cn) or {}
+                    if isinstance(max_cost, (int, float)):
+                        if int(cc.get('cost') or 99) > int(max_cost):
+                            continue
+                    if pb_tags:
+                        card_pb = str(cc.get('playableBy') or '').lower()
+                        if not any(t in card_pb for t in pb_tags):
+                            continue
+                    eligible.append(cn)
+                if eligible:
+                    picked = eligible[0]
+                    deck.remove(picked)
+                    hand = list(data.get(hand_key) or [])
+                    hand.append(picked)
+                    data[deck_key] = deck
+                    data[hand_key] = hand
+                    effects.append({'effect': 'searchDeckForCC',
+                                    'card': picked})
+        except Exception:
+            pass
+
     # draw — draw N CCs for the active player (DC Pattern E equivalent of
     # CC's draw field — scheme_jabba etc.).
     draw_n = entry.get('draw')
