@@ -33,6 +33,7 @@ def _fresh_registry():
     handlers.register('imp_citadel_', rd._handle_imp_citadel, 'round')
     handlers.register('rbf_discard_', rd._handle_rbf_discard, 'round')
     handlers.register('prog_override_', rd._handle_prog_override, 'round')
+    handlers.register('doubt_remove_', rd._handle_doubt_remove, 'round')
 
 
 def _two_figure_game(round_num=1):
@@ -604,6 +605,80 @@ def test_prog_override_single_word_trait():
         _cleanup()
 
 
+def test_doubt_remove_condition():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['figureConditions'] = {
+        'Rebel Trooper (Regular)-0-0': ['Focus', 'Bleed'],
+    }
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        cid = 'doubt_remove_G1_1_Rebel Trooper (Regular)-0-0_condition_1'
+        _, handler, _ = find_handler(cid)
+        result = handler(_Interaction(cid, user_id='alice'), ctx)
+        assert result['ok'] is True
+        assert result['type'] == 'condition'
+        assert result['removed'] == 'Bleed'
+        conds = g.data['figureConditions']['Rebel Trooper (Regular)-0-0']
+        assert 'Bleed' not in conds
+        assert 'Focus' in conds
+    finally:
+        _cleanup()
+
+
+def test_doubt_remove_token_clears_entry_when_empty():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['figurePowerTokens'] = {
+        'Rebel Trooper (Regular)-0-0': ['Focus'],
+    }
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        cid = 'doubt_remove_G1_1_Rebel Trooper (Regular)-0-0_token_0'
+        _, handler, _ = find_handler(cid)
+        result = handler(_Interaction(cid, user_id='alice'), ctx)
+        assert result['ok'] is True
+        assert result['type'] == 'token'
+        assert result['removed'] == 'Focus'
+        # Figure key entry removed entirely when tokens list drains
+        assert 'Rebel Trooper (Regular)-0-0' not in g.data['figurePowerTokens']
+    finally:
+        _cleanup()
+
+
+def test_doubt_remove_out_of_range():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['figureConditions'] = {'Rebel Trooper (Regular)-0-0': ['Focus']}
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        cid = 'doubt_remove_G1_1_Rebel Trooper (Regular)-0-0_condition_5'
+        _, handler, _ = find_handler(cid)
+        result = handler(_Interaction(cid, user_id='alice'), ctx)
+        assert result['ok'] is False
+        assert result['reason'] == 'index_out_of_range'
+    finally:
+        _cleanup()
+
+
+def test_doubt_remove_invalid_type():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('doubt_remove_G1_1_Rebel-0-0_bogus_0')
+    result = handler(_Interaction('doubt_remove_G1_1_Rebel-0-0_bogus_0'), {})
+    assert result['ok'] is False
+    assert result['reason'] == 'invalid_type'
+
+
 def test_prog_override_rejects_non_owner():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -653,6 +728,10 @@ def main():
         ('prog_override_multi', test_prog_override_sets_trait),
         ('prog_override_single', test_prog_override_single_word_trait),
         ('prog_override_non_owner', test_prog_override_rejects_non_owner),
+        ('doubt_remove_condition', test_doubt_remove_condition),
+        ('doubt_remove_token_clears', test_doubt_remove_token_clears_entry_when_empty),
+        ('doubt_remove_out_of_range', test_doubt_remove_out_of_range),
+        ('doubt_remove_invalid_type', test_doubt_remove_invalid_type),
     ]
     failures = []
     for name, fn in cases:

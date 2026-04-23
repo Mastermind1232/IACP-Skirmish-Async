@@ -256,6 +256,80 @@ def _handle_extra_armor_cancel(interaction: Any,
     return {'ok': True, 'noop': True}
 
 
+def _handle_doubt_remove(interaction: Any,
+                          ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """doubt_remove_{gameId}_{playerNum}_{figureKey}_{condition|token}_{idx}
+    — [Doubt] prompt resolution: remove one condition or power token
+    from the targeted figure. Mirrors src/handlers/round.js:2117-2154.
+    """
+    from python.engine.mechanics.conditions import filter_condition
+
+    cid = _cid(interaction)
+    if not cid.startswith('doubt_remove_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    rest = cid[len('doubt_remove_'):]
+    parts = rest.split('_')
+    # Last two segments are type + idx; everything between gameId/pn and those
+    # is the figure_key (which itself may contain underscores).
+    if len(parts) < 5:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    idx_str = parts.pop()
+    type_str = parts.pop()
+    game_id = parts[0]
+    try:
+        player_num = int(parts[1])
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    figure_key = '_'.join(parts[2:])
+    if not figure_key:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    try:
+        idx = int(idx_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    if type_str not in ('condition', 'token'):
+        return {'ok': False, 'reason': 'invalid_type'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+
+    if type_str == 'condition':
+        conds = (data.get('figureConditions') or {}).get(figure_key) or []
+        if idx < 0 or idx >= len(conds):
+            return {'ok': False, 'reason': 'index_out_of_range'}
+        removed = conds[idx]
+        filter_condition(data, figure_key, removed)
+        save = ctx.get('save_games')
+        if callable(save):
+            save()
+        return {
+            'ok': True, 'game': game, 'type': 'condition',
+            'removed': removed, 'figureKey': figure_key,
+        }
+
+    # token
+    tokens_map = data.get('figurePowerTokens') or {}
+    tokens = list(tokens_map.get(figure_key) or [])
+    if idx < 0 or idx >= len(tokens):
+        return {'ok': False, 'reason': 'index_out_of_range'}
+    removed = tokens.pop(idx)
+    if tokens:
+        tokens_map[figure_key] = tokens
+    else:
+        tokens_map.pop(figure_key, None)
+    data['figurePowerTokens'] = tokens_map
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    return {
+        'ok': True, 'game': game, 'type': 'token',
+        'removed': removed, 'figureKey': figure_key,
+    }
+
+
 def _handle_rbf_discard(interaction: Any,
                          ctx: Dict[str, Any]) -> Dict[str, Any]:
     """rbf_discard_{gameId}_{playerNum}_{cardIdx} — Rule by Fear (Emperor
@@ -546,3 +620,4 @@ register('rogue_one_return_', _handle_rogue_one_return, 'round')
 register('imp_citadel_', _handle_imp_citadel, 'round')
 register('rbf_discard_', _handle_rbf_discard, 'round')
 register('prog_override_', _handle_prog_override, 'round')
+register('doubt_remove_', _handle_doubt_remove, 'round')
