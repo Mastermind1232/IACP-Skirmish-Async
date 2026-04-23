@@ -408,6 +408,8 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     defeated = False
     vp_gained = 0
     conditions_applied: List[Dict[str, str]] = []
+    blast_applied: List[Dict[str, Any]] = []
+    cleave_applied: List[Dict[str, Any]] = []
     if damage > 0 and def_msg_id:
         dcs = data.get('dcHealthState') or {}
         reduce_result = reduce_hp(dcs, data, def_msg_id, def_fig_idx,
@@ -421,6 +423,76 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                 conditions_applied.append(
                     {'figure_key': target_key, 'condition': cond},
                 )
+
+        # ── Blast: damage figures adjacent to the primary target ───────
+        blast_n = int(combat.get('bonusBlast') or 0) + int(
+            combat.get('surgeBlast') or 0,
+        )
+        if blast_n > 0:
+            # Every figure adjacent to target_coord (on either side)
+            # takes `damage` damage. Capped at blast_n targets.
+            candidates: List[tuple] = []
+            fp = data.get('figurePositions') or {}
+            for pn_key, positions in fp.items():
+                if not isinstance(positions, dict):
+                    continue
+                pn = pn_key if isinstance(pn_key, int) else int(pn_key)
+                for fk, coord in positions.items():
+                    if fk == target_key or not coord:
+                        continue
+                    dist = count_game_spaces(game, def_coord, coord)
+                    if dist == 1:  # adjacent
+                        candidates.append((pn, fk, coord))
+            # Take up to blast_n candidates
+            for (pn, fk, coord) in candidates[:blast_n]:
+                msg_id = _msg_id_for_figure(data, fk, pn)
+                if not msg_id:
+                    continue
+                fig_idx = _figure_index_from_key(fk)
+                r = reduce_hp(data.get('dcHealthState') or {}, data,
+                               msg_id, fig_idx, damage, pn)
+                blast_applied.append({
+                    'figure_key': fk, 'player_num': pn,
+                    'damage': damage,
+                    'wasDefeated': bool(r.get('wasDefeated')),
+                })
+
+        # ── Cleave: splash 1 damage to a different adjacent hostile ────
+        cleave_n = int(combat.get('bonusCleave') or 0) + int(
+            combat.get('surgeCleave') or 0,
+        )
+        if cleave_n > 0:
+            # Pick ONE adjacent hostile other than the primary target
+            fp = data.get('figurePositions') or {}
+            # Attacker-adjacent hostiles
+            atk_positions = fp.get(atk_player) or fp.get(str(atk_player)) or {}
+            atk_coord_current = atk_positions.get(attacker_key)
+            for pn_key, positions in fp.items():
+                if not isinstance(positions, dict):
+                    continue
+                pn = pn_key if isinstance(pn_key, int) else int(pn_key)
+                if pn == atk_player:
+                    continue
+                for fk, coord in positions.items():
+                    if fk == target_key or not coord or not atk_coord_current:
+                        continue
+                    if count_game_spaces(
+                        game, atk_coord_current, coord,
+                    ) != 1:
+                        continue
+                    msg_id = _msg_id_for_figure(data, fk, pn)
+                    if not msg_id:
+                        continue
+                    fig_idx = _figure_index_from_key(fk)
+                    reduce_hp(data.get('dcHealthState') or {}, data,
+                               msg_id, fig_idx, cleave_n, pn)
+                    cleave_applied.append({
+                        'figure_key': fk, 'player_num': pn,
+                        'damage': cleave_n,
+                    })
+                    break  # Cleave hits one splash target only
+                if cleave_applied:
+                    break
 
         # ── Phase 8: ON-DAMAGE triggers ────────────────────────────────
         try:
@@ -563,5 +635,7 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         'triggered_abilities': triggered,
         'conditions_applied': conditions_applied,
         'surges_spent': spent_surges,
+        'blast_applied': blast_applied,
+        'cleave_applied': cleave_applied,
         'combat': final_combat,
     }
