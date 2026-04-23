@@ -1,14 +1,11 @@
 """Board renderer — produces a PNG image of the game map + figures.
 
-Minimal PIL-based renderer that draws:
-  - Grid cells (from map-spaces.json adjacency keys)
-  - Blocking terrain as dark fill
-  - P1 figures as blue circles, P2 as red, NPCs as green
-  - Cell coord labels along edges
-
-Not a drop-in replacement for the JS canvas renderer (which uses high-
-res map backgrounds from data/map-pdfs). This is a bare-bones
-representation good enough for non-graphical play + debug.
+PIL-based renderer that:
+  - Loads the real map image from vassal_extracted/images/maps/ when
+    available (via map-registry.json grid params).
+  - Overlays figure tokens, mission tokens, and terminal markers.
+  - Falls back to a bare-bones grid when the map image is missing or
+    PIL can't load GIFs.
 
 Usage:
     from python.discord_bot.board_renderer import render_board_png
@@ -18,6 +15,9 @@ Usage:
 from __future__ import annotations
 
 import io
+import json
+import os
+from functools import lru_cache
 from typing import Any, Dict, Optional, Tuple
 
 
@@ -41,11 +41,52 @@ def _cell_xy(coord: str) -> Optional[Tuple[int, int]]:
         return None
 
 
+@lru_cache(maxsize=1)
+def _map_registry() -> Dict[str, Any]:
+    root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    path = os.path.join(root, 'data', 'map-registry.json')
+    try:
+        with open(path) as f:
+            raw = json.load(f)
+    except Exception:
+        return {}
+    maps = raw.get('maps') if isinstance(raw, dict) else None
+    if isinstance(maps, list):
+        return {m.get('id'): m for m in maps if isinstance(m, dict)}
+    return {}
+
+
+def _map_image_and_grid(map_id: str):
+    """Return (PIL.Image, grid_dict) or (None, None) if unavailable."""
+    try:
+        from PIL import Image  # type: ignore[import]
+    except ImportError:
+        return None, None
+    registry = _map_registry().get(map_id) or {}
+    rel_path = registry.get('imagePath')
+    grid = registry.get('grid') or {}
+    if not rel_path:
+        return None, None
+    root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    abs_path = os.path.join(root, rel_path)
+    if not os.path.exists(abs_path):
+        return None, None
+    try:
+        img = Image.open(abs_path).convert('RGB')
+        return img, grid
+    except Exception:
+        return None, None
+
+
 def render_board_png(game: Any,
                      *, cell_size: int = CELL_SIZE,
                      margin: int = MARGIN) -> Optional[bytes]:
     """Render the game state as a PNG. Returns raw bytes, or None if
     the map data isn't available.
+
+    When the real map image is present (vassal_extracted/images/maps/),
+    composites figures on top using the registry grid params. Otherwise
+    falls back to the bare-bones grid renderer.
     """
     try:
         from PIL import Image, ImageDraw
@@ -66,7 +107,28 @@ def render_board_png(game: Any,
     if not cells:
         return None
 
-    # Compute grid bounds.
+    # Prefer real map image if we have it; else fall back to grid draw.
+    map_img, grid = _map_image_and_grid(map_id)
+    if map_img is not None and grid and all(k in grid for k in ('dx', 'dy', 'x0', 'y0')):
+        img = map_img.copy()
+        draw = ImageDraw.Draw(img)
+        cell_size = int(grid['dx'])
+
+        def _center(coord: str):
+            xy = _cell_xy(coord)
+            if xy is None:
+                return None
+            col, row = xy
+            cx = int(grid['x0']) + col * int(grid['dx']) + int(grid['dx']) // 2
+            cy = int(grid['y0']) + row * int(grid['dy']) + int(grid['dy']) // 2
+            return (cx, cy)
+
+        _overlay_tokens(data, map_id, draw, selected, _center, cell_size)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        return buf.getvalue()
+
+    # Fallback: grid-only render.
     xy_list = [_cell_xy(c) for c in cells]
     xy_list = [p for p in xy_list if p is not None]
     if not xy_list:
@@ -96,24 +158,42 @@ def render_board_png(game: Any,
         else:
             draw.rectangle([x0, y0, x1, y1], fill=(60, 60, 72), outline=(90, 90, 110))
 
-    # Draw figure positions.
+    def _center(coord: str):
+        xy = _cell_xy(coord)
+        if xy is None:
+            return None
+        col, row = xy
+        return (
+            margin + col * cell_size + cell_size // 2,
+            margin + row * cell_size + cell_size // 2,
+        )
+
+    _overlay_tokens(data, map_id, draw, selected, _center, cell_size)
+
+    # Output to PNG bytes.
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return buf.getvalue()
+
+
+def _overlay_tokens(data, map_id, draw, selected, center_fn, cell_size):
+    """Draw figures + mission tokens + terminals onto draw using center_fn."""
+    # Figure positions.
     fp = data.get('figurePositions') or {}
     colors = {1: (60, 130, 220), 2: (220, 60, 60)}
     npc_color = (60, 200, 120)
 
-    def _draw_token(coord: str, color: Tuple[int, int, int],
-                    label: str = '') -> None:
-        xy = _cell_xy(coord)
-        if xy is None:
+    def _draw_token(coord: str, color, label: str = '') -> None:
+        c = center_fn(str(coord).lower())
+        if c is None:
             return
-        col, row = xy
-        cx = margin + col * cell_size + cell_size // 2
-        cy = margin + row * cell_size + cell_size // 2
-        r = cell_size // 3
+        cx, cy = c
+        r = max(6, cell_size // 3)
         draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color,
-                      outline=(240, 240, 240), width=1)
+                      outline=(240, 240, 240), width=2)
         if label:
-            draw.text((cx - 4, cy - 6), label[:2], fill=(240, 240, 240))
+            draw.text((cx - r // 2, cy - r // 2), label[:2],
+                       fill=(240, 240, 240))
 
     for pn in (1, 2):
         positions = fp.get(pn) or fp.get(str(pn)) or {}
@@ -123,7 +203,6 @@ def render_board_png(game: Any,
             _draw_token(str(coord).lower(), colors[pn],
                         label=fk[:1].upper())
 
-    # NPCs (crates, Krykna, etc.)
     npc_pos = (data.get('figurePositions') or {}).get('npc') or {}
     for fk, coord in npc_pos.items():
         if not coord:
@@ -138,16 +217,13 @@ def render_board_png(game: Any,
         mission_key = 'missionA' if variant == 'a' else 'missionB'
         mission = tokens.get(mission_key) or {}
         positions = mission.get('positions') or {}
+        r = max(5, cell_size // 4)
         for coords_list in positions.values():
             for coord in (coords_list or []):
-                xy = _cell_xy(coord)
-                if xy is None:
+                c = center_fn(str(coord).lower())
+                if c is None:
                     continue
-                col, row = xy
-                cx = margin + col * cell_size + cell_size // 2
-                cy = margin + row * cell_size + cell_size // 2
-                r = cell_size // 4
-                # Yellow diamond token.
+                cx, cy = c
                 pts = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
                 draw.polygon(pts, fill=(230, 200, 60),
                               outline=(250, 230, 90))
@@ -155,19 +231,11 @@ def render_board_png(game: Any,
             coord = term if isinstance(term, str) else (term or {}).get('coord')
             if not coord:
                 continue
-            xy = _cell_xy(coord)
-            if xy is None:
+            c = center_fn(str(coord).lower())
+            if c is None:
                 continue
-            col, row = xy
-            cx = margin + col * cell_size + cell_size // 2
-            cy = margin + row * cell_size + cell_size // 2
-            r = cell_size // 4
+            cx, cy = c
             draw.rectangle([cx - r, cy - r, cx + r, cy + r],
                             fill=(80, 200, 220), outline=(130, 230, 250))
     except Exception:
         pass
-
-    # Output to PNG bytes.
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    return buf.getvalue()
