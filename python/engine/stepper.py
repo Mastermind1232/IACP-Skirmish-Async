@@ -37,6 +37,7 @@ from python.engine.mechanics.dice import roll_attack_dice, roll_defense_dice
 from python.engine.mechanics.interrupts import detect_post_move_interrupts
 from python.engine.mechanics.los import has_line_of_sight
 from python.engine.mechanics.movement_cache import get_path_cost
+from python.engine.mechanics.win_conditions import check_win_conditions
 from python.engine.state import GameState
 
 
@@ -694,6 +695,9 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     if isinstance(pc, Mapping) and not pc.get('roundScoped'):
         game['pendingCombat'] = None
 
+    # Check for VP-based / elimination win after damage/defeat.
+    check_win_conditions(game)
+
     # Record damage-this-activation.
     dmg_log = dict(game.get('figureDamageThisActivation') or {})
     pdmg = dict(dmg_log.get(atk_player, dmg_log.get(str(atk_player), {})))
@@ -757,7 +761,11 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
     p1_groups = _count_activations_from_board(game, 1)
     p2_groups = _count_activations_from_board(game, 2)
 
-    if p1_groups == 0 or p2_groups == 0:
+    # Full win-conditions check: covers VP >= 40 + elimination.
+    win_result = check_win_conditions(game)
+    if win_result.get('ended'):
+        game['roundPhase'] = 'end'
+    elif p1_groups == 0 or p2_groups == 0:
         game['phase'] = 'game_over'
         game['roundPhase'] = 'end'
     else:
