@@ -256,6 +256,71 @@ def _handle_extra_armor_cancel(interaction: Any,
     return {'ok': True, 'noop': True}
 
 
+def _handle_imp_citadel(interaction: Any,
+                         ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """imp_citadel_{gameId}_{playerNum}_{damage|block} — place one token
+    on [Imperial Citadel] at start of round.
+
+    JS site: src/handlers/round.js:1987-2040. Mutates
+    game.imperialCitadelTokens = {damage: N, block: N}. Legacy 'focus'
+    slot is migrated into 'block' to match the JS migration branch.
+    """
+    cid = _cid(interaction)
+    if not cid.startswith('imp_citadel_'):
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    rest = cid[len('imp_citadel_'):]
+    parts = rest.rsplit('_', 1)
+    if len(parts) != 2:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    head, token_type = parts
+    head_parts = head.split('_', 1)
+    if len(head_parts) != 2:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str = head_parts
+    try:
+        player_num = int(player_num_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    if token_type not in ('damage', 'block'):
+        return {'ok': False, 'reason': 'invalid_token_type'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    data = game.data if hasattr(game, 'data') else game
+    user_id = _uid(interaction)
+    owner_id = data.get(f'player{player_num}Id')
+    if user_id and str(user_id) != str(owner_id or ''):
+        return {'ok': False, 'reason': 'not_owner'}
+
+    tokens = dict(data.get('imperialCitadelTokens') or {})
+    # Migrate legacy focus→block
+    if 'focus' in tokens:
+        tokens['block'] = int(tokens.get('block') or 0) + int(tokens.get('focus') or 0)
+        del tokens['focus']
+    tokens.setdefault('damage', 0)
+    tokens.setdefault('block', 0)
+    tokens[token_type] = int(tokens.get(token_type) or 0) + 1
+    data['imperialCitadelTokens'] = tokens
+
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+    log = ctx.get('log_game_action')
+    label = 'Damage' if token_type == 'damage' else 'Block'
+    if callable(log):
+        log(format_log_line(
+            f'**Imperial Citadel** — placed **1 {label}** token '
+            f'(now: {tokens["damage"]} Damage, {tokens["block"]} Block).',
+            phase='ROUND', icon='round',
+        ), {})
+    return {
+        'ok': True, 'game': game, 'tokenType': token_type,
+        'tokens': dict(tokens),
+    }
+
+
 def _handle_rogue_one_return(interaction: Any,
                               ctx: Dict[str, Any]) -> Dict[str, Any]:
     """rogue_one_return_{gameId}_{playerNum}_{cardIdx} — player picks a
@@ -379,3 +444,4 @@ register('extra_armor_confirm_', _handle_extra_armor_confirm, 'round')
 register('extra_armor_cancel_', _handle_extra_armor_cancel, 'round')
 register('sor_mission_reveal_', _handle_sor_mission_reveal, 'round')
 register('rogue_one_return_', _handle_rogue_one_return, 'round')
+register('imp_citadel_', _handle_imp_citadel, 'round')

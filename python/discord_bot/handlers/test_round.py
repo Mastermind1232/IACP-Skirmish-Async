@@ -30,6 +30,7 @@ def _fresh_registry():
     handlers.register('extra_armor_cancel_', rd._handle_extra_armor_cancel, 'round')
     handlers.register('sor_mission_reveal_', rd._handle_sor_mission_reveal, 'round')
     handlers.register('rogue_one_return_', rd._handle_rogue_one_return, 'round')
+    handlers.register('imp_citadel_', rd._handle_imp_citadel, 'round')
 
 
 def _two_figure_game(round_num=1):
@@ -411,6 +412,95 @@ def test_rogue_one_return_rejects_when_no_pending():
         _cleanup()
 
 
+# ── imp_citadel ────────────────────────────────────────────────────────────
+
+def test_imp_citadel_places_damage_token():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('imp_citadel_G1_1_damage')
+        result = handler(
+            _Interaction('imp_citadel_G1_1_damage', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert result['tokenType'] == 'damage'
+        assert result['tokens'] == {'damage': 1, 'block': 0}
+        assert g.data['imperialCitadelTokens']['damage'] == 1
+    finally:
+        _cleanup()
+
+
+def test_imp_citadel_places_block_token_accumulates():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['imperialCitadelTokens'] = {'damage': 2, 'block': 1}
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('imp_citadel_G1_1_block')
+        result = handler(
+            _Interaction('imp_citadel_G1_1_block', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert result['tokens'] == {'damage': 2, 'block': 2}
+    finally:
+        _cleanup()
+
+
+def test_imp_citadel_migrates_legacy_focus_to_block():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['imperialCitadelTokens'] = {'damage': 1, 'focus': 3}
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('imp_citadel_G1_1_block')
+        result = handler(
+            _Interaction('imp_citadel_G1_1_block', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        # focus (3) rolled into block (0→3), then +1 for this placement
+        assert result['tokens']['block'] == 4
+        assert 'focus' not in g.data['imperialCitadelTokens']
+    finally:
+        _cleanup()
+
+
+def test_imp_citadel_rejects_invalid_token_type():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('imp_citadel_G1_1_bogus')
+    result = handler(_Interaction('imp_citadel_G1_1_bogus'), {})
+    assert result['ok'] is False
+    assert result['reason'] == 'invalid_token_type'
+
+
+def test_imp_citadel_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('imp_citadel_G1_1_damage')
+        result = handler(
+            _Interaction('imp_citadel_G1_1_damage', user_id='bob'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'not_owner'
+    finally:
+        _cleanup()
+
+
 def main():
     cases = [
         ('eor_advances_round', test_end_end_of_round_advances_round),
@@ -431,6 +521,11 @@ def main():
         ('ror_non_owner', test_rogue_one_return_rejects_non_owner),
         ('ror_out_of_range', test_rogue_one_return_rejects_out_of_range_index),
         ('ror_no_pending', test_rogue_one_return_rejects_when_no_pending),
+        ('imp_citadel_damage', test_imp_citadel_places_damage_token),
+        ('imp_citadel_block_accum', test_imp_citadel_places_block_token_accumulates),
+        ('imp_citadel_focus_migrate', test_imp_citadel_migrates_legacy_focus_to_block),
+        ('imp_citadel_invalid_type', test_imp_citadel_rejects_invalid_token_type),
+        ('imp_citadel_non_owner', test_imp_citadel_rejects_non_owner),
     ]
     failures = []
     for name, fn in cases:
