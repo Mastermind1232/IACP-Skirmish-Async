@@ -925,6 +925,34 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     except Exception:
         pass
 
+    # Fire friendly-attack triggers on attacker's teammates.
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        ally_positions = (game.data.get('figurePositions') or {}).get(
+            atk_player, {},
+        ) or {}
+        for ally_fk in list(ally_positions.keys()):
+            if ally_fk == attacker_key:
+                continue
+            ally_dc = _dc_name_from_figure_key(ally_fk)
+            ally_eff = get_dc_effect(ally_dc) or {}
+            for aid in (ally_eff.get('specialAbilityIds') or []):
+                abil_entry = get_ability(aid) or {}
+                if abil_entry.get('trigger') == 'friendly-attack':
+                    try:
+                        fire_ability(game.data, aid, {
+                            'figure_key': ally_fk,
+                            'attacker_figure_key': attacker_key,
+                            'defender_figure_key': target_key,
+                            'combat': combat,
+                            'trigger': 'friendly-attack',
+                        })
+                    except NotImplementedError:
+                        pass
+    except Exception:
+        pass
+
     # Fire when-targeted / attack-declared-on-you / ranged-attack-declared-on-you
     # triggers on defender abilities.
     try:
@@ -1150,6 +1178,28 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
                     })
                 except NotImplementedError:
                     pass
+        # after-friendly-attack on attacker's allies.
+        ally_positions_post = (game.data.get('figurePositions') or {}).get(
+            atk_player, {},
+        ) or {}
+        for ally_fk in list(ally_positions_post.keys()):
+            if ally_fk == attacker_key:
+                continue
+            ally_dc = _dc_name_from_figure_key(ally_fk)
+            ally_eff = get_dc_effect(ally_dc) or {}
+            for aid in (ally_eff.get('specialAbilityIds') or []):
+                abil_entry = get_ability(aid) or {}
+                if abil_entry.get('trigger') == 'after-friendly-attack':
+                    try:
+                        fire_ability(game.data, aid, {
+                            'figure_key': ally_fk,
+                            'attacker_figure_key': attacker_key,
+                            'defender_figure_key': target_key,
+                            'combat': combat,
+                            'trigger': 'after-friendly-attack',
+                        })
+                    except NotImplementedError:
+                        pass
     except Exception:
         pass
 
