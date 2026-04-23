@@ -25,6 +25,9 @@ def _fresh_registry():
     handlers.reset_for_tests()
     handlers.register('end_end_of_round_', rd._handle_end_end_of_round, 'round')
     handlers.register('end_start_of_round_', rd._handle_end_start_of_round, 'round')
+    handlers.register('extra_armor_pick_', rd._handle_extra_armor_pick, 'round')
+    handlers.register('extra_armor_confirm_', rd._handle_extra_armor_confirm, 'round')
+    handlers.register('extra_armor_cancel_', rd._handle_extra_armor_cancel, 'round')
 
 
 def _two_figure_game(round_num=1):
@@ -133,6 +136,111 @@ def test_end_start_of_round_game_not_found():
     assert result['reason'] == 'game_not_found'
 
 
+# ── Extra Armor ────────────────────────────────────────────────────────────
+
+def test_extra_armor_pick_cycles_0_1_2_0():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingExtraArmor_p1'] = {'total': 4, 'allocation': {}}
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        cid = 'extra_armor_pick_G1_1_Rebel Trooper (Regular)-0-0'
+        _, handler, _ = find_handler(cid)
+
+        r1 = handler(_Interaction(cid, user_id='alice'), ctx)
+        assert r1['ok'] is True and r1['tokenCount'] == 1
+        r2 = handler(_Interaction(cid, user_id='alice'), ctx)
+        assert r2['tokenCount'] == 2
+        r3 = handler(_Interaction(cid, user_id='alice'), ctx)
+        assert r3['tokenCount'] == 0
+    finally:
+        _cleanup()
+
+
+def test_extra_armor_pick_rejects_non_owner():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingExtraArmor_p1'] = {'total': 4, 'allocation': {}}
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        cid = 'extra_armor_pick_G1_1_Rebel Trooper (Regular)-0-0'
+        _, handler, _ = find_handler(cid)
+        result = handler(_Interaction(cid, user_id='bob'), ctx)
+        assert result['ok'] is False
+        assert result['reason'] == 'not_owner'
+    finally:
+        _cleanup()
+
+
+def test_extra_armor_confirm_requires_budget_exhausted():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingExtraArmor_p1'] = {
+        'total': 4, 'allocation': {'Rebel Trooper (Regular)-0-0': 2},
+    }
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('extra_armor_confirm_G1_1')
+        result = handler(
+            _Interaction('extra_armor_confirm_G1_1', user_id='alice'), ctx,
+        )
+        assert result['ok'] is False
+        assert result['reason'] == 'budget_not_exhausted'
+        assert result['remaining'] == 2
+    finally:
+        _cleanup()
+
+
+def test_extra_armor_confirm_applies_block_tokens():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _two_figure_game()
+    g.data['pendingExtraArmor_p1'] = {
+        'total': 4,
+        'allocation': {
+            'Rebel Trooper (Regular)-0-0': 2,
+            'Rebel Trooper (Regular)-0-1': 2,
+        },
+    }
+    try:
+        store = {'G1': g}
+        ctx = {'get_game': lambda gid: store.get(gid),
+               'save_games': lambda: None}
+        _, handler, _ = find_handler('extra_armor_confirm_G1_1')
+        result = handler(
+            _Interaction('extra_armor_confirm_G1_1', user_id='alice'), ctx,
+        )
+        assert result['ok'] is True
+        assert len(result['applied']) == 2
+        # Pending cleared
+        assert g.data.get('pendingExtraArmor_p1') is None
+        # Tokens granted
+        tokens = (g.data.get('figurePowerTokens') or {})
+        assert len(tokens.get('Rebel Trooper (Regular)-0-0') or []) == 2
+        assert all(t == 'Block'
+                    for t in tokens.get('Rebel Trooper (Regular)-0-0') or [])
+    finally:
+        _cleanup()
+
+
+def test_extra_armor_cancel_is_noop():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    _, handler, _ = find_handler('extra_armor_cancel_G1_1')
+    result = handler(_Interaction('extra_armor_cancel_G1_1'), {})
+    assert result['ok'] is True
+    assert result['noop'] is True
+
+
 def main():
     cases = [
         ('eor_advances_round', test_end_end_of_round_advances_round),
@@ -140,6 +248,11 @@ def main():
         ('sor_closes_window', test_end_start_of_round_closes_window),
         ('sor_rejects_non_holder', test_end_start_of_round_rejects_non_sor_holder),
         ('sor_game_not_found', test_end_start_of_round_game_not_found),
+        ('ea_pick_cycles', test_extra_armor_pick_cycles_0_1_2_0),
+        ('ea_pick_non_owner', test_extra_armor_pick_rejects_non_owner),
+        ('ea_confirm_budget', test_extra_armor_confirm_requires_budget_exhausted),
+        ('ea_confirm_applies', test_extra_armor_confirm_applies_block_tokens),
+        ('ea_cancel_noop', test_extra_armor_cancel_is_noop),
     ]
     failures = []
     for name, fn in cases:
