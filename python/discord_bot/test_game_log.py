@@ -73,6 +73,9 @@ def test_log_game_over_winner():
     game_log.log_game_over('g1', 1, 'elimination', backend=be)
     msgs = be.list_messages('log-chan-1')
     assert 'Player 1 wins' in msgs[0]['content']
+    # format_log_line prepends exactly one emoji.
+    content = msgs[0]['content']
+    assert not content.startswith('🏁 🏁'), 'duplicate emoji prefix'
 
 
 def test_log_game_over_draw():

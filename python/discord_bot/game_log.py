@@ -45,7 +45,7 @@ def log_attack(game_id: str, attacker: str, target: str, damage: int,
                backend: Optional[Any] = None) -> Optional[str]:
     """Log an attack event: attacker → target for N damage."""
     defeated_suffix = ' (**defeated**)' if defeated else ''
-    msg = f'⚡ **{attacker}** attacks **{target}** — {damage} damage{defeated_suffix}.'
+    msg = f'**{attacker}** attacks **{target}** — {damage} damage{defeated_suffix}.'
     return log_action(game_id, msg, phase='ATTACK', icon='attack',
                       backend=backend)
 
@@ -53,21 +53,21 @@ def log_attack(game_id: str, attacker: str, target: str, damage: int,
 def log_activation(game_id: str, figure_key: str, player_num: int,
                    *, backend: Optional[Any] = None) -> Optional[str]:
     """Log a figure activation."""
-    msg = f'🚩 Player {player_num} activates **{figure_key}**.'
+    msg = f'Player {player_num} activates **{figure_key}**.'
     return log_action(game_id, msg, phase='ACTIVATION', icon='activate',
                       backend=backend)
 
 
 def log_round_transition(game_id: str, new_round: int,
                          *, backend: Optional[Any] = None) -> Optional[str]:
-    msg = f'🔵 Round **{new_round}** begins.'
+    msg = f'Round **{new_round}** begins.'
     return log_action(game_id, msg, phase='ROUND', icon='round',
                       backend=backend)
 
 
 def log_vp_award(game_id: str, player_num: int, amount: int, reason: str,
                  *, backend: Optional[Any] = None) -> Optional[str]:
-    msg = f'🏆 Player {player_num} gains **{amount} VP** ({reason}).'
+    msg = f'Player {player_num} gains **{amount} VP** ({reason}).'
     return log_action(game_id, msg, phase='ROUND', icon='round',
                       backend=backend)
 
@@ -75,23 +75,23 @@ def log_vp_award(game_id: str, player_num: int, amount: int, reason: str,
 def log_game_over(game_id: str, winner: Optional[int], reason: str,
                   *, backend: Optional[Any] = None) -> Optional[str]:
     if winner is None:
-        msg = f'🏁 **Game Over** — draw ({reason}).'
+        msg = f'**Game Over** — draw ({reason}).'
     else:
-        msg = f'🏁 **Game Over** — Player {winner} wins ({reason}).'
+        msg = f'**Game Over** — Player {winner} wins ({reason}).'
     return log_action(game_id, msg, phase='ROUND', icon='round',
                       backend=backend)
 
 
 def log_cc_play(game_id: str, player_num: int, card_name: str,
                 *, backend: Optional[Any] = None) -> Optional[str]:
-    msg = f'🃏 Player {player_num} plays **{card_name}**.'
+    msg = f'Player {player_num} plays **{card_name}**.'
     return log_action(game_id, msg, phase='ACTION', icon='card',
                       backend=backend)
 
 
 def log_dc_special(game_id: str, figure_key: str, ability_label: str,
                    *, backend: Optional[Any] = None) -> Optional[str]:
-    msg = f'✨ **{figure_key}** uses **{ability_label}**.'
+    msg = f'**{figure_key}** uses **{ability_label}**.'
     return log_action(game_id, msg, phase='ACTION', icon='attack',
                       backend=backend)
 

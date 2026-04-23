@@ -262,6 +262,9 @@ def cmd_step_action(user_id: str, deps: Dict[str, Any], *,
                 'actionType': action_type}
     action = Action(type=at, player=player_num,
                      params=dict(action_params or {}))
+    # Snapshot before for log-diff.
+    import copy
+    before = copy.deepcopy(game)
     try:
         new_game = step(game, action)
     except Exception as e:
@@ -271,6 +274,10 @@ def cmd_step_action(user_id: str, deps: Dict[str, Any], *,
             'actionType': action_type,
         }
     _save(deps, game_id, new_game)
+
+    # Post action-log entries for what changed.
+    _log_step_event(game_id, before, new_game, action_type,
+                     action_params or {}, player_num, deps)
 
     # Refresh the Discord board message + both hand messages. No-op when
     # the bot hasn't tracked channels for this game yet (headless tests).
@@ -293,6 +300,78 @@ def _refresh_discord_views(game_id: str, game: Any,
         gc.refresh_game_view(game_id, game, backend=backend)
         gc.refresh_hand_view(game_id, 1, game, backend=backend)
         gc.refresh_hand_view(game_id, 2, game, backend=backend)
+    except Exception:
+        pass
+
+
+def _log_step_event(game_id: str, before: Any, after: Any,
+                     action_type: str, action_params: Mapping[str, Any],
+                     player_num: int, deps: Dict[str, Any]) -> None:
+    """Post game-log entries describing what changed between before/after.
+
+    Silent on error. Uses the channel_backend from deps if supplied.
+    """
+    try:
+        from python.discord_bot import game_log
+        backend = deps.get('channel_backend')
+
+        b_data = before.data if hasattr(before, 'data') else before
+        a_data = after.data if hasattr(after, 'data') else after
+
+        # Round transition.
+        b_round = b_data.get('round')
+        a_round = a_data.get('round')
+        if a_round and a_round != b_round:
+            game_log.log_round_transition(game_id, a_round, backend=backend)
+
+        # Activation.
+        if action_type == 'activate_dc':
+            fk = action_params.get('figure_key') or action_params.get('figureKey')
+            if fk:
+                game_log.log_activation(game_id, fk, player_num, backend=backend)
+
+        # CC play.
+        if action_type == 'play_cc':
+            card = action_params.get('card') or action_params.get('cardName')
+            if card:
+                game_log.log_cc_play(game_id, player_num, card, backend=backend)
+
+        # DC special.
+        if action_type == 'dc_special':
+            fk = action_params.get('figure_key') or action_params.get('figureKey')
+            result = a_data.get('lastDcSpecialResult') or {}
+            label = result.get('abilityId', 'special ability')
+            if fk:
+                game_log.log_dc_special(game_id, fk, label, backend=backend)
+
+        # Attack (via ATTACK_TARGET direct path).
+        if action_type == 'attack_target':
+            result = a_data.get('lastAttackOrchestration') or {}
+            attacker = action_params.get('attacker_key') or ''
+            target = action_params.get('target_key') or ''
+            damage = int(result.get('damage') or 0)
+            defeated = bool(result.get('defeated'))
+            if attacker and target:
+                game_log.log_attack(game_id, attacker, target, damage,
+                                     defeated=defeated, backend=backend)
+
+        # VP award detection.
+        for pn in (1, 2):
+            b_vp = int(((b_data.get(f'player{pn}VP') or {}).get('total') or 0))
+            a_vp = int(((a_data.get(f'player{pn}VP') or {}).get('total') or 0))
+            delta = a_vp - b_vp
+            if delta > 0:
+                game_log.log_vp_award(game_id, pn, delta,
+                                       reason=action_type, backend=backend)
+
+        # Game over.
+        if a_data.get('phase') == 'game_over' and b_data.get('phase') != 'game_over':
+            game_log.log_game_over(
+                game_id,
+                a_data.get('winner'),
+                a_data.get('gameEndedReason') or 'unknown',
+                backend=backend,
+            )
     except Exception:
         pass
 
