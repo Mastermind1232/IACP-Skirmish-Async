@@ -26,6 +26,8 @@ def _fresh_registry():
     handlers.register('there_is_no_try_skip_', cr._handle_there_is_no_try_skip, 'core')
     handlers.register('tough_luck_skip_', cr._handle_tough_luck_skip, 'core')
     handlers.register('hunter_protocol_skip_', cr._handle_hunter_protocol_skip, 'core')
+    handlers.register('strike_me_down_no_', cr._handle_strike_me_down_no, 'core')
+    handlers.register('slow_on_draw_no_', cr._handle_slow_on_draw_no, 'core')
 
 
 def _game():
@@ -91,6 +93,32 @@ def test_hunter_protocol_skip_clears_pending():
     assert 'pendingHunterProtocol' not in g.data
 
 
+def test_strike_me_down_no_clears_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game()
+    g.data['pendingStrikeMeDown'] = {'defenderPlayerNum': 1, 'combatThreadId': 't1'}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('strike_me_down_no_G1')
+    result = handler(_Interaction('strike_me_down_no_G1'), ctx)
+    assert result['ok'] is True
+    assert 'pendingStrikeMeDown' not in g.data
+
+
+def test_slow_on_draw_no_clears_pending():
+    _fresh_registry()
+    from python.discord_bot.handlers import find_handler
+    g = _game()
+    g.data['pendingSlowOnTheDraw'] = {'defenderPlayerNum': 2}
+    store = {'G1': g}
+    ctx = {'get_game': lambda gid: store.get(gid), 'save_games': lambda: None}
+    _, handler, _ = find_handler('slow_on_draw_no_G1')
+    result = handler(_Interaction('slow_on_draw_no_G1'), ctx)
+    assert result['ok'] is True
+    assert 'pendingSlowOnTheDraw' not in g.data
+
+
 def test_skip_malformed():
     _fresh_registry()
     from python.discord_bot.handlers import find_handler
@@ -116,6 +144,8 @@ def main():
         ('tint_skip_no_combat_ok', test_there_is_no_try_skip_no_combat_is_ok),
         ('tough_luck_skip', test_tough_luck_skip_clears_pending),
         ('hunter_protocol_skip', test_hunter_protocol_skip_clears_pending),
+        ('strike_me_down_no', test_strike_me_down_no_clears_pending),
+        ('slow_on_draw_no', test_slow_on_draw_no_clears_pending),
         ('skip_malformed', test_skip_malformed),
         ('game_not_found', test_game_not_found),
     ]

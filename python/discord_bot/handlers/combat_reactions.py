@@ -10,6 +10,8 @@ reroll-window handoff lives in the combat orchestrator port.
                                     stamps combat.tintResolved=True
   tough_luck_skip_{gameId}       — clears pendingToughLuck
   hunter_protocol_skip_{gameId}  — clears pendingHunterProtocol
+  strike_me_down_no_{gameId}     — decline Strike Me Down; clears pending
+  slow_on_draw_no_{gameId}       — decline Slow on the Draw; clears pending
 """
 from __future__ import annotations
 
@@ -86,8 +88,16 @@ _handle_tough_luck_skip = _make_reaction_skip(
 _handle_hunter_protocol_skip = _make_reaction_skip(
     'hunter_protocol_skip_', 'pendingHunterProtocol',
 )
+_handle_strike_me_down_no = _make_reaction_skip(
+    'strike_me_down_no_', 'pendingStrikeMeDown',
+)
+_handle_slow_on_draw_no = _make_reaction_skip(
+    'slow_on_draw_no_', 'pendingSlowOnTheDraw',
+)
 
 
 register('there_is_no_try_skip_', _handle_there_is_no_try_skip, 'core')
 register('tough_luck_skip_', _handle_tough_luck_skip, 'core')
 register('hunter_protocol_skip_', _handle_hunter_protocol_skip, 'core')
+register('strike_me_down_no_', _handle_strike_me_down_no, 'core')
+register('slow_on_draw_no_', _handle_slow_on_draw_no, 'core')
