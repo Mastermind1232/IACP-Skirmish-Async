@@ -356,6 +356,45 @@ def _handle_dc_end_activation(game: GameState, action: Action) -> GameState:
         game['movementPoints'] = int(per_mp.get(next_fk, 0) or 0)
         return game
     # Single figure (or last figure in a group): end group activation.
+    # Fire end-of-activation / activation-end triggers for every figure
+    # in the group before clearing state.
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        from python.engine.data.dc_effects_loader import get_dc_effect
+        active_player = int(game.get('activePlayer') or 1)
+        all_figs = active_keys + [
+            fk for fk in (
+                (game.data.get('figurePositions') or {}).get(active_player, {})
+            ).keys() if fk not in active_keys
+        ]
+        # Fire only for figures that activated this turn — captured via
+        # activationStartPositions[player].
+        starts = (game.data.get('activationStartPositions') or {}).get(
+            active_player, {}
+        )
+        fired_for = set()
+        for fk in active_keys:
+            dc_name_fk = _dc_name_from_figure_key(fk)
+            eff_fk = get_dc_effect(dc_name_fk) or {}
+            for aid in (eff_fk.get('specialAbilityIds') or []):
+                if aid in fired_for:
+                    continue
+                abil_entry = get_ability(aid) or {}
+                trig = abil_entry.get('trigger')
+                if trig in ('end-of-activation', 'activation-end'):
+                    fired_for.add(aid)
+                    try:
+                        fire_ability(game.data, aid, {
+                            'figure_key': fk,
+                            'player_num': active_player,
+                            'trigger': trig,
+                        })
+                    except NotImplementedError:
+                        pass
+    except Exception:
+        pass
+
     game['activeFigureKeys'] = []
     game['movementPoints'] = 0
     game['perFigureMp'] = None
