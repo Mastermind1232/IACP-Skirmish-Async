@@ -206,6 +206,23 @@ def legal_actions(game: GameState) -> List[Action]:
                     player=active,
                     params={'attacker_key': figure_key, 'target_key': tgt_key},
                 ))
+
+        # DC_SPECIAL actions — one per the active DC's special abilities.
+        # Each special is emitted without a bound target; for abilities
+        # that require a target (targetHostileFigure, chooseAdjacentHostileThen),
+        # the schema handler stamps pendingTargetHostile and a downstream
+        # action resolves the target. For self-targeting / AoE specials
+        # (freeMoveBonus, pounceRange, mobileMovement), the schema handler
+        # applies effects inline.
+        dc_name_s = _dc_name_from_figure_key(figure_key)
+        dc_eff_s = get_dc_effect(dc_name_s) or {}
+        spec_ids = dc_eff_s.get('specialAbilityIds') or []
+        for idx, _aid in enumerate(spec_ids):
+            out.append(Action(
+                type=ActionType.DC_SPECIAL,
+                player=active,
+                params={'figure_key': figure_key, 'special_idx': idx},
+            ))
         return out
 
     # Case: no active figure — choose which to activate, or pass / end phase.
