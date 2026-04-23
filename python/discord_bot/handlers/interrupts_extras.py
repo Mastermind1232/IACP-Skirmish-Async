@@ -128,10 +128,8 @@ _PREFIXES = [
     'executor_use_',
     'extra_protection_play_',
     'yhsiw_transfer_', 'yhsiw_damage_',
-    'reaction_use_',
-    'right_back_block_', 'right_back_nodmg_',
-    'mastery_pick_',
-    'interrogate_pick_', 'interrogate_discard_',
+    # reaction_use_, right_back_*, mastery_pick_, interrogate_pick_/discard_
+    # handled concretely in post_combat.py.
     'vet_instincts_pick_',
     'hunter_protocol_trigger_',
     'strike_me_down_yes_',
