@@ -241,6 +241,36 @@ def test_main_module_register_all_handlers_imports_without_error():
     assert count >= 1
 
 
+def test_slash_command_registry():
+    from python.discord_bot.main import (
+        slash_command_dispatch,
+        slash_command_names,
+    )
+    names = slash_command_names()
+    assert set(names) == {
+        'startgame', 'squad', 'startbattle', 'status',
+        'forfeit', 'listgames', 'legalactions', 'stepaction',
+    }
+    # Dispatch an unknown command.
+    try:
+        slash_command_dispatch('nope', 'alice', {'_store': {}})
+    except ValueError as e:
+        assert 'unknown slash command' in str(e)
+        return
+    raise AssertionError('expected ValueError')
+
+
+def test_slash_command_dispatch_starts_game():
+    from python.discord_bot.main import slash_command_dispatch
+    store = {}
+    deps = {'_store': store, 'game_store': store}
+    r = slash_command_dispatch('startgame', 'alice', deps,
+                                 opponent_id='bob', game_id='g1')
+    assert r['ok']
+    assert r['gameId'] == 'g1'
+    assert 'g1' in store
+
+
 def main():
     cases = [
         ('build_context_unknown_group_raises', test_build_context_unknown_group_raises),
@@ -260,6 +290,8 @@ def main():
         ('stepper_bridge_no_game_found', test_stepper_bridge_no_game_found_returns_failure),
         ('stepper_bridge_game_not_found_result', test_stepper_bridge_reports_game_not_found_when_inspected),
         ('main_register_all_handlers', test_main_module_register_all_handlers_imports_without_error),
+        ('slash_command_registry', test_slash_command_registry),
+        ('slash_command_dispatch_starts_game', test_slash_command_dispatch_starts_game),
     ]
     failures = []
     for name, fn in cases:
