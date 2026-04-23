@@ -41,14 +41,22 @@ def _resolve_game(ctx: Dict[str, Any], game_id: str) -> Any:
 
 
 def _make_pending_skip_handler(prefix: str,
-                                 pending_key: Optional[str]
+                                 pending_key: Optional[str],
+                                 allow_trailing: bool = False
                                  ) -> Callable[[Any, Dict[str, Any]], Dict[str, Any]]:
-    """Factory for `${prefix}{gameId}` → clear `game.${pending_key}` skip
-    handlers. `pending_key=None` means "no state mutation, just dismiss"
-    (sidewinder-style).
+    """Factory for `${prefix}{gameId}[_{trailing}]` → clear
+    `game.${pending_key}` skip handlers. `pending_key=None` means
+    "no state mutation, just dismiss" (sidewinder-style).
+
+    When `allow_trailing=True`, the customId may have anything after
+    the gameId segment (e.g. `mvint_skip_{gameId}_{triggerType}_{fk}`)
+    and only the first segment after the prefix is captured as gameId.
     """
     assert prefix.endswith('_')
-    pattern = re.compile(r'^' + re.escape(prefix) + r'([^_]+)$')
+    if allow_trailing:
+        pattern = re.compile(r'^' + re.escape(prefix) + r'([^_]+)(?:_.*)?$')
+    else:
+        pattern = re.compile(r'^' + re.escape(prefix) + r'([^_]+)$')
 
     def _handler(interaction: Any, ctx: Dict[str, Any]) -> Dict[str, Any]:
         cid = _cid(interaction)
