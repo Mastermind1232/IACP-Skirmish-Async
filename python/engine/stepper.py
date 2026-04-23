@@ -590,12 +590,23 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         if bonus_surge:
             attack_roll['surge'] = int(attack_roll.get('surge') or 0) + bonus_surge
 
+    # Merge pendingCombat bonuses (set by CCs/abilities via schema) into
+    # the combat dict so compute_combat_result applies them.
     combat = {
         'attackRoll': attack_roll,
         'defenseRoll': defense_roll,
         'attackerConds': [],
         'defenderConds': [],
     }
+    pending_combat = game.get('pendingCombat')
+    if isinstance(pending_combat, Mapping):
+        for k in ('bonusHits', 'bonusBlock', 'bonusEvade', 'bonusAccuracy',
+                  'bonusPierce', 'bonusSurges', 'bonusBlast', 'bonusCleave',
+                  'defenseDiceRemoved', 'attackerDiceToRemove',
+                  'attackerBonusDice', 'defenderBonusDice',
+                  'attackerRerollCount', 'defenderRerollCount'):
+            if k in pending_combat:
+                combat[k] = pending_combat[k]
     result = compute_combat_result(combat)
     damage = int(result.get('damage') or 0) if result.get('hit') else 0
 
