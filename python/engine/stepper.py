@@ -1029,6 +1029,43 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         atk_log[atk_player] = patk
         game['figureAttacksThisActivation'] = atk_log
 
+    # Fire post-attack Pattern D triggers on both attacker and defender.
+    # Covers Havoc Shot, Leg Hydraulics, Jets, Open Minded, Dual Wield,
+    # Return Fire, Wanton Destruction, After-attack auras.
+    try:
+        from python.engine.abilities.pattern_d import fire_ability
+        from python.engine.data.ability_library_loader import get_ability
+        atk_post_triggers = ('combat-after', 'after-attack', 'after-ranged-attack')
+        def_post_triggers = ('combat-after-defending', 'return-fire')
+        for aid in (atk_effect.get('specialAbilityIds') or []):
+            abil_entry = get_ability(aid) or {}
+            trig = abil_entry.get('trigger')
+            if trig in atk_post_triggers:
+                if trig == 'after-ranged-attack' and attack_type != 'range':
+                    continue
+                try:
+                    fire_ability(game.data, aid, {
+                        'figure_key': attacker_key,
+                        'combat': combat,
+                        'trigger': trig,
+                    })
+                except NotImplementedError:
+                    pass
+        for aid in (def_effect.get('specialAbilityIds') or []):
+            abil_entry = get_ability(aid) or {}
+            trig = abil_entry.get('trigger')
+            if trig in def_post_triggers:
+                try:
+                    fire_ability(game.data, aid, {
+                        'figure_key': target_key,
+                        'combat': combat,
+                        'trigger': trig,
+                    })
+                except NotImplementedError:
+                    pass
+    except Exception:
+        pass
+
     # Clear one-shot pendingCombat after the attack resolves (bonuses
     # from CCs/abilities were single-attack unless tagged round-scoped).
     pc = game.get('pendingCombat')
