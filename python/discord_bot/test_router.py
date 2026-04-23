@@ -280,6 +280,38 @@ def test_wire_slash_commands_no_tree_returns_zero():
     assert count == 0
 
 
+def test_route_auto_refreshes_when_result_has_game_id():
+    """On successful handler returning {ok, gameId, game}, router
+    calls game_channels.refresh_game_view via channel_backend."""
+    from python.discord_bot import game_channels as gc, handlers
+    from python.discord_bot.channels import InMemoryBackend
+    from python.discord_bot.router import route_sync
+    from python.engine.creation import create_game
+    gc._reset_for_tests()
+    handlers.reset_for_tests()
+
+    g = create_game()
+    g.data['player1Id'] = 'alice'
+    g.data['player2Id'] = 'bob'
+    g.data['phase'] = 'lobby'
+
+    def _test_handler(interaction, ctx):
+        return {'ok': True, 'gameId': 'g1', 'game': g}
+    handlers.register('myaction_', _test_handler, 'core')
+
+    be = InMemoryBackend()
+    gc.set_board_message('g1', 'chan-1', None)
+    deps = {'channel_backend': be}
+
+    class _I: custom_id = 'myaction_g1'
+    route_sync(_I(), deps)
+    # Board message should exist after auto-refresh.
+    cid, mid = gc.get_board_message('g1')
+    assert cid == 'chan-1'
+    assert mid is not None
+    assert be.fetch(cid, mid) is not None
+
+
 def main():
     cases = [
         ('build_context_unknown_group_raises', test_build_context_unknown_group_raises),
@@ -302,6 +334,7 @@ def main():
         ('slash_command_registry', test_slash_command_registry),
         ('slash_command_dispatch_starts_game', test_slash_command_dispatch_starts_game),
         ('wire_slash_no_tree', test_wire_slash_commands_no_tree_returns_zero),
+        ('auto_refresh', test_route_auto_refreshes_when_result_has_game_id),
     ]
     failures = []
     for name, fn in cases:

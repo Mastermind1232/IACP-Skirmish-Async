@@ -39,6 +39,39 @@ def _extract_custom_id(interaction: Any) -> Optional[str]:
     return None
 
 
+def _auto_refresh(result: Any, deps: Dict[str, Any]) -> None:
+    """If the handler returned a dict with a gameId, refresh the Discord
+    views for that game. Silent no-op when game_channels isn't set up.
+
+    Runs after every successful handler dispatch so the 55 per-family
+    handlers don't each need to call refresh themselves.
+    """
+    if not isinstance(result, dict):
+        return
+    game_id = result.get('gameId') or result.get('game_id')
+    if not game_id:
+        return
+    game = result.get('game')
+    if game is None:
+        # Look up from the store if not attached to the result.
+        get_game = deps.get('get_game')
+        if callable(get_game):
+            try:
+                game = get_game(game_id)
+            except Exception:
+                return
+    if game is None:
+        return
+    try:
+        from python.discord_bot import game_channels as gc
+        backend = deps.get('channel_backend')
+        gc.refresh_game_view(game_id, game, backend=backend)
+        gc.refresh_hand_view(game_id, 1, game, backend=backend)
+        gc.refresh_hand_view(game_id, 2, game, backend=backend)
+    except Exception:
+        pass
+
+
 async def route(interaction: Any, deps: Dict[str, Any]) -> RouteResult:
     """Route a button interaction to its registered handler.
 
@@ -61,7 +94,7 @@ async def route(interaction: Any, deps: Dict[str, Any]) -> RouteResult:
     try:
         result = handler(interaction, ctx)
         if inspect.isawaitable(result):
-            await result
+            result = await result
     except Exception as e:
         return {
             'ok': False, 'reason': 'handler_error',
@@ -69,6 +102,9 @@ async def route(interaction: Any, deps: Dict[str, Any]) -> RouteResult:
             'customId': custom_id,
             'prefix': prefix,
         }
+    # Auto-refresh Discord views after successful dispatches.
+    if isinstance(result, dict) and result.get('ok'):
+        _auto_refresh(result, deps)
     return {'ok': True, 'prefix': prefix, 'group': group}
 
 
@@ -104,4 +140,6 @@ def route_sync(interaction: Any, deps: Dict[str, Any]) -> RouteResult:
             'customId': custom_id,
             'prefix': prefix,
         }
+    if isinstance(result, dict) and result.get('ok'):
+        _auto_refresh(result, deps)
     return {'ok': True, 'prefix': prefix, 'group': group}
