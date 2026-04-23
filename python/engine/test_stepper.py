@@ -167,6 +167,21 @@ def test_move_pick_space_updates_position_and_charges_mp():
     assert 'Rebel Trooper (Regular)-0-0' in g.data['figuresMovedThisRound']
 
 
+def test_move_pick_space_no_pending_interrupts_on_vanilla_move():
+    """Vanilla Rebel/Stormtrooper move without adjacent BRAWLER-/SMUGGLER-
+    trait hostiles leaves pendingInterrupts absent."""
+    g = _two_figure_game()
+    g = step(g, Action(
+        type=ActionType.ACTIVATE_DC, player=1,
+        params={'figure_key': 'Rebel Trooper (Regular)-0-0'},
+    ))
+    g = step(g, Action(
+        type=ActionType.MOVE_PICK_SPACE, player=1,
+        params={'coord': 'a3'},
+    ))
+    assert not g.data.get('pendingInterrupts')
+
+
 def test_move_pick_space_rejects_insufficient_mp():
     g = _two_figure_game()
     g = step(g, Action(
@@ -2304,6 +2319,7 @@ def main():
         ('activate_dc_rejects_no_activations', test_activate_dc_rejects_no_activations),
         ('activate_dc_rejects_wrong_owner', test_activate_dc_rejects_wrong_owner),
         ('move_pick_space_updates_position_and_charges_mp', test_move_pick_space_updates_position_and_charges_mp),
+        ('move_pick_space_no_pending_interrupts_on_vanilla_move', test_move_pick_space_no_pending_interrupts_on_vanilla_move),
         ('move_pick_space_rejects_insufficient_mp', test_move_pick_space_rejects_insufficient_mp),
         ('dc_end_activation_clears_active_and_swaps_player', test_dc_end_activation_clears_active_and_swaps_player),
         ('phase_gate_ready_marks_player_ready', test_phase_gate_ready_marks_player_ready),

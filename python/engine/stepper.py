@@ -34,6 +34,7 @@ from python.engine.mechanics.defeat import (
     remove_figure_position,
 )
 from python.engine.mechanics.dice import roll_attack_dice, roll_defense_dice
+from python.engine.mechanics.interrupts import detect_post_move_interrupts
 from python.engine.mechanics.los import has_line_of_sight
 from python.engine.mechanics.movement_cache import get_path_cost
 from python.engine.state import GameState
@@ -312,6 +313,16 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
     if figure_key not in moved:
         moved.append(figure_key)
     game['figuresMovedThisRound'] = moved
+
+    # Post-move interrupt detection: Parting Blow / Dirty Trick / Disengage /
+    # Overwatch. Each trigger is a pending choice for the reacting player.
+    triggers = detect_post_move_interrupts(
+        game, player, figure_key, [start_coord, coord]
+    )
+    if triggers:
+        pending = list(game.get('pendingInterrupts') or [])
+        pending.extend(triggers)
+        game['pendingInterrupts'] = pending
 
     return game
 
