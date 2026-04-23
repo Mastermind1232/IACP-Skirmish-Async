@@ -335,6 +335,10 @@ def _handle_dc_end_activation(game: GameState, action: Action) -> GameState:
     game['perFigureMp'] = None
     active = int(game.get('activePlayer') or 1)
     game['activePlayer'] = 2 if active == 1 else 1
+    # Auto-skip any unresolved move interrupts at end of activation.
+    # In the Discord flow, the non-active player would have reacted
+    # button-by-button; headless AI skips them so they don't accumulate.
+    game['pendingInterrupts'] = []
     return game
 
 
