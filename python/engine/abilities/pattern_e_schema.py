@@ -464,6 +464,32 @@ def handle_schema_chain(game: Any, ability_id: str,
                 'type': override_type or 'range',
             })
 
+    # focusFireDoubleAttack / multiFireDoubleAttack — grant a free attack
+    # bonus so the figure can attack twice this activation. Focus Fire
+    # requires same target; Multi-Fire requires different target + -1 Hit.
+    if entry.get('focusFireDoubleAttack') and msg_id:
+        pending_fa = data.get('freeAttackBonusPending') or {}
+        pending_fa[msg_id] = {'from': entry.get('label') or 'Focus Fire'}
+        data['freeAttackBonusPending'] = pending_fa
+        ffa = data.get('focusFireActive') or {}
+        ffa[msg_id] = {'attacksRemaining': 2}
+        data['focusFireActive'] = ffa
+        effects.append({'effect': 'focusFireDoubleAttack'})
+
+    if entry.get('multiFireDoubleAttack') and msg_id:
+        pending_fa = data.get('freeAttackBonusPending') or {}
+        pending_fa[msg_id] = {'from': entry.get('label') or 'Multi-Fire'}
+        data['freeAttackBonusPending'] = pending_fa
+        mfa = data.get('multiFireActive') or {}
+        mfa[msg_id] = {'attacksRemaining': 2, 'firstTargetFigureKey': None}
+        data['multiFireActive'] = mfa
+        # -1 Hit during Multi-Fire
+        pend_combat = dict(data.get('pendingCombat') or {})
+        pend_combat['bonusHits'] = int(pend_combat.get('bonusHits') or 0) - 1
+        pend_combat['roundScoped'] = False  # single-attack scoped
+        data['pendingCombat'] = pend_combat
+        effects.append({'effect': 'multiFireDoubleAttack'})
+
     # applySelfCondition — add a condition to the activating figure (Prowl
     # applies Hide to self).
     asc = entry.get('applySelfCondition')
