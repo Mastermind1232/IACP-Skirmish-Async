@@ -139,6 +139,7 @@ def install_default_handlers() -> None:
     from python.engine.abilities.pattern_d_extras import (
         install_pattern_d_batch2,
     )
+    from python.engine.abilities.pattern_e_bulk import install_pattern_e_bulk
     from python.engine.abilities.pattern_e import (
         install_default_chain_handlers,
         resolve_pattern_e,
@@ -158,6 +159,7 @@ def install_default_handlers() -> None:
     install_fury_handlers()
     install_pattern_d_batch2()
     install_default_chain_handlers()
+    install_pattern_e_bulk()
 
 
 install_default_handlers()

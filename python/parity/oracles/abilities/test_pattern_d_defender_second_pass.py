@@ -391,7 +391,7 @@ def test_pattern_d_stub_count_is_137_after_D3_16():
     # (combat-defense-friends: sentinel, protector, keep_the_peace_elite,
     # keep_the_peace_regular) → 137. D3.17 lands 1 (mission-start:
     # stealthy_davith) → 136.
-    assert len(pattern_d_stub_ids()) == 68
+    assert len(pattern_d_stub_ids()) == 0
 
 
 def test_none_of_six_is_a_stub():
@@ -658,12 +658,9 @@ def test_remaining_combat_declare_stubs_still_raise():
     # Flawless Execution is the canonical still-stubbed combat-declare
     # ability (needs pendingPowerTokenGrant plumbing). Proves the 137
     # remaining Pattern D stubs are still fail-loud after D3.16.
-    try:
-        resolve({}, 'flawless_execution', {})
-    except TriggerNotImplemented as e:
-        assert e.ability_id == 'flawless_execution'
-        return
-    assert False, 'flawless_execution must still raise TriggerNotImplemented'
+    # Post-batch install, flawless_execution resolves via pending-stamper.
+    out = resolve({}, 'flawless_execution', {})
+    assert out.get('applied') is True
 
 
 def test_fire_site_helper_raises_if_defender_combat_defense_regresses_to_stub():

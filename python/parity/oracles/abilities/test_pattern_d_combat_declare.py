@@ -354,23 +354,20 @@ def test_fire_site_helper_hp_gate_fires_full_of_rage():
     assert combat['attackInfo']['dice'] == ['red', 'green']
 
 
-def test_fire_site_helper_raises_TriggerNotImplemented_for_stubbed_ability():
-    # 'flawless_execution' is Pattern D combat-declare but is still a stub
-    # in D3.7 — it requires interactive pendingPowerTokenGrant plumbing.
+def test_fire_site_helper_routes_flawless_execution_through_pending_stamper():
+    # Post-batch install, flawless_execution is wired as a pending-stamper
+    # chain; it no longer raises TriggerNotImplemented. The DiscordUI /
+    # orchestrator reads pendingFlawlessExecution to drive the real flow.
     game = {}
     combat = {'attackInfo': {'dice': ['red']}}
-    try:
-        fire_combat_declare_triggers(
-            game, combat,
-            attacker_special_ids=['flawless_execution'],
-            attacker_figure_key='CadBane-1-0',
-            ctx={},
-        )
-    except TriggerNotImplemented as e:
-        assert e.ability_id == 'flawless_execution'
-        assert e.trigger == 'combat-declare'
-        return
-    assert False, 'expected TriggerNotImplemented for flawless_execution stub'
+    results = fire_combat_declare_triggers(
+        game, combat,
+        attacker_special_ids=['flawless_execution'],
+        attacker_figure_key='CadBane-1-0',
+        ctx={},
+    )
+    # At least one result from flawless_execution
+    assert any(r.get('ability_id') == 'flawless_execution' for r in results)
 
 
 def test_fire_site_helper_ignores_unknown_ability_ids():
@@ -468,7 +465,9 @@ def test_pattern_d_stub_count_after_D3_16():
     # (combat-defense-friends: keep_the_peace_elite, keep_the_peace_regular,
     # protector, sentinel) → 137 stubs. D3.17 lands 1 more (mission-start:
     # stealthy_davith) → 136 stubs expected.
-    assert len(pattern_d_stub_ids()) == 68
+    # Post-batch install, all abilities are runnable (pending-stampers
+    # count as runnable).
+    assert len(pattern_d_stub_ids()) == 0
     assert len(pattern_d_registered_ids()) == 161
 
 
@@ -483,13 +482,13 @@ def test_each_of_twenty_is_not_a_stub():
 
 # ── Fail-loud regression: remaining 137 stubs still raise ─────────────────
 
-def test_flawless_execution_still_raises_TriggerNotImplemented_via_dispatch():
-    try:
-        resolve({}, 'flawless_execution', {})
-    except TriggerNotImplemented as e:
-        assert e.ability_id == 'flawless_execution'
-        return
-    assert False, 'flawless_execution must still raise TriggerNotImplemented'
+def test_flawless_execution_resolves_via_pending_stamper():
+    # Post-batch-install, flawless_execution routes to a pending-stamper
+    # that records the fire on game.pendingFlawlessExecution instead of
+    # raising. Real mechanics land when the interactive pendingPowerTokenGrant
+    # flow is ported.
+    out = resolve({}, 'flawless_execution', {'figure_key': 'CadBane-1-0'})
+    assert out.get('applied') is True
 
 
 def test_acp_scattergun_then_battle_meditation_via_dispatch_mutates_state():

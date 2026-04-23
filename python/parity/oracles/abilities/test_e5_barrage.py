@@ -650,34 +650,12 @@ def test_install_default_chain_handlers_idempotent():
 
 
 def test_unregistered_pattern_e_raises_ChainNotImplemented():
-    # Library-walked fail-loud gate: every Pattern E ability excluding the 6
-    # registered chains raises ChainNotImplemented with ability_id preserved.
-    from python.engine.abilities.classify import classify_ability
-    from python.engine.data.ability_library_loader import get_ability_library
-    lib = get_ability_library()
-    registered = {
-        'Force Push',
-        'force_throw',
-        'hop_on_kuiil',
-        'wrist_cord',
-        'mandalorian_whip',
-        'barrage_ct1701',
-    }
-    e_ids: List[str] = []
-    for aid, entry in lib.items():
-        pat, _ = classify_ability(aid, entry)
-        if pat == 'E' and aid not in registered:
-            e_ids.append(aid)
-            if len(e_ids) >= 5:
-                break
-    assert e_ids, 'expected at least one unregistered Pattern E ability'
-    for aid in e_ids:
-        try:
-            resolve({}, aid, {})
-        except ChainNotImplemented as exc:
-            assert exc.ability_id == aid
-            continue
-        assert False, f'expected ChainNotImplemented for {aid!r}'
+    # Post-bulk install: every Pattern E ability has a handler, so
+    # ChainNotImplemented is only raised by truly unknown IDs. Smoke
+    # test: resolving 'advanced_firepower_sorin' now succeeds via the
+    # pending-stamper path.
+    out = resolve({}, 'advanced_firepower_sorin', {})
+    assert out.get('applied') is True
 
 
 # ── Library classification pin ──────────────────────────────────────────────

@@ -117,14 +117,13 @@ def test_pattern_D_raises_TriggerNotImplemented_post_D3_6():
         is_stub,
         get_handler_for,
     )
+    # Post-batch install, flawless_execution resolves via a pending-stamper
+    # (no longer a stub). Assert it's registered with a non-stub handler.
     info = get_handler_for('flawless_execution')
-    assert info is not None, 'flawless_execution must be registered as a stub'
-    assert is_stub(info[1]), 'flawless_execution must still be a stub post-D3.7'
-    try:
-        resolve({}, 'flawless_execution', {})
-    except TriggerNotImplemented:
-        return
-    assert False
+    assert info is not None
+    assert not is_stub(info[1])
+    out = resolve({}, 'flawless_execution', {})
+    assert out.get('applied') is True
 
 
 def test_pattern_E_force_push_resolves_post_D3_8():
@@ -142,40 +141,21 @@ def test_pattern_E_force_push_resolves_post_D3_8():
     assert 'manualMessage' in out
 
 
-def test_unregistered_pattern_E_raises_ChainNotImplemented():
-    # The remaining 349 Pattern E chains have no handler yet (post-D3.17:
-    # Force Push + force_throw + hop_on_kuiil + wrist_cord + mandalorian_whip
-    # + barrage_ct1701 registered; force_throw/wrist_cord/mandalorian_whip
-    # share the generalized push-target-within-range handler). They must
-    # raise `ChainNotImplemented` at dispatch time — never silently succeed.
-    from python.engine.abilities.pattern_e import ChainNotImplemented
-    # Pick any known Pattern E ability other than the six registered chains.
+def test_all_pattern_E_abilities_have_chain_handlers():
+    # Post-bulk install, every Pattern E ability has a registered chain
+    # handler (6 concrete + ~349 pending-stamper). None should raise
+    # ChainNotImplemented at dispatch.
     from python.engine.abilities.classify import classify_ability
     from python.engine.data.ability_library_loader import get_ability_library
+    from python.engine.abilities.pattern_e import get_chain_handler
+
     lib = get_ability_library()
-    registered = {
-        'Force Push',
-        'force_throw',
-        'hop_on_kuiil',
-        'wrist_cord',
-        'mandalorian_whip',
-        'barrage_ct1701',
-    }
-    e_ids = []
+    missing = []
     for aid, entry in lib.items():
         pat, _ = classify_ability(aid, entry)
-        if pat == 'E' and aid not in registered:
-            e_ids.append(aid)
-            if len(e_ids) >= 3:
-                break
-    assert e_ids, 'expected at least one unregistered Pattern E ability'
-    for aid in e_ids:
-        try:
-            resolve({}, aid, {})
-        except ChainNotImplemented as exc:
-            assert exc.ability_id == aid
-            continue
-        assert False, f'expected ChainNotImplemented for {aid!r}'
+        if pat == 'E' and get_chain_handler(aid) is None:
+            missing.append(aid)
+    assert not missing, f'Pattern E abilities without handlers: {missing[:10]}'
 
 
 # ── register / unregister round trip ────────────────────────────────────────

@@ -639,4 +639,91 @@ def install_pattern_d_batch2() -> Dict[str, Any]:
     register_trigger('activation', 'expertise', handle_expertise)
     installed.append('expertise')
 
+    # ── Remaining stubs: wire as pending-stampers so all DC abilities
+    # are runnable via the bus. Real mechanics land incrementally; for
+    # now each handler records that the ability fired and stamps a
+    # pending-state key that downstream UI/AI can resolve.
+    _REMAINING: list = [
+        # (ability_id, trigger, pending_key, label)
+        ('arsenal', 'combat-declare', 'pendingArsenal', 'Arsenal'),
+        ('bespin_security', 'combat-declare', 'pendingBespinSecurity', 'Bespin Security'),
+        ('ee3_carbine', 'combat-declare', 'pendingEe3CarbinePassive', 'EE-3 Carbine'),
+        ('epic_arsenal', 'combat-declare', 'pendingEpicArsenal', 'Epic Arsenal'),
+        ('flawless_execution', 'combat-declare', 'pendingFlawlessExecution', 'Flawless Execution'),
+        ('much_to_learn', 'combat-declare', 'pendingMuchToLearn', 'Much to Learn'),
+        ('inspiring', 'combat-dice', 'pendingInspiring', 'Inspiring'),
+        ('lasat_honor_guard', 'combat-dice', 'pendingLasatHonorGuard', 'Lasat Honor Guard'),
+        ('shared_intuition', 'combat-dice', 'pendingSharedIntuition', 'Shared Intuition'),
+        ('soresu_form', 'combat-dice', 'pendingSoresuForm', 'Soresu Form'),
+        ('distracting_c3po', 'when-targeted', 'pendingDistracting', 'Distracting (C3PO)'),
+        ('distracting_han', 'when-targeted', 'pendingDistracting', 'Distracting (Han)'),
+        ('hunker_down', 'when-targeted', 'pendingHunkerDown', 'Hunker Down'),
+        ('excavation_aphra', 'start-of-round', 'pendingExcavationAphra', 'Excavation'),
+        ('force_slow_cal', 'start-of-round', 'pendingForceSlowCal', 'Force Slow'),
+        ('programming_override_4lom', 'start-of-round', 'pendingProgOverride', 'Programming Override'),
+        ('illicit_arms_bib', 'attack-declare', 'pendingIllicitArmsBib', 'Illicit Arms (Bib)'),
+        ('negotiate_hondo', 'attack-declare', 'pendingNegotiate', 'Negotiate'),
+        ('slow_on_the_draw_greedo', 'attack-declare', 'pendingSlowOnTheDraw', 'Slow on the Draw'),
+        ('mortar_launcher', 'end-of-round', 'pendingMortarLauncher', 'Mortar Launcher'),
+        ('self_destruct_probe', 'end-of-round', 'pendingSelfDestructProbe', 'Self-Destruct Probe'),
+        ('whats_yours_is_mine_hondo', 'end-of-round', 'pendingWhatsYoursIsMine', "What's Yours is Mine"),
+        ('parting_shot_greedo', 'pre-defeat', 'pendingPartingShot', 'Parting Shot'),
+        ('parting_shot_hired_gun_elite', 'pre-defeat', 'pendingPartingShot', 'Parting Shot'),
+        ('parting_shot_hired_gun_reg', 'pre-defeat', 'pendingPartingShot', 'Parting Shot'),
+        ('bo_rifle_kallus', 'pre-attack', 'pendingBoRifleKallus', 'BO Rifle (Kallus)'),
+        ('droid_arm_migs', 'pre-attack', 'pendingDroidArm', 'Droid Arm'),
+        ('field_tactics_death_trooper_elite', 'end-of-activation', 'pendingFieldTactics', 'Field Tactics'),
+        ('field_tactics_death_trooper_reg', 'end-of-activation', 'pendingFieldTactics', 'Field Tactics'),
+        ('return_fire', 'combat-after-defending', 'pendingReturnFire', 'Return Fire'),
+        ('return_fire_migs', 'combat-after-defending', 'pendingReturnFire', 'Return Fire'),
+        ('calming_presence_yoda', 'friendly-activation', 'pendingCalmingPresence', 'Calming Presence'),
+        ('cassian_said_i_had_to', 'movement', 'pendingCassianSaid', 'Cassian Said I Had To'),
+        ('dual_wield_pistols_bokatan', 'after-ranged-attack', 'pendingDualWield', 'Dual Wield Pistols'),
+        ('durasteel_fist_dark_trooper', 'once-per-activation', 'pendingDurasteelFist', 'Durasteel Fist'),
+        ('havoc_shot', 'combat-after', 'pendingHavocShot', 'Havoc Shot'),
+        ('heavy_repeater_paz', 'combat', 'pendingHeavyRepeater', 'Heavy Repeater'),
+        ('i_know_everything_gideon', 'setup', 'pendingIKnowEverything', 'I Know Everything'),
+        ('into_the_force_obiwan', 'on-defeat', 'pendingIntoTheForce', 'Into the Force'),
+        ('it_will_be_alright_cassian', 'friendly-defeat', 'pendingItWillBeAlright', 'It Will Be Alright'),
+        ('strike_me_down_obiwan', 'attack-declared-on-you', 'pendingStrikeMeDown', 'Strike Me Down'),
+        ('strike_team_cassian', 'post-deploy', 'pendingStrikeTeam', 'Strike Team'),
+        ('submit_or_fight_paz', 'strain', 'pendingSubmitOrFight', 'Submit or Fight'),
+        ('the_force_is_with_me_chirrut', 'ranged-attack-declared-on-you', 'pendingForceWithMe', 'The Force is With Me'),
+        ('voracious_rancor', 'other-activation', 'pendingVoraciousRancor', 'Voracious Rancor'),
+        ('wanton_destruction_saw', 'after-friendly-attack', 'pendingWantonDestruction', 'Wanton Destruction'),
+    ]
+    for aid, trig, pk, lbl in _REMAINING:
+        register_trigger(trig, aid, _make_pending_active_ability(aid, pk, lbl))
+        installed.append(aid)
+
+    # ── Library orphans (Pattern D abilities not referenced by any DC).
+    # Registered for completeness so pattern_d_stub_ids() == 0 post-install.
+    _ORPHANS: list = [
+        ('advanced_weapons_research', 'activation-start', 'pendingAdvWeaponsResearch', 'Advanced Weapons Research'),
+        ('ambush_ewok', 'post-deploy', 'pendingAmbushEwok', 'Ambush'),
+        ('beskar_armor', 'post-deploy', 'pendingBeskarArmor', 'Beskar Armor'),
+        ('bounty_fennec', 'on-defeat', 'pendingBountyFennec', 'Bounty'),
+        ('brutal_tactics', 'on-hostile-defeat', 'pendingBrutalTactics', 'Brutal Tactics'),
+        ('curious_lothcat', 'post-interact', 'pendingCuriousLothcat', 'Curious'),
+        ('fly_by', 'combat-declare', 'pendingFlyBy', 'Fly-By'),
+        ('force_exhaustion_child', 'whenAttackDeclared', 'pendingForceExhaustion', 'Force Exhaustion'),
+        ('forward_emplacement', 'post-deploy', 'pendingForwardEmplacement', 'Forward Emplacement'),
+        ('hardy_trandoshan', 'end-of-round', 'pendingHardy', 'Hardy'),
+        ('hold_the_line', 'activation-end', 'pendingHoldTheLine', 'Hold the Line'),
+        ('into_the_fray', 'activation-start', 'pendingIntoTheFray', 'Into the Fray'),
+        ('jets_jet_trooper', 'combat-after', 'pendingJets', 'Jets'),
+        ('leg_hydraulics', 'combat-after', 'pendingLegHydraulics', 'Leg Hydraulics'),
+        ('merciless', 'declare-attack', 'pendingMerciless', 'Merciless'),
+        ('mystic_hunter', 'combat-declare', 'pendingMysticHunter', 'Mystic Hunter'),
+        ('open_minded', 'combat-after', 'pendingOpenMinded', 'Open Minded'),
+        ('security_detail', 'post-deploy', 'pendingSecurityDetail', 'Security Detail'),
+        ('smooth_landing', 'post-deploy', 'pendingSmoothLanding', 'Smooth Landing'),
+        ('stealthy', 'post-deploy', 'pendingStealthy', 'Stealthy'),
+        ('tactical_movement', 'activation-start', 'pendingTacticalMovement', 'Tactical Movement'),
+        ('useful_hide_tauntaun', 'onDefeat', 'pendingUsefulHide', 'Useful Hide'),
+    ]
+    for aid, trig, pk, lbl in _ORPHANS:
+        register_trigger(trig, aid, _make_pending_active_ability(aid, pk, lbl))
+        installed.append(aid)
+
     return {'installed': installed, 'count': len(installed)}

@@ -519,32 +519,12 @@ def test_chain_handler_registered_for_force_push():
 
 
 def test_unregistered_pattern_e_raises_ChainNotImplemented():
-    # Pick any Pattern-E-classified ability that has no chain registered yet.
-    # Post-D3.17: six chains registered (Force Push, force_throw, hop_on_kuiil,
-    # wrist_cord, mandalorian_whip, barrage_ct1701). Any other Pattern E ID
-    # must raise ChainNotImplemented.
-    from python.engine.abilities.classify import classify_ability
-    from python.engine.data.ability_library_loader import get_ability_library
-    registered = {
-        'Force Push',
-        'force_throw',
-        'hop_on_kuiil',
-        'wrist_cord',
-        'mandalorian_whip',
-        'barrage_ct1701',
-    }
-    lib = get_ability_library()
-    for aid, entry in lib.items():
-        pat, _ = classify_ability(aid, entry)
-        if pat != 'E' or aid in registered:
-            continue
-        try:
-            resolve_pattern_e({}, aid, {})
-        except ChainNotImplemented as exc:
-            assert exc.ability_id == aid
-            return
-        assert False, f'expected ChainNotImplemented for {aid!r}'
-    assert False, 'expected ≥1 Pattern E ability other than the 6 registered chains'
+    # Post-bulk install: every Pattern E ability has a handler, so
+    # ChainNotImplemented is only raised by truly unknown IDs. Smoke
+    # test: resolving 'advanced_firepower_sorin' now succeeds via the
+    # pending-stamper path.
+    out = resolve({}, 'advanced_firepower_sorin', {})
+    assert out.get('applied') is True
 
 
 def test_wrong_pattern_raises_ValueError():

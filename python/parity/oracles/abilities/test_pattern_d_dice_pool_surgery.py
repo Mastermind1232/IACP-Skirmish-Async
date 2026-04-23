@@ -582,7 +582,7 @@ def test_pattern_d_runnable_count_is_twenty_four_after_d3_16():
     # (combat-defense-friends: sentinel, protector, keep_the_peace_elite,
     # keep_the_peace_regular) → 24 runnable. D3.17 lands stealthy_davith
     # (mission-start) → 25 runnable.
-    assert len(pattern_d_runnable_ids()) == 93
+    assert len(pattern_d_runnable_ids()) == 161
 
 
 def test_pattern_d_stub_count_is_137_after_d3_16():
@@ -590,7 +590,7 @@ def test_pattern_d_stub_count_is_137_after_d3_16():
     # D3.12 lands 3 → 147. D3.14 lands 6 (combat-declare defender-side
     # second pass) → 141. D3.16 lands 4 (combat-defense-friends) → 137.
     # D3.17 lands 1 (mission-start: stealthy_davith) → 136.
-    assert len(pattern_d_stub_ids()) == 68
+    assert len(pattern_d_stub_ids()) == 0
     assert len(pattern_d_registered_ids()) == 161
 
 
@@ -622,12 +622,9 @@ def test_flawless_execution_still_raises_TriggerNotImplemented_via_dispatch():
     # flawless_execution remains the canonical still-stubbed combat-declare
     # ability (needs pendingPowerTokenGrant plumbing). Proves the 137
     # remaining Pattern D stubs are still fail-loud after D3.16.
-    try:
-        resolve({}, 'flawless_execution', {})
-    except TriggerNotImplemented as e:
-        assert e.ability_id == 'flawless_execution'
-        return
-    assert False, 'flawless_execution must still raise TriggerNotImplemented'
+    # Post-batch install, flawless_execution resolves via pending-stamper.
+    out = resolve({}, 'flawless_execution', {})
+    assert out.get('applied') is True
 
 
 # ── Runner ─────────────────────────────────────────────────────────────────

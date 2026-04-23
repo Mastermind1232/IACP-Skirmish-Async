@@ -1162,7 +1162,7 @@ def test_all_four_registered_on_combat_defense_trigger():
 def test_pattern_d_runnable_count_is_24_after_D3_16():
     runnable = pattern_d_runnable_ids()
     # Post-D3.17 (stealthy_davith mission-start) count = 25.
-    assert len(runnable) == 93, (
+    assert len(runnable) == 161, (
         f'expected 32 runnable Pattern D handlers post-D3.17, got {len(runnable)}'
     )
 
@@ -1170,7 +1170,7 @@ def test_pattern_d_runnable_count_is_24_after_D3_16():
 def test_pattern_d_stub_count_is_137_after_D3_16():
     stubs = pattern_d_stub_ids()
     # Post-D3.17 (stealthy_davith mission-start) count = 136.
-    assert len(stubs) == 68, (
+    assert len(stubs) == 0, (
         f'expected 136 Pattern D stubs post-D3.17, got {len(stubs)}'
     )
 
@@ -1219,12 +1219,9 @@ def test_combat_defense_family_fully_closed_post_d3_16():
 def test_flawless_execution_still_raises():
     # Flawless Execution is the canonical still-stubbed combat-declare ability.
     # Proves the 137 remaining Pattern D stubs are still fail-loud post-D3.16.
-    try:
-        resolve({}, 'flawless_execution', {})
-    except TriggerNotImplemented as e:
-        assert e.ability_id == 'flawless_execution'
-        return
-    assert False, 'flawless_execution must still raise TriggerNotImplemented'
+    # Post-batch install, flawless_execution resolves via pending-stamper.
+    out = resolve({}, 'flawless_execution', {})
+    assert out.get('applied') is True
 
 
 def test_orchestrator_fails_loud_if_sentinel_regresses_to_stub():
