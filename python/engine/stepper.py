@@ -645,12 +645,16 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
             attack_roll['surge'] = int(attack_roll.get('surge') or 0) + bonus_surge
 
     # Merge pendingCombat bonuses (set by CCs/abilities via schema) into
-    # the combat dict so compute_combat_result applies them.
+    # the combat dict so compute_combat_result applies them. Conditions
+    # (Focus, Hide, Weaken, Stun) feed in via attackerConds/defenderConds.
+    conditions_map = game.get('figureConditions') or {}
+    atk_conds = list(conditions_map.get(attacker_key) or [])
+    def_conds = list(conditions_map.get(target_key) or [])
     combat = {
         'attackRoll': attack_roll,
         'defenseRoll': defense_roll,
-        'attackerConds': [],
-        'defenderConds': [],
+        'attackerConds': atk_conds,
+        'defenderConds': def_conds,
     }
     pending_combat = game.get('pendingCombat')
     if isinstance(pending_combat, Mapping):
