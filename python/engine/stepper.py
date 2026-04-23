@@ -766,13 +766,69 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         cur, mx = _get_figure_hp(game, def_player, target_key)
         new_hp = max(0, cur - damage)
         _set_figure_hp(game, def_player, target_key, new_hp, mx)
+
+        # Fire Pattern D on-damage triggers on the defender's abilities.
+        try:
+            from python.engine.abilities.pattern_d import fire_ability
+            from python.engine.data.ability_library_loader import get_ability
+            def_sids = def_effect.get('specialAbilityIds') or []
+            for aid in def_sids:
+                abil_entry = get_ability(aid) or {}
+                if abil_entry.get('trigger') == 'on-damage':
+                    try:
+                        fire_ability(game.data, aid, {
+                            'figure_key': target_key,
+                            'damaged_figure_key': target_key,
+                            'trigger': 'on-damage',
+                        })
+                    except NotImplementedError:
+                        pass
+        except Exception:
+            pass
+
         if new_hp <= 0:
+            # Pre-defeat triggers.
+            try:
+                from python.engine.abilities.pattern_d import fire_ability
+                from python.engine.data.ability_library_loader import get_ability
+                def_sids = def_effect.get('specialAbilityIds') or []
+                for aid in def_sids:
+                    abil_entry = get_ability(aid) or {}
+                    if abil_entry.get('trigger') == 'pre-defeat':
+                        try:
+                            fire_ability(game.data, aid, {
+                                'figure_key': target_key,
+                                'trigger': 'pre-defeat',
+                            })
+                        except NotImplementedError:
+                            pass
+            except Exception:
+                pass
+
             # Defeat.
             remove_figure_position(game.data, def_player, target_key)
             vp = calculate_kill_vp(def_dc)
             if vp:
                 award_kill_vp(game.data, atk_player, vp)
             check_nefarious_gains(game.data, def_player)
+
+            # On-defeat triggers on the defeated figure.
+            try:
+                from python.engine.abilities.pattern_d import fire_ability
+                from python.engine.data.ability_library_loader import get_ability
+                def_sids = def_effect.get('specialAbilityIds') or []
+                for aid in def_sids:
+                    abil_entry = get_ability(aid) or {}
+                    if abil_entry.get('trigger') in ('on-defeat', 'onDefeat'):
+                        try:
+                            fire_ability(game.data, aid, {
+                                'figure_key': target_key,
+                                'trigger': abil_entry.get('trigger'),
+                            })
+                        except NotImplementedError:
+                            pass
+            except Exception:
+                pass
 
     # Record attack on attacker — unless this was a free attack (already >= 1
     # at entry AND a freeAttackBonusPending credit was consumed above, which
