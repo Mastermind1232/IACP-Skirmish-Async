@@ -258,6 +258,28 @@ def test_orchestrator_defeat_skips_contraband_drop_non_carry_mission():
     assert not dropped, f'non-carry mission must not drop; got {dropped}'
 
 
+def test_crippling_blow_stuns_defender_on_hit():
+    """Crippling Blow CC stamps cripplingBlowPending. On a hit,
+    defender becomes Stunned; flag clears regardless."""
+    fixture = _base_fixture()
+    fixture['cripplingBlowPending'] = {'hl1dc0': True}
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red', 'red'],
+        defense_dice_override=['white'],
+    )
+    # Flag cleared.
+    assert not (g.data.get('cripplingBlowPending') or {}).get('hl1dc0')
+    # If the attack hit, Vader is Stunned.
+    if result.get('hit'):
+        conds = g.data.get('figureConditions', {}).get('Darth Vader-0-0', [])
+        assert 'Stun' in conds, (
+            f'Crippling Blow should Stun defender on hit; got {conds}'
+        )
+
+
 def test_self_defeats_after_attack_fires_on_attacker():
     """Dying Lunge / Final Stand stamp selfDefeatsAfterAttackMsgId.
     After attack resolves, attacker is removed from board and

@@ -688,6 +688,54 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
             except Exception:
                 pass
 
+    # ── Phase 11a: post-attack CC stamps (burst fire / crippling blow /
+    # disruptor rifle) — consume flags stamped by CC schema pre-pass.
+
+    # Burst Fire: on damage, apply Stun to every figure adjacent to target.
+    bf_map = data.get('burstFirePendingMsgId') or {}
+    if atk_msg_id and isinstance(bf_map, dict) and bf_map.get(atk_msg_id):
+        bf_new = dict(bf_map)
+        bf_new.pop(atk_msg_id, None)
+        data['burstFirePendingMsgId'] = bf_new
+        if damage > 0 and target_key:
+            try:
+                fp = data.get('figurePositions') or {}
+                for pn_key, positions in fp.items():
+                    if not isinstance(positions, dict):
+                        continue
+                    pn = pn_key if isinstance(pn_key, int) else int(pn_key)
+                    for fk, coord in positions.items():
+                        if fk == target_key or not coord:
+                            continue
+                        dist = count_game_spaces(game, def_coord, coord)
+                        if dist == 1:
+                            apply_condition(data, fk, 'Stun')
+            except Exception:
+                pass
+
+    # Crippling Blow: Stun defender on non-miss attack.
+    cb_map = data.get('cripplingBlowPending') or {}
+    if atk_msg_id and isinstance(cb_map, dict) and cb_map.get(atk_msg_id):
+        cb_new = dict(cb_map)
+        cb_new.pop(atk_msg_id, None)
+        data['cripplingBlowPending'] = cb_new
+        if hit and target_key:
+            apply_condition(data, target_key, 'Stun')
+
+    # Disruptor Rifle: on non-miss, if defender at 1 HP, deal 1 more dmg.
+    dr_map = data.get('disruptorRiflePending') or {}
+    if atk_msg_id and isinstance(dr_map, dict) and dr_map.get(atk_msg_id):
+        dr_new = dict(dr_map)
+        dr_new.pop(atk_msg_id, None)
+        data['disruptorRiflePending'] = dr_new
+        if hit and def_msg_id:
+            dcs = data.get('dcHealthState') or {}
+            entry = (dcs.get(def_msg_id) or [])
+            if def_fig_idx < len(entry):
+                cur = entry[def_fig_idx]
+                if isinstance(cur, list) and len(cur) >= 1 and cur[0] == 1:
+                    reduce_hp(dcs, data, def_msg_id, def_fig_idx, 1, def_player)
+
     # ── Phase 11b: SELF-DEFEAT after attack ─────────────────────────────
     # Dying Lunge, Final Stand, etc. stamp selfDefeatsAfterAttackMsgId
     # via the CC schema pre-pass. After the main attack resolves, the
