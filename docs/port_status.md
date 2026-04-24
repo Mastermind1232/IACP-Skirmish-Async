@@ -59,7 +59,7 @@ Only DONE entries should be considered trustworthy for training.
 | Area | JS source | Python | Status |
 |---|---|---|---|
 | Game creation | `src/game-creation.js` + `src/engine/game-creation-bridge.js` | `python/engine/creation.py` (49) | STUB |
-| Setup flow (zone → deploy → CC-draw) | `src/handlers/setup.js` (2604) + `src/engine/activation-setup.js` (1383) + `src/engine/setup-bridge.js` (609) | `python/engine/setup.py` (242) | PARTIAL |
+| Setup flow (zone → deploy → CC-draw) | `src/handlers/setup.js` (2604) + `src/engine/activation-setup.js` (1383) + `src/engine/setup-bridge.js` (609) | `python/engine/setup.py` (~400) | CLOSE | DC lookup trio (p{n}DcList / p{n}DcMessageIds / dcHealthState / dcMessageMeta) synthesized from squad on setup. Attachment auto-attach ported (33 attachment cards, matches JS findAutoAttachTarget keyword/name/affiliation semantics). Setup-time bonuses applied (Focused on the Kill +5 HP). legal_actions respects pendingOverrideAttackDice so CC-forced melee doesn't offer ranged-only targets. Commit b1cbdb8. Remaining: loadout selection, Clawdite form pick, complex multi-DC attachment cases. |
 | Post-deploy handlers | `src/handlers/post-deploy.js` (1871) | — | MISSING |
 | Blitz deploy | `src/handlers/blitz-deploy.js` (712) | — | MISSING |
 | Attachment confirmation | Inside setup.js | — | MISSING |
