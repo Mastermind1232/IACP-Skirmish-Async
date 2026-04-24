@@ -459,6 +459,12 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                     combat['surgeCancel'] = int(combat.get('surgeCancel') or 0) + int(eff[flag])
                 else:
                     combat[flag] = eff[flag]
+        # Post-resolution flags (read in Phase 8/later, not by combat math).
+        for flag in ('surgeCriticalHit', 'surgeStalkPrey',
+                     'surgeSuppressionStrain', 'surgeSelfFocus',
+                     'surgeSelfHide'):
+            if flag in eff:
+                combat[flag] = eff[flag]
     combat['triggeredSurges'] = spent_surges
 
     # ── Phase 6: RESOLVE ────────────────────────────────────────────────
@@ -557,6 +563,25 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                     break
 
         # ── Phase 8: ON-DAMAGE triggers ────────────────────────────────
+        # Furious Charge CC: if defender's player stamped a conditional-Focus
+        # flag and suffered >= threshold damage this attack, apply Focus and
+        # consume the flag. JS combat-bridge.js:528-534.
+        cf = data.get('conditionalFocusIfDamagedGte')
+        if isinstance(cf, dict):
+            cf_pn = cf.get('playerNum')
+            cf_thresh = int(cf.get('threshold') or 0)
+            if (cf_pn is not None and int(cf_pn) == int(def_player)
+                    and damage >= cf_thresh and target_key):
+                apply_condition(data, target_key, 'Focus')
+                data['conditionalFocusIfDamagedGte'] = None
+
+        # Critical Hit (Mak Eshka'rey surge): on damage + surgeCriticalHit set,
+        # block defender from playing CCs for the rest of the round.
+        # JS combat-bridge.js:554-558.
+        combat_dict = data.get('pendingCombat') or {}
+        if damage > 0 and combat_dict.get('surgeCriticalHit'):
+            data['criticalHitBlockedPlayer'] = def_player
+
         try:
             from python.engine.abilities.pattern_d import fire_ability
             for ability_id in defender_sids:

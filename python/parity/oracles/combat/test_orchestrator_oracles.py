@@ -561,6 +561,81 @@ def test_deflection_conditional_only_fires_on_zero_damage():
     assert (g.data.get('deflectionPending') or {}).get(2) == 2
 
 
+def test_furious_charge_focuses_defender_when_damage_gte_threshold():
+    """conditionalFocusIfDamagedGte: on damage >= threshold, defender gains
+    Focus and the flag clears."""
+    fixture = _base_fixture()
+    fixture['conditionalFocusIfDamagedGte'] = {'playerNum': 2, 'threshold': 1}
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) < 1:
+        pytest.skip('no damage on this seed')
+    conds = (g.data.get('figureConditions') or {}).get('Darth Vader-0-0') or []
+    assert 'Focus' in conds, f'Vader should be Focused; got {conds}'
+    assert g.data.get('conditionalFocusIfDamagedGte') is None, (
+        'flag should be cleared after firing'
+    )
+
+
+def test_furious_charge_does_not_fire_below_threshold():
+    """Threshold gate: damage < threshold keeps flag and does not Focus."""
+    fixture = _base_fixture()
+    fixture['conditionalFocusIfDamagedGte'] = {'playerNum': 2, 'threshold': 99}
+    g = _game(fixture)
+    orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    conds = (g.data.get('figureConditions') or {}).get('Darth Vader-0-0') or []
+    assert 'Focus' not in conds, 'no Focus below threshold'
+    assert g.data.get('conditionalFocusIfDamagedGte') is not None, (
+        'flag must be preserved when threshold not met'
+    )
+
+
+def test_furious_charge_only_fires_for_matching_player():
+    """Flag with playerNum=1 must not fire when P2 takes damage."""
+    fixture = _base_fixture()
+    fixture['conditionalFocusIfDamagedGte'] = {'playerNum': 1, 'threshold': 1}
+    g = _game(fixture)
+    orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    conds = (g.data.get('figureConditions') or {}).get('Darth Vader-0-0') or []
+    assert 'Focus' not in conds, 'P1-owned flag must not fire for P2 damage'
+    assert g.data.get('conditionalFocusIfDamagedGte') is not None
+
+
+def test_critical_hit_blocks_defender_from_playing_ccs():
+    """critical_hit surge (Mak Eshka'rey) stamps surgeCriticalHit on the
+    combat dict; post-damage this sets criticalHitBlockedPlayer so the
+    defender can't play Command cards the rest of the round."""
+    g = _game(_base_fixture())
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        surge_spends=['critical_hit'],
+        attack_dice_override=['red', 'blue', 'blue'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) == 0:
+        pytest.skip('no damage on this seed')
+    assert g.data.get('criticalHitBlockedPlayer') == 2, (
+        f"criticalHitBlockedPlayer should be 2 (defender); "
+        f"got {g.data.get('criticalHitBlockedPlayer')}"
+    )
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()
