@@ -293,6 +293,27 @@ def test_surge_spend_pierce_applies_to_combat():
     )
 
 
+def test_surge_spend_blast_populates_surgeBlast_field():
+    """Spending a 'blast 2' surge populates combat.surgeBlast = 2.
+
+    The blast phase (reads surgeBlast + bonusBlast) then triggers
+    adjacent-figure damage. This test verifies the plumbing —
+    end-to-end blast-damage-lands is gated on map adjacency which
+    varies per map and isn't worth tuning a fixture for."""
+    g = _game(_base_fixture())
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['yellow', 'yellow'],
+        defense_dice_override=['white'],
+        surge_spends=['blast 2'],
+    )
+    assert result['combat'].get('surgeBlast') == 2, (
+        f'surgeBlast should be 2 after spending blast 2; got '
+        f'{result["combat"].get("surgeBlast")}'
+    )
+
+
 def test_surge_spend_bleed_applies_condition():
     """Spending a 'bleed' surge adds Bleed to surgeConditions."""
     g = _game(_base_fixture())
