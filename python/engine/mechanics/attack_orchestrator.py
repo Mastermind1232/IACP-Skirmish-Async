@@ -582,6 +582,41 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         if damage > 0 and combat_dict.get('surgeCriticalHit'):
             data['criticalHitBlockedPlayer'] = def_player
 
+        # Stun Batons (Riot Trooper passive): on damage dealt, target takes
+        # 1 additional Strain (= 1 HP damage). Flame Trooper attachment
+        # grants Fireproof immunity. JS combat-bridge.js:535-552.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            dc_eff = get_dc_effects() or {}
+            atk_passives = (dc_eff.get(atk_dc) or {}).get('passives') or []
+            if damage > 0 and 'Stun Batons' in atk_passives and def_msg_id:
+                atk_key = f'p{def_player}DcAttachments'
+                def_atts = (data.get(atk_key) or {}).get(def_msg_id) or []
+                fireproof = any('Flame Trooper' in str(a) for a in def_atts)
+                if not fireproof:
+                    dcs = data.get('dcHealthState') or {}
+                    reduce_hp(dcs, data, def_msg_id, def_fig_idx, 1, def_player)
+        except Exception:
+            pass
+
+        # Self-Preservation (Hired Gun Elite passive): on any damage taken
+        # while alive, defender gains Focus. JS combat-bridge.js:560-568.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            dc_eff = get_dc_effects() or {}
+            def_passives = (dc_eff.get(def_dc) or {}).get('passives') or []
+            if damage > 0 and 'Self-Preservation' in def_passives and target_key:
+                # Check still alive after damage.
+                dcs = data.get('dcHealthState') or {}
+                entry = (dcs.get(def_msg_id) or [])
+                alive = (def_fig_idx < len(entry) and
+                         isinstance(entry[def_fig_idx], list) and
+                         int(entry[def_fig_idx][0] or 0) > 0)
+                if alive:
+                    apply_condition(data, target_key, 'Focus')
+        except Exception:
+            pass
+
         try:
             from python.engine.abilities.pattern_d import fire_ability
             for ability_id in defender_sids:

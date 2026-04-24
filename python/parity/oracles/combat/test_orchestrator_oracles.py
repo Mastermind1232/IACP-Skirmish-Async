@@ -636,6 +636,104 @@ def test_critical_hit_blocks_defender_from_playing_ccs():
     )
 
 
+def test_stun_batons_deals_extra_strain_on_damage():
+    """Riot Trooper Stun Batons: on damage, target takes +1 HP strain."""
+    fixture = _base_fixture()
+    # Swap Luke (no Stun Batons) for Riot Trooper (Elite) — has Stun Batons.
+    fixture['figurePositions'] = {
+        1: {'Riot Trooper (Elite)-0-0': 'e5'},
+        2: {'Darth Vader-0-0': 'f5'},
+    }
+    fixture['p1DcList'] = [{'dcName': 'Riot Trooper (Elite)', 'dgIndex': 0}]
+    fixture['dcMessageMeta']['hl1dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Riot Trooper (Elite)', 'playerNum': 1,
+    }
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Riot Trooper (Elite)-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) == 0:
+        pytest.skip('no damage on this seed')
+    # Vader starts at 12; took `damage` + 1 (Stun Batons strain).
+    expected = 12 - result['damage'] - 1
+    assert g.data['dcHealthState']['hl2dc0'][0][0] == expected, (
+        f'Vader HP should be {expected} (damage {result["damage"]} + 1 strain); '
+        f'got {g.data["dcHealthState"]["hl2dc0"][0][0]}'
+    )
+
+
+def test_stun_batons_skipped_when_no_damage_dealt():
+    """Stun Batons requires damage > 0."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Riot Trooper (Elite)-0-0': 'e5'},
+        2: {'Darth Vader-0-0': 'f5'},
+    }
+    fixture['p1DcList'] = [{'dcName': 'Riot Trooper (Elite)', 'dgIndex': 0}]
+    fixture['dcMessageMeta']['hl1dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Riot Trooper (Elite)', 'playerNum': 1,
+    }
+    g = _game(fixture)
+    # Find a miss seed to verify Stun Batons does NOT fire without damage.
+    miss_game = None
+    for seed in range(50):
+        fx = {**fixture}
+        fx['figurePositions'] = {
+            1: {'Riot Trooper (Elite)-0-0': 'e5'},
+            2: {'Darth Vader-0-0': 'f5'},
+        }
+        fx['dcHealthState'] = {
+            'hl1dc0': [[10, 10]], 'hl2dc0': [[12, 12]],
+        }
+        g2 = _game(dict(fx))
+        r = orchestrate_attack(
+            g2, 'Riot Trooper (Elite)-0-0', 'Darth Vader-0-0',
+            rng=random.Random(seed),
+            attack_dice_override=['blue'],
+            defense_dice_override=['red', 'red'],
+        )
+        if not r.get('hit') or r.get('damage', 0) == 0:
+            miss_game = g2
+            break
+    if miss_game is None:
+        pytest.skip('no zero-damage outcome')
+    assert miss_game.data['dcHealthState']['hl2dc0'][0][0] == 12, (
+        'Vader HP should be untouched when no damage dealt'
+    )
+
+
+def test_stun_batons_skipped_when_target_has_flame_trooper():
+    """Flame Trooper attachment grants Fireproof — immune to Stun Batons."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Riot Trooper (Elite)-0-0': 'e5'},
+        2: {'Darth Vader-0-0': 'f5'},
+    }
+    fixture['p1DcList'] = [{'dcName': 'Riot Trooper (Elite)', 'dgIndex': 0}]
+    fixture['dcMessageMeta']['hl1dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Riot Trooper (Elite)', 'playerNum': 1,
+    }
+    fixture['p2DcAttachments'] = {'hl2dc0': ['Flame Trooper']}
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Riot Trooper (Elite)-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) == 0:
+        pytest.skip('no damage on this seed')
+    # Fireproof — only the direct damage, not the +1 strain.
+    expected = 12 - result['damage']
+    assert g.data['dcHealthState']['hl2dc0'][0][0] == expected, (
+        f'Fireproof should skip Stun Batons strain; expected {expected}, '
+        f'got {g.data["dcHealthState"]["hl2dc0"][0][0]}'
+    )
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()
