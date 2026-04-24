@@ -381,8 +381,31 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
                     and i < len(msg_ids)):
                 msg_id_now = msg_ids[i]
                 dc_actions = dict(game.data.get('dcActionsData') or {})
+                # Stunned figures: clear Stun at start of activation
+                # and only get 1 action (instead of 2). Per IACP rules,
+                # Stunned applies per-figure, so we check any figure in
+                # the group's condition list.
+                conds_map = game.data.get('figureConditions') or {}
+                any_stunned = False
+                cleared_conds = {}
+                for grp_fk in group_figs:
+                    fk_conds = list(conds_map.get(grp_fk) or [])
+                    if 'Stun' in fk_conds:
+                        any_stunned = True
+                        fk_conds.remove('Stun')
+                        cleared_conds[grp_fk] = fk_conds
+                if cleared_conds:
+                    new_conds = dict(conds_map)
+                    for fk_key, new_list in cleared_conds.items():
+                        if new_list:
+                            new_conds[fk_key] = new_list
+                        else:
+                            new_conds.pop(fk_key, None)
+                    game.data['figureConditions'] = new_conds
+                actions_this_activation = 1 if any_stunned else 2
                 dc_actions[msg_id_now] = {
-                    'remaining': 2, 'total': 2,
+                    'remaining': actions_this_activation,
+                    'total': actions_this_activation,
                     'messageId': None, 'threadId': None,
                     'specialsUsed': [],
                 }

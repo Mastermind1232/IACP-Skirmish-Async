@@ -241,8 +241,21 @@ def legal_actions(game: GameState) -> List[Action]:
                     if not is_chebyshev_adjacent(start_coord, tgt_coord):
                         continue
                 else:
-                    if not map_spaces or not has_line_of_sight(
-                        start_coord, tgt_coord, map_spaces,
+                    # Match stepper's LOS check: filter opened doors and
+                    # consider other-figure blocking, so legal_actions
+                    # doesn't offer attacks the stepper would reject.
+                    if not map_spaces:
+                        continue
+                    from python.engine.mechanics.los import (
+                        build_los_blocking_set, map_spaces_with_open_doors,
+                    )
+                    ms_eff = map_spaces_with_open_doors(
+                        map_spaces, game.get('openedDoors') or [],
+                    )
+                    fig_block = build_los_blocking_set(game, figure_key)
+                    if not has_line_of_sight(
+                        start_coord, tgt_coord, ms_eff,
+                        figure_blocking_coords=fig_block,
                     ):
                         continue
                 out.append(Action(

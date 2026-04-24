@@ -25,7 +25,7 @@ terrain blocking for this function. Self-exclusion at source/dest gives the
 OUT-of/INTO carveouts; the generic path-check gives the between-cells block.
 """
 import math
-from typing import Iterable, List, Optional, Set, Tuple
+from typing import Any, Iterable, List, Optional, Set, Tuple
 
 from .coords import parse_coord, col_row_to_coord
 

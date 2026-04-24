@@ -258,6 +258,58 @@ def test_orchestrator_defeat_skips_contraband_drop_non_carry_mission():
     assert not dropped, f'non-carry mission must not drop; got {dropped}'
 
 
+def test_activate_stunned_figure_clears_stun_and_halves_actions():
+    """Activating a Stunned figure: clears Stun, dcActionsData.total = 1."""
+    from python.engine.stepper import step, Action, ActionType
+    from python.engine.state import GameState
+    # Build a minimal game where Luke is Stunned and about to activate.
+    g_data = _base_fixture()
+    g_data['activationsRemaining'] = {1: 1, 2: 1}
+    g_data['p1ActivationsRemaining'] = 1
+    g_data['p2ActivationsRemaining'] = 1
+    g_data['figureConditions'] = {'Luke Skywalker-0-0': ['Stun', 'Focus']}
+    g_data['phase'] = 'round_active'
+    g_data['roundPhase'] = 'activation'
+    gs = GameState(g_data)
+    gs = step(gs, Action(
+        type=ActionType.ACTIVATE_DC, player=1,
+        params={'figure_key': 'Luke Skywalker-0-0'},
+    ))
+    # Stun cleared, Focus retained.
+    conds = gs.data.get('figureConditions', {}).get('Luke Skywalker-0-0', [])
+    assert 'Stun' not in conds, f'Stun should be cleared; got {conds}'
+    assert 'Focus' in conds, f'Focus should remain; got {conds}'
+    # dcActionsData.total == 1 (halved from 2).
+    dc_act = gs.data.get('dcActionsData', {})
+    entry = dc_act.get('hl1dc0')
+    assert entry is not None, 'dcActionsData entry missing'
+    assert entry['total'] == 1 and entry['remaining'] == 1, (
+        f'stunned activation should give 1 action; got {entry}'
+    )
+
+
+def test_activate_non_stunned_figure_gets_2_actions():
+    """Normal activation: dcActionsData.total = 2, no Stun changes."""
+    from python.engine.stepper import step, Action, ActionType
+    from python.engine.state import GameState
+    g_data = _base_fixture()
+    g_data['activationsRemaining'] = {1: 1, 2: 1}
+    g_data['p1ActivationsRemaining'] = 1
+    g_data['p2ActivationsRemaining'] = 1
+    g_data['phase'] = 'round_active'
+    g_data['roundPhase'] = 'activation'
+    gs = GameState(g_data)
+    gs = step(gs, Action(
+        type=ActionType.ACTIVATE_DC, player=1,
+        params={'figure_key': 'Luke Skywalker-0-0'},
+    ))
+    entry = gs.data.get('dcActionsData', {}).get('hl1dc0')
+    assert entry is not None
+    assert entry['total'] == 2 and entry['remaining'] == 2, (
+        f'normal activation should give 2 actions; got {entry}'
+    )
+
+
 def test_orchestrator_multi_figure_group_partial_wipe():
     """Defeating one figure of a multi-figure group doesn't decrement
     activationsRemaining (group still alive)."""
