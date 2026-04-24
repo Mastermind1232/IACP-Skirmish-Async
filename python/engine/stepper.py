@@ -1561,19 +1561,142 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
         except Exception:
             pass
 
-    # Clear round-scoped CC/ability state: Fuel Upgrade, Elusive,
-    # Cheat to Win, Covering Fire, Built on Hope, Arcing Shot, etc.
-    # These set roundDefenseBonus*, activeCardEffects flags, or
-    # *Active fields that should reset at round boundary.
-    game['pendingCombat'] = None
-    game['nextAttacksBonusHits'] = None
-    game['nextAttacksBonusAcc'] = None
-    game['freeAttackBonusPending'] = None
-    game['mobileMovementActive'] = None
-    game['activeCardEffects'] = None
-    game['fluctuationSwappedThisRound'] = []
-    game['paybackBonusSurge'] = None
-    game['reinforcementsPlayedThisSor'] = False
+    # Reset all round-scoped flags at start of new round. Mirrors JS
+    # activation-state.js:cleanupRoundStart — comprehensive list of
+    # per-round CC / ability / combat / pending flags.
+    _ROUND_OBJECT_FLAGS = [
+        'roundDefenseBonusBlock', 'roundDefenseBonusEvade',
+        'roundDefenseAccuracyPenalty', 'roundMobileDefenseBonusBlock',
+        'roundDefenderBonusBlockPerEvade', 'roundTrooperAttackHitBonus',
+        'roundVehicleSpeedBonus', 'deflectionPending',
+        'deflectionUnconditional', 'roundAttackRerollDice',
+        'freeAttackBonusPending', 'pendingOverrideAttackDice',
+        'pendingSlingBarrage', 'nextAttackReach', 'fellSwoopFreeAttack',
+        'roundAttackSurgeBonus', 'overrunThisActivation',
+        'roundFigureAbilityUsed', 'roundEfficientTravel',
+        'nextAttackIgnoreFigureLOS', 'findsmanMeditationTarget',
+        'vanishImmunityUntilNextActivation', 'falseOrdersUpgrade',
+        'setTrapSpace', 'reverseEngineerActive', 'pendingMpBonus',
+        'pummelTwoAttacksThisActivation', 'pummelAttacksRemaining',
+        'overrunDamagedThisMove', 'overdriveUsedThisActivation',
+        'stayDownPendingMsgId', 'burstFirePendingMsgId',
+        'cripplingBlowPending', 'disruptorRiflePending',
+        'tonfaStrikeSecondAttack', 'barrageSecondAttack',
+        'barrageTargetSpace', 'barrageDefenseBonus',
+        'pendingMultiTargetRoll', 'closeQuartersActive',
+        'selfDestructProtocolTriggered', 'mobileMovementActive',
+        'moveXBypassActive', 'rushPending', 'shoulderRushPending',
+        'forcedAttackTarget', 'figureMoved', 'tripodAttacked',
+        'activationStartPositions', 'selfDefeatsAfterAttackMsgId',
+        'applySelfStunAfterAttackPlayerNum', 'postActivationConditions',
+        'pendingCombatResupply', 'pendingPostAttackConditions',
+        'nextActivationFreeAttack', 'vetInstinctsActiveThisActivation',
+        'surgeDoublingActive', 'optimalBombardmentBlastBonus',
+        'recoverOnHostileDefeat', 'nextHostileDefeatVpBonus',
+        'dcActivationLogMessageIds', 'defenderThreadData',
+        'deviceRerollGranted', 'nextAttackBonusAccuracy',
+        'priceBounties', 'diplomaticMissionEvade',
+        'lastResortTriggered', 'attackPerformedThisActivation',
+        'vadersFocusUsedThisRound', 'scavengedWalkerAttackPenalty',
+        'drivenByHatredAttackPenalty', 'roundProgrammingOverrideTrait',
+        'autofireActive', 'fireMissionActive',
+        'autofireChainTargetSpace', 'darksaberSecondAttack',
+        'saberOrbitAttacksRemaining', 'pendingOverwatchPlacement',
+        'activationKills', 'activationDamagedFigures',
+        'pendingBombDrop', 'massiveMovementLocked',
+        'disarmPermanentWeakened', 'adrenalineBonuses',
+        'opportunisticMustSpendNow', 'imperialRetrofittingMultiAttack',
+        'urgencyMustSpendAll', 'arcingShotActive', 'pendingSpacePick',
+        'roundTrooperSurgeStun', 'pendingDcAbilityChoice',
+        'moveInProgress', 'forceSlowSkipActivation', 'executorTriggered',
+    ]
+    _ROUND_NULL_FLAGS = [
+        'hitAndRunPendingMp', 'nextAttacksBonusHits',
+        'nextAttackBonusSurgeAbilities', 'nextAttackBonusPierce',
+        'nextAttacksBonusConditions',
+        'roundDefenderCannotBeTargetedUnlessWithinSpaces',
+        'roundDebuffNextHostileActivation',
+        'roundDroidExtraActionCostDamage', 'sitTightPlayerNum',
+        'roundInTheShadowsPlayerNum', 'strengthInNumbersPlayerNum',
+        'strengthInNumbersData', 'provokeNextActivation',
+        'agitateNextActivation', 'forceVisionNextActivation',
+        'forceVisionPending', 'stillFasterExcludeMsgId',
+        'pendingStillFaster', 'roundUtinniJawaBuffs',
+        'roundSmugglersTricksPlayerNum', 'squadSwarmPlayerNum',
+        'squadSwarmCumulativeCost',
+        'whenDefeatHostileWithin3GainBlockTokens',
+        'pendingRushPush', 'pendingMassivePush',
+        'pendingEmperorInterrupt', 'pendingExecutiveOrder',
+        'pendingBombardmentSorin', 'pendingFiringSquad',
+        'pendingCoordinatedRaid', 'pendingFieldTactics',
+        'pendingAwr', 'sonOfSkywalkerActive', 'dataTheftStolenCard',
+        'conditionalFocusIfDamagedGte', 'pendingToughLuck',
+        'pendingBELReorder', 'pendingThereIsNoTry',
+        'pendingSelfDestruct', 'pendingLastResort',
+        'nextDefeatedFriendlyVpReduction', 'forceDefenderRerollOne',
+        'doubleMatchingIconsOnReroll', 'pendingHunterProtocol',
+        'holdGroundPlayerNum', 'windfallActive', 'wreakVengeanceActive',
+        'toughLuckPlayerNum', 'thereIsNoTryPlayerNum',
+        'youWillNotDenyMeActive', 'mandaAsteelPlayerNum',
+        'stillFasterPlayerNum', 'signalJammerActive',
+        'terminalControlPlayerNum', 'unlimitedPowerActive',
+        'shadowOpsBlockedPlayer', 'criticalHitBlockedPlayer',
+        'pendingOrbitalBombardment', 'pendingYHSIW',
+        'powerfulInfluencePlayerNum', 'restInPeaceActive',
+        'pendingIllicitArms', 'pendingExtraProtection',
+        'extraProtectionTriggeredThisCombat',
+        'pendingExecutorInterrupt', 'pendingCcConfirmation',
+        'pendingNegation', 'pendingCommDisruptionPrompt',
+        'pendingCoverFire', 'pendingStrainChoice', 'pendingVoracious',
+        'pendingAssassinsBlade', 'pendingPunishingStrike',
+        'pendingConspire', 'pendingItWillBeAlright',
+        'pendingGeneralsOrders', 'pendingMotivation',
+        'pendingTrustedAlly', 'pendingTokenDistribution',
+        'pendingLieInAmbush', 'pendingPowerTokenGrant',
+        'pendingChannelTheForceStrain', 'pendingIllegalCcPlay',
+        'pendingCcAttachment', 'pendingCcChoice',
+        'pendingCcSpaceChoice', 'pendingIKnowEverything',
+        'pendingSurgeOverflow', 'pendingInterrogate',
+        'pendingMastery', 'pendingMissionSorReveal',
+        'pendingSuppressiveFireMp',
+        'pendingCelebration', 'pendingCleave',
+        'pendingFightingKnife', 'pendingConcussiveBolt',
+        'pendingSpreadThePain', 'pendingSpreadThePainCondPick',
+        'pendingReaction', 'pendingBoltslinger',
+        'pendingIndiscriminateFire', 'pendingHeavyFire',
+        'pendingHavocShot', 'pendingDeflect',
+        'pendingWantonDestruction', 'pendingFigurehead',
+        'pendingRogueOneTokenPick', 'pendingZilloDiscard',
+        'pendingStrikeMeDown', 'pendingSlowOnTheDraw',
+        'pendingForceExhaustion', 'slowOnTheDrawInterrupt',
+        'pendingFalseOrders', 'pendingOrderedMove',
+        'pendingShoulderRush', 'pendingDioFollow',
+        'pendingEe3Carbine', 'pendingRightBackAtYa',
+        'pendingBattlefieldLeadership',
+        'pendingScavengedWeaponryTransfer',
+        'pendingHeroicEffortReturn',
+        # Python-specific; present for parity with our internal state
+        'pendingCombat', 'activeCardEffects', 'paybackBonusSurge',
+    ]
+    _ROUND_ARRAY_FLAGS = [
+        'crippledFigures', 'disabledFigures', 'etiquetteBlockPairs',
+        'fluctuationSwappedThisRound', 'abilityExhaustedMsgIds',
+    ]
+    _ROUND_FALSE_FLAGS = [
+        'harshEnvironmentActive', 'noCommandDrawThisRound',
+        'p1LaunchPanelFlippedThisRound',
+        'p2LaunchPanelFlippedThisRound',
+        'powerConverterUsedThisRound',
+        'reinforcementsPlayedThisSor',
+    ]
+    for k in _ROUND_OBJECT_FLAGS:
+        game.data[k] = {}
+    for k in _ROUND_NULL_FLAGS:
+        game.data[k] = None
+    for k in _ROUND_ARRAY_FLAGS:
+        game.data[k] = []
+    for k in _ROUND_FALSE_FLAGS:
+        game.data[k] = False
 
     return game
 

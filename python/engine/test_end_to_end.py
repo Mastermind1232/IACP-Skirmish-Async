@@ -96,9 +96,13 @@ def test_cc_draw_refreshes_hand_at_round_start():
 
 
 def test_round_scoped_state_clears_on_eor():
-    """End-of-round clears pendingCombat, mobileMovementActive, etc."""
+    """End-of-round clears pendingCombat, mobileMovementActive, etc.
+
+    Post-commit matching JS activation-state.js:cleanupRoundStart,
+    OBJECT_FLAGS get reset to {} and NULL_FLAGS get reset to None.
+    Either "empty" form satisfies the clear-on-EoR contract.
+    """
     g = _autodeploy_game(seed=3)
-    # Stamp round-scoped state.
     g.data['pendingCombat'] = {'bonusHits': 2}
     g.data['mobileMovementActive'] = {'msg1': True}
     g.data['activeCardEffects'] = {'Devotion': {'flag': 'devotionEffect'}}
@@ -106,10 +110,12 @@ def test_round_scoped_state_clears_on_eor():
     g.data['activationsRemaining'] = {1: 0, 2: 0}
     g.data['roundPhase'] = 'end'
     g = step(g, Action(type=ActionType.END_END_OF_ROUND, player=0))
-    assert g.data.get('pendingCombat') is None
-    assert g.data.get('mobileMovementActive') is None
-    assert g.data.get('activeCardEffects') is None
-    assert g.data.get('paybackBonusSurge') is None
+    def _is_clear(v):
+        return v is None or v == {} or v == [] or v is False
+    assert _is_clear(g.data.get('pendingCombat'))
+    assert _is_clear(g.data.get('mobileMovementActive'))
+    assert _is_clear(g.data.get('activeCardEffects'))
+    assert _is_clear(g.data.get('paybackBonusSurge'))
 
 
 def test_vp_threshold_triggers_game_over():
