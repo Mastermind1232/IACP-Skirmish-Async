@@ -140,6 +140,92 @@ def get_threaded_corners(x1: float, y1: float, x2: float, y2: float
     return corners
 
 
+def build_los_blocking_set(game: Any, attacker_key: str) -> set:
+    """Collect the set of LOS-blocking cells: every other figure's
+    footprint (both sides), excluding the attacker's own footprint,
+    MASSIVE figures, and companion figures.
+
+    Mirrors JS `available-actions.js:2233-2246`. Callers pass this set
+    into `has_line_of_sight` as `figure_blocking_coords`.
+    """
+    from python.engine.data.dc_effects_loader import get_dc_effect
+    from python.engine.mechanics.board_helpers import (
+        get_effective_figure_size,
+    )
+    from python.engine.mechanics.coords import (
+        get_footprint_cells, normalize_coord,
+    )
+    from python.engine.mechanics.dc_helpers import dc_name_from_figure_key
+
+    data = game.data if hasattr(game, 'data') else game
+    positions_map = data.get('figurePositions') or {}
+    # Compute attacker's footprint so it doesn't self-block.
+    att_footprint: set = set()
+    for pn_key, poses in positions_map.items():
+        if not isinstance(poses, dict):
+            continue
+        for fk, pos in poses.items():
+            if fk == attacker_key and pos:
+                size = get_effective_figure_size(
+                    game, fk, dc_name_from_figure_key(fk),
+                )
+                for c in get_footprint_cells(pos, size):
+                    att_footprint.add(normalize_coord(c))
+    blocking: set = set()
+    for pn_key, poses in positions_map.items():
+        if not isinstance(poses, dict):
+            continue
+        for fk, pos in poses.items():
+            if not pos or fk == attacker_key:
+                continue
+            dc_name = dc_name_from_figure_key(fk)
+            eff = get_dc_effect(dc_name) or {}
+            # Companions and MASSIVE figures don't block LOS.
+            if eff.get('companion') is True:
+                continue
+            if any(str(k).upper() == 'MASSIVE'
+                   for k in (eff.get('keywords') or [])):
+                continue
+            size = get_effective_figure_size(game, fk, dc_name)
+            for c in get_footprint_cells(pos, size):
+                nc = normalize_coord(c)
+                if nc in att_footprint:
+                    continue
+                blocking.add(nc)
+    return blocking
+
+
+def map_spaces_with_open_doors(map_spaces: dict,
+                                opened_doors: Iterable[str]) -> dict:
+    """Return a shallow copy of `map_spaces` with `impassableEdges`
+    filtered to exclude any open-door edges.
+
+    `opened_doors` is a list of `"a|b"` or `"b|a"` edge-key strings
+    (matches JS `game.openedDoors` shape).
+    """
+    if not map_spaces:
+        return map_spaces
+    impassable = map_spaces.get('impassableEdges') or []
+    if not impassable or not opened_doors:
+        return map_spaces
+    opened = {str(k).lower() for k in opened_doors}
+    if not opened:
+        return map_spaces
+    filtered = []
+    for edge in impassable:
+        if not isinstance(edge, (list, tuple)) or len(edge) < 2:
+            filtered.append(edge)
+            continue
+        a = str(edge[0]).lower()
+        b = str(edge[1]).lower()
+        key_ab = f'{a}|{b}'
+        key_ba = f'{b}|{a}'
+        if key_ab in opened or key_ba in opened:
+            continue
+        filtered.append(edge)
+    return {**map_spaces, 'impassableEdges': filtered}
+
+
 def has_line_of_sight(coord1: str, coord2: str, map_spaces: dict,
                       figure_blocking_coords: Optional[Iterable[str]] = None
                       ) -> bool:

@@ -786,6 +786,7 @@ def _set_figure_hp(game: GameState, player: int, figure_key: str, cur: int, mx: 
 
 def _attack_legal(
     game: GameState, attacker_coord: str, target_coord: str, attack_type: str,
+    attacker_key: Optional[str] = None,
 ) -> Optional[str]:
     """Return an error string if the attack is illegal, else None."""
     attack_type = (attack_type or 'range').lower()
@@ -797,7 +798,18 @@ def _attack_legal(
     map_spaces = get_map_spaces(map_id) if map_id else {}
     if not map_spaces:
         return f'no map spaces for mapId={map_id!r}'
-    if not has_line_of_sight(attacker_coord, target_coord, map_spaces):
+    # Filter opened doors out of impassableEdges so LOS can trace
+    # through them. Also pass the figure-blocking set so other figures
+    # (including multi-cell footprints) block ranged LOS.
+    from python.engine.mechanics.los import (
+        build_los_blocking_set, map_spaces_with_open_doors,
+    )
+    ms_eff = map_spaces_with_open_doors(
+        map_spaces, game.data.get('openedDoors') or [],
+    )
+    fig_block = build_los_blocking_set(game, attacker_key) if attacker_key else None
+    if not has_line_of_sight(attacker_coord, target_coord, ms_eff,
+                              figure_blocking_coords=fig_block):
         return f'no LOS from {attacker_coord} to {target_coord}'
     return None
 
@@ -939,7 +951,8 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
     if not dice_colors:
         raise ValueError(f'attack_target: {atk_dc!r} has no attack dice')
 
-    err = _attack_legal(game, atk_coord, def_coord, attack_type)
+    err = _attack_legal(game, atk_coord, def_coord, attack_type,
+                         attacker_key=attacker_key)
     if err:
         raise ValueError(f'attack_target: {err}')
 
