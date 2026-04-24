@@ -1,0 +1,31 @@
+{
+  "_applied": false,
+  "_gated_by": "range-under-5",
+  "_result_keys": [
+    "applied",
+    "gated_by"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "trigger": "combat-declare"
+}
