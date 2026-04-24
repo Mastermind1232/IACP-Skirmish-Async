@@ -408,12 +408,43 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     combat['spentTokens'] = tokens_spent_detail
 
     # ── Phase 4: SURGE spends ────────────────────────────────────────────
+    # Each surge_spend key is parsed via parse_surge_effect and its
+    # modifiers are accumulated into combat.surge* fields, which
+    # compute_combat_result then reads. Previously: just decremented
+    # surgeRemaining — surges had no effect on the damage math.
+    from python.engine.mechanics.surge import parse_surge_effect
     spent_surges: List[str] = []
     for ability_id in (surge_spends or []):
         if combat['surgeRemaining'] <= 0:
             break
         combat['surgeRemaining'] -= 1
         spent_surges.append(ability_id)
+        eff = parse_surge_effect(ability_id) or {}
+        # Integer modifiers accumulate into combat.surge* slots.
+        for js_key, combat_key in (
+            ('damage', 'surgeDamage'),
+            ('pierce', 'surgePierce'),
+            ('accuracy', 'surgeAccuracy'),
+            ('blast', 'surgeBlast'),
+            ('recover', 'surgeRecover'),
+            ('cleave', 'surgeCleave'),
+        ):
+            delta = int(eff.get(js_key) or 0)
+            if delta:
+                combat[combat_key] = int(combat.get(combat_key) or 0) + delta
+        # Bleed/Stun/Weaken conditions — accumulate into surgeConditions.
+        for cond in (eff.get('conditions') or []):
+            lst = list(combat.get('surgeConditions') or [])
+            lst.append(cond)
+            combat['surgeConditions'] = lst
+        # Named-effect flags that compute_combat_result reads directly.
+        for flag in ('surgeCancel', 'surgeCancelDodge',
+                     'replaceWithStun'):
+            if flag in eff:
+                if flag == 'surgeCancel':
+                    combat['surgeCancel'] = int(combat.get('surgeCancel') or 0) + int(eff[flag])
+                else:
+                    combat[flag] = eff[flag]
     combat['triggeredSurges'] = spent_surges
 
     # ── Phase 6: RESOLVE ────────────────────────────────────────────────

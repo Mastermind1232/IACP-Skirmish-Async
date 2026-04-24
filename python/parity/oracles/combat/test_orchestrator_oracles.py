@@ -258,6 +258,58 @@ def test_orchestrator_defeat_skips_contraband_drop_non_carry_mission():
     assert not dropped, f'non-carry mission must not drop; got {dropped}'
 
 
+def test_surge_spend_damage_applies_to_combat():
+    """Spending a 'damage 2' surge adds 2 to combat.surgeDamage,
+    which compute_combat_result reads into final damage."""
+    g = _game(_base_fixture())
+    # Attacker has 2 surge baseline; spend 'damage 2'.
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['yellow', 'yellow', 'yellow'],  # gets surges
+        defense_dice_override=['white'],
+        surge_spends=['damage 2'],
+    )
+    combat = result['combat']
+    assert combat.get('surgeDamage', 0) >= 2, (
+        f'surgeDamage should be >=2 after spending "damage 2"; got '
+        f'{combat.get("surgeDamage")}'
+    )
+
+
+def test_surge_spend_pierce_applies_to_combat():
+    """Spending a 'pierce 1' surge adds 1 to combat.surgePierce."""
+    g = _game(_base_fixture())
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['yellow', 'yellow'],
+        defense_dice_override=['white'],
+        surge_spends=['pierce 1'],
+    )
+    combat = result['combat']
+    assert combat.get('surgePierce', 0) >= 1, (
+        f'surgePierce should be >=1; got {combat.get("surgePierce")}'
+    )
+
+
+def test_surge_spend_bleed_applies_condition():
+    """Spending a 'bleed' surge adds Bleed to surgeConditions."""
+    g = _game(_base_fixture())
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['yellow', 'yellow'],
+        defense_dice_override=['white'],
+        surge_spends=['bleed'],
+    )
+    combat = result['combat']
+    surge_conds = combat.get('surgeConditions') or []
+    assert 'Bleed' in surge_conds, (
+        f'surgeConditions should include Bleed; got {surge_conds}'
+    )
+
+
 def test_activate_stunned_figure_clears_stun_and_halves_actions():
     """Activating a Stunned figure: clears Stun, dcActionsData.total = 1."""
     from python.engine.stepper import step, Action, ActionType
