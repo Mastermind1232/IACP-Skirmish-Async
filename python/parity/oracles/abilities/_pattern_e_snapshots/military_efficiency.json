@@ -1,5 +1,7 @@
 {
-  "_effect_labels": [],
+  "_effect_labels": [
+    "military_efficiency_empty_discard"
+  ],
   "dcHealthState": {
     "hl1dc0": [
       [

@@ -1,5 +1,7 @@
 {
-  "_effect_labels": [],
+  "_effect_labels": [
+    "figurehead_noop"
+  ],
   "dcHealthState": {
     "hl1dc0": [
       [

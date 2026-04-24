@@ -133,7 +133,16 @@ def handle_schema_chain(game: Any, ability_id: str,
 
     Applies the common schema fields of the ability directly to game
     state. Returns {applied, effects, pending_key, log_message}.
+
+    Before running schema resolution, checks the bespoke registry for
+    ability IDs whose mechanic lives in JS handler code (not schema
+    fields). Bespoke handlers short-circuit the schema path.
     """
+    from python.engine.abilities.bespoke_e import get_bespoke_handler
+    bespoke = get_bespoke_handler(ability_id)
+    if bespoke is not None:
+        return bespoke(game, ability_id, ctx)
+
     entry = get_ability(ability_id) or {}
     # chooseOne: auto-pick option 0 (or ctx.choice_index if supplied) and
     # flatten its fields into the entry. Mirrors JS `entry.chooseOne[idx]`.

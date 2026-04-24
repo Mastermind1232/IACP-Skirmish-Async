@@ -1,5 +1,7 @@
 {
-  "_effect_labels": [],
+  "_effect_labels": [
+    "neurostim_resolved"
+  ],
   "dcHealthState": {
     "hl1dc0": [
       [
