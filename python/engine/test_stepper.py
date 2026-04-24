@@ -61,34 +61,44 @@ def test_pass_activation_turn_swaps_active_player():
     assert next_g.data['activePlayer'] == 1
 
 
-def test_end_activation_phase_requires_zero_activations():
+def test_end_activation_phase_noop_when_activations_remain():
+    """Mirrors JS handleStatusPhase: if activations remain, no-op
+    (return game unchanged) rather than raise."""
     g = create_game()
     g.data['activationsRemaining'] = {1: 2, 2: 0}
-    try:
-        step(g, Action(type=ActionType.END_ACTIVATION_PHASE, player=1))
-    except ValueError as e:
-        assert 'activations remaining' in str(e)
-        return
-    raise AssertionError('expected ValueError when activations remain')
+    g.data['roundPhase'] = 'activation'
+    new_g = step(g, Action(type=ActionType.END_ACTIVATION_PHASE, player=1))
+    assert new_g.data['roundPhase'] == 'activation'
+    assert not new_g.data.get('p1ActivationPhaseEnded')
 
 
-def test_end_activation_phase_transitions_to_end():
+def test_end_activation_phase_requires_both_players_ended():
+    """Mirrors JS: status_phase is per-player click. First click only
+    marks one player ended; second click transitions to 'end'."""
     g = create_game()
     g.data['activationsRemaining'] = {1: 0, 2: 0}
     g.data['roundPhase'] = 'activation'
-    new_g = step(g, Action(type=ActionType.END_ACTIVATION_PHASE, player=1))
-    assert new_g.data['roundPhase'] == 'end'
-    assert new_g.data['p1ActivationPhaseEnded'] is False
-    assert new_g.data['p2ActivationPhaseEnded'] is False
+    # First click: P1
+    g1 = step(g, Action(type=ActionType.END_ACTIVATION_PHASE, player=1))
+    assert g1.data['roundPhase'] == 'activation'
+    assert g1.data['p1ActivationPhaseEnded'] is True
+    assert not g1.data.get('p2ActivationPhaseEnded')
+    # Second click: P2 → transition
+    g2 = step(g1, Action(type=ActionType.END_ACTIVATION_PHASE, player=2))
+    assert g2.data['roundPhase'] == 'end'
+    assert g2.data['p1ActivationPhaseEnded'] is True
+    assert g2.data['p2ActivationPhaseEnded'] is True
 
 
 def test_end_activation_phase_accepts_missing_activations():
-    """Missing activationsRemaining should be treated as zero."""
+    """Missing activationsRemaining is treated as zero (no activations
+    to block on). Both-players requirement still applies."""
     g = create_game()
     g.data.pop('activationsRemaining', None)
     g.data['roundPhase'] = 'activation'
-    new_g = step(g, Action(type=ActionType.END_ACTIVATION_PHASE, player=1))
-    assert new_g.data['roundPhase'] == 'end'
+    g1 = step(g, Action(type=ActionType.END_ACTIVATION_PHASE, player=1))
+    g2 = step(g1, Action(type=ActionType.END_ACTIVATION_PHASE, player=2))
+    assert g2.data['roundPhase'] == 'end'
 
 
 def test_is_implemented_reports_correctly():
@@ -2374,8 +2384,8 @@ def main():
         ('unknown_action_raises', test_unknown_action_raises),
         ('step_does_not_mutate_input', test_step_does_not_mutate_input),
         ('pass_activation_turn_swaps_active_player', test_pass_activation_turn_swaps_active_player),
-        ('end_activation_phase_requires_zero_activations', test_end_activation_phase_requires_zero_activations),
-        ('end_activation_phase_transitions_to_end', test_end_activation_phase_transitions_to_end),
+        ('end_activation_phase_noop_when_activations_remain', test_end_activation_phase_noop_when_activations_remain),
+        ('end_activation_phase_requires_both_players_ended', test_end_activation_phase_requires_both_players_ended),
         ('end_activation_phase_accepts_missing_activations', test_end_activation_phase_accepts_missing_activations),
         ('is_implemented_reports_correctly', test_is_implemented_reports_correctly),
         ('activate_dc_sets_movement_points_from_speed', test_activate_dc_sets_movement_points_from_speed),

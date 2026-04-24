@@ -69,6 +69,12 @@ DISCORD_ONLY_PATHS = frozenset({
     'p1DcMessageIds', 'p2DcMessageIds',
     'isTestGame', 'recordedAt',
     'boardId',
+    # Discord-auth-layer fields: JS's handleStatusPhase bails via
+    # canActAsPlayer check when userId doesn't match player1Id/player2Id,
+    # leaving these fields unset. Python's pure game-engine stepper has
+    # no notion of userId so it applies the mutation. This asymmetry
+    # is expected — filter out of diff reports.
+    'p1ActivationPhaseEnded', 'p2ActivationPhaseEnded',
 })
 
 

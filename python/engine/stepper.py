@@ -110,6 +110,44 @@ def _has_any_activations_remaining(game: GameState) -> bool:
         for v in rem.values():
             if isinstance(v, (int, float)) and v > 0:
                 return True
+    # Mirror JS: p1/p2ActivationsRemaining are also tracked.
+    if (game.get('p1ActivationsRemaining') or 0) > 0:
+        return True
+    if (game.get('p2ActivationsRemaining') or 0) > 0:
+        return True
+    return False
+
+
+def _has_dc_actions_remaining_in_game(game: GameState) -> bool:
+    """Mirror src/engine/game-readers.js:hasActionsRemainingInGame.
+
+    True iff any DC-actions-data entry has remaining>0 AND the owning
+    group still has at least one figure on the board.
+    """
+    dc_actions = game.get('dcActionsData') or {}
+    dc_meta = game.get('dcMessageMeta') or []
+    if not dc_actions or not dc_meta:
+        return False
+    # dcMessageMeta is a list of [msgId, metaDict] pairs when loaded
+    # from JS, or a dict in Python-native form.
+    if isinstance(dc_meta, list):
+        iter_meta = dc_meta
+    elif isinstance(dc_meta, Mapping):
+        iter_meta = list(dc_meta.items())
+    else:
+        return False
+    for mid, meta in iter_meta:
+        if not isinstance(meta, Mapping):
+            continue
+        data = dc_actions.get(mid) or {}
+        if not isinstance(data, Mapping):
+            continue
+        if (data.get('remaining') or 0) <= 0:
+            continue
+        figs = (game.get('figurePositions') or {}).get(meta.get('playerNum')) or {}
+        dc_name = meta.get('dcName') or ''
+        if any(fk.startswith(dc_name + '-') for fk in figs):
+            return True
     return False
 
 
@@ -127,22 +165,36 @@ def _handle_pass_activation_turn(game: GameState, action: Action) -> GameState:
 
 
 def _handle_end_activation_phase(game: GameState, action: Action) -> GameState:
-    """End the activation phase and advance to end-of-round.
+    """End the activation phase — mirrors JS handleStatusPhase.
 
-    Preconditions (enforced):
-      - Both players must have 0 activations remaining.
+    JS semantics: each player clicks their own status_phase button.
+    On first click, set that player's p{N}ActivationPhaseEnded = True
+    and wait. On second click (other player), both flags become True
+    and roundPhase advances to 'end'.
+
+    Preconditions:
+      - Both players must have 0 activations remaining (and no DC
+        actions remaining — checked by the caller in full game).
     Effects:
-      - roundPhase -> 'end'
-      - Clears per-round activation-phase ready flags.
+      - Sets p{N}ActivationPhaseEnded for the acting player.
+      - If both are ended, advances roundPhase → 'end'.
     """
+    # Mirror JS handleStatusPhase: bail early (no-op) if activations
+    # OR DC actions remain. Unlike a ValueError raise, JS just returns
+    # without mutating state, so the drift harness sees no change.
     if _has_any_activations_remaining(game):
-        raise ValueError(
-            'end_activation_phase: activations remaining; '
-            f'state={game.get("activationsRemaining")}'
-        )
-    game['roundPhase'] = 'end'
-    game['p1ActivationPhaseEnded'] = False
-    game['p2ActivationPhaseEnded'] = False
+        return game
+    if _has_dc_actions_remaining_in_game(game):
+        return game
+    # Determine which player clicked. action.player is the acting player.
+    pn = action.player
+    if pn == 1:
+        game['p1ActivationPhaseEnded'] = True
+    elif pn == 2:
+        game['p2ActivationPhaseEnded'] = True
+    if (game.get('p1ActivationPhaseEnded')
+            and game.get('p2ActivationPhaseEnded')):
+        game['roundPhase'] = 'end'
     return game
 
 

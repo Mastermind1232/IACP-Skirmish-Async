@@ -321,7 +321,17 @@ def legal_actions(game: GameState) -> List[Action]:
         if rem_other > 0:
             out2.append(Action(type=ActionType.PASS_ACTIVATION_TURN, player=active))
     if rem_active == 0 and rem_other == 0:
-        out2.append(Action(type=ActionType.END_ACTIVATION_PHASE, player=active))
+        # Mirror JS status_phase: both players must click. Offer the
+        # action for whichever player hasn't clicked yet. If both
+        # haven't clicked, offer for active; else the remaining one.
+        p1_done = bool(game.get('p1ActivationPhaseEnded'))
+        p2_done = bool(game.get('p2ActivationPhaseEnded'))
+        if p1_done and not p2_done:
+            out2.append(Action(type=ActionType.END_ACTIVATION_PHASE, player=2))
+        elif p2_done and not p1_done:
+            out2.append(Action(type=ActionType.END_ACTIVATION_PHASE, player=1))
+        else:
+            out2.append(Action(type=ActionType.END_ACTIVATION_PHASE, player=active))
     elif rem_active == 0 and rem_other > 0:
         # Active player is out but opponent still has activations.
         # Must pass the activation turn so the opponent can act.
