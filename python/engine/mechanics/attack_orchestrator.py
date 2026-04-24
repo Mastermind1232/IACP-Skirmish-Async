@@ -599,6 +599,34 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         except Exception:
             pass
 
+        # Fury of Kashyyyk (army-wide attachment): when a friendly WOOKIEE
+        # suffers 3+ damage and survives, they become Focused.
+        # JS combat-bridge.js:570-582.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            dc_eff = get_dc_effects() or {}
+            if damage >= 3 and target_key and def_msg_id:
+                dcs = data.get('dcHealthState') or {}
+                entry = (dcs.get(def_msg_id) or [])
+                alive = (def_fig_idx < len(entry) and
+                         isinstance(entry[def_fig_idx], list) and
+                         int(entry[def_fig_idx][0] or 0) > 0)
+                if alive:
+                    dc_list = data.get(f'p{def_player}DcList') or []
+                    has_fury = any(
+                        isinstance(dc, dict) and
+                        dc.get('dcName') == '[Fury of Kashyyyk]'
+                        for dc in dc_list
+                    )
+                    tgt_kws = [
+                        str(k).upper() for k in
+                        ((dc_eff.get(def_dc) or {}).get('keywords') or [])
+                    ]
+                    if has_fury and 'WOOKIEE' in tgt_kws:
+                        apply_condition(data, target_key, 'Focus')
+        except Exception:
+            pass
+
         # Self-Preservation (Hired Gun Elite passive): on any damage taken
         # while alive, defender gains Focus. JS combat-bridge.js:560-568.
         try:

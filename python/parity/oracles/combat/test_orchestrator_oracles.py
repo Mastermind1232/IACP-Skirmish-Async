@@ -734,6 +734,98 @@ def test_stun_batons_skipped_when_target_has_flame_trooper():
     )
 
 
+def test_fury_of_kashyyyk_focuses_wookiee_on_3_plus_damage():
+    """[Fury of Kashyyyk] attachment: when a friendly WOOKIEE survives 3+
+    damage, they become Focused."""
+    fixture = _base_fixture()
+    # Swap Vader (no WOOKIEE keyword) for Chewbacca (WOOKIEE).
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {'Chewbacca-0-0': 'f5'},
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[12, 12]],  # Chewbacca survives 3 dmg easily.
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Chewbacca', 'playerNum': 2,
+    }
+    fixture['p2DcList'] = [
+        {'dcName': 'Chewbacca', 'dgIndex': 0},
+        {'dcName': '[Fury of Kashyyyk]', 'dgIndex': 1},
+    ]
+    g = _game(fixture)
+    # Need 3+ damage — use 3 red dice vs weak defense.
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Chewbacca-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) < 3:
+        pytest.skip('need 3+ damage for this test')
+    conds = (g.data.get('figureConditions') or {}).get('Chewbacca-0-0') or []
+    assert 'Focus' in conds, (
+        f'Chewbacca should be Focused (Fury of Kashyyyk + 3+ dmg); got {conds}'
+    )
+
+
+def test_fury_of_kashyyyk_does_not_fire_below_threshold():
+    """Damage < 3 → no Focus."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {'Chewbacca-0-0': 'f5'},
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]], 'hl2dc0': [[12, 12]],
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Chewbacca', 'playerNum': 2,
+    }
+    fixture['p2DcList'] = [
+        {'dcName': 'Chewbacca', 'dgIndex': 0},
+        {'dcName': '[Fury of Kashyyyk]', 'dgIndex': 1},
+    ]
+    g = _game(fixture)
+    # 1 red die — low damage.
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Chewbacca-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['blue'],
+        defense_dice_override=['red'],
+    )
+    if not result.get('hit') or result.get('damage', 0) >= 3:
+        pytest.skip('wrong damage outcome for below-threshold test')
+    conds = (g.data.get('figureConditions') or {}).get('Chewbacca-0-0') or []
+    assert 'Focus' not in conds, (
+        f'Chewbacca should not be Focused with damage < 3; got {conds}'
+    )
+
+
+def test_fury_of_kashyyyk_skipped_for_non_wookiee():
+    """Non-WOOKIEE target doesn't get Focus even with Fury in squad."""
+    fixture = _base_fixture()
+    # Vader is not a WOOKIEE.
+    fixture['p2DcList'] = [
+        {'dcName': 'Darth Vader', 'dgIndex': 0},
+        {'dcName': '[Fury of Kashyyyk]', 'dgIndex': 1},
+    ]
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) < 3:
+        pytest.skip('need 3+ damage for this test')
+    conds = (g.data.get('figureConditions') or {}).get('Darth Vader-0-0') or []
+    assert 'Focus' not in conds, (
+        f'Vader (not WOOKIEE) must not be Focused by Fury; got {conds}'
+    )
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()
