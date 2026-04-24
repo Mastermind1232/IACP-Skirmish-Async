@@ -26,5 +26,19 @@
       "Vader-1-0": "e8"
     }
   },
+  "figurePowerTokens": {
+    "Luke-1-0": [
+      "Hit",
+      "Hit",
+      "Hit",
+      "Hit"
+    ]
+  },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 2,
+      "total": 2
+    }
+  },
   "trigger": "post-deploy"
 }

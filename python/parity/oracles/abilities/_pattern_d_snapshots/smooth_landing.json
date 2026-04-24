@@ -26,5 +26,11 @@
       "Vader-1-0": "e8"
     }
   },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 1,
+      "total": 1
+    }
+  },
   "trigger": "post-deploy"
 }

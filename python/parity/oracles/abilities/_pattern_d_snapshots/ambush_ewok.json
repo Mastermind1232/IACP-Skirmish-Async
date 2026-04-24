@@ -18,6 +18,11 @@
       ]
     ]
   },
+  "figureConditions": {
+    "Luke-1-0": [
+      "Hide"
+    ]
+  },
   "figurePositions": {
     "1": {
       "Luke-1-0": "e5"

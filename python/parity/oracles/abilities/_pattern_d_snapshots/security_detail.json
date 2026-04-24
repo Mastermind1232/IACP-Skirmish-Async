@@ -1,8 +1,9 @@
 {
-  "_applied": true,
+  "_applied": false,
+  "_gated_by": "no-leader-ally",
   "_result_keys": [
     "applied",
-    "log_message"
+    "gated_by"
   ],
   "dcHealthState": {
     "hl1dc0": [

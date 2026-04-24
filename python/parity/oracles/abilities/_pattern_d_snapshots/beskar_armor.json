@@ -26,5 +26,11 @@
       "Vader-1-0": "e8"
     }
   },
+  "figurePowerTokens": {
+    "Luke-1-0": [
+      "Block",
+      "Block"
+    ]
+  },
   "trigger": "post-deploy"
 }

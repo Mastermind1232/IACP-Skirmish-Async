@@ -320,6 +320,187 @@ def stealthy_davith(game, aid, ctx):
     return {'applied': True, 'log_message': 'Stealthy (Davith): Hidden.'}
 
 
+# ── post-deploy handlers ────────────────────────────────────────────────
+# Mirror src/handlers/post-deploy.js:resolveAutoAbility. Each fires
+# after a figure deploys and applies an immediate state change. The
+# Discord-side version prompts for picks when choice matters; the
+# Python port auto-resolves with sensible defaults.
+
+def beskar_armor(game, aid, ctx):
+    """Beskar Armor: +2 Block tokens to the deployed figure."""
+    fk = ctx.get('figure_key')
+    if not fk:
+        return {'applied': False, 'gated_by': 'no-figure-key'}
+    try:
+        from python.engine.mechanics.tokens import grant_power_tokens
+        grant_power_tokens(_data(game), fk, 'Block', 2)
+        return {'applied': True,
+                'log_message': f'Beskar Armor: {fk} gains 2 Block Tokens.'}
+    except Exception as e:
+        return {'applied': False, 'gated_by': f'token-grant-failed: {e}'}
+
+
+def stealthy(game, aid, ctx):
+    """Stealthy / Ambush / In the Shadows: apply Hide to the
+    deployed figure."""
+    fk = ctx.get('figure_key')
+    if not fk:
+        return {'applied': False, 'gated_by': 'no-figure-key'}
+    _apply_condition(game, fk, 'Hide')
+    return {'applied': True,
+            'log_message': f'{aid}: {fk} becomes Hidden.'}
+
+
+def security_detail(game, aid, ctx):
+    """Security Detail: +1 Block token to the nearest LEADER ally.
+
+    JS prompts the player to pick when multiple LEADERs exist; Python
+    auto-picks the first LEADER friendly found.
+    """
+    from python.engine.data.dc_effects_loader import get_dc_effect
+    fk = ctx.get('figure_key')
+    pn = ctx.get('player_num') or (
+        1 if (fk and fk.endswith('-0-0') and '-1-0' not in fk) else 1
+    )
+    data = _data(game)
+    # Locate the player's figures.
+    fp = data.get('figurePositions') or {}
+    own = fp.get(pn) or fp.get(str(pn)) or {}
+    leader_fk = None
+    for own_fk in own:
+        if own_fk == fk:
+            continue
+        dc_name = own_fk.rsplit('-', 2)[0] if '-' in own_fk else own_fk
+        eff = get_dc_effect(dc_name) or {}
+        kws = [str(k).upper() for k in (eff.get('keywords') or [])]
+        if 'LEADER' in kws:
+            leader_fk = own_fk
+            break
+    if not leader_fk:
+        return {'applied': False, 'gated_by': 'no-leader-ally'}
+    try:
+        from python.engine.mechanics.tokens import grant_power_tokens
+        grant_power_tokens(data, leader_fk, 'Block', 1)
+        return {'applied': True,
+                'log_message': f'Security Detail: {leader_fk} gains 1 Block Token.',
+                'target': leader_fk}
+    except Exception as e:
+        return {'applied': False, 'gated_by': f'token-grant-failed: {e}'}
+
+
+def smooth_landing(game, aid, ctx):
+    """Smooth Landing: +1 MP to the deployed figure's DC.
+
+    The MP is granted via the movement-bank (JS stores it in the
+    activation's movementBank, same entry used by other post-deploy
+    move grants).
+    """
+    msg = ctx.get('msg_id')
+    if not msg:
+        return {'applied': False, 'gated_by': 'no-msg-id'}
+    try:
+        from python.engine.mechanics.game_helpers import grant_movement_bank
+        grant_movement_bank(_data(game), msg, 1)
+        return {'applied': True,
+                'log_message': 'Smooth Landing: +1 MP post-deploy.'}
+    except Exception as e:
+        return {'applied': False, 'gated_by': f'mp-grant-failed: {e}'}
+
+
+def forward_emplacement(game, aid, ctx):
+    """Forward Emplacement: +2 MP to the deployed figure's DC
+    (post-deploy movement grant)."""
+    msg = ctx.get('msg_id')
+    if not msg:
+        return {'applied': False, 'gated_by': 'no-msg-id'}
+    try:
+        from python.engine.mechanics.game_helpers import grant_movement_bank
+        grant_movement_bank(_data(game), msg, 2)
+        return {'applied': True,
+                'log_message': 'Forward Emplacement: +2 MP post-deploy.'}
+    except Exception as e:
+        return {'applied': False, 'gated_by': f'mp-grant-failed: {e}'}
+
+
+def strike_team(game, aid, ctx):
+    """Strike Team (Cassian): +2 MP self, +1 MP to each adjacent
+    friendly (auto-picked), then grant 4 Hit Tokens distributed
+    across those friendlies.
+
+    JS prompts for pick order when >1 adjacent; Python distributes
+    tokens greedily starting with the closest friendly.
+    """
+    from python.engine.mechanics.adjacency import is_chebyshev_adjacent
+    from python.engine.mechanics.figure_lookup import (
+        find_dc_message_id_for_figure,
+    )
+    data = _data(game)
+    fk = ctx.get('figure_key')
+    pn = ctx.get('player_num') or 1
+    msg = ctx.get('msg_id')
+    fp = data.get('figurePositions') or {}
+    own = fp.get(pn) or fp.get(str(pn)) or {}
+    self_coord = own.get(fk) if fk else None
+    adj_friendlies = []
+    if self_coord:
+        for own_fk, coord in own.items():
+            if own_fk == fk or not coord:
+                continue
+            if is_chebyshev_adjacent(self_coord, coord):
+                adj_friendlies.append(own_fk)
+    # +2 MP to self.
+    try:
+        from python.engine.mechanics.game_helpers import grant_movement_bank
+        if msg:
+            grant_movement_bank(data, msg, 2)
+    except Exception:
+        pass
+    # +1 MP each adjacent friendly.
+    dc_meta = data.get('dcMessageMeta') or {}
+    granted_mp: list = []
+    for ally_fk in adj_friendlies:
+        try:
+            ally_msg = find_dc_message_id_for_figure(
+                data.get('gameId'), pn, ally_fk, dc_meta,
+            )
+            if ally_msg:
+                grant_movement_bank(data, ally_msg, 1)
+                granted_mp.append(ally_fk)
+        except Exception:
+            pass
+    # Distribute 4 Hit tokens greedily: self + adjacent friendlies
+    # alternating. JS lets player pick; we go self→first→second→...
+    try:
+        from python.engine.mechanics.tokens import grant_power_tokens
+        recipients = [fk] + adj_friendlies
+        remaining = 4
+        while remaining > 0 and recipients:
+            for r in list(recipients):
+                if remaining <= 0:
+                    break
+                grant_power_tokens(data, r, 'Hit', 1)
+                remaining -= 1
+    except Exception:
+        pass
+    return {'applied': True,
+            'log_message': (f'Strike Team: +2 MP to {fk}, +1 MP to '
+                            f'{len(granted_mp)} ally(s), 4 Hit distributed.'),
+            'mp_granted': granted_mp}
+
+
+def infiltration_rebel_pathfinder(game, aid, ctx):
+    """Infiltration (Rebel Pathfinder): figure may deploy anywhere
+    not in the opponent's deployment zone.
+
+    Headless already placed the figure; this is a marker/no-op in
+    Python. Real move-resolution happens pre-deploy which headless
+    skips.
+    """
+    return {'applied': True,
+            'log_message': 'Infiltration: deploy-anywhere marker.',
+            'note': 'placement handled by deploy flow'}
+
+
 # ── Registry ────────────────────────────────────────────────────────────
 
 _BESPOKE: Dict[str, Tuple[str, Callable]] = {
@@ -361,6 +542,15 @@ _BESPOKE: Dict[str, Tuple[str, Callable]] = {
     'wall_run': ('activation', wall_run),
     # mission-start
     'stealthy_davith': ('mission-start', stealthy_davith),
+    # post-deploy
+    'beskar_armor': ('post-deploy', beskar_armor),
+    'stealthy': ('post-deploy', stealthy),
+    'ambush_ewok': ('post-deploy', stealthy),  # same mechanic (Hide self)
+    'security_detail': ('post-deploy', security_detail),
+    'smooth_landing': ('post-deploy', smooth_landing),
+    'forward_emplacement': ('post-deploy', forward_emplacement),
+    'strike_team_cassian': ('post-deploy', strike_team),
+    'infiltration_rebel_pathfinder': ('post-deploy', infiltration_rebel_pathfinder),
 }
 
 
