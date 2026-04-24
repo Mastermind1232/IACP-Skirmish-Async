@@ -1,0 +1,43 @@
+{
+  "_effect_labels": [
+    "slingBarrage_flagged"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "freeAttackBonusPending": {
+    "hl1dc0": {
+      "from": "Sling Barrage"
+    }
+  },
+  "pendingOverrideAttackDice": {
+    "hl1dc0": {
+      "bonusAccuracy": 0,
+      "dice": null,
+      "pierce": 0,
+      "type": "ranged"
+    }
+  },
+  "pendingSlingBarrage": {
+    "hl1dc0": true
+  }
+}

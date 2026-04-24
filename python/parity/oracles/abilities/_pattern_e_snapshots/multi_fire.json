@@ -1,0 +1,43 @@
+{
+  "_effect_labels": [
+    "multiFireDoubleAttack"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "freeAttackBonusPending": {
+    "hl1dc0": {
+      "from": "Multi-Fire"
+    }
+  },
+  "multiFireActive": {
+    "hl1dc0": {
+      "attacksRemaining": 2,
+      "firstTargetFigureKey": null
+    }
+  },
+  "pendingOverrideAttackDice": {
+    "hl1dc0": {
+      "bonusHits": -1
+    }
+  }
+}
