@@ -89,7 +89,10 @@ def detect_post_move_interrupts(game: Any, moving_player_num: int,
         closed_door_edges.add(edge_key(edge[0], edge[1]))
 
     opp_num = opponent_player_num(moving_player_num)
-    hostile_positions = (data.get('figurePositions') or {}).get(opp_num) or {}
+    _fp = data.get('figurePositions') or {}
+    # Tolerate both int and string player-num keys (JSON-loaded state
+    # uses strings; Python-native uses ints).
+    hostile_positions = _fp.get(opp_num) or _fp.get(str(opp_num)) or {}
     triggers: List[Dict[str, Any]] = []
     parting_blow_triggered = False
 
