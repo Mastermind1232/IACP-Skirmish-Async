@@ -61,8 +61,10 @@ def _dc_index_to_figure_key(game: Mapping[str, Any], player_num: int, dc_index: 
     """Look up a player's figure_key for the first live figure of the DC
     at `dc_index` in the player's DC list.
 
-    This mirrors JS `hl{pn}dc{i}` → `{dc_name}-{group_index}-{figure_index}`
-    mapping. Returns None if the DC/figure can't be found.
+    Mirrors JS `hl{pn}dc{i}` → `{dc_name}-{group_index}-{figure_index}`.
+    Prefers the DC entry's `dgIndex` field (JS-native, 1-based for
+    unique DCs, sequential for multi-group) — falls back to counting
+    priors when dgIndex is missing.
     """
     dc_list_key = 'p1DcList' if player_num == 1 else 'p2DcList'
     dc_list = game.get(dc_list_key) or []
@@ -72,16 +74,27 @@ def _dc_index_to_figure_key(game: Mapping[str, Any], player_num: int, dc_index: 
     dc_name = dc.get('dcName') if isinstance(dc, dict) else dc
     if not dc_name:
         return None
-    # Count how many groups of this DC precede this index (for group_index).
+
+    # Prefer dgIndex from the DC entry (JS-native).
+    dg = dc.get('dgIndex') if isinstance(dc, dict) else None
+
+    fps = (game.get('figurePositions') or {})
+    positions = fps.get(player_num) or fps.get(str(player_num)) or {}
+
+    if dg is not None:
+        prefix = f'{dc_name}-{dg}-'
+        for fkey, coord in positions.items():
+            if isinstance(fkey, str) and fkey.startswith(prefix) and coord:
+                return fkey
+        # dgIndex didn't match — fall through to prior-counting.
+
+    # Fallback: count prior entries of the same DC name.
     group_index = 0
     for i in range(dc_index):
         prior = dc_list[i]
         prior_name = prior.get('dcName') if isinstance(prior, dict) else prior
         if prior_name == dc_name:
             group_index += 1
-    # Find the first live figure (figure_index 0..N) of that group on board.
-    fps = (game.get('figurePositions') or {})
-    positions = fps.get(player_num) or fps.get(str(player_num)) or {}
     prefix = f'{dc_name}-{group_index}-'
     for fkey, coord in positions.items():
         if isinstance(fkey, str) and fkey.startswith(prefix) and coord:

@@ -265,13 +265,25 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
             f'(owned by p{player})'
         )
 
+    # Prefer JS-native scalar p{N}ActivationsRemaining, fall back to
+    # activationsRemaining dict. JS recorder produces only scalars;
+    # Python-native code populates both for convenience.
+    pact_key = 'p1ActivationsRemaining' if player == 1 else 'p2ActivationsRemaining'
     rem = dict(game.get('activationsRemaining') or {})
-    # Allow both int and str keys.
-    cur = rem.get(player, rem.get(str(player), 0))
+    cur_scalar = game.data.get(pact_key)
+    cur_dict = rem.get(player, rem.get(str(player), 0))
+    # Use whichever is > 0 (or scalar if both zero but only dict-form missing).
+    cur = (int(cur_scalar) if isinstance(cur_scalar, (int, float))
+           and cur_scalar > 0 else cur_dict)
     if not isinstance(cur, (int, float)) or cur <= 0:
-        raise ValueError(f'activate_dc: player {player} has no activations remaining')
+        # Last check: maybe dict has it but scalar doesn't.
+        if isinstance(cur_dict, (int, float)) and cur_dict > 0:
+            cur = cur_dict
+        else:
+            raise ValueError(f'activate_dc: player {player} has no activations remaining')
     rem[player] = int(cur) - 1
     game['activationsRemaining'] = rem
+    game.data[pact_key] = int(cur) - 1
 
     # Multi-figure group: activate every figure in the same group so they
     # can all move/attack this activation. Group identity is derived from
@@ -353,6 +365,55 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
     for fk in group_figs:
         per_fig_mp[fk] = mp
     game['perFigureMp'] = per_fig_mp
+
+    # Mirror JS on-activate state population:
+    #   - dcActionsData[msg_id] = {remaining: 2, total: 2, ...}
+    #   - movementBank[msg_id] = {total: mp, remaining: mp, ...}
+    #   - p{N}ActivatedDcIndices += dc_list_index
+    # These are state fields getAvailableActions reads to detect "this
+    # DC is in activation" and control which actions are legal next.
+    if parsed is not None:
+        for i, dc in enumerate(dc_list):
+            if not isinstance(dc, Mapping):
+                continue
+            if (dc.get('dcName') == tname
+                    and int(dc.get('dgIndex') or 0) == tgroup
+                    and i < len(msg_ids)):
+                msg_id_now = msg_ids[i]
+                dc_actions = dict(game.data.get('dcActionsData') or {})
+                dc_actions[msg_id_now] = {
+                    'remaining': 2, 'total': 2,
+                    'messageId': None, 'threadId': None,
+                    'specialsUsed': [],
+                }
+                game.data['dcActionsData'] = dc_actions
+                # movementBank tracks BONUS MP only (CC-granted extra
+                # movement that rolls over). Base-speed MP lives in
+                # movementPoints / perFigureMp. JS init:
+                # src/engine/activation-setup.js:197-201 merges
+                # pendingMpBonus + deployBonusMp at zero unless bonus
+                # is pending. Match by writing the 0/0 baseline.
+                bank_all = dict(game.data.get('movementBank') or {})
+                existing = bank_all.get(msg_id_now) or {}
+                # Preserve any rolled-over bonus MP (e.g. from CC play
+                # earlier this round); otherwise baseline to 0/0.
+                cur_total = int(existing.get('total') or 0)
+                cur_rem = int(existing.get('remaining') or 0)
+                bank_all[msg_id_now] = {
+                    'total': cur_total, 'remaining': cur_rem,
+                    'threadId': existing.get('threadId'),
+                    'messageId': existing.get('messageId'),
+                    'displayName': existing.get('displayName')
+                        or dc.get('displayName')
+                        or dc.get('dcName'),
+                }
+                game.data['movementBank'] = bank_all
+                activated_key = (f'p{player}ActivatedDcIndices')
+                idx_list = list(game.data.get(activated_key) or [])
+                if i not in idx_list:
+                    idx_list.append(i)
+                game.data[activated_key] = idx_list
+                break
 
     # Clear per-activation damage counter for this figure.
     dmg = dict(game.get('figureDamageThisActivation') or {})
@@ -489,6 +550,35 @@ def _handle_dc_end_activation(game: GameState, action: Action) -> GameState:
     # In the Discord flow, the non-active player would have reacted
     # button-by-button; headless AI skips them so they don't accumulate.
     game['pendingInterrupts'] = []
+    # Clear the current DC's actions-data entries now that activation
+    # ended. JS: sets dcActionsData[msg_id].remaining = 0 when the
+    # "End Activation" button fires. Without this, the entry stays at
+    # remaining=2 from activate_dc and _has_dc_actions_remaining_in_game
+    # returns True forever, blocking end_activation_phase.
+    dc_actions = dict(game.data.get('dcActionsData') or {})
+    if dc_actions:
+        for fk in active_keys:
+            parsed = _dc_name_from_figure_key(fk)
+            parts = fk.rsplit('-', 2)
+            if len(parts) != 3:
+                continue
+            try:
+                group = int(parts[1])
+            except ValueError:
+                continue
+            dc_list_key = 'p1DcList' if active == 1 else 'p2DcList'
+            msg_ids_key = 'p1DcMessageIds' if active == 1 else 'p2DcMessageIds'
+            dc_list = game.data.get(dc_list_key) or []
+            msg_ids = game.data.get(msg_ids_key) or []
+            for i, dc in enumerate(dc_list):
+                if not isinstance(dc, Mapping):
+                    continue
+                if (dc.get('dcName') == parsed
+                        and int(dc.get('dgIndex') or 0) == group
+                        and i < len(msg_ids)):
+                    dc_actions.pop(msg_ids[i], None)
+                    break
+    game.data['dcActionsData'] = dc_actions
     return game
 
 

@@ -125,7 +125,10 @@ def test_drift_reports_first_diff_location():
         real_after = step_custom_id(current, f'pass_activation_turn_{game_id}', 'p1', {})
         # But record a WRONG post-state (wrong activePlayer):
         bogus_after = dict(real_after.data)
-        bogus_after['activePlayer'] = 99
+        # Note: activePlayer is now filtered as a Python-native field
+        # (JS uses currentActivationTurnPlayerId). Use `round` to trigger
+        # the diff — it's a universal field the filter doesn't touch.
+        bogus_after['round'] = 999
         records = [
             {'schemaVersion': 1, 'gameId': game_id, 'recordedAt': 'x',
              'initialState': dict(initial)},

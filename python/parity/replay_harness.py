@@ -75,6 +75,13 @@ DISCORD_ONLY_PATHS = frozenset({
     # no notion of userId so it applies the mutation. This asymmetry
     # is expected — filter out of diff reports.
     'p1ActivationPhaseEnded', 'p2ActivationPhaseEnded',
+    # Python-native engine fields that JS doesn't mirror (JS uses
+    # currentActivationTurnPlayerId + dcActionsData to infer the same
+    # state). Not a divergence — representation difference.
+    'activeFigureKeys', 'activePlayer', 'activationStartPositions',
+    'activationsRemaining', 'movementPoints', 'perFigureMp',
+    'figureAttacksThisActivation', 'figureDamageThisActivation',
+    'figuresMovedThisRound',
 })
 
 
