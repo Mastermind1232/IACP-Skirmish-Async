@@ -60,6 +60,7 @@ def _base_fixture() -> Dict[str, Any]:
         'player1VP': {'total': 0, 'kills': 0, 'objectives': 0},
         'player2VP': {'total': 0, 'kills': 0, 'objectives': 0},
         'mapId': 'mos-eisley-outskirts',
+        'selectedMap': {'id': 'mos-eisley-outskirts'},
     }
 
 
@@ -824,6 +825,94 @@ def test_fury_of_kashyyyk_skipped_for_non_wookiee():
     assert 'Focus' not in conds, (
         f'Vader (not WOOKIEE) must not be Focused by Fury; got {conds}'
     )
+
+
+def test_fly_by_grants_2_mp_to_attacker_when_target_within_2():
+    """Jet Trooper (Elite) Fly-By: after attack within 2 spaces, +2 MP."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Jet Trooper (Elite)-0-0': 'e5'},
+        2: {'Darth Vader-0-0': 'f5'},
+    }
+    fixture['p1DcList'] = [{'dcName': 'Jet Trooper (Elite)', 'dgIndex': 0}]
+    fixture['dcMessageMeta']['hl1dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Jet Trooper (Elite)', 'playerNum': 1,
+    }
+    g = _game(fixture)
+    orchestrate_attack(
+        g, 'Jet Trooper (Elite)-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red'],
+        defense_dice_override=['white'],
+    )
+    bank = (g.data.get('movementBank') or {}).get('hl1dc0') or {}
+    bonus = int(bank.get('bonus') or bank.get('total') or 0)
+    assert bonus >= 2, (
+        f'Fly-By should grant 2 MP to attacker; got bank={bank}'
+    )
+
+
+def test_jets_grants_1_mp_to_attacker_when_target_within_2():
+    """Jet Trooper (Regular) Jets: after attack within 2 spaces, +1 MP."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Jet Trooper (Regular)-0-0': 'e5'},
+        2: {'Darth Vader-0-0': 'f5'},
+    }
+    fixture['p1DcList'] = [{'dcName': 'Jet Trooper (Regular)', 'dgIndex': 0}]
+    fixture['dcMessageMeta']['hl1dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Jet Trooper (Regular)', 'playerNum': 1,
+    }
+    g = _game(fixture)
+    orchestrate_attack(
+        g, 'Jet Trooper (Regular)-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red'],
+        defense_dice_override=['white'],
+    )
+    bank = (g.data.get('movementBank') or {}).get('hl1dc0') or {}
+    bonus = int(bank.get('bonus') or bank.get('total') or 0)
+    assert bonus >= 1, f'Jets should grant 1 MP; got bank={bank}'
+
+
+def test_nimble_grants_defender_2_mp_per_block():
+    """Asajj Ventress nimble_asajj: defender gains 2 MP per Block rolled."""
+    fixture = _base_fixture()
+    # Replace Vader with Asajj Ventress (has nimble_asajj specialAbility).
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {'Asajj Ventress-0-0': 'f5'},
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Asajj Ventress', 'playerNum': 2,
+    }
+    fixture['p2DcList'] = [{'dcName': 'Asajj Ventress', 'dgIndex': 0}]
+    g = _game(fixture)
+    # Try multiple seeds — black dice often roll blocks but not always.
+    fired = False
+    for seed in range(50):
+        fx = dict(fixture)
+        fx['figurePositions'] = {
+            1: {'Luke Skywalker-0-0': 'e5'},
+            2: {'Asajj Ventress-0-0': 'f5'},
+        }
+        fx['dcHealthState'] = {
+            'hl1dc0': [[10, 10]], 'hl2dc0': [[12, 12]],
+        }
+        fx['movementBank'] = None
+        g2 = _game(dict(fx))
+        orchestrate_attack(
+            g2, 'Luke Skywalker-0-0', 'Asajj Ventress-0-0',
+            rng=random.Random(seed),
+            attack_dice_override=['red'],
+            defense_dice_override=['black', 'black', 'black'],
+        )
+        bank = (g2.data.get('movementBank') or {}).get('hl2dc0') or {}
+        bonus = int(bank.get('bonus') or bank.get('total') or 0)
+        if bonus >= 2:
+            fired = True
+            break
+    assert fired, 'Nimble should grant >=2 MP for at least one block in 50 seeds'
 
 
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():

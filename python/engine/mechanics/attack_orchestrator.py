@@ -599,6 +599,38 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         except Exception:
             pass
 
+        # Fly-By (Jet Trooper Elite passive): after attack, attacker gains
+        # 2 MP if target was within 2 spaces. JS combat-bridge.js:644-652.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            from python.engine.mechanics.game_helpers import grant_movement_bank
+            dc_eff = get_dc_effects() or {}
+            atk_passives = (dc_eff.get(atk_dc) or {}).get('passives') or []
+            if ('Fly-By' in atk_passives and atk_msg_id
+                    and distance is not None and distance <= 2):
+                grant_movement_bank(data, atk_msg_id, 2)
+            elif ('Jets' in atk_passives and atk_msg_id
+                    and distance is not None and distance <= 2):
+                grant_movement_bank(data, atk_msg_id, 1)
+        except Exception:
+            pass
+
+        # Nimble (Asajj Ventress special ability): defender gains 2 MP per
+        # Block rolled. JS combat-bridge.js:716-727.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            from python.engine.mechanics.game_helpers import grant_movement_bank
+            dc_eff = get_dc_effects() or {}
+            def_sids = (dc_eff.get(def_dc) or {}).get('specialAbilityIds') or []
+            if 'nimble_asajj' in def_sids and def_msg_id:
+                # combat is in scope at this point (set in Phase 1, mutated since).
+                def_roll = combat.get('defenseRoll') or {}
+                blocks = int(def_roll.get('block') or 0)
+                if blocks > 0:
+                    grant_movement_bank(data, def_msg_id, blocks * 2)
+        except Exception:
+            pass
+
         # Fury of Kashyyyk (army-wide attachment): when a friendly WOOKIEE
         # suffers 3+ damage and survives, they become Focused.
         # JS combat-bridge.js:570-582.
