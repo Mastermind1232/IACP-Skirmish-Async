@@ -1,0 +1,49 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Second Chance",
+    "result": {
+      "applied": true,
+      "attachedTo": "hl1dc0",
+      "msgId": "hl1dc0"
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Second Chance"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ]
+}

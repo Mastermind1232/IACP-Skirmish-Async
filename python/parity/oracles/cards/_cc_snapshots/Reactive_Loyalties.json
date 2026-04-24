@@ -1,0 +1,56 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied",
+    "note"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Reactive Loyalties",
+    "result": {
+      "applied": true,
+      "note": "opponent CC swap \u2014 requires UI"
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Reactive Loyalties"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Reactive Loyalties": {
+      "cardName": "Reactive Loyalties",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

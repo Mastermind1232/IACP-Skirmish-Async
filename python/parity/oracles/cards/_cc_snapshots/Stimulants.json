@@ -1,0 +1,61 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        11,
+        12
+      ]
+    ]
+  },
+  "figureConditions": {
+    "Vader-1-0": [
+      "Focus"
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Stimulants",
+    "result": {
+      "applied": true,
+      "damage": 1,
+      "mpGranted": 1,
+      "targetFigureKey": "Vader-1-0"
+    }
+  },
+  "movementBank": {
+    "hl2dc0": {
+      "remaining": 1,
+      "total": 1
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Stimulants"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ]
+}

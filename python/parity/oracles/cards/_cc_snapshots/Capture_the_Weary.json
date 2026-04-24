@@ -1,0 +1,61 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figureConditions": {
+    "Vader-1-0": [
+      "Weaken"
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Capture the Weary",
+    "result": {
+      "applied": true,
+      "condition": "Weaken",
+      "targetFigureKey": "Vader-1-0"
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Capture the Weary"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Capture the Weary": {
+      "cardName": "Capture the Weary",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

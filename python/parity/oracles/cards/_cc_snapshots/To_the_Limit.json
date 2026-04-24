@@ -1,0 +1,66 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figureConditions": {
+    "Luke-1-0": [
+      "Focus"
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "To the Limit",
+    "result": {
+      "applied": true,
+      "mpGranted": 2
+    }
+  },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 2,
+      "total": 2
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "To the Limit"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "To the Limit": {
+      "cardName": "To the Limit",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

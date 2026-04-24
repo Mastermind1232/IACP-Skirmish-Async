@@ -1,0 +1,66 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figureConditions": {
+    "Luke-1-0": [
+      "Focus"
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Fatal Deception",
+    "result": {
+      "applied": true,
+      "effects": [
+        {
+          "effect": "applyFocus",
+          "figureKey": "Luke-1-0"
+        }
+      ],
+      "log_message": "Fatal Deception \u2014 1 schema effect(s) applied."
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Fatal Deception"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Fatal Deception": {
+      "cardName": "Fatal Deception",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

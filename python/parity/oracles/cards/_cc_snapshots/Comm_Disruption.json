@@ -1,0 +1,56 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied",
+    "note"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Comm Disruption",
+    "result": {
+      "applied": true,
+      "note": "handled via stepper COMM_DISRUPTION_PLAY"
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Comm Disruption"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Comm Disruption": {
+      "cardName": "Comm Disruption",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

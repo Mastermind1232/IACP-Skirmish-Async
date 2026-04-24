@@ -1,0 +1,68 @@
+{
+  "_applied": false,
+  "_result_keys": [
+    "applied",
+    "reason"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Price of Glory",
+    "result": {
+      "applied": false,
+      "effects": [
+        {
+          "amount": 2,
+          "effect": "mpBonus"
+        }
+      ],
+      "reason": "no_defeats_this_round"
+    }
+  },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 2,
+      "total": 2
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Price of Glory"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Price of Glory": {
+      "cardName": "Price of Glory",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

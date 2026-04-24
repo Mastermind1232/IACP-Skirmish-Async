@@ -1,0 +1,79 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "faceToFaceActive": {
+    "hl1dc0": true
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "freeAttackBonusPending": {
+    "hl1dc0": true
+  },
+  "lastCcEffectResult": {
+    "cardName": "Face to Face",
+    "result": {
+      "applied": true,
+      "effects": [
+        {
+          "effect": "freeAttackBonus"
+        },
+        {
+          "effect": "overrideAttackType"
+        }
+      ],
+      "mpGranted": 2,
+      "msgId": "hl1dc0"
+    }
+  },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 2,
+      "total": 2
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Face to Face"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingOverrideAttackDice": {
+    "hl1dc0": {
+      "blockSurgeAbilities": false,
+      "bonusAccuracy": 0,
+      "dice": null,
+      "mustTargetNonAdjacent": false,
+      "pierce": 0,
+      "type": "Melee"
+    }
+  }
+}

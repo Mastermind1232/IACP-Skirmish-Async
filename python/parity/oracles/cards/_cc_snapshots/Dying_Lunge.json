@@ -1,0 +1,89 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "freeAttackBonusPending": {
+    "hl1dc0": true
+  },
+  "lastCcEffectResult": {
+    "cardName": "Dying Lunge",
+    "result": {
+      "applied": true,
+      "effects": [
+        {
+          "effect": "freeAttackBonus"
+        },
+        {
+          "effect": "overrideAttackType"
+        },
+        {
+          "effect": "selfDefeatsAfterAttack"
+        }
+      ],
+      "mpGranted": 2,
+      "msgId": "hl1dc0"
+    }
+  },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 2,
+      "total": 2
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Dying Lunge"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Dying Lunge": {
+      "cardName": "Dying Lunge",
+      "playerNum": 1,
+      "round": 1
+    }
+  },
+  "pendingOverrideAttackDice": {
+    "hl1dc0": {
+      "blockSurgeAbilities": false,
+      "bonusAccuracy": 0,
+      "dice": null,
+      "mustTargetNonAdjacent": false,
+      "pierce": 0,
+      "type": "Melee"
+    }
+  },
+  "selfDefeatsAfterAttackMsgId": {
+    "hl1dc0": true
+  }
+}

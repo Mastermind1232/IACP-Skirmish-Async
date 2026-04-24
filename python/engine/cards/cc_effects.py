@@ -30,6 +30,19 @@ class UnknownCcEffect(KeyError):
 _CC_EFFECTS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], Dict[str, Any]]] = {}
 
 
+# Cards whose bespoke handler already grants MP from the library's
+# mpBonus value — schema pre-pass must NOT also grant, or MP doubles.
+# Includes _cc_generic_mp-routed cards + bespoke movement handlers.
+_CC_HANDLER_APPLIES_MP_BONUS = frozenset({
+    'Adrenaline', 'Advance Warning', 'Ambush', 'Apex Predator',
+    "Break 'Em", 'Close the Gap', 'Desperate Escape', 'Disengage',
+    'Dying Lunge', 'Eyes on the Prize', 'Face to Face', 'Fleet Footed',
+    'Force Jump', 'Force Surge', 'Heart of Freedom', 'Long Strides',
+    'Mobility', 'On the Lam', 'Overdrive', 'Rank and File', 'Sprint',
+    'Strategic Shift', 'Still Faster Than You', 'Utinni!',
+})
+
+
 def register(card_name: str, handler: Callable) -> None:
     if card_name in _CC_EFFECTS:
         raise ValueError(f'duplicate cc effect handler for {card_name!r}')
@@ -39,7 +52,15 @@ def register(card_name: str, handler: Callable) -> None:
 def resolve_pending_cc_effect(game: Any, ctx: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Dispatch game.pendingCcEffect to its per-card handler.
 
-    Returns the handler's result dict. Clears pendingCcEffect on success.
+    Before the card-specific handler runs, the library entry's schema
+    fields (freeAttackBonus, mpBonus, overrideAttackDice,
+    overrideAttackType, saberOrbitChain, powerTokenGain, …) are applied
+    via handle_schema_chain. This matches JS `resolveAbility` which
+    does the same field-driven application BEFORE branching into
+    card-specific logic. The card handler then layers card-unique
+    behavior on top.
+
+    Returns the merged result dict. Clears pendingCcEffect on success.
     Raises UnknownCcEffect if no handler is registered.
     """
     data = game.data if hasattr(game, 'data') else game
@@ -52,10 +73,169 @@ def resolve_pending_cc_effect(game: Any, ctx: Optional[Dict[str, Any]] = None) -
     handler = _CC_EFFECTS.get(card_name)
     if handler is None:
         raise UnknownCcEffect(card_name)
+
+    # Apply library-schema fields first (mirrors JS resolveAbility
+    # branches for freeAttackBonus, mpBonus, overrideAttackDice, …).
+    schema_effects = _apply_cc_schema_fields(data, card_name, pending, ctx or {})
+
     result = handler(game, dict(pending), ctx or {})
+    if isinstance(result, dict) and schema_effects:
+        merged_effects = list(result.get('effects') or [])
+        merged_effects.extend(schema_effects)
+        result = {**result, 'effects': merged_effects}
     data['pendingCcEffect'] = None
     data['lastCcEffectResult'] = {'cardName': card_name, 'result': result}
     return result
+
+
+def _apply_cc_schema_fields(data: Dict[str, Any], card_name: str,
+                             pending: Dict[str, Any],
+                             ctx: Dict[str, Any]) -> list:
+    """Apply library-schema fields from the card's ability entry.
+
+    Mirrors JS resolveAbility branches: if the ability-library entry
+    for this card has `freeAttackBonus`, `mpBonus`,
+    `overrideAttackDice`, `overrideAttackType`, `saberOrbitChain`,
+    `powerTokenGain`, `selfDefeatsAfterAttack`, or
+    `noCommandDrawThisRound`, apply them directly to game state.
+    Returns a list of effect records describing what fired.
+    """
+    from python.engine.data.ability_library_loader import get_ability
+    from python.engine.data import cc_effects_loader
+    effects: list = []
+    cc_lib = cc_effects_loader.get_cc_effects() or {}
+    cc_entry = (cc_lib.get(card_name) or {})
+    ability_id = cc_entry.get('abilityId') or card_name
+    entry = get_ability(ability_id) or {}
+    if not entry:
+        return effects
+    msg_id = (ctx or {}).get('msg_id') or (ctx or {}).get('msgId')
+    player_num = pending.get('playerNum') or (ctx or {}).get('playerNum')
+
+    # mpBonus / freeMoveBonus — apply IF the card doesn't have a
+    # bespoke handler that duplicates it. Tracked via
+    # _CC_HANDLER_APPLIES_MP_BONUS (cards whose handler grants MP).
+    mp = entry.get('mpBonus') or entry.get('freeMoveBonus')
+    if (isinstance(mp, (int, float)) and mp > 0 and msg_id
+            and card_name not in _CC_HANDLER_APPLIES_MP_BONUS):
+        from python.engine.mechanics.game_helpers import grant_movement_bank
+        grant_movement_bank(data, msg_id, int(mp))
+        effects.append({'effect': 'mpBonus', 'amount': int(mp)})
+
+    # freeAttackBonus (bool / dict / int count)
+    fa = entry.get('freeAttackBonus')
+    if fa and msg_id:
+        pending_fa = data.get('freeAttackBonusPending') or {}
+        count = entry.get('freeAttackBonusCount')
+        if isinstance(fa, dict):
+            pending_fa[msg_id] = dict(fa)
+        elif count is not None:
+            pending_fa[msg_id] = int(count) if int(count) > 1 else True
+        else:
+            pending_fa[msg_id] = True
+        data['freeAttackBonusPending'] = pending_fa
+        effects.append({'effect': 'freeAttackBonus'})
+
+    # overrideAttackDice (list) or overrideAttackType (no dice)
+    oad = entry.get('overrideAttackDice')
+    override_type = entry.get('overrideAttackType')
+    if oad and msg_id:
+        dice_spec = list(oad) if isinstance(oad, list) else []
+        if dice_spec:
+            pending_oad = data.get('pendingOverrideAttackDice') or {}
+            pending_oad[msg_id] = {
+                'dice': dice_spec,
+                'type': override_type,
+                'pierce': int(entry.get('overrideAttackPierce') or 0),
+                'bonusAccuracy': int(entry.get('overrideBonusAccuracy') or 0),
+                'mustTargetNonAdjacent': bool(entry.get('mustTargetNonAdjacent') or False),
+                'blockSurgeAbilities': bool(entry.get('blockSurgeAbilities') or False),
+            }
+            data['pendingOverrideAttackDice'] = pending_oad
+            effects.append({'effect': 'overrideAttackDice'})
+            # saberOrbitChain
+            chain = entry.get('saberOrbitChain')
+            if isinstance(chain, int) and chain > 1:
+                pending_fa = data.get('freeAttackBonusPending') or {}
+                pending_fa[msg_id] = chain
+                data['freeAttackBonusPending'] = pending_fa
+                remaining = data.get('saberOrbitAttacksRemaining') or {}
+                remaining[msg_id] = chain
+                data['saberOrbitAttacksRemaining'] = remaining
+    elif override_type and msg_id and not oad:
+        pending_oad = data.get('pendingOverrideAttackDice') or {}
+        pending_oad[msg_id] = {
+            'type': override_type,
+            'dice': None,
+            'pierce': int(entry.get('overrideAttackPierce') or 0),
+            'bonusAccuracy': int(entry.get('overrideBonusAccuracy') or 0),
+            'mustTargetNonAdjacent': bool(entry.get('mustTargetNonAdjacent') or False),
+            'blockSurgeAbilities': bool(entry.get('blockSurgeAbilities') or False),
+        }
+        data['pendingOverrideAttackDice'] = pending_oad
+        effects.append({'effect': 'overrideAttackType'})
+
+    # selfDefeatsAfterAttack
+    if entry.get('selfDefeatsAfterAttack') and msg_id:
+        flag = data.get('selfDefeatsAfterAttackMsgId') or {}
+        flag[msg_id] = True
+        data['selfDefeatsAfterAttackMsgId'] = flag
+        effects.append({'effect': 'selfDefeatsAfterAttack'})
+
+    # noCommandDrawThisRound (Cut Lines)
+    if entry.get('noCommandDrawThisRound'):
+        data['noCommandDrawThisRound'] = True
+        effects.append({'effect': 'noCommandDrawThisRound'})
+
+    # restInPeaceActive / restInPeaceEffect (Rest in Peace card)
+    if entry.get('restInPeaceActive') or entry.get('restInPeaceEffect'):
+        data['restInPeaceActive'] = True
+        effects.append({'effect': 'restInPeaceActive'})
+
+    # nextAttackBonusSurgeAbilities (list of surge strings to push into
+    # the player's next-attack surge-ability list — Cruel Strike etc.)
+    nabsa = entry.get('nextAttackBonusSurgeAbilities')
+    if nabsa and player_num in (1, 2):
+        bonuses = dict(data.get('nextAttackBonusSurgeAbilities') or {})
+        lst = list(bonuses.get(player_num) or [])
+        if isinstance(nabsa, list):
+            lst.extend(nabsa)
+        elif isinstance(nabsa, str):
+            lst.append(nabsa)
+        bonuses[player_num] = lst
+        data['nextAttackBonusSurgeAbilities'] = bonuses
+        effects.append({'effect': 'nextAttackBonusSurgeAbilities',
+                        'payload': list(nabsa) if isinstance(nabsa, list) else [nabsa]})
+
+    # nextAttackReach / nextAttackCleave (next-attack surge keys)
+    if entry.get('nextAttackReach') and player_num in (1, 2):
+        reach = dict(data.get('nextAttackReach') or {})
+        reach[player_num] = True
+        data['nextAttackReach'] = reach
+        effects.append({'effect': 'nextAttackReach'})
+    n_cleave = entry.get('nextAttackCleave')
+    if (isinstance(n_cleave, (int, float)) and n_cleave > 0
+            and player_num in (1, 2)):
+        bonuses = dict(data.get('nextAttackBonusSurgeAbilities') or {})
+        lst = list(bonuses.get(player_num) or [])
+        lst.append(f'cleave {int(n_cleave)}')
+        bonuses[player_num] = lst
+        data['nextAttackBonusSurgeAbilities'] = bonuses
+        effects.append({'effect': 'nextAttackCleave'})
+
+    # Card-specific "Burst Fire" / "Stay Down" / etc. label-gated stamps
+    # (JS handles these via entry.label inside the freeAttackBonus branch).
+    label = entry.get('label') or ''
+    if label == 'Burst Fire' and msg_id:
+        flag = data.get('burstFirePendingMsgId') or {}
+        flag[msg_id] = True
+        data['burstFirePendingMsgId'] = flag
+    if label == 'Stay Down' and msg_id:
+        flag = data.get('stayDownPendingMsgId') or {}
+        flag[msg_id] = True
+        data['stayDownPendingMsgId'] = flag
+
+    return effects
 
 
 # ---------------------------------------------------------------------------
@@ -1880,11 +2060,11 @@ def _cc_cruel_strike(game, pending, ctx):
 def _cc_face_to_face(game, pending, ctx):
     """Face to Face (specialAction): move up to 2, then attack adjacent.
 
-    Grants 2 MP and flags the figure as "must attack adjacent" via
-    faceToFaceActive[msg_id].
+    Grants 2 MP + flags figure as "must attack adjacent" via
+    faceToFaceActive[msg_id]. Schema pre-pass defers mpBonus to this
+    handler (single source of MP).
     """
     from python.engine.mechanics.game_helpers import grant_movement_bank
-
     data = game.data if hasattr(game, 'data') else game
     msg_id = (ctx or {}).get('msg_id')
     if not msg_id:
@@ -3116,6 +3296,19 @@ def _cc_generic_condition(game, pending, ctx, condition):
 
 
 def _cc_generic_damage(game, pending, ctx, amount):
+    """Deal N damage to the combat's attacker (reactive defender card).
+
+    Requires a combat object in ctx (these are combat-triggered CCs:
+    Right Back At Ya, Dangerous Prey, Gauntlet Blade, Definition:
+    'Love'). If no combat is active, mirror JS which returns
+    manualMessage and leaves state alone.
+    """
+    data = game.data if hasattr(game, 'data') else game
+    combat = (ctx or {}).get('combat') or data.get('pendingCombat') or {}
+    if not combat:
+        # Not in combat — card is unplayable per rules. Match JS
+        # manual-resolution behavior by skipping damage.
+        return {'applied': False, 'reason': 'no_combat_context'}
     target_fk = (ctx or {}).get('target_figure_key')
     target_pn = (ctx or {}).get('target_player_num')
     if not target_fk or target_pn not in (1, 2):
@@ -3125,6 +3318,8 @@ def _cc_generic_damage(game, pending, ctx, amount):
 
 
 def _cc_generic_mp(game, pending, ctx, amount):
+    """Grant N MP. Schema pre-pass deliberately skips mpBonus so this
+    handler is the single source of MP grants for its card."""
     from python.engine.mechanics.game_helpers import grant_movement_bank
     msg_id = (ctx or {}).get('msg_id')
     if not msg_id:
@@ -3231,7 +3426,12 @@ _CC_REAL_CARDS_SIMPLE = [
     ('Escalating Hostility', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
     ('Etiquette and Protocol', lambda g, p, c: _cc_generic_condition(g, p, c, 'Stun')),
     ('Evacuate', lambda g, p, c: {'applied': True}),  # self-defeat for half-VP
-    ('Eyes on the Prize', lambda g, p, c: _cc_generic_mp(g, p, c, 1)),
+    # Eyes on the Prize — informational: "Each friendly figure
+    # carrying/controlling a crate/mission token may recover 1 Damage
+    # OR gain 1 Power Token OR discard 1 HARMFUL condition". Resolved
+    # manually per figure in JS. No bulk auto-MP.
+    ('Eyes on the Prize', lambda g, p, c: {'applied': True,
+        'note': 'informational — resolve per-figure manually'}),
     ('Face Me!', lambda g, p, c: {'applied': True}),  # push
     ('Fatal Deception', lambda g, p, c: {'applied': True}),  # false-orders variant
     ('Ferocity', lambda g, p, c: {'applied': True}),  # creature attack
@@ -3248,7 +3448,7 @@ _CC_REAL_CARDS_SIMPLE = [
     ('Fuel Upgrade', lambda g, p, c: {'applied': True}),  # VEHICLE round bonus
     ('Gauntlet Blade', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
     ('Grenadier', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
-    ('Guerilla Warfare', lambda g, p, c: {'applied': True}),  # isolate bonus marker
+    ('Guerilla Warfare', lambda g, p, c: _cc_guerilla_warfare(g, p, c)),
     ('Harsh Environment', lambda g, p, c: {'applied': True}),  # terrain marker
     ('Hostile Negotiation', lambda g, p, c: {'applied': True}),  # opponent random discard
     ('I Can Feel It', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'attackerRerollCount', 1)),
@@ -3278,7 +3478,11 @@ _CC_REAL_CARDS_SIMPLE = [
     ('Miracle Worker', lambda g, p, c: _cc_generic_heal(g, p, c, 4)),
     ('Navigation Upgrade', lambda g, p, c: {'applied': True, 'note': 'VEHICLE +1 speed round marker'}),
     ('Optimal Bombardment', lambda g, p, c: {'applied': True, 'note': 'Orbital Bombardment +1 damage marker'}),
-    ('Overdrive', lambda g, p, c: _cc_generic_mp(g, p, c, 2)),
+    # Overdrive — droid may take an extra Action this activation by
+    # suffering 2 Damage. Not an MP grant. The mechanic is a flag the
+    # activation handler reads; no state change here on play.
+    ('Overdrive', lambda g, p, c: {'applied': True,
+        'note': 'extra action cost marker — consumed at action time'}),
     ('Overheated', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
     ('Overrun', lambda g, p, c: _cc_generic_damage(g, p, c, 2)),
     ('Overwhelming Impact', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusPierce', 2)),
@@ -3338,6 +3542,53 @@ _CC_REAL_CARDS_SIMPLE = [
 
 
 # ─── Upgraded handlers (was placeholders in earlier batches) ───────────────
+
+def _cc_guerilla_warfare(game, pending, ctx):
+    """Guerilla Warfare: each friendly with no adjacent friendly gains
+    1 Block Token + Hide. Mirrors JS applyBlockAndHideToIsolatedFriendlies
+    at src/game/abilities.js around that branch."""
+    from python.engine.mechanics.tokens import grant_power_tokens
+    data = game.data if hasattr(game, 'data') else game
+    pn = pending.get('playerNum') or (ctx or {}).get('playerNum')
+    if pn not in (1, 2):
+        return {'applied': False, 'reason': 'no_player_num'}
+    positions = (data.get('figurePositions') or {}).get(pn) \
+        or (data.get('figurePositions') or {}).get(str(pn)) or {}
+    keys = list(positions.keys())
+
+    def _parse(c):
+        if not c or len(c) < 2:
+            return None
+        try:
+            return (ord(c[0].lower()) - ord('a'), int(c[1:]))
+        except ValueError:
+            return None
+
+    qualified = []
+    for fk in keys:
+        pos = positions.get(fk)
+        pa = _parse(pos)
+        if not pa:
+            continue
+        has_adj = False
+        for other in keys:
+            if other == fk:
+                continue
+            pb = _parse(positions.get(other))
+            if not pb:
+                continue
+            if abs(pa[0] - pb[0]) + abs(pa[1] - pb[1]) == 1:
+                has_adj = True
+                break
+        if not has_adj:
+            qualified.append(fk)
+    affected = []
+    for fk in qualified:
+        grant_power_tokens(data, fk, 'Block', 1)
+        _apply_condition_to_target(game, fk, 'Hide')
+        affected.append(fk)
+    return {'applied': True, 'affected': affected}
+
 
 def _cc_de_wanna_wanga(game, pending, ctx):
     """De Wanna Wanga: shuffle 1 CC from discard into deck."""
@@ -3719,13 +3970,19 @@ def _cc_stall_for_time(game, pending, ctx):
 
 
 def _cc_stay_down(game, pending, ctx):
-    """Stay Down: after Close and Personal — target Weakened + Stunned."""
-    target = (ctx or {}).get('target_figure_key')
-    if not target:
-        return {'applied': False, 'reason': 'no_target'}
-    _apply_condition_to_target(game, target, 'Weaken')
-    _apply_condition_to_target(game, target, 'Stun')
-    return {'applied': True, 'targetFigureKey': target}
+    """Stay Down: after resolving Close and Personal — if target
+    survived, perform a free attack. After this attack, YOUR figure
+    becomes Stunned.
+
+    Library entry sets freeAttackBonus=true (schema stamps
+    freeAttackBonusPending) and label='Stay Down' (schema stamps
+    stayDownPendingMsgId). The "self becomes Stunned" fires when the
+    free attack resolves — combat resolver reads stayDownPendingMsgId.
+    This handler only records the play; no state mutation beyond what
+    the schema pre-pass already did. Previously wrongly applied
+    Weaken+Stun to target on play.
+    """
+    return {'applied': True, 'note': 'schema-applied free attack + self-stun-after flag'}
 
 
 def _cc_strength_in_numbers(game, pending, ctx):

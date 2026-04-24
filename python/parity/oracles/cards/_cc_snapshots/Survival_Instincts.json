@@ -1,0 +1,60 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "figurePowerTokens": {
+    "Luke-1-0": [
+      "Block"
+    ]
+  },
+  "lastCcEffectResult": {
+    "cardName": "Survival Instincts",
+    "result": {
+      "applied": true,
+      "granted": 1
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Survival Instincts"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Survival Instincts": {
+      "cardName": "Survival Instincts",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

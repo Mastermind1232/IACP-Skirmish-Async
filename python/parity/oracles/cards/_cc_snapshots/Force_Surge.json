@@ -1,0 +1,62 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Force Surge",
+    "result": {
+      "applied": true,
+      "mpGranted": 1,
+      "msgId": "hl1dc0"
+    }
+  },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 1,
+      "total": 1
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Force Surge"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Force Surge": {
+      "cardName": "Force Surge",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

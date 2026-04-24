@@ -1,0 +1,85 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "freeAttackBonusPending": {
+    "hl1dc0": true
+  },
+  "lastCcEffectResult": {
+    "cardName": "Final Stand",
+    "result": {
+      "applied": true,
+      "effects": [
+        {
+          "amount": 2,
+          "effect": "mpBonus"
+        },
+        {
+          "effect": "freeAttackBonus"
+        },
+        {
+          "effect": "overrideAttackType"
+        },
+        {
+          "effect": "selfDefeatsAfterAttack"
+        }
+      ],
+      "figureKey": "Luke-1-0"
+    }
+  },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 2,
+      "total": 2
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Final Stand"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingOverrideAttackDice": {
+    "hl1dc0": {
+      "blockSurgeAbilities": false,
+      "bonusAccuracy": 0,
+      "dice": null,
+      "mustTargetNonAdjacent": false,
+      "pierce": 0,
+      "type": "Melee"
+    }
+  },
+  "selfDefeatsAfterAttackMsgId": {
+    "hl1dc0": true
+  }
+}

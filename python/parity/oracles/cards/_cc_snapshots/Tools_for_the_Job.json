@@ -1,0 +1,62 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "figurePowerTokens": {
+    "Vader-1-0": [
+      "Damage",
+      "Damage"
+    ]
+  },
+  "lastCcEffectResult": {
+    "cardName": "Tools for the Job",
+    "result": {
+      "applied": true,
+      "count": 2,
+      "figureKey": "Vader-1-0"
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Tools for the Job"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Tools for the Job": {
+      "cardName": "Tools for the Job",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

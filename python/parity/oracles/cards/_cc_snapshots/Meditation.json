@@ -1,0 +1,62 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "figurePowerTokens": {
+    "Luke-1-0": [
+      "Surge",
+      "Surge"
+    ]
+  },
+  "lastCcEffectResult": {
+    "cardName": "Meditation",
+    "result": {
+      "applied": true,
+      "figureKey": "Luke-1-0",
+      "tokensGranted": 2
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Meditation"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Meditation": {
+      "cardName": "Meditation",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

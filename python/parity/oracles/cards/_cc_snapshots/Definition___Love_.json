@@ -1,0 +1,64 @@
+{
+  "_applied": false,
+  "_result_keys": [
+    "applied",
+    "reason"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "freeAttackBonusPending": {
+    "hl1dc0": true
+  },
+  "lastCcEffectResult": {
+    "cardName": "Definition: 'Love'",
+    "result": {
+      "applied": false,
+      "effects": [
+        {
+          "effect": "freeAttackBonus"
+        }
+      ],
+      "reason": "no_combat_context"
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Definition: 'Love'"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Definition: 'Love'": {
+      "cardName": "Definition: 'Love'",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

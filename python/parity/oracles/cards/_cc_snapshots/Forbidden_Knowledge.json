@@ -1,0 +1,61 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Forbidden Knowledge",
+    "result": {
+      "applied": true,
+      "effects": [
+        {
+          "count": 0,
+          "effect": "draw"
+        }
+      ],
+      "log_message": "Forbidden Knowledge \u2014 1 schema effect(s) applied."
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Forbidden Knowledge"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Forbidden Knowledge": {
+      "cardName": "Forbidden Knowledge",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

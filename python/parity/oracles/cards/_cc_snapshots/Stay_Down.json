@@ -1,0 +1,64 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied",
+    "note"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "freeAttackBonusPending": {
+    "hl1dc0": true
+  },
+  "lastCcEffectResult": {
+    "cardName": "Stay Down",
+    "result": {
+      "applied": true,
+      "effects": [
+        {
+          "effect": "freeAttackBonus"
+        }
+      ],
+      "note": "schema-applied free attack + self-stun-after flag"
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Stay Down"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingCcFiredByCard": {
+    "Stay Down": {
+      "cardName": "Stay Down",
+      "playerNum": 1,
+      "round": 1
+    }
+  }
+}

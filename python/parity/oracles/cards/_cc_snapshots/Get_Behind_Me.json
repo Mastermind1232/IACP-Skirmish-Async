@@ -1,0 +1,63 @@
+{
+  "_applied": false,
+  "_result_keys": [
+    "applied",
+    "reason"
+  ],
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "lastCcEffectResult": {
+    "cardName": "Get Behind Me!",
+    "result": {
+      "applied": false,
+      "effects": [
+        {
+          "amount": 3,
+          "effect": "mpBonus"
+        }
+      ],
+      "message": "get_behind_me: requires ctx.new_target_figure_key",
+      "pending_key": "pendingCcResolve",
+      "reason": "requires_ctx"
+    }
+  },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 3,
+      "total": 3
+    }
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Get Behind Me!"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "_applied": true,
+  "_result_keys": [
+    "applied"
+  ],
+  "closeAndPersonalActive": {
+    "meleeOnly": true,
+    "playerNum": 1
+  },
+  "dcHealthState": {
+    "hl1dc0": [
+      [
+        10,
+        10
+      ]
+    ],
+    "hl2dc0": [
+      [
+        12,
+        12
+      ]
+    ]
+  },
+  "figurePositions": {
+    "1": {
+      "Luke-1-0": "e5"
+    },
+    "2": {
+      "Vader-1-0": "e8"
+    }
+  },
+  "freeAttackBonusPending": {
+    "hl1dc0": true
+  },
+  "lastCcEffectResult": {
+    "cardName": "Close and Personal",
+    "result": {
+      "applied": true,
+      "bonusDamage": 2,
+      "effects": [
+        {
+          "amount": 2,
+          "effect": "mpBonus"
+        },
+        {
+          "effect": "freeAttackBonus"
+        },
+        {
+          "effect": "overrideAttackDice"
+        }
+      ],
+      "playerNum": 1
+    }
+  },
+  "movementBank": {
+    "hl1dc0": {
+      "remaining": 2,
+      "total": 2
+    }
+  },
+  "nextAttackBonusDamage": {
+    "1": 2
+  },
+  "p1CcDeck": [
+    "Reserve A",
+    "Reserve B",
+    "Reserve C"
+  ],
+  "p1CcHand": [
+    "Close and Personal"
+  ],
+  "p2CcDeck": [
+    "Reserve D",
+    "Reserve E",
+    "Reserve F"
+  ],
+  "pendingOverrideAttackDice": {
+    "hl1dc0": {
+      "blockSurgeAbilities": false,
+      "bonusAccuracy": 0,
+      "dice": [
+        {
+          "color": "red"
+        },
+        {
+          "color": "yellow"
+        }
+      ],
+      "mustTargetNonAdjacent": false,
+      "pierce": 0,
+      "type": "Melee"
+    }
+  }
+}
