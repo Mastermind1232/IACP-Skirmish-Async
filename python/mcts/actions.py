@@ -205,6 +205,35 @@ def legal_actions(game: GameState) -> List[Action]:
             atk_effect = get_dc_effect(atk_dc) or {}
             spec = atk_effect.get('attack') or {}
             attack_type = (spec.get('type') or 'range').lower()
+            # A pending attack-dice override (from a CC like Close and
+            # Personal, Face to Face, Lightbow, etc.) replaces the
+            # attack type for the next attack. Mirrors the stepper
+            # consumption path at _handle_attack_target.
+            atk_msg_id = None
+            dc_list = game.get('p1DcList' if active == 1 else 'p2DcList') or []
+            dc_msg_ids = game.get('p1DcMessageIds' if active == 1 else 'p2DcMessageIds') or []
+            parts = figure_key.rsplit('-', 2)
+            if len(parts) == 3:
+                dc_name = parts[0]
+                try:
+                    dg = int(parts[1])
+                except ValueError:
+                    dg = None
+                for i, dc in enumerate(dc_list):
+                    if i >= len(dc_msg_ids):
+                        break
+                    name = (dc.get('dcName') if isinstance(dc, Mapping)
+                            else dc)
+                    if name == dc_name and (
+                        dg is None
+                        or int((dc.get('dgIndex') if isinstance(dc, Mapping) else 0) or 0) == dg
+                    ):
+                        atk_msg_id = dc_msg_ids[i]
+                        break
+            override_map = game.get('pendingOverrideAttackDice') or {}
+            override = override_map.get(atk_msg_id) if atk_msg_id else None
+            if isinstance(override, Mapping) and override.get('type'):
+                attack_type = str(override['type']).lower()
             opp = 2 if active == 1 else 1
             opp_figs = _sorted_figures(game, opp)
             for tgt_key, tgt_coord in opp_figs:
