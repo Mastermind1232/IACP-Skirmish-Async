@@ -1,0 +1,152 @@
+# JS ↔ Python Port Audit
+
+Anti-backtracking inventory. SIZE/SHAPE heuristic only — high-value
+COVERED-BY-SHAPE entries still need behavioral verification before
+being marked COMPLETE. MISSING and STUB-ONLY are guaranteed gaps.
+
+## Summary
+
+- Total JS rules-logic files: 129
+- Total Python engine files: 77
+
+Status counts:
+
+- **MISSING**: 102
+- **STUB-ONLY**: 1
+- **PARTIAL**: 9
+- **COVERED-BY-SHAPE**: 12
+- **UNVERIFIED**: 5
+
+## Rows (sorted by JS LOC, largest first)
+
+| Status | JS file | JS LOC | JS fns | Python counterpart(s) | Note |
+|---|---|---|---|---|---|
+| MISSING | `src/game/abilities.js` | 9798 | 15 | — | no python counterpart; JS has 15 fns, 9798 LOC |
+| PARTIAL | `src/handlers/combat.js` | 6335 | 53 | python/engine/mechanics/combat.py, python/engine/mechanics/combat_declare.py, python/engine/mechanics/combat_defense_friends.py | py=12fns vs js=53fns |
+| MISSING | `src/handlers/dc-play-area.js` | 3698 | 37 | — | no python counterpart; JS has 37 fns, 3698 LOC |
+| MISSING | `src/engine/combat-bridge.js` | 2930 | 8 | — | no python counterpart; JS has 8 fns, 2930 LOC |
+| PARTIAL | `src/handlers/setup.js` | 2604 | 41 | python/engine/setup.py | py=4fns vs js=41fns |
+| PARTIAL | `src/handlers/activation.js` | 2460 | 22 | python/engine/mechanics/activation_effects.py | py=5fns vs js=22fns |
+| MISSING | `src/engine/available-actions.js` | 2394 | 44 | — | no python counterpart; JS has 44 fns, 2394 LOC |
+| PARTIAL | `src/handlers/round.js` | 2154 | 28 | python/engine/mechanics/round_effects.py | py=3fns vs js=28fns |
+| MISSING | `src/handlers/post-deploy.js` | 1871 | 35 | — | no python counterpart; JS has 35 fns, 1871 LOC |
+| MISSING | `src/handlers/cc-hand.js` | 1721 | 31 | — | no python counterpart; JS has 31 fns, 1721 LOC |
+| UNVERIFIED | `src/handlers/movement.js` | 1463 | 21 | python/engine/mechanics/movement_board.py, python/engine/mechanics/movement_cache.py | py=13fns/501loc vs js=21/1463 |
+| MISSING | `src/engine/activation-setup.js` | 1383 | 3 | — | no python counterpart; JS has 3 fns, 1383 LOC |
+| MISSING | `src/handlers/combat-special-effects.js` | 1192 | 36 | — | no python counterpart; JS has 36 fns, 1192 LOC |
+| PARTIAL | `src/game/movement.js` | 1099 | 34 | python/engine/mechanics/movement_board.py, python/engine/mechanics/movement_cache.py | py=13fns vs js=34fns |
+| PARTIAL | `src/handlers/interrupts.js` | 1065 | 20 | python/engine/mechanics/interrupts.py | py=4fns vs js=20fns |
+| MISSING | `src/handlers/combat-reactions.js` | 910 | 11 | — | no python counterpart; JS has 11 fns, 910 LOC |
+| MISSING | `src/handlers/recover.js` | 839 | 21 | — | no python counterpart; JS has 21 fns, 839 LOC |
+| MISSING | `src/handlers/index.js` | 721 | 4 | — | no python counterpart; JS has 4 fns, 721 LOC |
+| MISSING | `src/handlers/blitz-deploy.js` | 712 | 19 | — | no python counterpart; JS has 19 fns, 712 LOC |
+| COVERED-BY-SHAPE | `src/game/mission-rules.js` | 711 | 8 | python/engine/mechanics/mission_rules.py | py=12fns ≥ js=8fns (py=979loc, js=711loc) |
+| MISSING | `src/game/validation.js` | 696 | 13 | — | no python counterpart; JS has 13 fns, 696 LOC |
+| MISSING | `src/handlers/favorites.js` | 664 | 17 | — | no python counterpart; JS has 17 fns, 664 LOC |
+| COVERED-BY-SHAPE | `src/game/cc-timing.js` | 619 | 15 | python/engine/mechanics/cc_timing.py | py=16fns ≥ js=15fns (py=630loc, js=619loc) |
+| MISSING | `src/engine/setup-bridge.js` | 609 | 5 | — | no python counterpart; JS has 5 fns, 609 LOC |
+| MISSING | `src/engine/misc-helpers.js` | 598 | 15 | — | no python counterpart; JS has 15 fns, 598 LOC |
+| MISSING | `src/handlers/game-tools.js` | 504 | 6 | — | no python counterpart; JS has 6 fns, 504 LOC |
+| MISSING | `src/handlers/fast-forward.js` | 468 | 11 | — | no python counterpart; JS has 11 fns, 468 LOC |
+| MISSING | `src/engine/message-updaters.js` | 467 | 12 | — | no python counterpart; JS has 12 fns, 467 LOC |
+| MISSING | `src/game/activation-state.js` | 462 | 2 | — | no python counterpart; JS has 2 fns, 462 LOC |
+| COVERED-BY-SHAPE | `src/game/board-helpers.js` | 460 | 20 | python/engine/board_data.py, python/engine/mechanics/board_helpers.py, python/engine/mechanics/movement_board.py | py=28fns ≥ js=20fns (py=838loc, js=460loc) |
+| PARTIAL | `src/handlers/phase-gate.js` | 426 | 13 | python/engine/mechanics/phase_gate.py | py=6fns vs js=13fns |
+| MISSING | `src/handlers/map-events.js` | 410 | 8 | — | no python counterpart; JS has 8 fns, 410 LOC |
+| UNVERIFIED | `src/game/combat.js` | 370 | 16 | python/engine/mechanics/combat.py, python/engine/mechanics/combat_declare.py, python/engine/mechanics/combat_defense_friends.py | py=12fns/756loc vs js=16/370 |
+| UNVERIFIED | `src/game/phase-gate.js` | 358 | 8 | python/engine/mechanics/phase_gate.py | py=6fns/136loc vs js=8/358 |
+| PARTIAL | `src/game/spatial.js` | 334 | 13 | python/engine/mechanics/spatial.py | py=4fns vs js=13fns |
+| MISSING | `src/handlers/post-combat.js` | 332 | 5 | — | no python counterpart; JS has 5 fns, 332 LOC |
+| MISSING | `src/engine/defeat-handler.js` | 321 | 1 | — | no python counterpart; JS has 1 fns, 321 LOC |
+| UNVERIFIED | `src/engine/win-conditions.js` | 309 | 7 | python/engine/mechanics/win_conditions.py | py=5fns/113loc vs js=7/309 |
+| COVERED-BY-SHAPE | `src/engine/activation-effects.js` | 292 | 2 | python/engine/mechanics/activation_effects.py | py=5fns ≥ js=2fns (py=449loc, js=292loc) |
+| MISSING | `src/engine/action-types.js` | 284 | 1 | — | no python counterpart; JS has 1 fns, 284 LOC |
+| MISSING | `src/handlers/botmenu.js` | 266 | 10 | — | no python counterpart; JS has 10 fns, 266 LOC |
+| MISSING | `src/engine/scenario-mutators.js` | 264 | 4 | — | no python counterpart; JS has 4 fns, 264 LOC |
+| MISSING | `src/game/cc-passive-redraw.js` | 247 | 6 | — | no python counterpart; JS has 6 fns, 247 LOC |
+| MISSING | `src/engine/game-creation-bridge.js` | 244 | 11 | — | no python counterpart; JS has 11 fns, 244 LOC |
+| COVERED-BY-SHAPE | `src/game/player-helpers.js` | 211 | 39 | python/engine/mechanics/player_helpers.py | py=42fns ≥ js=39fns (py=284loc, js=211loc) |
+| COVERED-BY-SHAPE | `src/handlers/interact.js` | 201 | 2 | python/engine/mechanics/interact.py | py=2fns ≥ js=2fns (py=142loc, js=201loc) |
+| MISSING | `src/game/movement-interrupts.js` | 200 | 3 | — | no python counterpart; JS has 3 fns, 200 LOC |
+| PARTIAL | `src/game/dc-helpers.js` | 183 | 11 | python/engine/mechanics/dc_helpers.py | py=3fns vs js=11fns |
+| MISSING | `src/handlers/lobby.js` | 170 | 2 | — | no python counterpart; JS has 2 fns, 170 LOC |
+| MISSING | `src/engine/prompt-reconciler.js` | 166 | 10 | — | no python counterpart; JS has 10 fns, 166 LOC |
+| MISSING | `src/engine/recovery.js` | 152 | 3 | — | no python counterpart; JS has 3 fns, 152 LOC |
+| MISSING | `src/handlers/space-picker.js` | 143 | 2 | — | no python counterpart; JS has 2 fns, 143 LOC |
+| MISSING | `src/engine/hand-ui-helpers.js` | 140 | 6 | — | no python counterpart; JS has 6 fns, 140 LOC |
+| MISSING | `src/game/index.js` | 120 | 0 | — | no python counterpart; JS has 0 fns, 120 LOC |
+| MISSING | `src/engine/board-ui-helpers.js` | 113 | 4 | — | no python counterpart; JS has 4 fns, 113 LOC |
+| MISSING | `src/engine/game-engine.js` | 112 | 2 | — | no python counterpart; JS has 2 fns, 112 LOC |
+| COVERED-BY-SHAPE | `src/game/damage-helpers.js` | 112 | 4 | python/engine/mechanics/damage_helpers.py | py=5fns ≥ js=4fns (py=124loc, js=112loc) |
+| COVERED-BY-SHAPE | `src/game/phase.js` | 112 | 4 | python/engine/mechanics/phase_gate.py, python/engine/phases.py | py=8fns ≥ js=4fns (py=199loc, js=112loc) |
+| UNVERIFIED | `src/game/game-helpers.js` | 106 | 4 | python/engine/mechanics/game_helpers.py | py=3fns/75loc vs js=4/106 |
+| MISSING | `src/engine/deploy-ui-helpers.js` | 102 | 5 | — | no python counterpart; JS has 5 fns, 102 LOC |
+| MISSING | `src/engine/game-readers.js` | 99 | 9 | — | no python counterpart; JS has 9 fns, 99 LOC |
+| MISSING | `src/engine/dc-ui-helpers.js` | 96 | 6 | — | no python counterpart; JS has 6 fns, 96 LOC |
+| MISSING | `src/game/force-exhaustion-helpers.js` | 95 | 3 | — | no python counterpart; JS has 3 fns, 95 LOC |
+| MISSING | `src/game/adaptive-skills-helpers.js` | 93 | 5 | — | no python counterpart; JS has 5 fns, 93 LOC |
+| MISSING | `src/game/action-queue.js` | 89 | 4 | — | no python counterpart; JS has 4 fns, 89 LOC |
+| COVERED-BY-SHAPE | `src/game/conditions.js` | 89 | 5 | python/engine/mechanics/conditions.py, python/engine/mechanics/win_conditions.py | py=10fns ≥ js=5fns (py=241loc, js=89loc) |
+| MISSING | `src/game/field-tactics-helpers.js` | 89 | 4 | — | no python counterpart; JS has 4 fns, 89 LOC |
+| COVERED-BY-SHAPE | `src/game/coords.js` | 86 | 11 | python/engine/mechanics/coords.py | py=11fns ≥ js=11fns (py=130loc, js=86loc) |
+| MISSING | `src/game/figure-config.js` | 78 | 6 | — | no python counterpart; JS has 6 fns, 78 LOC |
+| MISSING | `src/engine/cc-draw-prompts.js` | 76 | 1 | — | no python counterpart; JS has 1 fns, 76 LOC |
+| COVERED-BY-SHAPE | `src/game/vp-helpers.js` | 76 | 5 | python/engine/mechanics/vp_helpers.py | py=7fns ≥ js=5fns (py=88loc, js=76loc) |
+| COVERED-BY-SHAPE | `src/engine/mission-helpers.js` | 68 | 5 | python/engine/data/mission_cards_loader.py, python/engine/mechanics/mission_rules.py | py=17fns ≥ js=5fns (py=1029loc, js=68loc) |
+| MISSING | `src/game/attached-dio-helpers.js` | 64 | 2 | — | no python counterpart; JS has 2 fns, 64 LOC |
+| MISSING | `src/handlers/requests.js` | 64 | 2 | — | no python counterpart; JS has 2 fns, 64 LOC |
+| MISSING | `src/engine/utils.js` | 59 | 3 | — | no python counterpart; JS has 3 fns, 59 LOC |
+| MISSING | `src/game/aim-rebel-trooper-helpers.js` | 59 | 3 | — | no python counterpart; JS has 3 fns, 59 LOC |
+| MISSING | `src/game/agile-jet-trooper-helpers.js` | 53 | 2 | — | no python counterpart; JS has 2 fns, 53 LOC |
+| MISSING | `src/game/bespin-security-helpers.js` | 51 | 3 | — | no python counterpart; JS has 3 fns, 51 LOC |
+| MISSING | `src/game/scavenged-stock-helpers.js` | 51 | 2 | — | no python counterpart; JS has 2 fns, 51 LOC |
+| MISSING | `src/game/hunker-down-helpers.js` | 50 | 3 | — | no python counterpart; JS has 3 fns, 50 LOC |
+| MISSING | `src/game/modular-hse-helpers.js` | 48 | 3 | — | no python counterpart; JS has 3 fns, 48 LOC |
+| MISSING | `src/game/much-to-learn-helpers.js` | 47 | 5 | — | no python counterpart; JS has 5 fns, 47 LOC |
+| MISSING | `src/game/shock-and-awe-helpers.js` | 47 | 4 | — | no python counterpart; JS has 4 fns, 47 LOC |
+| MISSING | `src/game/adv-targeting-computer-helpers.js` | 46 | 3 | — | no python counterpart; JS has 3 fns, 46 LOC |
+| MISSING | `src/game/keep-the-peace-helpers.js` | 46 | 4 | — | no python counterpart; JS has 4 fns, 46 LOC |
+| MISSING | `src/game/front-line-helpers.js` | 43 | 3 | — | no python counterpart; JS has 3 fns, 43 LOC |
+| MISSING | `src/game/dubious-counterparts-helpers.js` | 42 | 2 | — | no python counterpart; JS has 2 fns, 42 LOC |
+| MISSING | `src/game/shared-intuition-helpers.js` | 42 | 4 | — | no python counterpart; JS has 4 fns, 42 LOC |
+| MISSING | `src/game/vanguard-helpers.js` | 42 | 3 | — | no python counterpart; JS has 3 fns, 42 LOC |
+| MISSING | `src/game/droid-kit-helpers.js` | 41 | 1 | — | no python counterpart; JS has 1 fns, 41 LOC |
+| MISSING | `src/game/scattergun-helpers.js` | 41 | 4 | — | no python counterpart; JS has 4 fns, 41 LOC |
+| MISSING | `src/game/sniper-helpers.js` | 40 | 4 | — | no python counterpart; JS has 4 fns, 40 LOC |
+| MISSING | `src/game/targeting-computer-helpers.js` | 39 | 2 | — | no python counterpart; JS has 2 fns, 39 LOC |
+| MISSING | `src/game/forest-fighters-helpers.js` | 38 | 3 | — | no python counterpart; JS has 3 fns, 38 LOC |
+| MISSING | `src/game/take-cover-jawa-helpers.js` | 38 | 2 | — | no python counterpart; JS has 2 fns, 38 LOC |
+| MISSING | `src/game/exploit-weakness-helpers.js` | 37 | 3 | — | no python counterpart; JS has 3 fns, 37 LOC |
+| MISSING | `src/game/awr-helpers.js` | 36 | 2 | — | no python counterpart; JS has 2 fns, 36 LOC |
+| MISSING | `src/game/charge-generators-helpers.js` | 36 | 3 | — | no python counterpart; JS has 3 fns, 36 LOC |
+| MISSING | `src/game/slippery-smuggler-helpers.js` | 36 | 2 | — | no python counterpart; JS has 2 fns, 36 LOC |
+| MISSING | `src/game/cunning-helpers.js` | 35 | 2 | — | no python counterpart; JS has 2 fns, 35 LOC |
+| MISSING | `src/game/illicit-arms-helpers.js` | 34 | 2 | — | no python counterpart; JS has 2 fns, 34 LOC |
+| MISSING | `src/game/squad-training-helpers.js` | 34 | 2 | — | no python counterpart; JS has 2 fns, 34 LOC |
+| MISSING | `src/game/find-weakness-helpers.js` | 33 | 2 | — | no python counterpart; JS has 2 fns, 33 LOC |
+| MISSING | `src/game/inspiring-helpers.js` | 33 | 2 | — | no python counterpart; JS has 2 fns, 33 LOC |
+| MISSING | `src/game/battle-meditation-helpers.js` | 32 | 2 | — | no python counterpart; JS has 2 fns, 32 LOC |
+| MISSING | `src/game/defensive-reroll-helpers.js` | 32 | 3 | — | no python counterpart; JS has 3 fns, 32 LOC |
+| MISSING | `src/game/distracting-helpers.js` | 32 | 2 | — | no python counterpart; JS has 2 fns, 32 LOC |
+| MISSING | `src/game/evade-debuff-helpers.js` | 32 | 3 | — | no python counterpart; JS has 3 fns, 32 LOC |
+| MISSING | `src/game/raider-weequay-helpers.js` | 32 | 2 | — | no python counterpart; JS has 2 fns, 32 LOC |
+| MISSING | `src/game/dead-precise-kotun-helpers.js` | 31 | 3 | — | no python counterpart; JS has 3 fns, 31 LOC |
+| MISSING | `src/game/query-hk47-helpers.js` | 31 | 2 | — | no python counterpart; JS has 2 fns, 31 LOC |
+| MISSING | `src/game/composite-plating-helpers.js` | 30 | 3 | — | no python counterpart; JS has 3 fns, 30 LOC |
+| MISSING | `src/game/fury-helpers.js` | 30 | 2 | — | no python counterpart; JS has 2 fns, 30 LOC |
+| MISSING | `src/game/relentless-helpers.js` | 30 | 2 | — | no python counterpart; JS has 2 fns, 30 LOC |
+| MISSING | `src/game/spray-fire-helpers.js` | 30 | 2 | — | no python counterpart; JS has 2 fns, 30 LOC |
+| MISSING | `src/game/tripod-eweb-helpers.js` | 30 | 2 | — | no python counterpart; JS has 2 fns, 30 LOC |
+| MISSING | `src/game/full-of-rage-helpers.js` | 28 | 2 | — | no python counterpart; JS has 2 fns, 28 LOC |
+| MISSING | `src/game/gamorrean-honor-guard-helpers.js` | 27 | 3 | — | no python counterpart; JS has 3 fns, 27 LOC |
+| MISSING | `src/game/overpower-helpers.js` | 27 | 3 | — | no python counterpart; JS has 3 fns, 27 LOC |
+| MISSING | `src/game/cortosis-weave-helpers.js` | 26 | 2 | — | no python counterpart; JS has 2 fns, 26 LOC |
+| MISSING | `src/game/sharpshooter-helpers.js` | 26 | 2 | — | no python counterpart; JS has 2 fns, 26 LOC |
+| MISSING | `src/game/awkward-atst-helpers.js` | 22 | 2 | — | no python counterpart; JS has 2 fns, 22 LOC |
+| MISSING | `src/game/adapt-blaise-helpers.js` | 21 | 1 | — | no python counterpart; JS has 1 fns, 21 LOC |
+| MISSING | `src/game/mon-cala-sf-loku-helpers.js` | 20 | 1 | — | no python counterpart; JS has 1 fns, 20 LOC |
+| MISSING | `src/game/slow-on-the-draw-helpers.js` | 19 | 1 | — | no python counterpart; JS has 1 fns, 19 LOC |
+| MISSING | `src/game/apply-move.js` | 18 | 1 | — | no python counterpart; JS has 1 fns, 18 LOC |
+| STUB-ONLY | `src/game/card-names.js` | 17 | 3 | python/engine/mechanics/card_names.py | py=3fns/39loc vs js=3/17 |
+| MISSING | `src/game/deck-hash.js` | 15 | 1 | — | no python counterpart; JS has 1 fns, 15 LOC |
+| MISSING | `src/handlers/special.js` | 13 | 1 | — | no python counterpart; JS has 1 fns, 13 LOC |
