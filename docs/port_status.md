@@ -52,7 +52,7 @@ Only DONE entries should be considered trustworthy for training.
 | Pattern C (passive) | Many `<keyword>-helpers.js` files + combat.js inline | `python/engine/abilities/pattern_c.py` (467) | PARTIAL | 55/63 marked 'deferred-handler-combat' — rely on combat.js-side integration, NOT yet verified |
 | Pattern D (triggered) | Inline in `src/game/abilities.js` | `pattern_d.py`, `pattern_d_extras.py`, `pattern_d_handlers.py`, `bespoke_d.py` | CLOSE | 161/161 with real handlers; snapshot-locked; but fixture is minimal — many handlers return early on ctx gaps |
 | Pattern E (active dcSpecial) | Inline in `src/game/abilities.js` | `pattern_e_schema.py`, `bespoke_e.py`, `force_push.py`, `force_throw.py`, `push_target_within_range.py`, `barrage.py`, `hop_on.py`, `pattern_e_bulk.py` | CLOSE | 117/117 produce post-state; 37 byte-identical to JS, 54 superset; 0 unhandled |
-| Command card effects | `data/cc-effects.json` + `src/game/abilities.js` branches | `python/engine/cards/cc_effects.py` (4268), `cc_schema.py` (330), `cc_bulk_named.py` | PARTIAL | 293 cards; most route through generic `apply_cc_schema` fallback; 11 bespoke ports; actual per-card mechanics largely unverified |
+| Command card effects | `data/cc-effects.json` + `src/game/abilities.js` branches | `python/engine/cards/cc_effects.py` (4300+), `cc_schema.py`, `cc_bulk_named.py` | DONE | 293/293 cards behavior-verified via `python/parity/cc_golden.py`: 76 PASS byte-identical with JS, 217 PY_AHEAD (Python applies mechanic JS defers to handler). Snapshot-locked via 294 pytests. Commit 32b42dc. |
 
 ## Layer 3 — Setup + deployment
 
