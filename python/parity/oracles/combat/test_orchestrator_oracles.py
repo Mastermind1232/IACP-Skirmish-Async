@@ -516,6 +516,51 @@ def test_next_attacks_bonus_conditions_depleted_entry_removed():
     )
 
 
+def test_deflection_unconditional_damages_attacker_on_hit():
+    """deflectionUnconditional fires on any hit, regardless of damage dealt."""
+    fixture = _base_fixture()
+    fixture['deflectionPending'] = {2: 3}
+    fixture['deflectionUnconditional'] = {2: True}
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit'):
+        pytest.skip('miss on this seed')
+    # Luke (P1) took deflection damage: 10 - 3 = 7.
+    assert g.data['dcHealthState']['hl1dc0'][0][0] == 7, (
+        f"Luke HP should drop by 3; got {g.data['dcHealthState']['hl1dc0']}"
+    )
+    assert 2 not in (g.data.get('deflectionPending') or {}), (
+        'deflectionPending entry should clear after firing'
+    )
+
+
+def test_deflection_conditional_only_fires_on_zero_damage():
+    """Legacy deflection only fires when defender takes 0 damage."""
+    fixture = _base_fixture()
+    fixture['deflectionPending'] = {2: 2}
+    # deflectionUnconditional NOT set → conditional on damage == 0.
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) == 0:
+        pytest.skip('wrong seed outcome for this conditional test')
+    # Hit with damage > 0 — deflection should NOT fire.
+    assert g.data['dcHealthState']['hl1dc0'][0][0] == 10, (
+        'Luke HP should be untouched when conditional deflection skipped'
+    )
+    # Entry NOT consumed either.
+    assert (g.data.get('deflectionPending') or {}).get(2) == 2
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()

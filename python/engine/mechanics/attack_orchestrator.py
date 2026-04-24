@@ -750,6 +750,36 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                 if isinstance(cur, list) and len(cur) >= 1 and cur[0] == 1:
                     reduce_hp(dcs, data, def_msg_id, def_fig_idx, 1, def_player)
 
+    # Deflection: defender's deflectionPending[player] applies damage to
+    # the attacker after resolution. Unconditional variant fires on any
+    # hit; legacy variant only when defender suffered 0 damage.
+    deflect_map = data.get('deflectionPending') or {}
+    deflect_uncond_map = data.get('deflectionUnconditional') or {}
+    if isinstance(deflect_map, dict):
+        deflect_dmg = int(
+            deflect_map.get(def_player,
+                            deflect_map.get(str(def_player), 0)) or 0
+        )
+        deflect_uncond = bool(
+            (isinstance(deflect_uncond_map, dict) and
+             deflect_uncond_map.get(def_player,
+                                    deflect_uncond_map.get(str(def_player))))
+        )
+        if deflect_dmg > 0 and hit and (deflect_uncond or damage == 0):
+            dm_new = dict(deflect_map)
+            dm_new.pop(def_player, None)
+            dm_new.pop(str(def_player), None)
+            data['deflectionPending'] = dm_new
+            if isinstance(deflect_uncond_map, dict):
+                du_new = dict(deflect_uncond_map)
+                du_new.pop(def_player, None)
+                du_new.pop(str(def_player), None)
+                data['deflectionUnconditional'] = du_new
+            if atk_msg_id:
+                dcs = data.get('dcHealthState') or {}
+                reduce_hp(dcs, data, atk_msg_id, atk_fig_idx,
+                          deflect_dmg, atk_player)
+
     # ── Phase 11b: SELF-DEFEAT after attack ─────────────────────────────
     # Dying Lunge, Final Stand, etc. stamp selfDefeatsAfterAttackMsgId
     # via the CC schema pre-pass. After the main attack resolves, the
