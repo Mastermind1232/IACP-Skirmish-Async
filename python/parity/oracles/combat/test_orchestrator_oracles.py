@@ -258,6 +258,30 @@ def test_orchestrator_defeat_skips_contraband_drop_non_carry_mission():
     assert not dropped, f'non-carry mission must not drop; got {dropped}'
 
 
+def test_self_defeats_after_attack_fires_on_attacker():
+    """Dying Lunge / Final Stand stamp selfDefeatsAfterAttackMsgId.
+    After attack resolves, attacker is removed from board and
+    defender's player scores kill VP."""
+    fixture = _base_fixture()
+    fixture['selfDefeatsAfterAttackMsgId'] = {'hl1dc0': True}
+    g = _game(fixture)
+    orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    # Attacker removed from board.
+    p1_figs = g.data['figurePositions'].get(1, {})
+    assert 'Luke Skywalker-0-0' not in p1_figs, (
+        f'Luke should self-defeat after attack; still at {p1_figs.get("Luke Skywalker-0-0")}'
+    )
+    # Flag cleared.
+    assert not (g.data.get('selfDefeatsAfterAttackMsgId') or {}).get('hl1dc0'), (
+        'selfDefeatsAfterAttackMsgId should clear on consume'
+    )
+
+
 def test_surge_spend_damage_applies_to_combat():
     """Spending a 'damage 2' surge adds 2 to combat.surgeDamage,
     which compute_combat_result reads into final damage."""

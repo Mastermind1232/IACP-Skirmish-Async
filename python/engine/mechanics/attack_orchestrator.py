@@ -688,6 +688,31 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
             except Exception:
                 pass
 
+    # ── Phase 11b: SELF-DEFEAT after attack ─────────────────────────────
+    # Dying Lunge, Final Stand, etc. stamp selfDefeatsAfterAttackMsgId
+    # via the CC schema pre-pass. After the main attack resolves, the
+    # attacker auto-defeats. Mirrors JS combat-bridge.js.
+    self_defeat_map = data.get('selfDefeatsAfterAttackMsgId') or {}
+    if atk_msg_id and isinstance(self_defeat_map, dict) and self_defeat_map.get(atk_msg_id):
+        # Clear the flag.
+        sd_map = dict(self_defeat_map)
+        sd_map.pop(atk_msg_id, None)
+        data['selfDefeatsAfterAttackMsgId'] = sd_map
+        # Reduce attacker HP to zero + fire defeat-path side effects.
+        dcs = data.get('dcHealthState') or {}
+        atk_hs = dcs.get(atk_msg_id)
+        if isinstance(atk_hs, list) and atk_fig_idx < len(atk_hs):
+            entry = atk_hs[atk_fig_idx]
+            if isinstance(entry, list) and len(entry) >= 2:
+                max_hp = int(entry[1] or entry[0] or 99)
+                reduce_hp(dcs, data, atk_msg_id, atk_fig_idx,
+                          max_hp, atk_player)
+        _remove_figure(data, atk_player, attacker_key)
+        # Award VP to defender (the attacker died in the act).
+        self_defeat_vp = calculate_kill_vp(atk_dc)
+        if self_defeat_vp:
+            award_kill_vp(data, def_player, self_defeat_vp)
+
     # ── Phase 12: POST (clear pending + record attacks) ─────────────────
     # Record attack on attacker
     atk_log = dict(data.get('figureAttacksThisActivation') or {})
