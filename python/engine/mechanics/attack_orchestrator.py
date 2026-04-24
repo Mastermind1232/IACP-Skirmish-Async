@@ -255,6 +255,20 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                     combat[_k] = list(combat.get(_k) or []) + list(prior_pc[_k] or [])
                 else:
                     combat[_k] = int(combat.get(_k) or 0) + int(prior_pc[_k] or 0)
+    # Consume nextAttacksBonusConditions (CC-stamped bonus conditions that
+    # apply to the next N attacks by this player — e.g. "next attack inflicts
+    # Bleed" style cards). Decrement counter; drop entry when depleted.
+    nabc = data.get('nextAttacksBonusConditions')
+    if isinstance(nabc, dict):
+        entry = nabc.get(atk_player)
+        if isinstance(entry, dict):
+            count = int(entry.get('count') or 0)
+            conds = entry.get('conditions') or []
+            if count > 0 and conds:
+                combat['bonusConditions'] = list(combat.get('bonusConditions') or []) + list(conds)
+                entry['count'] = count - 1
+                if entry['count'] <= 0:
+                    del nabc[atk_player]
     data['pendingCombat'] = combat
 
     # ── Phase 2: PRE-ATTACK triggers ─────────────────────────────────────

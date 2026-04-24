@@ -471,3 +471,66 @@ def test_orchestrator_multi_figure_group_partial_wipe():
             f'remaining P2 stormtroopers={len(stormtroopers)}, '
             f'p2_rem={p2_rem}'
         )
+
+
+def test_next_attacks_bonus_conditions_consumed_on_hit():
+    """nextAttacksBonusConditions[player] merges into combat.bonusConditions
+    and decrements; depleted entry is removed."""
+    fixture = _base_fixture()
+    fixture['nextAttacksBonusConditions'] = {
+        1: {'count': 2, 'conditions': ['Bleed']},
+    }
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    entry = g.data['nextAttacksBonusConditions'].get(1)
+    assert entry is not None, 'entry should remain after first consume'
+    assert entry['count'] == 1, f'count should decrement to 1; got {entry}'
+    if result.get('hit'):
+        conds = (g.data.get('figureConditions') or {}).get(
+            'Darth Vader-0-0') or []
+        assert 'Bleed' in conds, (
+            f'bonus Bleed should apply on hit; figureConditions={conds}'
+        )
+
+
+def test_next_attacks_bonus_conditions_depleted_entry_removed():
+    """When counter hits 0, entry is dropped from the map."""
+    fixture = _base_fixture()
+    fixture['nextAttacksBonusConditions'] = {
+        1: {'count': 1, 'conditions': ['Stun']},
+    }
+    g = _game(fixture)
+    orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red'],
+        defense_dice_override=['white'],
+    )
+    assert 1 not in (g.data.get('nextAttacksBonusConditions') or {}), (
+        'depleted entry should be removed'
+    )
+
+
+def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
+    """Player-2's pending bonus conditions don't fire on a P1 attack."""
+    fixture = _base_fixture()
+    fixture['nextAttacksBonusConditions'] = {
+        2: {'count': 1, 'conditions': ['Bleed']},
+    }
+    g = _game(fixture)
+    orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red'],
+        defense_dice_override=['white'],
+    )
+    p2_entry = (g.data.get('nextAttacksBonusConditions') or {}).get(2)
+    assert p2_entry is not None
+    assert p2_entry['count'] == 1, (
+        f'P2 entry must not decrement on a P1 attack; got {p2_entry}'
+    )
