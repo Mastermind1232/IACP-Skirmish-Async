@@ -1301,6 +1301,39 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
     if eor_events:
         game.data['lastEndOfRoundDcEvents'] = eor_events
 
+    # Mission end-of-round rules (VP awards, crate distribution, Krykna
+    # activation on Chopper Base A, etc.) — matches JS round.js →
+    # runEndOfRoundRules call site.
+    try:
+        from python.engine.mechanics.mission_rules import (
+            run_end_of_round_rules, run_npc_krykna_activation,
+        )
+        selected = game.data.get('selectedMission') or {}
+        variant = 'a'
+        rules_eor = None
+        if isinstance(selected, Mapping):
+            variant = selected.get('variant') or 'a'
+            rules = selected.get('rules')
+            if isinstance(rules, Mapping):
+                rules_eor = rules.get('endOfRound')
+        map_id = game.data.get('mapId')
+        if not map_id:
+            sel_map = game.data.get('selectedMap') or {}
+            if isinstance(sel_map, Mapping):
+                map_id = sel_map.get('id')
+        if rules_eor:
+            run_end_of_round_rules(game, map_id, variant,
+                                    dict(rules_eor))
+            # Krykna activation is flag-gated, not branch-dispatched.
+            if rules_eor.get('npcKryknaActivation') and map_id:
+                try:
+                    run_npc_krykna_activation(game, map_id, variant=variant)
+                except TypeError:
+                    # Older signature without variant kwarg.
+                    run_npc_krykna_activation(game, map_id)
+    except Exception:
+        pass
+
     cur_round = int(game.get('round') or game.get('currentRound') or 1)
     game['round'] = cur_round + 1
     # Keep currentRound in sync if it was being used.
