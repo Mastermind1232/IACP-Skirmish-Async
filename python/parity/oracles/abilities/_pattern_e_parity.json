@@ -4,8 +4,8 @@
     "ERROR_PY": 0,
     "FAIL": 0,
     "JS_MANUAL": 37,
-    "PASS": 34,
-    "PY_AHEAD": 46,
+    "PASS": 37,
+    "PY_AHEAD": 43,
     "SKIP": 0
   },
   "reports": [
@@ -155,19 +155,8 @@
       "status": "JS_MANUAL"
     },
     {
-      "extra_state": [],
       "id": "deflect",
-      "js_choice_options": [
-        "Vader"
-      ],
-      "note": "JS awaits chooseOne; Python auto-picked idx=0",
-      "py_effects": [
-        {
-          "effect": "targetHostileFigure_reactive_deferred",
-          "note": "fires only on trigger, not on activation"
-        }
-      ],
-      "status": "PY_AHEAD"
+      "status": "PASS"
     },
     {
       "diffs_on_state": [
@@ -211,26 +200,8 @@
       "status": "PY_AHEAD"
     },
     {
-      "extra_state": [
-        "nextAttackBonusSurgeAbilities: JS=null | PY={\"1\": [\"cleave 2\"]}",
-        "nextAttackReach: JS=null | PY={\"1\": true}"
-      ],
       "id": "dual_bladed_fury",
-      "js_choice_options": [
-        "Reach + Cleave 2",
-        "Become Focused"
-      ],
-      "note": "JS awaits chooseOne; Python auto-picked idx=0",
-      "py_effects": [
-        {
-          "amount": 2,
-          "effect": "nextAttackCleave"
-        },
-        {
-          "effect": "nextAttackReach"
-        }
-      ],
-      "status": "PY_AHEAD"
+      "status": "PASS"
     },
     {
       "diffs_on_state": [],
@@ -310,10 +281,8 @@
         "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[10, 12]]}"
       ],
       "id": "force_choke",
-      "js_choice_options": [
-        "Vader"
-      ],
-      "note": "JS awaits chooseOne; Python auto-picked idx=0",
+      "js_log": "**Force Choke** \u2014 **Vader** (apply 2 Damage + 1 Strain manually).",
+      "note": "JS logged+deferred to handler; Python mutated",
       "py_effects": [
         {
           "condition": null,
@@ -560,17 +529,17 @@
     },
     {
       "diffs_on_state": [
-        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[10, 12]]}"
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[11, 12]]}"
       ],
       "id": "jetpack_rocket",
       "js_manual": "**Jetpack Rocket** requires 2 MP (you have 0).",
       "note": "JS defers to handler; Python auto-resolved",
       "py_effects": [
         {
-          "damage": 2,
+          "damage": 1,
           "dieColor": "blue",
           "effect": "rollOneDie_resolved",
-          "hits": 2,
+          "hits": 1,
           "target": "Vader-1-0"
         }
       ],
@@ -646,22 +615,8 @@
       "status": "JS_MANUAL"
     },
     {
-      "extra_state": [],
       "id": "mockery",
-      "js_choice_options": [
-        "Vader"
-      ],
-      "note": "JS awaits chooseOne; Python auto-picked idx=0",
-      "py_effects": [
-        {
-          "condition": null,
-          "damage": 0,
-          "effect": "targetHostileFigure_resolved",
-          "strain": 1,
-          "target": "Vader-1-0"
-        }
-      ],
-      "status": "PY_AHEAD"
+      "status": "PASS"
     },
     {
       "id": "multi_fire",
@@ -737,7 +692,7 @@
         "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 2, \"total\": 2}}"
       ],
       "id": "ram_chopper",
-      "js_log": "**Ram** \u2014 Rolled 1 green die: **2 Hits**. **Vader** apply 2 Damage manually.",
+      "js_log": "**Ram** \u2014 Rolled 1 green die: **1 Hit, 1 Surge**. **Vader** apply 1 Damage manually.",
       "note": "JS logged+deferred to handler; Python mutated",
       "py_effects": [
         {
@@ -853,35 +808,33 @@
     },
     {
       "diffs_on_state": [
-        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[11, 12]]}"
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[10, 12]]}"
       ],
       "id": "shock_grenade_purge",
       "js_manual": "Resolve **Shock Grenade** manually (map not loaded).",
       "note": "JS defers to handler; Python auto-resolved",
       "py_effects": [
         {
-          "damage": 1,
+          "damage": 2,
           "dieColor": "green",
           "effect": "rollOneDie_resolved",
-          "hits": 1,
+          "hits": 2,
           "target": "Vader-1-0"
         }
       ],
       "status": "PY_AHEAD"
     },
     {
-      "diffs_on_state": [
-        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[11, 12]]}"
-      ],
+      "diffs_on_state": [],
       "id": "shock_lance_dewback",
       "js_manual": "Resolve **Shock Lance** manually (map not loaded).",
       "note": "JS defers to handler; Python auto-resolved",
       "py_effects": [
         {
-          "damage": 1,
+          "damage": 0,
           "dieColor": "green",
           "effect": "rollOneDie_resolved",
-          "hits": 1,
+          "hits": 0,
           "target": "Vader-1-0"
         }
       ],
@@ -902,17 +855,17 @@
     },
     {
       "extra_state": [
-        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[9, 12]]}"
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[10, 12]]}"
       ],
       "id": "slam",
       "js_log": "**Slam** \u2014 Rolled 1 red die: **3 Hits**. **Vader** apply 3 Damage manually.",
       "note": "JS logged+deferred to handler; Python mutated",
       "py_effects": [
         {
-          "damage": 3,
+          "damage": 2,
           "dieColor": "red",
           "effect": "rollOneDie_resolved",
-          "hits": 3,
+          "hits": 2,
           "target": "Vader-1-0"
         }
       ],

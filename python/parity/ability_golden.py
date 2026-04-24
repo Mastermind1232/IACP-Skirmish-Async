@@ -161,12 +161,18 @@ def _coerce_numeric_keys(v: Any) -> Any:
 
 
 def apply_js(ability_id: str, game: Dict[str, Any],
-              ctx: Dict[str, Any]) -> Dict[str, Any]:
-    """Invoke the JS CLI and return its stdout-JSON parsed."""
+              ctx: Dict[str, Any],
+              multi_step: bool = False) -> Dict[str, Any]:
+    """Invoke the JS CLI and return its stdout-JSON parsed.
+
+    When `multi_step` is True, the CLI loops up to 5 times auto-picking
+    defaults for requiresChoice/requiresSpaceChoice/targetFigureKeys —
+    simulating the dc-play-area.js handler path."""
     payload = json.dumps({
         'abilityId': ability_id,
         'game': game,
         'context': ctx,
+        'multiStep': multi_step,
     })
     proc = subprocess.run(
         ['node', str(JS_CLI)],
@@ -242,12 +248,22 @@ def diff_states(js_game: Dict[str, Any],
     return diffs
 
 
-def compare_ability(ability_id: str) -> Dict[str, Any]:
+def compare_ability(ability_id: str,
+                     multi_step: bool = False) -> Dict[str, Any]:
     """Single-ability parity check. Returns {id, status, diffs, js_result,
-    py_result} where status ∈ {PASS, FAIL, SKIP, ERROR}."""
+    py_result} where status ∈ {PASS, FAIL, SKIP, ERROR}.
+
+    When `multi_step` is True, the JS side simulates the full handler
+    path (dc-play-area.js) — auto-picks choices, spaces, targets — so
+    we compare against the JS "applied in full" state rather than just
+    what resolveAbility does in one call.
+    """
     game, ctx = build_minimal_fixture()
 
-    js_resp = apply_js(ability_id, json.loads(json.dumps(game)), ctx)
+    js_resp = apply_js(
+        ability_id, json.loads(json.dumps(game)), ctx,
+        multi_step=multi_step,
+    )
     py_resp = apply_python(ability_id, json.loads(json.dumps(game)), ctx)
 
     if py_resp.get('skipped'):
@@ -412,6 +428,8 @@ def main(argv: List[str]) -> int:
     ap.add_argument('--all', action='store_true', help='Run all abilities')
     ap.add_argument('--limit', type=int, help='Cap number run')
     ap.add_argument('--json', action='store_true', help='JSON output')
+    ap.add_argument('--multi-step', action='store_true',
+                    help='Simulate full JS handler path (auto-pick choices)')
     args = ap.parse_args(argv)
 
     if args.ability:
@@ -428,7 +446,7 @@ def main(argv: List[str]) -> int:
         'ERROR_JS': 0, 'ERROR_PY': 0,
     }
     for aid in targets:
-        rep = compare_ability(aid)
+        rep = compare_ability(aid, multi_step=args.multi_step)
         reports.append(rep)
         counts[rep['status']] = counts.get(rep['status'], 0) + 1
 
