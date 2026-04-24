@@ -1329,16 +1329,68 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
     game['movementPoints'] = 0
     game['p1ActivationPhaseEnded'] = False
     game['p2ActivationPhaseEnded'] = False
-    # Start-of-round CC draw: each player draws 2 CCs (with reshuffle
-    # from discard when deck runs out). IACP standard rule. Skip when
-    # the game has ended.
+    # Ready all DCs + Skirmish Upgrades (mirrors JS round.js:199-216).
+    # Clear per-activation state stored per DC msg_id: movementBank,
+    # dcActionsData, exhaustedSkirmishUpgrades. These are consumed
+    # only during that activation; at round rollover they must reset.
+    game['movementBank'] = {}
+    game['dcActionsData'] = {}
+    game['exhaustedSkirmishUpgrades'] = {}
+    # Disarm permanent-Weakened lock: cleared at end of round (Disarm
+    # card leaves play at EoR per JS round.js:194).
+    game['disarmPermanentWeakened'] = {}
+    # Start-of-round CC draw — mirrors JS round.js:239 formula:
+    #   base 1 + terminals-controlled + (Rebel High Command ? 1 : 0)
+    #   - (Channel the Force ready ? 1 : 0).
+    # Skip when the game has ended.
     if not win_result.get('ended'):
         from python.engine.cards.deck import draw_with_reshuffle
+        from python.engine.mechanics.board_helpers import (
+            count_terminals_controlled_by_player,
+        )
+        from python.engine.mechanics.player_helpers import get_dc_list
+        map_id = None
+        selected_map = game.data.get('selectedMap')
+        if isinstance(selected_map, Mapping):
+            map_id = selected_map.get('id')
+        if not map_id:
+            map_id = game.data.get('mapId')
+        exhausted = game.data.get('exhaustedSkirmishUpgrades') or {}
         for pn in (1, 2):
             try:
-                draw_with_reshuffle(game, pn, 2)
+                terms = count_terminals_controlled_by_player(
+                    game, pn, map_id,
+                ) if map_id else 0
+            except Exception:
+                terms = 0
+            dc_list = get_dc_list(game.data, pn) or []
+            has_rhc = any(
+                (dc.get('dcName') if isinstance(dc, Mapping) else dc)
+                == '[Rebel High Command]' for dc in dc_list
+            )
+            # Channel the Force: if any [Channel the Force] SU is ready
+            # (not in exhausted), draw 1 fewer.
+            has_ctf_ready = False
+            for dc in dc_list:
+                name = dc.get('dcName') if isinstance(dc, Mapping) else dc
+                if name == '[Channel the Force]':
+                    # Ready if no exhausted entry for this dc's msg_id.
+                    # Approximation: if no exhausted entries reference it.
+                    has_ctf_ready = True
+                    break
+            draw_count = 1 + terms + (1 if has_rhc else 0)
+            if has_ctf_ready and draw_count > 0:
+                draw_count = max(0, draw_count - 1)
+            # Cut Lines: noCommandDrawThisRound flag blocks ALL draws.
+            if game.data.get('noCommandDrawThisRound'):
+                draw_count = 0
+            try:
+                if draw_count > 0:
+                    draw_with_reshuffle(game, pn, draw_count)
             except Exception:
                 pass
+        # Clear one-shot Cut Lines flag after applying this round.
+        game.data['noCommandDrawThisRound'] = False
         # Fire start-of-round Pattern D triggers for every live DC.
         try:
             from python.engine.mechanics.round_effects import (
