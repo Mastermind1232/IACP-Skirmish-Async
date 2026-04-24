@@ -136,14 +136,21 @@ def apply_cc_schema(card_name: str):
             except Exception:
                 pass
 
-        # placeDefeatedFigure — stamp pending placement picker
+        # placeDefeatedFigure — Auto-resolve: mark the first defeated
+        # friendly as "available for return" via a flag the round
+        # cleanup can read. No pending stamp; in headless we can't
+        # pick a coord without a full board-picker.
         if entry.get('placeDefeatedFigure'):
-            data['pendingPlaceDefeated'] = {
-                'cardName': card_name,
+            defeated_flag = data.get('defeatedReturnQueue') or {}
+            defeated_flag[card_name] = {
                 'playerNum': player_num,
                 'spec': entry.get('placeDefeatedFigure'),
             }
-            effects.append({'effect': 'placeDefeatedFigure'})
+            data['defeatedReturnQueue'] = defeated_flag
+            effects.append({
+                'effect': 'placeDefeatedFigure_flagged',
+                'note': 'placement-picker not modelled in headless',
+            })
 
         # chooseAdjacentHostileThen — if target supplied in ctx, apply
         # damage/condition/strain; otherwise stamp pending.
@@ -178,13 +185,60 @@ def apply_cc_schema(card_name: str):
                     'damage': damage, 'strain': strain, 'condition': condition,
                 })
             else:
-                data['pendingChooseAdjHostile'] = {
-                    'cardName': card_name,
-                    'playerNum': player_num,
-                    'figureKey': figure_key,
-                    'spec': dict(cah),
-                }
-                effects.append({'effect': 'chooseAdjacentHostileThen'})
+                # Auto-pick first adjacent hostile; if none, first
+                # hostile on the board.
+                picked = None
+                try:
+                    from python.engine.mechanics.adjacency import (
+                        is_chebyshev_adjacent,
+                    )
+                    fp = data.get('figurePositions') or {}
+                    self_coord = None
+                    if figure_key and player_num in (1, 2):
+                        self_coord = (fp.get(player_num) or {}).get(figure_key)
+                    opp = 2 if player_num == 1 else 1
+                    opp_positions = fp.get(opp) or {}
+                    if self_coord:
+                        for fk, coord in opp_positions.items():
+                            if coord and is_chebyshev_adjacent(self_coord, coord):
+                                picked = (fk, opp)
+                                break
+                    if picked is None and opp_positions:
+                        fk = next(iter(opp_positions))
+                        picked = (fk, opp)
+                except Exception:
+                    pass
+                if picked:
+                    pfk, ppn = picked
+                    try:
+                        from python.engine.mechanics.figure_lookup import (
+                            find_dc_message_id_for_figure, parse_figure_key,
+                        )
+                        dc_meta = data.get('dcMessageMeta') or {}
+                        tmsg = find_dc_message_id_for_figure(
+                            data.get('gameId'), ppn, pfk, dc_meta,
+                        )
+                        damage = int(cah.get('damage') or 0)
+                        if damage > 0 and tmsg:
+                            from python.engine.mechanics.damage_helpers import reduce_hp
+                            parsed = parse_figure_key(pfk)
+                            fig_idx = parsed[2] if parsed else 0
+                            dc_health = data.get('dcHealthState') or {}
+                            reduce_hp(dc_health, data, tmsg, fig_idx, damage, ppn)
+                        condition = cah.get('applyCondition') or cah.get('condition')
+                        if isinstance(condition, str) and condition:
+                            from python.engine.mechanics.conditions import apply_condition
+                            apply_condition(game, pfk, condition)
+                    except Exception:
+                        pass
+                    effects.append({
+                        'effect': 'chooseAdjacentHostileThen_autoresolved',
+                        'target': pfk,
+                    })
+                else:
+                    effects.append({
+                        'effect': 'chooseAdjacentHostileThen_no_target',
+                    })
 
         # Combat-phase bonuses — stamp on pendingCombat if present.
         _COMBAT_FIELDS = {

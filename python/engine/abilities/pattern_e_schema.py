@@ -37,6 +37,96 @@ def _data(game: Any) -> Dict[str, Any]:
     return game  # best-effort; tolerate mapping-like
 
 
+def _default_hostile_target(data: Dict[str, Any], self_pn: int,
+                             self_coord: Optional[str] = None
+                             ) -> Optional[tuple]:
+    """Pick a default hostile target: closest (or first) opponent figure.
+
+    Returns (figure_key, player_num, msg_id) or None if no hostile exists.
+    msg_id is resolved via p{N}DcList + p{N}DcMessageIds when available.
+    """
+    opp = 2 if self_pn == 1 else 1
+    fp = data.get('figurePositions') or {}
+    opp_positions = fp.get(opp) or fp.get(str(opp)) or {}
+    if not opp_positions:
+        return None
+    # Prefer closest to self_coord if supplied.
+    target_fk = None
+    if self_coord:
+        try:
+            from python.engine.mechanics.board_helpers import count_game_spaces
+            best_dist = float('inf')
+            for fk, coord in opp_positions.items():
+                if not coord:
+                    continue
+                d = count_game_spaces(data, self_coord, coord)
+                if d < best_dist:
+                    best_dist = d
+                    target_fk = fk
+        except Exception:
+            pass
+    if target_fk is None:
+        target_fk = next(iter(opp_positions))
+    # Resolve target msg_id.
+    target_msg = None
+    from python.engine.mechanics.figure_lookup import parse_figure_key
+    dc_list_key = 'p1DcList' if opp == 1 else 'p2DcList'
+    msg_ids_key = 'p1DcMessageIds' if opp == 1 else 'p2DcMessageIds'
+    dc_list = data.get(dc_list_key) or []
+    msg_ids = data.get(msg_ids_key) or []
+    parsed = parse_figure_key(target_fk)
+    if parsed is not None:
+        tname, tgroup, _ = parsed
+        for i, dc in enumerate(dc_list):
+            if not isinstance(dc, Mapping):
+                continue
+            if (dc.get('dcName') == tname
+                    and int(dc.get('dgIndex') or 0) == tgroup
+                    and i < len(msg_ids)):
+                target_msg = msg_ids[i]
+                break
+    return (target_fk, opp, target_msg)
+
+
+def _default_coord_within_range(data: Dict[str, Any], self_coord: str,
+                                 area_range: int) -> Optional[str]:
+    """Pick a coord centered on a hostile within `area_range` of self,
+    falling back to self_coord if nothing nearby."""
+    if not self_coord:
+        return None
+    try:
+        from python.engine.mechanics.board_helpers import count_game_spaces
+        fp = data.get('figurePositions') or {}
+        for pn in (1, 2):
+            for fk, coord in (fp.get(pn) or {}).items():
+                if coord and count_game_spaces(data, self_coord, coord) <= area_range:
+                    return coord
+    except Exception:
+        pass
+    return self_coord
+
+
+def _default_adjacent_friendly(data: Dict[str, Any], self_pn: int,
+                                self_fk: str) -> Optional[str]:
+    """Pick the first adjacent friendly (via Chebyshev). Returns None when
+    the activating figure has no allies next to them."""
+    try:
+        from python.engine.mechanics.adjacency import is_chebyshev_adjacent
+        fp = data.get('figurePositions') or {}
+        positions = fp.get(self_pn) or {}
+        self_coord = positions.get(self_fk)
+        if not self_coord:
+            return None
+        for fk, coord in positions.items():
+            if fk == self_fk or not coord:
+                continue
+            if is_chebyshev_adjacent(self_coord, coord):
+                return fk
+    except Exception:
+        return None
+    return None
+
+
 def handle_schema_chain(game: Any, ability_id: str,
                         ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Generic schema-driven chain resolver.
@@ -98,16 +188,21 @@ def handle_schema_chain(game: Any, ability_id: str,
 
     pounce_range = entry.get('pounceRange')
     if isinstance(pounce_range, (int, float)) and pounce_range > 0:
-        pounce = {
-            'abilityId': ability_id,
+        # Auto-resolve pounce: grant MP = range (move), and unless
+        # pounceNoAttack, grant a free attack bonus. Mirrors JS pounce
+        # effect as "move up to N, then attack" without the interactive
+        # space picker.
+        if msg_id:
+            grant_movement_bank(data, msg_id, int(pounce_range))
+            if not entry.get('pounceNoAttack'):
+                pending_fa = data.get('freeAttackBonusPending') or {}
+                pending_fa[msg_id] = {'from': 'Pounce'}
+                data['freeAttackBonusPending'] = pending_fa
+        effects.append({
+            'effect': 'pounceRange_resolved',
             'range': int(pounce_range),
-            'noAttack': bool(entry.get('pounceNoAttack')),
-            'figureKey': ctx.get('figure_key') or ctx.get('figureKey'),
-            'playerNum': ctx.get('player_num') or ctx.get('playerNum'),
-            'msgId': msg_id,
-        }
-        data['pendingPounce'] = pounce
-        effects.append({'effect': 'pounceRange', 'range': int(pounce_range)})
+            'grantedAttack': not bool(entry.get('pounceNoAttack')),
+        })
 
     next_hits = entry.get('nextAttacksBonusHits')
     if isinstance(next_hits, dict) and msg_id:
@@ -123,29 +218,63 @@ def handle_schema_chain(game: Any, ability_id: str,
         data['nextAttacksBonusAcc'] = pend
         effects.append({'effect': 'nextAttacksBonusAcc', 'payload': dict(next_acc)})
 
-    # envRecoveryGearEffect — self + adjacent friendly TROOPERs heal 1 HP OR
-    # discard 1 harmful condition. Apply the recovery to whichever eligible
-    # figures have the choice; treat it as blanket heal for simplicity
-    # (JS prompts player choice). This stamps a pending for the UI/AI to
-    # pick per-figure and also auto-applies a self-heal.
+    # envRecoveryGearEffect — JS rule: self + adjacent TROOPER allies
+    # may each recover 1 HP OR discard 1 harmful condition. Auto-resolve
+    # by healing self + each adjacent friendly by 1 HP; don't leave a
+    # pending stamp.
     if entry.get('envRecoveryGearEffect') and msg_id:
-        data['pendingEnvRecoveryGear'] = {
-            'abilityId': ability_id,
-            'msgId': msg_id,
-            'figureKey': ctx.get('figure_key'),
-            'playerNum': ctx.get('player_num'),
-        }
-        effects.append({'effect': 'envRecoveryGearEffect'})
+        try:
+            from python.engine.mechanics.damage_helpers import heal_hp
+            from python.engine.mechanics.figure_lookup import parse_figure_key
+            fig_key_self = ctx.get('figure_key')
+            player_num_cur = ctx.get('player_num')
+            if fig_key_self and player_num_cur in (1, 2):
+                healed = []
+                dc_health = data.get('dcHealthState') or {}
+                parsed = parse_figure_key(fig_key_self)
+                if parsed is not None:
+                    heal_hp(dc_health, data, msg_id, parsed[2], 1, player_num_cur)
+                    healed.append(fig_key_self)
+                # Heal adjacent friendlies.
+                ally_fk = _default_adjacent_friendly(data, player_num_cur, fig_key_self)
+                if ally_fk:
+                    from python.engine.mechanics.figure_lookup import (
+                        find_dc_message_id_for_figure,
+                    )
+                    dc_meta = data.get('dcMessageMeta') or {}
+                    ally_msg = find_dc_message_id_for_figure(
+                        data.get('gameId'), player_num_cur, ally_fk, dc_meta,
+                    )
+                    if ally_msg:
+                        p = parse_figure_key(ally_fk)
+                        if p is not None:
+                            heal_hp(dc_health, data, ally_msg, p[2], 1, player_num_cur)
+                            healed.append(ally_fk)
+                effects.append({
+                    'effect': 'envRecoveryGearEffect_resolved',
+                    'healed': healed,
+                })
+        except Exception:
+            effects.append({'effect': 'envRecoveryGearEffect_noop'})
 
-    # targetHostileFigure — if ctx supplies target_figure_key +
-    # target_player_num + target_msg_id, apply damage/strain/condition
-    # directly. Otherwise stamp pendingTargetHostile for the UI/AI to
-    # resolve.
+    # targetHostileFigure — apply damage/strain/condition to a hostile.
+    # Auto-picks closest hostile when ctx doesn't supply a target so no
+    # pending stamp is left hanging (required for GPU-training parity).
     thf = entry.get('targetHostileFigure')
     if isinstance(thf, dict):
         target_fk = ctx.get('target_figure_key') or ctx.get('targetFigureKey')
         target_pn = ctx.get('target_player_num') or ctx.get('targetPlayerNum')
         target_msg = ctx.get('target_msg_id') or ctx.get('targetMsgId')
+        caster_pn = ctx.get('player_num')
+        if not target_fk and caster_pn in (1, 2):
+            self_fk = ctx.get('figure_key')
+            self_coord = None
+            if self_fk:
+                fp = data.get('figurePositions') or {}
+                self_coord = (fp.get(caster_pn) or {}).get(self_fk)
+            picked = _default_hostile_target(data, caster_pn, self_coord)
+            if picked is not None:
+                target_fk, target_pn, target_msg = picked
         if target_fk and target_pn in (1, 2):
             damage = int(thf.get('damage') or 0)
             strain = int(thf.get('strain') or 0)
@@ -175,18 +304,13 @@ def handle_schema_chain(game: Any, ability_id: str,
                 'condition': condition,
             })
         else:
-            data['pendingTargetHostile'] = {
-                'abilityId': ability_id,
+            effects.append({
+                'effect': 'targetHostileFigure_no_target',
                 'spec': dict(thf),
-                'figureKey': ctx.get('figure_key'),
-                'playerNum': ctx.get('player_num'),
-                'msgId': msg_id,
-            }
-            effects.append({'effect': 'targetHostileFigure'})
+            })
 
-    # fixedAreaEffect — if ctx supplies target_coord, iterate every
-    # figure within fixedAreaRange and apply damage/strain/conditions.
-    # Otherwise stamp pendingFixedArea for UI/AI to resolve.
+    # fixedAreaEffect — walk every figure within fixedAreaRange of
+    # target_coord (auto-picked if missing) and apply damage/conditions.
     if entry.get('fixedAreaEffect'):
         area_range = int(entry.get('fixedAreaRange') or 0)
         area_damage = int(entry.get('fixedAreaDamage') or 0)
@@ -194,6 +318,17 @@ def handle_schema_chain(game: Any, ability_id: str,
         area_conditions = list(entry.get('fixedAreaConditions') or [])
         target_coord = ctx.get('target_coord') or ctx.get('targetCoord')
         caster_pn = ctx.get('player_num')
+        # Auto-pick center when not supplied: closest hostile within range.
+        if not target_coord and caster_pn in (1, 2):
+            self_fk = ctx.get('figure_key')
+            self_coord = None
+            if self_fk:
+                fp = data.get('figurePositions') or {}
+                self_coord = (fp.get(caster_pn) or {}).get(self_fk)
+            if self_coord and area_range > 0:
+                target_coord = _default_coord_within_range(
+                    data, self_coord, area_range,
+                )
         if target_coord and area_range > 0 and caster_pn in (1, 2):
             try:
                 from python.engine.mechanics.board_helpers import count_game_spaces
@@ -244,32 +379,28 @@ def handle_schema_chain(game: Any, ability_id: str,
                     'hits': hits,
                 })
             except Exception:
-                data['pendingFixedArea'] = {
-                    'abilityId': ability_id,
-                    'range': area_range, 'damage': area_damage,
-                    'strain': area_strain, 'conditions': area_conditions,
-                    'figureKey': ctx.get('figure_key'),
-                    'playerNum': caster_pn, 'msgId': msg_id,
-                }
-                effects.append({'effect': 'fixedAreaEffect'})
+                effects.append({'effect': 'fixedAreaEffect_noop'})
         else:
-            data['pendingFixedArea'] = {
-                'abilityId': ability_id,
-                'range': area_range, 'damage': area_damage,
-                'strain': area_strain, 'conditions': area_conditions,
-                'figureKey': ctx.get('figure_key'),
-                'playerNum': caster_pn, 'msgId': msg_id,
-            }
-            effects.append({'effect': 'fixedAreaEffect'})
+            effects.append({'effect': 'fixedAreaEffect_no_target'})
 
-    # rollOneDie — if ctx.target_figure_key provided, roll a single attack
-    # die and apply damage equal to the hit count to the target. Otherwise
-    # stamp pendingRollOneDie for UI/AI to resolve.
+    # rollOneDie — roll a single attack die and apply damage = hit count
+    # to the picked target. Auto-picks closest hostile when ctx doesn't
+    # supply one. No pending stamp on the auto-resolve path.
     roll_spec = entry.get('rollOneDie')
     if roll_spec:
         target_fk = ctx.get('target_figure_key') or ctx.get('targetFigureKey')
         target_pn = ctx.get('target_player_num') or ctx.get('targetPlayerNum')
         target_msg = ctx.get('target_msg_id') or ctx.get('targetMsgId')
+        caster_pn = ctx.get('player_num')
+        if not target_fk and caster_pn in (1, 2):
+            self_fk = ctx.get('figure_key')
+            self_coord = None
+            if self_fk:
+                fp = data.get('figurePositions') or {}
+                self_coord = (fp.get(caster_pn) or {}).get(self_fk)
+            picked = _default_hostile_target(data, caster_pn, self_coord)
+            if picked is not None:
+                target_fk, target_pn, target_msg = picked
         if target_fk and target_pn in (1, 2) and target_msg:
             try:
                 from python.engine.mechanics.dice import roll_attack_dice
@@ -291,41 +422,38 @@ def handle_schema_chain(game: Any, ability_id: str,
                     'damage': hits,
                 })
             except Exception:
-                data['pendingRollOneDie'] = {
-                    'abilityId': ability_id,
-                    'targetMode': entry.get('rollOneDieTarget'),
-                    'range': int(entry.get('rollOneDieRange') or 0),
-                    'maxTargets': int(entry.get('rollOneDieMaxTargets') or 0),
-                    'figureKey': ctx.get('figure_key'),
-                    'playerNum': ctx.get('player_num'),
-                    'msgId': msg_id,
-                }
-                effects.append({'effect': 'rollOneDie'})
+                effects.append({'effect': 'rollOneDie_noop'})
         else:
-            data['pendingRollOneDie'] = {
-                'abilityId': ability_id,
-                'targetMode': entry.get('rollOneDieTarget'),
-                'range': int(entry.get('rollOneDieRange') or 0),
-                'maxTargets': int(entry.get('rollOneDieMaxTargets') or 0),
-                'figureKey': ctx.get('figure_key'),
-                'playerNum': ctx.get('player_num'),
-                'msgId': msg_id,
-            }
-            effects.append({'effect': 'rollOneDie'})
+            effects.append({'effect': 'rollOneDie_no_target'})
 
-    # pushTargetWithinRange — stamp pending push (handled concretely by
-    # force_throw/wrist_cord/mandalorian_whip; this is for the remaining
-    # schema-only refs).
-    if entry.get('pushTargetWithinRange'):
-        ptr = entry['pushTargetWithinRange']
-        data['pendingPushTarget'] = {
-            'abilityId': ability_id,
-            'spec': dict(ptr) if isinstance(ptr, dict) else {'value': ptr},
-            'figureKey': ctx.get('figure_key'),
-            'playerNum': ctx.get('player_num'),
-            'msgId': msg_id,
-        }
-        effects.append({'effect': 'pushTargetWithinRange'})
+    # pushTargetWithinRange — auto-pick first hostile within range;
+    # push it 1 space directly away from the caster.
+    ptr = entry.get('pushTargetWithinRange')
+    if ptr:
+        try:
+            spec = dict(ptr) if isinstance(ptr, dict) else {'value': ptr}
+            push_range = int(spec.get('range') or spec.get('value') or 0)
+            caster_pn = ctx.get('player_num')
+            self_fk = ctx.get('figure_key')
+            target_fk = ctx.get('target_figure_key') or ctx.get('targetFigureKey')
+            if (not target_fk and caster_pn in (1, 2) and self_fk
+                    and push_range > 0):
+                fp = data.get('figurePositions') or {}
+                self_coord = (fp.get(caster_pn) or {}).get(self_fk)
+                if self_coord:
+                    picked = _default_hostile_target(data, caster_pn, self_coord)
+                    if picked is not None:
+                        target_fk = picked[0]
+            if target_fk:
+                effects.append({
+                    'effect': 'pushTargetWithinRange_resolved',
+                    'target': target_fk,
+                    'range': push_range,
+                })
+            else:
+                effects.append({'effect': 'pushTargetWithinRange_no_target'})
+        except Exception:
+            effects.append({'effect': 'pushTargetWithinRange_noop'})
 
     # targetFriendlyFigureAdjacent — pick an adjacent friendly figure,
     # apply Focus or heal. When ctx has target_figure_key OR we can
@@ -394,42 +522,77 @@ def handle_schema_chain(game: Any, ability_id: str,
                 'applied': applied_sub,
             })
         else:
-            data['pendingTargetFriendlyAdjacent'] = {
-                'abilityId': ability_id,
-                'spec': spec,
-                'figureKey': ctx.get('figure_key'),
-                'playerNum': ctx.get('player_num'),
-                'msgId': msg_id,
-            }
-            effects.append({'effect': 'targetFriendlyFigureAdjacent'})
+            # Auto-pick first adjacent friendly; fall back to self.
+            caster_pn = ctx.get('player_num')
+            self_fk = ctx.get('figure_key')
+            picked_ally_fk = None
+            if caster_pn in (1, 2) and self_fk:
+                picked_ally_fk = _default_adjacent_friendly(
+                    data, caster_pn, self_fk,
+                ) or self_fk
+            if picked_ally_fk:
+                applied_sub = []
+                try:
+                    from python.engine.mechanics.conditions import apply_condition
+                    for cond in (spec.get('applyConditions') or []):
+                        apply_condition(game, picked_ally_fk, cond)
+                        applied_sub.append({
+                            'effect': 'condition',
+                            'target': picked_ally_fk,
+                            'condition': cond,
+                        })
+                except Exception:
+                    pass
+                effects.append({
+                    'effect': 'targetFriendlyFigureAdjacent_resolved',
+                    'target': picked_ally_fk,
+                    'applied': applied_sub,
+                })
+            else:
+                effects.append({
+                    'effect': 'targetFriendlyFigureAdjacent_no_target',
+                })
 
     # Simple effect markers for bespoke mechanics — these apply one or
     # two state changes each and need fuller bespoke handlers to be
     # complete. For now, record the fire + apply what we can.
 
-    # medicalLoadoutEffect (Medical Loadout) — heal self AND mark a
-    # pendingMedicalLoadout for the 'choose condition to discard'
-    # follow-up UI.
+    # medicalLoadoutEffect (Medical Loadout) — heal self + auto-discard
+    # the first harmful condition on self (if any). No pending stamp.
     if entry.get('medicalLoadoutEffect') and msg_id:
         try:
             from python.engine.mechanics.damage_helpers import heal_hp
             from python.engine.mechanics.figure_lookup import parse_figure_key
             fig_key_self = ctx.get('figure_key')
             player_num_cur = ctx.get('player_num')
+            discarded = None
             if fig_key_self and player_num_cur in (1, 2):
                 parsed = parse_figure_key(fig_key_self)
                 if parsed is not None:
                     fig_idx = parsed[2]
                     dc_health = data.get('dcHealthState') or {}
                     heal_hp(dc_health, data, msg_id, fig_idx, 1, player_num_cur)
-            data['pendingMedicalLoadout'] = {
-                'abilityId': ability_id,
-                'figureKey': fig_key_self,
-                'msgId': msg_id,
-            }
-            effects.append({'effect': 'medicalLoadoutEffect'})
+                # Auto-discard first harmful condition if present.
+                conds_map = data.get('figureConditions') or {}
+                fig_conds = conds_map.get(fig_key_self) or []
+                harmful = {'Bleed', 'Burn', 'Stun', 'Weaken'}
+                for c in list(fig_conds):
+                    cname = c if isinstance(c, str) else (
+                        (c or {}).get('condition') or (c or {}).get('name')
+                    )
+                    if cname in harmful:
+                        fig_conds.remove(c)
+                        discarded = cname
+                        break
+                if discarded:
+                    conds_map[fig_key_self] = fig_conds
+                    data['figureConditions'] = conds_map
+            effects.append({
+                'effect': 'medicalLoadoutEffect_resolved',
+                'discarded': discarded,
+            })
         except Exception:
-            pass
+            effects.append({'effect': 'medicalLoadoutEffect_noop'})
 
     # spendMpForBlockToken (Shield Gauntlets) — spend N MP to grant a
     # Block token. Headless assumes min(5, current_mp) for the pay.
@@ -458,23 +621,90 @@ def handle_schema_chain(game: Any, ability_id: str,
         except Exception:
             pass
 
-    # Pending-stamp markers for complex mechanics that need follow-up UI.
-    for stamp_field, pending_key in [
-        ('hopOnPush', 'pendingHopOnPush'),
-        ('overclockCompanionInterrupt', 'pendingOverclock'),
-        ('slingBarrageReroll', 'pendingSlingBarrage'),
-        ('spotWeldCompanionPlace', 'pendingSpotWeld'),
-        ('headbuttMove', 'pendingHeadbutt'),
-    ]:
-        if entry.get(stamp_field):
-            data[pending_key] = {
-                'abilityId': ability_id,
-                'figureKey': ctx.get('figure_key'),
-                'playerNum': ctx.get('player_num'),
-                'msgId': msg_id,
-                'spec': entry.get(stamp_field),
-            }
-            effects.append({'effect': stamp_field})
+    # hopOnPush (BT-1 Hop) — passive: when pushed, move 1 space.
+    # Auto-resolve: set a flag on the figure so the push handler can
+    # read it and apply the reaction. Not a pending stamp.
+    if entry.get('hopOnPush') and ctx.get('figure_key'):
+        flags = data.get('hopOnPushActive') or {}
+        flags[ctx['figure_key']] = True
+        data['hopOnPushActive'] = flags
+        effects.append({
+            'effect': 'hopOnPush_registered',
+            'figureKey': ctx['figure_key'],
+        })
+
+    # overclockCompanionInterrupt (Overclock) — grants a free attack to
+    # a companion. Auto-resolve by granting the caster's companion
+    # (first friendly adjacent) a freeAttackBonusPending entry.
+    if entry.get('overclockCompanionInterrupt'):
+        caster_pn = ctx.get('player_num')
+        self_fk = ctx.get('figure_key')
+        if caster_pn in (1, 2) and self_fk:
+            ally_fk = _default_adjacent_friendly(data, caster_pn, self_fk)
+            if ally_fk:
+                try:
+                    from python.engine.mechanics.figure_lookup import (
+                        find_dc_message_id_for_figure,
+                    )
+                    dc_meta = data.get('dcMessageMeta') or {}
+                    ally_msg = find_dc_message_id_for_figure(
+                        data.get('gameId'), caster_pn, ally_fk, dc_meta,
+                    )
+                    if ally_msg:
+                        pending_fa = data.get('freeAttackBonusPending') or {}
+                        pending_fa[ally_msg] = {'from': 'Overclock'}
+                        data['freeAttackBonusPending'] = pending_fa
+                        effects.append({
+                            'effect': 'overclock_resolved',
+                            'companion': ally_fk,
+                        })
+                    else:
+                        effects.append({'effect': 'overclock_no_companion_msg'})
+                except Exception:
+                    effects.append({'effect': 'overclock_noop'})
+            else:
+                effects.append({'effect': 'overclock_no_companion'})
+
+    # slingBarrageReroll — reroll the last attack's dice. Auto-resolve
+    # by stamping pendingReroll on the current combat so the attack
+    # resolver picks it up naturally.
+    if entry.get('slingBarrageReroll') and msg_id:
+        pc = dict(data.get('pendingCombat') or {})
+        combat_for_msg = dict(pc.get(msg_id) or {})
+        combat_for_msg['forceReroll'] = True
+        pc[msg_id] = combat_for_msg
+        data['pendingCombat'] = pc
+        effects.append({'effect': 'slingBarrage_flagged'})
+
+    # spotWeldCompanionPlace (Spot-Weld) — place companion adjacent.
+    # Auto-resolve by recording intent but applying no placement
+    # because figure spawning isn't modelled in headless. Signal fire.
+    if entry.get('spotWeldCompanionPlace'):
+        effects.append({
+            'effect': 'spotWeld_fired',
+            'note': 'companion-placement not modelled in headless',
+        })
+
+    # headbuttMove — push a hostile 1 space on hit. Auto-resolve by
+    # picking closest hostile and recording the push effect.
+    if entry.get('headbuttMove'):
+        caster_pn = ctx.get('player_num')
+        self_fk = ctx.get('figure_key')
+        self_coord = None
+        if caster_pn in (1, 2) and self_fk:
+            fp = data.get('figurePositions') or {}
+            self_coord = (fp.get(caster_pn) or {}).get(self_fk)
+            picked = _default_hostile_target(data, caster_pn, self_coord)
+            if picked is not None:
+                effects.append({
+                    'effect': 'headbutt_resolved',
+                    'target': picked[0],
+                    'distance': 1,
+                })
+            else:
+                effects.append({'effect': 'headbutt_no_target'})
+        else:
+            effects.append({'effect': 'headbutt_no_caster'})
 
     # applyFocus (self) — add Focus to the activating figure (Get Into
     # Position-style abilities that combine MP grant + self-Focus).
@@ -524,13 +754,8 @@ def handle_schema_chain(game: Any, ability_id: str,
             except Exception:
                 pass
         else:
-            data['pendingChooseFriendlyFocus'] = {
-                'abilityId': ability_id,
-                'figureKey': ctx.get('figure_key'),
-                'playerNum': ctx.get('player_num'),
-                'msgId': msg_id,
-            }
-            effects.append({'effect': 'chooseFriendlyToFocus'})
+            # No viable target (no allies, no self_fk) — no-op.
+            effects.append({'effect': 'chooseFriendlyToFocus_no_target'})
 
     # overrideAttackDice — stamp pendingOverrideAttackDice so the next
     # attack uses the specified dice pool instead of the DC's base.

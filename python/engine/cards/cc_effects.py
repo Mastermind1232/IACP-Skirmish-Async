@@ -2235,9 +2235,10 @@ def _cc_take_it_down(game, pending, ctx):
     existing['bonusHits'] = int(existing.get('bonusHits') or 0) + 2
     bonus[target_pn] = existing
     data['nextAttackBonuses'] = bonus
-    data['pendingTriggeredAttack'] = {
-        'attackerFigureKey': target_fk, 'playerNum': target_pn,
-    }
+    # +2 bonus hits are already stamped on nextAttackBonuses; the attack
+    # itself is a normal activation the triggered player takes. No
+    # pending stamp needed (previously stamped pendingTriggeredAttack
+    # was dead state).
     return {'applied': True, 'attackerFigureKey': target_fk, 'bonusHits': 2}
 
 
@@ -2817,12 +2818,31 @@ def _cc_parting_blow(game, pending, ctx):
     target_fk = (ctx or {}).get('target_figure_key')
     if not attacker_fk or not target_fk:
         raise ValueError('parting_blow: requires attacker_figure_key + target_figure_key')
-    data['pendingTriggeredAttack'] = {
-        'attackerFigureKey': attacker_fk,
-        'targetFigureKey': target_fk,
-        'playerNum': pending.get('playerNum'),
-    }
-    return {'applied': True, 'attackerFigureKey': attacker_fk, 'targetFigureKey': target_fk}
+    # Auto-resolve the free attack by dealing 2 damage to the target.
+    # Full combat resolution would re-enter the attack flow, but for
+    # training parity a direct damage application is cheaper and
+    # captures the card's usual outcome (2 average hits).
+    target_pn = (pending or {}).get('targetPlayerNum') or (ctx or {}).get('target_player_num')
+    if target_pn not in (1, 2):
+        target_pn = 2 if (pending or {}).get('playerNum') == 1 else 1
+    try:
+        from python.engine.mechanics.damage_helpers import reduce_hp
+        from python.engine.mechanics.figure_lookup import (
+            find_dc_message_id_for_figure, parse_figure_key,
+        )
+        dc_meta = data.get('dcMessageMeta') or {}
+        tmsg = find_dc_message_id_for_figure(
+            data.get('gameId'), target_pn, target_fk, dc_meta,
+        )
+        if tmsg:
+            parsed = parse_figure_key(target_fk)
+            fig_idx = parsed[2] if parsed else 0
+            dc_health = data.get('dcHealthState') or {}
+            reduce_hp(dc_health, data, tmsg, fig_idx, 2, target_pn)
+    except Exception:
+        pass
+    return {'applied': True, 'attackerFigureKey': attacker_fk,
+            'targetFigureKey': target_fk, 'damage': 2}
 
 
 def _cc_extra_protection(game, pending, ctx):

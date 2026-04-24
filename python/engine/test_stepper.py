@@ -2223,7 +2223,13 @@ def test_false_orders_move_moves_controlled_figure():
     assert new_g.data['pendingFalseOrders'] is None
 
 
-def test_false_orders_attack_records_intent():
+def test_false_orders_attack_auto_resolves():
+    """false_orders_attack auto-resolves by clearing pendingFalseOrders.
+
+    Previously stamped pendingFalseOrdersAttack — now that stamp was
+    never consumed downstream, so the handler auto-resolves the attack
+    directly instead (best-effort damage application).
+    """
     g = create_game()
     g.data['pendingFalseOrders'] = {
         'controlledFigureKey': 'Trooper-0-0',
@@ -2234,13 +2240,8 @@ def test_false_orders_attack_records_intent():
         type=ActionType.FALSE_ORDERS_ATTACK, player=1,
         params={'target_figure_key': 'Luke-0-0'},
     ))
-    assert new_g.data['pendingFalseOrdersAttack'] == {
-        'controlledFigureKey': 'Trooper-0-0',
-        'controlledPlayerNum': 2,
-        'targetFigureKey': 'Luke-0-0',
-        'controllerPlayerNum': 1,
-    }
     assert new_g.data['pendingFalseOrders'] is None
+    assert 'pendingFalseOrdersAttack' not in new_g.data
 
 
 def test_strain_choice_alldmg_applies_full_hp_damage():

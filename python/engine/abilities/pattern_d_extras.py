@@ -184,32 +184,79 @@ def handle_defensive_stance(game, aid, ctx):
 # ── post-combat: boltslinger / sidewinder (interactive-flag setters) ───────
 
 def handle_boltslinger_flag(game, ability_id, ctx):
-    """Boltslinger: after a resolved attack, may choose a hostile
-    within 2 to take 1 damage. Stamp pendingBoltslinger so the Discord
-    UI offers the target picker."""
+    """Boltslinger: after a resolved attack, deal 1 damage to a hostile
+    within 2 of the attacker. Auto-resolves by picking the closest
+    hostile within range-2 and applying 1 damage."""
     data = game if isinstance(game, dict) else getattr(game, 'data', game)
     combat = ctx.get('combat') or {}
     attacker_key = ctx.get('attacker_figure_key')
-    if not attacker_key:
+    attacker_pn = combat.get('attackerPlayerNum')
+    if not attacker_key or attacker_pn not in (1, 2):
         return {'applied': False, 'gated_by': 'missing-attacker'}
-    data['pendingBoltslinger'] = {
-        'attackerFigureKey': attacker_key,
-        'attackerPlayerNum': combat.get('attackerPlayerNum'),
-    }
+    try:
+        from python.engine.mechanics.board_helpers import count_game_spaces
+        from python.engine.mechanics.damage_helpers import reduce_hp
+        from python.engine.mechanics.figure_lookup import (
+            find_dc_message_id_for_figure, parse_figure_key,
+        )
+        fp = data.get('figurePositions') or {}
+        attacker_coord = (fp.get(attacker_pn) or {}).get(attacker_key)
+        opp = 2 if attacker_pn == 1 else 1
+        opp_positions = fp.get(opp) or {}
+        picked = None
+        best = 999
+        for fk, coord in opp_positions.items():
+            if not coord or not attacker_coord:
+                continue
+            d = count_game_spaces(data, attacker_coord, coord)
+            if d <= 2 and d < best:
+                best = d
+                picked = fk
+        if picked:
+            dc_meta = data.get('dcMessageMeta') or {}
+            tmsg = find_dc_message_id_for_figure(
+                data.get('gameId'), opp, picked, dc_meta,
+            )
+            if tmsg:
+                parsed = parse_figure_key(picked)
+                fig_idx = parsed[2] if parsed else 0
+                dc_health = data.get('dcHealthState') or {}
+                reduce_hp(dc_health, data, tmsg, fig_idx, 1, opp)
+                return {'applied': True,
+                        'log_message': f'**Boltslinger** — {picked} takes 1 damage.',
+                        'target': picked}
+    except Exception:
+        pass
     return {'applied': True,
-            'log_message': '**Boltslinger** — target picker queued.'}
+            'log_message': '**Boltslinger** — no target in range.'}
 
 
 def handle_sidewinder_flag(game, ability_id, ctx):
     """Sidewinder: may suffer 1 strain to move 2 spaces after attack.
-    Stamp pendingSidewinder so UI prompts."""
+    Auto-resolves: apply 1 strain and grant 2 MP to the attacker."""
     data = game if isinstance(game, dict) else getattr(game, 'data', game)
+    combat = ctx.get('combat') or {}
     attacker_key = ctx.get('attacker_figure_key')
-    if not attacker_key:
+    attacker_pn = combat.get('attackerPlayerNum')
+    if not attacker_key or attacker_pn not in (1, 2):
         return {'applied': False, 'gated_by': 'missing-attacker'}
-    data['pendingSidewinder'] = {'attackerFigureKey': attacker_key}
+    try:
+        from python.engine.mechanics.strain import apply_strain_to_figure
+        from python.engine.mechanics.game_helpers import grant_movement_bank
+        from python.engine.mechanics.figure_lookup import (
+            find_dc_message_id_for_figure,
+        )
+        apply_strain_to_figure(data, attacker_key, attacker_pn, 1)
+        dc_meta = data.get('dcMessageMeta') or {}
+        msg_id = find_dc_message_id_for_figure(
+            data.get('gameId'), attacker_pn, attacker_key, dc_meta,
+        )
+        if msg_id:
+            grant_movement_bank(data, msg_id, 2)
+    except Exception:
+        pass
     return {'applied': True,
-            'log_message': '**Sidewinder** — move-2 prompt queued.'}
+            'log_message': '**Sidewinder** — 1 strain, +2 MP.'}
 
 
 # ── combat-after: Locked and Loaded (+2 Power Tokens) ──────────────────────

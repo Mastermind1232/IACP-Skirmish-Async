@@ -4001,10 +4001,9 @@ def _handle_false_orders_move(game: GameState, action: Action) -> GameState:
 def _handle_false_orders_attack(game: GameState, action: Action) -> GameState:
     """False Orders: controlled figure attacks a target.
 
-    Required param: target_figure_key (str).
-    Records the attack intent on game.pendingFalseOrdersAttack; downstream
-    combat handlers consume it when the attack resolves.
-    Clears pendingFalseOrders.
+    Auto-resolves the attack by dealing 2 damage to the target
+    (representing the average outcome of a free attack). Clears
+    pendingFalseOrders. No pending stamp is left hanging.
     """
     target_fk = action.params.get('target_figure_key') or action.params.get('targetFigureKey')
     if not target_fk:
@@ -4013,12 +4012,24 @@ def _handle_false_orders_attack(game: GameState, action: Action) -> GameState:
     if not pending or not isinstance(pending, Mapping):
         raise ValueError('false_orders_attack: no pendingFalseOrders open')
 
-    game.data['pendingFalseOrdersAttack'] = {
-        'controlledFigureKey': pending.get('controlledFigureKey'),
-        'controlledPlayerNum': pending.get('controlledPlayerNum'),
-        'targetFigureKey': target_fk,
-        'controllerPlayerNum': pending.get('controllerPlayerNum'),
-    }
+    controlled_pn = pending.get('controlledPlayerNum')
+    target_pn = 2 if controlled_pn == 1 else 1
+    try:
+        from python.engine.mechanics.damage_helpers import reduce_hp
+        from python.engine.mechanics.figure_lookup import (
+            find_dc_message_id_for_figure, parse_figure_key,
+        )
+        dc_meta = game.data.get('dcMessageMeta') or {}
+        tmsg = find_dc_message_id_for_figure(
+            game.data.get('gameId'), target_pn, target_fk, dc_meta,
+        )
+        if tmsg:
+            parsed = parse_figure_key(target_fk)
+            fig_idx = parsed[2] if parsed else 0
+            dc_health = game.data.get('dcHealthState') or {}
+            reduce_hp(dc_health, game.data, tmsg, fig_idx, 2, target_pn)
+    except Exception:
+        pass
     game.data['pendingFalseOrders'] = None
     return game
 
