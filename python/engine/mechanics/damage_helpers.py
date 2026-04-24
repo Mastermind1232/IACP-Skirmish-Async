@@ -91,7 +91,16 @@ def reduce_hp(dc_health_state: Dict[str, List[List[int]]],
     actual_damage = prev_hp - new_hp
     if actual_damage > 0 and 'totalDamageReceived' in game and game['totalDamageReceived']:
         tdr = game['totalDamageReceived']
-        tdr[player_num] = (tdr.get(player_num, 0) or 0) + actual_damage
+        # Match JS object-key semantics: whatever key type is already
+        # in the dict (int or string), write to the same slot. This
+        # avoids the dict ending up with both {'1': N, 1: M} entries
+        # when the fixture was loaded from JSON (string keys) but the
+        # caller passed an int player_num. Prefer string when both
+        # exist; fall back to int otherwise.
+        key = player_num
+        if str(player_num) in tdr:
+            key = str(player_num)
+        tdr[key] = (tdr.get(key, 0) or 0) + actual_damage
 
     return {'newHp': new_hp, 'maxHp': max_hp, 'prevHp': prev_hp, 'wasDefeated': new_hp <= 0}
 
