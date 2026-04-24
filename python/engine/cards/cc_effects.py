@@ -4194,11 +4194,18 @@ def _cc_wild_fury(game, pending, ctx):
 
 
 def _cc_windfall(game, pending, ctx):
-    """Windfall: draw 2 CCs when a CC is discarded from hand/deck."""
-    from python.engine.cards.deck import draw_with_reshuffle
+    """Windfall: at start of round, while active, every hostile CC
+    the opponent plays awards VP equal to its cost to you. Matches
+    JS `game.windfallActive = { playerNum }` flag (src/game/abilities.js).
+
+    The actual VP award fires in _handle_play_cc when the OPPONENT
+    plays a cost>0 card. This handler only stamps the activation
+    marker.
+    """
+    data = game.data if hasattr(game, 'data') else game
     pn = pending.get('playerNum')
-    drew = draw_with_reshuffle(game, pn, 2)
-    return {'applied': True, 'drew': drew}
+    data['windfallActive'] = {'playerNum': pn}
+    return {'applied': True, 'windfallActiveFor': pn}
 
 
 def _cc_worth_every_credit(game, pending, ctx):

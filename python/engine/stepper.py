@@ -2032,6 +2032,22 @@ def _handle_play_cc(game: GameState, action: Action) -> GameState:
         'playerNum': player,
     }
 
+    # Windfall hook: if the OPPONENT has windfallActive, they gain VP
+    # equal to this card's cost (except when the card IS Windfall).
+    # Mirrors JS cc-hand.js:611-616 and :701-706.
+    wf = game.data.get('windfallActive')
+    card_cost = int(effect.get('cost') or 0)
+    if (isinstance(wf, Mapping) and card_cost > 0 and card != 'Windfall'):
+        wf_player = wf.get('playerNum')
+        if wf_player in (1, 2) and wf_player != player:
+            vp_key = 'player1VP' if wf_player == 1 else 'player2VP'
+            vp_state = dict(game.data.get(vp_key) or {
+                'total': 0, 'kills': 0, 'objectives': 0,
+            })
+            vp_state['total'] = int(vp_state.get('total') or 0) + card_cost
+            vp_state['objectives'] = int(vp_state.get('objectives') or 0) + card_cost
+            game.data[vp_key] = vp_state
+
     # Auto-resolve: when params.auto_resolve=True (default for AI self-play),
     # immediately invoke the CC effect resolver with ctx. Tests / Discord
     # flow can opt out to keep pendingCcEffect around for choice UI.

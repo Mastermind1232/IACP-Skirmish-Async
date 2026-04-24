@@ -29,7 +29,7 @@
     "cardName": "Windfall",
     "result": {
       "applied": true,
-      "drew": []
+      "windfallActiveFor": 1
     }
   },
   "p1CcDeck": [
