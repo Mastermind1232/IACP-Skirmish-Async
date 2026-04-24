@@ -215,6 +215,49 @@ def test_orchestrator_bonus_conditions_apply_on_hit():
     assert 'Bleed' in conds, f'Bleed should apply on hit; got {conds}'
 
 
+def test_orchestrator_defeat_drops_contraband_on_carry_mission():
+    """Mos Eisley Outskirts B: a defeated figure carrying contraband
+    drops it on its last space."""
+    fixture = _base_fixture()
+    fixture['dcHealthState']['hl2dc0'] = [[1, 12]]
+    fixture['figureContraband'] = {'Darth Vader-0-0': True}
+    fixture['selectedMission'] = {'mechanics': {'type': 'carry'}}
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(12345),
+        attack_dice_override=['red', 'red', 'red', 'red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit'):
+        pytest.skip('miss on this seed')
+    assert result.get('defeated') is True
+    dropped = g.data.get('droppedContrabandSpaces') or []
+    assert 'f5' in dropped, f'contraband should drop at f5; got {dropped}'
+    # Carrier entry removed.
+    assert 'Darth Vader-0-0' not in (g.data.get('figureContraband') or {})
+
+
+def test_orchestrator_defeat_skips_contraband_drop_non_carry_mission():
+    """Non-carry missions: contraband is NOT dropped on defeat
+    (flag is still cleared but space not added)."""
+    fixture = _base_fixture()
+    fixture['dcHealthState']['hl2dc0'] = [[1, 12]]
+    fixture['figureContraband'] = {'Darth Vader-0-0': True}
+    # Missing selectedMission → no carry mechanic.
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(12345),
+        attack_dice_override=['red', 'red', 'red', 'red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit'):
+        pytest.skip('miss on this seed')
+    dropped = g.data.get('droppedContrabandSpaces')
+    assert not dropped, f'non-carry mission must not drop; got {dropped}'
+
+
 def test_orchestrator_multi_figure_group_partial_wipe():
     """Defeating one figure of a multi-figure group doesn't decrement
     activationsRemaining (group still alive)."""

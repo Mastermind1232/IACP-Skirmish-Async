@@ -552,11 +552,68 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
 
         # ── Phase 10: DEFEAT ───────────────────────────────────────────
         if defeated:
+            # Capture pre-remove state for downstream drops.
+            last_pos = def_coord
+            fig_contraband = data.get('figureContraband') or {}
+            was_carrying_contraband = bool(fig_contraband.get(target_key))
+
             _remove_figure(data, def_player, target_key)
+
+            # CRR RTK-002: carried contraband drops on the defeated
+            # figure's space. Only fires on `carry` missions (Mos
+            # Eisley Outskirts B). Mirrors JS defeat-handler.js:108-118.
+            if was_carrying_contraband and last_pos:
+                mission = data.get('selectedMission') or {}
+                mech = mission.get('mechanics') if isinstance(mission, dict) else None
+                if isinstance(mech, dict) and mech.get('type') == 'carry':
+                    dropped = list(data.get('droppedContrabandSpaces') or [])
+                    norm_pos = str(last_pos).lower()
+                    if norm_pos not in dropped:
+                        dropped.append(norm_pos)
+                    data['droppedContrabandSpaces'] = dropped
+                # Always drop the carrier's entry (contraband no longer
+                # travels with the dead figure).
+                fc_map = dict(data.get('figureContraband') or {})
+                fc_map.pop(target_key, None)
+                data['figureContraband'] = fc_map
+
             vp = calculate_kill_vp(def_dc)
             if vp:
                 award_kill_vp(data, atk_player, vp)
                 vp_gained = int(vp)
+
+            # Attachment VP: when the last figure in a group dies,
+            # award VP equal to every attached card's deployment cost
+            # (may be negative — rules: NEGATIVE DEPLOYMENT COST).
+            # Mirrors JS defeat-handler.js:131-148.
+            att_vp = 0
+            if def_msg_id:
+                def_fp = (data.get('figurePositions') or {}).get(
+                    def_player, {},
+                ) or {}
+                # Check if any other figure of this DC group remains.
+                parts = target_key.rsplit('-', 2)
+                if len(parts) == 3:
+                    dc_prefix = f'{parts[0]}-{parts[1]}-'
+                    group_alive = any(
+                        fk.startswith(dc_prefix) for fk in def_fp.keys()
+                    )
+                else:
+                    group_alive = False
+                if not group_alive:
+                    att_map = (data.get(f'p{def_player}DcAttachments')
+                                or {})
+                    attachments = att_map.get(def_msg_id) or []
+                    for att_name in attachments:
+                        att_eff = get_dc_effect(att_name) or get_dc_effect(
+                            f'[{att_name}]',
+                        ) or {}
+                        att_cost = int(att_eff.get('cost') or 0)
+                        if att_cost != 0:
+                            att_vp += att_cost
+                    if att_vp != 0:
+                        award_kill_vp(data, atk_player, att_vp)
+                        vp_gained += int(att_vp)
 
             # ── Phase 11: ON-DEFEAT + friendly-defeat triggers ──────────
             try:
