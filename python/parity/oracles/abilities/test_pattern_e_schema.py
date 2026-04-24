@@ -44,7 +44,10 @@ def test_free_move_and_free_attack():
     r = handle_schema_chain(game, 'leaping_slash', ctx)
     assert game['movementBank']['m1']['total'] == 2
     assert 'm1' in game['freeAttackBonusPending']
-    assert game['freeAttackBonusPending']['m1']['from'] == 'Leaping Slash'
+    # Default freeAttackBonus is bool True (matches JS shape at
+    # src/game/abilities.js:1801). Only ability-specific dicts
+    # override with {from: '...'}.
+    assert game['freeAttackBonusPending']['m1'] is True
 
 
 def test_pounce_range_auto_resolves():

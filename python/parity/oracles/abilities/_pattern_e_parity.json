@@ -1,0 +1,1133 @@
+{
+  "counts": {
+    "ERROR_JS": 0,
+    "ERROR_PY": 0,
+    "FAIL": 0,
+    "JS_MANUAL": 37,
+    "PASS": 34,
+    "PY_AHEAD": 46,
+    "SKIP": 0
+  },
+  "reports": [
+    {
+      "id": "advanced_firepower_sorin",
+      "js_manual": "Resolve manually: Advanced Firepower",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "airborne_commander_gar_saxon",
+      "js_manual": "Resolve manually: Airborne Commander",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "alter_mind_obiwan",
+      "js_manual": "Resolve manually: Alter Mind",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "barrage_ct1701",
+      "status": "PASS"
+    },
+    {
+      "id": "bartered_information",
+      "js_manual": "**Bartered Information** \u2014 No friendly SCUM figure within 2 spaces.",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "boulder_barrage",
+      "js_manual": "Resolve **Boulder Barrage** manually (map not loaded).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "fixedAreaEffect_no_target"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "brutal_cleave",
+      "status": "PASS"
+    },
+    {
+      "id": "brutality",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[9, 12]]}"
+      ],
+      "id": "bully_jabba",
+      "js_manual": "No valid targets in range/LOS. Apply **Bully** manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "condition": null,
+          "damage": 3,
+          "effect": "targetHostileFigure_resolved",
+          "strain": 0,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "call_the_shots_hera",
+      "js_manual": "Resolve manually: Call the Shots",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "charged_shot_elite",
+      "status": "PASS"
+    },
+    {
+      "id": "charged_shot_reg",
+      "status": "PASS"
+    },
+    {
+      "extra_state": [
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 1, \"total\": 1}}"
+      ],
+      "id": "close_quarters",
+      "js_result": {
+        "activeMsgId": "hl1dc0",
+        "applied": true,
+        "freeAction": true,
+        "logMessage": "**Close Quarters** \u2014 Gained 1 free MP. Your next attack uses an adjacent hostile's dice/type, removes 1 defense die, +1 Accuracy (automated).",
+        "refreshMovementBank": false
+      },
+      "note": "Python schema applies a superset of JS resolveAbility",
+      "py_effects": [
+        {
+          "amount": 1,
+          "effect": "freeMoveBonus"
+        },
+        {
+          "effect": "freeAttackBonus"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "comms_jammer_isb",
+      "js_manual": "Resolve manually: Comms Jammer",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "continually_unexpected",
+      "js_manual": "**Continually Unexpected** \u2014 Need 2 Damage/Surge Tokens (have 0 Damage + 0 Surge).",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "coordinated_raid_elite",
+      "js_manual": "**Coordinated Raid** \u2014 No friendly IMPERIAL figure (cost \u22644) within 4 spaces.",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "coordinated_raid_regular",
+      "js_manual": "**Coordinated Raid** \u2014 No other figures in your group on the board.",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "crippling_blow",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [
+        "freeAttackBonusPending: JS={} | PY={\"hl1dc0\": true}",
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 3, \"total\": 3}}"
+      ],
+      "id": "dc_pounce",
+      "js_manual": "Pounce: place figure in empty space within 3, then may perform an attack (free)",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "pounceRange_resolved",
+          "grantedAttack": true,
+          "range": 3
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "defensible_sc2m",
+      "js_manual": "Resolve manually: Defensible",
+      "status": "JS_MANUAL"
+    },
+    {
+      "extra_state": [],
+      "id": "deflect",
+      "js_choice_options": [
+        "Vader"
+      ],
+      "note": "JS awaits chooseOne; Python auto-picked idx=0",
+      "py_effects": [
+        {
+          "effect": "targetHostileFigure_reactive_deferred",
+          "note": "fires only on trigger, not on activation"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 2, \"total\": 2}}"
+      ],
+      "id": "dins_wrist_flamethrower",
+      "js_manual": "Resolve **Din's Wrist Flamethrower** manually (map not loaded).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "amount": 2,
+          "effect": "freeMoveBonus"
+        },
+        {
+          "effect": "fixedAreaEffect_no_target"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "disruptor_rifle_mando",
+      "status": "PASS"
+    },
+    {
+      "id": "disruptor_rifle_snowtrooper",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [
+        "figureConditions: JS={} | PY={\"Vader-1-0\": [\"Focus\"]}"
+      ],
+      "id": "do_or_do_not_yoda",
+      "js_manual": "**Do or Do Not** \u2014 No friendly REBEL FORCE USER within 4 spaces.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "chooseFriendlyToFocus_resolved",
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "extra_state": [
+        "nextAttackBonusSurgeAbilities: JS=null | PY={\"1\": [\"cleave 2\"]}",
+        "nextAttackReach: JS=null | PY={\"1\": true}"
+      ],
+      "id": "dual_bladed_fury",
+      "js_choice_options": [
+        "Reach + Cleave 2",
+        "Become Focused"
+      ],
+      "note": "JS awaits chooseOne; Python auto-picked idx=0",
+      "py_effects": [
+        {
+          "amount": 2,
+          "effect": "nextAttackCleave"
+        },
+        {
+          "effect": "nextAttackReach"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "env_recovery_gear",
+      "js_manual": "Resolve **Environmental Recovery Gear** manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "envRecoveryGearEffect_resolved",
+          "healed": [
+            "Luke-1-0"
+          ]
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "evasive_maneuver",
+      "status": "PASS"
+    },
+    {
+      "extra_state": [
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 2, \"total\": 2}}"
+      ],
+      "id": "executor",
+      "js_result": {
+        "activeMsgId": "hl1dc0",
+        "applied": true,
+        "freeAction": true,
+        "logMessage": "**Executor** \u2014 (Interrupt: triggered when a friendly figure within 3 spaces is defeated.) Gain 2 free movement points, then your next attack costs no action. Limit once per round.",
+        "refreshMovementBank": false
+      },
+      "note": "Python schema applies a superset of JS resolveAbility",
+      "py_effects": [
+        {
+          "amount": 2,
+          "effect": "freeMoveBonus"
+        },
+        {
+          "effect": "freeAttackBonus"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "false_orders",
+      "js_manual": "**False Orders** \u2014 No hostile figures with cost \u2264 4 within 4 spaces.",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "field_report",
+      "status": "PASS"
+    },
+    {
+      "id": "figurehead",
+      "js_manual": "Resolve manually: Figurehead",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "flamethrower_terro",
+      "js_manual": "Resolve **Flamethrower** manually (map not loaded).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "fixedAreaEffect_no_target"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "focus_fire_tank",
+      "status": "PASS"
+    },
+    {
+      "extra_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[10, 12]]}"
+      ],
+      "id": "force_choke",
+      "js_choice_options": [
+        "Vader"
+      ],
+      "note": "JS awaits chooseOne; Python auto-picked idx=0",
+      "py_effects": [
+        {
+          "condition": null,
+          "damage": 2,
+          "effect": "targetHostileFigure_resolved",
+          "strain": 1,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "force_deflection_yoda",
+      "js_manual": "Resolve manually: Force Deflection",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 6, \"total\": 6}}"
+      ],
+      "id": "force_leap_ahsoka",
+      "js_manual": "Force Leap",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "pounceRange_resolved",
+          "grantedAttack": false,
+          "range": 6
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 6, \"total\": 6}}"
+      ],
+      "id": "force_leap_second_sister",
+      "js_manual": "Force Leap",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "pounceRange_resolved",
+          "grantedAttack": false,
+          "range": 6
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[9, 12]]}",
+        "figureConditions: JS={} | PY={\"Vader-1-0\": [\"Weaken\"]}"
+      ],
+      "id": "force_lightning",
+      "js_manual": "No valid targets in range/LOS. Apply **Force Lightning** manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "condition": "Weaken",
+          "damage": 3,
+          "effect": "targetHostileFigure_resolved",
+          "strain": 0,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "force_throw",
+      "js_manual": "**Force Throw** \u2014 map data not available. Resolve manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "pushTargetWithinRange_resolved",
+          "range": 3,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "fresh_catch_lothcat",
+      "status": "PASS"
+    },
+    {
+      "id": "fyrnock_style_tress",
+      "js_manual": "Resolve manually: Fyrnock Style",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "gar_saxon_flamethrower",
+      "js_manual": "Resolve **Gar Saxon's Flamethrower** manually (map not loaded).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "fixedAreaEffect_no_target"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "get_down_onar",
+      "js_manual": "Resolve manually: Get Down",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "get_into_position",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "gifted_mechanic",
+      "js_manual": "No adjacent friendly DROID/VEHICLE found. Resolve **Gifted Mechanic** manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "applied": [],
+          "effect": "targetFriendlyFigureAdjacent_resolved",
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "hair_trigger",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "headbutt_tauntaun",
+      "js_manual": "Headbutt",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "distance": 1,
+          "effect": "headbutt_resolved",
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [
+        "hopOnPushActive: JS=null | PY={\"Luke-1-0\": true}"
+      ],
+      "id": "hop_on_kuiil",
+      "js_manual": "Hop On!",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "hopOnPush_registered",
+          "figureKey": "Luke-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "i_am_one_with_the_force",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[11, 12]]}",
+        "figureConditions: JS={} | PY={\"Vader-1-0\": [\"Weaken\"]}"
+      ],
+      "id": "improper_procedure",
+      "js_manual": "No valid targets in range/LOS. Apply **Improper Procedure** manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "condition": "Weaken",
+          "damage": 1,
+          "effect": "targetHostileFigure_resolved",
+          "strain": 0,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "improved_smugglers_instincts",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [
+        "figureConditions: JS={} | PY={\"Vader-1-0\": [\"Focus\"]}"
+      ],
+      "id": "incentivize_jabba",
+      "js_manual": "**Incentivize** \u2014 No elite figures on the board.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "chooseFriendlyToFocus_resolved",
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [
+        "figureConditions: JS={} | PY={\"Vader-1-0\": [\"Focus\"]}"
+      ],
+      "id": "inform",
+      "js_manual": "Resolve manually: no map selected.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "chooseFriendlyToFocus_resolved",
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "extra_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[11, 12]]}",
+        "figureConditions: JS={\"Luke-1-0\": [\"Focus\"]} | PY={\"Luke-1-0\": [\"Focus\"], \"Vader-1-0\": [\"Bleed\"]}"
+      ],
+      "id": "invasive_procedure",
+      "js_result": {
+        "applied": true,
+        "freeAction": false,
+        "logMessage": "**Invasive Procedure** \u2014 No adjacent targets. You became **Focused**.",
+        "refreshDcEmbed": true
+      },
+      "note": "Python schema applies a superset of JS resolveAbility",
+      "py_effects": [
+        {
+          "condition": "Bleed",
+          "damage": 1,
+          "effect": "targetHostileFigure_resolved",
+          "strain": 1,
+          "target": "Vader-1-0"
+        },
+        {
+          "condition": "Focus",
+          "effect": "selfCondition",
+          "figureKey": "Luke-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[10, 12]]}"
+      ],
+      "id": "jetpack_rocket",
+      "js_manual": "**Jetpack Rocket** requires 2 MP (you have 0).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "damage": 2,
+          "dieColor": "blue",
+          "effect": "rollOneDie_resolved",
+          "hits": 2,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "extra_state": [
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 2, \"total\": 2}}"
+      ],
+      "id": "leaping_slash",
+      "js_result": {
+        "activeMsgId": "hl1dc0",
+        "applied": true,
+        "freeAction": true,
+        "logMessage": "**Leaping Slash** \u2014 Gained 2 free MP. Your next attack costs no action.",
+        "refreshMovementBank": false
+      },
+      "note": "Python schema applies a superset of JS resolveAbility",
+      "py_effects": [
+        {
+          "amount": 2,
+          "effect": "freeMoveBonus"
+        },
+        {
+          "effect": "freeAttackBonus"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "leg_hydraulics_tress",
+      "js_manual": "Resolve manually: Leg Hydraulics",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "lift_off_dark_trooper",
+      "status": "PASS"
+    },
+    {
+      "id": "lightsaber_throw_gi",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "mandalorian_whip",
+      "js_manual": "**Mandalorian Whip** \u2014 map data not available. Resolve manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "pushTargetWithinRange_resolved",
+          "range": 3,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "medical_loadout",
+      "js_manual": "Medical Loadout: You or an adjacent friendly recovers 3 Damage",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "discarded": null,
+          "effect": "medicalLoadoutEffect_resolved"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "military_efficiency",
+      "js_manual": "Resolve manually: Military Efficiency",
+      "status": "JS_MANUAL"
+    },
+    {
+      "extra_state": [],
+      "id": "mockery",
+      "js_choice_options": [
+        "Vader"
+      ],
+      "note": "JS awaits chooseOne; Python auto-picked idx=0",
+      "py_effects": [
+        {
+          "condition": null,
+          "damage": 0,
+          "effect": "targetHostileFigure_resolved",
+          "strain": 1,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "multi_fire",
+      "status": "PASS"
+    },
+    {
+      "id": "neurostim_hemlock",
+      "js_manual": "**Neurostim** \u2014 No adjacent friendly figures.",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[11, 12]]}"
+      ],
+      "id": "neurotoxin_hemlock",
+      "js_manual": "Resolve **Neurotoxin** manually (map not loaded).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "damage": 1,
+          "dieColor": "yellow",
+          "effect": "rollOneDie_resolved",
+          "hits": 1,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "nimble_asajj",
+      "js_manual": "Resolve manually: Nimble",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "on_the_hunt",
+      "status": "PASS"
+    },
+    {
+      "id": "order_hit_jabba",
+      "status": "PASS"
+    },
+    {
+      "id": "overclock",
+      "status": "PASS"
+    },
+    {
+      "id": "power_converter_saska",
+      "js_manual": "Resolve manually: Power Converter",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "precision_grand_inquisitor",
+      "js_manual": "Resolve manually: Precision",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "prowl",
+      "status": "PASS"
+    },
+    {
+      "id": "raider_weequay_elite",
+      "js_manual": "Resolve manually: Raider",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "raider_weequay_reg",
+      "js_manual": "Resolve manually: Raider",
+      "status": "JS_MANUAL"
+    },
+    {
+      "extra_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[10, 12]]}",
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 2, \"total\": 2}}"
+      ],
+      "id": "ram_chopper",
+      "js_log": "**Ram** \u2014 Rolled 1 green die: **2 Hits**. **Vader** apply 2 Damage manually.",
+      "note": "JS logged+deferred to handler; Python mutated",
+      "py_effects": [
+        {
+          "amount": 2,
+          "effect": "freeMoveBonus"
+        },
+        {
+          "damage": 2,
+          "dieColor": "green",
+          "effect": "rollOneDie_resolved",
+          "hits": 2,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "rat_catcher_lothcat",
+      "status": "PASS"
+    },
+    {
+      "id": "resourceful_lando",
+      "js_manual": "Resolve manually: Resourceful",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "rush_onar",
+      "status": "PASS"
+    },
+    {
+      "id": "saber_orbit",
+      "status": "PASS"
+    },
+    {
+      "id": "saber_strike",
+      "status": "PASS"
+    },
+    {
+      "id": "scheme_jabba",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "scomp_link",
+      "js_manual": "**Scomp Link** \u2014 R2-D2 is not adjacent to a terminal (no terminals found for this map).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "count": 0,
+          "effect": "drawCCIfAdjacentTerminal"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[11, 12]]}"
+      ],
+      "id": "scratch_crumb",
+      "js_manual": "No valid targets in range/LOS. Apply **Scratch** manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "condition": null,
+          "damage": 1,
+          "effect": "targetHostileFigure_resolved",
+          "strain": 0,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "service_r2d2",
+      "js_manual": "Service",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "amount": 1,
+          "effect": "healFriendlyAdjacent",
+          "target": "Luke-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "set_your_sights_loku",
+      "js_manual": "Resolve manually: Set Your Sights",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "shield_gauntlets",
+      "js_manual": "**Shield Gauntlets** requires 1 MP (you have 0).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "spendMpForBlockToken"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "shift_clawdite_elite",
+      "js_manual": "Resolve manually: Shift",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "shift_clawdite_reg",
+      "js_manual": "Resolve manually: Shift",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[11, 12]]}"
+      ],
+      "id": "shock_grenade_purge",
+      "js_manual": "Resolve **Shock Grenade** manually (map not loaded).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "damage": 1,
+          "dieColor": "green",
+          "effect": "rollOneDie_resolved",
+          "hits": 1,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[11, 12]]}"
+      ],
+      "id": "shock_lance_dewback",
+      "js_manual": "Resolve **Shock Lance** manually (map not loaded).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "damage": 1,
+          "dieColor": "green",
+          "effect": "rollOneDie_resolved",
+          "hits": 1,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "shoulder_rush",
+      "status": "PASS"
+    },
+    {
+      "id": "shrewd_scoundrel_lando",
+      "js_manual": "Resolve manually: Shrewd Scoundrel",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "sith_acolyte",
+      "status": "PASS"
+    },
+    {
+      "extra_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[9, 12]]}"
+      ],
+      "id": "slam",
+      "js_log": "**Slam** \u2014 Rolled 1 red die: **3 Hits**. **Vader** apply 3 Damage manually.",
+      "note": "JS logged+deferred to handler; Python mutated",
+      "py_effects": [
+        {
+          "damage": 3,
+          "dieColor": "red",
+          "effect": "rollOneDie_resolved",
+          "hits": 3,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "sling_barrage_ewok_elite",
+      "status": "PASS"
+    },
+    {
+      "id": "slippery_smuggler_elite",
+      "js_manual": "Resolve manually: Slippery",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "slippery_smuggler_reg",
+      "js_manual": "Resolve manually: Slippery",
+      "status": "JS_MANUAL"
+    },
+    {
+      "extra_state": [
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 2, \"total\": 2}}"
+      ],
+      "id": "smugglers_instincts",
+      "js_result": {
+        "activeMsgId": "hl1dc0",
+        "applied": true,
+        "freeAction": true,
+        "logMessage": "**Smuggler's Instincts** \u2014 Gained 2 free MP. Your next attack costs no action. *(Attack first, then use the MP.)*",
+        "refreshMovementBank": false
+      },
+      "note": "Python schema applies a superset of JS resolveAbility",
+      "py_effects": [
+        {
+          "amount": 2,
+          "effect": "freeMoveBonus"
+        },
+        {
+          "effect": "freeAttackBonus"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "spot_weld",
+      "status": "PASS"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "squad_captain",
+      "js_manual": "No adjacent friendly TROOPER/LEADER found. Resolve **Squad Captain** manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "applied": [],
+          "effect": "targetFriendlyFigureAdjacent_resolved",
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "squad_cohesion_kotun",
+      "js_manual": "Resolve manually: Squad Cohesion",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "stim_canister",
+      "js_manual": "Stim Canister",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "amount": 2,
+          "effect": "healFriendlyAdjacent",
+          "target": "Luke-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "stim_canister_bd1",
+      "js_manual": "No adjacent friendly  found. Resolve **Stim Canister** manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "applied": [],
+          "effect": "targetFriendlyFigureAdjacent_resolved",
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "survival_is_strength_armorer",
+      "js_manual": "Resolve manually: Survival is Strength",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[10, 12]]}"
+      ],
+      "id": "system_shock_chopper",
+      "js_manual": "No valid targets in range/LOS. Apply **System Shock** manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "condition": null,
+          "damage": 2,
+          "effect": "targetHostileFigure_resolved",
+          "strain": 1,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "extra_state": [
+        "movementBank: JS={} | PY={\"hl1dc0\": {\"remaining\": 2, \"total\": 2}}"
+      ],
+      "id": "tonfa_strike",
+      "js_result": {
+        "activeMsgId": "hl1dc0",
+        "applied": true,
+        "freeAction": false,
+        "logMessage": "**Tonfa Strike** \u2014 Gained 2 free MP. Your next attack is free and uses [Red, Green] dice (Melee). After it resolves, a second free attack is automatically granted.",
+        "refreshDcEmbed": false,
+        "refreshMovementBank": false
+      },
+      "note": "Python schema applies a superset of JS resolveAbility",
+      "py_effects": [
+        {
+          "amount": 2,
+          "effect": "freeMoveBonus"
+        },
+        {
+          "effect": "freeAttackBonus"
+        },
+        {
+          "dice": [
+            "red",
+            "green"
+          ],
+          "effect": "overrideAttackDice",
+          "type": "melee"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "trained_rancor",
+      "js_manual": "Resolve manually: Trained",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [
+        "dcHealthState: JS={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[12, 12]]} | PY={\"hl1dc0\": [[10, 10]], \"hl2dc0\": [[10, 12]]}"
+      ],
+      "id": "trample_bantha",
+      "js_manual": "Resolve **Trample** manually (map not loaded).",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "damage": 2,
+          "dieColor": "red",
+          "effect": "rollOneDie_resolved",
+          "hits": 2,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "tusken_cycler_elite",
+      "status": "PASS"
+    },
+    {
+      "id": "tusken_cycler_regular",
+      "status": "PASS"
+    },
+    {
+      "id": "twin_sabers_ahsoka",
+      "js_manual": "Resolve manually: Twin Sabers",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "unhinged_director_krennic",
+      "js_manual": "Resolve manually: Unhinged Director",
+      "status": "JS_MANUAL"
+    },
+    {
+      "id": "unstable_devices_saska",
+      "js_manual": "Resolve manually: Unstable Devices",
+      "status": "JS_MANUAL"
+    },
+    {
+      "diffs_on_state": [],
+      "id": "wrist_cord",
+      "js_manual": "**Wrist Cord** \u2014 map data not available. Resolve manually.",
+      "note": "JS defers to handler; Python auto-resolved",
+      "py_effects": [
+        {
+          "effect": "pushTargetWithinRange_resolved",
+          "range": 3,
+          "target": "Vader-1-0"
+        }
+      ],
+      "status": "PY_AHEAD"
+    },
+    {
+      "id": "you_have_something_i_want_gideon",
+      "js_manual": "No hostile figures within 4 spaces have Power Tokens or condition tokens.",
+      "status": "JS_MANUAL"
+    }
+  ],
+  "total": 117
+}

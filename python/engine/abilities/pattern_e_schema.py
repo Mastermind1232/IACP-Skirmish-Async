@@ -163,7 +163,8 @@ def handle_schema_chain(game: Any, ability_id: str,
 
     effects = []
 
-    free_move = entry.get('freeMoveBonus')
+    # JS uses both `freeMoveBonus` and `mpBonus` (alias) for "grant N MP".
+    free_move = entry.get('freeMoveBonus') or entry.get('mpBonus')
     if isinstance(free_move, (int, float)) and free_move > 0 and msg_id:
         grant_movement_bank(data, msg_id, int(free_move))
         effects.append({'effect': 'freeMoveBonus', 'amount': int(free_move)})
@@ -177,12 +178,16 @@ def handle_schema_chain(game: Any, ability_id: str,
     free_attack = entry.get('freeAttackBonus')
     if free_attack and msg_id:
         pending_fa = data.get('freeAttackBonusPending') or {}
-        # JS uses True OR a dict `{from: '...'}`; mirror both.
-        pending_fa[msg_id] = (
-            {'from': entry.get('label') or ability_id}
-            if isinstance(free_attack, bool)
-            else dict(free_attack)
-        )
+        # Mirror JS: default = True (bool); freeAttackBonusCount > 1 =
+        # integer count; explicit dict overrides (Sling Barrage, Focus
+        # Fire, Multi-Fire, Overclock, saberOrbitChain).
+        count = entry.get('freeAttackBonusCount')
+        if isinstance(free_attack, dict):
+            pending_fa[msg_id] = dict(free_attack)
+        elif count is not None:
+            pending_fa[msg_id] = int(count) if int(count) > 1 else True
+        else:
+            pending_fa[msg_id] = True
         data['freeAttackBonusPending'] = pending_fa
         effects.append({'effect': 'freeAttackBonus'})
 
@@ -196,7 +201,7 @@ def handle_schema_chain(game: Any, ability_id: str,
             grant_movement_bank(data, msg_id, int(pounce_range))
             if not entry.get('pounceNoAttack'):
                 pending_fa = data.get('freeAttackBonusPending') or {}
-                pending_fa[msg_id] = {'from': 'Pounce'}
+                pending_fa[msg_id] = True
                 data['freeAttackBonusPending'] = pending_fa
         effects.append({
             'effect': 'pounceRange_resolved',
@@ -204,19 +209,28 @@ def handle_schema_chain(game: Any, ability_id: str,
             'grantedAttack': not bool(entry.get('pounceNoAttack')),
         })
 
+    # nextAttacksBonusHits / nextAttacksBonusAcc — JS keys by
+    # player_num (src/game/abilities.js:2550). Strip any fields JS
+    # doesn't write (keep just count + bonus).
+    pn_cur = ctx.get('player_num')
     next_hits = entry.get('nextAttacksBonusHits')
-    if isinstance(next_hits, dict) and msg_id:
+    if isinstance(next_hits, dict) and pn_cur in (1, 2):
         pend = data.get('nextAttacksBonusHits') or {}
-        pend[msg_id] = dict(next_hits)
+        pend[pn_cur] = {
+            'count': next_hits.get('count'),
+            'bonus': next_hits.get('bonus'),
+        }
         data['nextAttacksBonusHits'] = pend
-        effects.append({'effect': 'nextAttacksBonusHits', 'payload': dict(next_hits)})
+        effects.append({'effect': 'nextAttacksBonusHits',
+                        'payload': dict(pend[pn_cur])})
 
     next_acc = entry.get('nextAttacksBonusAcc')
-    if isinstance(next_acc, dict) and msg_id:
+    if isinstance(next_acc, dict) and pn_cur in (1, 2):
         pend = data.get('nextAttacksBonusAcc') or {}
-        pend[msg_id] = dict(next_acc)
+        pend[pn_cur] = dict(next_acc)
         data['nextAttacksBonusAcc'] = pend
-        effects.append({'effect': 'nextAttacksBonusAcc', 'payload': dict(next_acc)})
+        effects.append({'effect': 'nextAttacksBonusAcc',
+                        'payload': dict(next_acc)})
 
     # envRecoveryGearEffect — JS rule: self + adjacent TROOPER allies
     # may each recover 1 HP OR discard 1 harmful condition. Auto-resolve
@@ -260,7 +274,26 @@ def handle_schema_chain(game: Any, ability_id: str,
     # targetHostileFigure — apply damage/strain/condition to a hostile.
     # Auto-picks closest hostile when ctx doesn't supply a target so no
     # pending stamp is left hanging (required for GPU-training parity).
+    #
+    # EXCEPTION: reactive abilities (freeAction + description starts
+    # with "After …") must NOT auto-fire on activation — they fire
+    # only when their trigger occurs. Mirrors JS resolveAbility which
+    # returns manualMessage for these.
     thf = entry.get('targetHostileFigure')
+    desc = (entry.get('description') or '').lower()
+    _is_reactive = (
+        bool(entry.get('freeAction'))
+        and any(kw in desc for kw in
+                ('after a', 'after an', 'after the', 'when an',
+                 'when a hostile', 'when the'))
+    )
+    if isinstance(thf, dict) and _is_reactive:
+        effects.append({
+            'effect': 'targetHostileFigure_reactive_deferred',
+            'note': 'fires only on trigger, not on activation',
+        })
+        thf = None
+
     if isinstance(thf, dict):
         target_fk = ctx.get('target_figure_key') or ctx.get('targetFigureKey')
         target_pn = ctx.get('target_player_num') or ctx.get('targetPlayerNum')
@@ -665,15 +698,24 @@ def handle_schema_chain(game: Any, ability_id: str,
             else:
                 effects.append({'effect': 'overclock_no_companion'})
 
-    # slingBarrageReroll — reroll the last attack's dice. Auto-resolve
-    # by stamping pendingReroll on the current combat so the attack
-    # resolver picks it up naturally.
+    # slingBarrageReroll — mirror JS at src/game/abilities.js:1600-1605:
+    # grant a free ranged attack using the printed pool with reroll
+    # bonus per group-mate with LOS. Stamps freeAttackBonusPending,
+    # pendingOverrideAttackDice (ranged + null dice = printed pool),
+    # and pendingSlingBarrage[msg_id] = True.
     if entry.get('slingBarrageReroll') and msg_id:
-        pc = dict(data.get('pendingCombat') or {})
-        combat_for_msg = dict(pc.get(msg_id) or {})
-        combat_for_msg['forceReroll'] = True
-        pc[msg_id] = combat_for_msg
-        data['pendingCombat'] = pc
+        pending_fa = data.get('freeAttackBonusPending') or {}
+        pending_fa[msg_id] = {'from': 'Sling Barrage'}
+        data['freeAttackBonusPending'] = pending_fa
+        pending_oad = data.get('pendingOverrideAttackDice') or {}
+        pending_oad[msg_id] = {
+            'type': 'ranged', 'dice': None,
+            'pierce': 0, 'bonusAccuracy': 0,
+        }
+        data['pendingOverrideAttackDice'] = pending_oad
+        psb = data.get('pendingSlingBarrage') or {}
+        psb[msg_id] = True
+        data['pendingSlingBarrage'] = psb
         effects.append({'effect': 'slingBarrage_flagged'})
 
     # spotWeldCompanionPlace (Spot-Weld) — place companion adjacent.
@@ -773,17 +815,65 @@ def handle_schema_chain(game: Any, ability_id: str,
         else:
             dice_spec = []
         if dice_spec:
+            # Match JS schema at src/game/abilities.js:1754 — all six
+            # fields must be present so the combat resolver reads them
+            # unambiguously. JS defaults: type=null, pierce=0,
+            # bonusAccuracy=0, mustTargetNonAdjacent=false,
+            # blockSurgeAbilities=false.
             pending = dict(data.get('pendingOverrideAttackDice') or {})
             pending[msg_id] = {
                 'dice': dice_spec,
-                'type': override_type or 'range',
+                'type': override_type,
+                'pierce': int(entry.get('overrideAttackPierce') or 0),
+                'bonusAccuracy': int(entry.get('overrideBonusAccuracy') or 0),
+                'mustTargetNonAdjacent': bool(
+                    entry.get('mustTargetNonAdjacent') or False
+                ),
+                'blockSurgeAbilities': bool(
+                    entry.get('blockSurgeAbilities') or False
+                ),
             }
             data['pendingOverrideAttackDice'] = pending
+            # Saber Orbit: stamp saberOrbitChain count as
+            # freeAttackBonusPending[msgId] = N, and record remaining
+            # attacks — JS at src/game/abilities.js:1746-1749.
+            chain = entry.get('saberOrbitChain')
+            if isinstance(chain, int) and chain > 1:
+                pending_fa = data.get('freeAttackBonusPending') or {}
+                pending_fa[msg_id] = chain
+                data['freeAttackBonusPending'] = pending_fa
+                remaining = data.get('saberOrbitAttacksRemaining') or {}
+                remaining[msg_id] = chain
+                data['saberOrbitAttacksRemaining'] = remaining
             effects.append({
                 'effect': 'overrideAttackDice',
                 'dice': dice_spec,
-                'type': override_type or 'range',
+                'type': override_type,
             })
+
+    # overrideAttackType without overrideAttackDice (Lightsaber Throw,
+    # Face to Face, Dying Lunge, Final Stand) — mirrors JS at
+    # src/game/abilities.js:1837-1845: stamp pendingOverrideAttackDice
+    # with dice=null + attack-type and any accuracy/adjacency flags.
+    if entry.get('overrideAttackType') and not oad and msg_id:
+        pending = dict(data.get('pendingOverrideAttackDice') or {})
+        pending[msg_id] = {
+            'type': entry.get('overrideAttackType'),
+            'dice': None,
+            'pierce': int(entry.get('overrideAttackPierce') or 0),
+            'bonusAccuracy': int(entry.get('overrideBonusAccuracy') or 0),
+            'mustTargetNonAdjacent': bool(
+                entry.get('mustTargetNonAdjacent') or False
+            ),
+            'blockSurgeAbilities': bool(
+                entry.get('blockSurgeAbilities') or False
+            ),
+        }
+        data['pendingOverrideAttackDice'] = pending
+        effects.append({
+            'effect': 'overrideAttackType',
+            'type': entry.get('overrideAttackType'),
+        })
 
     # focusFireDoubleAttack / multiFireDoubleAttack — grant a free attack
     # bonus so the figure can attack twice this activation. Focus Fire
@@ -798,17 +888,19 @@ def handle_schema_chain(game: Any, ability_id: str,
         effects.append({'effect': 'focusFireDoubleAttack'})
 
     if entry.get('multiFireDoubleAttack') and msg_id:
+        # Mirror JS at src/game/abilities.js:1635-1642 exactly:
+        # freeAttackBonusPending[msgId] = {from: 'Multi-Fire'}
+        # pendingOverrideAttackDice[msgId] = {bonusHits: -1}
+        # multiFireActive[msgId] = {attacksRemaining: 2, firstTargetFigureKey: None}
         pending_fa = data.get('freeAttackBonusPending') or {}
-        pending_fa[msg_id] = {'from': entry.get('label') or 'Multi-Fire'}
+        pending_fa[msg_id] = {'from': 'Multi-Fire'}
         data['freeAttackBonusPending'] = pending_fa
+        pending_oad = data.get('pendingOverrideAttackDice') or {}
+        pending_oad[msg_id] = {'bonusHits': -1}
+        data['pendingOverrideAttackDice'] = pending_oad
         mfa = data.get('multiFireActive') or {}
         mfa[msg_id] = {'attacksRemaining': 2, 'firstTargetFigureKey': None}
         data['multiFireActive'] = mfa
-        # -1 Hit during Multi-Fire
-        pend_combat = dict(data.get('pendingCombat') or {})
-        pend_combat['bonusHits'] = int(pend_combat.get('bonusHits') or 0) - 1
-        pend_combat['roundScoped'] = False  # single-attack scoped
-        data['pendingCombat'] = pend_combat
         effects.append({'effect': 'multiFireDoubleAttack'})
 
     # applyFocusToSelf — Focus the activating figure (used by
@@ -824,33 +916,43 @@ def handle_schema_chain(game: Any, ability_id: str,
             except Exception:
                 pass
 
-    # nextAttackCleave / nextAttackReach — stamp pendingCombat bonuses that
-    # apply to the figure's next attack. Supports Dual-Bladed Fury,
-    # Whirlwind-style nextAttack* grants.
+    # nextAttackCleave / nextAttackReach — mirror JS schema at
+    # src/game/abilities.js:262-273: cleave goes into
+    # nextAttackBonusSurgeAbilities[playerNum] as 'cleave N' string;
+    # reach goes into nextAttackReach[playerNum] = True. Supports
+    # Dual-Bladed Fury, Whirlwind-style next-attack grants.
+    player_num_cur = ctx.get('player_num')
     n_cleave = entry.get('nextAttackCleave')
-    if isinstance(n_cleave, (int, float)) and n_cleave > 0:
-        pc = dict(data.get('pendingCombat') or {})
-        pc['bonusCleave'] = int(pc.get('bonusCleave') or 0) + int(n_cleave)
-        data['pendingCombat'] = pc
+    if (isinstance(n_cleave, (int, float)) and n_cleave > 0
+            and player_num_cur in (1, 2)):
+        bonuses = dict(data.get('nextAttackBonusSurgeAbilities') or {})
+        lst = list(bonuses.get(player_num_cur) or [])
+        lst.append(f'cleave {int(n_cleave)}')
+        bonuses[player_num_cur] = lst
+        data['nextAttackBonusSurgeAbilities'] = bonuses
         effects.append({'effect': 'nextAttackCleave', 'amount': int(n_cleave)})
 
-    if entry.get('nextAttackReach'):
-        pc = dict(data.get('pendingCombat') or {})
-        pc['nextAttackReach'] = True
-        data['pendingCombat'] = pc
+    if entry.get('nextAttackReach') and player_num_cur in (1, 2):
+        reach = dict(data.get('nextAttackReach') or {})
+        reach[player_num_cur] = True
+        data['nextAttackReach'] = reach
         effects.append({'effect': 'nextAttackReach'})
 
-    # applySelfCondition — add a condition to the activating figure (Prowl
-    # applies Hide to self).
-    asc = entry.get('applySelfCondition')
-    if isinstance(asc, str) and asc:
+    # selfCondition — apply a condition to the activating figure
+    # (Invasive Procedure → Focus, mirrors JS at abilities.js:530-538).
+    # Alias for applySelfCondition.
+    self_cond = entry.get('selfCondition') or entry.get('applySelfCondition')
+    if isinstance(self_cond, str) and self_cond:
         fig_key = ctx.get('figure_key')
         if fig_key:
             try:
                 from python.engine.mechanics.conditions import apply_condition
-                apply_condition(game, fig_key, asc)
-                effects.append({'effect': 'applySelfCondition', 'condition': asc,
-                                'figureKey': fig_key})
+                apply_condition(game, fig_key, self_cond)
+                effects.append({
+                    'effect': 'selfCondition',
+                    'condition': self_cond,
+                    'figureKey': fig_key,
+                })
             except Exception:
                 pass
 
