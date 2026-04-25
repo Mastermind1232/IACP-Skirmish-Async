@@ -384,6 +384,103 @@ def _handle_squad_training(data, combat, ctx):
     return {'effect': 'squad_training', 'rerolled_index': idx_worst}
 
 
+def _has_adjacent_friendly(data, player_num, figure_key):
+    """True iff any same-side figure (other than self) is Chebyshev-adjacent."""
+    from python.engine.mechanics.adjacency import is_chebyshev_adjacent
+    fp = data.get('figurePositions') or {}
+    self_coord = (fp.get(player_num) or fp.get(str(player_num)) or {}).get(figure_key)
+    if not self_coord:
+        return False
+    for fk, coord in (fp.get(player_num) or fp.get(str(player_num)) or {}).items():
+        if fk == figure_key or not coord:
+            continue
+        if is_chebyshev_adjacent(self_coord, coord):
+            return True
+    return False
+
+
+def _reroll_one_defense_die(combat, rng, prefer_lowest=True):
+    """Reroll one defense die (the lowest block+evade if prefer_lowest).
+    Mutates defenseRoll.dice + recomputed totals in place.
+    Returns the rerolled index, or None if no dice / no rng."""
+    def_roll = combat.get('defenseRoll') or {}
+    dice = list(def_roll.get('dice') or [])
+    if not dice or rng is None:
+        return None
+    from python.engine.mechanics.dice import roll_defense_dice
+    if prefer_lowest:
+        idx = min(range(len(dice)), key=lambda i:
+                   (dice[i].get('block') or 0) + (dice[i].get('evade') or 0))
+    else:
+        idx = 0
+    old = dice[idx]
+    color = old.get('color', 'white')
+    new = roll_defense_dice(color, rng=rng)
+    new_dice_list = new.get('dice') or [new]  # roll_defense_dice may return single
+    # roll_defense_dice in some versions returns a single die dict, not a list.
+    if isinstance(new, dict) and 'block' in new:
+        # Single-die response shape.
+        dice[idx] = {k: new.get(k) for k in ('color', 'block', 'evade', 'dodge')}
+    else:
+        if not new_dice_list:
+            return None
+        dice[idx] = new_dice_list[0]
+    def_roll['dice'] = dice
+    def_roll['block'] = sum(int(d.get('block') or 0) for d in dice)
+    def_roll['evade'] = sum(int(d.get('evade') or 0) for d in dice)
+    def_roll['dodge'] = any(bool(d.get('dodge')) for d in dice)
+    combat['defenseRoll'] = def_roll
+    return idx
+
+
+def _handle_cower(data, combat, ctx):
+    """Cower (C-3PO / Imperial Officer Reg): "While defending, while adjacent
+    to a friendly figure, you may reroll 1 defense die." Greedy-take in
+    headless: reroll the lowest-value defense die (block+evade)."""
+    if not _has_adjacent_friendly(
+            data, ctx['defender_player'], ctx['defender_key']):
+        return None
+    rng = ctx.get('rng')
+    idx = _reroll_one_defense_die(combat, rng, prefer_lowest=True)
+    if idx is None:
+        return None
+    return {'effect': 'cower', 'rerolled_index': idx}
+
+
+def _handle_targeting_computer_atst(data, combat, ctx):
+    """Targeting Computer (AT-ST): "While attacking, you may reroll 1 attack
+    die." Greedy-take: reroll the lowest acc+dmg+surge die (same primitive
+    as squad_training, no adjacency gate)."""
+    rng = ctx.get('rng')
+    if rng is None:
+        return None
+    attack_roll = combat.get('attackRoll') or {}
+    dice = list(attack_roll.get('dice') or [])
+    if not dice:
+        return None
+    from python.engine.mechanics.dice import roll_attack_dice
+    idx = min(range(len(dice)), key=lambda i:
+               (dice[i].get('acc') or 0) + (dice[i].get('dmg') or 0)
+               + (dice[i].get('surge') or 0))
+    old = dice[idx]
+    color = old.get('color', 'blue')
+    new_roll = roll_attack_dice([color], rng=rng)
+    new_dice = new_roll.get('dice') or []
+    if not new_dice:
+        return None
+    dice[idx] = new_dice[0]
+    attack_roll['dice'] = dice
+    attack_roll['acc'] = sum(int(d.get('acc') or 0) for d in dice)
+    attack_roll['dmg'] = sum(int(d.get('dmg') or 0) for d in dice)
+    attack_roll['surge'] = sum(int(d.get('surge') or 0) for d in dice)
+    combat['attackRoll'] = attack_roll
+    combat['surgeRemaining'] = (
+        int(attack_roll.get('surge') or 0)
+        + int(combat.get('surgeBonus') or 0)
+    )
+    return {'effect': 'targeting_computer_atst', 'rerolled_index': idx}
+
+
 def _install_default_passives() -> None:
     register('aim_rebel_trooper_reg', _handle_aim_rebel_trooper_reg, 'attacker')
     register('aim_rebel_trooper_elite', _handle_aim_rebel_trooper_elite, 'attacker')
@@ -401,6 +498,9 @@ def _install_default_passives() -> None:
     register_post_roll('squad_training_stormtrooper_reg', _handle_squad_training, 'attacker')
     register_post_roll('squad_training_shoretrooper_elite', _handle_squad_training, 'attacker')
     register_post_roll('squad_training_shoretrooper_reg', _handle_squad_training, 'attacker')
+    register_post_roll('cower_c3po', _handle_cower, 'defender')
+    register_post_roll('cower_imperial_officer_reg', _handle_cower, 'defender')
+    register_post_roll('targeting_computer_atst', _handle_targeting_computer_atst, 'attacker')
 
 
 _install_default_passives()

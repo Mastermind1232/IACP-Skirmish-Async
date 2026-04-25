@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T04:00:30.976963+00:00",
+  "generated": "2026-04-25T04:08:34.231201+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 266,
-      "stub": 44,
+      "real": 269,
+      "stub": 41,
       "missing": 0,
       "total": 310
     },
@@ -370,8 +370,8 @@
       "coordinated_raid_elite": "real",
       "coordinated_raid_regular": "real",
       "cortosis_weave": "real",
-      "cower_c3po": "stub",
-      "cower_imperial_officer_reg": "stub",
+      "cower_c3po": "real",
+      "cower_imperial_officer_reg": "real",
       "crippling_blow": "real",
       "cunning_han": "real",
       "cunning_jyn": "real",
@@ -602,7 +602,7 @@
       "tactical_maneuver": "real",
       "take_cover_jawa_elite": "real",
       "take_cover_jawa_reg": "real",
-      "targeting_computer_atst": "stub",
+      "targeting_computer_atst": "real",
       "targeting_computer_hk_elite": "real",
       "targeting_computer_ig11": "real",
       "targeting_computer_probe_elite": "real",
@@ -737,8 +737,6 @@
       "camouflage_mak",
       "camouflage_scout_trooper",
       "coordinated_hunt_purge_commander",
-      "cower_c3po",
-      "cower_imperial_officer_reg",
       "defensive_fire_bokatan",
       "devout_chirrut",
       "dirty_dealing_bib",
@@ -768,7 +766,6 @@
       "shared_calculations_zuckuss",
       "spiked_boots_snowtrooper",
       "spray_fire_heavy_stormtrooper",
-      "targeting_computer_atst",
       "this_is_the_way_armorer",
       "tripod_eweb",
       "trust_goes_both_ways_jyn",

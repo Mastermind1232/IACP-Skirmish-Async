@@ -221,12 +221,12 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'cower_c3po': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js:2702 (cowerIds array)',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:2702 → py mechanics/passive_combat.py:_handle_cower (greedy reroll worst defense die when adj friendly)',
     ),
     'cower_imperial_officer_reg': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js:2702 (cowerIds array)',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:2702 → py mechanics/passive_combat.py:_handle_cower',
     ),
     'gambit_lando': (
         'deferred-handler-combat', 'handler-combat',
@@ -293,8 +293,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_take_cover_defender',
     ),
     'targeting_computer_atst': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_targeting_computer_atst (greedy reroll worst attack die)',
     ),
     'tripod_eweb': (
         'deferred-handler-combat', 'handler-combat',

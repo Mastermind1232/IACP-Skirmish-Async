@@ -156,6 +156,8 @@ def test_registry_includes_starter_set():
         'agile_jet_trooper_elite', 'agile_jet_trooper_reg',
         'squad_training_stormtrooper_elite', 'squad_training_stormtrooper_reg',
         'squad_training_shoretrooper_elite', 'squad_training_shoretrooper_reg',
+        'cower_c3po', 'cower_imperial_officer_reg',
+        'targeting_computer_atst',
     }
     assert expected.issubset(set(ids))
 
@@ -322,6 +324,69 @@ def test_squad_training_fires_with_adjacent_trooper():
     # The die at index 0 (worst) was rerolled — totals recomputed.
     assert combat['attackRoll']['dice'][0] != {'color': 'blue',
                                                 'acc': 0, 'dmg': 0, 'surge': 0}
+
+
+# ── cower_c3po / cower_imperial_officer_reg (post-roll) ───────────────────
+
+def test_cower_no_fire_without_adjacent_friendly():
+    from python.engine.mechanics.passive_combat import apply_post_roll_passives
+    import random
+    data = _base_data()
+    # Only one friendly figure on player 1, defender position has no adj ally.
+    data['figurePositions'][1] = {'C-3PO-0-0': 'a3'}
+    combat = {'defenseRoll': {
+        'dice': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': False}],
+        'block': 0, 'evade': 0, 'dodge': False,
+    }}
+    ctx = _ctx(atk_key='Stormtrooper (Regular)-0-0',
+               def_key='C-3PO-0-0', atk_player=2, def_player=1)
+    ctx['rng'] = random.Random(7)
+    fired = apply_post_roll_passives(
+        data, combat, [], ['cower_c3po'], ctx,
+    )
+    assert not fired
+
+
+def test_cower_fires_with_adjacent_friendly():
+    from python.engine.mechanics.passive_combat import apply_post_roll_passives
+    import random
+    data = _base_data()
+    data['figurePositions'][1] = {
+        'C-3PO-0-0': 'a3',
+        'Rebel Trooper (Regular)-0-0': 'a4',  # adjacent friendly
+    }
+    combat = {'defenseRoll': {
+        'dice': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': False}],
+        'block': 0, 'evade': 0, 'dodge': False,
+    }}
+    ctx = _ctx(atk_key='Stormtrooper (Regular)-0-0',
+               def_key='C-3PO-0-0', atk_player=2, def_player=1)
+    ctx['rng'] = random.Random(7)
+    fired = apply_post_roll_passives(
+        data, combat, [], ['cower_c3po'], ctx,
+    )
+    assert any(f['effect'] == 'cower' for f in fired)
+
+
+# ── targeting_computer_atst (post-roll) ────────────────────────────────────
+
+def test_targeting_computer_atst_rerolls_worst_die():
+    from python.engine.mechanics.passive_combat import apply_post_roll_passives
+    import random
+    data = _base_data()
+    combat = {'attackRoll': {
+        'dice': [
+            {'color': 'blue', 'acc': 0, 'dmg': 0, 'surge': 0},
+            {'color': 'red', 'acc': 1, 'dmg': 2, 'surge': 1},
+        ],
+        'acc': 1, 'dmg': 2, 'surge': 1,
+    }, 'surgeBonus': 0}
+    ctx = _ctx()
+    ctx['rng'] = random.Random(11)
+    fired = apply_post_roll_passives(
+        data, combat, ['targeting_computer_atst'], [], ctx,
+    )
+    assert any(f['effect'] == 'targeting_computer_atst' for f in fired)
 
 
 # ── lucky_r2d2 (post-roll) ─────────────────────────────────────────────────
