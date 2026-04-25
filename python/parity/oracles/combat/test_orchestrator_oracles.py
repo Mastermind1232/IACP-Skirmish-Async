@@ -977,6 +977,52 @@ def test_guerilla_does_not_fire_without_kill():
     )
 
 
+def test_distracting_fire_damages_attacker_when_pathfinder_has_los():
+    """Rebel Pathfinder Elite: if alive on defender's side with LOS to
+    attacker, attacker takes 1 damage post-attack."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {
+            'Darth Vader-0-0': 'f5',
+            # Pathfinder is the second figure on P2 with LOS to Luke.
+            'Rebel Pathfinder (Elite)-1-0': 'e6',
+        },
+    }
+    fixture['p2DcList'] = [
+        {'dcName': 'Darth Vader', 'dgIndex': 0},
+        {'dcName': 'Rebel Pathfinder (Elite)', 'dgIndex': 1},
+    ]
+    g = _game(fixture)
+    luke_hp_before = fixture['dcHealthState']['hl1dc0'][0][0]
+    orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red'],
+        defense_dice_override=['white'],
+    )
+    # Distracting Fire deals 1 damage to attacker — independent of attack hit.
+    luke_hp_after = g.data['dcHealthState']['hl1dc0'][0][0]
+    assert luke_hp_after == luke_hp_before - 1, (
+        f'Luke should take 1 damage from Distracting Fire; '
+        f'before={luke_hp_before} after={luke_hp_after}'
+    )
+
+
+def test_distracting_fire_skipped_without_pathfinder():
+    """No Pathfinder on defender's side → no Distracting Fire damage."""
+    g = _game(_base_fixture())
+    orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red'],
+        defense_dice_override=['white'],
+    )
+    assert g.data['dcHealthState']['hl1dc0'][0][0] == 10, (
+        'Luke HP should be untouched without Distracting Fire trigger'
+    )
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()

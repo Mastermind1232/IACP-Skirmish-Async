@@ -599,6 +599,40 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         except Exception:
             pass
 
+        # Distracting Fire (Rebel Pathfinder Elite): after attack, if any
+        # alive friendly Pathfinder with distracting_fire_rebel_pathfinder
+        # has LOS to the attacker, deal 1 Damage to attacker. Only one
+        # trigger per attack. JS combat-bridge.js:820-857.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            from python.engine.data.map_spaces_loader import get_map_spaces
+            from python.engine.mechanics.los import has_line_of_sight
+            dc_eff = get_dc_effects() or {}
+            atk_pos = (data.get('figurePositions') or {}).get(
+                atk_player, {}).get(attacker_key)
+            sel_map = data.get('selectedMap') or {}
+            map_id = sel_map.get('id') if isinstance(sel_map, dict) else None
+            if atk_pos and atk_msg_id and map_id:
+                map_sp = get_map_spaces(map_id)
+                friendly = (data.get('figurePositions') or {}).get(
+                    def_player, {}) or {}
+                for df_fk, df_pos in friendly.items():
+                    df_name = _dc_name_from_figure_key(df_fk)
+                    df_sids = (dc_eff.get(df_name) or {}).get(
+                        'specialAbilityIds') or []
+                    if 'distracting_fire_rebel_pathfinder' not in df_sids:
+                        continue
+                    if not has_line_of_sight(
+                            str(df_pos).lower(),
+                            str(atk_pos).lower(),
+                            map_sp, None):
+                        continue
+                    dcs = data.get('dcHealthState') or {}
+                    reduce_hp(dcs, data, atk_msg_id, atk_fig_idx, 1, atk_player)
+                    break  # one trigger per attack
+        except Exception:
+            pass
+
         # Guerilla (Rebel Pathfinder / Alliance Ranger): when the attack
         # defeats the defender, the attacker becomes Hidden. JS uses an
         # abilityText substring match (no specialAbilityIds entry).
