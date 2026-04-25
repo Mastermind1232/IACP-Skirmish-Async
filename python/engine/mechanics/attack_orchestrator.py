@@ -931,6 +931,57 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                         gb.append('You Will Not Deny Me')
                         data['gameBox'] = gb
 
+                # Of No Importance (nextDefeatedFriendlyVpReduction): when
+                # the defending side stamped this and a friendly is defeated,
+                # reduce the attacker's VP. JS combat-bridge.js:1010-1019.
+                noi = data.get('nextDefeatedFriendlyVpReduction')
+                if isinstance(noi, dict):
+                    noi_pn = noi.get('playerNum')
+                    noi_amt = int(noi.get('amount') or 0)
+                    if (noi_pn is not None and int(noi_pn) == int(def_player)
+                            and noi_amt > 0):
+                        vp_key = f'player{atk_player}VP'
+                        vp = data.get(vp_key) or {'total': 0, 'kills': 0,
+                                                   'objectives': 0}
+                        new_total = max(0, int(vp.get('total') or 0) - noi_amt)
+                        vp['total'] = new_total
+                        vp['kills'] = max(0, int(vp.get('kills') or 0) - noi_amt)
+                        data[vp_key] = vp
+                    data['nextDefeatedFriendlyVpReduction'] = None
+
+                # Price on Their Heads (priceBounties): bounty VP to setter
+                # when target group is defeated. Keyed by target label
+                # (which is the dcName for groups). JS combat-bridge.js:1022-1030.
+                pb = data.get('priceBounties') or {}
+                if isinstance(pb, dict) and def_dc in pb:
+                    bnty = pb[def_dc]
+                    if isinstance(bnty, dict):
+                        b_amt = int(bnty.get('amount') or 0)
+                        b_pn = int(bnty.get('playerNum') or atk_player)
+                    else:
+                        b_amt = int(bnty)
+                        b_pn = atk_player
+                    if b_amt > 0:
+                        award_objective_vp(data, b_pn, b_amt)
+                    new_pb = dict(pb)
+                    new_pb.pop(def_dc, None)
+                    data['priceBounties'] = new_pb
+
+                # Paid in Beskar (whenDefeatHostileWithin3GainBlockTokens):
+                # block tokens to attacker when hostile within range defeated.
+                pib = data.get('whenDefeatHostileWithin3GainBlockTokens')
+                if isinstance(pib, dict):
+                    pib_range = int(pib.get('range') or 3)
+                    pib_tokens = int(pib.get('tokens') or 1)
+                    if (distance is not None and distance <= pib_range
+                            and attacker_key):
+                        from python.engine.mechanics.tokens import (
+                            grant_power_tokens,
+                        )
+                        grant_power_tokens(data, attacker_key, 'Block',
+                                           pib_tokens)
+                    data['whenDefeatHostileWithin3GainBlockTokens'] = None
+
                 # Apex Predator (recoverOnHostileDefeat): heal HP when a
                 # hostile within range is defeated.
                 ap_map = data.get('recoverOnHostileDefeat') or {}
