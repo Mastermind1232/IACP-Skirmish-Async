@@ -231,37 +231,26 @@ def cc_coverage() -> Tuple[Dict[str, str], List[str]]:
 
 
 def _bootstrap_ability_dispatch():
-    """Import every pattern module in the order that produces a complete
-    registry: install Pattern D stubs first, then let the bespoke / handler
-    modules overwrite stubs with real handlers. Returns the live dispatch
-    module so callers don't have to re-import.
+    """Ensure the live dispatch registry is fully wired with real handlers.
 
-    Repeat-call safe — pattern modules use idempotent registration.
+    `python.engine.abilities.dispatch` runs `install_default_handlers()` at
+    import time, which already calls every install_* entry point in the
+    correct order. We import once + then add `bespoke_d` (which the default
+    sequence doesn't include) so the scanner sees the same handler registry
+    as production drift replay.
+
+    Returns (dispatch, pattern_d) so callers can introspect runnable IDs.
+    Repeat-call safe.
     """
     repo = REPO
     if str(repo) not in sys.path:
         sys.path.insert(0, str(repo))
 
-    from python.engine.abilities import (  # type: ignore
-        dispatch, pattern_a, pattern_b, pattern_c, pattern_d, pattern_e,
-    )
-    pattern_d.install_pattern_d_stubs()
-    # Real-handler modules: import for side effects, then call install_*
-    # entry points so register_trigger overwrites stubs.
-    from python.engine.abilities import (  # type: ignore
-        pattern_d_handlers, pattern_d_extras, bespoke_d, bespoke_e,
-        pattern_e_bulk, pattern_e_schema,
-    )
-    pattern_d_handlers.install_combat_declare_handlers()
-    pattern_d_handlers.install_combat_defense_friends_handlers()
-    pattern_d_handlers.install_mission_start_handlers()
-    pattern_d_handlers.install_free_move_equal_to_speed_handlers()
-    pattern_d_handlers.install_on_damage_handlers()
-    pattern_d_handlers.install_forest_fighters_handler()
-    pattern_d_handlers.install_fury_handlers()
-    pattern_d_extras.install_pattern_d_batch2()
+    from python.engine.abilities import dispatch, pattern_d  # type: ignore
+    # bespoke_d's install_bespoke_d_handlers is not in install_default_handlers;
+    # it's an opt-in extension layer. Call it explicitly for parity scoring.
+    from python.engine.abilities import bespoke_d  # type: ignore
     bespoke_d.install_bespoke_d_handlers()
-    pattern_e_bulk.install_pattern_e_bulk()
     return dispatch, pattern_d
 
 
@@ -418,34 +407,43 @@ def ability_coverage() -> Dict[str, str]:
 
 
 def mission_coverage() -> Dict[str, str]:
-    """A map is 'validated' if a drift trace exists for it AND a per-map
-    oracle test exists. 'partial' if rules touch it in mission_rules.py but
-    no oracle. 'missing' otherwise."""
+    """A map is 'validated' iff every drift trace for it replays byte-
+    identical through the Python engine (totalDiffs == 0, erroredSteps == 0,
+    unsupportedSteps == 0). 'partial' if traces exist but at least one
+    diff/error/unsupported step landed, OR rules are wired in
+    mission-cards.json but no traces exist. 'missing' otherwise.
+    """
+    repo = REPO
+    if str(repo) not in sys.path:
+        sys.path.insert(0, str(repo))
+    from python.parity.full_game_drift import run_drift  # type: ignore
+
     m_data = _load_json(DATA / 'mission-cards.json')
     declared = list((m_data.get('maps') or {}).keys())
     drift_dir = REPO / 'python/parity/oracles/drift_traces'
-    miss_dir = REPO / 'python/parity/oracles/missions'
-    rules_text = (REPO / 'python/engine/mechanics/mission_rules.py').read_text()
     out: Dict[str, str] = {}
     maps = m_data.get('maps') or {}
+
     for map_id in declared:
-        has_drift = any(p.name.startswith(f'{map_id}_game_')
-                        for p in drift_dir.glob(f'{map_id}_*.jsonl'))
-        # Mission rules are data-driven: any map with EOR rules in
-        # mission-cards.json is at least 'partial' (executor in
-        # mission_rules.py reads the data and applies). Drift trace
-        # promotes it to 'validated'.
+        traces = sorted(drift_dir.glob(f'{map_id}_game_*.jsonl'))
         map_data = maps.get(map_id) or {}
         has_rules = bool(
             map_data.get('a') or map_data.get('b')
             or map_data.get('endOfRound')
         )
-        if has_drift:
-            out[map_id] = 'validated'
-        elif has_rules:
-            out[map_id] = 'partial'
-        else:
-            out[map_id] = 'missing'
+
+        if not traces:
+            out[map_id] = 'partial' if has_rules else 'missing'
+            continue
+
+        report = run_drift(traces, fail_on_diff=False, max_diffs_per_step=1)
+        replay_ok = (
+            report.get('totalDiffs', 0) == 0
+            and report.get('erroredSteps', 0) == 0
+            and report.get('unsupportedSteps', 0) == 0
+        )
+        out[map_id] = 'validated' if replay_ok else 'partial'
+
     return out
 
 

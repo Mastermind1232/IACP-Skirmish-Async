@@ -160,6 +160,43 @@ def test_activate_dc_rejects_no_activations():
     raise AssertionError('expected ValueError')
 
 
+def test_activate_dc_does_not_auto_fire_active_category_abilities():
+    """Player-choice abilities (`category: active`, e.g. Heroic, Charge,
+    Wall Run) share the 'activation' trigger with passives like Sustained
+    by Rage but must NOT auto-fire when the figure activates — JS only
+    fires them on the explicit Special-Action button. Auto-firing produces
+    phantom freeAttackBonusPending stamps that diverge from JS recordings.
+
+    Regression test for the bug surfaced by drift replay on
+    hoth-battle-station: Luke Skywalker's heroic ability was stamping
+    freeAttackBonusPending on every activation.
+    """
+    from python.engine.creation import create_game
+    g = create_game(map_id='mos-eisley-outskirts')
+    g.data['mapId'] = 'mos-eisley-outskirts'
+    g.data['figurePositions'] = {
+        1: {'Luke Skywalker (Jedi Knight)-0-0': 'a1'},
+        2: {'Stormtrooper (Regular)-0-0': 'h8'},
+    }
+    g.data['activationsRemaining'] = {1: 1, 2: 1}
+    g.data['activePlayer'] = 1
+    g.data['p1DcList'] = [{'dcName': 'Luke Skywalker (Jedi Knight)', 'dgIndex': 0}]
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+
+    # Pre-import dispatch so handlers are installed (mimics live runtime).
+    import python.engine.abilities.dispatch  # noqa: F401
+
+    new_g = step(g, Action(
+        type=ActionType.ACTIVATE_DC, player=1,
+        params={'figure_key': 'Luke Skywalker (Jedi Knight)-0-0'},
+    ))
+    # Heroic is `category: active` + `trigger: activation` — must NOT fire.
+    assert not new_g.data.get('freeAttackBonusPending'), (
+        f'Active-category ability auto-fired on activation: '
+        f'{new_g.data.get("freeAttackBonusPending")!r}'
+    )
+
+
 def test_activate_dc_rejects_wrong_owner():
     g = _two_figure_game()
     try:

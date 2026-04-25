@@ -446,8 +446,16 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
     game['figureDamageThisActivation'] = dmg
 
     # Fire Pattern D activation / activation-start triggers for each
-    # figure in the activated group. Covers Sustained by Rage, Heroic,
-    # Expertise, Charge, Mortar Launcher, Strategize, Wisdom, etc.
+    # figure in the activated group. Covers passive abilities like
+    # Sustained by Rage, Expertise, Strategize, Wisdom — abilities that
+    # automatically take effect when the figure activates.
+    #
+    # category='active' abilities (Heroic, Charge, Wall Run, Bombardment,
+    # …) share the 'activation' trigger but are player-choice — JS only
+    # fires them when the player presses the DC's Special-Action button.
+    # They route through DC_SPECIAL (`_handle_dc_special`), not here.
+    # Auto-firing them on activation produces phantom freeAttackBonusPending
+    # / movementBank stamps that JS recordings don't have.
     try:
         from python.engine.abilities.pattern_d import fire_ability
         from python.engine.data.ability_library_loader import get_ability, get_trigger_for
@@ -457,16 +465,22 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
             eff_fk = _gef(dc_name_fk) or {}
             for aid in (eff_fk.get('specialAbilityIds') or []):
                 trig = get_trigger_for(aid)
-                if trig in ('activation', 'activation-start'):
-                    try:
-                        fire_ability(game.data, aid, {
-                            'figure_key': fk,
-                            'msg_id': msg_id_cur if 'msg_id_cur' in locals() else None,
-                            'player_num': player,
-                            'trigger': trig,
-                        })
-                    except NotImplementedError:
-                        pass
+                if trig not in ('activation', 'activation-start'):
+                    continue
+                entry = get_ability(aid) or {}
+                cat = entry.get('category') or ''
+                if cat == 'active':
+                    # Player-choice — only fires via explicit DC_SPECIAL.
+                    continue
+                try:
+                    fire_ability(game.data, aid, {
+                        'figure_key': fk,
+                        'msg_id': msg_id_cur if 'msg_id_cur' in locals() else None,
+                        'player_num': player,
+                        'trigger': trig,
+                    })
+                except NotImplementedError:
+                    pass
 
         # Fire friendly-activation / other-activation on OTHER figures.
         # friendly-activation: a friendly ally's ability fires when a
