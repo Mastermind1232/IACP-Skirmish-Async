@@ -983,7 +983,7 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                     data['whenDefeatHostileWithin3GainBlockTokens'] = None
 
                 # Apex Predator (recoverOnHostileDefeat): heal HP when a
-                # hostile within range is defeated.
+                # hostile within range is defeated. Entry consumed.
                 ap_map = data.get('recoverOnHostileDefeat') or {}
                 if isinstance(ap_map, dict):
                     ap = ap_map.get(atk_player,
@@ -998,6 +998,65 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                                 dcs = data.get('dcHealthState') or {}
                                 heal_hp(dcs, data, ap_msg,
                                         atk_fig_idx, ap_amt, atk_player)
+                        new_ap = dict(ap_map)
+                        new_ap.pop(atk_player, None)
+                        new_ap.pop(str(atk_player), None)
+                        data['recoverOnHostileDefeat'] = new_ap
+
+                # Last Stand (Stormtrooper Elite passive): when a figure of
+                # the group is defeated, another figure in the SAME group
+                # becomes Focused. JS combat-bridge.js:1088-1102.
+                from python.engine.data.dc_effects_loader import get_dc_effects
+                dc_eff_x = get_dc_effects() or {}
+                def_passives_x = (dc_eff_x.get(def_dc) or {}).get(
+                    'passives') or []
+                if 'Last Stand' in def_passives_x:
+                    parts = (target_key or '').rsplit('-', 2)
+                    if len(parts) == 3:
+                        prefix = f'{parts[0]}-{parts[1]}-'
+                        def_fp = (data.get('figurePositions') or {}).get(
+                            def_player, {}) or {}
+                        survivors = [k for k in def_fp.keys()
+                                     if k.startswith(prefix)
+                                     and k != target_key]
+                        if survivors:
+                            apply_condition(data, survivors[0], 'Focus')
+
+                # Imperial Citadel: when a friendly Imperial figure is
+                # defeated, transfer its Power Tokens to the Citadel.
+                # JS combat-bridge.js:1106-1124.
+                def_aff = (dc_eff_x.get(def_dc) or {}).get('affiliation')
+                if def_aff == 'Imperial':
+                    def_dc_list = data.get(f'p{def_player}DcList') or []
+                    has_citadel = any(
+                        isinstance(dc, dict) and
+                        dc.get('dcName') == '[Imperial Citadel]'
+                        for dc in def_dc_list
+                    )
+                    fpt = data.get('figurePowerTokens') or {}
+                    tokens = fpt.get(target_key) or []
+                    if has_citadel and tokens:
+                        ic = data.get('imperialCitadelTokens') or {
+                            'damage': 0, 'block': 0, 'hit': 0,
+                            'surge': 0, 'evade': 0,
+                        }
+                        for t in tokens:
+                            k = str(t).lower()
+                            ic[k] = int(ic.get(k) or 0) + 1
+                        data['imperialCitadelTokens'] = ic
+                        new_fpt = dict(fpt)
+                        new_fpt.pop(target_key, None)
+                        data['figurePowerTokens'] = new_fpt
+
+                # Into the Force (Obi-Wan Kenobi): when defeated, a friendly
+                # figure becomes Focused. JS combat-bridge.js:1127-1136.
+                if def_dc == 'Obi-Wan Kenobi':
+                    def_fp = (data.get('figurePositions') or {}).get(
+                        def_player, {}) or {}
+                    others = [k for k in def_fp.keys()
+                              if not k.startswith('Obi-Wan Kenobi-')]
+                    if others:
+                        apply_condition(data, others[0], 'Focus')
             except Exception:
                 pass
 

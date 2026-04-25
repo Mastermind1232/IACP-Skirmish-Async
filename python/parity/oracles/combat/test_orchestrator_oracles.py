@@ -1275,6 +1275,114 @@ def test_paid_in_beskar_grants_block_tokens_within_range():
     assert g.data.get('whenDefeatHostileWithin3GainBlockTokens') is None
 
 
+def test_last_stand_focuses_surviving_groupmate():
+    """Stormtrooper (Elite) Last Stand: another figure of the same group
+    becomes Focused on defeat."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {
+            'Stormtrooper (Elite)-0-0': 'f5',  # this one will die
+            'Stormtrooper (Elite)-0-1': 'f6',  # surviving groupmate
+        },
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[1, 12], [12, 12]],  # first figure at 1 HP.
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Stormtrooper (Elite)',
+        'playerNum': 2,
+    }
+    fixture['p2DcList'] = [{'dcName': 'Stormtrooper (Elite)', 'dgIndex': 0}]
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Stormtrooper (Elite)-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    conds = (g.data.get('figureConditions') or {}).get(
+        'Stormtrooper (Elite)-0-1') or []
+    assert 'Focus' in conds, (
+        f'Surviving groupmate should be Focused; got {conds}'
+    )
+
+
+def test_imperial_citadel_transfers_tokens_on_imperial_defeat():
+    """Imperial defender's tokens move to imperialCitadelTokens on defeat."""
+    fixture = _base_fixture()
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]], 'hl2dc0': [[1, 12]],
+    }
+    fixture['p2DcList'] = [
+        {'dcName': 'Darth Vader', 'dgIndex': 0},
+        {'dcName': '[Imperial Citadel]', 'dgIndex': 1},
+    ]
+    fixture['figurePowerTokens'] = {
+        'Darth Vader-0-0': ['Block', 'Damage', 'Hit'],
+    }
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    ic = g.data.get('imperialCitadelTokens') or {}
+    assert ic.get('block') == 1
+    assert ic.get('damage') == 1
+    assert ic.get('hit') == 1
+    fpt = (g.data.get('figurePowerTokens') or {}).get('Darth Vader-0-0')
+    assert fpt is None, 'Defeated figure tokens should be cleared'
+
+
+def test_into_the_force_focuses_friendly_when_obiwan_defeated():
+    """Obi-Wan defeated → another friendly becomes Focused."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {
+            'Obi-Wan Kenobi-0-0': 'f5',
+            'Stormtrooper-1-0': 'f6',  # surviving friendly
+        },
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[1, 12]],
+        'hl2dc1': [[3, 3]],
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Obi-Wan Kenobi', 'playerNum': 2,
+    }
+    fixture['dcMessageMeta']['hl2dc1'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Stormtrooper', 'playerNum': 2,
+    }
+    fixture['p2DcList'] = [
+        {'dcName': 'Obi-Wan Kenobi', 'dgIndex': 0},
+        {'dcName': 'Stormtrooper', 'dgIndex': 1},
+    ]
+    fixture['p2DcMessageIds'] = ['hl2dc0', 'hl2dc1']
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Obi-Wan Kenobi-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    conds = (g.data.get('figureConditions') or {}).get(
+        'Stormtrooper-1-0') or []
+    assert 'Focus' in conds, (
+        f'Stormtrooper should be Focused after Obi-Wan defeat; got {conds}'
+    )
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()
