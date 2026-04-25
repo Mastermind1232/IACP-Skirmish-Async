@@ -267,6 +267,23 @@ def legal_actions(game: GameState) -> List[Action]:
                             cheby = max(abs(ax - bx), abs(ay - by))
                             if cheby >= 4:
                                 continue
+                # insignificant_dio: defender can't be targeted if a
+                # friendly (defender's-side) figure shares the same space.
+                # Applies to both melee and ranged. JS site:
+                # src/engine/available-actions.js:2353.
+                tgt_dc_name_id = tgt_key.rsplit('-', 2)[0] if '-' in tgt_key else tgt_key
+                tgt_eff_id = get_dc_effect(tgt_dc_name_id) or {}
+                if 'insignificant_dio' in (tgt_eff_id.get('specialAbilityIds') or []):
+                    opp_positions = (game.get('figurePositions') or {}).get(opp) or \
+                                     (game.get('figurePositions') or {}).get(str(opp)) or {}
+                    if isinstance(opp_positions, Mapping):
+                        same_space = any(
+                            ffk != tgt_key and fcoord
+                            and str(fcoord).lower() == str(tgt_coord).lower()
+                            for ffk, fcoord in opp_positions.items()
+                        )
+                        if same_space:
+                            continue
                     # Match stepper's LOS check: filter opened doors and
                     # consider other-figure blocking, so legal_actions
                     # doesn't offer attacks the stepper would reject.

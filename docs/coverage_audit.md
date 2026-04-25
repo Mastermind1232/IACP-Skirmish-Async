@@ -1,6 +1,6 @@
 # Coverage Audit — Single Source of Truth
 
-Regenerated: `2026-04-25T21:39:11.741380+00:00`. Run `python3 python/parity/coverage_audit.py` to refresh.
+Regenerated: `2026-04-25T23:27:04.845202+00:00`. Run `python3 python/parity/coverage_audit.py` to refresh.
 
 This report cross-references the action enum, drift recordings, oracle tests, the live dispatch probe, the Pattern C catalog, and the file-by-file shape audit. It answers two questions:
 
@@ -9,11 +9,11 @@ This report cross-references the action enum, drift recordings, oracle tests, th
 
 ## Headline
 
-- **Weighted completion estimate: 57.9%** (layer-by-layer below)
+- **Weighted completion estimate: 61.6%** (layer-by-layer below)
 - **Action types**: 81 total, 18 ever observed in any drift recording
 - **Drift evidence**: 8,600 recorded steps across 43 files
-- **Live dispatch probe** (handler exists & runs): DC abilities 284/310, CC effects 293/293, missions 0/8, action handlers 81/81
-- **Pattern C passives** wired vs deferred: 31/58 (deferred: 17)
+- **Live dispatch probe** (handler exists & runs): DC abilities 299/310, CC effects 293/293, missions 0/8, action handlers 81/81
+- **Pattern C passives** wired vs deferred: 45/58 (deferred: 3)
 
 ## Verdict per action type
 
@@ -134,12 +134,9 @@ Hand-maintained in `python/engine/abilities/pattern_c.py:_CATALOG`. Promoting an
 
 | Status bucket | Count |
 |---|---|
-| `wired-engine` | 31 |
-| `deferred-handler-combat` | 10 |
+| `wired-engine` | 45 |
 | `data-only-unreferenced` | 10 |
-| `deferred-bridge` | 3 |
 | `deferred-handler-other` | 3 |
-| `deferred-abilities-js` | 1 |
 
 ## Oracle tests by area
 
@@ -196,14 +193,14 @@ Layer-by-layer breakdown. Weights reflect importance for AI training (ability re
 
 | Layer | Weight | Ratio | Contribution |
 |---|---|---|---|
-| Ability resolution | 25 | 0.916 | 22.9 |
+| Ability resolution | 25 | 0.965 | 24.11 |
 | Combat math/primitives | 15 | 0.950 | 14.25 |
 | Action types verified (GOLD+SILVER) | 20 | 0.222 | 4.44 |
-| Pattern C wired ratio | 10 | 0.534 | 5.34 |
+| Pattern C wired ratio | 10 | 0.776 | 7.76 |
 | Command card effects | 10 | 1.000 | 10.0 |
 | Mission scoring | 10 | 0.000 | 0.0 |
 | Discord-flow handlers | 10 | 0.100 | 1.0 |
-| **Total** | **100** | — | **57.9** |
+| **Total** | **100** | — | **61.6** |
 
 ## What this audit *cannot* tell you
 

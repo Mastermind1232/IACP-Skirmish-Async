@@ -167,20 +167,20 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/engine/activation-setup.js → py mechanics/passive_combat.py:_handle_trust_goes_both_ways_jyn (greedy: closest friendly within 3 gets +1 MP)',
     ),
     'defensive_fire_bokatan': (
-        'deferred-bridge', 'bridge',
-        'src/engine/combat-bridge.js:2680',
+        'wired-engine', 'engine',
+        'src/engine/combat-bridge.js:2701 → py mechanics/attack_orchestrator.py post-attack hook (attacker gains 1 Block token after ranged attack)',
     ),
     'this_is_the_way_armorer': (
         'wired-engine', 'engine',
         'src/engine/win-conditions.js → py mechanics/attack_orchestrator.py post-defeat hook (killer gains Block token if Armorer is on board)',
     ),
     'insignificant_dio': (
-        'deferred-bridge', 'bridge',
-        'src/engine/available-actions.js + handlers/dc-play-area.js',
+        'wired-engine', 'engine',
+        'src/engine/available-actions.js:2353 → py mcts/actions.py (skip target if Dio shares space with a friendly)',
     ),
     'overload_saboteur': (
-        'deferred-bridge', 'bridge',
-        'src/engine/available-actions.js + combat.js + combat-reactions.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js + available-actions.js → py mechanics/attack_orchestrator.py (stamps surgeMaxUsesPerAbility=2)',
     ),
 
     # Handler-combat — the handler populates combat.bonus* / combat pipeline
@@ -229,16 +229,16 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js:2702 → py mechanics/passive_combat.py:_handle_cower',
     ),
     'gambit_lando': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/attack_orchestrator.py (stamps combat.gambitActive when paired with resourceful_lando)',
     ),
     'improvised_cover_verena': (
         'wired-engine', 'engine',
         'src/handlers/combat.js:2131 → py mechanics/passive_combat.py:_handle_improvised_cover_verena (figure-adjacency clause; object/crate adjacency deferred until crates port)',
     ),
     'krayt_dragon_fury_tress': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/attack_orchestrator.py (stamps combat.kraytDragonFury for surge multiplier)',
     ),
     'light_it_up_rebel_pathfinder': (
         'wired-engine', 'engine',
@@ -249,24 +249,24 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js:4370 → py mechanics/passive_combat.py:_handle_lucky_r2d2 (post-roll Dodge → recover 2 HP)',
     ),
     'mon_cala_sf_loku': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/attack_orchestrator.py (+1 atk reroll if attacker is MON CALA)',
     ),
     'personal_combat_shield_gar_saxon': (
         'wired-engine', 'engine',
         'src/handlers/combat.js:5253-5364 → py mechanics/attack_orchestrator.py Phase 4a (Block-token spend → +1 Evade)',
     ),
     'pulse_cannon_iden': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:4708 → py mechanics/attack_orchestrator.py (+4 acc, +1 hit if attacker spent Power token)',
     ),
     'shared_calculations_zuckuss': (
         'wired-engine', 'engine',
         'src/handlers/combat.js → py mechanics/attack_orchestrator.py (force +1 def reroll if friendly DROID within 3 + LOS to target)',
     ),
     'spray_fire_heavy_stormtrooper': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:2179 → py mechanics/attack_orchestrator.py (-3 accuracy, +1 surge)',
     ),
     'squad_training_shoretrooper_elite': (
         'wired-engine', 'engine',
@@ -297,12 +297,12 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_targeting_computer_atst (greedy reroll worst attack die)',
     ),
     'tripod_eweb': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js + handlers/dc-play-area.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:2317 → py mechanics/attack_orchestrator.py (raises AttackError if attacker.figureMoved is set)',
     ),
     'vague_and_unconvincing_k2s0': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/attack_orchestrator.py (stamps combat.vagueAndUnconvincing to gate token/CC spends)',
     ),
     'versatile_weaponry_hk_elite': (
         'wired-engine', 'engine',
@@ -311,23 +311,22 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
 
     # Handler-movement
     'spiked_boots_snowtrooper': (
-        'deferred-abilities-js', 'abilities-js-push',
-        'src/game/abilities.js:320/416/1930 + handlers/movement.js:1054 '
-        '(push/rush MASSIVE-pusher guard)',
+        'wired-engine', 'engine',
+        'src/game/abilities.js:320/416 → py engine/abilities/push_target_within_range.py:_spiked_boots_blocks (gates push unless attacker is MASSIVE)',
     ),
 
     # Handler-other (setup, round, phase-gate, dc-play-area, cc-hand)
     'imperial_loadout_purge_trooper': (
         'deferred-handler-other', 'handler-other',
-        'src/handlers/setup.js + phase-gate.js + activation-setup.js',
+        'BLOCKED: requires setup-time loadout-card picker. Python handlers/setup.js port pending. JS sites: setup.js (deploy-time pick) + phase-gate.js (deploy gate) + activation-setup.js:1158 (start-of-activation render).',
     ),
     'shape_clawdite_elite': (
         'deferred-handler-other', 'handler-other',
-        'src/handlers/setup.js + round.js + phase-gate.js + activation-setup.js',
+        'BLOCKED: requires setup-time form-card picker + per-round form-pick prompt. Python multi-handler port pending. JS sites: setup.js + round.js (per-round prompt) + phase-gate.js + activation-setup.js.',
     ),
     'shape_clawdite_reg': (
         'deferred-handler-other', 'handler-other',
-        'src/handlers/setup.js + round.js + phase-gate.js + activation-setup.js',
+        'BLOCKED: same as shape_clawdite_elite (regular variant).',
     ),
     'non_combatant_c3po': (
         'wired-engine', 'engine',

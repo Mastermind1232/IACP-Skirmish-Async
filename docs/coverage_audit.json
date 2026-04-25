@@ -1388,7 +1388,7 @@
       "verdict": "UNVERIFIED"
     }
   ],
-  "generated": "2026-04-25T21:39:11.741380+00:00",
+  "generated": "2026-04-25T23:27:04.845202+00:00",
   "headline": {
     "action_types": 81,
     "drift_distinct_actions": 18,
@@ -1399,8 +1399,8 @@
     "live_coverage": {
       "abilities": {
         "missing": 0,
-        "real": 284,
-        "stub": 26,
+        "real": 299,
+        "stub": 11,
         "total": 310
       },
       "actions": {
@@ -1423,11 +1423,8 @@
     },
     "pattern_c_buckets": {
       "data-only-unreferenced": 10,
-      "deferred-abilities-js": 1,
-      "deferred-bridge": 3,
-      "deferred-handler-combat": 10,
       "deferred-handler-other": 3,
-      "wired-engine": 31
+      "wired-engine": 45
     },
     "pattern_c_total": 58,
     "port_audit_counts": {
@@ -1445,9 +1442,9 @@
     "weighted_estimate": {
       "layers": [
         {
-          "contribution": 22.9,
+          "contribution": 24.11,
           "layer": "Ability resolution",
-          "ratio": 0.916,
+          "ratio": 0.965,
           "weight": 25
         },
         {
@@ -1463,9 +1460,9 @@
           "weight": 20
         },
         {
-          "contribution": 5.34,
+          "contribution": 7.76,
           "layer": "Pattern C wired ratio",
-          "ratio": 0.534,
+          "ratio": 0.776,
           "weight": 10
         },
         {
@@ -1487,7 +1484,7 @@
           "weight": 10
         }
       ],
-      "score": 57.9
+      "score": 61.6
     }
   },
   "oracles_by_area": {
@@ -1598,9 +1595,9 @@
       "status": "wired-engine"
     },
     "coordinated_hunt_purge_commander": {
-      "js_site": "src/handlers/combat.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/attack_orchestrator.py (+1 atk reroll: self OR HUNTER w/ LOS to PC)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "cower_imperial_officer_reg": {
       "js_site": "src/handlers/combat.js:2702 \u2192 py mechanics/passive_combat.py:_handle_cower",
@@ -1618,9 +1615,9 @@
       "status": "data-only-unreferenced"
     },
     "defensive_fire_bokatan": {
-      "js_site": "src/engine/combat-bridge.js:2680",
-      "kind": "bridge",
-      "status": "deferred-bridge"
+      "js_site": "src/engine/combat-bridge.js:2701 \u2192 py mechanics/attack_orchestrator.py post-attack hook (attacker gains 1 Block token after ranged attack)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "devout_chirrut": {
       "js_site": "src/game/cc-timing.js \u2192 py mechanics/cc_timing.py (hasDevout flag drives CC restriction allowance)",
@@ -1653,9 +1650,9 @@
       "status": "wired-engine"
     },
     "gambit_lando": {
-      "js_site": "src/handlers/combat.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/attack_orchestrator.py (stamps combat.gambitActive when paired with resourceful_lando)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "hunt_dissent_kallus": {
       "js_site": "src/engine/win-conditions.js \u2192 py mechanics/attack_orchestrator.py post-defeat hook (Kallus gains Block token when self or TROOPER within 3 kills)",
@@ -1673,7 +1670,7 @@
       "status": "wired-engine"
     },
     "imperial_loadout_purge_trooper": {
-      "js_site": "src/handlers/setup.js + phase-gate.js + activation-setup.js",
+      "js_site": "BLOCKED: requires setup-time loadout-card picker. Python handlers/setup.js port pending. JS sites: setup.js (deploy-time pick) + phase-gate.js (deploy gate) + activation-setup.js:1158 (start-of-activation render).",
       "kind": "handler-other",
       "status": "deferred-handler-other"
     },
@@ -1683,14 +1680,14 @@
       "status": "wired-engine"
     },
     "insignificant_dio": {
-      "js_site": "src/engine/available-actions.js + handlers/dc-play-area.js",
-      "kind": "bridge",
-      "status": "deferred-bridge"
+      "js_site": "src/engine/available-actions.js:2353 \u2192 py mcts/actions.py (skip target if Dio shares space with a friendly)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "krayt_dragon_fury_tress": {
-      "js_site": "src/handlers/combat.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/attack_orchestrator.py (stamps combat.kraytDragonFury for surge multiplier)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "last_wielder_darksaber_bokatan": {
       "js_site": "library-declared; no JS string-literal consumption found",
@@ -1698,9 +1695,9 @@
       "status": "data-only-unreferenced"
     },
     "light_it_up_rebel_pathfinder": {
-      "js_site": "src/handlers/combat.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/attack_orchestrator.py (+1 atk reroll if target had no LOS at activation start)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "modular_heavy_stormtrooper": {
       "js_site": "library-declared; no JS string-literal consumption found",
@@ -1708,14 +1705,14 @@
       "status": "data-only-unreferenced"
     },
     "mon_cala_sf_loku": {
-      "js_site": "src/handlers/combat.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/attack_orchestrator.py (+1 atk reroll if attacker is MON CALA)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "overload_saboteur": {
-      "js_site": "src/engine/available-actions.js + combat.js + combat-reactions.js",
-      "kind": "bridge",
-      "status": "deferred-bridge"
+      "js_site": "src/handlers/combat.js + available-actions.js \u2192 py mechanics/attack_orchestrator.py (stamps surgeMaxUsesPerAbility=2)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "personal_combat_shield_bokatan": {
       "js_site": "library-declared; gar_saxon variant is the wired sibling",
@@ -1728,9 +1725,9 @@
       "status": "wired-engine"
     },
     "pulse_cannon_iden": {
-      "js_site": "src/handlers/combat.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js:4708 \u2192 py mechanics/attack_orchestrator.py (+4 acc, +1 hit if attacker spent Power token)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "scavenged_stock_jawa_elite": {
       "js_site": "library-declared; no JS string-literal consumption found",
@@ -1753,29 +1750,29 @@
       "status": "data-only-unreferenced"
     },
     "shape_clawdite_elite": {
-      "js_site": "src/handlers/setup.js + round.js + phase-gate.js + activation-setup.js",
+      "js_site": "BLOCKED: requires setup-time form-card picker + per-round form-pick prompt. Python multi-handler port pending. JS sites: setup.js + round.js (per-round prompt) + phase-gate.js + activation-setup.js.",
       "kind": "handler-other",
       "status": "deferred-handler-other"
     },
     "shape_clawdite_reg": {
-      "js_site": "src/handlers/setup.js + round.js + phase-gate.js + activation-setup.js",
+      "js_site": "BLOCKED: same as shape_clawdite_elite (regular variant).",
       "kind": "handler-other",
       "status": "deferred-handler-other"
     },
     "shared_calculations_zuckuss": {
-      "js_site": "src/handlers/combat.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/attack_orchestrator.py (force +1 def reroll if friendly DROID within 3 + LOS to target)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "spiked_boots_snowtrooper": {
-      "js_site": "src/game/abilities.js:320/416/1930 + handlers/movement.js:1054 ",
-      "kind": "abilities-js-push",
-      "status": "deferred-abilities-js"
+      "js_site": "src/game/abilities.js:320/416 \u2192 py engine/abilities/push_target_within_range.py:_spiked_boots_blocks (gates push unless attacker is MASSIVE)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "spray_fire_heavy_stormtrooper": {
-      "js_site": "src/handlers/combat.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js:2179 \u2192 py mechanics/attack_orchestrator.py (-3 accuracy, +1 surge)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "squad_training_shoretrooper_elite": {
       "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_squad_training (greedy reroll worst attack die)",
@@ -1818,9 +1815,9 @@
       "status": "wired-engine"
     },
     "tripod_eweb": {
-      "js_site": "src/handlers/combat.js + handlers/dc-play-area.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js:2317 \u2192 py mechanics/attack_orchestrator.py (raises AttackError if attacker.figureMoved is set)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "trust_goes_both_ways_jyn": {
       "js_site": "src/engine/activation-setup.js \u2192 py mechanics/passive_combat.py:_handle_trust_goes_both_ways_jyn (greedy: closest friendly within 3 gets +1 MP)",
@@ -1828,9 +1825,9 @@
       "status": "wired-engine"
     },
     "versatile_weaponry_hk_elite": {
-      "js_site": "src/handlers/combat.js",
-      "kind": "handler-combat",
-      "status": "deferred-handler-combat"
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/attack_orchestrator.py (always force +1 defender reroll)",
+      "kind": "engine",
+      "status": "wired-engine"
     }
   },
   "port_audit_top_missing": [

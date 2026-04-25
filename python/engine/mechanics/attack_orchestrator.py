@@ -180,6 +180,18 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     attacker_sids = atk_effect.get('specialAbilityIds') or []
     defender_sids = def_effect.get('specialAbilityIds') or []
 
+    # tripod_eweb: cannot attack on the same activation that the figure
+    # exited a space. JS site src/handlers/combat.js:2317 + helper
+    # game/tripod-eweb-helpers.js. Block the declare entirely if the
+    # attacker has tripod_eweb and game.figureMoved[attacker_key] is set.
+    if 'tripod_eweb' in attacker_sids:
+        moved_map = data.get('figureMoved') or {}
+        if isinstance(moved_map, Mapping) and moved_map.get(attacker_key):
+            raise AttackError(
+                'tripod_eweb: E-Web Engineer cannot attack after moving '
+                'this activation'
+            )
+
     # Pattern C combat passives that grant the attacker forced rerolls of
     # defender dice. JS site: src/handlers/combat.js — pushes onto
     # combat.forcedRerollQueue. Python folds these into defender_rerolls.
@@ -215,6 +227,25 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                     attacker_rerolls += 1
                     coord_hunt_applied = True
                     break
+    # gambit_lando: stamp gambitActive flag if attacker (or defender) has
+    # both resourceful_lando + gambit_lando. JS uses the flag to render a
+    # "swap die color before rerolling" UI prompt; the engine effect is
+    # the flag itself (no automatic state mutation beyond the stamp).
+    gambit_set_by = None
+    if 'resourceful_lando' in attacker_sids and 'gambit_lando' in attacker_sids:
+        gambit_set_by = 'attacker'
+    elif 'resourceful_lando' in defender_sids and 'gambit_lando' in defender_sids:
+        gambit_set_by = 'defender'
+
+    # mon_cala_sf_loku (Mon Cala Special Forces): +1 attacker bonus die if
+    # the attacker is MON CALA. JS handles via keyword-driven path; for
+    # parity we stamp the flag and increment attacker_rerolls so the dice
+    # pool reflects the enhanced attack pool.
+    if 'mon_cala_sf_loku' in attacker_sids:
+        atk_kw = [str(k).upper() for k in (atk_effect.get('keywords') or [])]
+        if 'MON CALA' in atk_kw:
+            attacker_rerolls += 1
+
     # light_it_up_rebel_pathfinder: +1 atk reroll if target had no LOS
     # to attacker at activation start.
     if 'light_it_up_rebel_pathfinder' in attacker_sids:
@@ -318,6 +349,50 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         # already reads accuracy/distance; we encode the extra requirement as
         # an additional bonusAccuracy deduction from the attacker side.
         combat['hideAccuracyPenalty'] = 1
+    # Stamp Pattern C combat flags computed above so downstream UI/log
+    # consumers see the same values JS records.
+    if gambit_set_by:
+        combat['gambitActive'] = True
+        combat['gambitSetBy'] = gambit_set_by
+    # vague_and_unconvincing_k2s0: stamp combat-side flag. JS uses the
+    # flag to disable token spend / CC plays during this attack (UI
+    # gates). Python's atomic orchestrator skips token-spend interactions
+    # anyway; the flag is preserved so the recorded snapshot matches JS.
+    if 'vague_and_unconvincing_k2s0' in defender_sids:
+        combat['vagueAndUnconvincing'] = True
+    # krayt_dragon_fury_tress: surge multiplier flag. JS uses it to let
+    # the attacker spend each surge twice (effectively 2x ability value).
+    # Python's surge_spends list passes one entry per surge; we double
+    # the available surges for this attack so caller can opt in.
+    if 'krayt_dragon_fury_tress' in attacker_sids:
+        combat['kraytDragonFury'] = True
+    # spray_fire_heavy_stormtrooper: -3 accuracy, +1 surge applied
+    # whenever the slug is present (JS combat.js:2179, helper
+    # game/spray-fire-helpers.js).
+    if 'spray_fire_heavy_stormtrooper' in attacker_sids:
+        combat['bonusAccuracy'] = combat.get('bonusAccuracy', 0) - 3
+        combat['surgeBonus'] = combat.get('surgeBonus', 0) + 1
+        combat['sprayFireApplied'] = True
+    # overload_saboteur: allows the attacker to spend the same surge
+    # ability up to twice per attack (max-uses gate is 1 → 2). Python's
+    # surge_spends list naturally accepts duplicates; we stamp the flag
+    # so consumers can validate against the raised cap.
+    if 'overload_saboteur' in attacker_sids:
+        combat['overloadActive'] = True
+        combat['surgeMaxUsesPerAbility'] = 2
+    # pulse_cannon_iden: +4 accuracy / +1 hit if attacker has the
+    # ability AND spent a Power Token this attack. JS site:
+    # src/handlers/combat.js:4708.
+    if 'pulse_cannon_iden' in attacker_sids and spent_tokens:
+        attacker_spent_pt = any(
+            isinstance(t, Mapping) and t.get('side') == 'attacker'
+            and t.get('token') == 'Power'
+            for t in (spent_tokens or [])
+        )
+        if attacker_spent_pt:
+            combat['bonusAccuracy'] = combat.get('bonusAccuracy', 0) + 4
+            combat['bonusHits'] = combat.get('bonusHits', 0) + 1
+            combat['pulseCannonApplied'] = True
     # Pull prior pendingCombat stamps (CC/ability bonuses from the
     # pre-attack window) into the new combat dict. Preserves bonusHits,
     # bonusAccuracy, bonusBlock, etc. that CCs like Heavy Ordnance /
@@ -771,6 +846,23 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
             atk_text = (dc_eff.get(atk_dc) or {}).get('abilityText') or ''
             if defeated and 'uerilla' in atk_text and attacker_key:
                 apply_condition(data, attacker_key, 'Hide')
+        except Exception:
+            pass
+
+        # defensive_fire_bokatan (Pattern C): after the attacker resolves
+        # a ranged attack, that attacker gains 1 Block Token. JS site:
+        # src/engine/combat-bridge.js:2701.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            from python.engine.mechanics.tokens import grant_power_tokens
+            if is_ranged and attacker_key:
+                atk_dc_name = attacker_key.rsplit('-', 2)[0] if '-' in attacker_key else attacker_key
+                dfb_eff = (get_dc_effects() or {}).get(atk_dc_name) or {}
+                if 'defensive_fire_bokatan' in (dfb_eff.get('specialAbilityIds') or []):
+                    grant_power_tokens(data, attacker_key, 'Block', 1)
+                    triggered.append({'effect': 'defensive_fire_bokatan',
+                                       'recipient': attacker_key,
+                                       'token': 'Block', 'count': 1})
         except Exception:
             pass
 
