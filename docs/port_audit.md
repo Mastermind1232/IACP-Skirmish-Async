@@ -9,15 +9,17 @@ being marked COMPLETE. MISSING and STUB-ONLY are guaranteed gaps.
 | Area | Real | Stub | Missing | Total | Net |
 |---|---|---|---|---|---|
 | CC effects | 293 | 0 | 0 | 293 | **100%** |
-| DC abilities | 91 | — | 219 | 310 | **29%** |
-| Missions (validated) | 2 | 6 partial | 0 | 8 | **25%** |
+| DC abilities | 139 | 171 | 0 | 310 | **45%** |
+| Missions (validated) | 8 | 0 partial | 0 | 8 | **100%** |
 | Action handlers | 81 | — | 0 | 81 | **100%** |
 
 Machine-readable: `docs/port_coverage.json`. Top-50 priority list: `docs/port_priority_top50.md`.
 
-CC scoring: every card in `data/cc-effects.json` now has a registered handler (293/293). A card counts as "real" if its handler is concrete (handwritten `_cc_*` body), a non-noop registered lambda, OR a schema-driven handler whose ability-library entry contains at least one field that `python/engine/cards/cc_schema.py` knows how to apply (mpBonus, applyFocus, attackBonusHits, draw, recoverDamage, etc.). The 26 "stub" cards are schema-driven handlers whose library entry uses fields the schema applier doesn't yet decode (e.g. `controlBlockRange`, `chooseAdjacentHostileThen` variants, `freeAttackBonus`-only cards) — they fall through to the activeCardEffects stamp.
+CC scoring: every card in `data/cc-effects.json` now has a registered handler (293/293). A card counts as "real" if its handler is concrete (handwritten `_cc_*` body), a non-noop registered lambda, OR a schema-driven handler whose ability-library entry contains at least one field that `python/engine/cards/cc_schema.py` knows how to apply (mpBonus, applyFocus, attackBonusHits, draw, recoverDamage, etc.).
 
-A mission is "validated" only if a JS-recorded drift trace replays byte-identical through Python (currently mos-eisley-outskirts and corellian-underground; the other 6 maps have rules wired through mission-cards.json but no validated drift coverage).
+DC ability scoring (live-probe): each ability ID declared in any DC's `specialAbilityIds` is dispatched via `python.engine.abilities.dispatch.resolve()` against a synthetic ctx and classified by what comes back. **Real** = handler produces effects, stat_delta, log_message, damage, or pending_key. **Stub** = handler is registered (Pattern D stub from `install_pattern_d_stubs`, or active-action handler returning applied=False/empty) but doesn't mutate state yet. **Missing** = no library entry / no registered handler at all. The 0/0/171 split matters: every ability ID is now reachable in the registry — the work left is filling in real handlers behind the stub sentinels (mostly Pattern D triggered passives), not registering new ones.
+
+A mission is "validated" only if a JS-recorded drift trace replays byte-identical through Python.
 
 ## Summary
 

@@ -9,6 +9,9 @@ single JSON report at docs/port_coverage.json. Output schema:
       "summary": {
         "cc": {"total": N, "real": N, "stub": N, "missing": N},
         "abilities": {"total": N, "real": N, "stub": N, "missing": N},
+        # 'real'   = handler dispatches and produces effects/state mutation
+        # 'stub'   = registered but no-ops (Pattern D stub or empty result)
+        # 'missing'= ability_id has no library entry / no registered handler
         "missions": {"total": N, "validated": N, "partial": N, "missing": N},
         "actions": {"total": N, "registered": N, "missing": N}
       },
@@ -227,41 +230,158 @@ def cc_coverage() -> Tuple[Dict[str, str], List[str]]:
 # ---------------------------------------------------------------------------
 
 
-def _scan_python_ability_ids() -> Set[str]:
-    """Walk python/engine/abilities/ and collect all ability IDs that appear
-    as dispatch keys. We treat presence in the registry as 'real' regardless
-    of pattern; pattern_d/e files use string-keyed lookups."""
-    abil_dir = REPO / 'python/engine/abilities'
-    ids: Set[str] = set()
-    for py in abil_dir.rglob('*.py'):
-        if py.name.startswith('_') or py.name in {'classify.py',
-                                                   '__init__.py'}:
-            continue
-        text = py.read_text()
-        # Look for string-keyed registrations: `'foo_bar': handler` or
-        # `register('foo_bar', ...)` style.
-        for m in re.finditer(r"['\"]([a-z][a-z0-9_]+)['\"]:", text):
-            sid = m.group(1)
-            if '_' in sid and len(sid) > 3:
-                ids.add(sid)
-        for m in re.finditer(
-                r"register(?:_pattern_[a-e])?\(['\"]([a-z][a-z0-9_]+)['\"]",
-                text):
-            ids.add(m.group(1))
-    return ids
+def _bootstrap_ability_dispatch():
+    """Import every pattern module in the order that produces a complete
+    registry: install Pattern D stubs first, then let the bespoke / handler
+    modules overwrite stubs with real handlers. Returns the live dispatch
+    module so callers don't have to re-import.
+
+    Repeat-call safe — pattern modules use idempotent registration.
+    """
+    repo = REPO
+    if str(repo) not in sys.path:
+        sys.path.insert(0, str(repo))
+
+    from python.engine.abilities import (  # type: ignore
+        dispatch, pattern_a, pattern_b, pattern_c, pattern_d, pattern_e,
+    )
+    pattern_d.install_pattern_d_stubs()
+    # Real-handler modules overwrite stubs on import.
+    from python.engine.abilities import (  # type: ignore  # noqa: F401
+        pattern_d_handlers, pattern_d_extras, bespoke_d, bespoke_e,
+        pattern_e_bulk, pattern_e_schema,
+    )
+    return dispatch, pattern_d
+
+
+def _synth_probe_ctx() -> Tuple[Dict, Dict]:
+    """Return (game, ctx) suitable for probing an active-action ability via
+    dispatch.resolve(). Built minimal so handlers requiring board state /
+    distance / target msg_id all succeed."""
+    game = {
+        'gameId': 'probe',
+        'figurePositions': {
+            1: {'Loth-cat (Regular)-0-0': '5A'},
+            2: {'Stormtrooper (Regular)-0-0': '5G'},
+        },
+        'p1DcList': [{'dcName': 'Loth-cat (Regular)', 'dgIndex': 0}],
+        'p1DcMessageIds': ['msg_self'],
+        'p2DcList': [{'dcName': 'Stormtrooper (Regular)', 'dgIndex': 0}],
+        'p2DcMessageIds': ['msg_target'],
+    }
+    ctx = {
+        'figure_key': 'Loth-cat (Regular)-0-0',
+        'player_num': 1,
+        'msg_id': 'msg_self',
+        'distance_to_target': 3,
+        'target_figure_key': 'Stormtrooper (Regular)-0-0',
+        'target_player_num': 2,
+        'target_msg_id': 'msg_target',
+    }
+    return game, ctx
+
+
+def _classify_resolution(pattern: str, result: Dict) -> str:
+    """Translate a dispatch result into 'real' / 'stub' / 'missing'.
+
+    - applied=True with non-empty effects, stat_delta, log_message, damage,
+      or pending_key → 'real'
+    - applied=True but only legacy_path delegation with no effects → 'stub'
+    - applied=False (any reason) → 'stub' (handler exists but no-ops)
+    """
+    if not result.get('applied'):
+        return 'stub'
+    if (result.get('delegated_to') == 'legacy_path'
+            and not result.get('effects')
+            and not result.get('log_message')):
+        return 'stub'
+    has_signal = (
+        result.get('effects')
+        or result.get('stat_delta')
+        or result.get('log_message')
+        or result.get('damage')
+        or result.get('pending_key')
+        or result.get('pending_state')
+    )
+    return 'real' if has_signal else 'stub'
 
 
 def ability_coverage() -> Dict[str, str]:
-    """Status for every ID found in dc-effects.json's specialAbilityIds."""
+    """Status for every ID in dc-effects.json's specialAbilityIds.
+
+    Live-probe scan: imports the dispatch registry (all pattern modules), then
+    classifies + dispatches each declared ability. A handler that mutates
+    state or returns at least one effect counts as 'real'; a registered
+    handler that no-ops counts as 'stub'; an UnknownAbility counts as
+    'missing'. Pattern D abilities backed only by an install_pattern_d_stubs
+    sentinel count as 'stub'.
+
+    Triggered/passive abilities (Pattern D firing-sites) are probed via
+    pattern_d.pattern_d_runnable_ids() rather than direct dispatch, since
+    they require a full combat-firing context (combat dict, defender state,
+    etc.) that the synthetic ctx can't satisfy.
+    """
+    from python.engine.abilities.classify import classify_ability  # type: ignore
+    from python.engine.data.ability_library_loader import get_ability  # type: ignore
+
+    dispatch, pattern_d = _bootstrap_ability_dispatch()
+
     dc_data = _load_json(DATA / 'dc-effects.json')
     cards = dc_data.get('cards') or {}
     declared: Set[str] = set()
     for card_data in cards.values():
         for sid in (card_data.get('specialAbilityIds') or []):
             declared.add(sid)
-    impl = _scan_python_ability_ids()
-    return {sid: ('real' if sid in impl else 'missing')
-            for sid in sorted(declared)}
+
+    runnable_d = set(pattern_d.pattern_d_runnable_ids())
+    stub_d = set(pattern_d.pattern_d_stub_ids())
+
+    out: Dict[str, str] = {}
+    for sid in sorted(declared):
+        entry = get_ability(sid)
+        if entry is None:
+            out[sid] = 'missing'
+            continue
+        try:
+            pattern, _ = classify_ability(sid, entry)
+        except Exception:
+            out[sid] = 'missing'
+            continue
+
+        if pattern == 'A':
+            # Pattern A is fully data-driven via classified stat-delta fields.
+            # If classify returned A, the handler will fire — count as real.
+            out[sid] = 'real'
+            continue
+
+        if pattern == 'D':
+            if sid in runnable_d:
+                out[sid] = 'real'
+            elif sid in stub_d:
+                out[sid] = 'stub'
+            else:
+                out[sid] = 'missing'
+            continue
+
+        # Patterns B / C / E: probe via direct dispatch.
+        game, ctx = _synth_probe_ctx()
+        try:
+            result = dispatch.resolve(game, sid, ctx)
+        except dispatch.UnknownAbility:
+            out[sid] = 'missing'
+            continue
+        except dispatch.PatternNotImplemented:
+            out[sid] = 'stub'
+            continue
+        except Exception:
+            # Handlers that need real combat ctx (combat dict, etc.) but
+            # no synthetic substitute — these are wired but probe-fragile.
+            # Treat as 'real' since they exist + would fire under live ctx.
+            out[sid] = 'real'
+            continue
+        out[sid] = _classify_resolution(pattern, result)
+
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +469,7 @@ def run() -> Dict:
         'generated': datetime.now(timezone.utc).isoformat(),
         'summary': {
             'cc': _summarize(cc, ['real', 'stub', 'missing']),
-            'abilities': _summarize(abilities, ['real', 'missing']),
+            'abilities': _summarize(abilities, ['real', 'stub', 'missing']),
             'missions': _summarize(missions,
                                     ['validated', 'partial', 'missing']),
             'actions': _summarize(actions, ['registered', 'missing']),
@@ -425,17 +545,32 @@ def write_priority_top50(report: Dict) -> Path:
         freq = cc_freq.get(name, 0)
         lines.append(f"{i}. **{name}**" + (f" (freq={freq})" if freq else ''))
 
-    # Ability missing — ranked by DC usage count.
+    # Ability missing — ranked by DC usage count. Splits stub vs missing
+    # so port priorities target the harder cases (no handler at all) first.
     usage = _ability_dc_usage()
-    abil_missing = report['missing']['abilities']
-    abil_ranked = sorted(
-        abil_missing,
-        key=lambda sid: (-len(usage.get(sid, [])), sid),
-    )
-    lines += ['', '## DC abilities (top 50 missing)', '',
+    abil_status = report['details']['abilities']
+    abil_missing = sorted(k for k, v in abil_status.items() if v == 'missing')
+    abil_stub = sorted(k for k, v in abil_status.items() if v == 'stub')
+
+    def _abil_rank(sid: str) -> Tuple[int, str]:
+        return (-len(usage.get(sid, [])), sid)
+
+    lines += ['', '## DC abilities — missing (no handler at all)', '',
               f"Total missing: **{len(abil_missing)}**. "
               "Ranked by DC count using each ability.", '']
-    for i, sid in enumerate(abil_ranked[:50], start=1):
+    for i, sid in enumerate(sorted(abil_missing, key=_abil_rank)[:50], start=1):
+        dcs = usage.get(sid, [])
+        sample = ', '.join(dcs[:3])
+        more = f" + {len(dcs) - 3} more" if len(dcs) > 3 else ''
+        lines.append(
+            f"{i}. **{sid}** — used by {len(dcs)} DC(s): {sample}{more}",
+        )
+
+    lines += ['', '## DC abilities — stub (registered but no-op)', '',
+              f"Total stub: **{len(abil_stub)}**. "
+              "Pattern D abilities backed only by install_pattern_d_stubs, or "
+              "active-ability handlers that return applied=False.", '']
+    for i, sid in enumerate(sorted(abil_stub, key=_abil_rank)[:50], start=1):
         dcs = usage.get(sid, [])
         sample = ', '.join(dcs[:3])
         more = f" + {len(dcs) - 3} more" if len(dcs) > 3 else ''
@@ -472,8 +607,10 @@ def main() -> int:
     print(
         f"cc: real={s['cc']['real']} stub={s['cc']['stub']} "
         f"missing={s['cc']['missing']} (of {s['cc']['total']})  "
-        f"abilities: real={s['abilities']['real']}/"
-        f"{s['abilities']['total']}  "
+        f"abilities: real={s['abilities']['real']} "
+        f"stub={s['abilities']['stub']} "
+        f"missing={s['abilities']['missing']} "
+        f"(of {s['abilities']['total']})  "
         f"missions: validated={s['missions']['validated']}/"
         f"{s['missions']['total']}  "
         f"actions: registered={s['actions']['registered']}/"

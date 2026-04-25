@@ -1,6 +1,6 @@
 # Port Priority — Top-50 Missing Items
 
-Generated: 2026-04-25T01:39:00.671419+00:00
+Generated: 2026-04-25T02:07:54.957567+00:00
 
 Run `python3 python/parity/port_coverage.py` to refresh.
 
@@ -9,66 +9,62 @@ Run `python3 python/parity/port_coverage.py` to refresh.
 Total missing/stubbed: **0**. Ranked by play-frequency record if available, else alphabetical.
 
 
-## DC abilities (top 50 missing)
+## DC abilities — missing (no handler at all)
 
-Total missing: **219**. Ranked by DC count using each ability.
+Total missing: **0**. Ranked by DC count using each ability.
 
-1. **dc_pounce** — used by 4 DC(s): Loth-cat (Elite), Loth-cat (Regular), Nexu (Elite) + 1 more
-2. **multi_fire** — used by 3 DC(s): Biv Bodhrik, Sentry Droid (Elite), Sentry Droid (Regular)
-3. **brutality** — used by 2 DC(s): Darth Vader, Royal Guard Champion
-4. **self_destruct_probe** — used by 2 DC(s): Probe Droid (Elite), Probe Droid (Regular)
-5. **sentinel** — used by 2 DC(s): Royal Guard (Elite), Royal Guard (Regular)
-6. **spot_weld** — used by 2 DC(s): Ugnaught Tinkerer (Elite), Ugnaught Tinkerer (Regular)
-7. **advanced_firepower_sorin** — used by 1 DC(s): General Sorin
-8. **air_support_bodhi** — used by 1 DC(s): Bodhi Rook
-9. **airborne_commander_gar_saxon** — used by 1 DC(s): Gar Saxon
-10. **alter_mind_obiwan** — used by 1 DC(s): Obi-Wan Kenobi
-11. **arms_distribution_kotun** — used by 1 DC(s): Ko-Tun Feralo
-12. **arsenal** — used by 1 DC(s): IG-88
-13. **barrage_ct1701** — used by 1 DC(s): CT-1701
-14. **battlefield_leadership** — used by 1 DC(s): Leia Organa
-15. **bespin_security** — used by 1 DC(s): Wing Guard (Elite)
-16. **bo_rifle_kallus** — used by 1 DC(s): Agent Kallus
-17. **bo_rifle_staff_strike** — used by 1 DC(s): Zeb Orrelios
-18. **boltslinger** — used by 1 DC(s): Vinto Hreeda
-19. **bombardment_sorin** — used by 1 DC(s): General Sorin
-20. **boulder_barrage** — used by 1 DC(s): Taron Malicos
-21. **brush_ezra** — used by 1 DC(s): Ezra Bridger
-22. **brutal_cleave** — used by 1 DC(s): Gaarkhan
-23. **bully_jabba** — used by 1 DC(s): Jabba the Hutt
-24. **call_the_shots_hera** — used by 1 DC(s): Hera Syndulla
-25. **calming_presence_yoda** — used by 1 DC(s): Yoda
+
+## DC abilities — stub (registered but no-op)
+
+Total stub: **171**. Pattern D abilities backed only by install_pattern_d_stubs, or active-ability handlers that return applied=False.
+
+1. **overload_saboteur** — used by 2 DC(s): Rebel Saboteur (Elite), Rebel Saboteur (Regular)
+2. **personal_combat_shield_gar_saxon** — used by 2 DC(s): Bo-Katan Kryze, Gar Saxon
+3. **self_destruct_probe** — used by 2 DC(s): Probe Droid (Elite), Probe Droid (Regular)
+4. **tripod_eweb** — used by 2 DC(s): E-Web Engineer (Elite), E-Web Engineer (Regular)
+5. **adapt_blaise** — used by 1 DC(s): Agent Blaise
+6. **adaptive_skills_mara_jade** — used by 1 DC(s): Mara Jade
+7. **adv_targeting_computer_dark_trooper** — used by 1 DC(s): Dark Trooper Mk III
+8. **agile_jet_trooper_elite** — used by 1 DC(s): Jet Trooper (Elite)
+9. **agile_jet_trooper_reg** — used by 1 DC(s): Jet Trooper (Regular)
+10. **aim_rebel_trooper_reg** — used by 1 DC(s): Rebel Trooper (Regular)
+11. **air_support_bodhi** — used by 1 DC(s): Bodhi Rook
+12. **arms_distribution_kotun** — used by 1 DC(s): Ko-Tun Feralo
+13. **arsenal** — used by 1 DC(s): IG-88
+14. **attached_dio** — used by 1 DC(s): Dio
+15. **awkward_atst** — used by 1 DC(s): AT-ST
+16. **battlefield_leadership** — used by 1 DC(s): Leia Organa
+17. **bespin_security** — used by 1 DC(s): Wing Guard (Elite)
+18. **bo_rifle_kallus** — used by 1 DC(s): Agent Kallus
+19. **bo_rifle_staff_strike** — used by 1 DC(s): Zeb Orrelios
+20. **boltslinger** — used by 1 DC(s): Vinto Hreeda
+21. **bombardment_sorin** — used by 1 DC(s): General Sorin
+22. **brush_ezra** — used by 1 DC(s): Ezra Bridger
+23. **calming_presence_yoda** — used by 1 DC(s): Yoda
+24. **camouflage_mak** — used by 1 DC(s): Mak Eshka'rey
+25. **camouflage_scout_trooper** — used by 1 DC(s): Scout Trooper (Elite)
 26. **cassian_said_i_had_to** — used by 1 DC(s): K-2S0
-27. **charge** — used by 1 DC(s): Gaarkhan
-28. **charge_generators** — used by 1 DC(s): AT-DP
-29. **charged_shot_elite** — used by 1 DC(s): Sentry Droid (Elite)
-30. **charged_shot_reg** — used by 1 DC(s): Sentry Droid (Regular)
-31. **close_quarters** — used by 1 DC(s): Verena Talos
-32. **comms_jammer_isb** — used by 1 DC(s): ISB Infiltrator (Elite)
-33. **conclusion** — used by 1 DC(s): HK-47
-34. **consider_it_my_payment_asajj** — used by 1 DC(s): Asajj Ventress
-35. **crippling_blow** — used by 1 DC(s): Rancor
-36. **cunning_han** — used by 1 DC(s): Han Solo
-37. **cunning_jyn** — used by 1 DC(s): Jyn Odan
-38. **cunning_nexu_elite** — used by 1 DC(s): Nexu (Elite)
-39. **cunning_nexu_reg** — used by 1 DC(s): Nexu (Regular)
-40. **cut_and_run_davith** — used by 1 DC(s): Davith Elso
-41. **defensible_sc2m** — used by 1 DC(s): SC2-M Repulsor Tank
+27. **charge_generators** — used by 1 DC(s): AT-DP
+28. **consider_it_my_payment_asajj** — used by 1 DC(s): Asajj Ventress
+29. **continually_unexpected** — used by 1 DC(s): K-2S0
+30. **coordinated_hunt_purge_commander** — used by 1 DC(s): Purge Commander (Elite)
+31. **coordinated_raid_elite** — used by 1 DC(s): ISB Infiltrator (Elite)
+32. **coordinated_raid_regular** — used by 1 DC(s): ISB Infiltrator (Regular)
+33. **cower_c3po** — used by 1 DC(s): C-3P0
+34. **cower_imperial_officer_reg** — used by 1 DC(s): Imperial Officer (Regular)
+35. **cunning_han** — used by 1 DC(s): Han Solo
+36. **cunning_jyn** — used by 1 DC(s): Jyn Odan
+37. **cunning_nexu_elite** — used by 1 DC(s): Nexu (Elite)
+38. **cunning_nexu_reg** — used by 1 DC(s): Nexu (Regular)
+39. **cut_and_run_davith** — used by 1 DC(s): Davith Elso
+40. **dead_precise_kotun** — used by 1 DC(s): Ko-Tun Feralo
+41. **defensive_fire_bokatan** — used by 1 DC(s): Bo-Katan Kryze
 42. **defensive_stance** — used by 1 DC(s): Diala Passil
 43. **deference_protocol** — used by 1 DC(s): KX-Series Security Droid (Elite)
-44. **deflect** — used by 1 DC(s): Luke Skywalker (Jedi Knight)
-45. **demolish** — used by 1 DC(s): Drokkatta
-46. **dins_wrist_flamethrower** — used by 1 DC(s): The Mandalorian
-47. **disposable** — used by 1 DC(s): Hired Gun (Regular)
-48. **disruptor_rifle_mando** — used by 1 DC(s): The Mandalorian
-49. **disruptor_rifle_snowtrooper** — used by 1 DC(s): Snowtrooper (Elite)
-50. **distracting_c3po** — used by 1 DC(s): C-3P0
-
-## Missions (all unvalidated)
-
-1. **anchorhead-cantina-bar** — partial
-2. **chopper-base-atollon** — partial
-3. **devaron-garrison** — partial
-4. **development-facility** — partial
-5. **hoth-battle-station** — partial
-6. **lothal-wastes** — partial
+44. **demolish** — used by 1 DC(s): Drokkatta
+45. **devout_chirrut** — used by 1 DC(s): Chirrut Imwe
+46. **dirty_dealing_bib** — used by 1 DC(s): Bib Fortuna
+47. **distracting_c3po** — used by 1 DC(s): C-3P0
+48. **distracting_fire_rebel_pathfinder** — used by 1 DC(s): Rebel Pathfinder (Elite)
+49. **distracting_han** — used by 1 DC(s): Han Solo
+50. **droid_arm_migs** — used by 1 DC(s): Migs Mayfeld
