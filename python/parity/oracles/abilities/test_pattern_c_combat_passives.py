@@ -326,6 +326,60 @@ def test_squad_training_fires_with_adjacent_trooper():
                                                 'acc': 0, 'dmg': 0, 'surge': 0}
 
 
+# ── awkward_atst / non_combatant_c3po (legal_actions gates) ────────────────
+
+def test_awkward_atst_blocks_attack_on_adjacent_target():
+    """AT-ST cannot attack a figure that's Chebyshev-adjacent. legal_actions
+    must skip the ATTACK_TARGET option for the adjacent target."""
+    from python.mcts.actions import legal_actions
+    from python.engine.actions import ActionType
+    from python.engine.stepper import Action, step
+    from python.engine.creation import create_game
+    g = create_game(map_id='mos-eisley-outskirts')
+    g.data['mapId'] = 'mos-eisley-outskirts'
+    g.data['figurePositions'] = {
+        1: {'AT-ST-0-0': 'a1'},
+        2: {'Rebel Trooper (Regular)-0-0': 'a2',  # adjacent
+             'Rebel Trooper (Regular)-0-1': 'g7'},  # ranged
+    }
+    g.data['activationsRemaining'] = {1: 1, 2: 1}
+    g.data['activePlayer'] = 1
+    g.data['p1DcList'] = [{'dcName': 'AT-ST', 'dgIndex': 0}]
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+    # Activate AT-ST first so legal_actions enumerates its attacks.
+    g = step(g, Action(type=ActionType.ACTIVATE_DC, player=1,
+                        params={'figure_key': 'AT-ST-0-0'}))
+    actions = legal_actions(g)
+    attack_targets = [a.params.get('target_key') for a in actions
+                       if a.type == ActionType.ATTACK_TARGET]
+    assert 'Rebel Trooper (Regular)-0-0' not in attack_targets, \
+        f'awkward_atst should block adjacent target: {attack_targets}'
+
+
+def test_non_combatant_c3po_blocks_all_attacks():
+    """C-3PO has 'You cannot attack.' legal_actions must emit no
+    ATTACK_TARGET options for C-3PO."""
+    from python.mcts.actions import legal_actions
+    from python.engine.actions import ActionType
+    from python.engine.stepper import Action, step
+    from python.engine.creation import create_game
+    g = create_game(map_id='mos-eisley-outskirts')
+    g.data['mapId'] = 'mos-eisley-outskirts'
+    g.data['figurePositions'] = {
+        1: {'C-3P0-0-0': 'a1'},
+        2: {'Stormtrooper (Regular)-0-0': 'g7'},
+    }
+    g.data['activationsRemaining'] = {1: 1, 2: 1}
+    g.data['activePlayer'] = 1
+    g.data['p1DcList'] = [{'dcName': 'C-3P0', 'dgIndex': 0}]
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+    g = step(g, Action(type=ActionType.ACTIVATE_DC, player=1,
+                        params={'figure_key': 'C-3P0-0-0'}))
+    actions = legal_actions(g)
+    attacks = [a for a in actions if a.type == ActionType.ATTACK_TARGET]
+    assert not attacks, f'C-3PO should produce no attacks: {attacks}'
+
+
 # ── personal_combat_shield_gar_saxon (token-spend hook) ────────────────────
 
 def test_personal_combat_shield_grants_evade_on_block_token_spend():

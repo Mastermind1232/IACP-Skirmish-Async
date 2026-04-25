@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T04:10:25.259219+00:00",
+  "generated": "2026-04-25T04:13:04.590022+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 270,
-      "stub": 40,
+      "real": 272,
+      "stub": 38,
       "missing": 0,
       "total": 310
     },
@@ -336,7 +336,7 @@
       "arms_distribution_kotun": "real",
       "arsenal": "real",
       "attached_dio": "stub",
-      "awkward_atst": "stub",
+      "awkward_atst": "real",
       "barrage_ct1701": "real",
       "bartered_information": "real",
       "battle_meditation": "real",
@@ -508,7 +508,7 @@
       "neurostim_hemlock": "real",
       "neurotoxin_hemlock": "real",
       "nimble_asajj": "real",
-      "non_combatant_c3po": "stub",
+      "non_combatant_c3po": "real",
       "officer_order": "real",
       "on_my_mark": "real",
       "on_the_hunt": "real",
@@ -733,7 +733,6 @@
       "adapt_blaise",
       "adaptive_skills_mara_jade",
       "attached_dio",
-      "awkward_atst",
       "camouflage_mak",
       "camouflage_scout_trooper",
       "coordinated_hunt_purge_commander",
@@ -753,7 +752,6 @@
       "light_it_up_rebel_pathfinder",
       "modular_heavy_stormtrooper",
       "mon_cala_sf_loku",
-      "non_combatant_c3po",
       "overload_saboteur",
       "pulse_cannon_iden",
       "scavenged_stock_jawa_elite",

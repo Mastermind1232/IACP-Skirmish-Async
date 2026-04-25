@@ -9,7 +9,7 @@ being marked COMPLETE. MISSING and STUB-ONLY are guaranteed gaps.
 | Area | Real | Stub | Missing | Total | Net |
 |---|---|---|---|---|---|
 | CC effects | 293 | 0 | 0 | 293 | **100%** |
-| DC abilities | 269 | 41 | 0 | 310 | **87%** |
+| DC abilities | 272 | 38 | 0 | 310 | **88%** |
 | Missions (validated) | 8 | 0 partial | 0 | 8 | **100%** |
 | Action handlers | 81 | — | 0 | 81 | **100%** |
 

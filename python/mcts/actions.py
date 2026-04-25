@@ -234,9 +234,18 @@ def legal_actions(game: GameState) -> List[Action]:
             override = override_map.get(atk_msg_id) if atk_msg_id else None
             if isinstance(override, Mapping) and override.get('type'):
                 attack_type = str(override['type']).lower()
+            # Pattern C attack-legality gates — passives that disable
+            # an attack option for this attacker entirely.
+            atk_special_ids = atk_effect.get('specialAbilityIds') or []
+            non_combatant = 'non_combatant_c3po' in atk_special_ids
+            awkward = 'awkward_atst' in atk_special_ids
             opp = 2 if active == 1 else 1
-            opp_figs = _sorted_figures(game, opp)
+            opp_figs = [] if non_combatant else _sorted_figures(game, opp)
             for tgt_key, tgt_coord in opp_figs:
+                # awkward_atst: AT-ST cannot attack adjacent figures.
+                # JS: src/handlers/combat.js:2073 distance ≤1 gate.
+                if awkward and is_chebyshev_adjacent(start_coord, tgt_coord):
+                    continue
                 if attack_type == 'melee':
                     if not is_chebyshev_adjacent(start_coord, tgt_coord):
                         continue

@@ -205,8 +205,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_aim_rebel_trooper_reg',
     ),
     'awkward_atst': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js:2073 (distance ≤1 gate)',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:2073 → py mcts/actions.py (legal_actions skip ATTACK_TARGET when distance==1)',
     ),
     'camouflage_mak': (
         'deferred-handler-combat', 'handler-combat',
@@ -330,8 +330,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/setup.js + round.js + phase-gate.js + activation-setup.js',
     ),
     'non_combatant_c3po': (
-        'deferred-handler-other', 'handler-other',
-        'src/handlers/dc-play-area.js (attack-targetability gate)',
+        'wired-engine', 'engine',
+        'src/handlers/dc-play-area.js → py mcts/actions.py (legal_actions skips ATTACK_TARGET entirely for C-3PO)',
     ),
 
     # CC-timing layer (game/cc-timing.js)
