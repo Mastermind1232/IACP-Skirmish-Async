@@ -180,6 +180,86 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     attacker_sids = atk_effect.get('specialAbilityIds') or []
     defender_sids = def_effect.get('specialAbilityIds') or []
 
+    # Pattern C combat passives that grant the attacker forced rerolls of
+    # defender dice. JS site: src/handlers/combat.js — pushes onto
+    # combat.forcedRerollQueue. Python folds these into defender_rerolls.
+    if 'versatile_weaponry_hk_elite' in attacker_sids:
+        defender_rerolls += 1
+    # coordinated_hunt_purge_commander: +1 atk reroll for the attacker
+    # itself, OR +1 if attacker is HUNTER and a friendly Purge Commander
+    # has LOS to attacker. Limit 1 per attack.
+    coord_hunt_applied = False
+    if 'coordinated_hunt_purge_commander' in attacker_sids:
+        attacker_rerolls += 1
+        coord_hunt_applied = True
+    elif any(str(k).upper() == 'HUNTER' for k in (atk_effect.get('keywords') or [])):
+        # Look for a friendly with coordinated_hunt_purge_commander + LOS.
+        from python.engine.mechanics.los import has_line_of_sight as _los
+        from python.engine.data.map_spaces_loader import get_map_spaces as _gms
+        from python.engine.data.dc_effects_loader import get_dc_effects as _gde
+        sel_map = data.get('selectedMap') or {}
+        map_id = data.get('mapId') or (sel_map.get('id') if isinstance(sel_map, Mapping) else None)
+        ms = _gms(map_id) if map_id else None
+        if ms and atk_coord:
+            atk_positions = (data.get('figurePositions') or {}).get(atk_player) or {}
+            atk_positions = atk_positions if isinstance(atk_positions, Mapping) else {}
+            de = _gde() or {}
+            for fk, pos in atk_positions.items():
+                if fk == attacker_key or not pos:
+                    continue
+                fk_dc = fk.rsplit('-', 2)[0] if '-' in fk else fk
+                fk_eff = de.get(fk_dc) or {}
+                if 'coordinated_hunt_purge_commander' not in (fk_eff.get('specialAbilityIds') or []):
+                    continue
+                if _los(str(pos).lower(), str(atk_coord).lower(), ms):
+                    attacker_rerolls += 1
+                    coord_hunt_applied = True
+                    break
+    # light_it_up_rebel_pathfinder: +1 atk reroll if target had no LOS
+    # to attacker at activation start.
+    if 'light_it_up_rebel_pathfinder' in attacker_sids:
+        from python.engine.mechanics.los import has_line_of_sight as _los2
+        from python.engine.data.map_spaces_loader import get_map_spaces as _gms2
+        liu_start = (data.get('activationStartPositions') or {}).get(attacker_key)
+        sel_map2 = data.get('selectedMap') or {}
+        map_id2 = data.get('mapId') or (sel_map2.get('id') if isinstance(sel_map2, Mapping) else None)
+        ms2 = _gms2(map_id2) if map_id2 else None
+        if liu_start and def_coord and ms2:
+            target_had_los = _los2(str(def_coord).lower(), str(liu_start).lower(), ms2)
+            if not target_had_los:
+                attacker_rerolls += 1
+    # shared_calculations_zuckuss: same effect, gated on a friendly DROID
+    # within 3 spaces with LOS to target.
+    if 'shared_calculations_zuckuss' in attacker_sids:
+        from python.engine.mechanics.spatial import count_game_spaces as _cnt
+        from python.engine.mechanics.los import has_line_of_sight as _los
+        from python.engine.data.map_spaces_loader import get_map_spaces as _gms
+        from python.engine.data.dc_effects_loader import get_dc_effects as _gde
+        sel_map = data.get('selectedMap') or {}
+        map_id = data.get('mapId') or (sel_map.get('id') if isinstance(sel_map, Mapping) else None)
+        ms = _gms(map_id) if map_id else None
+        if ms and def_coord:
+            atk_positions = (data.get('figurePositions') or {}).get(atk_player) or {}
+            atk_positions = atk_positions if isinstance(atk_positions, Mapping) else {}
+            de = _gde() or {}
+            for fk, pos in atk_positions.items():
+                if fk == attacker_key or not pos:
+                    continue
+                fk_dc = fk.rsplit('-', 2)[0] if '-' in fk else fk
+                fk_eff = de.get(fk_dc) or {}
+                kw = [str(k).upper() for k in (fk_eff.get('keywords') or [])]
+                if 'DROID' not in kw:
+                    continue
+                try:
+                    dist = _cnt(game, pos, atk_coord)
+                except Exception:
+                    dist = 99
+                if dist > 3:
+                    continue
+                if _los(str(pos).lower(), str(def_coord).lower(), ms):
+                    defender_rerolls += 1
+                    break
+
     dice_colors = attack_dice_override or list(atk_attack.get('dice') or [])
     if not dice_colors:
         raise AttackError(f'{atk_dc!r} has no attack dice')

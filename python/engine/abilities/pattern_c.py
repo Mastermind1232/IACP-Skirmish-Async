@@ -217,8 +217,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js:2269 → py mcts/actions.py (legal_actions skips ranged ATTACK_TARGET when distance >= 4)',
     ),
     'coordinated_hunt_purge_commander': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/attack_orchestrator.py (+1 atk reroll: self OR HUNTER w/ LOS to PC)',
     ),
     'cower_c3po': (
         'wired-engine', 'engine',
@@ -241,8 +241,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'light_it_up_rebel_pathfinder': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/attack_orchestrator.py (+1 atk reroll if target had no LOS at activation start)',
     ),
     'lucky_r2d2': (
         'wired-engine', 'engine',
@@ -261,8 +261,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'shared_calculations_zuckuss': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/attack_orchestrator.py (force +1 def reroll if friendly DROID within 3 + LOS to target)',
     ),
     'spray_fire_heavy_stormtrooper': (
         'deferred-handler-combat', 'handler-combat',
@@ -305,8 +305,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'versatile_weaponry_hk_elite': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/attack_orchestrator.py (always force +1 defender reroll)',
     ),
 
     # Handler-movement
