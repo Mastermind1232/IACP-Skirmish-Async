@@ -29,8 +29,13 @@
     "cardName": "Sit Tight",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "Sit Tight \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "effect": "sitTightPlayerNum",
+          "playerNum": 1
+        }
+      ],
+      "log_message": "Sit Tight \u2014 1 schema effect(s) applied."
     }
   },
   "p1CcDeck": [

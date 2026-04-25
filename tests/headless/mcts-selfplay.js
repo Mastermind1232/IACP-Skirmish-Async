@@ -16,8 +16,13 @@
  * strategic decision, and we record the visit distribution per decision.
  *
  * Usage:
- *   node tests/headless/mcts-selfplay.js <learnings-path> [numGames] [--mcts=N] [--map=name] [--verbose] [--output=<policy-buf-path>]
- *   node tests/headless/mcts-selfplay.js learnings-data.json 10 --mcts=25 --verbose
+ *   node tests/headless/mcts-selfplay.js <learnings-path> [numGames] [--mcts=N] [--map=name]
+ *       [--output=<policy-buf-path>] [--weights-out=<out.json>] [--no-train] [--verbose]
+ *       [--max-iters=N] [--root-temp=F] [--dirichlet-eps=F]
+ *
+ * Defaults: rootTemp=0.3, dirichletEps=0.05, dirichletAlpha=0.3, maxIters=4000
+ *   - Cold-start (fresh Wp): low noise keeps games terminating. Once the policy
+ *     head warms, scale rootTemp and eps up toward AlphaZero-spec (1.0, 0.25).
  *
  * Outputs: prints game-level summary + policy buffer stats. Policy buffer
  * gets persisted to <output-path> (default ./tests/headless/policy-buffer.json).
@@ -144,6 +149,11 @@ async function runSelfPlayGame(learnings, army, opts = {}) {
   // truncated with winner=null and whatever VP each side has. Keeps a noisy
   // policy from stalling the whole training run.
   const maxIters = opts.maxIters ?? 4000;
+  // Asymmetric mode: only one side uses MCTS, the other plays DQN-argmax.
+  // Guarantees natural termination (per Phase B) while still generating
+  // training data from the MCTS side. Useful for cold-start warm-up before
+  // full symmetric self-play.
+  const mctsSide = opts.mctsSide ?? 'both'; // 'both' | 1 | 2
 
   const agentP1 = makeNeutralAgent('p1', army);
   const agentP2 = makeNeutralAgent('p2', army);
@@ -316,7 +326,10 @@ async function runSelfPlayGame(learnings, army, opts = {}) {
     let action = null;
     let recordedThisStep = false;
 
-    if (strategicCount >= 2) {
+    const useMcts = strategicCount >= 2 &&
+      (mctsSide === 'both' || mctsSide === actingPN);
+
+    if (useMcts) {
       mctsCallsAttempted++;
       try {
         const mctsResult = await pickMctsAction({
@@ -424,6 +437,10 @@ function parseArgs(argv) {
     else if (a.startsWith('--max-iters=')) args.maxIters = parseInt(a.slice(12), 10) || 4000;
     else if (a.startsWith('--root-temp=')) args.rootTemp = parseFloat(a.slice(12));
     else if (a.startsWith('--dirichlet-eps=')) args.dirichletEps = parseFloat(a.slice(16));
+    else if (a.startsWith('--mcts-side=')) {
+      const v = a.slice(12);
+      args.mctsSide = (v === '1' || v === '2') ? parseInt(v, 10) : 'both';
+    }
     else if (a === '--verbose') args.verbose = true;
     else if (a === '--no-train') args.train = false;
     else pos.push(a);
@@ -473,6 +490,7 @@ async function main() {
       map: args.map,
       iterLog: args.verbose ? 500 : 0,
       maxIters: args.maxIters ?? 4000,
+      mctsSide: args.mctsSide ?? 'both',
     });
 
     if (result.winnerPN === 1) p1Wins++;

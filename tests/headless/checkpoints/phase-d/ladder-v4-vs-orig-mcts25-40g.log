@@ -1,0 +1,23 @@
+[learnings] Migrated network: added policy head Wp[23×64]
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v4-classwt.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-data.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=0sims
+  [10/40] 1209.6s | A=0W 1L 9D (0.0%) | ΔVP 0.00 | ΔElo -12.1
+  [20/40] 2739.8s | A=1W 2L 17D (5.0%) | ΔVP 0.00 | ΔElo -13.1
+  [30/40] 4972.1s | A=2W 2L 26D (6.7%) | ΔVP 0.00 | ΔElo 3.4
+  [40/40] 6336.9s | A=4W 3L 33D (10.0%) | ΔVP 0.00 | ΔElo 9.2
+
+=== LADDER RESULT ===
+Games: 40
+A wins: 4 (10.0%)
+B wins: 3 (7.5%)
+Draws:  33 (82.5%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1504.6  B=1495.4
+Elo delta (A - B): 9.2 ± 45.0 (95% CI)
+Interpretation: NOT significant at 95%
+
+Per matchup:
+  3actWampaLiA: 0W 0L 10D (0.0%) | ΔVP 0.00
+  ATRT_Brawler: 0W 0L 10D (0.0%) | ΔVP 0.00
+  Bikes_Flames: 4W 0L 6D (40.0%) | ΔVP 0.00
+  Boba_v1: 0W 3L 7D (0.0%) | ΔVP 0.00

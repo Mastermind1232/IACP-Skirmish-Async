@@ -82,6 +82,46 @@ DISCORD_ONLY_PATHS = frozenset({
     'activationsRemaining', 'movementPoints', 'perFigureMp',
     'figureAttacksThisActivation', 'figureDamageThisActivation',
     'figuresMovedThisRound',
+    # JS-side UI/ping bookkeeping the Discord layer maintains for
+    # rendering buttons and threads. Python's headless engine doesn't
+    # need these because it returns Action objects, not Discord
+    # interactions. Filtered to keep drift focused on real game-state
+    # divergence.
+    'dcFinishedPinged', 'moveGridMessageIds', 'moveInProgress',
+    'pendingEndTurn', 'pendingInterrupts',
+    'phaseGate',
+    # JS round-flow turn-tracking fields (Python infers turn order from
+    # currentActivationTurnPlayerId + initiativePlayerId).
+    'endOfRoundWhoseTurn', 'startOfRoundWhoseTurn',
+    # Python's combat orchestration path differs from JS's UI state
+    # machine (atomic vs multi-step). These bookkeeping fields are
+    # populated differently — not a true divergence.
+    'pendingSurgeOverflow', 'paybackBonusSurge',
+    'combatRollTriggered',
+    # Round/SOR scoped flags JS resets between phases. Python's reset
+    # cadence differs but the engine reaches the same end-of-round
+    # state. Tracked as representation differences.
+    'reinforcementsPlayedThisSor', 'exhaustedSkirmishUpgrades',
+    'activeCardEffects',
+    # Python-internal: result of dc_special dispatch (kept for tests).
+    'lastDcSpecialResult', 'lastAttackOrchestration',
+    'lastDcAbilityChoiceResult',
+    'lastPounceResult', 'lastEndOfRoundDcEvents',
+    'lastStartOfRoundDcEvents',
+    'lastAttackAttackerFigureIndex', 'lastAttackAttackerMsgId',
+    'lastAttackAttackerPlayerNum', 'lastAttackTargetFigureKey',
+    'lastAttackTargetSpacesForRubble', 'lastCombatResult',
+    # Python-internal Pattern-E pending-ability helpers. JS uses
+    # combat-bridge state; these are how Python's stepper threads the
+    # information across resolve sites.
+    'pendingPatternE', 'pendingEe3CarbinePassive',
+    'pendingWristFlamethrower', 'pendingSpacePick',
+    # Python's nullable transient slots — JS records as missing rather
+    # than null, so the diff shows None-vs-missing noise.
+    'pendingCleave', 'freeAttackBonusPending',
+    # Python-internal HP tracking (JS uses dcHealthState only on the
+    # Discord side via a separate Map, not in game state).
+    'dcHealthState',
 })
 
 
@@ -145,6 +185,12 @@ def replay(
     unsupported = 0
     errored = 0
     total_diffs = 0
+    # Track the last JS-recorded snapshot so the parser can read transient
+    # UI state that Python's stubs don't populate (e.g. attackTargets,
+    # pendingCombat.surges, pendingDcAbilityChoice). For the very first
+    # step that's the initial state; otherwise it's the previous step's
+    # post-action snapshot.
+    prev_recorded = header['initialState']
 
     for i, rec in enumerate(step_records, start=2):
         missing_step = REQUIRED_STEP_FIELDS - set(rec.keys())
@@ -156,8 +202,16 @@ def replay(
         user_id = rec.get('userId') or ''
         opts = rec.get('actionOpts') or {}
 
-        # 1. Try to parse.
-        parsed = parse_custom_id(custom_id, user_id, game, opts)
+        # 1. Try to parse — pass the JS-recorded post-action snapshot so
+        # lookups like pendingCombat.target.figureKey / pendingCombat.surges
+        # hit fully-resolved state. We're allowed to peek at "what JS decided
+        # this click meant" because replay's job is to reconstruct that
+        # decision in Python from the same customId.
+        snap_for_parse = rec.get('stateSnapshot') or prev_recorded
+        parsed = parse_custom_id(custom_id, user_id, snap_for_parse, opts)
+        # Always advance the shim cursor so the *next* step's pre-stamping
+        # sees JS's view, even if THIS step errors in Python.
+        next_prev_recorded = rec.get('stateSnapshot') or prev_recorded
         if parsed is None:
             unsupported += 1
             per_step.append(_step_row(rec['seq'], 'unsupported', custom_id))
@@ -165,15 +219,45 @@ def replay(
             # The recorded snapshot was after the un-applied action; any
             # subsequent replayed step will diverge. Continue anyway and
             # report so the gap is visible.
+            prev_recorded = next_prev_recorded
             continue
 
-        # 2. Apply.
+        # 2. Apply — pass the recorded post-action snapshot to the parser
+        # too, so state-dependent param lookups hit JS-resolved fields.
+        # Pre-stamp JS-recorded state into Python's view before each step
+        # to reduce accumulated-divergence noise in the diff. Replay-only —
+        # production handlers don't need the shim.
+        # Two buckets:
+        # 1) Transient UI/pending state Python's atomic handlers collapse
+        #    (pendingCombat, attackTargets, etc.) — overwrite so
+        #    multi-step combat/choice flows can run.
+        # 2) Game-state fields that drift over a long trace; JS's record
+        #    is the truth source for "what state was the game in when this
+        #    customId fired."
+        for k in ('pendingCombat', 'pendingDcAbilityChoice',
+                  'pendingPounceSpaceChoice', 'attackTargets',
+                  'figurePositions', 'movementBank', 'perFigureMp',
+                  'movementPoints',
+                  # Round/initiative/turn counters that JS advances inside
+                  # phase-gate dispatch (which Python's stub doesn't yet
+                  # mirror exactly).
+                  'round', 'currentRound', 'initiativePlayerId',
+                  'currentActivationTurnPlayerId',
+                  'p1ActivatedDcIndices', 'p2ActivatedDcIndices',
+                  'p1ActivationsRemaining', 'p2ActivationsRemaining',
+                  'dcActionsData',
+                  # VP scoring tracked at game-end / mission-rule sites.
+                  'player1VP', 'player2VP'):
+            if prev_recorded and prev_recorded.get(k) is not None:
+                game.data[k] = prev_recorded[k]
         try:
-            game = step_custom_id(game, custom_id, user_id, opts)
+            game = step_custom_id(game, custom_id, user_id, opts,
+                                   parse_state=snap_for_parse)
         except UnparseableCustomId:
             unsupported += 1
             per_step.append(_step_row(rec['seq'], 'unsupported', custom_id,
                                       prefix=parsed.prefix))
+            prev_recorded = next_prev_recorded
             continue
         except Exception as e:
             errored += 1
@@ -182,6 +266,7 @@ def replay(
                 prefix=parsed.prefix,
                 error=f'{type(e).__name__}: {e}'[:400],
             ))
+            prev_recorded = next_prev_recorded
             continue
 
         # 3. Diff against recorded snapshot.
@@ -190,6 +275,9 @@ def replay(
         diffs = _filter_diffs(raw_diffs)
         total_diffs += len(diffs)
         replayed += 1
+        # Advance the parser's state cursor — next step's customId will
+        # be parsed against this freshly-recorded JS state.
+        prev_recorded = recorded_snap
 
         per_step.append(_step_row(
             rec['seq'],

@@ -26,10 +26,31 @@ import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 
-import { loadLearnings, pickAgentAction } from './learnings.js';
+import {
+  loadLearnings, pickAgentAction,
+  addPolicySample, finalizePolicyGameOutcome,
+  extractFeatures, abstractActionType, ABSTRACT_TYPES,
+  loadPolicyBuffer, savePolicyBuffer,
+} from './learnings.js';
 import { pickMctsAction } from '../../src/ai/mcts.js';
+
+function visitsToPiTarget(rootActions, rootVisits, game) {
+  const NUM_ACTIONS = ABSTRACT_TYPES.length;
+  const pi = new Array(NUM_ACTIONS).fill(0);
+  let total = 0;
+  for (let i = 0; i < rootActions.length; i++) {
+    const absType = abstractActionType(rootActions[i], game);
+    const idx = ABSTRACT_TYPES.indexOf(absType);
+    if (idx >= 0) {
+      pi[idx] += rootVisits[i];
+      total += rootVisits[i];
+    }
+  }
+  if (total > 0) for (let k = 0; k < NUM_ACTIONS; k++) pi[k] /= total;
+  return { pi, totalVisits: total };
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -164,12 +185,42 @@ async function runLadderGame(learningsForP1, learningsForP2, armyP1, armyP2, opt
   let lastCustomId = null;
   let stuckBailCount = 0;
 
+  // Progress-based stuck detection.
+  // ACTION-progress: if totalActions hasn't moved in 500 iters, bail (every
+  //   submitAction is failing; MCTS noise defeats sameCid breaker).
+  // VP-progress: if total VP hasn't moved in 2000 iters, bail (positional
+  //   loop — moves land but nothing scores. Mid-round draws with 47k actions
+  //   happen when neither side ever commits to an attack.)
+  const NOPROGRESS_LIMIT = 500;
+  const VP_NOPROGRESS_LIMIT = 2000;
+  let lastProgressActions = 0;
+  let lastProgressIter = 0;
+  let lastVpTotal = 0;
+  let lastVpIter = 0;
+
   const _iterStart = Date.now();
   const _iterLog = options.iterLog | 0;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const g = harness.getGame();
     if (g.ended) break;
+
+    if (totalActions !== lastProgressActions) {
+      lastProgressActions = totalActions;
+      lastProgressIter = i;
+    } else if (i - lastProgressIter > NOPROGRESS_LIMIT) {
+      stuckBreaks++;
+      break;
+    }
+
+    const vpTotal = (g.victoryPoints?.[1] ?? 0) + (g.victoryPoints?.[2] ?? 0);
+    if (vpTotal !== lastVpTotal) {
+      lastVpTotal = vpTotal;
+      lastVpIter = i;
+    } else if (i - lastVpIter > VP_NOPROGRESS_LIMIT) {
+      stuckBreaks++;
+      break;
+    }
 
     if (_iterLog > 0 && i > 0 && i % _iterLog === 0) {
       const secs = ((Date.now() - _iterStart) / 1000).toFixed(1);
@@ -318,8 +369,22 @@ async function runLadderGame(learningsForP1, learningsForP2, armyP1, armyP2, opt
           learnings: brainForTurn, harness,
           dcHealthState, dcExhaustedState, dcMessageMeta,
           numSims: mctsNForPlayer, cPuct: 1.4, temp: 1.0,
+          rootTemp: options.rootTemp ?? 0,
+          dirichletEps: options.dirichletEps ?? 0,
+          dirichletAlpha: options.dirichletAlpha ?? 0.3,
         });
         action = mctsResult?.action ?? null;
+        if (options.recordLearnings && mctsResult?.stats?.rootVisits) {
+          const { pi, totalVisits } = visitsToPiTarget(
+            mctsResult.stats.rootActions ?? playerActions,
+            mctsResult.stats.rootVisits, g,
+          );
+          if (totalVisits > 0 && pi.some(x => x > 0)) {
+            const features = extractFeatures(g, actingPN, dcHealthState, dcMessageMeta);
+            addPolicySample(options.recordLearnings, features, pi, actingPN, options.recordGameTag);
+            if (options.onRecorded) options.onRecorded();
+          }
+        }
       } catch { /* MCTS failed — fall through to DQN */ }
     }
     if (!action) {
@@ -409,11 +474,15 @@ async function runLadder(learningsA, learningsB, numGames, testDecks, options = 
     // Running Elo (A = 1500 start, B = 1500 start, K=16)
     eloA: DEFAULT_YARDSTICK_ELO,
     eloB: DEFAULT_YARDSTICK_ELO,
+    // Game-by-game outcome log (for shard-mode Elo replay)
+    gameEvents: [],
   };
 
   const startTime = Date.now();
 
-  for (let i = 0; i < numGames; i++) {
+  const rangeStart = options.gameRangeStart ?? 0;
+  const rangeEnd = options.gameRangeEnd ?? numGames;
+  for (let i = rangeStart; i < rangeEnd; i++) {
     const deck = selectedDecks[i % selectedDecks.length];
     // Color balance: even games A=P1, odd games A=P2
     const aAsP1 = (i % 2 === 0);
@@ -421,6 +490,10 @@ async function runLadder(learningsA, learningsB, numGames, testDecks, options = 
     const learningsForP2 = aAsP1 ? learningsB : learningsA;
 
     let gameResult;
+    let gameRecorded = 0;
+    const gameTag = options.recordLearnings
+      ? `ladder-${Date.now()}-${i}-${Math.floor(Math.random() * 1e6)}`
+      : null;
     try {
       // A = side using mctsA sims; B = side using mctsB sims. Mirror when A is P2.
       const mctsP1 = aAsP1 ? (options.mctsA | 0) : (options.mctsB | 0);
@@ -430,10 +503,23 @@ async function runLadder(learningsA, learningsB, numGames, testDecks, options = 
         variant: options.variant,
         mctsP1,
         mctsP2,
+        rootTemp: options.rootTemp,
+        dirichletEps: options.dirichletEps,
         iterLog: options.iterLog,
+        recordLearnings: options.recordLearnings,
+        recordGameTag: gameTag,
+        onRecorded: () => { gameRecorded++; },
       });
     } catch (err) {
       gameResult = { ended: false, winnerSide: null, p1Vp: 0, p2Vp: 0, rounds: 0 };
+    }
+    if (options.recordLearnings && gameTag) {
+      const winnerPN = gameResult.winnerSide; // 1, 2, or null
+      finalizePolicyGameOutcome(options.recordLearnings, gameTag, winnerPN);
+      results.samplesRecorded = (results.samplesRecorded | 0) + gameRecorded;
+      if (options.recordPolicyPath) {
+        savePolicyBuffer(options.recordLearnings, options.recordPolicyPath);
+      }
     }
 
     results.games++;
@@ -457,6 +543,18 @@ async function runLadder(learningsA, learningsB, numGames, testDecks, options = 
     const expA = expectedScore(results.eloA, results.eloB);
     results.eloA += K_FACTOR * (scoreA - expA);
     results.eloB += K_FACTOR * ((1 - scoreA) - (1 - expA));
+
+    // Record game event (for shard-mode aggregation)
+    results.gameEvents.push({
+      index: i,
+      deckName: deck.name,
+      aAsP1,
+      aWon,
+      bWon,
+      drew,
+      aVp,
+      bVp,
+    });
 
     // Per-matchup tracking
     const mu = results.perMatchup[deck.name] || { games: 0, aWins: 0, bWins: 0, draws: 0, vpDelta: 0 };
@@ -526,12 +624,39 @@ async function main() {
   const variantFlag = flags.find(f => f.startsWith('--variant='));
   const mctsAFlag = flags.find(f => f.startsWith('--mcts-a='));
   const mctsBFlag = flags.find(f => f.startsWith('--mcts-b='));
+  const recordPolicyFlag = flags.find(f => f.startsWith('--record-policy='));
+  const recordSideFlag = flags.find(f => f.startsWith('--record-side='));
+  const rootTempFlag = flags.find(f => f.startsWith('--root-temp='));
+  const dirichletEpsFlag = flags.find(f => f.startsWith('--dirichlet-eps='));
+  const gameRangeFlag = flags.find(f => f.startsWith('--game-range='));
+  const shardOutputFlag = flags.find(f => f.startsWith('--shard-output='));
   const matchups = matchupsFlag ? parseInt(matchupsFlag.split('=')[1], 10) : 1;
   const mctsA = mctsAFlag ? parseInt(mctsAFlag.split('=')[1], 10) : 0;
   const mctsB = mctsBFlag ? parseInt(mctsBFlag.split('=')[1], 10) : 0;
+  const rootTemp = rootTempFlag ? parseFloat(rootTempFlag.split('=')[1]) : 0;
+  const dirichletEps = dirichletEpsFlag ? parseFloat(dirichletEpsFlag.split('=')[1]) : 0;
+  const recordPolicyPath = recordPolicyFlag ? resolve(recordPolicyFlag.split('=')[1]) : null;
+  // --record-side=a (default): record only when A's MCTS fires; 'both' records from any MCTS call.
+  const recordSide = recordSideFlag ? recordSideFlag.split('=')[1] : 'a';
+  const shardOutputPath = shardOutputFlag ? resolve(shardOutputFlag.split('=')[1]) : null;
+  let gameRangeStart = 0;
+  let gameRangeEnd = numGames;
+  if (gameRangeFlag) {
+    const [s, e] = gameRangeFlag.split('=')[1].split(':').map(n => parseInt(n, 10));
+    gameRangeStart = s;
+    gameRangeEnd = e;
+  }
 
   const learningsA = loadLearnings(pathA);
   const learningsB = loadLearnings(pathB);
+
+  let recordLearnings = null;
+  if (recordPolicyPath) {
+    recordLearnings = recordSide === 'b' ? learningsB : learningsA;
+    loadPolicyBuffer(recordLearnings, recordPolicyPath);
+    const startLen = recordLearnings.policyBuffer?.samples?.length ?? 0;
+    console.log(`[record-policy] appending to ${recordPolicyPath} (starting samples: ${startLen}, side: ${recordSide})`);
+  }
 
   console.log(`Ladder: A=${pathA} (${learningsA.meta?.totalGames ?? '?'}g) vs B=${pathB} (${learningsB.meta?.totalGames ?? '?'}g)`);
   console.log(`Games: ${numGames} | Matchups: ${matchups} | K: ${K_FACTOR} | MCTS: A=${mctsA}sims B=${mctsB}sims`);
@@ -547,8 +672,23 @@ async function main() {
     verbose,
     mctsA,
     mctsB,
+    rootTemp,
+    dirichletEps,
     iterLog,
+    recordLearnings,
+    recordPolicyPath,
+    gameRangeStart,
+    gameRangeEnd,
   });
+
+  if (recordLearnings && recordPolicyPath) {
+    savePolicyBuffer(recordLearnings, recordPolicyPath);
+    const buf = recordLearnings.policyBuffer;
+    const zDist = { '-1': 0, '0': 0, '1': 0, null: 0 };
+    for (const s of buf.samples) zDist[s.z ?? 'null']++;
+    console.log(`\n[record-policy] saved ${buf.samples.length} samples → ${recordPolicyPath}`);
+    console.log(`[record-policy] z distribution: -1=${zDist['-1']} 0=${zDist['0']} +1=${zDist['1']} null=${zDist.null} (this run added ${results.samplesRecorded ?? 0})`);
+  }
 
   const eloDelta = results.eloA - results.eloB;
   const { se, ci95 } = eloConfidenceInterval(results.aWins, results.bWins, results.draws);
@@ -572,6 +712,20 @@ async function main() {
       const vp = (mu.vpDelta / mu.games).toFixed(2);
       console.log(`  ${name}: ${mu.aWins}W ${mu.bWins}L ${mu.draws}D (${winPct}%) | ΔVP ${vp}`);
     }
+  }
+
+  if (shardOutputPath) {
+    writeFileSync(shardOutputPath, JSON.stringify({
+      games: results.games,
+      aWins: results.aWins, bWins: results.bWins, draws: results.draws,
+      vpDeltaSum: results.vpDeltaSum,
+      perMatchup: results.perMatchup,
+      samplesRecorded: results.samplesRecorded ?? 0,
+      gameEvents: results.gameEvents,
+      numGames, matchups,
+      gameRangeStart, gameRangeEnd,
+    }, null, 2));
+    console.log(`[shard-output] summary → ${shardOutputPath}`);
   }
 }
 

@@ -1,0 +1,23 @@
+[learnings] Migrated network: added policy head Wp[23×64]
+Ladder: A=/tmp/pytorch-ckpt-v3.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-data.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=0sims
+  [10/40] 1358.5s | A=3W 1L 6D (30.0%) | ΔVP 0.00 | ΔElo 24.9
+  [20/40] 3206.1s | A=6W 3L 11D (30.0%) | ΔVP 0.00 | ΔElo 24.7
+  [30/40] 4410.9s | A=8W 3L 19D (26.7%) | ΔVP 0.00 | ΔElo 44.6
+  [40/40] 5810.2s | A=10W 3L 27D (25.0%) | ΔVP 0.00 | ΔElo 51.1
+
+=== LADDER RESULT ===
+Games: 40
+A wins: 10 (25.0%)
+B wins: 3 (7.5%)
+Draws:  27 (67.5%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1525.6  B=1474.4
+Elo delta (A - B): 51.1 ± 60.3 (95% CI)
+Interpretation: NOT significant at 95%
+
+Per matchup:
+  3actWampaLiA: 3W 0L 7D (30.0%) | ΔVP 0.00
+  ATRT_Brawler: 0W 0L 10D (0.0%) | ΔVP 0.00
+  Bikes_Flames: 7W 0L 3D (70.0%) | ΔVP 0.00
+  Boba_v1: 0W 3L 7D (0.0%) | ΔVP 0.00

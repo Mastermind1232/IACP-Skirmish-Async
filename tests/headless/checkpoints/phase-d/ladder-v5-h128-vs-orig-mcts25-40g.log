@@ -1,0 +1,24 @@
+[learnings] Migrated hidden size: 64 → 128 (warm-start: 64 neurons preserved, 64 new)
+[learnings] Migrated network: added policy head Wp[23×128]
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-data.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=0sims
+  [10/40] 1607.6s | A=2W 0L 8D (20.0%) | ΔVP 0.00 | ΔElo 24.2
+  [20/40] 2690.2s | A=4W 1L 15D (20.0%) | ΔVP 0.00 | ΔElo 29.8
+  [30/40] 4450.5s | A=8W 1L 21D (26.7%) | ΔVP 0.00 | ΔElo 74.8
+  [40/40] 5915.5s | A=10W 1L 29D (25.0%) | ΔVP 0.00 | ΔElo 72.9
+
+=== LADDER RESULT ===
+Games: 40
+A wins: 10 (25.0%)
+B wins: 1 (2.5%)
+Draws:  29 (72.5%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1536.4  B=1463.6
+Elo delta (A - B): 72.9 ± 53.7 (95% CI)
+Interpretation: SIGNIFICANT at 95%
+
+Per matchup:
+  3actWampaLiA: 2W 0L 8D (20.0%) | ΔVP 0.00
+  ATRT_Brawler: 2W 0L 8D (20.0%) | ΔVP 0.00
+  Bikes_Flames: 6W 0L 4D (60.0%) | ΔVP 0.00
+  Boba_v1: 0W 1L 9D (0.0%) | ΔVP 0.00

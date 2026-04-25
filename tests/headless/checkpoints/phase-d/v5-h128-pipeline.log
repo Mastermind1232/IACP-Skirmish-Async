@@ -1,0 +1,91 @@
+=== [1/3] Train v5-h128 (20ep, λ_v=0.5, hidden=128 block-copy from v3) ===
+Device: cpu
+Loading learnings: tests/headless/checkpoints/phase-d/warmed-20e-v3-lambda05.json
+  source net: hidden=64 features=50 actions=23 has_policy=True
+Loading buffer: tests/headless/checkpoints/phase-d/buf-v4-merged.json
+  8861 samples in buffer
+  8861 samples with z != None (features=50 actions=23)
+  ENLARGEMENT: hidden 64 -> 128
+  loaded JS -> PyTorch: {'src_hidden': 64, 'src_n_features': 50, 'src_n_actions': 23, 'has_policy': True}
+  z distribution: {-1: 775, 0: 0, 1: 8086}  (value head can only learn when at least two classes are present)
+
+Training: epochs=20 batch=256 lr=0.0003 wd=0.0001 lambda_v=0.5 beta=0.001
+epoch   1/20  ce=1.4179 mse=0.2505 ent=1.5578 loss=1.5416  [0.1s]
+  step    50  ep   2  ce=1.3955 mse=0.2468 ent=1.4617 loss=1.5174
+epoch   2/20  ce=1.3179 mse=0.2447 ent=1.4619 loss=1.4388  [0.2s]
+  step   100  ep   3  ce=1.2899 mse=0.1876 ent=1.3854 loss=1.3823
+epoch   3/20  ce=1.2461 mse=0.2435 ent=1.4212 loss=1.3664  [0.3s]
+epoch   4/20  ce=1.1866 mse=0.2425 ent=1.3869 loss=1.3064  [0.5s]
+  step   150  ep   5  ce=1.2093 mse=0.3275 ent=1.3827 loss=1.3717
+epoch   5/20  ce=1.1377 mse=0.2412 ent=1.3727 loss=1.2569  [0.6s]
+  step   200  ep   6  ce=1.0647 mse=0.2353 ent=1.2875 loss=1.1810
+epoch   6/20  ce=1.1000 mse=0.2390 ent=1.3349 loss=1.2182  [0.7s]
+epoch   7/20  ce=1.0635 mse=0.2353 ent=1.3093 loss=1.1798  [0.8s]
+  step   250  ep   8  ce=0.9958 mse=0.2060 ent=1.2902 loss=1.0975
+epoch   8/20  ce=1.0320 mse=0.2360 ent=1.2666 loss=1.1487  [0.9s]
+  step   300  ep   9  ce=1.0397 mse=0.3202 ent=1.2762 loss=1.1986
+epoch   9/20  ce=1.0033 mse=0.2360 ent=1.2417 loss=1.1201  [1.0s]
+  step   350  ep  10  ce=0.9568 mse=0.2301 ent=1.2367 loss=1.0706
+epoch  10/20  ce=0.9775 mse=0.2346 ent=1.2200 loss=1.0936  [1.1s]
+epoch  11/20  ce=0.9554 mse=0.2334 ent=1.1825 loss=1.0710  [1.2s]
+  step   400  ep  12  ce=1.0016 mse=0.2314 ent=1.1612 loss=1.1161
+epoch  12/20  ce=0.9358 mse=0.2333 ent=1.1679 loss=1.0513  [1.3s]
+  step   450  ep  13  ce=0.9091 mse=0.2134 ent=1.1214 loss=1.0147
+epoch  13/20  ce=0.9167 mse=0.2336 ent=1.1413 loss=1.0323  [1.4s]
+epoch  14/20  ce=0.9005 mse=0.2327 ent=1.1181 loss=1.0158  [1.5s]
+  step   500  ep  15  ce=0.9406 mse=0.2007 ent=1.1735 loss=1.0398
+epoch  15/20  ce=0.8851 mse=0.2330 ent=1.1044 loss=1.0005  [1.6s]
+  step   550  ep  16  ce=0.8203 mse=0.2948 ent=1.0670 loss=0.9667
+epoch  16/20  ce=0.8718 mse=0.2312 ent=1.0813 loss=0.9863  [1.7s]
+epoch  17/20  ce=0.8576 mse=0.2292 ent=1.0663 loss=0.9712  [1.8s]
+  step   600  ep  18  ce=0.8589 mse=0.2033 ent=1.0339 loss=0.9596
+epoch  18/20  ce=0.8453 mse=0.2314 ent=1.0492 loss=0.9600  [2.0s]
+  step   650  ep  19  ce=0.8052 mse=0.3148 ent=1.0174 loss=0.9616
+epoch  19/20  ce=0.8344 mse=0.2278 ent=1.0365 loss=0.9473  [2.1s]
+  step   700  ep  20  ce=0.8356 mse=0.4283 ent=1.0351 loss=1.0488
+epoch  20/20  ce=0.8227 mse=0.2299 ent=1.0210 loss=0.9366  [2.2s]
+
+Done in 2.2s. Exporting network...
+WARNING: output hidden=128 != source=64. JS cannot load this network as-is. Save as PyTorch state_dict instead or roll a JS-side enlargement. Writing full-dim weights anyway.
+Saved: tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json
+
+=== [2/3] Compare v3 (64h) vs v5 (128h) — expect mismatch warning ===
+A: tests/headless/checkpoints/phase-d/warmed-20e-v3-lambda05.json
+B: tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json
+A info: {'src_hidden': 64, 'src_n_features': 50, 'src_n_actions': 23, 'has_policy': True}
+B info: {'src_hidden': 128, 'src_n_features': 50, 'src_n_actions': 23, 'has_policy': True}
+
+Traceback (most recent call last):
+  File "/Users/adammeehan/Public/IACP-Skirmish-Async/python/compare_checkpoints.py", line 131, in <module>
+    sys.exit(main())
+  File "/Users/adammeehan/Public/IACP-Skirmish-Async/python/compare_checkpoints.py", line 80, in main
+    dw1 = (w1_b - w1_a).abs()
+RuntimeError: The size of tensor a (128) must match the size of tensor b (64) at non-singleton dimension 0
+
+=== [3/3] Ladder v5-h128 vs original at MCTS=25 (40g) ===
+[learnings] Migrated hidden size: 64 → 128 (warm-start: 64 neurons preserved, 64 new)
+[learnings] Migrated network: added policy head Wp[23×128]
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-data.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=0sims
+  [10/40] 1607.6s | A=2W 0L 8D (20.0%) | ΔVP 0.00 | ΔElo 24.2
+  [20/40] 2690.2s | A=4W 1L 15D (20.0%) | ΔVP 0.00 | ΔElo 29.8
+  [30/40] 4450.5s | A=8W 1L 21D (26.7%) | ΔVP 0.00 | ΔElo 74.8
+  [40/40] 5915.5s | A=10W 1L 29D (25.0%) | ΔVP 0.00 | ΔElo 72.9
+
+=== LADDER RESULT ===
+Games: 40
+A wins: 10 (25.0%)
+B wins: 1 (2.5%)
+Draws:  29 (72.5%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1536.4  B=1463.6
+Elo delta (A - B): 72.9 ± 53.7 (95% CI)
+Interpretation: SIGNIFICANT at 95%
+
+Per matchup:
+  3actWampaLiA: 2W 0L 8D (20.0%) | ΔVP 0.00
+  ATRT_Brawler: 2W 0L 8D (20.0%) | ΔVP 0.00
+  Bikes_Flames: 6W 0L 4D (60.0%) | ΔVP 0.00
+  Boba_v1: 0W 1L 9D (0.0%) | ΔVP 0.00
+
+=== v5-h128 pipeline complete ===

@@ -29,8 +29,19 @@
     "cardName": "Hostile Negotiation",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "Hostile Negotiation \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "count": 0,
+          "effect": "discardRandomFromHand",
+          "playerNum": 1
+        },
+        {
+          "count": 0,
+          "effect": "opponentDiscardRandomFromHand",
+          "playerNum": 2
+        }
+      ],
+      "log_message": "Hostile Negotiation \u2014 2 schema effect(s) applied."
     }
   },
   "p1CcDeck": [

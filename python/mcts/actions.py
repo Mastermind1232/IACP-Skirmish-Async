@@ -250,6 +250,23 @@ def legal_actions(game: GameState) -> List[Action]:
                     if not is_chebyshev_adjacent(start_coord, tgt_coord):
                         continue
                 else:
+                    # Pre-LOS gate: camouflage_mak / camouflage_scout_trooper —
+                    # hostile figures 4+ spaces away cannot target this
+                    # defender on a ranged attack. JS site:
+                    # src/handlers/combat.js:2269 (post-declare check).
+                    tgt_dc_name = tgt_key.rsplit('-', 2)[0] if '-' in tgt_key else tgt_key
+                    tgt_eff = get_dc_effect(tgt_dc_name) or {}
+                    tgt_special_ids = tgt_eff.get('specialAbilityIds') or []
+                    has_camo = ('camouflage_mak' in tgt_special_ids
+                                 or 'camouflage_scout_trooper' in tgt_special_ids)
+                    if has_camo:
+                        from python.engine.mechanics.adjacency import parse_coord
+                        ax, ay = parse_coord(start_coord)
+                        bx, by = parse_coord(tgt_coord)
+                        if ax >= 0 and bx >= 0:
+                            cheby = max(abs(ax - bx), abs(ay - by))
+                            if cheby >= 4:
+                                continue
                     # Match stepper's LOS check: filter opened doors and
                     # consider other-figure blocking, so legal_actions
                     # doesn't offer attacks the stepper would reject.

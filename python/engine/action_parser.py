@@ -387,6 +387,133 @@ def _parse_deployment_fig(cid, uid, game, opts):
     )
 
 
+# Mid-activation customIds — recorded by the JS recorder once both fast-paths
+# (dc_end_activation_ + pass_activation_turn_) start letting full activation
+# cycles run. Python doesn't yet have stepper handlers that mutate state for
+# these (handlers/dc-play-area.js + handlers/combat.js are not ported), so
+# replay treats them as "applied no-ops": the action is parsed and dispatched,
+# but the dispatch handler in stepper.py either no-ops or routes to a stub.
+# This is intentional — it keeps drift surfacing real diffs (Python state
+# diverges from JS state on each mid-activation step) instead of hiding them
+# behind UnparseableCustomId/"unsupported" markers.
+def _parse_dc_move(cid: str, uid: str, game: Mapping[str, Any], opts: Mapping[str, Any]) -> Optional[Action]:
+    # dc_move_{msgId}_f{figureIndex}
+    rest = cid[len('dc_move_'):]
+    m = re.match(r'^(.+)_f(\d+)$', rest)
+    if not m:
+        return None
+    msg_id = m.group(1)
+    figure_idx = int(m.group(2))
+    # Resolve figure_key from msgId via the headless `hl{pn}dc{i}` convention.
+    pd = _msg_id_to_player_and_dc(msg_id)
+    figure_key = None
+    player_num = _user_to_player_num(game, uid)
+    if pd is not None:
+        player_num = pd[0]
+        figure_key = _dc_index_to_figure_key(game, pd[0], pd[1])
+        # Replace tail `-0` group index with `-{figure_idx}` for multi-figure DCs.
+        if figure_key and figure_idx > 0:
+            figure_key = re.sub(r'-(\d+)$', f'-{figure_idx}', figure_key)
+    return Action(
+        type=ActionType.MOVE_FIGURE, player=player_num,
+        params={'msg_id': msg_id, 'figure_idx': figure_idx, 'figure_key': figure_key},
+    )
+
+
+def _parse_move_pick(cid: str, uid: str, game: Mapping[str, Any], opts: Mapping[str, Any]) -> Optional[Action]:
+    # move_pick_{moveKey}_{coord} | move_pick_{moveKey}_done
+    # moveKey is `{msgId}_{figureIdx}` (msgId = hl{pn}dc{i} so safe to rsplit).
+    # The "done" variant means "stop moving here" — no coord, so skip in
+    # replay (returning None lets the harness mark it unsupported).
+    rest = cid[len('move_pick_'):]
+    if rest.endswith('_done'):
+        return None
+    parts = rest.rsplit('_', 1)
+    if len(parts) != 2:
+        return None
+    move_key, coord = parts
+    # move_key shape: `hl{pn}dc{i}_f{idx}` — split off the `_f{idx}` tail.
+    msg_id = move_key
+    figure_idx = 0
+    fk_match = re.match(r'^(.+)_f(\d+)$', move_key)
+    if fk_match:
+        msg_id = fk_match.group(1)
+        figure_idx = int(fk_match.group(2))
+    pd = _msg_id_to_player_and_dc(msg_id)
+    figure_key = None
+    player_num = _user_to_player_num(game, uid)
+    if pd is not None:
+        player_num = pd[0]
+        figure_key = _dc_index_to_figure_key(game, pd[0], pd[1])
+        if figure_key and figure_idx > 0:
+            figure_key = re.sub(r'-(\d+)$', f'-{figure_idx}', figure_key)
+    return Action(
+        type=ActionType.MOVE_PICK_SPACE, player=player_num,
+        params={'move_key': move_key, 'coord': coord, 'figure_key': figure_key},
+    )
+
+
+def _parse_dc_special(cid: str, uid: str, game: Mapping[str, Any], opts: Mapping[str, Any]) -> Optional[Action]:
+    # dc_special_{specialIdx}_{msgId}
+    rest = cid[len('dc_special_'):]
+    m = re.match(r'^(\d+)_(.+)$', rest)
+    if not m:
+        return None
+    special_idx = int(m.group(1))
+    msg_id = m.group(2)
+    pd = _msg_id_to_player_and_dc(msg_id)
+    figure_key = None
+    player_num = _user_to_player_num(game, uid)
+    if pd is not None:
+        player_num = pd[0]
+        figure_key = _dc_index_to_figure_key(game, pd[0], pd[1])
+    return Action(
+        type=ActionType.DC_SPECIAL, player=player_num,
+        params={'msg_id': msg_id, 'special_idx': special_idx, 'figure_key': figure_key},
+    )
+
+
+def _parse_dc_ability_choice(cid: str, uid: str, game: Mapping[str, Any], opts: Mapping[str, Any]) -> Optional[Action]:
+    # dc_ability_choice_{gameId}_{msgId}_{abilityIdx}_{choiceIdx}
+    # gameId can contain leading zeros but no underscores; msgId is `hl{pn}dc{i}`
+    # also without underscores. So splitting by '_' from the right is safe:
+    # last two segments are choiceIdx + abilityIdx, prior is msgId, head is gameId.
+    rest = cid[len('dc_ability_choice_'):]
+    parts = rest.split('_')
+    if len(parts) < 4:
+        return None
+    try:
+        choice_index = int(parts[-1])
+        ability_idx = int(parts[-2])
+    except ValueError:
+        return None
+    msg_id = parts[-3]
+    pd = _msg_id_to_player_and_dc(msg_id)
+    player_num = pd[0] if pd is not None else _user_to_player_num(game, uid)
+    return Action(
+        type=ActionType.DC_ABILITY_CHOICE, player=player_num,
+        params={
+            'msg_id': msg_id,
+            'special_idx': ability_idx,
+            'choice_index': choice_index,
+        },
+    )
+
+
+def _parse_phase_gate_ready(cid: str, uid: str, game: Mapping[str, Any], opts: Mapping[str, Any]) -> Optional[Action]:
+    # phase_gate_ready_{gameId}
+    return Action(
+        type=ActionType.PHASE_GATE_READY, player=_user_to_player_num(game, uid),
+    )
+
+
+def _parse_combat_ready(cid: str, uid: str, game: Mapping[str, Any], opts: Mapping[str, Any]) -> Optional[Action]:
+    # combat_ready_{gameId}
+    return Action(
+        type=ActionType.COMBAT_READY, player=_user_to_player_num(game, uid),
+    )
+
+
 # Dispatch table: exact prefix → parser function.
 _PARSERS = (
     ('auto_deploy_', _parse_auto_deploy),
@@ -395,6 +522,13 @@ _PARSERS = (
     ('end_end_of_round_', _parse_end_end_of_round),
     ('dc_end_activation_', _parse_dc_end_activation),
     ('dc_activate_', _parse_dc_activate),
+    # Mid-activation prefixes (recorded but no Python state mutation yet)
+    ('dc_move_', _parse_dc_move),
+    ('move_pick_', _parse_move_pick),
+    ('dc_special_', _parse_dc_special),
+    ('dc_ability_choice_', _parse_dc_ability_choice),
+    ('phase_gate_ready_', _parse_phase_gate_ready),
+    ('combat_ready_', _parse_combat_ready),
     # Bridge-fallback prefixes (owned by stepper_bridge)
     ('cc_confirm_play_', _parse_cc_confirm_play),
     ('cc_cancel_play_', _parse_cc_cancel_play),
@@ -430,10 +564,42 @@ def _parse_attack_target(cid, uid, game, opts):
         target_idx = int(tgt_str)
     except ValueError:
         return None
+    # Prefer the JS-resolved keys from pendingCombat (set by the attack
+    # handler the moment it ran). Falls back to msgId resolution +
+    # attackTargets list when pendingCombat isn't populated.
+    pd = _msg_id_to_player_and_dc(msg_id)
+    attacker_key = None
+    target_key = None
+    player_num = _user_to_player_num(game, uid)
+    pc = game.get('pendingCombat') if isinstance(game, Mapping) else None
+    if isinstance(pc, Mapping):
+        attacker_key = (pc.get('attackerFigureKey')
+                        or (pc.get('attacker') or {}).get('figureKey')
+                        if isinstance(pc.get('attacker'), Mapping) else
+                        pc.get('attackerFigureKey'))
+        target = pc.get('target')
+        if isinstance(target, Mapping):
+            target_key = target.get('figureKey') or target.get('figure_key')
+        if pc.get('attackerPlayerNum'):
+            player_num = int(pc['attackerPlayerNum'])
+    if not attacker_key and pd is not None:
+        player_num = pd[0]
+        attacker_key = _dc_index_to_figure_key(game, pd[0], pd[1])
+        if attacker_key and figure_idx > 0:
+            attacker_key = re.sub(r'-(\d+)$', f'-{figure_idx}', attacker_key)
+    if not target_key:
+        targets_map = game.get('attackTargets') if isinstance(game, Mapping) else None
+        if isinstance(targets_map, Mapping):
+            bucket = targets_map.get(f'{msg_id}_{figure_idx}')
+            if isinstance(bucket, list) and 0 <= target_idx < len(bucket):
+                t = bucket[target_idx]
+                if isinstance(t, Mapping):
+                    target_key = t.get('figureKey') or t.get('figure_key')
     return Action(
-        type=ActionType.ATTACK_TARGET, player=_user_to_player_num(game, uid),
+        type=ActionType.ATTACK_TARGET, player=player_num,
         params={'msg_id': msg_id, 'figure_idx': figure_idx,
-                'target_idx': target_idx},
+                'target_idx': target_idx,
+                'attacker_key': attacker_key, 'target_key': target_key},
     )
 
 
@@ -448,12 +614,15 @@ def _parse_combat_reroll(cid, uid, game, opts):
     parts = rest.split('_')
     if len(parts) < 3:
         return None
-    side = parts[1]
+    side_raw = parts[1]
+    # Python handler expects full names ('attacker' / 'defender'); the JS
+    # customId carries shorthand ('atk' / 'def'). Normalize.
+    side = {'atk': 'attacker', 'def': 'defender'}.get(side_raw, side_raw)
     tail = parts[2]
     if tail == 'done':
         return Action(
             type=ActionType.COMBAT_REROLL, player=_user_to_player_num(game, uid),
-            params={'side': side, 'done': True},
+            params={'side': side, 'done': True, 'indices': []},
         )
     try:
         idx = int(tail)
@@ -461,7 +630,7 @@ def _parse_combat_reroll(cid, uid, game, opts):
         return None
     return Action(
         type=ActionType.COMBAT_REROLL, player=_user_to_player_num(game, uid),
-        params={'side': side, 'die_idx': idx},
+        params={'side': side, 'die_idx': idx, 'indices': [idx]},
     )
 
 
@@ -474,21 +643,34 @@ def _parse_combat_surge(cid, uid, game, opts):
     tail = parts[1]
     if tail == 'done':
         return Action(
-            type=ActionType.COMBAT_SURGE, player=_user_to_player_num(game, uid),
-            params={'done': True},
+            type=ActionType.COMBAT_SKIP_SURGES, player=_user_to_player_num(game, uid),
+            params={},
         )
     if tail == 'bleed_prevention':
         return Action(
             type=ActionType.COMBAT_SURGE, player=_user_to_player_num(game, uid),
-            params={'spend': 'bleed_prevention'},
+            params={'ability': 'bleed_prevention'},
         )
     try:
         idx = int(tail)
     except ValueError:
         return None
+    # Look up the surge ability id from game.pendingCombat.surges[idx].
+    pc = game.get('pendingCombat') if isinstance(game, Mapping) else None
+    ability = None
+    if isinstance(pc, Mapping):
+        surges = pc.get('surges') or pc.get('availableSurges') or []
+        if isinstance(surges, list) and 0 <= idx < len(surges):
+            entry = surges[idx]
+            if isinstance(entry, Mapping):
+                ability = entry.get('id') or entry.get('abilityId') or entry.get('ability')
+            elif isinstance(entry, str):
+                ability = entry
+    if not ability:
+        ability = f'surge_{idx}'  # fallback so handler doesn't crash
     return Action(
         type=ActionType.COMBAT_SURGE, player=_user_to_player_num(game, uid),
-        params={'surge_idx': idx},
+        params={'surge_idx': idx, 'ability': ability},
     )
 
 
@@ -513,15 +695,40 @@ def _parse_combat_token(cid, uid, game, opts):
 
 def _parse_combat_resolve_ready(cid, uid, game, opts):
     # combat_resolve_ready_{gameId}
+    # Handler needs `damage (int)` and optionally `defeated (bool)`. Read
+    # them from the pendingCombat snapshot the JS engine has already filled.
+    pc = game.get('pendingCombat') if isinstance(game, Mapping) else None
+    damage = 0
+    defeated = False
+    if isinstance(pc, Mapping):
+        # JS stamps `damage`/`finalDamage`/`netDamage` depending on phase.
+        for k in ('finalDamage', 'damage', 'netDamage', 'damageDealt'):
+            v = pc.get(k)
+            if isinstance(v, int) and v >= 0:
+                damage = v
+                break
+        defeated = bool(pc.get('defeated') or pc.get('targetDefeated'))
     return Action(
         type=ActionType.COMBAT_RESOLVE, player=_user_to_player_num(game, uid),
+        params={'damage': damage, 'defeated': defeated},
     )
 
 
 def _parse_combat_gate(cid, uid, game, opts):
     # combat_gate_{gameId}
+    # The handler requires a `gate (str)` param to stamp. The customId
+    # carries no gate info; in JS the gate is implicit in the current UI
+    # phase. Best proxy in replay: read the next-step phase from
+    # pendingCombat.nextPhase or pendingCombat.phase.
+    pc = game.get('pendingCombat') if isinstance(game, Mapping) else None
+    gate = None
+    if isinstance(pc, Mapping):
+        gate = pc.get('nextPhase') or pc.get('phase') or 'gate'
+    if not gate:
+        gate = 'gate'
     return Action(
         type=ActionType.COMBAT_GATE, player=_user_to_player_num(game, uid),
+        params={'gate': gate},
     )
 
 
@@ -616,14 +823,23 @@ def step_custom_id(
     custom_id: str,
     user_id: str = '',
     action_opts: Optional[Mapping[str, Any]] = None,
+    parse_state: Optional[Mapping[str, Any]] = None,
 ) -> GameState:
     """Parse a JS customId into a Python Action and apply it.
+
+    parse_state: optional alternate state for the parser (typically the
+    previous recorded JS snapshot, used during drift replay so parsers can
+    read transient UI fields Python's stubs don't populate). Falls back to
+    `game` when omitted.
 
     Raises UnparseableCustomId if no parser handles the prefix.
     Any error from the action handler itself propagates unchanged.
     """
     from python.engine.stepper import step  # local import avoids cycle
-    parsed = parse_custom_id(custom_id, user_id, game, action_opts)
+    parsed = parse_custom_id(
+        custom_id, user_id, parse_state if parse_state is not None else game,
+        action_opts,
+    )
     if parsed is None:
         raise UnparseableCustomId(
             f'no parser for customId={custom_id!r} '

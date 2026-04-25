@@ -1,0 +1,184 @@
+=== v9 pipeline start: Sun Apr 19 23:45:02 CDT 2026 ===
+
+=== [1/6] Data-gen: v5-h128 vs v5-h128, 40g, MCTS=25, noise(0.3/0.05), record both sides ===
+NOTE: using eval-ladder (stuck-breakers) with --root-temp/--dirichlet-eps for self-match diversity.
+[record-policy] appending to /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/buf-v9-raw.json (starting samples: 0, side: both)
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=25sims
+  [10/40] 496.1s | A=1W 5L 4D (10.0%) | ΔVP 0.00 | ΔElo -54.2
+  [20/40] 1584.9s | A=3W 7L 10D (15.0%) | ΔVP 0.00 | ΔElo -36.5
+  [30/40] 2262.4s | A=5W 10L 15D (16.7%) | ΔVP 0.00 | ΔElo -39.9
+  [40/40] 2923.6s | A=5W 14L 21D (12.5%) | ΔVP 0.00 | ΔElo -79.9
+
+[record-policy] saved 17462 samples → /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/buf-v9-raw.json
+[record-policy] z distribution: -1=0 0=13990 +1=3472 null=0 (this run added 17462)
+
+=== LADDER RESULT ===
+Games: 40
+A wins: 5 (12.5%)
+B wins: 14 (35.0%)
+Draws:  21 (52.5%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1460.1  B=1539.9
+Elo delta (A - B): -79.9 ± 73.9 (95% CI)
+Interpretation: SIGNIFICANT at 95%
+
+Per matchup:
+  3actWampaLiA: 4W 0L 6D (40.0%) | ΔVP 0.00
+  ATRT_Brawler: 0W 7L 3D (0.0%) | ΔVP 0.00
+  Bikes_Flames: 1W 0L 9D (10.0%) | ΔVP 0.00
+  Boba_v1: 0W 7L 3D (0.0%) | ΔVP 0.00
+
+=== [2/6] Filter decisive + merge with v4-merged ===
+Per-source:
+  tests/headless/checkpoints/phase-d/buf-v4-merged.json: 8861 in → 8861 decisive  z-hist={-1: 775, 1: 8086}
+  tests/headless/checkpoints/phase-d/buf-v9-raw.json: 17462 in → 3472 decisive  z-hist={0: 13990, 1: 3472}
+Merged: 12333 decisive / 26323 total  z-hist={-1: 775, 1: 11558}
+Saved: tests/headless/checkpoints/phase-d/buf-v9-merged.json
+
+=== [3/6] Train v9 (20ep, λ_v=0.5, from v5 weights, 128-hidden) ===
+Device: cpu
+Loading learnings: tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json
+  source net: hidden=128 features=50 actions=23 has_policy=True
+Loading buffer: tests/headless/checkpoints/phase-d/buf-v9-merged.json
+  12333 samples in buffer
+  12333 samples with z != None (features=50 actions=23)
+  loaded JS -> PyTorch: {'src_hidden': 128, 'src_n_features': 50, 'src_n_actions': 23, 'has_policy': True}
+  z distribution: {-1: 775, 0: 0, 1: 11558}  (value head can only learn when at least two classes are present)
+
+Training: epochs=20 batch=256 lr=0.0003 wd=0.0001 lambda_v=0.5 beta=0.001
+epoch   1/20  ce=0.9255 mse=0.1624 ent=0.9666 loss=1.0058  [0.2s]
+  step    50  ep   2  ce=0.8173 mse=0.1398 ent=0.9774 loss=0.8863
+epoch   2/20  ce=0.7435 mse=0.1625 ent=0.9429 loss=0.8239  [0.3s]
+  step   100  ep   3  ce=0.6769 mse=0.0483 ent=0.8722 loss=0.7002
+epoch   3/20  ce=0.6850 mse=0.1588 ent=0.8938 loss=0.7635  [0.4s]
+  step   150  ep   4  ce=0.6163 mse=0.1711 ent=0.8569 loss=0.7009
+epoch   4/20  ce=0.6556 mse=0.1611 ent=0.8545 loss=0.7353  [0.6s]
+  step   200  ep   5  ce=0.6312 mse=0.1430 ent=0.8425 loss=0.7019
+epoch   5/20  ce=0.6395 mse=0.1604 ent=0.8260 loss=0.7189  [0.7s]
+  step   250  ep   6  ce=0.7118 mse=0.1690 ent=0.8391 loss=0.7954
+epoch   6/20  ce=0.6253 mse=0.1608 ent=0.8008 loss=0.7049  [0.8s]
+  step   300  ep   7  ce=0.6982 mse=0.1902 ent=0.7875 loss=0.7925
+epoch   7/20  ce=0.6171 mse=0.1563 ent=0.7838 loss=0.6945  [0.9s]
+  step   350  ep   8  ce=0.5381 mse=0.2502 ent=0.7770 loss=0.6625
+epoch   8/20  ce=0.6074 mse=0.1574 ent=0.7675 loss=0.6853  [1.0s]
+  step   400  ep   9  ce=0.5853 mse=0.1746 ent=0.7506 loss=0.6719
+epoch   9/20  ce=0.5964 mse=0.1535 ent=0.7526 loss=0.6724  [1.2s]
+  step   450  ep  10  ce=0.6007 mse=0.1254 ent=0.7491 loss=0.6627
+epoch  10/20  ce=0.5892 mse=0.1517 ent=0.7428 loss=0.6643  [1.3s]
+  step   500  ep  11  ce=0.6605 mse=0.2396 ent=0.7061 loss=0.7796
+epoch  11/20  ce=0.5803 mse=0.1542 ent=0.7278 loss=0.6566  [1.4s]
+  step   550  ep  12  ce=0.6451 mse=0.1253 ent=0.7234 loss=0.7070
+epoch  12/20  ce=0.5734 mse=0.1551 ent=0.7187 loss=0.6502  [1.5s]
+  step   600  ep  13  ce=0.5420 mse=0.1566 ent=0.7183 loss=0.6196
+epoch  13/20  ce=0.5701 mse=0.1534 ent=0.7071 loss=0.6461  [1.7s]
+  step   650  ep  14  ce=0.5912 mse=0.1566 ent=0.7350 loss=0.6688
+epoch  14/20  ce=0.5623 mse=0.1516 ent=0.7008 loss=0.6374  [1.8s]
+  step   700  ep  15  ce=0.6131 mse=0.1328 ent=0.7267 loss=0.6788
+epoch  15/20  ce=0.5565 mse=0.1497 ent=0.6962 loss=0.6306  [1.9s]
+  step   750  ep  16  ce=0.5656 mse=0.1284 ent=0.7004 loss=0.6291
+epoch  16/20  ce=0.5512 mse=0.1532 ent=0.6829 loss=0.6272  [2.0s]
+  step   800  ep  17  ce=0.4657 mse=0.1426 ent=0.6459 loss=0.5363
+epoch  17/20  ce=0.5426 mse=0.1531 ent=0.6777 loss=0.6185  [2.1s]
+  step   850  ep  18  ce=0.5748 mse=0.0631 ent=0.7010 loss=0.6057
+epoch  18/20  ce=0.5385 mse=0.1482 ent=0.6683 loss=0.6120  [2.3s]
+  step   900  ep  19  ce=0.5161 mse=0.1566 ent=0.6561 loss=0.5937
+epoch  19/20  ce=0.5339 mse=0.1511 ent=0.6657 loss=0.6088  [2.4s]
+  step   950  ep  20  ce=0.4799 mse=0.1409 ent=0.6595 loss=0.5497
+epoch  20/20  ce=0.5280 mse=0.1490 ent=0.6579 loss=0.6018  [2.5s]
+
+Done in 2.5s. Exporting network...
+Saved: tests/headless/checkpoints/phase-d/warmed-20e-v9-h128.json
+
+=== [4/6] Compare v5 vs v9 ===
+A: tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json
+B: tests/headless/checkpoints/phase-d/warmed-20e-v9-h128.json
+A info: {'src_hidden': 128, 'src_n_features': 50, 'src_n_actions': 23, 'has_policy': True}
+B info: {'src_hidden': 128, 'src_n_features': 50, 'src_n_actions': 23, 'has_policy': True}
+
+Trunk W1 delta: max=3.0293e-01 mean=3.3022e-02 L2=4.0943e+00
+Policy Wp delta: max=3.0875e-01 mean=3.6793e-02 L2=2.8624e+00
+Wp L2 norms: A=8.7770e+00 B=1.0329e+01
+
+=== EARLY_GAME_COMBAT ===
+  V: A=+16.772 (tanh=+1.000)  B=+15.909 (tanh=+1.000)  |diff|=8.632e-01
+  Q diff max=1.295e+00   top-3 A:[(7, '21.71'), (12, '20.63'), (18, '19.08')]
+                                      B:[(7, '21.00'), (12, '19.95'), (18, '18.06')]
+  P diff max=1.086e-01   entropy A=1.401 B=1.089
+  top-3 P A:[(7, '0.416'), (1, '0.359'), (15, '0.112')]
+  top-3 P B:[(7, '0.525'), (1, '0.355'), (15, '0.085')]
+  argmax(Q) same: True (A=7 B=7)  argmax(P) same: True (A=7 B=7)
+
+=== MID_GAME_WINNING ===
+  V: A=+20.894 (tanh=+1.000)  B=+21.123 (tanh=+1.000)  |diff|=2.285e-01
+  Q diff max=7.188e-01   top-3 A:[(7, '25.73'), (12, '25.06'), (18, '23.00')]
+                                      B:[(7, '26.19'), (12, '25.62'), (18, '23.14')]
+  P diff max=1.598e-01   entropy A=1.012 B=0.548
+  top-3 P A:[(1, '0.719'), (8, '0.121'), (7, '0.091')]
+  top-3 P B:[(1, '0.879'), (8, '0.053'), (10, '0.028')]
+  argmax(Q) same: True (A=7 B=7)  argmax(P) same: True (A=1 B=1)
+
+=== LATE_GAME_LOSING ===
+  V: A=-8.457 (tanh=-1.000)  B=-8.060 (tanh=-1.000)  |diff|=3.975e-01
+  Q diff max=7.897e-01   top-3 A:[(7, '-2.29'), (12, '-4.42'), (18, '-5.92')]
+                                      B:[(7, '-1.85'), (12, '-3.98'), (18, '-5.48')]
+  P diff max=1.855e-01   entropy A=1.293 B=0.896
+  top-3 P A:[(1, '0.533'), (6, '0.271'), (8, '0.089')]
+  top-3 P B:[(1, '0.718'), (6, '0.180'), (10, '0.055')]
+  argmax(Q) same: True (A=7 B=7)  argmax(P) same: True (A=1 B=1)
+
+
+=== [5/6] Ladder v9 vs v5 MCTS=25 (40g symmetric — primary ship gate) ===
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v9-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=25sims
+  [10/40] 2043.7s | A=1W 2L 7D (10.0%) | ΔVP 0.00 | ΔElo -11.8
+  [20/40] 3776.7s | A=3W 2L 15D (15.0%) | ΔVP 0.00 | ΔElo 18.3
+  [30/40] 5706.4s | A=3W 2L 25D (10.0%) | ΔVP 0.00 | ΔElo 11.4
+  [40/40] 7177.7s | A=3W 3L 34D (7.5%) | ΔVP 0.00 | ΔElo -6.7
+
+=== LADDER RESULT ===
+Games: 40
+A wins: 3 (7.5%)
+B wins: 3 (7.5%)
+Draws:  34 (85.0%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1496.6  B=1503.4
+Elo delta (A - B): -6.7 ± 41.7 (95% CI)
+Interpretation: NOT significant at 95%
+
+Per matchup:
+  3actWampaLiA: 0W 3L 7D (0.0%) | ΔVP 0.00
+  ATRT_Brawler: 0W 0L 10D (0.0%) | ΔVP 0.00
+  Bikes_Flames: 3W 0L 7D (30.0%) | ΔVP 0.00
+  Boba_v1: 0W 0L 10D (0.0%) | ΔVP 0.00
+
+=== [6/6] Ladder v9 vs orig-64h MCTS=25 (40g asymmetric — historical track) ===
+[learnings] Migrated hidden size: 64 → 128 (warm-start: 64 neurons preserved, 64 new)
+[learnings] Migrated network: added policy head Wp[23×128]
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v9-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/orig-64h-baseline.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=0sims
+  [10/40] 1274.1s | A=2W 2L 6D (20.0%) | ΔVP 0.00 | ΔElo -0.5
+  [20/40] 2580.6s | A=6W 2L 12D (30.0%) | ΔVP 0.00 | ΔElo 52.7
+  [30/40] 4458.2s | A=8W 2L 20D (26.7%) | ΔVP 0.00 | ΔElo 59.8
+  [40/40] 5458.7s | A=12W 2L 26D (30.0%) | ΔVP 0.00 | ΔElo 87.7
+
+=== LADDER RESULT ===
+Games: 40
+A wins: 12 (30.0%)
+B wins: 2 (5.0%)
+Draws:  26 (65.0%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1543.9  B=1456.1
+Elo delta (A - B): 87.7 ± 61.6 (95% CI)
+Interpretation: SIGNIFICANT at 95%
+
+Per matchup:
+  3actWampaLiA: 2W 1L 7D (20.0%) | ΔVP 0.00
+  ATRT_Brawler: 1W 1L 8D (10.0%) | ΔVP 0.00
+  Bikes_Flames: 9W 0L 1D (90.0%) | ΔVP 0.00
+  Boba_v1: 0W 0L 10D (0.0%) | ΔVP 0.00
+
+=== v9 pipeline complete: Mon Apr 20 04:04:29 CDT 2026 ===
+v9 ckpt:   tests/headless/checkpoints/phase-d/warmed-20e-v9-h128.json
+v9 buf:    tests/headless/checkpoints/phase-d/buf-v9-merged.json
+Logs:      tests/headless/checkpoints/phase-d/ladder-v9-*.log  tests/headless/checkpoints/phase-d/v9-pipeline.log

@@ -29,8 +29,13 @@
     "cardName": "Harsh Environment",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "Harsh Environment \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "effect": "harshEnvironment",
+          "playerNum": 1
+        }
+      ],
+      "log_message": "This round: figures on exterior spaces apply -1 Evade; figures on interior spaces apply +1 Block. Applied automatically during defense rolls."
     }
   },
   "p1CcDeck": [

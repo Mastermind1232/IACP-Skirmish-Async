@@ -1,0 +1,26 @@
+=== Ladder v5-h128 vs v3 at MCTS=25 (40g symmetric) ===
+[learnings] Migrated hidden size: 64 → 128 (warm-start: 64 neurons preserved, 64 new)
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v3-lambda05.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=25sims
+  [10/40] 2698.1s | A=1W 0L 9D (10.0%) | ΔVP 0.00 | ΔElo 11.5
+  [20/40] 5265.5s | A=4W 0L 16D (20.0%) | ΔVP 0.00 | ΔElo 45.6
+  [30/40] 7537.8s | A=5W 0L 25D (16.7%) | ΔVP 0.00 | ΔElo 40.1
+  [40/40] 9675.8s | A=7W 0L 33D (17.5%) | ΔVP 0.00 | ΔElo 53.0
+
+=== LADDER RESULT ===
+Games: 40
+A wins: 7 (17.5%)
+B wins: 0 (0.0%)
+Draws:  33 (82.5%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1526.5  B=1473.5
+Elo delta (A - B): 53.0 ± 42.2 (95% CI)
+Interpretation: SIGNIFICANT at 95%
+
+Per matchup:
+  3actWampaLiA: 0W 0L 10D (0.0%) | ΔVP 0.00
+  ATRT_Brawler: 0W 0L 10D (0.0%) | ΔVP 0.00
+  Bikes_Flames: 7W 0L 3D (70.0%) | ΔVP 0.00
+  Boba_v1: 0W 0L 10D (0.0%) | ΔVP 0.00
+
+=== v5-vs-v3 ladder complete ===

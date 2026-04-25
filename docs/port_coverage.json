@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T04:21:01.797237+00:00",
+  "generated": "2026-04-25T21:31:20.271363+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,14 +8,14 @@
       "total": 293
     },
     "abilities": {
-      "real": 275,
-      "stub": 35,
+      "real": 277,
+      "stub": 33,
       "missing": 0,
       "total": 310
     },
     "missions": {
-      "validated": 8,
-      "partial": 0,
+      "validated": 0,
+      "partial": 8,
       "missing": 0,
       "total": 8
     },
@@ -353,8 +353,8 @@
       "bully_jabba": "real",
       "call_the_shots_hera": "real",
       "calming_presence_yoda": "real",
-      "camouflage_mak": "stub",
-      "camouflage_scout_trooper": "stub",
+      "camouflage_mak": "real",
+      "camouflage_scout_trooper": "real",
       "cassian_said_i_had_to": "real",
       "charge": "real",
       "charge_generators": "real",
@@ -634,14 +634,14 @@
       "you_have_something_i_want_gideon": "real"
     },
     "missions": {
-      "mos-eisley-outskirts": "validated",
-      "corellian-underground": "validated",
-      "chopper-base-atollon": "validated",
-      "lothal-wastes": "validated",
-      "devaron-garrison": "validated",
-      "anchorhead-cantina-bar": "validated",
-      "development-facility": "validated",
-      "hoth-battle-station": "validated"
+      "mos-eisley-outskirts": "partial",
+      "corellian-underground": "partial",
+      "chopper-base-atollon": "partial",
+      "lothal-wastes": "partial",
+      "devaron-garrison": "partial",
+      "anchorhead-cantina-bar": "partial",
+      "development-facility": "partial",
+      "hoth-battle-station": "partial"
     },
     "actions": {
       "ACTIVATE_DC": "registered",
@@ -733,8 +733,6 @@
       "adapt_blaise",
       "adaptive_skills_mara_jade",
       "attached_dio",
-      "camouflage_mak",
-      "camouflage_scout_trooper",
       "coordinated_hunt_purge_commander",
       "defensive_fire_bokatan",
       "devout_chirrut",
@@ -766,7 +764,16 @@
       "vague_and_unconvincing_k2s0",
       "versatile_weaponry_hk_elite"
     ],
-    "missions": [],
+    "missions": [
+      "anchorhead-cantina-bar",
+      "chopper-base-atollon",
+      "corellian-underground",
+      "devaron-garrison",
+      "development-facility",
+      "hoth-battle-station",
+      "lothal-wastes",
+      "mos-eisley-outskirts"
+    ],
     "actions": []
   },
   "cc_dead_code": [

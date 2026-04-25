@@ -29,8 +29,13 @@
     "cardName": "Lure of the Dark Side",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "Lure of the Dark Side \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "effect": "lureOfTheDarkSide",
+          "playerNum": 1
+        }
+      ],
+      "log_message": "Lure of the Dark Side \u2014 1 schema effect(s) applied."
     }
   },
   "p1CcDeck": [

@@ -1,0 +1,1989 @@
+{
+  "actions": [
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "dawn-of-rebellion_game_000.jsonl",
+        "dawn-of-rebellion_game_001.jsonl",
+        "dawn-of-rebellion_game_002.jsonl",
+        "devaron-garrison_game_000.jsonl",
+        "devaron-garrison_game_001.jsonl",
+        "devaron-garrison_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_001.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "lothal-wastes_game_000.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "lothal-wastes_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl",
+        "passive-coverage_aim-rebel-elite_000.jsonl",
+        "passive-coverage_aim-rebel-elite_001.jsonl",
+        "passive-coverage_aim-rebel-trooper_000.jsonl",
+        "passive-coverage_aim-rebel-trooper_001.jsonl",
+        "passive-coverage_dark-trooper-targeting_000.jsonl",
+        "passive-coverage_dark-trooper-targeting_001.jsonl",
+        "passive-coverage_jawa-take-cover_000.jsonl",
+        "passive-coverage_jawa-take-cover_001.jsonl",
+        "passive-coverage_jet-trooper-agile_000.jsonl",
+        "passive-coverage_jet-trooper-agile_001.jsonl",
+        "passive-coverage_kotun-dead-precise_000.jsonl",
+        "passive-coverage_kotun-dead-precise_001.jsonl",
+        "passive-coverage_r2d2-lucky_000.jsonl",
+        "passive-coverage_r2d2-lucky_001.jsonl",
+        "passive-coverage_verena-improvised-cover_000.jsonl",
+        "passive-coverage_verena-improvised-cover_001.jsonl"
+      ],
+      "drift_hits": 724,
+      "enum": "ACTIVATE_DC",
+      "has_oracle": true,
+      "oracle_files": [
+        "python/parity/oracles/abilities/test_pattern_c_combat_passives.py",
+        "python/parity/oracles/combat/test_orchestrator_oracles.py"
+      ],
+      "parser_prefixes": [
+        "dc_activate_"
+      ],
+      "registered": true,
+      "string": "activate_dc",
+      "verdict": "GOLD"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "ARSENAL_PICK",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "arsenal_pick_"
+      ],
+      "registered": true,
+      "string": "arsenal_pick",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 70,
+      "enum": "ATTACK_TARGET",
+      "has_oracle": true,
+      "oracle_files": [
+        "python/parity/oracles/abilities/test_pattern_c_combat_passives.py"
+      ],
+      "parser_prefixes": [
+        "attack_target_"
+      ],
+      "registered": true,
+      "string": "attack_target",
+      "verdict": "GOLD"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "AUTO_DEPLOY",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "auto_deploy_"
+      ],
+      "registered": true,
+      "string": "auto_deploy",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "BOMB_DROP_SPACE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "bomb_drop_space",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "BO_RIFLE_SKIP",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "bo_rifle_skip",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "BO_RIFLE_USE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "bo_rifle_use",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "CC_CANCEL_PLAY",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "cc_cancel_play_"
+      ],
+      "registered": true,
+      "string": "cc_cancel_play",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "CC_CHOICE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "cc_choice",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "CC_CONFIRM_PLAY",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "cc_confirm_play_"
+      ],
+      "registered": true,
+      "string": "cc_confirm_play",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "CC_DRAW",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "cc_draw",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "CC_SPACE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "cc_space",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "CELEBRATION_PASS",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "celebration_pass_"
+      ],
+      "registered": true,
+      "string": "celebration_pass",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "CELEBRATION_PLAY",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "celebration_play_"
+      ],
+      "registered": true,
+      "string": "celebration_play",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 291,
+      "enum": "COMBAT_GATE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "combat_gate_"
+      ],
+      "registered": true,
+      "string": "combat_gate",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "COMBAT_PASSIVE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "combat_passive_"
+      ],
+      "registered": true,
+      "string": "combat_passive",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 139,
+      "enum": "COMBAT_READY",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "combat_ready_"
+      ],
+      "registered": true,
+      "string": "combat_ready",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 31,
+      "enum": "COMBAT_REROLL",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "combat_reroll_",
+        "pre_reroll_"
+      ],
+      "registered": true,
+      "string": "combat_reroll",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 16,
+      "enum": "COMBAT_RESOLVE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "combat_resolve_ready_"
+      ],
+      "registered": true,
+      "string": "combat_resolve",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 136,
+      "enum": "COMBAT_ROLL",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "combat_roll_"
+      ],
+      "registered": true,
+      "string": "combat_roll",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "COMBAT_SKIP_SURGES",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "combat_skip_surges",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 42,
+      "enum": "COMBAT_SURGE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "combat_surge_"
+      ],
+      "registered": true,
+      "string": "combat_surge",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "COMBAT_TOKEN",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "combat_token_"
+      ],
+      "registered": true,
+      "string": "combat_token",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "COMM_DISRUPTION_PLAY",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "comm_disruption_play_"
+      ],
+      "registered": true,
+      "string": "comm_disruption_play",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "COMM_DISRUPTION_SKIP",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "comm_disruption_skip_"
+      ],
+      "registered": true,
+      "string": "comm_disruption_skip",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "CONFIRM_ATTACHMENT",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "confirm_attachment",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "COVER_FIRE_BLOCK",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "cover_fire_block_"
+      ],
+      "registered": true,
+      "string": "cover_fire_block",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "COVER_FIRE_SKIP",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "cover_fire_skip_"
+      ],
+      "registered": true,
+      "string": "cover_fire_skip",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "dawn-of-rebellion_game_000.jsonl",
+        "dawn-of-rebellion_game_001.jsonl",
+        "dawn-of-rebellion_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 51,
+      "enum": "DC_ABILITY_CHOICE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "dc_ability_choice_"
+      ],
+      "registered": true,
+      "string": "dc_ability_choice",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "DC_ACTION",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "dc_action",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "dawn-of-rebellion_game_000.jsonl",
+        "dawn-of-rebellion_game_001.jsonl",
+        "dawn-of-rebellion_game_002.jsonl",
+        "devaron-garrison_game_000.jsonl",
+        "devaron-garrison_game_001.jsonl",
+        "devaron-garrison_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_001.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "lothal-wastes_game_000.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "lothal-wastes_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 677,
+      "enum": "DC_END_ACTIVATION",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "dc_end_activation_"
+      ],
+      "registered": true,
+      "string": "dc_end_activation",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "dawn-of-rebellion_game_000.jsonl",
+        "dawn-of-rebellion_game_001.jsonl",
+        "dawn-of-rebellion_game_002.jsonl",
+        "devaron-garrison_game_000.jsonl",
+        "devaron-garrison_game_001.jsonl",
+        "devaron-garrison_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_001.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "lothal-wastes_game_000.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "lothal-wastes_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 257,
+      "enum": "DC_SPECIAL",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "dc_special_"
+      ],
+      "registered": true,
+      "string": "dc_special",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "DEPLOY_DONE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "deployment_done",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "DEPLOY_FIGURE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "deployment_fig_"
+      ],
+      "registered": true,
+      "string": "deploy_figure",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "DEPLOY_PICK",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "deploy_pick",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "DEPLOY_ROW",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "deploy_row",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "DETERMINE_INITIATIVE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "determine_initiative",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "DRAFT_RANDOM",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "draft_random",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "DRAW_CC",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "draw_cc",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "dawn-of-rebellion_game_000.jsonl",
+        "dawn-of-rebellion_game_001.jsonl",
+        "dawn-of-rebellion_game_002.jsonl",
+        "devaron-garrison_game_000.jsonl",
+        "devaron-garrison_game_001.jsonl",
+        "devaron-garrison_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_001.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "lothal-wastes_game_000.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "lothal-wastes_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl",
+        "passive-coverage_aim-rebel-elite_000.jsonl",
+        "passive-coverage_aim-rebel-elite_001.jsonl",
+        "passive-coverage_aim-rebel-trooper_000.jsonl",
+        "passive-coverage_aim-rebel-trooper_001.jsonl",
+        "passive-coverage_dark-trooper-targeting_000.jsonl",
+        "passive-coverage_dark-trooper-targeting_001.jsonl",
+        "passive-coverage_jawa-take-cover_000.jsonl",
+        "passive-coverage_jawa-take-cover_001.jsonl",
+        "passive-coverage_jet-trooper-agile_000.jsonl",
+        "passive-coverage_jet-trooper-agile_001.jsonl",
+        "passive-coverage_kotun-dead-precise_000.jsonl",
+        "passive-coverage_kotun-dead-precise_001.jsonl",
+        "passive-coverage_r2d2-lucky_000.jsonl",
+        "passive-coverage_r2d2-lucky_001.jsonl",
+        "passive-coverage_verena-improvised-cover_000.jsonl",
+        "passive-coverage_verena-improvised-cover_001.jsonl"
+      ],
+      "drift_hits": 3539,
+      "enum": "END_ACTIVATION_PHASE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "status_phase_"
+      ],
+      "registered": true,
+      "string": "end_activation_phase",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "dawn-of-rebellion_game_000.jsonl",
+        "dawn-of-rebellion_game_001.jsonl",
+        "dawn-of-rebellion_game_002.jsonl",
+        "devaron-garrison_game_000.jsonl",
+        "devaron-garrison_game_001.jsonl",
+        "devaron-garrison_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_001.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "lothal-wastes_game_000.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "lothal-wastes_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 316,
+      "enum": "END_END_OF_ROUND",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "end_end_of_round_"
+      ],
+      "registered": true,
+      "string": "end_end_of_round",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "END_ROUND_PASS",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "end_round_pass",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "END_START_OF_ROUND",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "end_start_of_round",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "END_TURN",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "end_turn",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "FALSE_ORDERS_ATTACK",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "false_orders_attack",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "FALSE_ORDERS_MOVE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "false_orders_action_"
+      ],
+      "registered": true,
+      "string": "false_orders_move",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "FALSE_ORDERS_SKIP",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "false_orders_skip_"
+      ],
+      "registered": true,
+      "string": "false_orders_skip",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "INTERACT",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "interact",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "MAP_CONFIRM",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "map_confirm",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "MAP_GO_BACK",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "map_go_back",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "MAP_TYPE_CHOICE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "map_type_choice",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "MISSILE_SALVO_DIE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "missile_salvo_die_"
+      ],
+      "registered": true,
+      "string": "missile_salvo_die",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "MISSILE_SALVO_DONE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "missile_salvo_done_"
+      ],
+      "registered": true,
+      "string": "missile_salvo_done",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "dawn-of-rebellion_game_000.jsonl",
+        "dawn-of-rebellion_game_001.jsonl",
+        "dawn-of-rebellion_game_002.jsonl",
+        "devaron-garrison_game_000.jsonl",
+        "devaron-garrison_game_001.jsonl",
+        "devaron-garrison_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_001.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "lothal-wastes_game_000.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "lothal-wastes_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 438,
+      "enum": "MOVE_FIGURE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "dc_move_"
+      ],
+      "registered": true,
+      "string": "move_figure",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "MOVE_LETTER",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "move_letter",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "MOVE_MP",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "move_mp",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "devaron-garrison_game_000.jsonl",
+        "devaron-garrison_game_001.jsonl",
+        "devaron-garrison_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_001.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "lothal-wastes_game_000.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "lothal-wastes_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 602,
+      "enum": "MOVE_PICK_SPACE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "move_pick_"
+      ],
+      "registered": true,
+      "string": "move_pick_space",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "OB_SPACE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "ob_space",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "OVERWATCH_SPACE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "overwatch_space",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "dawn-of-rebellion_game_000.jsonl",
+        "dawn-of-rebellion_game_001.jsonl",
+        "dawn-of-rebellion_game_002.jsonl",
+        "devaron-garrison_game_000.jsonl",
+        "devaron-garrison_game_001.jsonl",
+        "devaron-garrison_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_001.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "lothal-wastes_game_000.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "lothal-wastes_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 266,
+      "enum": "PASS_ACTIVATION_TURN",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "pass_activation_turn_"
+      ],
+      "registered": true,
+      "string": "pass_activation_turn",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "dawn-of-rebellion_game_000.jsonl",
+        "dawn-of-rebellion_game_001.jsonl",
+        "dawn-of-rebellion_game_002.jsonl",
+        "devaron-garrison_game_000.jsonl",
+        "devaron-garrison_game_001.jsonl",
+        "devaron-garrison_game_002.jsonl",
+        "development-facility_game_000.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "hoth-battle-station_game_000.jsonl",
+        "hoth-battle-station_game_001.jsonl",
+        "hoth-battle-station_game_002.jsonl",
+        "lothal-wastes_game_000.jsonl",
+        "lothal-wastes_game_001.jsonl",
+        "lothal-wastes_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 942,
+      "enum": "PHASE_GATE_READY",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "phase_gate_ready_"
+      ],
+      "registered": true,
+      "string": "phase_gate_ready",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "PHASE_GATE_UNREADY",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "phase_gate_unready",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "PICK_ZONE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "pick_zone",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "PLAY_CC",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "play_cc",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "PLAY_CC_DOUBLE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "play_cc_double",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "PLAY_CC_SPECIAL",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "play_cc_special",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [
+        "anchorhead-cantina-bar_game_000.jsonl",
+        "anchorhead-cantina-bar_game_001.jsonl",
+        "anchorhead-cantina-bar_game_002.jsonl",
+        "chopper-base-atollon_game_000.jsonl",
+        "chopper-base-atollon_game_001.jsonl",
+        "chopper-base-atollon_game_002.jsonl",
+        "corellian-underground_game_000.jsonl",
+        "corellian-underground_game_001.jsonl",
+        "corellian-underground_game_002.jsonl",
+        "development-facility_game_001.jsonl",
+        "development-facility_game_002.jsonl",
+        "mos-eisley-outskirts_game_000.jsonl",
+        "mos-eisley-outskirts_game_001.jsonl",
+        "mos-eisley-outskirts_game_002.jsonl"
+      ],
+      "drift_hits": 49,
+      "enum": "POUNCE_SPACE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "pounce_space_"
+      ],
+      "registered": true,
+      "string": "pounce_space",
+      "verdict": "SILVER"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "POWER_TOKEN_CHOICE",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "power_token_choice",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "PT_OVERFLOW_DISCARD",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "pt_overflow",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "REFRESH_MAP",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "refresh_map",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "RUSH_PUSH_FIG",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "rush_push_fig_"
+      ],
+      "registered": true,
+      "string": "rush_push_fig",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "RUSH_PUSH_SKIP",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "rush_push_skip_"
+      ],
+      "registered": true,
+      "string": "rush_push_skip",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "SELECT_MAP",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "select_map",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "SHOULDER_RUSH_FIG",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "shoulder_rush_fig_"
+      ],
+      "registered": true,
+      "string": "shoulder_rush_fig",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "SHOULDER_RUSH_SKIP",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [
+        "shoulder_rush_skip_"
+      ],
+      "registered": true,
+      "string": "shoulder_rush_skip",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "SPECIAL_ACTION",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "special_action",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "SPREAD_PAIN_COND",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "spread_pain_cond",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "STRAIN_CHOICE_ALLDMG",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "strain_choice_alldmg",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "STRAIN_CHOICE_DISCARD",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "strain_choice_discard",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "SUBMIT_SQUAD",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "submit_squad",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "drift_files": [],
+      "drift_hits": 0,
+      "enum": "UNDO",
+      "has_oracle": false,
+      "oracle_files": [],
+      "parser_prefixes": [],
+      "registered": true,
+      "string": "undo",
+      "verdict": "UNVERIFIED"
+    }
+  ],
+  "generated": "2026-04-25T21:31:20.282715+00:00",
+  "headline": {
+    "action_types": 81,
+    "drift_distinct_actions": 18,
+    "drift_total_steps": 8600,
+    "drift_unmapped_prefixes": {
+      "interact_choice": 14
+    },
+    "live_coverage": {
+      "abilities": {
+        "missing": 0,
+        "real": 277,
+        "stub": 33,
+        "total": 310
+      },
+      "actions": {
+        "missing": 0,
+        "registered": 81,
+        "total": 81
+      },
+      "cc": {
+        "missing": 0,
+        "real": 293,
+        "stub": 0,
+        "total": 293
+      },
+      "missions": {
+        "missing": 0,
+        "partial": 8,
+        "total": 8,
+        "validated": 0
+      }
+    },
+    "pattern_c_buckets": {
+      "data-only-unreferenced": 10,
+      "deferred-abilities-js": 1,
+      "deferred-bridge": 7,
+      "deferred-cc-timing": 3,
+      "deferred-handler-combat": 10,
+      "deferred-handler-other": 3,
+      "wired-engine": 24
+    },
+    "pattern_c_total": 58,
+    "port_audit_counts": {
+      "COVERED-BY-SHAPE": 12,
+      "MISSING": 102,
+      "PARTIAL": 9,
+      "STUB-ONLY": 1,
+      "UNVERIFIED": 5
+    },
+    "verdict_counts": {
+      "GOLD": 2,
+      "SILVER": 16,
+      "UNVERIFIED": 63
+    },
+    "weighted_estimate": {
+      "layers": [
+        {
+          "contribution": 22.34,
+          "layer": "Ability resolution",
+          "ratio": 0.894,
+          "weight": 25
+        },
+        {
+          "contribution": 14.25,
+          "layer": "Combat math/primitives",
+          "ratio": 0.95,
+          "weight": 15
+        },
+        {
+          "contribution": 4.44,
+          "layer": "Action types verified (GOLD+SILVER)",
+          "ratio": 0.222,
+          "weight": 20
+        },
+        {
+          "contribution": 4.14,
+          "layer": "Pattern C wired ratio",
+          "ratio": 0.414,
+          "weight": 10
+        },
+        {
+          "contribution": 10.0,
+          "layer": "Command card effects",
+          "ratio": 1.0,
+          "weight": 10
+        },
+        {
+          "contribution": 0.0,
+          "layer": "Mission scoring",
+          "ratio": 0.0,
+          "weight": 10
+        },
+        {
+          "contribution": 1.0,
+          "layer": "Discord-flow handlers",
+          "ratio": 0.1,
+          "weight": 10
+        }
+      ],
+      "score": 56.2
+    }
+  },
+  "oracles_by_area": {
+    "abilities": {
+      "JS_PARITY": 0,
+      "PROBE": 0,
+      "SNAPSHOT": 2,
+      "UNIT": 23,
+      "tests": 651
+    },
+    "cards": {
+      "JS_PARITY": 0,
+      "PROBE": 0,
+      "SNAPSHOT": 1,
+      "UNIT": 0,
+      "tests": 2
+    },
+    "combat": {
+      "JS_PARITY": 3,
+      "PROBE": 1,
+      "SNAPSHOT": 0,
+      "UNIT": 8,
+      "tests": 205
+    },
+    "conditions": {
+      "JS_PARITY": 0,
+      "PROBE": 1,
+      "SNAPSHOT": 0,
+      "UNIT": 2,
+      "tests": 32
+    },
+    "los": {
+      "JS_PARITY": 1,
+      "PROBE": 3,
+      "SNAPSHOT": 0,
+      "UNIT": 0,
+      "tests": 21
+    },
+    "missions": {
+      "JS_PARITY": 0,
+      "PROBE": 0,
+      "SNAPSHOT": 0,
+      "UNIT": 1,
+      "tests": 41
+    },
+    "movement": {
+      "JS_PARITY": 1,
+      "PROBE": 1,
+      "SNAPSHOT": 0,
+      "UNIT": 2,
+      "tests": 42
+    }
+  },
+  "pattern_c_catalog": {
+    "adapt_blaise": {
+      "js_site": "src/engine/activation-setup.js (start-of-activation hook)",
+      "kind": "bridge",
+      "status": "deferred-bridge"
+    },
+    "adaptive_skills_mara_jade": {
+      "js_site": "src/game/cc-timing.js + handlers/cc-hand.js (CC reroll gate)",
+      "kind": "cc-timing",
+      "status": "deferred-cc-timing"
+    },
+    "adv_targeting_computer_dark_trooper": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_adv_targeting_computer (auto-Focus only; reroll-may deferred)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "agile_jet_trooper_elite": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_agile_jet_trooper (greedy block\u2192evade)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "agile_jet_trooper_reg": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_agile_jet_trooper (greedy block\u2192evade)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "aim_rebel_trooper_elite": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_aim_rebel_trooper_elite",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "aim_rebel_trooper_reg": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_aim_rebel_trooper_reg",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "attached_dio": {
+      "js_site": "library-declared (dcPassive with trigger: friendly-movement); ",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "awkward_atst": {
+      "js_site": "src/handlers/combat.js:2073 \u2192 py mcts/actions.py (legal_actions skip ATTACK_TARGET when distance==1)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "camouflage_mak": {
+      "js_site": "src/handlers/combat.js:2269 \u2192 py mcts/actions.py (legal_actions skips ranged ATTACK_TARGET when distance >= 4)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "camouflage_scout_trooper": {
+      "js_site": "src/handlers/combat.js:2269 \u2192 py mcts/actions.py (legal_actions skips ranged ATTACK_TARGET when distance >= 4)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "coordinated_hunt_purge_commander": {
+      "js_site": "src/handlers/combat.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    },
+    "cower_imperial_officer_reg": {
+      "js_site": "src/handlers/combat.js:2702 \u2192 py mechanics/passive_combat.py:_handle_cower",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "dead_precise_kotun": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_dead_precise_kotun",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "dead_weight_pardon_bokatan": {
+      "js_site": "library-declared; no JS string-literal consumption found",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "defensive_fire_bokatan": {
+      "js_site": "src/engine/combat-bridge.js:2680",
+      "kind": "bridge",
+      "status": "deferred-bridge"
+    },
+    "devout_chirrut": {
+      "js_site": "src/game/cc-timing.js (CC timing window)",
+      "kind": "cc-timing",
+      "status": "deferred-cc-timing"
+    },
+    "dirty_dealing_bib": {
+      "js_site": "library-declared; no JS string-literal consumption found",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "droid_kit_iden": {
+      "js_site": "library-declared; no JS string-literal consumption found",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "dubious_counterparts_aphra": {
+      "js_site": "library-declared; no JS string-literal consumption found",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "fallen_master_malicos": {
+      "js_site": "src/game/cc-timing.js",
+      "kind": "cc-timing",
+      "status": "deferred-cc-timing"
+    },
+    "fast_learner_mara_jade": {
+      "js_site": "src/engine/activation-setup.js",
+      "kind": "bridge",
+      "status": "deferred-bridge"
+    },
+    "gambit_lando": {
+      "js_site": "src/handlers/combat.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    },
+    "hunt_dissent_kallus": {
+      "js_site": "src/engine/win-conditions.js \u2192 py mechanics/attack_orchestrator.py post-defeat hook (Kallus gains Block token when self or TROOPER within 3 kills)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "immune_onar": {
+      "js_site": "src/game/conditions.js:35 \u2192 py conditions.is_condition_immune",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "immune_snowtrooper_elite": {
+      "js_site": "src/game/conditions.js:35 \u2192 py conditions.is_condition_immune",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "imperial_loadout_purge_trooper": {
+      "js_site": "src/handlers/setup.js + phase-gate.js + activation-setup.js",
+      "kind": "handler-other",
+      "status": "deferred-handler-other"
+    },
+    "improvised_cover_verena": {
+      "js_site": "src/handlers/combat.js:2131 \u2192 py mechanics/passive_combat.py:_handle_improvised_cover_verena (figure-adjacency clause; object/crate adjacency deferred until crates port)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "insignificant_dio": {
+      "js_site": "src/engine/available-actions.js + handlers/dc-play-area.js",
+      "kind": "bridge",
+      "status": "deferred-bridge"
+    },
+    "krayt_dragon_fury_tress": {
+      "js_site": "src/handlers/combat.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    },
+    "last_wielder_darksaber_bokatan": {
+      "js_site": "library-declared; no JS string-literal consumption found",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "light_it_up_rebel_pathfinder": {
+      "js_site": "src/handlers/combat.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    },
+    "modular_heavy_stormtrooper": {
+      "js_site": "library-declared; no JS string-literal consumption found",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "mon_cala_sf_loku": {
+      "js_site": "src/handlers/combat.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    },
+    "overload_saboteur": {
+      "js_site": "src/engine/available-actions.js + combat.js + combat-reactions.js",
+      "kind": "bridge",
+      "status": "deferred-bridge"
+    },
+    "personal_combat_shield_bokatan": {
+      "js_site": "library-declared; gar_saxon variant is the wired sibling",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "personal_combat_shield_gar_saxon": {
+      "js_site": "src/handlers/combat.js:5253-5364 \u2192 py mechanics/attack_orchestrator.py Phase 4a (Block-token spend \u2192 +1 Evade)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "pulse_cannon_iden": {
+      "js_site": "src/handlers/combat.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    },
+    "scavenged_stock_jawa_elite": {
+      "js_site": "library-declared; no JS string-literal consumption found",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "scrap_battalion_ugnaught_elite": {
+      "js_site": "src/engine/activation-setup.js",
+      "kind": "bridge",
+      "status": "deferred-bridge"
+    },
+    "scrap_battalion_ugnaught_reg": {
+      "js_site": "src/engine/activation-setup.js",
+      "kind": "bridge",
+      "status": "deferred-bridge"
+    },
+    "shady_contacts_saska": {
+      "js_site": "library-declared; no JS string-literal consumption found",
+      "kind": "unknown",
+      "status": "data-only-unreferenced"
+    },
+    "shape_clawdite_elite": {
+      "js_site": "src/handlers/setup.js + round.js + phase-gate.js + activation-setup.js",
+      "kind": "handler-other",
+      "status": "deferred-handler-other"
+    },
+    "shape_clawdite_reg": {
+      "js_site": "src/handlers/setup.js + round.js + phase-gate.js + activation-setup.js",
+      "kind": "handler-other",
+      "status": "deferred-handler-other"
+    },
+    "shared_calculations_zuckuss": {
+      "js_site": "src/handlers/combat.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    },
+    "spiked_boots_snowtrooper": {
+      "js_site": "src/game/abilities.js:320/416/1930 + handlers/movement.js:1054 ",
+      "kind": "abilities-js-push",
+      "status": "deferred-abilities-js"
+    },
+    "spray_fire_heavy_stormtrooper": {
+      "js_site": "src/handlers/combat.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    },
+    "squad_training_shoretrooper_elite": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_squad_training (greedy reroll worst attack die)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "squad_training_shoretrooper_reg": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_squad_training (greedy reroll worst attack die)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "squad_training_stormtrooper_elite": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_squad_training (greedy reroll worst attack die)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "squad_training_stormtrooper_reg": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_squad_training (greedy reroll worst attack die)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "take_cover_jawa_elite": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_take_cover_defender",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "take_cover_jawa_reg": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_take_cover_defender",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "targeting_computer_atst": {
+      "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_targeting_computer_atst (greedy reroll worst attack die)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "this_is_the_way_armorer": {
+      "js_site": "src/engine/win-conditions.js \u2192 py mechanics/attack_orchestrator.py post-defeat hook (killer gains Block token if Armorer is on board)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "tripod_eweb": {
+      "js_site": "src/handlers/combat.js + handlers/dc-play-area.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    },
+    "trust_goes_both_ways_jyn": {
+      "js_site": "src/engine/activation-setup.js \u2192 py mechanics/passive_combat.py:_handle_trust_goes_both_ways_jyn (greedy: closest friendly within 3 gets +1 MP)",
+      "kind": "engine",
+      "status": "wired-engine"
+    },
+    "versatile_weaponry_hk_elite": {
+      "js_site": "src/handlers/combat.js",
+      "kind": "handler-combat",
+      "status": "deferred-handler-combat"
+    }
+  },
+  "port_audit_top_missing": [
+    {
+      "fns": 15,
+      "js": "src/game/abilities.js",
+      "loc": 9798
+    },
+    {
+      "fns": 37,
+      "js": "src/handlers/dc-play-area.js",
+      "loc": 3698
+    },
+    {
+      "fns": 8,
+      "js": "src/engine/combat-bridge.js",
+      "loc": 2930
+    },
+    {
+      "fns": 44,
+      "js": "src/engine/available-actions.js",
+      "loc": 2394
+    },
+    {
+      "fns": 35,
+      "js": "src/handlers/post-deploy.js",
+      "loc": 1871
+    },
+    {
+      "fns": 31,
+      "js": "src/handlers/cc-hand.js",
+      "loc": 1721
+    },
+    {
+      "fns": 3,
+      "js": "src/engine/activation-setup.js",
+      "loc": 1383
+    },
+    {
+      "fns": 36,
+      "js": "src/handlers/combat-special-effects.js",
+      "loc": 1192
+    },
+    {
+      "fns": 11,
+      "js": "src/handlers/combat-reactions.js",
+      "loc": 910
+    },
+    {
+      "fns": 21,
+      "js": "src/handlers/recover.js",
+      "loc": 839
+    },
+    {
+      "fns": 4,
+      "js": "src/handlers/index.js",
+      "loc": 721
+    },
+    {
+      "fns": 19,
+      "js": "src/handlers/blitz-deploy.js",
+      "loc": 712
+    },
+    {
+      "fns": 13,
+      "js": "src/game/validation.js",
+      "loc": 696
+    },
+    {
+      "fns": 17,
+      "js": "src/handlers/favorites.js",
+      "loc": 664
+    },
+    {
+      "fns": 5,
+      "js": "src/engine/setup-bridge.js",
+      "loc": 609
+    },
+    {
+      "fns": 15,
+      "js": "src/engine/misc-helpers.js",
+      "loc": 598
+    },
+    {
+      "fns": 6,
+      "js": "src/handlers/game-tools.js",
+      "loc": 504
+    },
+    {
+      "fns": 11,
+      "js": "src/handlers/fast-forward.js",
+      "loc": 468
+    },
+    {
+      "fns": 12,
+      "js": "src/engine/message-updaters.js",
+      "loc": 467
+    },
+    {
+      "fns": 2,
+      "js": "src/game/activation-state.js",
+      "loc": 462
+    },
+    {
+      "fns": 8,
+      "js": "src/handlers/map-events.js",
+      "loc": 410
+    },
+    {
+      "fns": 5,
+      "js": "src/handlers/post-combat.js",
+      "loc": 332
+    },
+    {
+      "fns": 1,
+      "js": "src/engine/defeat-handler.js",
+      "loc": 321
+    },
+    {
+      "fns": 1,
+      "js": "src/engine/action-types.js",
+      "loc": 284
+    },
+    {
+      "fns": 10,
+      "js": "src/handlers/botmenu.js",
+      "loc": 266
+    },
+    {
+      "fns": 4,
+      "js": "src/engine/scenario-mutators.js",
+      "loc": 264
+    },
+    {
+      "fns": 6,
+      "js": "src/game/cc-passive-redraw.js",
+      "loc": 247
+    },
+    {
+      "fns": 11,
+      "js": "src/engine/game-creation-bridge.js",
+      "loc": 244
+    },
+    {
+      "fns": 3,
+      "js": "src/game/movement-interrupts.js",
+      "loc": 200
+    },
+    {
+      "fns": 2,
+      "js": "src/handlers/lobby.js",
+      "loc": 170
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+[learnings] Migrated hidden size: 64 → 128 (warm-start: 64 neurons preserved, 64 new)
+[learnings] Migrated network: added policy head Wp[23×128]
+[record-policy] appending to /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/buf-v10-smoke10.json (starting samples: 0, side: a)
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/orig-64h-baseline.json (10158g)
+Games: 10 | Matchups: 2 | K: 16 | MCTS: A=25sims B=25sims
+  [10/10] 700.6s | A=1W 2L 7D (10.0%) | ΔVP 0.00 | ΔElo -14.2
+
+[record-policy] saved 5670 samples → /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/buf-v10-smoke10.json
+[record-policy] z distribution: -1=0 0=5112 +1=558 null=0 (this run added 5670)
+
+=== LADDER RESULT ===
+Games: 10
+A wins: 1 (10.0%)
+B wins: 2 (20.0%)
+Draws:  7 (70.0%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1492.9  B=1507.1
+Elo delta (A - B): -14.2 ± 117.1 (95% CI)
+Interpretation: NOT significant at 95%
+
+Per matchup:
+  3actWampaLiA: 1W 0L 4D (20.0%) | ΔVP 0.00
+  ATRT_Brawler: 0W 2L 3D (0.0%) | ΔVP 0.00

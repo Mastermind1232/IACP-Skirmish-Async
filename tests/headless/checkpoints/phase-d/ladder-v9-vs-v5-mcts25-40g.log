@@ -1,0 +1,22 @@
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v9-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=25sims
+  [10/40] 2043.7s | A=1W 2L 7D (10.0%) | ΔVP 0.00 | ΔElo -11.8
+  [20/40] 3776.7s | A=3W 2L 15D (15.0%) | ΔVP 0.00 | ΔElo 18.3
+  [30/40] 5706.4s | A=3W 2L 25D (10.0%) | ΔVP 0.00 | ΔElo 11.4
+  [40/40] 7177.7s | A=3W 3L 34D (7.5%) | ΔVP 0.00 | ΔElo -6.7
+
+=== LADDER RESULT ===
+Games: 40
+A wins: 3 (7.5%)
+B wins: 3 (7.5%)
+Draws:  34 (85.0%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1496.6  B=1503.4
+Elo delta (A - B): -6.7 ± 41.7 (95% CI)
+Interpretation: NOT significant at 95%
+
+Per matchup:
+  3actWampaLiA: 0W 3L 7D (0.0%) | ΔVP 0.00
+  ATRT_Brawler: 0W 0L 10D (0.0%) | ΔVP 0.00
+  Bikes_Flames: 3W 0L 7D (30.0%) | ΔVP 0.00
+  Boba_v1: 0W 0L 10D (0.0%) | ΔVP 0.00

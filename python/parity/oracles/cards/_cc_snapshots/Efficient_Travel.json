@@ -29,8 +29,13 @@
     "cardName": "Efficient Travel",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "Efficient Travel \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "effect": "efficientTravel",
+          "playerNum": 1
+        }
+      ],
+      "log_message": "Efficient Travel \u2014 1 schema effect(s) applied."
     }
   },
   "p1CcDeck": [

@@ -1,0 +1,31 @@
+=== Ladder v5-h128 vs orig at MCTS=25 (80g confirmation) ===
+[learnings] Migrated hidden size: 64 → 128 (warm-start: 64 neurons preserved, 64 new)
+[learnings] Migrated network: added policy head Wp[23×128]
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-data.json (10158g)
+Games: 80 | Matchups: 4 | K: 16 | MCTS: A=25sims B=0sims
+  [10/80] 1761.8s | A=3W 1L 6D (30.0%) | ΔVP 0.00 | ΔElo 26.0
+  [20/80] 3078.1s | A=6W 1L 13D (30.0%) | ΔVP 0.00 | ΔElo 54.7
+  [30/80] 5520.5s | A=7W 1L 22D (23.3%) | ΔVP 0.00 | ΔElo 48.1
+  [40/80] 6882.7s | A=9W 2L 29D (22.5%) | ΔVP 0.00 | ΔElo 46.5
+  [50/80] 8631.7s | A=12W 3L 35D (24.0%) | ΔVP 0.00 | ΔElo 59.3
+  [60/80] 10344.6s | A=15W 5L 40D (25.0%) | ΔVP 0.00 | ΔElo 48.6
+  [70/80] 12041.0s | A=19W 7L 44D (27.1%) | ΔVP 0.00 | ΔElo 57.9
+  [80/80] 13915.2s | A=21W 7L 52D (26.3%) | ΔVP 0.00 | ΔElo 64.2
+
+=== LADDER RESULT ===
+Games: 80
+A wins: 21 (26.3%)
+B wins: 7 (8.8%)
+Draws:  52 (65.0%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1532.1  B=1467.9
+Elo delta (A - B): 64.2 ± 44.4 (95% CI)
+Interpretation: SIGNIFICANT at 95%
+
+Per matchup:
+  3actWampaLiA: 2W 3L 15D (10.0%) | ΔVP 0.00
+  ATRT_Brawler: 2W 0L 18D (10.0%) | ΔVP 0.00
+  Bikes_Flames: 17W 0L 3D (85.0%) | ΔVP 0.00
+  Boba_v1: 0W 4L 16D (0.0%) | ΔVP 0.00
+
+=== v5-h128 80g confirmation complete ===

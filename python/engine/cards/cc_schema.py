@@ -365,26 +365,31 @@ def apply_cc_schema(card_name: str):
             effects.append({'effect': 'roundAttackRerollDice',
                             'count': rerolls})
 
-        # freeAttackBonus (Lightbow + similar): stamp pending free-attack
-        # for the figure-of-record. Combat orchestrator already consumes
-        # freeAttackBonusPending elsewhere.
+        # freeAttackBonus (Lightbow + similar): JS stamps a boolean true
+        # gate on the msgId. Python previously incremented a count which
+        # diverged from JS shape. Match JS exactly.
         if entry.get('freeAttackBonus') and msg_id:
             fab = dict(data.get('freeAttackBonusPending') or {})
-            fab[msg_id] = (fab.get(msg_id) or 0) + 1
+            fab[msg_id] = True
             data['freeAttackBonusPending'] = fab
             effects.append({'effect': 'freeAttackBonus',
                             'msgId': msg_id})
 
         # overrideAttackDice / overrideAttackType / overrideBonusAccuracy
-        # (Lightbow): stamp pendingOverrideAttackDice for the next attack.
+        # (Lightbow): stamp pendingOverrideAttackDice. JS shape is fully
+        # populated with blockSurgeAbilities/mustTargetNonAdjacent/pierce
+        # defaults so the consumer doesn't need to fill them.
         if (entry.get('overrideAttackDice')
                 or entry.get('overrideAttackType')
                 or entry.get('overrideBonusAccuracy')) and msg_id:
             poad = dict(data.get('pendingOverrideAttackDice') or {})
             poad[msg_id] = {
                 'dice': entry.get('overrideAttackDice'),
-                'attackType': entry.get('overrideAttackType'),
-                'bonusAccuracy': entry.get('overrideBonusAccuracy'),
+                'type': entry.get('overrideAttackType'),
+                'bonusAccuracy': entry.get('overrideBonusAccuracy') or 0,
+                'blockSurgeAbilities': bool(entry.get('blockSurgeAbilities')),
+                'mustTargetNonAdjacent': bool(entry.get('mustTargetNonAdjacent')),
+                'pierce': int(entry.get('pierce') or 0),
             }
             data['pendingOverrideAttackDice'] = poad
             effects.append({'effect': 'overrideAttackDice',

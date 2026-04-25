@@ -29,8 +29,13 @@
     "cardName": "Wreak Vengeance",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "Wreak Vengeance \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "effect": "setsWreakVengeance",
+          "playerNum": 1
+        }
+      ],
+      "log_message": "**Wreak Vengeance** \u2014 When using **Dual-Bladed Fury**, both surge effects are applied automatically (play alongside Dual-Bladed Fury)."
     }
   },
   "p1CcDeck": [

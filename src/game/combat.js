@@ -1,16 +1,60 @@
 /**
  * Combat logic: dice rolls, surge abilities, result computation. No Discord.
+ *
+ * Dice-stream hooks (D6 parity): when `setDiceStream(s)` is called, every roll
+ * pops a face index from `s.pools[role][color]` instead of using Math.random().
+ * When `setDiceRecorder(r)` is called, each roll appends to `r.pools` and
+ * `r.log`. `clearDiceHooks()` reverts to normal (Math.random) mode. Both hooks
+ * default to null and have zero effect on the production code path.
  */
 import { getDiceData, getDcEffects } from '../data-loader.js';
+
+let _diceStream = null;
+let _diceRecorder = null;
+
+/** Install a dice stream; subsequent rolls pop indices from it. Pass null to clear. */
+export function setDiceStream(stream) { _diceStream = stream; }
+/** Install a recorder; subsequent rolls append to its pools + log. Pass null to clear. */
+export function setDiceRecorder(recorder) { _diceRecorder = recorder; }
+/** Revert to normal Math.random mode. */
+export function clearDiceHooks() { _diceStream = null; _diceRecorder = null; }
+/** Inspect current hooks (for tests / debugging). */
+export function getDiceHooks() { return { stream: _diceStream, recorder: _diceRecorder }; }
+
+function _drawIndex(role, color, facesLen) {
+  if (_diceStream) {
+    const pool = _diceStream.pools?.[role]?.[color];
+    if (!pool || pool.length === 0) {
+      throw new Error(`DiceStreamExhausted: ${role}/${color}`);
+    }
+    return pool.shift();
+  }
+  return Math.floor(Math.random() * facesLen);
+}
+
+function _record(role, color, faceIdx, face) {
+  if (!_diceRecorder) return;
+  _diceRecorder.pools = _diceRecorder.pools || { attack: {}, defense: {} };
+  const bucket = _diceRecorder.pools[role];
+  bucket[color] = bucket[color] || [];
+  bucket[color].push(faceIdx);
+  _diceRecorder.log = _diceRecorder.log || [];
+  _diceRecorder.log.push({
+    seq: _diceRecorder.log.length, role, color, faceIdx, face,
+  });
+}
 
 export function rollAttackDice(diceColors) {
   const dice = [];
   let acc = 0, dmg = 0, surge = 0;
   for (const color of diceColors || []) {
-    const faces = getDiceData().attack?.[color.toLowerCase()];
+    const normColor = color.toLowerCase();
+    const faces = getDiceData().attack?.[normColor];
     if (!faces?.length) continue;
-    const face = faces[Math.floor(Math.random() * faces.length)];
+    const idx = _drawIndex('attack', normColor, faces.length);
+    const face = faces[idx];
     const result = { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0 };
+    _record('attack', normColor, idx, { acc: result.acc, dmg: result.dmg, surge: result.surge });
     dice.push(result);
     acc += result.acc;
     dmg += result.dmg;
@@ -21,26 +65,38 @@ export function rollAttackDice(diceColors) {
 
 export function rollDefenseDice(defenseType) {
   const color = defenseType || 'white';
-  const faces = getDiceData().defense?.[color.toLowerCase()];
+  const normColor = color.toLowerCase();
+  const faces = getDiceData().defense?.[normColor];
   if (!faces?.length) return { color, block: 0, evade: 0, dodge: false };
-  const face = faces[Math.floor(Math.random() * faces.length)];
-  return { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+  const idx = _drawIndex('defense', normColor, faces.length);
+  const face = faces[idx];
+  const result = { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+  _record('defense', normColor, idx, { block: result.block, evade: result.evade, dodge: result.dodge });
+  return result;
 }
 
 /** Roll a single attack die by color. Returns individual face result. */
 export function rollSingleAttackDie(color) {
-  const faces = getDiceData().attack?.[color.toLowerCase()];
+  const normColor = color.toLowerCase();
+  const faces = getDiceData().attack?.[normColor];
   if (!faces?.length) return { color, acc: 0, dmg: 0, surge: 0 };
-  const face = faces[Math.floor(Math.random() * faces.length)];
-  return { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0 };
+  const idx = _drawIndex('attack', normColor, faces.length);
+  const face = faces[idx];
+  const result = { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0 };
+  _record('attack', normColor, idx, { acc: result.acc, dmg: result.dmg, surge: result.surge });
+  return result;
 }
 
 /** Roll a single defense die by color. Returns individual face result. */
 export function rollSingleDefenseDie(color) {
-  const faces = getDiceData().defense?.[(color || 'white').toLowerCase()];
+  const normColor = (color || 'white').toLowerCase();
+  const faces = getDiceData().defense?.[normColor];
   if (!faces?.length) return { color, block: 0, evade: 0, dodge: false };
-  const face = faces[Math.floor(Math.random() * faces.length)];
-  return { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+  const idx = _drawIndex('defense', normColor, faces.length);
+  const face = faces[idx];
+  const result = { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+  _record('defense', normColor, idx, { block: result.block, evade: result.evade, dodge: result.dodge });
+  return result;
 }
 
 /** Recalculate attack totals from individual dice results. */

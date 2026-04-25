@@ -25,7 +25,10 @@ import { getDcList, getDcMessageIds, getActivationsRemaining, setActivationsRema
 import { DC_ACTIONS_PER_ACTIVATION } from '../discord/messages.js';
 import { isCompanionHostDefeated } from '../game/dc-helpers.js';
 import { applyStartOfActivationEffects } from '../engine/activation-effects.js';
+import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
 import { applyMoveTransition } from '../game/apply-move.js';
+import { cleanupActivation } from '../game/activation-state.js';
+import { getDcEffects } from '../data-loader.js';
 
 /**
  * Headless-only DC activation: performs the 4 critical game-state mutations
@@ -102,6 +105,64 @@ function headlessActivateDc(game, customId, dcExhaustedState, dcHealthState) {
   // Deterministic start-of-activation effects
   applyStartOfActivationEffects(game, { dcName, playerNum, displayName, msgId, dcHealthState });
 
+  return { ok: true };
+}
+
+/**
+ * Headless-only pass_activation_turn: mirrors the engine state mutation in
+ * handlePassActivationTurn (src/handlers/activation.js:205). Sets
+ * currentActivationTurnPlayerId to the opponent. Skips Discord embed IO,
+ * pushUndo, and follow-up replies. Honors the same gate: cannot pass when
+ * you have at least as many activations remaining as the opponent.
+ */
+function headlessPassActivationTurn(game) {
+  const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+  if (!turnPlayerId) return { ok: false, error: 'No turn player' };
+  const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
+  const otherPlayerNum = turnPlayerNum === 1 ? 2 : 1;
+  const myRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
+  const otherRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
+  if (otherRem <= myRem) {
+    return { ok: false, rejected: true, error: 'Cannot pass with fewer-or-equal remaining' };
+  }
+  const otherPlayerId = otherPlayerNum === 1 ? game.player1Id : game.player2Id;
+  game.currentActivationTurnPlayerId = otherPlayerId;
+  return { ok: true };
+}
+
+/**
+ * Headless-only DC end-activation: mirrors the deterministic state-mutation
+ * portion of handleDcEndActivation in src/handlers/activation.js. Skips all
+ * Discord IO (thread.archive, message.edit, follow-up replies). Mirrors the
+ * meta-lookup → cleanupActivation → applyEndOfActivationEffects sequence.
+ */
+function headlessEndActivation(game, customId, dcMessageMeta) {
+  const msgId = customId.replace(/^dc_end_activation_/, '');
+  const meta = dcMessageMeta?.get?.(msgId);
+  if (!meta) {
+    if (process.env.HEADLESS_DEBUG) {
+      const keys = dcMessageMeta && dcMessageMeta.keys ? [...dcMessageMeta.keys()] : 'no-map';
+      console.error(`[headlessEndActivation] no meta for ${msgId}; keys=${JSON.stringify(keys)}`);
+    }
+    return { ok: false, error: `No meta for msgId=${msgId}` };
+  }
+  const displayName = meta.displayName || meta.dcName;
+
+  game.dcFinishedPinged = game.dcFinishedPinged || {};
+  game.dcFinishedPinged[msgId] = true;
+
+  // Build figure keys for only the activated deployment group.
+  const endEff = getDcEffects()?.[meta.dcName];
+  const figCount = endEff?.figures || 1;
+  const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '0';
+  const figureKeys = [];
+  for (let fi = 0; fi < figCount; fi++) {
+    figureKeys.push(`${meta.dcName}-${dgIndex}-${fi}`);
+  }
+  cleanupActivation(game, msgId, meta.playerNum, figureKeys);
+  applyEndOfActivationEffects(game, {
+    dcName: meta.dcName, playerNum: meta.playerNum, displayName, msgId,
+  });
   return { ok: true };
 }
 
@@ -194,6 +255,29 @@ export function createHarness(initialGame, options = {}) {
         }
         const events = lightweight ? [] : _translateEvents(gameId, handlerKey, userId, beforeSnap, gamesMap);
         return { game, messages: [], events };
+      }
+
+      // Headless intercept: dc_end_activation_ skips thread/message IO and
+      // Discord embeds. Calls cleanupActivation + applyEndOfActivationEffects
+      // directly so the activation actually ends. Lightweight-only — full
+      // Discord-mode tests rely on the regular handler path running through
+      // fakeInteraction for surface-event tracking.
+      if (lightweight && customId.startsWith('dc_end_activation_')) {
+        const game = gamesMap.get(gameId);
+        if (!game) return { game: null, messages: [], error: 'Game not found', events: [] };
+        const result = headlessEndActivation(game, customId, deps.dcMessageMeta);
+        return { game, messages: [], error: result.ok ? undefined : result.error, events: [] };
+      }
+
+      // Headless intercept: pass_activation_turn_ skips embed/undo IO. Only
+      // mutation is `currentActivationTurnPlayerId = opponent`. Same gate as
+      // the live handler: cannot pass when you have ≥ opponent's activations.
+      // Lightweight-only for the same reason as dc_end_activation_.
+      if (lightweight && customId.startsWith('pass_activation_turn_')) {
+        const game = gamesMap.get(gameId);
+        if (!game) return { game: null, messages: [], error: 'Game not found', events: [] };
+        const result = headlessPassActivationTurn(game);
+        return { game, messages: [], error: result.ok ? undefined : (result.rejected ? undefined : result.error), events: [] };
       }
 
       // MCTS fast-path intercept: move_pick_ skips _renderNextMoveGrid (second

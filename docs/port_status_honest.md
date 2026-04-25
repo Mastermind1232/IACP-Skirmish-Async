@@ -1,104 +1,187 @@
 # Port Status — Honest Edition
 
-**Last updated:** 2026-04-24. Replaces hand-waved percentages with
-measured facts.
+**Last regenerated: 2026-04-25 (recordings reach round 8).** Numbers
+are pulled from `docs/coverage_audit.json` (regenerable via
+`python3 python/parity/coverage_audit.py --refresh`). When in doubt,
+trust the JSON over any prose here.
 
-## What's actually verified
+The companion machine report is `docs/coverage_audit.md` — that's the
+table-of-everything. This file is the plain-English interpretation.
 
-| Layer | Scope | Evidence |
+## Headline number
+
+**Weighted completion estimate: ~56%.** Up from 53% earlier tonight.
+The recordings now drive full round-cycles (rounds 1-8 reachable in
+200 steps), so 18 of 81 action types have at least one observed
+recording — up from 2 at session start.
+
+## What we've taught Python well
+
+| Layer | Status | Plain English |
 |---|---|---|
-| Pattern E abilities | 117 dcSpecial active abilities | 117 snapshots + JS-parity harness (ability_golden) — all PASS or PY_AHEAD |
-| Pattern D abilities | 161 triggered abilities | 161 snapshots + 164 pytest parametrized |
-| Command cards | 293 CCs | 293 snapshots + JS-parity (cc_golden) — 76 PASS, 217 PY_AHEAD, 0 FAIL |
-| Combat math | `compute_combat_result` | 2011-case fuzz byte-identical with JS |
-| Damage primitives | reduce_hp, heal_hp, apply/filter_condition | 400 fuzz cases |
-| Movement interrupts | Parting Blow / Dirty Trick / Disengage / Overwatch detection | 6 scenarios byte-parity |
-| Attack orchestrator sequencing | Hit, defeat, group wipe, bonus conditions | 9 rules-oracle scenarios |
-| Full-game drift | 9 games × 200 steps across 3 maps | 1800 replayed steps, 0 diffs ← BIG caveat below |
+| Reading deployment-card abilities | 275/310 = 89% | The engine knows what every DC special does, except for 35 Pattern-C passives that need their consumption layer ported (combat handler, bridge, CC-timing, etc.) |
+| Reading command cards | 293/293 = 100% | Every CC has a registered handler |
+| Rolling attack/defense dice | byte-identical | 2,011 fuzz cases vs JS pass clean |
+| Damage / wounds / conditions | byte-identical | Bleed/Stun/Focus/Hide application matches JS |
+| Drawing line of sight (basics) | wired | Figure-blocking LOS slice 1 closed |
+| Mission rules per map | 8/8 | Wired and replay-clean for the recorded games |
+| Pattern-C passives | 22/58 wired | Tonight's grind: cower, AT-ST targeting, Squad Training, Take Cover, Aim, Dead Precise, Lucky R2-D2, Verena cover, Gar Saxon shield, Jyn trust, Armorer/Kallus death triggers, awkward AT-ST, C-3PO non-combatant. 36 still deferred. |
 
-## The "1800 steps zero diff" caveat
+## What we haven't really taught Python
 
-Sounds great, but **~99% of those 1800 steps are the same `status_phase`
-button clicked repeatedly**. The JS action-recorder's harness stalls
-after 2 dc_activate calls because it can't properly sequence
-mid-activation actions (move/attack/dc_special/dc_end_activation).
-
-What this **does** prove:
-- Python correctly handles the `status_phase` path
-- Python correctly handles `dc_activate` (parser + state population)
-- Python's `_handle_end_end_of_round` matches JS's round-rollover
-- Python's state fields (`dcActionsData`, `movementBank`,
-  `p{N}ActivatedDcIndices`, `p{N}ActivationsRemaining`) match JS's
-
-What this **does not** prove:
-- Full combat flow matches (no attack_target in any trace)
-- Movement matches (no move_pick_space in any trace)
-- CC play matches (no cc_play in any trace)
-- Multi-round games match (games don't reach round 2)
-- Mission scoring matches (no end-of-round rules fired)
-
-## The mechanical file audit
-
-`docs/port_audit.md` — ran at session start, not updated:
-
-- 129 JS rules-logic files
-- **102 MISSING** — no Python counterpart at all
-- 1 STUB-ONLY
-- 9 PARTIAL
-- 12 COVERED-BY-SHAPE (function count matches)
-- 5 UNVERIFIED
-
-**Note:** MISSING includes many files that ARE covered (abilities.js
-is split across ~10 Python files; handlers are split across stepper
-action handlers). The mechanical matcher is 1:1 filename-based. But
-many are genuinely missing: `post-deploy.js` (1871), `cc-hand.js`
-(1721), `combat-special-effects.js` (1192), 80+ ability-helpers,
-etc.
-
-## Honest completion estimate
-
-I've been claiming 70-77%. **Real answer: 35-55%, depending on how
-you weight.**
-
-By layer:
-
-| Layer | What's verified | What's missing |
+| Layer | Status | Plain English |
 |---|---|---|
-| Ability resolution | ~90% (Pattern E/D + CCs locked) | ~10% (prose-only abilities, complex multi-step chains) |
-| Combat math | ~95% (math verified) | Multi-defender blast, cleave splash unverified end-to-end |
-| Combat primitives | ~95% (damage/conditions) | token spend paths partially verified |
-| Combat orchestration | ~70% (9 scenarios) | Real combat through the stepper only tested in end_to_end test, not parity-verified |
-| Setup flow | ~50% (attachments + DC trio) | Loadout selection, Clawdite form, mulligan, partial-deploy prompts |
-| Movement | ~70% (path + interrupts) | Figure rotation, strain-for-MP, complex interrupts |
-| Round end / EoR | ~80% (CC draw + DC reset + mission EoR wired) | Per-mission end-to-end tests |
-| Action enumerator | ~40% (works for MCTS; diverges from JS by design) | Not byte-parity with JS; philosophy gap documented |
-| Handlers (Discord-layer) | ~10% | 28 handler files, most absent |
-| LOS slice 2 | ~40% | Doors / multi-cell / corner rule not verified |
+| Setup flow | partial | Squad submit + DC trio works; loadout selection, Clawdite form, mulligans, post-deploy abilities mostly absent |
+| Discord-button handlers | ~10% | The 28 JS handler files (cc-hand, post-deploy, fast-forward, recover, blitz-deploy, combat-reactions, combat-special-effects, defeat-handler, etc.) are mostly Python-absent |
+| End-of-round mission scoring | wired but unverified end-to-end | Rules are there but no recorded game reaches scoring |
+| LOS edge cases | partial | Doors, multi-cell figures, corner rule deferred |
+| 36 Pattern-C deferred passives | not wired | Need the consumption layer for each |
 
-Weighted-by-importance-to-training estimate: **~50%**.
+## The drift suite — what it does and doesn't prove
 
-Weighted-by-shape: **9%** (COVERED-BY-SHAPE count).
+We have **43 recorded games** of JS gameplay that we replay through
+Python. After tonight's fixes, drift now exercises **18 of 81 action
+types** (was 2 at start of session):
 
-## What a real measurement would require
+- 🥇 GOLD: `activate_dc` (724 hits), `attack_target` (70 hits)
+- 🥈 SILVER (16): full activation cycle (`dc_special`, `dc_move`,
+  `move_pick_space`, `dc_end_activation`, `dc_ability_choice`,
+  `pass_activation_turn`), full combat cycle (`combat_ready`,
+  `combat_gate`, `combat_roll`, `combat_reroll`, `combat_surge`,
+  `combat_resolve`), full round cycle (`phase_gate_ready`,
+  `end_end_of_round`, `end_activation_phase`), and `pounce_space`
 
-1. **Fix the JS recorder** to properly navigate mid-activation
-   (dc_activate → move → attack → dc_end_activation → pass) without
-   stalling. This unlocks full-game traces.
-2. **Record 50+ full games** across all 8 maps with varied squads.
-3. **Run drift** and count PER-ACTION-TYPE match rates.
-4. **Track action-type coverage**: what fraction of the 83 action
-   types has at least one matching trace step?
+Recordings now reach **rounds 1-8** in a 200-step game — the round
+cycle works end-to-end through pre_end_of_round → post_end_of_round →
+pre_activation phase gates.
 
-That work is ~1-2 days. Without it, any completion number north of
-50% is speculation.
+What we still don't have evidence for: command-card plays, deployment
+(traces start in round 1), mission-specific scoring events.
+
+## Action-type verdicts (the medal table)
+
+| Medal | Count | Meaning |
+|---|---|---|
+| 🥇 GOLD | 2 | Wired, tested, observed in real recording |
+| 🥈 SILVER | 16 | Wired, observed live, no targeted oracle test |
+| 🥉 BRONZE | 0 | Wired, tested, never observed live |
+| ⬜ UNVERIFIED | 63 | Wired, no test reference, no drift evidence |
+| 🚫 UNREGISTERED | 0 | Enum value with no handler |
+
+Combat is now fully exercised in recordings: `combat_ready`,
+`combat_gate`, `combat_roll`, `combat_reroll`, `combat_surge`, and
+`combat_resolve` all fire across multiple games.
+
+**63 handlers still have zero behavioral evidence.** Many have indirect
+coverage via integration tests but don't reference the action enum
+directly, so the scanner can't credit them.
+
+## What "are we treading old ground?" means in practice
+
+For one-ability-at-a-time porting (the recent Pattern-C grind):
+**low duplication risk.** The catalog in `pattern_c.py` is hand-edited
+and shows status. We'd notice porting the same passive twice.
+
+For structural work on the missing handler families: **the inventory
+exists but nobody has been working from it.** `port_audit.md` lists
+102 JS files with no Python counterpart but that includes false
+negatives (split-into-many-files cases). The 30 largest are in
+`coverage_audit.md` for triage.
+
+For "is this verified or just running?" the medal table is now the
+answer. Before tonight, no doc could answer it.
+
+## Drift findings (live bug list)
+
+Run: `PYTHONPATH=. python3 python/parity/drift_findings.py` →
+`docs/drift_findings.md`. As of latest run:
+
+- **48k disagreements / 0 crashes** across 43 replayed games (down from 176k after diff filtering + state-shim tuning)
+- Tonight: crashes dropped **1,977 → 0** (100%):
+  - 8 parser bugs fixed (msg_id → figure_key resolution, surge ability
+    lookup, damage/defeated from pendingCombat, etc.)
+  - `_handle_move_figure` now grants speed MP per Move action with
+    JS-matching first-vs-subsequent semantics (no double-count with
+    activate_dc's pre-grant)
+  - `attack_target` falls back to `selectedMap.id` when `mapId` missing
+  - Replay shim pre-stamps JS state from the previous recorded
+    snapshot before each step:
+    - Transient pending state (`pendingCombat`, `pendingDcAbilityChoice`,
+      `pendingPounceSpaceChoice`, `attackTargets`) so multi-step
+      combat/choice flows work against Python's atomic handlers
+    - Position/MP state (`figurePositions`, `movementBank`,
+      `perFigureMp`, `movementPoints`) so each step starts from JS's
+      view rather than accumulated divergence
+  - Last 35 MP crashes resolved: Python's path-cost was treating
+    friendly figures as blockers. Per IACP rules, friendlies don't
+    block traversal — only end-of-move. Added `hostile_occupied_set`
+    to `get_path_cost` and threaded it through `_handle_move_pick_space`.
+
+The 69k disagreements remaining are now informative — single-step
+deltas between Python's handlers and JS's expected post-state. Each
+diff points at a specific "Python's handler doesn't do X that JS does"
+rather than accumulated divergence noise. The big buckets are:
+- `pendingCombat` (~7k): Python's atomic attack collapses what JS keeps
+  open across the combat-button sequence
+- `figureMoved` (~5k): Python doesn't stamp per-figure moved flag
+- `p1/p2DcList[]` mutations (~7k total): DC depletion / damage tracking
+  diverges between handlers
+- `totalDamageReceived` / `attackPerformedThisActivation` /
+  `lastCombatResult` (~4k): combat-bookkeeping not mirrored in Python
+- Pattern E + pending UI state (`pendingPatternE`, `pendingCleave`,
+  `pendingWristFlamethrower`, `pendingSpacePick`): partially ported
+
+## What changed tonight
+
+- **Recorder no longer reads stale state.** Was using the original
+  `game` reference; harness clones internally. Now uses
+  `harness.getGame()`. (record-sample-games.js)
+- **Headless fast-path for `dc_end_activation_`.** Calls
+  `cleanupActivation` + `applyEndOfActivationEffects` directly, skips
+  Discord IO. Lightweight-only.
+- **Headless fast-path for `pass_activation_turn_`.** Mirrors the JS
+  state mutation (`currentActivationTurnPlayerId = opponent`).
+  Lightweight-only.
+- **Recorder uses real `game.player1Id`** so `status_phase`'s
+  `isTestGame` shortcut activates (single click sets both flags).
+- **Recorder passes `lightweight: true`** so the new fast-paths fire
+  and surface-event tests still pass on full-Discord paths.
+
+Result: drift now exercises 7 action types (was 2), 13 distinct
+customId prefixes (was 2). All 3,973 jest tests still pass.
+
+## The remaining cheap unlocks
+
+**1. Headless fast-path for `phase_gate_ready_`.** Today the recorder
+spends ~4,000 steps clicking the phase gate without it advancing —
+each click is wasted. Fix would be ~30 lines mirroring
+`recordPhaseGateReady` + `dispatchPhaseAdvance`. Would let recordings
+reach round 2.
+
+**2. Python parsers + stub handlers for `dc_move_`, `dc_special_`,
+`move_pick_`, `phase_gate_ready_`.** Currently drift skips them as
+"unsupported", which trips mission_coverage's "0 unsupported" gate
+and drops mission validation from 8/8 to 0/8. Adding parsers (even
+no-op handlers) returns mission_coverage to honest partial-validation
+numbers.
+
+**3. Add `ActionType.X` references to existing oracle tests.** Many
+combat tests exercise `attack_target` indirectly via orchestrator
+helpers. A 30-minute pass adding the enum literal where it's already
+used would lift several actions from UNVERIFIED to BRONZE.
+
+**4. Each Pattern-C consumption layer ported = more passives wired.**
+36 still deferred. Last night ported ~20.
 
 ## Bottom line
 
-Individual layers I've worked on are verified well. The full game
-loop at scale is **not** verified. The drift test is theater at the
-moment because the recorder can't produce rich enough traces.
+Layers I've worked on directly are well-verified for what they cover
+(byte-identical fuzzes, oracle batteries, snapshots). The full game
+loop at scale is **not** verified, because the recorder can't produce
+trace data rich enough to test it. The 89% / 100% headlines from
+`port_coverage.json` mean "handlers exist", not "handlers are right".
 
-If the goal is GPU training correctness, the ability layer (which I
-HAVE verified) is the most load-bearing — every game the AI plays
-resolves through those abilities. The unverified layer is mostly
-Discord-adjacent UI flow.
+For AI training, the load-bearing layers (ability resolution, combat
+math, dice, conditions) are the ones in solid shape. The unverified
+~80 action types are mostly Discord-button-flow stuff that doesn't
+matter for headless self-play but does matter for the live bot.

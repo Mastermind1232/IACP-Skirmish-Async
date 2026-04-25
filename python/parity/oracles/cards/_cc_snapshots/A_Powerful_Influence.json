@@ -29,8 +29,13 @@
     "cardName": "A Powerful Influence",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "A Powerful Influence \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "effect": "powerfulInfluence",
+          "playerNum": 1
+        }
+      ],
+      "log_message": "Until the start of the next round, hostile figures within 3 spaces cannot interact and are not counted for control."
     }
   },
   "p1CcDeck": [

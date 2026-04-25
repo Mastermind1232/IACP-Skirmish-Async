@@ -29,8 +29,13 @@
     "cardName": "Just Business",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "Just Business \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "count": 1,
+          "effect": "roundAttackRerollDice"
+        }
+      ],
+      "log_message": "Just Business \u2014 1 schema effect(s) applied."
     }
   },
   "p1CcDeck": [

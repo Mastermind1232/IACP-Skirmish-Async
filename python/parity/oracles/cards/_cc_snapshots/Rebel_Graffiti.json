@@ -29,8 +29,13 @@
     "cardName": "Rebel Graffiti",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "Rebel Graffiti \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "bonus": 2,
+          "effect": "rebelGraffitiVp"
+        }
+      ],
+      "log_message": "Rebel Graffiti \u2014 1 schema effect(s) applied."
     }
   },
   "p1CcDeck": [

@@ -1,0 +1,31 @@
+[learnings] Migrated network: added policy head Wp[23×64]
+[record-policy] appending to /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/buf-v4-raw.json (starting samples: 0, side: a)
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v3-lambda05.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/learnings-data.json (10158g)
+Games: 80 | Matchups: 4 | K: 16 | MCTS: A=25sims B=0sims
+  [10/80] 1512.8s | A=2W 1L 7D (20.0%) | ΔVP 0.00 | ΔElo 11.1
+  [20/80] 3041.3s | A=5W 1L 14D (25.0%) | ΔVP 0.00 | ΔElo 45.3
+  [30/80] 4197.5s | A=7W 3L 20D (23.3%) | ΔVP 0.00 | ΔElo 27.1
+  [40/80] 5317.5s | A=10W 4L 26D (25.0%) | ΔVP 0.00 | ΔElo 42.1
+  [50/80] 6388.3s | A=11W 4L 35D (22.0%) | ΔVP 0.00 | ΔElo 37.9
+  [60/80] 7922.4s | A=13W 5L 42D (21.7%) | ΔVP 0.00 | ΔElo 37.7
+  [70/80] 9809.4s | A=14W 5L 51D (20.0%) | ΔVP 0.00 | ΔElo 35.1
+  [80/80] 11345.9s | A=14W 5L 61D (17.5%) | ΔVP 0.00 | ΔElo 21.9
+
+[record-policy] saved 50000 samples → /Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/buf-v4-raw.json
+[record-policy] z distribution: -1=554 0=45800 +1=3646 null=0 (this run added 77305)
+
+=== LADDER RESULT ===
+Games: 80
+A wins: 14 (17.5%)
+B wins: 5 (6.3%)
+Draws:  61 (76.3%)
+Avg VP delta (A - B): 0.00
+Running Elo: A=1511.0  B=1489.0
+Elo delta (A - B): 21.9 ± 36.6 (95% CI)
+Interpretation: NOT significant at 95%
+
+Per matchup:
+  3actWampaLiA: 2W 0L 18D (10.0%) | ΔVP 0.00
+  ATRT_Brawler: 1W 0L 19D (5.0%) | ΔVP 0.00
+  Bikes_Flames: 11W 0L 9D (55.0%) | ΔVP 0.00
+  Boba_v1: 0W 5L 15D (0.0%) | ΔVP 0.00

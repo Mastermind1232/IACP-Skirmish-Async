@@ -29,8 +29,13 @@
     "cardName": "Signal Jammer",
     "result": {
       "applied": true,
-      "effects": [],
-      "log_message": "Signal Jammer \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "effects": [
+        {
+          "effect": "signalJammer",
+          "playerNum": 1
+        }
+      ],
+      "log_message": "**Signal Jammer** \u2014 Place this card in your Play Area. When any player next plays a Command card, cancel its effects and discard both cards. **Notify your opponent that Signal Jammer is now active.**"
     }
   },
   "p1CcDeck": [

@@ -34,13 +34,21 @@
       "applied": true,
       "effects": [
         {
+          "effect": "freeAttackBonus",
+          "msgId": "hl1dc0"
+        },
+        {
+          "effect": "overrideAttackDice",
+          "msgId": "hl1dc0"
+        },
+        {
           "effect": "freeAttackBonus"
         },
         {
           "effect": "overrideAttackDice"
         }
       ],
-      "log_message": "Lightbow \u2014 played (complex mechanic stamped on activeCardEffects)."
+      "log_message": "Lightbow \u2014 2 schema effect(s) applied."
     }
   },
   "p1CcDeck": [

@@ -344,9 +344,20 @@ def get_reachable_spaces(start_coord: str, mp: int, map_spaces: Dict[str, Any], 
     return list((cache.get('cells') or {}).keys())
 
 
-def get_path_cost(start_coord: str, dest_coord: str, map_spaces: Dict[str, Any], occupied_set: Optional[List[str]] = None) -> float:
-    """Default-profile 1x1 path cost; returns math.inf when unreachable."""
-    board = build_temp_board_state(map_spaces, occupied_set or [], None)
+def get_path_cost(start_coord: str, dest_coord: str, map_spaces: Dict[str, Any],
+                   occupied_set: Optional[List[str]] = None,
+                   hostile_occupied_set: Optional[List[str]] = None) -> float:
+    """Default-profile 1x1 path cost; returns math.inf when unreachable.
+
+    `occupied_set`: ALL occupied cells — checked for end-of-move (can't
+    finish on an occupied cell).
+    `hostile_occupied_set`: subset of `occupied_set` that blocks
+    pass-through during traversal. Friendly figures occupy a cell (so
+    end-of-move blocks) but the moving figure can pass through them
+    (per IACP rules). When omitted, all occupied cells are treated as
+    hostile (legacy behavior).
+    """
+    board = build_temp_board_state(map_spaces, occupied_set or [], hostile_occupied_set)
     if not board:
         return math.inf
     profile = profile_from_size('1x1')

@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Mapping, Optional
 
 import random as _random
+import re
 
 from python.engine.actions import ActionType
 from python.engine.data.dc_effects_loader import get_dc_effect
@@ -192,9 +193,10 @@ def _handle_end_activation_phase(game: GameState, action: Action) -> GameState:
         game['p1ActivationPhaseEnded'] = True
     elif pn == 2:
         game['p2ActivationPhaseEnded'] = True
-    if (game.get('p1ActivationPhaseEnded')
-            and game.get('p2ActivationPhaseEnded')):
-        game['roundPhase'] = 'end'
+    # JS doesn't advance roundPhase here — it just opens the
+    # pre_end_of_round phase gate via sendPhaseGateMessages, leaving
+    # roundPhase='activation' until the gate's both-ready dispatch sets
+    # roundPhase='end_of_round'. Don't pre-empt that here.
     return game
 
 
@@ -224,6 +226,29 @@ def _occupied_cells(game: GameState, exclude_key: Optional[str] = None) -> list:
                 continue
             if isinstance(coord, str) and coord:
                 out.append(coord)
+    return out
+
+
+def _hostile_occupied_cells(game: GameState, mover_player: int,
+                              exclude_key: Optional[str] = None) -> list:
+    """Cells occupied by figures of the opposing player. Used to block
+    pass-through during movement traversal (friendlies are passable per
+    IACP rules)."""
+    if mover_player not in (1, 2):
+        return []
+    other = 2 if mover_player == 1 else 1
+    out = []
+    fp = game.get('figurePositions') or {}
+    if not isinstance(fp, Mapping):
+        return out
+    other_positions = fp.get(other) or fp.get(str(other)) or {}
+    if not isinstance(other_positions, Mapping):
+        return out
+    for fkey, coord in other_positions.items():
+        if fkey == exclude_key:
+            continue
+        if isinstance(coord, str) and coord:
+            out.append(coord)
     return out
 
 
@@ -662,6 +687,10 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
     else:
         mp = int(game.get('movementPoints') or 0)
     map_id = game.get('mapId')
+    if not map_id:
+        sel = game.get('selectedMap') or {}
+        if isinstance(sel, Mapping):
+            map_id = sel.get('id')
     map_spaces = get_map_spaces(map_id)
     if not map_spaces:
         raise ValueError(f'move_pick_space: no map spaces for mapId={map_id!r}')
@@ -689,8 +718,15 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
                     break
 
     # Mobile movement ignores blocking figures (empty occupied_set).
-    occupied = [] if mobile_active else _occupied_cells(game, exclude_key=figure_key)
-    cost = get_path_cost(start_coord, coord, map_spaces, occupied)
+    # Otherwise: friendly figures occupy a cell (block end-of-move) but
+    # don't block pass-through, per IACP rules. Compute hostile subset.
+    if mobile_active:
+        occupied = []
+        hostile = []
+    else:
+        occupied = _occupied_cells(game, exclude_key=figure_key)
+        hostile = _hostile_occupied_cells(game, player, exclude_key=figure_key)
+    cost = get_path_cost(start_coord, coord, map_spaces, occupied, hostile)
     if cost == float('inf'):
         raise ValueError(f'move_pick_space: {coord} unreachable from {start_coord}')
     if cost > mp:
@@ -706,6 +742,25 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
         game['perFigureMp'] = per_mp_map
     game['movementPoints'] = new_mp
 
+    # Mirror JS's movementBank.{msgId}.remaining decrement. The msg_id
+    # for this figure's activation lives in the Action params under
+    # `move_key` (= `{msgId}_{figureIdx}`). When move_key isn't supplied
+    # we resolve via figure_key → DC list lookup.
+    move_key = action.params.get('move_key')
+    pn_msg_id = None
+    if move_key and isinstance(move_key, str):
+        m = re.match(r'^(.+)_f\d+$', move_key) or re.match(r'^(.+)_\d+$', move_key)
+        if m:
+            pn_msg_id = m.group(1)
+    if pn_msg_id:
+        bank = dict(game.get('movementBank') or {})
+        entry = dict(bank.get(pn_msg_id) or {})
+        if entry:
+            cur = int(entry.get('remaining') or 0)
+            entry['remaining'] = max(0, cur - int(cost))
+            bank[pn_msg_id] = entry
+            game['movementBank'] = bank
+
     fp = dict(game.get('figurePositions') or {})
     ppos = dict(fp.get(player, fp.get(str(player), {})))
     ppos[figure_key] = coord
@@ -716,6 +771,11 @@ def _handle_move_pick_space(game: GameState, action: Action) -> GameState:
     if figure_key not in moved:
         moved.append(figure_key)
     game['figuresMovedThisRound'] = moved
+
+    # Mirror JS's per-figure moved flag (used by Tripod, Aim, etc.).
+    fm = dict(game.get('figureMoved') or {})
+    fm[figure_key] = True
+    game['figureMoved'] = fm
 
     # Post-move interrupt detection: Parting Blow / Dirty Trick / Disengage /
     # Overwatch. Each trigger is a pending choice for the reacting player.
@@ -841,6 +901,10 @@ def _attack_legal(
             return f'melee target {target_coord} not adjacent to {attacker_coord}'
         return None
     map_id = game.get('mapId')
+    if not map_id:
+        sel = game.get('selectedMap') or {}
+        if isinstance(sel, Mapping):
+            map_id = sel.get('id')
     map_spaces = get_map_spaces(map_id) if map_id else {}
     if not map_spaces:
         return f'no map spaces for mapId={map_id!r}'
@@ -1330,6 +1394,14 @@ def _handle_attack_target(game: GameState, action: Action) -> GameState:
         patk[attacker_key] = already + 1
         atk_log[atk_player] = patk
         game['figureAttacksThisActivation'] = atk_log
+
+    # Mirror JS's attackPerformedThisActivation per-msgId flag (used by
+    # the dc-play-area to disable attack buttons after one attack and
+    # cleared at end of activation).
+    if atk_msg_id:
+        apta = dict(game.get('attackPerformedThisActivation') or {})
+        apta[atk_msg_id] = True
+        game['attackPerformedThisActivation'] = apta
 
     # Fire post-attack Pattern D triggers on both attacker and defender.
     # Covers Havoc Shot, Leg Hydraulics, Jets, Open Minded, Dual Wield,
@@ -2456,6 +2528,7 @@ def _handle_dc_special(game: GameState, action: Action) -> GameState:
         'playerNum': player_num,
         'result': result,
     }
+
     return game
 
 
@@ -4165,11 +4238,16 @@ def _handle_deploy_row(game: GameState, action: Action) -> GameState:
 
 
 def _handle_move_figure(game: GameState, action: Action) -> GameState:
-    """Open movement for a specific figure (UI shim).
+    """Begin a Move action for a specific figure.
 
     Required params: figure_key, msg_id.
-    Records game.moveInProgress[msg_id] = {figureKey, playerNum}. Real
-    MP consumption happens via MOVE_PICK_SPACE.
+
+    Effects (mirrors src/handlers/dc-play-area.js dc_move_ branch):
+      - Records moveInProgress[msg_id] = {figureKey, playerNum}.
+      - Grants `speed` MP (per IACP rules: each Move action adds speed
+        to current movement bank, accumulating with leftover MP).
+      - Updates movementPoints + perFigureMp for the moving figure so
+        the next MOVE_PICK_SPACE has the right budget.
     """
     figure_key = action.params.get('figure_key') or action.params.get('figureKey')
     msg_id = action.params.get('msg_id') or action.params.get('msgId')
@@ -4183,6 +4261,70 @@ def _handle_move_figure(game: GameState, action: Action) -> GameState:
     move_in_progress = game.data.get('moveInProgress') or {}
     move_in_progress[msg_id] = {'figureKey': figure_key, 'playerNum': player}
     game.data['moveInProgress'] = move_in_progress
+
+    # Grant speed MP. Look up DC speed from the figure's DC effects.
+    dc_name = figure_key.rsplit('-', 2)[0] if '-' in figure_key else figure_key
+    speed = 4
+    try:
+        from python.engine.data.dc_effects_loader import get_dc_effects
+        effects = get_dc_effects() or {}
+        eff = effects.get(dc_name) or {}
+        s = eff.get('speed')
+        if isinstance(s, (int, float)):
+            speed = int(s)
+    except Exception:
+        pass
+
+    # JS semantics: the first Move action of an activation establishes
+    # the bank (mp = speed); subsequent Move actions add speed to leftover.
+    # Python's activate_dc already pre-grants speed MP at activation, so
+    # the first dc_move here would double-count if we just added speed
+    # unconditionally. We detect "first dc_move after activate" via the
+    # absence of a populated movementBank entry — JS doesn't create the
+    # bank until the first Move click.
+    bank = dict(game.data.get('movementBank') or {})
+    existing_entry = bank.get(msg_id) or {}
+    is_first_move = not (existing_entry.get('total') or existing_entry.get('remaining'))
+
+    per_mp = dict(game.data.get('perFigureMp') or {})
+    if figure_key in per_mp:
+        if is_first_move:
+            per_mp[figure_key] = speed
+        else:
+            per_mp[figure_key] = int(per_mp.get(figure_key) or 0) + speed
+        game.data['perFigureMp'] = per_mp
+        game.data['movementPoints'] = per_mp[figure_key]
+    else:
+        if is_first_move:
+            game.data['movementPoints'] = speed
+        else:
+            cur = int(game.data.get('movementPoints') or 0)
+            game.data['movementPoints'] = cur + speed
+
+    # Mirror JS movementBank for parity-friendly diff output.
+    if is_first_move:
+        bank[msg_id] = {
+            'total': speed, 'remaining': speed,
+            'threadId': existing_entry.get('threadId'),
+            'messageId': existing_entry.get('messageId'),
+            'displayName': existing_entry.get('displayName'),
+        }
+    else:
+        new_entry = dict(existing_entry)
+        new_entry['remaining'] = int(existing_entry.get('remaining') or 0) + speed
+        new_entry['total'] = int(existing_entry.get('total') or 0) + speed
+        bank[msg_id] = new_entry
+    game.data['movementBank'] = bank
+
+    # Move action consumes 1 action from dcActionsData (mirrors JS).
+    actions_data = dict(game.data.get('dcActionsData') or {})
+    entry_a = dict(actions_data.get(msg_id) or {})
+    if entry_a:
+        rem = int(entry_a.get('remaining') or 0)
+        if rem > 0:
+            entry_a['remaining'] = rem - 1
+            actions_data[msg_id] = entry_a
+            game.data['dcActionsData'] = actions_data
     return game
 
 

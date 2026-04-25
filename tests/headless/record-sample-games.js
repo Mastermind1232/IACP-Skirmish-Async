@@ -41,6 +41,30 @@ async function recordOne(gameIndex, outPath, mapId) {
       p1: [{dcName: 'Ahsoka Tano'}, {dcName: 'Rebel Trooper (Regular)'}],
       p2: [{dcName: 'Darth Vader'}, {dcName: 'Stormtrooper (Regular)'}],
     },
+    'chopper-base-atollon': {
+      p1: [{dcName: 'Hera Syndulla'}, {dcName: 'Rebel Trooper (Regular)'}],
+      p2: [{dcName: 'Boba Fett'}, {dcName: 'Stormtrooper (Regular)'}],
+    },
+    'lothal-wastes': {
+      p1: [{dcName: 'Ezra Bridger'}, {dcName: 'Rebel Trooper (Regular)'}],
+      p2: [{dcName: 'Agent Kallus'}, {dcName: 'Stormtrooper (Regular)'}],
+    },
+    'devaron-garrison': {
+      p1: [{dcName: 'Cassian Andor'}, {dcName: 'Rebel Trooper (Regular)'}],
+      p2: [{dcName: 'Darth Vader'}, {dcName: 'Stormtrooper (Regular)'}],
+    },
+    'anchorhead-cantina-bar': {
+      p1: [{dcName: 'Han Solo (Rebel Hero)'}, {dcName: 'Chewbacca'}],
+      p2: [{dcName: 'Boba Fett'}, {dcName: 'Stormtrooper (Regular)'}],
+    },
+    'development-facility': {
+      p1: [{dcName: 'Ahsoka Tano'}, {dcName: 'Rebel Trooper (Regular)'}],
+      p2: [{dcName: 'Darth Vader'}, {dcName: 'Stormtrooper (Regular)'}],
+    },
+    'hoth-battle-station': {
+      p1: [{dcName: 'Luke Skywalker (Jedi Knight)'}, {dcName: 'Rebel Trooper (Regular)'}],
+      p2: [{dcName: 'Darth Vader'}, {dcName: 'Stormtrooper (Regular)'}],
+    },
   };
   const a = armies[mapId] || armies['dawn-of-rebellion'];
   const built = createTestGame()
@@ -52,11 +76,18 @@ async function recordOne(gameIndex, outPath, mapId) {
     .inRound(1)
     .build();
   const { game, deps, dcMessageMeta, dcExhaustedState, dcHealthState } = built;
+  // status_phase has an isTestGame fast-path that lets a single click advance
+  // both players' end-of-phase flags. Without it, both player IDs must click.
+  game.isTestGame = true;
 
   const outStream = fs.createWriteStream(outPath);
   const harness = createRecordingHarness(game, {
     outStream, deps, dcMessageMeta, dcExhaustedState, dcHealthState,
+    lightweight: true,
   });
+  const PLAYER1_ID = game.player1Id || 'player1';
+  const PLAYER2_ID = game.player2Id || 'player2';
+  const userIdFor = (p) => (p === 2 ? PLAYER2_ID : PLAYER1_ID);
 
   let actionsDone = 0;
   let noProgressCount = 0;
@@ -64,40 +95,75 @@ async function recordOne(gameIndex, outPath, mapId) {
   let lastCustomId = null;
   let sameCount = 0;
 
+  // Pick whichever player has actionable choices. The harness clones the
+  // game internally; reading the live clone via harness.getGame() is the
+  // only way to see post-activation state. Forward-progress preference:
+  // a player whose only available action is progress-averse (status_phase,
+  // *_unready) should be passed over in favor of their opponent who has
+  // a progressive option — otherwise the recorder oscillates on phase gates.
+  function pickPlayerAndActions() {
+    const liveGame = harness.getGame();
+    const declared = liveGame.activePlayer;
+    const actionsFor = (p) => {
+      try { return getAvailableActions(liveGame, p, deps) || []; }
+      catch { return []; }
+    };
+    const a1 = actionsFor(1);
+    const a2 = actionsFor(2);
+    const fwd = (xs) => xs.filter((a) => !PROGRESS_AVERSE_PREFIXES_BOUND.some((p) => String(a.customId || '').startsWith(p)));
+    if (declared === 1 && fwd(a1).length) return { player: 1, actions: a1, live: liveGame };
+    if (declared === 2 && fwd(a2).length) return { player: 2, actions: a2, live: liveGame };
+    const fwd1 = fwd(a1), fwd2 = fwd(a2);
+    if (fwd1.length && fwd2.length) {
+      const p1Acts = (liveGame.p1ActivatedDcIndices || []).length;
+      const p2Acts = (liveGame.p2ActivatedDcIndices || []).length;
+      const player = p1Acts <= p2Acts ? 1 : 2;
+      return { player, actions: player === 1 ? a1 : a2, live: liveGame };
+    }
+    if (fwd1.length) return { player: 1, actions: a1, live: liveGame };
+    if (fwd2.length) return { player: 2, actions: a2, live: liveGame };
+    if (a1.length) return { player: 1, actions: a1, live: liveGame };
+    if (a2.length) return { player: 2, actions: a2, live: liveGame };
+    return { player: 0, actions: [], live: liveGame };
+  }
+  // Closure-bound list (the const inside the loop body isn't visible here).
+  const PROGRESS_AVERSE_PREFIXES_BOUND = ['status_phase_', 'phase_gate_unready_'];
+
+  // Deprioritize buttons that walk back progress: status_phase ends a round
+  // (we want to play more first) and *_unready toggles undo the readiness we
+  // just established, sending the recorder into oscillation loops.
+  const PROGRESS_AVERSE_PREFIXES = [
+    'status_phase_',
+    'phase_gate_unready_',
+  ];
+  const isProgressAverse = (cid) =>
+    PROGRESS_AVERSE_PREFIXES.some((p) => String(cid || '').startsWith(p));
+
   while (actionsDone < ACTIONS_PER_GAME && noProgressCount < 15) {
-    const curPlayer = game.activePlayer || 1;
-    let actions;
-    try {
-      actions = getAvailableActions(game, curPlayer, deps);
-    } catch (e) {
-      noProgressCount += 1;
-      continue;
-    }
-    if (!actions || actions.length === 0) {
-      noProgressCount += 1;
-      continue;
-    }
-    // Prefer non-status-phase actions when available to exercise combat
-    // / movement / CC play. Fall back to any if that's all there is.
-    let pool = actions.filter((a) => !String(a.customId || '').startsWith('status_phase_'));
-    if (pool.length === 0) pool = actions;
-    // Avoid the same action three times in a row — usually a loop.
+    const { actions, player } = pickPlayerAndActions();
+    if (!actions.length) { noProgressCount += 1; continue; }
+    const progressivePool = actions.filter((a) => !isProgressAverse(a.customId));
+    let pool = progressivePool.length ? progressivePool : actions;
     if (lastCustomId && sameCount >= 2) {
-      pool = pool.filter((a) => a.customId !== lastCustomId);
-      if (pool.length === 0) pool = actions;
+      const filtered = pool.filter((a) => a.customId !== lastCustomId);
+      // Falling back: stay within the progressive pool — falling back to
+      // `actions` would let progress-averse buttons (status_phase, *_unready)
+      // sneak in and undo the readiness we just established.
+      if (filtered.length) pool = filtered;
     }
     const best = pickRandomAction(pool);
     if (!best) { noProgressCount += 1; continue; }
     try {
-      await harness.submitAction(best.customId, 'test-user', best.opts || {});
+      // Use the player-specific user id so handlers like phase_gate_ready_
+      // and status_phase_ correctly attribute the click. The recorder's
+      // pickPlayerAndActions already filtered to a player who has actions —
+      // matching userId lets the JS handler accept the button without
+      // "not your turn" rejections.
+      await harness.submitAction(best.customId, userIdFor(player), best.opts || {});
       actionsDone += 1;
       noProgressCount = 0;
-      if (best.customId === lastCustomId) {
-        sameCount += 1;
-      } else {
-        lastCustomId = best.customId;
-        sameCount = 0;
-      }
+      if (best.customId === lastCustomId) sameCount += 1;
+      else { lastCustomId = best.customId; sameCount = 0; }
     } catch (e) {
       noProgressCount += 1;
     }
@@ -112,7 +178,7 @@ async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const results = [];
   for (let i = 0; i < GAMES; i++) {
-    const outPath = path.join(OUT_DIR, `game_${String(i).padStart(3, '0')}.jsonl`);
+    const outPath = path.join(OUT_DIR, `${MAP_ID}_game_${String(i).padStart(3, '0')}.jsonl`);
     try {
       const r = await recordOne(i, outPath, MAP_ID);
       results.push(r);

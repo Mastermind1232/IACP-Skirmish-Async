@@ -209,12 +209,12 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js:2073 → py mcts/actions.py (legal_actions skip ATTACK_TARGET when distance==1)',
     ),
     'camouflage_mak': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:2269 → py mcts/actions.py (legal_actions skips ranged ATTACK_TARGET when distance >= 4)',
     ),
     'camouflage_scout_trooper': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:2269 → py mcts/actions.py (legal_actions skips ranged ATTACK_TARGET when distance >= 4)',
     ),
     'coordinated_hunt_purge_commander': (
         'deferred-handler-combat', 'handler-combat',

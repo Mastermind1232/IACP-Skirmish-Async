@@ -1,0 +1,4 @@
+Ladder: A=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v10-h128.json (10158g) vs B=/Users/adammeehan/Public/IACP-Skirmish-Async/tests/headless/checkpoints/phase-d/warmed-20e-v5-h128.json (10158g)
+Games: 40 | Matchups: 4 | K: 16 | MCTS: A=25sims B=25sims
+  [10/40] 2336.2s | A=1W 0L 9D (10.0%) | ΔVP 0.00 | ΔElo 11.5
+  [20/40] 4056.2s | A=4W 0L 16D (20.0%) | ΔVP 0.00 | ΔElo 44.2
