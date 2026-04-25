@@ -150,8 +150,102 @@ def test_registry_includes_starter_set():
     expected = {
         'aim_rebel_trooper_reg', 'aim_rebel_trooper_elite',
         'take_cover_jawa_elite', 'take_cover_jawa_reg',
+        'adv_targeting_computer_dark_trooper',
+        'dead_precise_kotun', 'improvised_cover_verena',
     }
     assert expected.issubset(set(ids))
+
+
+# ── adv_targeting_computer_dark_trooper ────────────────────────────────────
+
+def test_adv_targeting_computer_grants_focus_and_green_die():
+    data = _base_data()
+    combat = {'attackInfo': {'dice': ['blue', 'red']}}
+    fired = apply_combat_passives(
+        data, combat, ['adv_targeting_computer_dark_trooper'], [], _ctx(),
+    )
+    # Focus condition applied to attacker.
+    cond = (data.get('figureConditions') or {}).get(
+        'Rebel Trooper (Regular)-0-0') or []
+    assert 'Focus' in cond
+    # Green die appended to attack pool.
+    assert 'green' in (combat.get('attackInfo') or {}).get('dice', [])
+    assert any(f['effect'] == 'adv_targeting_computer' for f in fired)
+
+
+# ── dead_precise_kotun ─────────────────────────────────────────────────────
+
+def test_dead_precise_fires_when_attacker_did_not_move():
+    data = _base_data()
+    data['activationStartPositions'][1]['Rebel Trooper (Regular)-0-0'] = 'a3'
+    combat = {}
+    fired = apply_combat_passives(
+        data, combat, ['dead_precise_kotun'], [], _ctx(),
+    )
+    assert combat.get('bonusAccuracy') == 2
+    assert 'bonusHits' not in combat  # accuracy-only, no hits
+    assert any(f['effect'] == 'dead_precise_kotun' for f in fired)
+
+
+def test_dead_precise_no_fire_when_moved():
+    data = _base_data()  # default: moved
+    combat = {}
+    fired = apply_combat_passives(
+        data, combat, ['dead_precise_kotun'], [], _ctx(),
+    )
+    assert 'bonusAccuracy' not in combat
+    assert not fired
+
+
+# ── improvised_cover_verena ────────────────────────────────────────────────
+
+def test_improvised_cover_fires_when_defender_adjacent_to_non_attacker_hostile():
+    data = _base_data()
+    # Move defender to h7 with a non-attacker hostile (Stormtrooper at h8 is
+    # the attacker; add a third unit, "K-2S0", on player 1, adjacent to h8).
+    data['figurePositions'][1]['K-2S0-0-0'] = 'h7'
+    data['figurePositions'][2]['Stormtrooper (Regular)-0-0'] = 'h8'
+    # Attacker is K-2S0 on player 1; defender Stormtrooper on player 2.
+    # Defender at h8 is adjacent to K-2S0 (h7) — but K-2S0 IS the attacker,
+    # so improvised_cover should NOT fire from the attacker's adjacency.
+    ctx = _ctx(atk_key='K-2S0-0-0', def_key='Stormtrooper (Regular)-0-0',
+               atk_player=1, def_player=2)
+    combat = {}
+    fired = apply_combat_passives(
+        data, combat, [], ['improvised_cover_verena'], ctx,
+    )
+    assert 'bonusBlock' not in combat
+    # Now add a SECOND p1 figure adjacent to defender (h7 → h8 adj).
+    data['figurePositions'][1]['Rebel Trooper (Regular)-0-0'] = 'g8'
+    fired = apply_combat_passives(
+        data, combat, [], ['improvised_cover_verena'], ctx,
+    )
+    assert combat.get('bonusBlock') == 1
+    assert any(f['effect'] == 'improvised_cover_verena' for f in fired)
+
+
+def test_improvised_cover_no_fire_when_no_adjacent_non_friendly():
+    data = _base_data()
+    # Stormtrooper at h8, Rebel at a3 — defender has no nearby non-friendly.
+    combat = {}
+    fired = apply_combat_passives(
+        data, combat, [],  ['improvised_cover_verena'],
+        _ctx(atk_key='Rebel Trooper (Regular)-0-0',
+             def_key='Stormtrooper (Regular)-0-0'),
+    )
+    assert 'bonusBlock' not in combat
+
+
+def test_adv_targeting_computer_idempotent_when_already_focused():
+    data = _base_data()
+    data['figureConditions'] = {'Rebel Trooper (Regular)-0-0': ['Focus']}
+    combat = {'attackInfo': {'dice': ['blue', 'red']}}
+    fired = apply_combat_passives(
+        data, combat, ['adv_targeting_computer_dark_trooper'], [], _ctx(),
+    )
+    # Already focused: don't double-stack the green die.
+    assert (combat.get('attackInfo') or {}).get('dice') == ['blue', 'red']
+    assert not fired
 
 
 def test_unknown_passive_id_is_silently_ignored():

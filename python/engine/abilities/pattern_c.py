@@ -143,8 +143,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/engine/activation-setup.js (start-of-activation hook)',
     ),
     'dead_precise_kotun': (
-        'deferred-bridge', 'bridge',
-        'src/engine/activation-setup.js + handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_dead_precise_kotun',
     ),
     'fast_learner_mara_jade': (
         'deferred-bridge', 'bridge',
@@ -185,8 +185,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
 
     # Handler-combat — the handler populates combat.bonus* / combat pipeline
     'adv_targeting_computer_dark_trooper': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js (adds bonusHits/surge pool)',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_adv_targeting_computer (auto-Focus only; reroll-may deferred)',
     ),
     'agile_jet_trooper_elite': (
         'deferred-handler-combat', 'handler-combat',
@@ -233,8 +233,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'improvised_cover_verena': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js:2131 (map-space defence gate)',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:2131 → py mechanics/passive_combat.py:_handle_improvised_cover_verena (figure-adjacency clause; object/crate adjacency deferred until crates port)',
     ),
     'krayt_dragon_fury_tress': (
         'deferred-handler-combat', 'handler-combat',

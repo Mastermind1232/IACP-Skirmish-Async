@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T03:48:58.462897+00:00",
+  "generated": "2026-04-25T03:52:47.831283+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 257,
-      "stub": 53,
+      "real": 260,
+      "stub": 50,
       "missing": 0,
       "total": 310
     },
@@ -325,7 +325,7 @@
       "acp_scattergun": "real",
       "adapt_blaise": "stub",
       "adaptive_skills_mara_jade": "stub",
-      "adv_targeting_computer_dark_trooper": "stub",
+      "adv_targeting_computer_dark_trooper": "real",
       "advanced_firepower_sorin": "real",
       "agile_jet_trooper_elite": "stub",
       "agile_jet_trooper_reg": "stub",
@@ -379,7 +379,7 @@
       "cunning_nexu_reg": "real",
       "cut_and_run_davith": "real",
       "dc_pounce": "real",
-      "dead_precise_kotun": "stub",
+      "dead_precise_kotun": "real",
       "defensible_sc2m": "real",
       "defensive_fire_bokatan": "stub",
       "defensive_stance": "real",
@@ -467,7 +467,7 @@
       "imperial_loadout_purge_trooper": "stub",
       "improper_procedure": "real",
       "improved_smugglers_instincts": "real",
-      "improvised_cover_verena": "stub",
+      "improvised_cover_verena": "real",
       "incentivize_jabba": "real",
       "indiscriminate_fire": "real",
       "infiltration_rebel_pathfinder": "real",
@@ -732,7 +732,6 @@
     "abilities": [
       "adapt_blaise",
       "adaptive_skills_mara_jade",
-      "adv_targeting_computer_dark_trooper",
       "agile_jet_trooper_elite",
       "agile_jet_trooper_reg",
       "attached_dio",
@@ -742,7 +741,6 @@
       "coordinated_hunt_purge_commander",
       "cower_c3po",
       "cower_imperial_officer_reg",
-      "dead_precise_kotun",
       "defensive_fire_bokatan",
       "devout_chirrut",
       "dirty_dealing_bib",
@@ -753,7 +751,6 @@
       "gambit_lando",
       "hunt_dissent_kallus",
       "imperial_loadout_purge_trooper",
-      "improvised_cover_verena",
       "insignificant_dio",
       "krayt_dragon_fury_tress",
       "last_wielder_darksaber_bokatan",
