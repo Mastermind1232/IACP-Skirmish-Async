@@ -1,39 +1,13 @@
 # Port Priority — Top-50 Missing Items
 
-Generated: 2026-04-25T01:32:00.276474+00:00
+Generated: 2026-04-25T01:39:00.671419+00:00
 
 Run `python3 python/parity/port_coverage.py` to refresh.
 
 ## CC effects (top 50 missing)
 
-Total missing/stubbed: **26**. Ranked by play-frequency record if available, else alphabetical.
+Total missing/stubbed: **0**. Ranked by play-frequency record if available, else alphabetical.
 
-1. **A Powerful Influence**
-2. **Cal's Buddy**
-3. **Chaotic Force**
-4. **Choose a Side**
-5. **Coordinated Attack**
-6. **Corrupting Force**
-7. **Covering Fire**
-8. **Data Theft**
-9. **Deploy the Garrison**
-10. **Devotion**
-11. **Efficient Travel**
-12. **Evacuate**
-13. **Face Me!**
-14. **Ferocity**
-15. **Findsman Meditation**
-16. **Foresee**
-17. **Harsh Environment**
-18. **Hostile Negotiation**
-19. **Jundland Terror**
-20. **Just Business**
-21. **Lightbow**
-22. **Lure of the Dark Side**
-23. **Rebel Graffiti**
-24. **Signal Jammer**
-25. **Sit Tight**
-26. **Wreak Vengeance**
 
 ## DC abilities (top 50 missing)
 

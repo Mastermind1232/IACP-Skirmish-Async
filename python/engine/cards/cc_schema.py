@@ -290,6 +290,145 @@ def apply_cc_schema(card_name: str):
         if stamped:
             data['activeCardEffects'] = active
 
+        # ── Per-card named-flag stamps (Phase 2A continuation) ─────────
+        # Each of these CC schemas stamps a per-card / per-player flag
+        # that downstream code (combat, EoR rules, condition appliers)
+        # reads at the appropriate window. The schema handler ensures
+        # the flag is set on game state regardless of whether the
+        # downstream consumer is fully ported.
+
+        # A Powerful Influence: hostile figures within range can't interact
+        # / count for control. JS sets game.powerfulInfluencePlayerNum.
+        if entry.get('interactBlockRange') and entry.get('controlBlockRange'):
+            data['powerfulInfluencePlayerNum'] = player_num
+            effects.append({'effect': 'powerfulInfluence',
+                            'playerNum': player_num})
+
+        # Data Theft (stealsFromOpponentDiscard): mark active so combat
+        # / EoR logic can route the steal effect.
+        if entry.get('stealsFromOpponentDiscard'):
+            data['dataTheftActive'] = {'playerNum': player_num}
+            effects.append({'effect': 'dataTheft', 'playerNum': player_num})
+
+        # Efficient Travel: round-scoped MP bonus marker.
+        if entry.get('roundEfficientTravel'):
+            data['efficientTravelPlayerNum'] = player_num
+            effects.append({'effect': 'efficientTravel',
+                            'playerNum': player_num})
+
+        # Harsh Environment: round-wide environment flag.
+        if entry.get('setsHarshEnvironment'):
+            data['harshEnvironmentActive'] = {'playerNum': player_num}
+            effects.append({'effect': 'harshEnvironment',
+                            'playerNum': player_num})
+
+        # Hostile Negotiation: each player discards N random cards from
+        # hand. Implements the symmetric hand-discard pattern directly.
+        own_disc = entry.get('discardRandomFromHand')
+        opp_disc = entry.get('opponentDiscardRandomFromHand')
+
+        def _discard_random(pn: int, n: int) -> int:
+            hand_key = f'player{pn}CcHand'
+            disc_key = f'player{pn}CcDiscard'
+            hand = list(data.get(hand_key) or [])
+            disc = list(data.get(disc_key) or [])
+            import random as _rng
+            removed = 0
+            for _ in range(n):
+                if not hand:
+                    break
+                idx = _rng.randrange(len(hand))
+                disc.append(hand.pop(idx))
+                removed += 1
+            data[hand_key] = hand
+            data[disc_key] = disc
+            return removed
+
+        if (isinstance(own_disc, int) or isinstance(opp_disc, int)) \
+                and player_num in (1, 2):
+            opp = 2 if player_num == 1 else 1
+            if isinstance(own_disc, int) and own_disc > 0:
+                n = _discard_random(player_num, own_disc)
+                effects.append({'effect': 'discardRandomFromHand',
+                                'playerNum': player_num, 'count': n})
+            if isinstance(opp_disc, int) and opp_disc > 0:
+                n = _discard_random(opp, opp_disc)
+                effects.append({'effect': 'opponentDiscardRandomFromHand',
+                                'playerNum': opp, 'count': n})
+
+        # Just Business: round-scoped reroll grant for the playing player.
+        rerolls = entry.get('roundAttackRerollDice')
+        if isinstance(rerolls, int) and rerolls > 0:
+            data['roundAttackRerollDice'] = {
+                'playerNum': player_num, 'count': rerolls,
+            }
+            effects.append({'effect': 'roundAttackRerollDice',
+                            'count': rerolls})
+
+        # freeAttackBonus (Lightbow + similar): stamp pending free-attack
+        # for the figure-of-record. Combat orchestrator already consumes
+        # freeAttackBonusPending elsewhere.
+        if entry.get('freeAttackBonus') and msg_id:
+            fab = dict(data.get('freeAttackBonusPending') or {})
+            fab[msg_id] = (fab.get(msg_id) or 0) + 1
+            data['freeAttackBonusPending'] = fab
+            effects.append({'effect': 'freeAttackBonus',
+                            'msgId': msg_id})
+
+        # overrideAttackDice / overrideAttackType / overrideBonusAccuracy
+        # (Lightbow): stamp pendingOverrideAttackDice for the next attack.
+        if (entry.get('overrideAttackDice')
+                or entry.get('overrideAttackType')
+                or entry.get('overrideBonusAccuracy')) and msg_id:
+            poad = dict(data.get('pendingOverrideAttackDice') or {})
+            poad[msg_id] = {
+                'dice': entry.get('overrideAttackDice'),
+                'attackType': entry.get('overrideAttackType'),
+                'bonusAccuracy': entry.get('overrideBonusAccuracy'),
+            }
+            data['pendingOverrideAttackDice'] = poad
+            effects.append({'effect': 'overrideAttackDice',
+                            'msgId': msg_id})
+
+        # Rebel Graffiti: +N VP next EoR for terminal-controller.
+        rg = entry.get('rebelGraffitiVp')
+        if isinstance(rg, int) and rg > 0:
+            data['rebelGraffitiPending'] = {
+                'playerNum': player_num, 'bonus': rg,
+            }
+            effects.append({'effect': 'rebelGraffitiVp', 'bonus': rg})
+
+        # Cal's Buddy: stamp a pending companion-deploy. Empty schema in
+        # the ability library — handler is hardcoded by card name.
+        if card_name == "Cal's Buddy":
+            atk_fp = (data.get('figurePositions') or {}).get(player_num) or {}
+            cal_key = next(
+                (k for k in atk_fp if k.startswith('Cal Kestis-')),
+                None,
+            )
+            if cal_key:
+                pending = dict(data.get('calsBuddyPending') or {})
+                pending[cal_key] = {'playerNum': player_num,
+                                    'calFigureKey': cal_key}
+                data['calsBuddyPending'] = pending
+                effects.append({'effect': 'calsBuddyPending',
+                                'playerNum': player_num,
+                                'calFigureKey': cal_key})
+
+        # Single-flag CCs that just toggle a game-wide marker.
+        # Pattern: field name == game state field. Stamp playerNum.
+        for flag_field in ('signalJammer', 'sitTightPlayerNum',
+                            'lureOfTheDarkSide', 'setsWreakVengeance'):
+            if entry.get(flag_field):
+                # Field name strips trailing 'PlayerNum' if present so
+                # we end up with a clean flag name for game state.
+                clean = flag_field
+                if clean.endswith('PlayerNum'):
+                    clean = clean[:-len('PlayerNum')] + 'PlayerNum'
+                data[clean] = player_num
+                effects.append({'effect': flag_field,
+                                'playerNum': player_num})
+
         if effects:
             return {
                 'applied': True,

@@ -175,20 +175,41 @@ def cc_coverage() -> Tuple[Dict[str, str], List[str]]:
         'roundDefenseBonusBlock', 'roundDefenseBonusEvade',
         'applyDefenseBonusBlock', 'applyDefenseBonusEvade',
         'defenseBonusDice', 'rerollOneAttackDie',
+        # Phase 2A continuation: per-card flag stamps
+        'interactBlockRange', 'controlBlockRange',
+        'stealsFromOpponentDiscard', 'roundEfficientTravel',
+        'setsHarshEnvironment', 'discardRandomFromHand',
+        'opponentDiscardRandomFromHand', 'roundAttackRerollDice',
+        'freeAttackBonus', 'overrideAttackDice', 'overrideAttackType',
+        'overrideBonusAccuracy', 'rebelGraffitiVp', 'signalJammer',
+        'sitTightPlayerNum', 'lureOfTheDarkSide', 'setsWreakVengeance',
     }
     schema_cards = set()
     cc_bulk_mod = sys.modules.get('python.engine.cards.cc_bulk_named')
     if cc_bulk_mod is not None:
         meta = getattr(cc_bulk_mod, '_INSTALLED', None) or {}
         schema_cards = set(meta.get('schema_cards') or [])
+    # Per-card hardcoded handlers in cc_schema.py (effective without a
+    # decoded schema field).
+    cc_schema_hardcoded = {"Cal's Buddy"}
     if al_path.exists():
         al = _load_json(al_path).get('abilities') or {}
         for name in list(handler_status.keys()):
             if name not in schema_cards:
                 continue
             entry = al.get(name) or {}
-            if not any(k in entry for k in schema_handled_fields):
-                handler_status[name] = 'stub'
+            # Direct match on a known field?
+            if any(k in entry for k in schema_handled_fields):
+                continue
+            # Pattern match: any *Effect:True field is generically stamped
+            # via the *Effect handler in apply_cc_schema (lines ~273-291).
+            if any(k.endswith('Effect') and v is True
+                   for k, v in entry.items()):
+                continue
+            # Hardcoded by card_name in apply_cc_schema?
+            if name in cc_schema_hardcoded:
+                continue
+            handler_status[name] = 'stub'
     out: Dict[str, str] = {}
     for name in sorted(declared):
         if name in handler_status:
