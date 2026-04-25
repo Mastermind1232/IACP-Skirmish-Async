@@ -1,8 +1,8 @@
 {
   "totals": {
     "files": 43,
-    "clean_files": 14,
-    "total_diffs": 22631,
+    "clean_files": 16,
+    "total_diffs": 21167,
     "total_errors": 0,
     "total_replayed": 8541
   },
@@ -48,10 +48,6 @@
       561
     ],
     [
-      "pendingStrikeTeam",
-      537
-    ],
-    [
       "crateTokens",
       526
     ],
@@ -60,20 +56,12 @@
       502
     ],
     [
-      "pendingMuchToLearn",
-      440
-    ],
-    [
       "currentRound",
       418
     ],
     [
       "p1ActivationsTotal",
       402
-    ],
-    [
-      "pendingArmsDistribution",
-      398
     ],
     [
       "round",
@@ -124,8 +112,20 @@
       136
     ],
     [
-      "pendingItWillBeAlright",
-      111
+      "player1VP",
+      94
+    ],
+    [
+      "harshEnvironmentActive",
+      81
+    ],
+    [
+      "noCommandDrawThisRound",
+      81
+    ],
+    [
+      "p1LaunchPanelFlippedThisRound",
+      81
     ]
   ],
   "errors_by_action": [],
@@ -133,11 +133,7 @@
   "diffs_by_action": [
     [
       "phase_gate",
-      868
-    ],
-    [
-      "status_phase",
-      695
+      836
     ],
     [
       "dc_end",
@@ -145,19 +141,19 @@
     ],
     [
       "dc_activate",
-      496
+      443
     ],
     [
       "move_pick",
-      386
-    ],
-    [
-      "dc_move",
-      342
+      326
     ],
     [
       "end_end",
       316
+    ],
+    [
+      "dc_move",
+      303
     ],
     [
       "combat_gate",
@@ -166,6 +162,10 @@
     [
       "pass_activation",
       266
+    ],
+    [
+      "status_phase",
+      263
     ],
     [
       "dc_special",
@@ -201,7 +201,7 @@
     ],
     [
       "combat_resolve",
-      14
+      13
     ]
   ],
   "first_diff_by_action": {
@@ -228,9 +228,7 @@
       "diffs": [
         "  - attackPerformedThisActivation = {'hl2dc1': True}  (only in left)",
         "  ~ dcActionsData.hl2dc1.remaining: 2 != 1",
-        "  + pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': False, 'p2Ready': False, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False}  (only in right)",
-        "  ~ player2VP.kills: 5 != 0",
-        "  ~ player2VP.total: 5 != 0"
+        "  + pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': False, 'p2Ready': False, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False}  (only in right)"
       ]
     },
     "combat_ready": {
@@ -392,7 +390,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 1215,
+      "diffs": 1219,
       "clean": false
     },
     {
@@ -440,7 +438,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 480,
+      "diffs": 484,
       "clean": false
     },
     {
@@ -448,7 +446,7 @@
       "replayed": 195,
       "unsupported": 5,
       "errored": 0,
-      "diffs": 939,
+      "diffs": 941,
       "clean": false
     },
     {
@@ -488,7 +486,7 @@
       "replayed": 196,
       "unsupported": 4,
       "errored": 0,
-      "diffs": 586,
+      "diffs": 404,
       "clean": false
     },
     {
@@ -496,7 +494,7 @@
       "replayed": 198,
       "unsupported": 2,
       "errored": 0,
-      "diffs": 629,
+      "diffs": 413,
       "clean": false
     },
     {
@@ -504,7 +502,7 @@
       "replayed": 197,
       "unsupported": 3,
       "errored": 0,
-      "diffs": 736,
+      "diffs": 486,
       "clean": false
     },
     {
@@ -520,7 +518,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 1900,
+      "diffs": 1902,
       "clean": false
     },
     {
@@ -528,7 +526,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 1395,
+      "diffs": 1397,
       "clean": false
     },
     {
@@ -560,7 +558,7 @@
       "replayed": 198,
       "unsupported": 2,
       "errored": 0,
-      "diffs": 379,
+      "diffs": 236,
       "clean": false
     },
     {
@@ -568,7 +566,7 @@
       "replayed": 198,
       "unsupported": 2,
       "errored": 0,
-      "diffs": 508,
+      "diffs": 396,
       "clean": false
     },
     {
@@ -576,7 +574,7 @@
       "replayed": 197,
       "unsupported": 3,
       "errored": 0,
-      "diffs": 414,
+      "diffs": 229,
       "clean": false
     },
     {
@@ -584,7 +582,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 284,
+      "diffs": 286,
       "clean": false
     },
     {
@@ -600,7 +598,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 1225,
+      "diffs": 1231,
       "clean": false
     },
     {
@@ -688,16 +686,16 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 199,
-      "clean": false
+      "diffs": 0,
+      "clean": true
     },
     {
       "file": "passive-coverage_kotun-dead-precise_001.jsonl",
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 199,
-      "clean": false
+      "diffs": 0,
+      "clean": true
     },
     {
       "file": "passive-coverage_r2d2-lucky_000.jsonl",

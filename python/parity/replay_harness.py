@@ -116,6 +116,8 @@ DISCORD_ONLY_PATHS = frozenset({
     # information across resolve sites.
     'pendingPatternE', 'pendingEe3CarbinePassive',
     'pendingWristFlamethrower', 'pendingSpacePick',
+    'pendingStrikeTeam', 'pendingMuchToLearn',
+    'pendingArmsDistribution', 'pendingItWillBeAlright',
     # Python's nullable transient slots — JS records as missing rather
     # than null, so the diff shows None-vs-missing noise.
     'pendingCleave', 'freeAttackBonusPending',

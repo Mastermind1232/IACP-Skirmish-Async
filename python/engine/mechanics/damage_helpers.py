@@ -89,8 +89,14 @@ def reduce_hp(dc_health_state: Dict[str, List[List[int]]],
     _sync_dc_list(game, msg_id, player_num, health_state)
 
     actual_damage = prev_hp - new_hp
-    if actual_damage > 0 and 'totalDamageReceived' in game and game['totalDamageReceived']:
-        tdr = game['totalDamageReceived']
+    if actual_damage > 0:
+        # Mirror JS auto-init pattern (src/game-state.js:192) — create
+        # the totalDamageReceived dict if missing so callers don't have
+        # to pre-init it.
+        tdr = game.get('totalDamageReceived') if hasattr(game, 'get') else game.get('totalDamageReceived')
+        if not isinstance(tdr, dict):
+            tdr = {1: 0, 2: 0}
+            game['totalDamageReceived'] = tdr
         # Match JS object-key semantics: whatever key type is already
         # in the dict (int or string), write to the same slot. This
         # avoids the dict ending up with both {'1': N, 1: M} entries

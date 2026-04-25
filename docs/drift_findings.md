@@ -1,8 +1,8 @@
 # Drift Findings — what Python disagrees with JS about
 
-- Files replayed: **43** (clean: 14)
+- Files replayed: **43** (clean: 16)
 - Steps replayed: **8,541**
-- Diffs surfaced: **22,631**
+- Diffs surfaced: **21,167**
 - Steps that errored: **0**
 
 ## Top diverging state fields
@@ -21,13 +21,10 @@ Each row: how many step-level diffs touched that top-level state field. "Top-lev
 | 813 | `movementBank` |
 | 772 | `attackPerformedThisActivation` |
 | 561 | `dcActionsData` |
-| 537 | `pendingStrikeTeam` |
 | 526 | `crateTokens` |
 | 502 | `figureMoved` |
-| 440 | `pendingMuchToLearn` |
 | 418 | `currentRound` |
 | 402 | `p1ActivationsTotal` |
-| 398 | `pendingArmsDistribution` |
 | 316 | `round` |
 | 273 | `lastDefeatInfo` |
 | 266 | `currentActivationTurnPlayerId` |
@@ -40,7 +37,10 @@ Each row: how many step-level diffs touched that top-level state field. "Top-lev
 | 156 | `p2ActivationsRemaining` |
 | 143 | `attackTargets` |
 | 136 | `activationDamagedFigures` |
-| 111 | `pendingItWillBeAlright` |
+| 94 | `player1VP` |
+| 81 | `harshEnvironmentActive` |
+| 81 | `noCommandDrawThisRound` |
+| 81 | `p1LaunchPanelFlippedThisRound` |
 
 ## Errors by action type
 
@@ -56,15 +56,15 @@ Each row: how many step-level diffs touched that top-level state field. "Top-lev
 
 | # | Action prefix |
 |---|---|
-| 868 | `phase_gate` |
-| 695 | `status_phase` |
+| 836 | `phase_gate` |
 | 677 | `dc_end` |
-| 496 | `dc_activate` |
-| 386 | `move_pick` |
-| 342 | `dc_move` |
+| 443 | `dc_activate` |
+| 326 | `move_pick` |
 | 316 | `end_end` |
+| 303 | `dc_move` |
 | 291 | `combat_gate` |
 | 266 | `pass_activation` |
+| 263 | `status_phase` |
 | 257 | `dc_special` |
 | 139 | `combat_ready` |
 | 136 | `combat_roll` |
@@ -73,7 +73,7 @@ Each row: how many step-level diffs touched that top-level state field. "Top-lev
 | 46 | `pounce` |
 | 42 | `combat_surge` |
 | 31 | `combat_reroll` |
-| 14 | `combat_resolve` |
+| 13 | `combat_resolve` |
 
 ## First example diff per action type
 
@@ -85,8 +85,6 @@ Each row: how many step-level diffs touched that top-level state field. "Top-lev
   - attackPerformedThisActivation = {'hl2dc1': True}  (only in left)
   ~ dcActionsData.hl2dc1.remaining: 2 != 1
   + pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': False, 'p2Ready': False, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False}  (only in right)
-  ~ player2VP.kills: 5 != 0
-  ~ player2VP.total: 5 != 0
 ```
 
 ### `combat_gate`

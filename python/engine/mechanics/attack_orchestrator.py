@@ -1034,6 +1034,13 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
 
         # ── Phase 9: PRE-DEFEAT triggers ────────────────────────────────
         if defeated:
+            # Mirror JS combat-bridge.js:981 — stamp lastDefeatInfo for
+            # CC-timing gates ("recent defeat" window).
+            data['lastDefeatInfo'] = {
+                'playerNum': def_player,
+                'figureKey': target_key,
+                'dcName': def_dc,
+            }
             try:
                 from python.engine.abilities.pattern_d import fire_ability
                 from python.engine.data.ability_library_loader import get_ability
