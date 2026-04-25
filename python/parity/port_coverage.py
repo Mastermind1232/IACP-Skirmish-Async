@@ -246,11 +246,22 @@ def _bootstrap_ability_dispatch():
         dispatch, pattern_a, pattern_b, pattern_c, pattern_d, pattern_e,
     )
     pattern_d.install_pattern_d_stubs()
-    # Real-handler modules overwrite stubs on import.
-    from python.engine.abilities import (  # type: ignore  # noqa: F401
+    # Real-handler modules: import for side effects, then call install_*
+    # entry points so register_trigger overwrites stubs.
+    from python.engine.abilities import (  # type: ignore
         pattern_d_handlers, pattern_d_extras, bespoke_d, bespoke_e,
         pattern_e_bulk, pattern_e_schema,
     )
+    pattern_d_handlers.install_combat_declare_handlers()
+    pattern_d_handlers.install_combat_defense_friends_handlers()
+    pattern_d_handlers.install_mission_start_handlers()
+    pattern_d_handlers.install_free_move_equal_to_speed_handlers()
+    pattern_d_handlers.install_on_damage_handlers()
+    pattern_d_handlers.install_forest_fighters_handler()
+    pattern_d_handlers.install_fury_handlers()
+    pattern_d_extras.install_pattern_d_batch2()
+    bespoke_d.install_bespoke_d_handlers()
+    pattern_e_bulk.install_pattern_e_bulk()
     return dispatch, pattern_d
 
 
