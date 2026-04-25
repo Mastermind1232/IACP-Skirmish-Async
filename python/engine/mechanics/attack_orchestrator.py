@@ -1057,6 +1057,52 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                               if not k.startswith('Obi-Wan Kenobi-')]
                     if others:
                         apply_condition(data, others[0], 'Focus')
+
+                # Royal Guard Vengeance: when an adjacent friendly NON-GUARDIAN
+                # is defeated, adjacent Royal Guards become Focused.
+                # JS combat-bridge.js:1140-1160.
+                def_kws = [
+                    str(k).upper() for k in
+                    ((dc_eff_x.get(def_dc) or {}).get('keywords') or [])
+                ]
+                sel_map_x = data.get('selectedMap') or {}
+                map_id_x = (sel_map_x.get('id')
+                            if isinstance(sel_map_x, dict) else None)
+                if 'GUARDIAN' not in def_kws and last_pos and map_id_x:
+                    from python.engine.data.map_spaces_loader import (
+                        get_map_spaces as _gms,
+                    )
+                    map_sp_x = _gms(map_id_x) or {}
+                    adj_map = map_sp_x.get('adjacency') or {}
+                    adj = [str(a).lower() for a in
+                           (adj_map.get(str(last_pos).lower()) or [])]
+                    def_fp = (data.get('figurePositions') or {}).get(
+                        def_player, {}) or {}
+                    for rg_fk, rg_pos in def_fp.items():
+                        if rg_fk == target_key or not rg_pos:
+                            continue
+                        rg_name = _dc_name_from_figure_key(rg_fk)
+                        if rg_name not in ('Royal Guard (Regular)',
+                                           'Royal Guard (Elite)'):
+                            continue
+                        if str(rg_pos).lower() in adj:
+                            apply_condition(data, rg_fk, 'Focus')
+
+                # This is the Way (Armorer on the board): attacker gains
+                # 1 Block Token (max 2). JS combat-bridge.js:1163-1172.
+                atk_fp = (data.get('figurePositions') or {}).get(
+                    atk_player, {}) or {}
+                if any(fk.startswith('The Armorer-') for fk in atk_fp):
+                    from python.engine.mechanics.tokens import (
+                        grant_power_tokens,
+                    )
+                    grant_power_tokens(data, attacker_key, 'Block', 1, 2)
+
+                # Bounty (Fennec Shand passive): on defeat, opponent gains
+                # 2 objective VP. JS combat-bridge.js:1174-1184.
+                if 'Bounty' in (
+                        (dc_eff_x.get(def_dc) or {}).get('passives') or []):
+                    award_objective_vp(data, atk_player, 2)
             except Exception:
                 pass
 

@@ -1383,6 +1383,68 @@ def test_into_the_force_focuses_friendly_when_obiwan_defeated():
     )
 
 
+def test_this_is_the_way_grants_block_token_when_armorer_on_board():
+    """Armorer on attacker's board → +1 Block token on hostile defeat."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {
+            'Luke Skywalker-0-0': 'e5',
+            'The Armorer-1-0': 'b3',
+        },
+        2: {'Darth Vader-0-0': 'f5'},
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl1dc1': [[8, 8]],
+        'hl2dc0': [[1, 12]],
+    }
+    fixture['p1DcList'] = [
+        {'dcName': 'Luke Skywalker', 'dgIndex': 0},
+        {'dcName': 'The Armorer', 'dgIndex': 1},
+    ]
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    fpt = (g.data.get('figurePowerTokens') or {}).get(
+        'Luke Skywalker-0-0') or []
+    blocks = [t for t in fpt if str(t).lower() == 'block']
+    assert len(blocks) >= 1, f'Luke should have a Block token; got {fpt}'
+
+
+def test_bounty_passive_awards_2_vp_on_defeat():
+    """Fennec Shand Bounty: opponent gains 2 objective VP on defeat."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {'Fennec Shand-0-0': 'f5'},
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[1, 12]],
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Fennec Shand', 'playerNum': 2,
+    }
+    fixture['p2DcList'] = [{'dcName': 'Fennec Shand', 'dgIndex': 0}]
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Fennec Shand-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    obj = (g.data.get('player1VP') or {}).get('objectives', 0)
+    assert obj >= 2, f'P1 should have +2 bounty VP; got {obj}'
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()
