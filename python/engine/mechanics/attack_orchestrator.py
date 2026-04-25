@@ -1145,6 +1145,29 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                             candidates.append(fk)
                     for fk in candidates[:2]:
                         _gpt(data, fk, 'Evade', 1, 2)
+
+                # Cleanup: clear sub-states keyed by the defeated DC's
+                # msg_id to prevent orphaned pending choices.
+                # JS combat-bridge.js:1237-1248.
+                if def_msg_id:
+                    pdac = data.get('pendingDcAbilityChoice')
+                    if isinstance(pdac, dict):
+                        new_pdac = {
+                            k: v for k, v in pdac.items()
+                            if not str(k).startswith(f'{def_msg_id}_')
+                        }
+                        if new_pdac:
+                            data['pendingDcAbilityChoice'] = new_pdac
+                        else:
+                            data.pop('pendingDcAbilityChoice', None)
+                    pps = data.get('pendingPounceSpaceChoice')
+                    if isinstance(pps, dict) and def_msg_id in pps:
+                        new_pps = {k: v for k, v in pps.items()
+                                   if k != def_msg_id}
+                        if new_pps:
+                            data['pendingPounceSpaceChoice'] = new_pps
+                        else:
+                            data.pop('pendingPounceSpaceChoice', None)
             except Exception:
                 pass
 

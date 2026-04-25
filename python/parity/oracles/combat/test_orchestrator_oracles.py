@@ -1541,6 +1541,40 @@ def test_useful_hide_grants_evade_tokens_to_nearby_friendly_on_taunton_defeat():
     )
 
 
+def test_post_defeat_cleanup_clears_pending_dc_ability_choice():
+    """pendingDcAbilityChoice keys prefixed with the defeated msg_id are removed."""
+    fixture = _base_fixture()
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]], 'hl2dc0': [[1, 12]],
+    }
+    # Multiple keys; only those prefixed with hl2dc0_ should be removed.
+    fixture['pendingDcAbilityChoice'] = {
+        'hl2dc0_some_choice': {'data': 'A'},
+        'hl1dc0_other_choice': {'data': 'B'},
+    }
+    fixture['pendingPounceSpaceChoice'] = {
+        'hl2dc0': 'a1',
+        'hl1dc0': 'b2',
+    }
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    pdac = g.data.get('pendingDcAbilityChoice') or {}
+    assert 'hl2dc0_some_choice' not in pdac
+    assert 'hl1dc0_other_choice' in pdac, (
+        'unrelated keys must be preserved'
+    )
+    pps = g.data.get('pendingPounceSpaceChoice') or {}
+    assert 'hl2dc0' not in pps
+    assert 'hl1dc0' in pps, 'unrelated entries must be preserved'
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()
