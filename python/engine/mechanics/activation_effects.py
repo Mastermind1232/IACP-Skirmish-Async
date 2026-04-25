@@ -279,6 +279,45 @@ def apply_start_of_activation_effects(game: Any, *, dc_name: str, player_num: in
                         })
                         break
 
+    # Adapt (Agent Blaise): pure UI prompt in JS, no engine state mutation.
+    # Logged so the audit can confirm wired-engine status truthfully.
+    if 'adapt_blaise' in ability_ids:
+        applied.append({
+            'effect': 'Adapt',
+            'message': (
+                f'🔄 **Adapt** — **{display_name}** chooses a trait '
+                f'for this round (UI-only; no engine effect).'
+            ),
+        })
+
+    # Fast Learner (Mara Jade): pure UI prompt; the actual gate fires
+    # later when CCs are checked. JS only sends a thread message at SoA.
+    if 'fast_learner_mara_jade' in ability_ids:
+        applied.append({
+            'effect': 'Fast Learner',
+            'message': (
+                f'📚 **Fast Learner** — **{display_name}** may, once this '
+                f'round, play a CC whose restriction matches another DC '
+                f'name in your army (UI-only at SoA).'
+            ),
+        })
+
+    # Scrap Battalion (Ugnaught Tinkerer Elite/Reg): Junk Droid
+    # co-activates with the Ugnaught. JS marks the companion to
+    # co-activate by stamping companionActivatedBefore[msgId] = 'co-activate'.
+    if ('scrap_battalion_ugnaught_elite' in ability_ids
+            or 'scrap_battalion_ugnaught_reg' in ability_ids):
+        cab = dict(data.get('companionActivatedBefore') or {})
+        cab[msg_id] = 'co-activate'
+        data['companionActivatedBefore'] = cab
+        applied.append({
+            'effect': 'Scrap Battalion',
+            'message': (
+                f'🛠️ **Scrap Battalion** — **{display_name}**: Junk Droid '
+                f'companion co-activates with this group.'
+            ),
+        })
+
     return {'applied': applied}
 
 

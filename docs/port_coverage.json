@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T21:31:20.271363+00:00",
+  "generated": "2026-04-25T21:39:11.730361+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 277,
-      "stub": 33,
+      "real": 284,
+      "stub": 26,
       "missing": 0,
       "total": 310
     },
@@ -323,8 +323,8 @@
     },
     "abilities": {
       "acp_scattergun": "real",
-      "adapt_blaise": "stub",
-      "adaptive_skills_mara_jade": "stub",
+      "adapt_blaise": "real",
+      "adaptive_skills_mara_jade": "real",
       "adv_targeting_computer_dark_trooper": "real",
       "advanced_firepower_sorin": "real",
       "agile_jet_trooper_elite": "real",
@@ -386,7 +386,7 @@
       "deference_protocol": "real",
       "deflect": "real",
       "demolish": "real",
-      "devout_chirrut": "stub",
+      "devout_chirrut": "real",
       "dins_wrist_flamethrower": "real",
       "dirty_dealing_bib": "stub",
       "disposable": "real",
@@ -414,9 +414,9 @@
       "executor": "real",
       "expertise": "real",
       "exploit_weakness": "real",
-      "fallen_master_malicos": "stub",
+      "fallen_master_malicos": "real",
       "false_orders": "real",
-      "fast_learner_mara_jade": "stub",
+      "fast_learner_mara_jade": "real",
       "field_report": "real",
       "field_tactics_death_trooper_elite": "real",
       "field_tactics_death_trooper_reg": "real",
@@ -548,8 +548,8 @@
       "scavenged_stock_jawa_elite": "stub",
       "scheme_jabba": "real",
       "scomp_link": "real",
-      "scrap_battalion_ugnaught_elite": "stub",
-      "scrap_battalion_ugnaught_reg": "stub",
+      "scrap_battalion_ugnaught_elite": "real",
+      "scrap_battalion_ugnaught_reg": "real",
       "scratch_crumb": "real",
       "self_destruct_probe": "real",
       "self_destruct_protocol": "real",
@@ -730,17 +730,12 @@
   "missing": {
     "cc": [],
     "abilities": [
-      "adapt_blaise",
-      "adaptive_skills_mara_jade",
       "attached_dio",
       "coordinated_hunt_purge_commander",
       "defensive_fire_bokatan",
-      "devout_chirrut",
       "dirty_dealing_bib",
       "droid_kit_iden",
       "dubious_counterparts_aphra",
-      "fallen_master_malicos",
-      "fast_learner_mara_jade",
       "gambit_lando",
       "imperial_loadout_purge_trooper",
       "insignificant_dio",
@@ -752,8 +747,6 @@
       "overload_saboteur",
       "pulse_cannon_iden",
       "scavenged_stock_jawa_elite",
-      "scrap_battalion_ugnaught_elite",
-      "scrap_battalion_ugnaught_reg",
       "shady_contacts_saska",
       "shape_clawdite_elite",
       "shape_clawdite_reg",

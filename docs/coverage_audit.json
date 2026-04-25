@@ -1388,7 +1388,7 @@
       "verdict": "UNVERIFIED"
     }
   ],
-  "generated": "2026-04-25T21:31:20.282715+00:00",
+  "generated": "2026-04-25T21:39:11.741380+00:00",
   "headline": {
     "action_types": 81,
     "drift_distinct_actions": 18,
@@ -1399,8 +1399,8 @@
     "live_coverage": {
       "abilities": {
         "missing": 0,
-        "real": 277,
-        "stub": 33,
+        "real": 284,
+        "stub": 26,
         "total": 310
       },
       "actions": {
@@ -1424,11 +1424,10 @@
     "pattern_c_buckets": {
       "data-only-unreferenced": 10,
       "deferred-abilities-js": 1,
-      "deferred-bridge": 7,
-      "deferred-cc-timing": 3,
+      "deferred-bridge": 3,
       "deferred-handler-combat": 10,
       "deferred-handler-other": 3,
-      "wired-engine": 24
+      "wired-engine": 31
     },
     "pattern_c_total": 58,
     "port_audit_counts": {
@@ -1446,9 +1445,9 @@
     "weighted_estimate": {
       "layers": [
         {
-          "contribution": 22.34,
+          "contribution": 22.9,
           "layer": "Ability resolution",
-          "ratio": 0.894,
+          "ratio": 0.916,
           "weight": 25
         },
         {
@@ -1464,9 +1463,9 @@
           "weight": 20
         },
         {
-          "contribution": 4.14,
+          "contribution": 5.34,
           "layer": "Pattern C wired ratio",
-          "ratio": 0.414,
+          "ratio": 0.534,
           "weight": 10
         },
         {
@@ -1488,7 +1487,7 @@
           "weight": 10
         }
       ],
-      "score": 56.2
+      "score": 57.9
     }
   },
   "oracles_by_area": {
@@ -1544,14 +1543,14 @@
   },
   "pattern_c_catalog": {
     "adapt_blaise": {
-      "js_site": "src/engine/activation-setup.js (start-of-activation hook)",
-      "kind": "bridge",
-      "status": "deferred-bridge"
+      "js_site": "src/engine/activation-setup.js \u2192 py mechanics/activation_effects.py:apply_start_of_activation_effects (UI-only prompt; logged for parity)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "adaptive_skills_mara_jade": {
-      "js_site": "src/game/cc-timing.js + handlers/cc-hand.js (CC reroll gate)",
-      "kind": "cc-timing",
-      "status": "deferred-cc-timing"
+      "js_site": "src/game/cc-timing.js \u2192 py mechanics/cc_timing.py:ADAPTIVE_SKILLS_ABILITY_ID (army-affiliation match + conditional keyword trait inject)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "adv_targeting_computer_dark_trooper": {
       "js_site": "src/handlers/combat.js \u2192 py mechanics/passive_combat.py:_handle_adv_targeting_computer (auto-Focus only; reroll-may deferred)",
@@ -1624,9 +1623,9 @@
       "status": "deferred-bridge"
     },
     "devout_chirrut": {
-      "js_site": "src/game/cc-timing.js (CC timing window)",
-      "kind": "cc-timing",
-      "status": "deferred-cc-timing"
+      "js_site": "src/game/cc-timing.js \u2192 py mechanics/cc_timing.py (hasDevout flag drives CC restriction allowance)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "dirty_dealing_bib": {
       "js_site": "library-declared; no JS string-literal consumption found",
@@ -1644,14 +1643,14 @@
       "status": "data-only-unreferenced"
     },
     "fallen_master_malicos": {
-      "js_site": "src/game/cc-timing.js",
-      "kind": "cc-timing",
-      "status": "deferred-cc-timing"
+      "js_site": "src/game/cc-timing.js \u2192 py mechanics/cc_timing.py (FORCE USER counts as IMPERIAL for CC restrictions)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "fast_learner_mara_jade": {
-      "js_site": "src/engine/activation-setup.js",
-      "kind": "bridge",
-      "status": "deferred-bridge"
+      "js_site": "src/engine/activation-setup.js \u2192 py mechanics/activation_effects.py (UI-only prompt at SoA; CC restriction-bypass gate fires elsewhere)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "gambit_lando": {
       "js_site": "src/handlers/combat.js",
@@ -1739,14 +1738,14 @@
       "status": "data-only-unreferenced"
     },
     "scrap_battalion_ugnaught_elite": {
-      "js_site": "src/engine/activation-setup.js",
-      "kind": "bridge",
-      "status": "deferred-bridge"
+      "js_site": "src/engine/activation-setup.js \u2192 py mechanics/activation_effects.py (sets companionActivatedBefore[msgId]=co-activate)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "scrap_battalion_ugnaught_reg": {
-      "js_site": "src/engine/activation-setup.js",
-      "kind": "bridge",
-      "status": "deferred-bridge"
+      "js_site": "src/engine/activation-setup.js \u2192 py mechanics/activation_effects.py (sets companionActivatedBefore[msgId]=co-activate)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "shady_contacts_saska": {
       "js_site": "library-declared; no JS string-literal consumption found",

@@ -139,28 +139,28 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
 
     # Bridge-layer (src/engine/)
     'adapt_blaise': (
-        'deferred-bridge', 'bridge',
-        'src/engine/activation-setup.js (start-of-activation hook)',
+        'wired-engine', 'engine',
+        'src/engine/activation-setup.js → py mechanics/activation_effects.py:apply_start_of_activation_effects (UI-only prompt; logged for parity)',
     ),
     'dead_precise_kotun': (
         'wired-engine', 'engine',
         'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_dead_precise_kotun',
     ),
     'fast_learner_mara_jade': (
-        'deferred-bridge', 'bridge',
-        'src/engine/activation-setup.js',
+        'wired-engine', 'engine',
+        'src/engine/activation-setup.js → py mechanics/activation_effects.py (UI-only prompt at SoA; CC restriction-bypass gate fires elsewhere)',
     ),
     'hunt_dissent_kallus': (
         'wired-engine', 'engine',
         'src/engine/win-conditions.js → py mechanics/attack_orchestrator.py post-defeat hook (Kallus gains Block token when self or TROOPER within 3 kills)',
     ),
     'scrap_battalion_ugnaught_elite': (
-        'deferred-bridge', 'bridge',
-        'src/engine/activation-setup.js',
+        'wired-engine', 'engine',
+        'src/engine/activation-setup.js → py mechanics/activation_effects.py (sets companionActivatedBefore[msgId]=co-activate)',
     ),
     'scrap_battalion_ugnaught_reg': (
-        'deferred-bridge', 'bridge',
-        'src/engine/activation-setup.js',
+        'wired-engine', 'engine',
+        'src/engine/activation-setup.js → py mechanics/activation_effects.py (sets companionActivatedBefore[msgId]=co-activate)',
     ),
     'trust_goes_both_ways_jyn': (
         'wired-engine', 'engine',
@@ -336,16 +336,16 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
 
     # CC-timing layer (game/cc-timing.js)
     'adaptive_skills_mara_jade': (
-        'deferred-cc-timing', 'cc-timing',
-        'src/game/cc-timing.js + handlers/cc-hand.js (CC reroll gate)',
+        'wired-engine', 'engine',
+        'src/game/cc-timing.js → py mechanics/cc_timing.py:ADAPTIVE_SKILLS_ABILITY_ID (army-affiliation match + conditional keyword trait inject)',
     ),
     'devout_chirrut': (
-        'deferred-cc-timing', 'cc-timing',
-        'src/game/cc-timing.js (CC timing window)',
+        'wired-engine', 'engine',
+        'src/game/cc-timing.js → py mechanics/cc_timing.py (hasDevout flag drives CC restriction allowance)',
     ),
     'fallen_master_malicos': (
-        'deferred-cc-timing', 'cc-timing',
-        'src/game/cc-timing.js',
+        'wired-engine', 'engine',
+        'src/game/cc-timing.js → py mechanics/cc_timing.py (FORCE USER counts as IMPERIAL for CC restrictions)',
     ),
 
     # Data-only — library-declared, no live JS consumption as string literal.
