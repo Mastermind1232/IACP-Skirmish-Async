@@ -1,63 +1,39 @@
 # Port Priority — Top-50 Missing Items
 
-Generated: 2026-04-25T01:22:07.405446+00:00
+Generated: 2026-04-25T01:32:00.276474+00:00
 
 Run `python3 python/parity/port_coverage.py` to refresh.
 
 ## CC effects (top 50 missing)
 
-Total missing/stubbed: **157**. Ranked by play-frequency record if available, else alphabetical.
+Total missing/stubbed: **26**. Ranked by play-frequency record if available, else alphabetical.
 
 1. **A Powerful Influence**
-2. **All in a Day's Work**
-3. **Ambush**
-4. **Arcing Shot**
-5. **Assassinate**
-6. **Blend In**
-7. **Bodyguard**
-8. **Built on Hope**
-9. **Cal's Buddy**
-10. **Capitalize**
-11. **Capture the Weary**
-12. **Cavalry Charge**
-13. **Chaotic Force**
-14. **Cheat to Win**
-15. **Choose a Side**
-16. **Cloned Reinforcements**
-17. **Close the Gap**
-18. **Collateral Damage**
-19. **Comm Disruption**
-20. **Concentrated Fire**
-21. **Coordinated Attack**
-22. **Corrupting Force**
-23. **Counter Attack**
-24. **Covering Fire**
-25. **Dangerous Prey**
-26. **Data Theft**
-27. **De Wanna Wanga**
-28. **Deathblow**
-29. **Definition: 'Love'**
-30. **Deflection**
-31. **Demoralizing Monologue**
-32. **Deploy the Garrison**
-33. **Desperate Escape**
-34. **Devotion**
-35. **Disarm**
-36. **Disorient**
-37. **Double or Nothing**
-38. **Droid Mastery**
-39. **Dying Lunge**
-40. **Efficient Travel**
-41. **Element of Surprise**
-42. **Elusive**
-43. **Emergency Aid**
-44. **Endless Reserves**
-45. **Escalating Hostility**
-46. **Etiquette and Protocol**
-47. **Evacuate**
-48. **Eyes on the Prize**
-49. **Face Me!**
-50. **Fatal Deception**
+2. **Cal's Buddy**
+3. **Chaotic Force**
+4. **Choose a Side**
+5. **Coordinated Attack**
+6. **Corrupting Force**
+7. **Covering Fire**
+8. **Data Theft**
+9. **Deploy the Garrison**
+10. **Devotion**
+11. **Efficient Travel**
+12. **Evacuate**
+13. **Face Me!**
+14. **Ferocity**
+15. **Findsman Meditation**
+16. **Foresee**
+17. **Harsh Environment**
+18. **Hostile Negotiation**
+19. **Jundland Terror**
+20. **Just Business**
+21. **Lightbow**
+22. **Lure of the Dark Side**
+23. **Rebel Graffiti**
+24. **Signal Jammer**
+25. **Sit Tight**
+26. **Wreak Vengeance**
 
 ## DC abilities (top 50 missing)
 

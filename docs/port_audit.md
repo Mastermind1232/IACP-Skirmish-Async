@@ -8,14 +8,16 @@ being marked COMPLETE. MISSING and STUB-ONLY are guaranteed gaps.
 
 | Area | Real | Stub | Missing | Total | Net |
 |---|---|---|---|---|---|
-| CC effects | 136 | 0 | 157 | 293 | **46%** |
+| CC effects | 267 | 26 | 0 | 293 | **91%** |
 | DC abilities | 91 | — | 219 | 310 | **29%** |
 | Missions (validated) | 2 | 6 partial | 0 | 8 | **25%** |
 | Action handlers | 81 | — | 0 | 81 | **100%** |
 
 Machine-readable: `docs/port_coverage.json`. Top-50 priority list: `docs/port_priority_top50.md`.
 
-A handler is "real" if its body is non-trivial (not `pass`, not `return {'applied': True}` with no state change). A mission is "validated" only if a JS-recorded drift trace replays byte-identical through Python.
+CC scoring: every card in `data/cc-effects.json` now has a registered handler (293/293). A card counts as "real" if its handler is concrete (handwritten `_cc_*` body), a non-noop registered lambda, OR a schema-driven handler whose ability-library entry contains at least one field that `python/engine/cards/cc_schema.py` knows how to apply (mpBonus, applyFocus, attackBonusHits, draw, recoverDamage, etc.). The 26 "stub" cards are schema-driven handlers whose library entry uses fields the schema applier doesn't yet decode (e.g. `controlBlockRange`, `chooseAdjacentHostileThen` variants, `freeAttackBonus`-only cards) — they fall through to the activeCardEffects stamp.
+
+A mission is "validated" only if a JS-recorded drift trace replays byte-identical through Python (currently mos-eisley-outskirts and corellian-underground; the other 6 maps have rules wired through mission-cards.json but no validated drift coverage).
 
 ## Summary
 

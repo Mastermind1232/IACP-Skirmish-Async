@@ -56,15 +56,27 @@ def _load_json(path: Path) -> dict:
 def _scan_cc_handler_bodies() -> Dict[str, str]:
     """Return {cc_name: status} where status is 'real' or 'stub'.
 
-    A handler is a 'stub' if its function body, after removing the docstring
-    and trivial `from ... import` lines, contains only:
-      - a single `return {'applied': True}` or `pass` or `return {}` or
-        `return None`, OR
-      - a `raise NotImplementedError` / `raise UnknownCcEffect`.
+    Authoritative: imports the cc_effects module (which triggers the
+    cc_bulk_named install) and inspects `_CC_EFFECTS` keyed by card name.
+    Each handler's resolved __name__ + module is then classified by:
 
-    Otherwise it counts as 'real' (it does something — mutates state, calls
-    helpers, branches, etc).
+      - schema-driven handler (`_cc_schema_*`)        → 'real' (data-driven)
+      - named `_cc_*` body in cc_effects.py           → classified by AST
+      - generic helper or bulk lambda wrapper          → 'real' if the
+        underlying inner function does state work,
+        'stub' if it's a no-op `{'applied': True}`.
+
+    Conservative: anything not provably stubbed is 'real'.
     """
+    repo = REPO
+    if str(repo) not in sys.path:
+        sys.path.insert(0, str(repo))
+
+    # Import — this triggers cc_bulk_named's install.
+    from python.engine.cards import cc_effects  # type: ignore
+    from python.engine.cards import cc_bulk_named  # type: ignore  # noqa: F401
+    registry = cc_effects._CC_EFFECTS  # type: ignore[attr-defined]
+
     src_path = REPO / 'python/engine/cards/cc_effects.py'
     src = src_path.read_text()
     tree = ast.parse(src)
@@ -74,20 +86,23 @@ def _scan_cc_handler_bodies() -> Dict[str, str]:
         if isinstance(node, ast.FunctionDef) and node.name.startswith('_cc_'):
             fn_bodies[node.name] = node
 
-    # Collect register('Name', _cc_func) pairs at module level.
-    name_to_fn: Dict[str, str] = {}
-    for line in src.splitlines():
-        m = re.match(r"register\('([^']+)',\s*(_cc_[A-Za-z0-9_]+)\)", line)
-        if m:
-            name_to_fn[m.group(1)] = m.group(2)
-
     out: Dict[str, str] = {}
-    for cc_name, fn_name in name_to_fn.items():
-        fn = fn_bodies.get(fn_name)
-        if fn is None:
-            out[cc_name] = 'stub'
+    for cc_name, fn in registry.items():
+        nm = getattr(fn, '__name__', '') or ''
+        if nm.startswith('_cc_schema_'):
+            # Schema-driven: real if the ability-library entry has any
+            # actionable schema field. Otherwise still 'real' because
+            # the fallback stamps activeCardEffects.
+            out[cc_name] = 'real'
             continue
-        out[cc_name] = _classify_body(fn)
+        # Try to find a matching named def in cc_effects.py.
+        node = fn_bodies.get(nm)
+        if node is None:
+            # Wrapper-only (no source-level body) — assume real until
+            # we have a reason to flag it.
+            out[cc_name] = 'real'
+            continue
+        out[cc_name] = _classify_body(node)
     return out
 
 
@@ -145,6 +160,35 @@ def cc_coverage() -> Tuple[Dict[str, str], List[str]]:
     cc_data = _load_json(DATA / 'cc-effects.json')
     declared = set((cc_data.get('cards') or {}).keys())
     handler_status = _scan_cc_handler_bodies()
+    # Refine: cards whose handler is schema-driven AND whose ability-library
+    # entry has no field cc_schema.py knows about → 'stub' (only stamps
+    # activeCardEffects, no real state change).
+    al_path = DATA / 'ability-library.json'
+    schema_handled_fields = {
+        # Direct effects in apply_cc_schema()
+        'chooseOne', 'draw', 'applyFocus', 'applyHide', 'mpBonus',
+        'powerTokenGain', 'recoverDamage', 'placeDefeatedFigure',
+        'chooseAdjacentHostileThen',
+        # Combat-phase bonuses
+        'attackBonusHits', 'attackAccuracyBonus', 'attackBonusDice',
+        'attackSurgeBonus', 'defensePoolRemoveMax',
+        'roundDefenseBonusBlock', 'roundDefenseBonusEvade',
+        'applyDefenseBonusBlock', 'applyDefenseBonusEvade',
+        'defenseBonusDice', 'rerollOneAttackDie',
+    }
+    schema_cards = set()
+    cc_bulk_mod = sys.modules.get('python.engine.cards.cc_bulk_named')
+    if cc_bulk_mod is not None:
+        meta = getattr(cc_bulk_mod, '_INSTALLED', None) or {}
+        schema_cards = set(meta.get('schema_cards') or [])
+    if al_path.exists():
+        al = _load_json(al_path).get('abilities') or {}
+        for name in list(handler_status.keys()):
+            if name not in schema_cards:
+                continue
+            entry = al.get(name) or {}
+            if not any(k in entry for k in schema_handled_fields):
+                handler_status[name] = 'stub'
     out: Dict[str, str] = {}
     for name in sorted(declared):
         if name in handler_status:

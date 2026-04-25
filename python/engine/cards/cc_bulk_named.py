@@ -105,10 +105,16 @@ def _make_named_wrapper(card_name: str, inner):
 def install_cc_named_wrappers() -> Dict[str, Any]:
     """Replace every lambda CC handler in _CC_EFFECTS with a named wrapper.
 
-    Additionally: for lambdas that are pure no-op placeholders
-    (`{'applied': True}` with no captures), replace the inner with the
-    schema-driven handler so those cards apply real state changes
-    derived from the ability-library entry.
+    Additionally:
+      - For lambdas that are pure no-op placeholders
+        (`{'applied': True}` with no captures), replace the inner with
+        the schema-driven handler so those cards apply real state
+        changes derived from the ability-library entry.
+      - For CC names declared in cc-effects.json but with NO registered
+        handler at all, install a schema-driven handler. This covers
+        CCs that route entirely through the ability-library schema
+        (most CCs only have `playableBy` + `abilityId` in the data
+        file; their effect lives in ability-library.json).
     """
     root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
@@ -120,14 +126,22 @@ def install_cc_named_wrappers() -> Dict[str, Any]:
     converted = 0
     schema_replaced = 0
     concrete_wrapped = 0
+    schema_installed = 0
+    schema_cards: list = []  # CCs whose handler is schema-driven
     for name in cards:
         fn = _CC_EFFECTS.get(name)
         if fn is None:
+            # Not yet registered — install schema-driven handler.
+            inner = apply_cc_schema(name)
+            _CC_EFFECTS[name] = _make_named_wrapper(name, inner)
+            schema_installed += 1
+            schema_cards.append(name)
             continue
         if fn.__name__ == '<lambda>':
             if _is_noop_lambda(fn):
                 inner = apply_cc_schema(name)
                 schema_replaced += 1
+                schema_cards.append(name)
             else:
                 inner = fn
             _CC_EFFECTS[name] = _make_named_wrapper(name, inner)
@@ -140,8 +154,10 @@ def install_cc_named_wrappers() -> Dict[str, Any]:
     return {
         'converted': converted,
         'schema_replaced': schema_replaced,
+        'schema_installed': schema_installed,
         'concrete_wrapped': concrete_wrapped,
         'total_cards': len(cards),
+        'schema_cards': schema_cards,
     }
 
 
