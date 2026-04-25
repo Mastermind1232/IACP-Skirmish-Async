@@ -694,6 +694,76 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         except Exception:
             pass
 
+        # this_is_the_way_armorer (Pattern C): "When another friendly figure
+        # resolves an attack, if the defender was defeated, that figure
+        # gains 1 Block Token." Fires when ANY p_atk figure has the
+        # ability — the attacker (the friendly that got the kill) gets the
+        # token. JS reads the Armorer's specialAbilityIds via
+        # src/engine/win-conditions.js + post-attack hook.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            from python.engine.mechanics.tokens import grant_power_tokens
+            if defeated and attacker_key:
+                dc_eff = get_dc_effects() or {}
+                fp_atk = (data.get('figurePositions') or {}).get(atk_player) or {}
+                for ally_fk in fp_atk:
+                    if ally_fk == attacker_key:
+                        continue
+                    ally_dc = ally_fk.split('-', 1)[0]
+                    sids = (dc_eff.get(ally_dc) or {}).get('specialAbilityIds') or []
+                    if 'this_is_the_way_armorer' in sids:
+                        grant_power_tokens(data, attacker_key, 'Block', 1)
+                        triggered.append({'effect': 'this_is_the_way_armorer',
+                                          'recipient': attacker_key,
+                                          'token': 'Block', 'count': 1})
+                        break  # one grant per attack
+        except Exception:
+            pass
+
+        # hunt_dissent_kallus (Pattern C): "When you or a friendly TROOPER
+        # within 3 spaces defeats a hostile figure, you gain 1 Block Token."
+        # The Block Token goes to the figure with this passive (Kallus),
+        # not the killer. Fires only when the killer is Kallus himself OR
+        # a TROOPER within 3 spaces of Kallus.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            from python.engine.mechanics.tokens import grant_power_tokens
+            from python.engine.mechanics.coords import parse_coord
+            if defeated and attacker_key:
+                dc_eff = get_dc_effects() or {}
+                fp_atk = (data.get('figurePositions') or {}).get(atk_player) or {}
+                # Find Kallus (the figure carrying hunt_dissent_kallus).
+                kallus_fk = None
+                kallus_coord = None
+                for ally_fk, ally_coord in fp_atk.items():
+                    ally_dc = ally_fk.split('-', 1)[0]
+                    sids = (dc_eff.get(ally_dc) or {}).get('specialAbilityIds') or []
+                    if 'hunt_dissent_kallus' in sids:
+                        kallus_fk = ally_fk
+                        kallus_coord = ally_coord
+                        break
+                if kallus_fk and kallus_coord:
+                    # Killer is the attacker. Check: is killer Kallus, or a
+                    # TROOPER within Chebyshev-3 of Kallus?
+                    fires = (attacker_key == kallus_fk)
+                    if not fires:
+                        atk_keywords = (dc_eff.get(atk_dc) or {}).get('keywords') or []
+                        if 'TROOPER' in atk_keywords:
+                            atk_pos = fp_atk.get(attacker_key)
+                            if atk_pos:
+                                kx, ky = parse_coord(kallus_coord)
+                                ax, ay = parse_coord(atk_pos)
+                                if (kx >= 0 and ax >= 0
+                                        and max(abs(kx - ax), abs(ky - ay)) <= 3):
+                                    fires = True
+                    if fires:
+                        grant_power_tokens(data, kallus_fk, 'Block', 1)
+                        triggered.append({'effect': 'hunt_dissent_kallus',
+                                          'recipient': kallus_fk,
+                                          'token': 'Block', 'count': 1})
+        except Exception:
+            pass
+
         # Fly-By (Jet Trooper Elite passive): after attack, attacker gains
         # 2 MP if target was within 2 spaces. JS combat-bridge.js:644-652.
         try:

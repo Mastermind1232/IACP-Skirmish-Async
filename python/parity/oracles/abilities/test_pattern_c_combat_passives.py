@@ -326,6 +326,91 @@ def test_squad_training_fires_with_adjacent_trooper():
                                                 'acc': 0, 'dmg': 0, 'surge': 0}
 
 
+# ── this_is_the_way_armorer / hunt_dissent_kallus (post-defeat) ────────────
+
+def _setup_post_defeat_game(p1_extra_dc=None):
+    """Build a minimal orchestrator-ready game where p1's Stormtrooper
+    proxy is sized to one-shot the p2 figure on the next attack."""
+    from python.engine.creation import create_game
+    g = create_game(map_id='mos-eisley-outskirts')
+    g.data['mapId'] = 'mos-eisley-outskirts'
+    g.data['figurePositions'] = {
+        1: {'Stormtrooper (Regular)-0-0': 'a1'},
+        2: {'Rebel Trooper (Regular)-0-0': 'a2'},  # adj for melee
+    }
+    g.data['p1DcList'] = [{'dcName': 'Stormtrooper (Regular)', 'dgIndex': 0}]
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+    g.data['p2DcList'] = [{'dcName': 'Rebel Trooper (Regular)', 'dgIndex': 0}]
+    g.data['p2DcMessageIds'] = ['hl2dc0']
+    # 1 HP defender — guaranteed defeat on any hit.
+    g.data['dcHealthState'] = {'hl1dc0': [[3, 3]], 'hl2dc0': [[1, 1]]}
+    if p1_extra_dc:
+        dc_name, fk, coord = p1_extra_dc
+        g.data['figurePositions'][1][fk] = coord
+        g.data['p1DcList'].append({'dcName': dc_name, 'dgIndex': 0})
+        g.data['p1DcMessageIds'].append('hl1dc1')
+        g.data['dcHealthState']['hl1dc1'] = [[8, 8]]
+    return g
+
+
+def test_this_is_the_way_armorer_grants_block_token_to_killer():
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    from python.engine.data.dc_effects_loader import get_dc_effect
+    eff = get_dc_effect('The Armorer')
+    if not eff or 'this_is_the_way_armorer' not in (eff.get('specialAbilityIds') or []):
+        import pytest
+        pytest.skip('The Armorer fixture missing this_is_the_way_armorer')
+    import random
+    rng = random.Random(0)
+    # Run attacks until one defeats — bounded to avoid infinite loop.
+    for seed in range(30):
+        gg = _setup_post_defeat_game(
+            p1_extra_dc=('The Armorer', 'The Armorer-0-0', 'h8'))
+        orchestrate_attack(
+            gg.data, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(seed),
+        )
+        if int(gg.data['dcHealthState']['hl2dc0'][0][0]) <= 0:
+            tokens = (gg.data.get('figurePowerTokens') or {}).get(
+                'Stormtrooper (Regular)-0-0') or []
+            assert 'Block' in tokens, \
+                f'expected Block token after Armorer-witnessed kill, got {tokens}'
+            return
+    import pytest
+    pytest.fail('No defeat occurred in 30 attempts — fixture too weak to test')
+
+
+def test_hunt_dissent_kallus_only_fires_when_killer_is_self_or_trooper_within_3():
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    from python.engine.data.dc_effects_loader import get_dc_effect
+    eff = get_dc_effect('Agent Kallus')
+    if 'hunt_dissent_kallus' not in (eff.get('specialAbilityIds') or []):
+        import pytest
+        pytest.skip('Agent Kallus fixture missing hunt_dissent_kallus')
+    # Kallus far away (>3 spaces) — should NOT fire even though killer
+    # (Stormtrooper) is a TROOPER.
+    import random
+    g = _setup_post_defeat_game(
+        p1_extra_dc=('Agent Kallus', 'Agent Kallus-0-0', 'h8'))
+    for seed in range(30):
+        gg = _setup_post_defeat_game(
+            p1_extra_dc=('Agent Kallus', 'Agent Kallus-0-0', 'h8'))
+        orchestrate_attack(
+            gg.data, 'Stormtrooper (Regular)-0-0',
+            'Rebel Trooper (Regular)-0-0',
+            rng=random.Random(seed),
+        )
+        if int(gg.data['dcHealthState']['hl2dc0'][0][0]) <= 0:
+            tokens = (gg.data.get('figurePowerTokens') or {}).get(
+                'Agent Kallus-0-0') or []
+            assert 'Block' not in tokens, \
+                f'Kallus too far away — should NOT have Block: {tokens}'
+            return
+    import pytest
+    pytest.fail('No defeat occurred in 30 attempts')
+
+
 # ── trust_goes_both_ways_jyn (activation-time) ─────────────────────────────
 
 def test_trust_goes_both_ways_grants_mp_to_friendly_within_3():

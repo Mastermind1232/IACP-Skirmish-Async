@@ -1,6 +1,6 @@
 # Port Priority — Top-50 Missing Items
 
-Generated: 2026-04-25T04:18:19.276252+00:00
+Generated: 2026-04-25T04:21:01.797237+00:00
 
 Run `python3 python/parity/port_coverage.py` to refresh.
 
@@ -16,7 +16,7 @@ Total missing: **0**. Ranked by DC count using each ability.
 
 ## DC abilities — stub (registered but no-op)
 
-Total stub: **37**. Pattern D abilities backed only by install_pattern_d_stubs, or active-ability handlers that return applied=False.
+Total stub: **35**. Pattern D abilities backed only by install_pattern_d_stubs, or active-ability handlers that return applied=False.
 
 1. **overload_saboteur** — used by 2 DC(s): Rebel Saboteur (Elite), Rebel Saboteur (Regular)
 2. **tripod_eweb** — used by 2 DC(s): E-Web Engineer (Elite), E-Web Engineer (Regular)
@@ -34,24 +34,22 @@ Total stub: **37**. Pattern D abilities backed only by install_pattern_d_stubs, 
 14. **fallen_master_malicos** — used by 1 DC(s): Taron Malicos
 15. **fast_learner_mara_jade** — used by 1 DC(s): Mara Jade
 16. **gambit_lando** — used by 1 DC(s): Lando Calrissian
-17. **hunt_dissent_kallus** — used by 1 DC(s): Agent Kallus
-18. **imperial_loadout_purge_trooper** — used by 1 DC(s): Purge Trooper (Elite)
-19. **insignificant_dio** — used by 1 DC(s): Dio
-20. **krayt_dragon_fury_tress** — used by 1 DC(s): Tress Hacnua
-21. **last_wielder_darksaber_bokatan** — used by 1 DC(s): Bo-Katan Kryze
-22. **light_it_up_rebel_pathfinder** — used by 1 DC(s): Rebel Pathfinder (Elite)
-23. **modular_heavy_stormtrooper** — used by 1 DC(s): Heavy Stormtrooper (Elite)
-24. **mon_cala_sf_loku** — used by 1 DC(s): Loku Kanoloa
-25. **pulse_cannon_iden** — used by 1 DC(s): Iden Versio
-26. **scavenged_stock_jawa_elite** — used by 1 DC(s): Jawa Scavenger (Elite)
-27. **scrap_battalion_ugnaught_elite** — used by 1 DC(s): Ugnaught Tinkerer (Elite)
-28. **scrap_battalion_ugnaught_reg** — used by 1 DC(s): Ugnaught Tinkerer (Regular)
-29. **shady_contacts_saska** — used by 1 DC(s): Saska Teft
-30. **shape_clawdite_elite** — used by 1 DC(s): Clawdite Shapeshifter (Elite)
-31. **shape_clawdite_reg** — used by 1 DC(s): Clawdite Shapeshifter (Regular)
-32. **shared_calculations_zuckuss** — used by 1 DC(s): Zuckuss
-33. **spiked_boots_snowtrooper** — used by 1 DC(s): Snowtrooper (Elite)
-34. **spray_fire_heavy_stormtrooper** — used by 1 DC(s): Heavy Stormtrooper (Elite)
-35. **this_is_the_way_armorer** — used by 1 DC(s): The Armorer
-36. **vague_and_unconvincing_k2s0** — used by 1 DC(s): K-2S0
-37. **versatile_weaponry_hk_elite** — used by 1 DC(s): HK Assassin Droid (Elite)
+17. **imperial_loadout_purge_trooper** — used by 1 DC(s): Purge Trooper (Elite)
+18. **insignificant_dio** — used by 1 DC(s): Dio
+19. **krayt_dragon_fury_tress** — used by 1 DC(s): Tress Hacnua
+20. **last_wielder_darksaber_bokatan** — used by 1 DC(s): Bo-Katan Kryze
+21. **light_it_up_rebel_pathfinder** — used by 1 DC(s): Rebel Pathfinder (Elite)
+22. **modular_heavy_stormtrooper** — used by 1 DC(s): Heavy Stormtrooper (Elite)
+23. **mon_cala_sf_loku** — used by 1 DC(s): Loku Kanoloa
+24. **pulse_cannon_iden** — used by 1 DC(s): Iden Versio
+25. **scavenged_stock_jawa_elite** — used by 1 DC(s): Jawa Scavenger (Elite)
+26. **scrap_battalion_ugnaught_elite** — used by 1 DC(s): Ugnaught Tinkerer (Elite)
+27. **scrap_battalion_ugnaught_reg** — used by 1 DC(s): Ugnaught Tinkerer (Regular)
+28. **shady_contacts_saska** — used by 1 DC(s): Saska Teft
+29. **shape_clawdite_elite** — used by 1 DC(s): Clawdite Shapeshifter (Elite)
+30. **shape_clawdite_reg** — used by 1 DC(s): Clawdite Shapeshifter (Regular)
+31. **shared_calculations_zuckuss** — used by 1 DC(s): Zuckuss
+32. **spiked_boots_snowtrooper** — used by 1 DC(s): Snowtrooper (Elite)
+33. **spray_fire_heavy_stormtrooper** — used by 1 DC(s): Heavy Stormtrooper (Elite)
+34. **vague_and_unconvincing_k2s0** — used by 1 DC(s): K-2S0
+35. **versatile_weaponry_hk_elite** — used by 1 DC(s): HK Assassin Droid (Elite)

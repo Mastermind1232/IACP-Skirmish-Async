@@ -151,8 +151,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/engine/activation-setup.js',
     ),
     'hunt_dissent_kallus': (
-        'deferred-bridge', 'bridge',
-        'src/engine/win-conditions.js + activation-setup.js',
+        'wired-engine', 'engine',
+        'src/engine/win-conditions.js → py mechanics/attack_orchestrator.py post-defeat hook (Kallus gains Block token when self or TROOPER within 3 kills)',
     ),
     'scrap_battalion_ugnaught_elite': (
         'deferred-bridge', 'bridge',
@@ -171,8 +171,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/engine/combat-bridge.js:2680',
     ),
     'this_is_the_way_armorer': (
-        'deferred-bridge', 'bridge',
-        'src/engine/win-conditions.js',
+        'wired-engine', 'engine',
+        'src/engine/win-conditions.js → py mechanics/attack_orchestrator.py post-defeat hook (killer gains Block token if Armorer is on board)',
     ),
     'insignificant_dio': (
         'deferred-bridge', 'bridge',

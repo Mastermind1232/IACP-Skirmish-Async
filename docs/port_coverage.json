@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T04:18:19.276252+00:00",
+  "generated": "2026-04-25T04:21:01.797237+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 273,
-      "stub": 37,
+      "real": 275,
+      "stub": 35,
       "missing": 0,
       "total": 310
     },
@@ -457,7 +457,7 @@
       "heroic": "real",
       "hop_on_kuiil": "real",
       "hunker_down": "real",
-      "hunt_dissent_kallus": "stub",
+      "hunt_dissent_kallus": "real",
       "i_am_one_with_the_force": "real",
       "i_know_everything_gideon": "real",
       "i_make_the_rules_cad_bane": "real",
@@ -610,7 +610,7 @@
       "targeting_computer_sentry_reg": "real",
       "tempt": "real",
       "the_force_is_with_me_chirrut": "real",
-      "this_is_the_way_armorer": "stub",
+      "this_is_the_way_armorer": "real",
       "tonfa_strike": "real",
       "trained_rancor": "real",
       "trample_bantha": "real",
@@ -744,7 +744,6 @@
       "fallen_master_malicos",
       "fast_learner_mara_jade",
       "gambit_lando",
-      "hunt_dissent_kallus",
       "imperial_loadout_purge_trooper",
       "insignificant_dio",
       "krayt_dragon_fury_tress",
@@ -763,7 +762,6 @@
       "shared_calculations_zuckuss",
       "spiked_boots_snowtrooper",
       "spray_fire_heavy_stormtrooper",
-      "this_is_the_way_armorer",
       "tripod_eweb",
       "vague_and_unconvincing_k2s0",
       "versatile_weaponry_hk_elite"
