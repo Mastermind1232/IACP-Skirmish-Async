@@ -2,26 +2,22 @@
   "totals": {
     "files": 43,
     "clean_files": 14,
-    "total_diffs": 48281,
+    "total_diffs": 22631,
     "total_errors": 0,
     "total_replayed": 8541
   },
   "top_diverging_fields": [
     [
-      "pendingCombat",
-      6781
-    ],
-    [
       "p2DcList[1]",
       2956
     ],
     [
-      "totalDamageReceived",
-      2510
+      "pendingCombat",
+      2697
     ],
     [
-      "specialActionUsedThisActivation",
-      2484
+      "totalDamageReceived",
+      2510
     ],
     [
       "p1DcList[1]",
@@ -36,24 +32,16 @@
       1031
     ],
     [
-      "figureConditions",
-      961
-    ],
-    [
       "roundPhase",
       943
     ],
     [
-      "attackPerformedThisActivation",
-      892
-    ],
-    [
-      "figureMoved",
-      837
-    ],
-    [
       "movementBank",
       813
+    ],
+    [
+      "attackPerformedThisActivation",
+      772
     ],
     [
       "dcActionsData",
@@ -66,6 +54,10 @@
     [
       "crateTokens",
       526
+    ],
+    [
+      "figureMoved",
+      502
     ],
     [
       "pendingMuchToLearn",
@@ -84,14 +76,6 @@
       398
     ],
     [
-      "pendingDcAbilityChoice",
-      365
-    ],
-    [
-      "activationDamagedFigures",
-      317
-    ],
-    [
       "round",
       316
     ],
@@ -108,12 +92,8 @@
       234
     ],
     [
-      "pendingItWillBeAlright",
-      192
-    ],
-    [
-      "activationKills",
-      166
+      "specialActionUsedThisActivation",
+      190
     ],
     [
       "p1ActivationsRemaining",
@@ -124,8 +104,28 @@
       156
     ],
     [
-      "p1ActivatedDcIndices[0]",
+      "p1ActivatedDcIndices",
       156
+    ],
+    [
+      "p2ActivatedDcIndices",
+      156
+    ],
+    [
+      "p2ActivationsRemaining",
+      156
+    ],
+    [
+      "attackTargets",
+      143
+    ],
+    [
+      "activationDamagedFigures",
+      136
+    ],
+    [
+      "pendingItWillBeAlright",
+      111
     ]
   ],
   "errors_by_action": [],
@@ -133,11 +133,11 @@
   "diffs_by_action": [
     [
       "phase_gate",
-      934
+      868
     ],
     [
       "status_phase",
-      751
+      695
     ],
     [
       "dc_end",
@@ -145,15 +145,15 @@
     ],
     [
       "dc_activate",
-      625
+      496
     ],
     [
       "move_pick",
-      489
+      386
     ],
     [
       "dc_move",
-      404
+      342
     ],
     [
       "end_end",
@@ -189,7 +189,7 @@
     ],
     [
       "pounce",
-      49
+      46
     ],
     [
       "combat_surge",
@@ -201,7 +201,7 @@
     ],
     [
       "combat_resolve",
-      16
+      14
     ]
   ],
   "first_diff_by_action": {
@@ -210,7 +210,7 @@
       "seq": 4,
       "customId": "dc_end_activation_hl1dc0",
       "diffs": [
-        "  - movementBank.hl1dc0 = {'total': 4, 'remaining': 0, 'threadId': None, 'messageId': None, 'displayName': 'Han Solo (Rebel Hero)'}  (only in left)"
+        "  - movementBank = {'hl1dc0': {'total': 4, 'remaining': 0, 'displayName': 'Han Solo (Rebel Hero)'}}  (only in left)"
       ]
     },
     "pass_activation": {
@@ -228,7 +228,9 @@
       "diffs": [
         "  - attackPerformedThisActivation = {'hl2dc1': True}  (only in left)",
         "  ~ dcActionsData.hl2dc1.remaining: 2 != 1",
-        "  + pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusSurgeAbilities': [], 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'attackerConds': [], 'defenderConds': [], 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': False, 'p2Ready': False, 'attackRoll': None, 'defenseRoll': None, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False}  (only in right)"
+        "  + pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': False, 'p2Ready': False, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False}  (only in right)",
+        "  ~ player2VP.kills: 5 != 0",
+        "  ~ player2VP.total: 5 != 0"
       ]
     },
     "combat_ready": {
@@ -246,7 +248,7 @@
       "diffs": [
         "  - attackPerformedThisActivation = {'hl2dc1': True}  (only in left)",
         "  + pendingCombat.attackDiceResults = [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 3, 'dmg': 2, 'surge': 0}]  (only in right)",
-        "  ~ pendingCombat.attackRoll: NoneType != dict"
+        "  + pendingCombat.attackRoll = {'acc': 8, 'dmg': 3, 'surge': 0}  (only in right)"
       ]
     },
     "combat_gate": {
@@ -275,7 +277,7 @@
       "seq": 22,
       "customId": "dc_move_hl2dc1_f0",
       "diffs": [
-        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusSurgeAbilities': [], 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'attackerConds': [], 'defenderConds': [], 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'forcedRerollQueue': [], 'pendingPreRerolls': [], 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defenderRerolledIndices': [], 'rerollPhase': None, 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
+        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
       ]
     },
     "move_pick": {
@@ -283,7 +285,7 @@
       "seq": 23,
       "customId": "move_pick_hl2dc1_0_b16",
       "diffs": [
-        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusSurgeAbilities': [], 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'attackerConds': [], 'defenderConds': [], 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'forcedRerollQueue': [], 'pendingPreRerolls': [], 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defenderRerolledIndices': [], 'rerollPhase': None, 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
+        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
       ]
     },
     "dc_activate": {
@@ -291,7 +293,7 @@
       "seq": 26,
       "customId": "dc_activate_00001_2_0",
       "diffs": [
-        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusSurgeAbilities': [], 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'attackerConds': [], 'defenderConds': [], 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'forcedRerollQueue': [], 'pendingPreRerolls': [], 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defenderRerolledIndices': [], 'rerollPhase': None, 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
+        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
       ]
     },
     "status_phase": {
@@ -299,7 +301,7 @@
       "seq": 34,
       "customId": "status_phase_00001",
       "diffs": [
-        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusSurgeAbilities': [], 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'attackerConds': [], 'defenderConds': [], 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'forcedRerollQueue': [], 'pendingPreRerolls': [], 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defenderRerolledIndices': [], 'rerollPhase': None, 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
+        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
       ]
     },
     "phase_gate": {
@@ -307,7 +309,7 @@
       "seq": 36,
       "customId": "phase_gate_ready_00001",
       "diffs": [
-        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusSurgeAbilities': [], 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'attackerConds': [], 'defenderConds': [], 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'forcedRerollQueue': [], 'pendingPreRerolls': [], 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defenderRerolledIndices': [], 'rerollPhase': None, 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
+        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 6, 'dmg': 3, 'surge': 0}, 'defenseRoll': {'block': 0, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-5', 'attackDiceResults': [{'color': 'blue', 'acc': 5, 'dmg': 1, 'surge': 0}, {'color': 'green', 'acc': 1, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}], 'defenseDiceCount': 1, 'attackerRerollsRemaining': 1, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1], 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': False, 'p2Ready': True}, 'phase': 'gate'}  (only in left)"
       ]
     },
     "end_end": {
@@ -315,12 +317,12 @@
       "seq": 38,
       "customId": "end_end_of_round_00001",
       "diffs": [
-        "  - abilityExhaustedMsgIds = []  (only in left)",
-        "  - activationDamagedFigures = {}  (only in left)",
-        "  - activationKills = {}  (only in left)",
-        "  - adrenalineBonuses = {}  (only in left)",
-        "  - agitateNextActivation = None  (only in left)",
-        "  - applySelfStunAfterAttackPlayerNum = {}  (only in left)"
+        "  + attackPerformedThisActivation = {'hl2dc1': True}  (only in right)",
+        "  ~ currentRound: 2 != 1",
+        "  + figureMoved = {'Han Solo (Rebel Hero)-1-0': True, 'Stormtrooper (Regular)-1-0': True, 'Boba Fett-1-0': True}  (only in right)",
+        "  - harshEnvironmentActive = False  (only in left)",
+        "  - noCommandDrawThisRound = False  (only in left)",
+        "  - p1LaunchPanelFlippedThisRound = False  (only in left)"
       ]
     },
     "dc_special": {
@@ -329,18 +331,8 @@
       "customId": "dc_special_1_hl2dc0",
       "diffs": [
         "  ~ attackTargets.hl2dc0_0[0].dist: 6 != 4",
-        "  + dcActionsData.hl2dc0.specialsUsed[0] = 1  (only in right)",
-        "  - pendingCombat = None  (only in left)",
-        "  + pendingPounceSpaceChoice = {'hl2dc0': {'gameId': '00001', 'playerNum': 2, 'figureIndex': 0, 'msgId': 'hl2dc0', 'abilityId': 'wrist_flamethrower', 'specialIdx': 1, 'validSpaces': ['g12', 'h12', 'f12', 'g13', 'g11', 'h13', 'h11', 'f13', 'f11', 'i12', 'i13', 'i11', 'e12', 'e13', 'e11', 'g14', 'h14', 'f14', 'g10', 'h10', 'f10', 'i14', 'i10', 'e14', 'e10'], 'targetFigureKey': None}}  (only in right)"
-      ]
-    },
-    "pounce": {
-      "file": "anchorhead-cantina-bar_game_000.jsonl",
-      "seq": 48,
-      "customId": "pounce_space_00001_hl2dc0_0_e12",
-      "diffs": [
-        "  - pendingCombat = None  (only in left)",
-        "  ~ pendingPounceSpaceChoice: NoneType != dict"
+        "  + dcActionsData.hl2dc0.specialsUsed = [1]  (only in right)",
+        "  + pendingPounceSpaceChoice = {'hl2dc0': {'gameId': '00001', 'playerNum': 2, 'figureIndex': 0, 'msgId': 'hl2dc0', 'abilityId': 'wrist_flamethrower', 'specialIdx': 1, 'validSpaces': ['g12', 'h12', 'f12', 'g13', 'g11', 'h13', 'h11', 'f13', 'f11', 'i12', 'i13', 'i11', 'e12', 'e13', 'e11', 'g14', 'h14', 'f14', 'g10', 'h10', 'f10', 'i14', 'i10', 'e14', 'e10']}}  (only in right)"
       ]
     },
     "combat_surge": {
@@ -348,7 +340,7 @@
       "seq": 93,
       "customId": "combat_surge_00001_2",
       "diffs": [
-        "  - attackPerformedThisActivation.hl1dc1 = True  (only in left)",
+        "  - attackPerformedThisActivation = {'hl1dc1': True}  (only in left)",
         "  ~ p2DcList[1].healthState[1][0]: 3 != 0",
         "  ~ pendingCombat.surgeAccuracy: 0 != 2",
         "  + pendingCombat.surgeBlast = 0  (only in right)",
@@ -361,11 +353,23 @@
       "seq": 94,
       "customId": "combat_resolve_ready_00001",
       "diffs": [
-        "  + activationDamagedFigures.hl1dc1 = ['Stormtrooper (Regular)-1-2']  (only in right)",
+        "  + activationDamagedFigures = {'hl1dc1': ['Stormtrooper (Regular)-1-2']}  (only in right)",
         "  ~ p2DcList[1].healthState[1][0]: 3 != 0",
         "  ~ p2DcList[1].healthState[2][0]: 3 != 2",
-        "  - pendingCombat = None  (only in left)",
         "  ~ totalDamageReceived.2: 0 != 4"
+      ]
+    },
+    "pounce": {
+      "file": "anchorhead-cantina-bar_game_000.jsonl",
+      "seq": 152,
+      "customId": "pounce_space_00001_hl2dc0_0_k7",
+      "diffs": [
+        "  ~ p1ActivationsTotal: 2 != 1",
+        "  ~ p1DcList[0].healthState[0][0]: 1 != 0",
+        "  ~ p2DcList[1].healthState[1][0]: 3 != 0",
+        "  ~ p2DcList[1].healthState[2][0]: 3 != 2",
+        "  - pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Chewbacca', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Chewbacca-1-0', 'coord': 'd17', 'label': 'Chewbacca', 'hasLOS': True, 'dist': 3}, 'targetStats': {'defense': ['white', 'black'], 'cost': 15, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 3, 'combatThreadId': 'thread-fake-msg-50', 'combatDeclareMsgId': 'fake-msg-50', 'combatPreMsgId': 'fake-msg-51', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 3, 'dmg': 0, 'surge': 2}, 'defenseRoll': {'block': 3, 'evade': 0, 'dodge': False}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-54', 'attackDiceResults': [{'color': 'blue', 'acc': 2, 'dmg': 0, 'surge': 1}, {'color': 'green', 'acc': 1, 'dmg': 0, 'surge': 1}], 'defenseDiceResults': [{'color': 'white', 'block': 1, 'evade': 0, 'dodge': False}, {'color': 'black', 'block': 2, 'evade': 0, 'dodge': False}], 'defenseDiceCount': 2, 'attackerRerollsRemaining': 0, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [1, 0], 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'evadeCancelledSurge': 0, 'surgeRemaining': 0, 'surgeDamage': 1, 'surgePierce': 0, 'surgeAccuracy': 2, 'surgeBlast': 0, 'surgeRecover': 0, 'surgeSpentCount': {'0': 1, '1': 1}, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': True, 'p2Ready': False}, 'phase': 'gate'}  (only in left)",
+        "  ~ totalDamageReceived.1: 0 != 1"
       ]
     },
     "dc_ability": {
@@ -376,9 +380,8 @@
         "  + figureConditions = {'Boba Fett-1-0': ['Weaken'], 'Stormtrooper (Regular)-1-2': ['Weaken']}  (only in right)",
         "  ~ p2DcList[0].healthState[0][0]: 14 != 12",
         "  ~ p2DcList[1].healthState[2][0]: 3 != 1",
-        "  - pendingCombat = {'gameId': '00002', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc0', 'attackerDcName': 'Boba Fett', 'defenderDcName': 'Chewbacca', 'bonusSurgeAbilities': [], 'bonusPierce': 0, 'attackerDisplayName': 'Boba Fett', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Boba Fett-1-0', 'attackerConds': [], 'defenderConds': [], 'target': {'figureKey': 'Chewbacca-1-0', 'coord': 'a12', 'label': 'Chewbacca', 'hasLOS': True, 'dist': 2}, 'targetStats': {'defense': ['white', 'black'], 'cost': 15, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 2, 'combatThreadId': 'thread-fake-msg-91', 'combatDeclareMsgId': 'fake-msg-91', 'combatPreMsgId': 'fake-msg-92', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 8, 'dmg': 5, 'surge': 1}, 'defenseRoll': {'block': 2, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-95', 'attackDiceResults': [{'color': 'blue', 'acc': 3, 'dmg': 1, 'surge': 1}, {'color': 'green', 'acc': 2, 'dmg': 2, 'surge': 0}, {'color': 'green', 'acc': 3, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}, {'color': 'black', 'block': 2, 'evade': 0, 'dodge': False}], 'defenseDiceCount': 2, 'forcedRerollQueue': [], 'pendingPreRerolls': [], 'attackerRerollsRemaining': 0, 'defenderRerollsRemaining': 0, 'attackerRerolledIndices': [], 'defenderRerolledIndices': [], 'rerollPhase': None, 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': True, 'p2Ready': False}, 'phase': 'gate'}  (only in left)",
-        "  ~ pendingDcAbilityChoice: NoneType != dict",
-        "  + pendingPounceSpaceChoice.hl2dc0 = {'gameId': '00002', 'playerNum': 2, 'figureIndex': 0, 'msgId': 'hl2dc0', 'abilityId': 'wrist_cord', 'validSpaces': ['a13', 'b13', 'a15', 'b15'], 'targetFigureKey': 'Stormtrooper (Regular)-1-0'}  (only in right)"
+        "  - pendingCombat = {'gameId': '00002', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc0', 'attackerDcName': 'Boba Fett', 'defenderDcName': 'Chewbacca', 'bonusPierce': 0, 'attackerDisplayName': 'Boba Fett', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Boba Fett-1-0', 'target': {'figureKey': 'Chewbacca-1-0', 'coord': 'a12', 'label': 'Chewbacca', 'hasLOS': True, 'dist': 2}, 'targetStats': {'defense': ['white', 'black'], 'cost': 15, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 2, 'combatThreadId': 'thread-fake-msg-91', 'combatDeclareMsgId': 'fake-msg-91', 'combatPreMsgId': 'fake-msg-92', 'p1Ready': True, 'p2Ready': True, 'attackRoll': {'acc': 8, 'dmg': 5, 'surge': 1}, 'defenseRoll': {'block': 2, 'evade': 0, 'dodge': True}, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False, 'rollMessageId': 'fake-msg-95', 'attackDiceResults': [{'color': 'blue', 'acc': 3, 'dmg': 1, 'surge': 1}, {'color': 'green', 'acc': 2, 'dmg': 2, 'surge': 0}, {'color': 'green', 'acc': 3, 'dmg': 2, 'surge': 0}], 'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': True}, {'color': 'black', 'block': 2, 'evade': 0, 'dodge': False}], 'defenseDiceCount': 2, 'attackerRerollsRemaining': 0, 'defenderRerollsRemaining': 0, 'defensibleResolved': True, 'getDownResolved': True, 'callTheShotsResolved': True, 'heavyRepeaterResolved': True, 'combatGate': {'phase': 'pre_resolve', 'p1Ready': True, 'p2Ready': False}, 'phase': 'gate'}  (only in left)",
+        "  + pendingPounceSpaceChoice = {'hl2dc0': {'gameId': '00002', 'playerNum': 2, 'figureIndex': 0, 'msgId': 'hl2dc0', 'abilityId': 'wrist_cord', 'validSpaces': ['a13', 'b13', 'a15', 'b15'], 'targetFigureKey': 'Stormtrooper (Regular)-1-0'}}  (only in right)"
       ]
     }
   },
@@ -389,7 +392,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 2017,
+      "diffs": 1215,
       "clean": false
     },
     {
@@ -397,7 +400,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 2610,
+      "diffs": 1632,
       "clean": false
     },
     {
@@ -405,7 +408,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 2560,
+      "diffs": 1755,
       "clean": false
     },
     {
@@ -413,7 +416,7 @@
       "replayed": 197,
       "unsupported": 3,
       "errored": 0,
-      "diffs": 1604,
+      "diffs": 628,
       "clean": false
     },
     {
@@ -421,7 +424,7 @@
       "replayed": 198,
       "unsupported": 2,
       "errored": 0,
-      "diffs": 1338,
+      "diffs": 445,
       "clean": false
     },
     {
@@ -429,7 +432,7 @@
       "replayed": 197,
       "unsupported": 3,
       "errored": 0,
-      "diffs": 1517,
+      "diffs": 503,
       "clean": false
     },
     {
@@ -437,7 +440,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 1478,
+      "diffs": 480,
       "clean": false
     },
     {
@@ -445,7 +448,7 @@
       "replayed": 195,
       "unsupported": 5,
       "errored": 0,
-      "diffs": 1930,
+      "diffs": 939,
       "clean": false
     },
     {
@@ -453,7 +456,7 @@
       "replayed": 196,
       "unsupported": 4,
       "errored": 0,
-      "diffs": 1939,
+      "diffs": 1030,
       "clean": false
     },
     {
@@ -461,7 +464,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 1808,
+      "diffs": 789,
       "clean": false
     },
     {
@@ -469,7 +472,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 2091,
+      "diffs": 1065,
       "clean": false
     },
     {
@@ -477,7 +480,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 1983,
+      "diffs": 978,
       "clean": false
     },
     {
@@ -485,7 +488,7 @@
       "replayed": 196,
       "unsupported": 4,
       "errored": 0,
-      "diffs": 1589,
+      "diffs": 586,
       "clean": false
     },
     {
@@ -493,7 +496,7 @@
       "replayed": 198,
       "unsupported": 2,
       "errored": 0,
-      "diffs": 1646,
+      "diffs": 629,
       "clean": false
     },
     {
@@ -501,7 +504,7 @@
       "replayed": 197,
       "unsupported": 3,
       "errored": 0,
-      "diffs": 1725,
+      "diffs": 736,
       "clean": false
     },
     {
@@ -509,7 +512,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 2309,
+      "diffs": 1377,
       "clean": false
     },
     {
@@ -517,7 +520,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 2875,
+      "diffs": 1900,
       "clean": false
     },
     {
@@ -525,7 +528,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 2372,
+      "diffs": 1395,
       "clean": false
     },
     {
@@ -533,7 +536,7 @@
       "replayed": 197,
       "unsupported": 3,
       "errored": 0,
-      "diffs": 1318,
+      "diffs": 360,
       "clean": false
     },
     {
@@ -541,7 +544,7 @@
       "replayed": 193,
       "unsupported": 7,
       "errored": 0,
-      "diffs": 1254,
+      "diffs": 246,
       "clean": false
     },
     {
@@ -549,7 +552,7 @@
       "replayed": 194,
       "unsupported": 6,
       "errored": 0,
-      "diffs": 1388,
+      "diffs": 394,
       "clean": false
     },
     {
@@ -557,7 +560,7 @@
       "replayed": 198,
       "unsupported": 2,
       "errored": 0,
-      "diffs": 1225,
+      "diffs": 379,
       "clean": false
     },
     {
@@ -565,7 +568,7 @@
       "replayed": 198,
       "unsupported": 2,
       "errored": 0,
-      "diffs": 1322,
+      "diffs": 508,
       "clean": false
     },
     {
@@ -573,7 +576,7 @@
       "replayed": 197,
       "unsupported": 3,
       "errored": 0,
-      "diffs": 1256,
+      "diffs": 414,
       "clean": false
     },
     {
@@ -581,7 +584,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 1135,
+      "diffs": 284,
       "clean": false
     },
     {
@@ -589,7 +592,7 @@
       "replayed": 195,
       "unsupported": 5,
       "errored": 0,
-      "diffs": 1321,
+      "diffs": 341,
       "clean": false
     },
     {
@@ -597,7 +600,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 2273,
+      "diffs": 1225,
       "clean": false
     },
     {

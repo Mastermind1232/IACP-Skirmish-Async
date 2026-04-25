@@ -55,14 +55,37 @@ def _unwrap(x):
 
 
 def _normalize(x):
-    """Recursively normalize dict keys to strings so int/str key confusion
-    between Python-native state and JSON-loaded state doesn't show up as
-    a spurious diff."""
+    """Recursively normalize for diff comparison.
+
+    Two transforms:
+      - Dict keys → strings (Python int keys vs JSON-loaded str keys).
+      - Drop top-level entries with "empty default" values (None, {}, [])
+        so that Python initializing a state field to its empty default
+        doesn't diff against JS not setting the key at all. JS engines
+        commonly delete or never-create fields rather than carrying a
+        null; Python's class-style state often keeps the key with a
+        default. The two are semantically equivalent for game logic.
+    """
     if isinstance(x, dict):
-        return {str(k): _normalize(v) for k, v in x.items()}
+        return {
+            str(k): _normalize(v)
+            for k, v in x.items()
+            if not _is_empty_default(v)
+        }
     if isinstance(x, list):
         return [_normalize(v) for v in x]
     return x
+
+
+def _is_empty_default(v):
+    """True for values that should be treated as 'absent' for diff purposes."""
+    if v is None:
+        return True
+    if isinstance(v, dict) and len(v) == 0:
+        return True
+    if isinstance(v, list) and len(v) == 0:
+        return True
+    return False
 
 
 def _walk(a, b, path: str) -> List[Diff]:
