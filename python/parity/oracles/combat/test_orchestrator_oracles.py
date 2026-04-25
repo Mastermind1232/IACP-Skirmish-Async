@@ -1023,6 +1023,66 @@ def test_distracting_fire_skipped_without_pathfinder():
     )
 
 
+def test_you_will_not_deny_me_saves_fifth_brother():
+    """youWillNotDenyMeActive prevents Fifth Brother defeat by healing to 1 HP."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {'Fifth Brother-0-0': 'f5'},
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[1, 12]],  # 1 HP, easy lethal hit.
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Fifth Brother', 'playerNum': 2,
+    }
+    fixture['p2DcList'] = [{'dcName': 'Fifth Brother', 'dgIndex': 0}]
+    fixture['youWillNotDenyMeActive'] = {'playerNum': 2}
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Fifth Brother-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) == 0:
+        pytest.skip('miss on this seed')
+    # Defeated should be flipped to False; figure still on the board at 1 HP.
+    assert not result.get('defeated'), (
+        'Fifth Brother should not be defeated; YWNDM should heal to 1.'
+    )
+    pos = (g.data.get('figurePositions') or {}).get(2, {}).get(
+        'Fifth Brother-0-0')
+    assert pos is not None, 'Fifth Brother should remain on the board'
+    hp = g.data['dcHealthState']['hl2dc0'][0][0]
+    assert hp == 1, f'Fifth Brother should be at 1 HP; got {hp}'
+
+
+def test_second_chance_saves_target_and_discards_card():
+    """secondChanceDcMsgId saves the target and removes the CC entry."""
+    fixture = _base_fixture()
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[1, 12]],  # 1 HP — hit will defeat.
+    }
+    fixture['secondChanceDcMsgId'] = {'hl2dc0': 2}
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) == 0:
+        pytest.skip('miss on this seed')
+    assert not result.get('defeated'), 'Second Chance should save target'
+    pos = (g.data.get('figurePositions') or {}).get(2, {}).get('Darth Vader-0-0')
+    assert pos is not None, 'Vader should remain on the board'
+    sc = g.data.get('secondChanceDcMsgId') or {}
+    assert 'hl2dc0' not in sc, 'Second Chance entry should be discarded'
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()

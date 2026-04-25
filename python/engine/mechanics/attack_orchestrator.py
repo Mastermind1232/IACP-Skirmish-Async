@@ -762,6 +762,38 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
             except Exception:
                 pass
 
+        # ── Phase 9b: DEFEAT-PREVENTION ────────────────────────────────
+        # Two effects can un-defeat the target before Phase 10 removes it:
+        #   1. You Will Not Deny Me: Fifth Brother heals to 1 HP.
+        #      Effect persists until a hostile is defeated.
+        #   2. Second Chance CC attachment: heal 2 HP, discard the CC.
+        # JS combat-bridge.js:861-878.
+        if defeated:
+            try:
+                from python.engine.mechanics.damage_helpers import heal_hp
+                ywndm = data.get('youWillNotDenyMeActive')
+                if (isinstance(ywndm, dict)
+                        and ywndm.get('playerNum') == def_player
+                        and 'fifth' in (def_dc or '').lower()):
+                    dcs = data.get('dcHealthState') or {}
+                    heal_hp(dcs, data, def_msg_id, def_fig_idx, 1, def_player)
+                    defeated = False
+                    # Restore figure position (it's still in the dict at
+                    # this point — Phase 10 hasn't run yet).
+                # Second Chance: keyed by msg_id to player_num.
+                sc_map = data.get('secondChanceDcMsgId') or {}
+                if (isinstance(sc_map, dict)
+                        and sc_map.get(def_msg_id) == def_player):
+                    dcs = data.get('dcHealthState') or {}
+                    heal_hp(dcs, data, def_msg_id, def_fig_idx, 2, def_player)
+                    defeated = False
+                    # Discard the CC.
+                    new_sc = dict(sc_map)
+                    new_sc.pop(def_msg_id, None)
+                    data['secondChanceDcMsgId'] = new_sc
+            except Exception:
+                pass
+
         # ── Phase 10: DEFEAT ───────────────────────────────────────────
         if defeated:
             # Capture pre-remove state for downstream drops.
