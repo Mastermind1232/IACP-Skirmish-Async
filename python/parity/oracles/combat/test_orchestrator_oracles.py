@@ -1445,6 +1445,102 @@ def test_bounty_passive_awards_2_vp_on_defeat():
     assert obj >= 2, f'P1 should have +2 bounty VP; got {obj}'
 
 
+def test_brutal_tactics_weakens_adjacent_hostiles_on_kill():
+    """Saw Gerrera Brutal Tactics: hostiles within 3 of defeated foe become
+    Weakened."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {
+            'Luke Skywalker-0-0': 'e5',
+            'Saw Gerrerra-1-0': 'b3',
+        },
+        2: {
+            'Darth Vader-0-0': 'f5',
+            'Stormtrooper-1-0': 'f6',  # within 3 of f5
+        },
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl1dc1': [[10, 10]],
+        'hl2dc0': [[1, 12]],
+        'hl2dc1': [[3, 3]],
+    }
+    fixture['p1DcList'] = [
+        {'dcName': 'Luke Skywalker', 'dgIndex': 0},
+        {'dcName': 'Saw Gerrerra', 'dgIndex': 1},
+    ]
+    fixture['p2DcList'] = [
+        {'dcName': 'Darth Vader', 'dgIndex': 0},
+        {'dcName': 'Stormtrooper', 'dgIndex': 1},
+    ]
+    fixture['dcMessageMeta']['hl2dc1'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Stormtrooper', 'playerNum': 2,
+    }
+    fixture['p2DcMessageIds'] = ['hl2dc0', 'hl2dc1']
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    conds = (g.data.get('figureConditions') or {}).get(
+        'Stormtrooper-1-0') or []
+    assert 'Weaken' in conds, (
+        f'Stormtrooper should be Weakened by Brutal Tactics; got {conds}'
+    )
+
+
+def test_useful_hide_grants_evade_tokens_to_nearby_friendly_on_taunton_defeat():
+    """Tauntaun Rider Useful Hide: 2 Evade tokens distributed to nearby
+    friendly figures."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {
+            'Tauntaun Rider-0-0': 'f5',
+            'Stormtrooper-1-0': 'f6',  # adjacent friendly
+            'Stormtrooper-1-1': 'f7',  # within 3 friendly
+        },
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[1, 12]],
+        'hl2dc1': [[3, 3], [3, 3]],
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Tauntaun Rider', 'playerNum': 2,
+    }
+    fixture['dcMessageMeta']['hl2dc1'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Stormtrooper', 'playerNum': 2,
+    }
+    fixture['p2DcList'] = [
+        {'dcName': 'Tauntaun Rider', 'dgIndex': 0},
+        {'dcName': 'Stormtrooper', 'dgIndex': 1},
+    ]
+    fixture['p2DcMessageIds'] = ['hl2dc0', 'hl2dc1']
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Tauntaun Rider-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    fpt = g.data.get('figurePowerTokens') or {}
+    total_evade = 0
+    for fk, toks in fpt.items():
+        if fk.startswith('Stormtrooper-'):
+            total_evade += sum(1 for t in toks if str(t).lower() == 'evade')
+    assert total_evade >= 1, (
+        f'Useful Hide should grant Evade tokens to nearby Stormtroopers; '
+        f'got {fpt}'
+    )
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()

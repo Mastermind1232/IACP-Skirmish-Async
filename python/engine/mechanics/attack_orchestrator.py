@@ -1103,6 +1103,48 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                 if 'Bounty' in (
                         (dc_eff_x.get(def_dc) or {}).get('passives') or []):
                     award_objective_vp(data, atk_player, 2)
+
+                # Brutal Tactics (Saw Gerrera passive on attacker side):
+                # when a hostile is defeated, all hostiles within 3 spaces
+                # of the defeated figure become Weakened (Condition Immunity
+                # filters out the affected). JS combat-bridge.js:1186-1207.
+                atk_has_saw = False
+                atk_fp_x = (data.get('figurePositions') or {}).get(
+                    atk_player, {}) or {}
+                for atk_fk in atk_fp_x:
+                    atk_name = _dc_name_from_figure_key(atk_fk)
+                    if 'Brutal Tactics' in (
+                            (dc_eff_x.get(atk_name) or {}).get('passives')
+                            or []):
+                        atk_has_saw = True
+                        break
+                if atk_has_saw and last_pos:
+                    enemy_fp = (data.get('figurePositions') or {}).get(
+                        def_player, {}) or {}
+                    for fk, pos in enemy_fp.items():
+                        if not pos or fk == target_key:
+                            continue
+                        dist = count_game_spaces(game, last_pos, pos)
+                        if dist <= 3:
+                            apply_condition(data, fk, 'Weaken')
+
+                # Useful Hide (Tauntaun Rider): on defeat, distribute up to
+                # 2 Evade Tokens among friendly figures within 3 spaces of
+                # the defeated figure. JS combat-bridge.js:1212-1232.
+                if def_dc == 'Tauntaun Rider' and last_pos:
+                    from python.engine.mechanics.tokens import (
+                        grant_power_tokens as _gpt,
+                    )
+                    fr_fp = (data.get('figurePositions') or {}).get(
+                        def_player, {}) or {}
+                    candidates = []
+                    for fk, pos in fr_fp.items():
+                        if fk == target_key or not pos:
+                            continue
+                        if count_game_spaces(game, last_pos, pos) <= 3:
+                            candidates.append(fk)
+                    for fk in candidates[:2]:
+                        _gpt(data, fk, 'Evade', 1, 2)
             except Exception:
                 pass
 
