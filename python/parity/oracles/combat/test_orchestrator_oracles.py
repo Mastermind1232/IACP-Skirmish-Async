@@ -1147,6 +1147,54 @@ def test_sustained_by_rage_does_not_save_after_activation():
     )
 
 
+def test_worth_every_credit_awards_bonus_vp_on_kill():
+    """nextHostileDefeatVpBonus[player] adds objective VP and clears."""
+    fixture = _base_fixture()
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]], 'hl2dc0': [[1, 12]],
+    }
+    fixture['nextHostileDefeatVpBonus'] = {1: {'amount': 3}}
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    obj = (g.data.get('player1VP') or {}).get('objectives', 0)
+    assert obj >= 3, (
+        f'P1 should have objective VP from Worth Every Credit; got {obj}'
+    )
+    assert 1 not in (g.data.get('nextHostileDefeatVpBonus') or {})
+
+
+def test_apex_predator_heals_attacker_on_kill_within_range():
+    """recoverOnHostileDefeat heals attacker when hostile within range falls."""
+    fixture = _base_fixture()
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[5, 10]],  # Luke at 5/10 — room to heal.
+        'hl2dc0': [[1, 12]],
+    }
+    fixture['recoverOnHostileDefeat'] = {
+        1: {'range': 3, 'amount': 2, 'msgId': 'hl1dc0'},
+    }
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    luke_hp = g.data['dcHealthState']['hl1dc0'][0][0]
+    assert luke_hp == 7, (
+        f'Apex Predator should heal +2 (5→7); got {luke_hp}'
+    )
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()

@@ -883,6 +883,73 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                         award_kill_vp(data, atk_player, att_vp)
                         vp_gained += int(att_vp)
 
+            # ── Phase 10b: HOSTILE-DEFEAT post-effects ─────────────────
+            # CC stamps + DC passives that fire when the attacker defeats
+            # any hostile. JS combat-bridge.js:1045-1100.
+            try:
+                from python.engine.mechanics.damage_helpers import heal_hp
+                from python.engine.mechanics.vp_helpers import (
+                    award_objective_vp,
+                )
+
+                # Worth Every Credit (nextHostileDefeatVpBonus): bonus VP
+                # to the attacker on hostile defeat; entry consumed.
+                wec = data.get('nextHostileDefeatVpBonus') or {}
+                if isinstance(wec, dict):
+                    entry = wec.get(atk_player,
+                                    wec.get(str(atk_player)))
+                    if entry:
+                        amt = (int(entry.get('amount') or 2)
+                               if isinstance(entry, dict) else int(entry))
+                        award_objective_vp(data, atk_player, amt)
+                        new_wec = dict(wec)
+                        new_wec.pop(atk_player, None)
+                        new_wec.pop(str(atk_player), None)
+                        data['nextHostileDefeatVpBonus'] = new_wec
+
+                # You Will Not Deny Me hostile-defeat half: when ANY hostile
+                # is defeated, Fifth Brother recovers 2 HP and the card is
+                # discarded. JS combat-bridge.js:1053-1067.
+                ywndm = data.get('youWillNotDenyMeActive')
+                if isinstance(ywndm, dict):
+                    fb_player = ywndm.get('playerNum')
+                    if fb_player is not None:
+                        fb_positions = (data.get('figurePositions') or {}).get(
+                            fb_player, {}) or {}
+                        fb_key = next(
+                            (k for k in fb_positions
+                             if 'fifth' in
+                             _dc_name_from_figure_key(k).lower()),
+                            None,
+                        )
+                        fb_msg = _msg_id_for_figure(data, fb_key, fb_player) if fb_key else None
+                        if fb_msg:
+                            dcs = data.get('dcHealthState') or {}
+                            heal_hp(dcs, data, fb_msg, 0, 2, fb_player)
+                        data['youWillNotDenyMeActive'] = None
+                        gb = list(data.get('gameBox') or [])
+                        gb.append('You Will Not Deny Me')
+                        data['gameBox'] = gb
+
+                # Apex Predator (recoverOnHostileDefeat): heal HP when a
+                # hostile within range is defeated.
+                ap_map = data.get('recoverOnHostileDefeat') or {}
+                if isinstance(ap_map, dict):
+                    ap = ap_map.get(atk_player,
+                                    ap_map.get(str(atk_player)))
+                    if isinstance(ap, dict):
+                        ap_range = int(ap.get('range') or 2)
+                        if (distance is not None
+                                and distance <= ap_range):
+                            ap_msg = ap.get('msgId') or atk_msg_id
+                            ap_amt = int(ap.get('amount') or 2)
+                            if ap_msg:
+                                dcs = data.get('dcHealthState') or {}
+                                heal_hp(dcs, data, ap_msg,
+                                        atk_fig_idx, ap_amt, atk_player)
+            except Exception:
+                pass
+
             # ── Phase 11: ON-DEFEAT + friendly-defeat triggers ──────────
             try:
                 from python.engine.abilities.pattern_d import fire_ability
