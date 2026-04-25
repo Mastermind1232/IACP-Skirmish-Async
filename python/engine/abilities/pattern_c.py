@@ -197,12 +197,12 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'aim_rebel_trooper_elite': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_aim_rebel_trooper_elite',
     ),
     'aim_rebel_trooper_reg': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_aim_rebel_trooper_reg',
     ),
     'awkward_atst': (
         'deferred-handler-combat', 'handler-combat',
@@ -285,12 +285,12 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'take_cover_jawa_elite': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_take_cover_defender',
     ),
     'take_cover_jawa_reg': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_take_cover_defender',
     ),
     'targeting_computer_atst': (
         'deferred-handler-combat', 'handler-combat',

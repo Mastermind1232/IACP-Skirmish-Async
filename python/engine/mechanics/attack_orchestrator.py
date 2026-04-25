@@ -306,6 +306,29 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         # already mutated combat/game in place.
         pass
 
+    # Fire Pattern C combat passives (attacker + defender). These are the
+    # data-only JS passives consumed in src/handlers/combat.js — handlers
+    # in passive_combat.py mutate combat[bonus*] in place.
+    try:
+        from python.engine.mechanics.passive_combat import apply_combat_passives
+        passive_ctx = {
+            'attacker_key': attacker_key,
+            'defender_key': target_key,
+            'attacker_player': atk_player,
+            'defender_player': def_player,
+            'distance': distance,
+            'is_ranged': is_ranged,
+            'attacker_figure_index': atk_fig_idx,
+            'defender_figure_index': def_fig_idx,
+        }
+        passive_fired = apply_combat_passives(
+            data, combat, attacker_sids, defender_sids, passive_ctx,
+        )
+        triggered.extend(passive_fired)
+    except Exception:
+        # Pattern C passives are best-effort — never block combat.
+        pass
+
     # Fire combat-defense-friends (walks 1+2 over defender's adjacent allies)
     try:
         defense_fired = fire_combat_defense_friends_triggers(
