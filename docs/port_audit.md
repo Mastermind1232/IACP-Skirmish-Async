@@ -9,7 +9,7 @@ being marked COMPLETE. MISSING and STUB-ONLY are guaranteed gaps.
 | Area | Real | Stub | Missing | Total | Net |
 |---|---|---|---|---|---|
 | CC effects | 293 | 0 | 0 | 293 | **100%** |
-| DC abilities | 244 | 66 | 0 | 310 | **79%** |
+| DC abilities | 254 | 56 | 0 | 310 | **82%** |
 | Missions (validated) | 8 | 0 partial | 0 | 8 | **100%** |
 | Action handlers | 81 | — | 0 | 81 | **100%** |
 
@@ -17,7 +17,9 @@ Machine-readable: `docs/port_coverage.json`. Top-50 priority list: `docs/port_pr
 
 CC scoring: every card in `data/cc-effects.json` now has a registered handler (293/293). A card counts as "real" if its handler is concrete (handwritten `_cc_*` body), a non-noop registered lambda, OR a schema-driven handler whose ability-library entry contains at least one field that `python/engine/cards/cc_schema.py` knows how to apply (mpBonus, applyFocus, attackBonusHits, draw, recoverDamage, etc.).
 
-DC ability scoring (live-probe): each ability ID declared in any DC's `specialAbilityIds` is dispatched via `python.engine.abilities.dispatch.resolve()` against a synthetic ctx and classified by what comes back. **Real** = handler produces effects, stat_delta, log_message, damage, or pending_key. **Stub** = handler is registered (Pattern D stub from `install_pattern_d_stubs`, or active-action handler returning applied=False/empty) but doesn't mutate state yet. **Missing** = no library entry / no registered handler at all. The 0/0/171 split matters: every ability ID is now reachable in the registry — the work left is filling in real handlers behind the stub sentinels (mostly Pattern D triggered passives), not registering new ones.
+DC ability scoring (live-probe): each ability ID declared in any DC's `specialAbilityIds` is dispatched via `python.engine.abilities.dispatch.resolve()` against a synthetic ctx and classified by what comes back. **Real** = handler produces effects, stat_delta, log_message, damage, pending_key, or `requiresChoice` — even with applied=False, structured signal proves the handler ran logic and merely lacked synthetic prereqs (no target, no tokens, etc.). **Stub** = no structured signal, OR Pattern C ability whose `_CATALOG` status is one of the `deferred-*` buckets (consumption layer not yet ported). **Missing** = no library entry / no registered handler.
+
+The 254/56/0 split: all 56 remaining stubs are Pattern C `deferred-bridge` / `deferred-handler-*` / `deferred-cc-timing` passives. These are *catalogued* in `pattern_c.py:_CATALOG` with their JS read-site, but they require porting the JS handler/bridge layer (`src/handlers/combat.js`, `src/engine/combat-bridge.js`, etc.) into Python — not the trigger-bus pattern that lifted Pattern D coverage. So they're tracked as known structural debt rather than per-ability porting work.
 
 A mission is "validated" only if a JS-recorded drift trace replays byte-identical through Python.
 

@@ -295,17 +295,25 @@ def _synth_probe_ctx() -> Tuple[Dict, Dict]:
 def _classify_resolution(pattern: str, result: Dict) -> str:
     """Translate a dispatch result into 'real' / 'stub' / 'missing'.
 
-    - applied=True with non-empty effects, stat_delta, log_message, damage,
-      or pending_key → 'real'
-    - applied=True but only legacy_path delegation with no effects → 'stub'
-    - applied=False (any reason) → 'stub' (handler exists but no-ops)
+    A handler counts as 'real' when it produces any structured signal — even
+    if the synthetic probe ctx prevents applied=True. The signals we trust:
+
+      - effects (incl. gate-fail markers like `*_no_target`,
+        `*_token_gate_failed`) — handler ran logic, just lacked prereqs
+      - requiresChoice + choiceOptions — interactive ability waiting on UI
+      - stat_delta / damage / log_message / pending_*
+
+    Pattern dispatch may also resolve to a different pattern than classify
+    expected (e.g. Pattern E classify, Pattern C handler returns the
+    deferred-* metadata). Treat that as 'real' iff the metadata is wired
+    (consumption_layer + js_site present), 'stub' otherwise.
     """
-    if not result.get('applied'):
+    # Pattern C metadata response — wired iff catalogued
+    if (result.get('pattern') == 'C' and 'status' in result):
+        if result.get('status') == 'wired-engine':
+            return 'real'
         return 'stub'
-    if (result.get('delegated_to') == 'legacy_path'
-            and not result.get('effects')
-            and not result.get('log_message')):
-        return 'stub'
+
     has_signal = (
         result.get('effects')
         or result.get('stat_delta')
@@ -313,7 +321,16 @@ def _classify_resolution(pattern: str, result: Dict) -> str:
         or result.get('damage')
         or result.get('pending_key')
         or result.get('pending_state')
+        or result.get('requiresChoice')
     )
+    if not result.get('applied'):
+        # applied=False but with structured signal = handler ran, just lacks
+        # synthetic prereq. That's real.
+        return 'real' if has_signal else 'stub'
+    if (result.get('delegated_to') == 'legacy_path'
+            and not result.get('effects')
+            and not result.get('log_message')):
+        return 'stub'
     return 'real' if has_signal else 'stub'
 
 
