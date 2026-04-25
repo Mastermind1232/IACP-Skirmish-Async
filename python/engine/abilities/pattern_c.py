@@ -189,12 +189,12 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_adv_targeting_computer (auto-Focus only; reroll-may deferred)',
     ),
     'agile_jet_trooper_elite': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_agile_jet_trooper (greedy block→evade)',
     ),
     'agile_jet_trooper_reg': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_agile_jet_trooper (greedy block→evade)',
     ),
     'aim_rebel_trooper_elite': (
         'wired-engine', 'engine',
@@ -269,20 +269,20 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'squad_training_shoretrooper_elite': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_squad_training (greedy reroll worst attack die)',
     ),
     'squad_training_shoretrooper_reg': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_squad_training (greedy reroll worst attack die)',
     ),
     'squad_training_stormtrooper_elite': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_squad_training (greedy reroll worst attack die)',
     ),
     'squad_training_stormtrooper_reg': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js → py mechanics/passive_combat.py:_handle_squad_training (greedy reroll worst attack die)',
     ),
     'take_cover_jawa_elite': (
         'wired-engine', 'engine',

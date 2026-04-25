@@ -306,6 +306,84 @@ def _handle_lucky_r2d2(data, combat, ctx):
     return {'effect': 'lucky_r2d2', 'recovered': 2}
 
 
+def _handle_agile_jet_trooper(data, combat, ctx):
+    """Agile (Jet Trooper E/R): "While defending, you may convert 1 Block to
+    1 Evade." Greedy-take in headless: convert iff defender has at least 1
+    Block to spare. Mutates defenseRoll counts in place."""
+    def_roll = combat.get('defenseRoll') or {}
+    if int(def_roll.get('block') or 0) < 1:
+        return None
+    def_roll['block'] = int(def_roll['block']) - 1
+    def_roll['evade'] = int(def_roll.get('evade') or 0) + 1
+    combat['defenseRoll'] = def_roll
+    return {'effect': 'agile_jet_trooper', 'converted': 'block→evade'}
+
+
+def _has_adjacent_friendly_with_keyword(data, player_num, figure_key,
+                                         keyword):
+    """True iff a same-side figure (other than self) within Chebyshev
+    distance 1 has `keyword` in its DC's keywords list."""
+    from python.engine.mechanics.adjacency import is_chebyshev_adjacent
+    from python.engine.data.dc_effects_loader import get_dc_effect
+    fp = data.get('figurePositions') or {}
+    self_coord = (fp.get(player_num) or fp.get(str(player_num)) or {}).get(figure_key)
+    if not self_coord:
+        return False
+    for fk, coord in (fp.get(player_num) or fp.get(str(player_num)) or {}).items():
+        if fk == figure_key or not coord:
+            continue
+        if not is_chebyshev_adjacent(self_coord, coord):
+            continue
+        dc_name = fk.split('-', 1)[0] if '-' in fk else fk
+        eff = get_dc_effect(dc_name) or {}
+        if keyword in (eff.get('keywords') or []):
+            return True
+    return False
+
+
+def _handle_squad_training(data, combat, ctx):
+    """Squad Training (Stormtrooper / Shoretrooper E/R): "While attacking,
+    while adjacent to another friendly TROOPER, you may reroll 1 attack die."
+    Greedy-take in headless: re-roll the lowest-value attack die (acc+dmg+
+    surge sum). Always-take is JS-faithful when the new die can only equal
+    or improve the bottom-of-pool die in expectation.
+    """
+    if not _has_adjacent_friendly_with_keyword(
+            data, ctx['attacker_player'], ctx['attacker_key'], 'TROOPER'):
+        return None
+    attack_roll = combat.get('attackRoll') or {}
+    dice = list(attack_roll.get('dice') or [])
+    if not dice:
+        return None
+    rng = ctx.get('rng')
+    if rng is None:
+        return None
+    from python.engine.mechanics.dice import roll_attack_dice
+    # Pick lowest-value die to reroll.
+    idx_worst = min(range(len(dice)), key=lambda i:
+                     (dice[i].get('acc') or 0) + (dice[i].get('dmg') or 0)
+                     + (dice[i].get('surge') or 0))
+    old = dice[idx_worst]
+    color = old.get('color', 'blue')
+    new_roll = roll_attack_dice([color], rng=rng)
+    new_dice = new_roll.get('dice') or []
+    if not new_dice:
+        return None
+    dice[idx_worst] = new_dice[0]
+    # Recompute totals from the modified dice list.
+    attack_roll['dice'] = dice
+    attack_roll['acc'] = sum(int(d.get('acc') or 0) for d in dice)
+    attack_roll['dmg'] = sum(int(d.get('dmg') or 0) for d in dice)
+    attack_roll['surge'] = sum(int(d.get('surge') or 0) for d in dice)
+    combat['attackRoll'] = attack_roll
+    # Recompute combat-level surge pool to match.
+    combat['surgeRemaining'] = (
+        int(attack_roll.get('surge') or 0)
+        + int(combat.get('surgeBonus') or 0)
+    )
+    return {'effect': 'squad_training', 'rerolled_index': idx_worst}
+
+
 def _install_default_passives() -> None:
     register('aim_rebel_trooper_reg', _handle_aim_rebel_trooper_reg, 'attacker')
     register('aim_rebel_trooper_elite', _handle_aim_rebel_trooper_elite, 'attacker')
@@ -317,6 +395,12 @@ def _install_default_passives() -> None:
     register('improvised_cover_verena', _handle_improvised_cover_verena,
              'defender')
     register_post_roll('lucky_r2d2', _handle_lucky_r2d2, 'defender')
+    register_post_roll('agile_jet_trooper_elite', _handle_agile_jet_trooper, 'defender')
+    register_post_roll('agile_jet_trooper_reg', _handle_agile_jet_trooper, 'defender')
+    register_post_roll('squad_training_stormtrooper_elite', _handle_squad_training, 'attacker')
+    register_post_roll('squad_training_stormtrooper_reg', _handle_squad_training, 'attacker')
+    register_post_roll('squad_training_shoretrooper_elite', _handle_squad_training, 'attacker')
+    register_post_roll('squad_training_shoretrooper_reg', _handle_squad_training, 'attacker')
 
 
 _install_default_passives()

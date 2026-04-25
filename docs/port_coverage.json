@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T03:55:11.023458+00:00",
+  "generated": "2026-04-25T04:00:30.976963+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 261,
-      "stub": 49,
+      "real": 266,
+      "stub": 44,
       "missing": 0,
       "total": 310
     },
@@ -327,8 +327,8 @@
       "adaptive_skills_mara_jade": "stub",
       "adv_targeting_computer_dark_trooper": "real",
       "advanced_firepower_sorin": "real",
-      "agile_jet_trooper_elite": "stub",
-      "agile_jet_trooper_reg": "stub",
+      "agile_jet_trooper_elite": "real",
+      "agile_jet_trooper_reg": "real",
       "aim_rebel_trooper_reg": "real",
       "air_support_bodhi": "real",
       "airborne_commander_gar_saxon": "real",
@@ -587,9 +587,9 @@
       "spray_fire_heavy_stormtrooper": "stub",
       "squad_captain": "real",
       "squad_cohesion_kotun": "real",
-      "squad_training_shoretrooper_elite": "stub",
-      "squad_training_stormtrooper_elite": "stub",
-      "squad_training_stormtrooper_reg": "stub",
+      "squad_training_shoretrooper_elite": "real",
+      "squad_training_stormtrooper_elite": "real",
+      "squad_training_stormtrooper_reg": "real",
       "stealthy_davith": "real",
       "stim_canister_bd1": "real",
       "strategize_thrawn": "real",
@@ -732,8 +732,6 @@
     "abilities": [
       "adapt_blaise",
       "adaptive_skills_mara_jade",
-      "agile_jet_trooper_elite",
-      "agile_jet_trooper_reg",
       "attached_dio",
       "awkward_atst",
       "camouflage_mak",
@@ -770,9 +768,6 @@
       "shared_calculations_zuckuss",
       "spiked_boots_snowtrooper",
       "spray_fire_heavy_stormtrooper",
-      "squad_training_shoretrooper_elite",
-      "squad_training_stormtrooper_elite",
-      "squad_training_stormtrooper_reg",
       "targeting_computer_atst",
       "this_is_the_way_armorer",
       "tripod_eweb",

@@ -407,6 +407,7 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         post_ctx.update({
             'attacker_msg_id': atk_msg_id,
             'defender_msg_id': def_msg_id,
+            'rng': rng,
         })
         post_fired = apply_post_roll_passives(
             data, combat, attacker_sids, defender_sids, post_ctx,
