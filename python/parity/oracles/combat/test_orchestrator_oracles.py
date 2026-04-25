@@ -915,6 +915,68 @@ def test_nimble_grants_defender_2_mp_per_block():
     assert fired, 'Nimble should grant >=2 MP for at least one block in 50 seeds'
 
 
+def test_guerilla_hides_attacker_on_kill():
+    """Rebel Pathfinder Guerilla: when the attack defeats the defender,
+    the attacker becomes Hidden."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Alliance Ranger (Elite)-0-0': 'e5'},
+        2: {'Stormtrooper-0-0': 'f5'},
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[1, 4]],  # Stormtrooper at 1 HP — easy to defeat.
+    }
+    fixture['dcMessageMeta'] = {
+        'hl1dc0': {'gameId': 'orch-oracle', 'dcName': 'Alliance Ranger (Elite)',
+                   'playerNum': 1},
+        'hl2dc0': {'gameId': 'orch-oracle', 'dcName': 'Stormtrooper',
+                   'playerNum': 2},
+    }
+    fixture['p1DcList'] = [{'dcName': 'Alliance Ranger (Elite)', 'dgIndex': 0}]
+    fixture['p2DcList'] = [{'dcName': 'Stormtrooper', 'dgIndex': 0}]
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Alliance Ranger (Elite)-0-0', 'Stormtrooper-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('defeated'):
+        pytest.skip('did not kill on this seed')
+    conds = (g.data.get('figureConditions') or {}).get(
+        'Alliance Ranger (Elite)-0-0') or []
+    assert 'Hide' in conds, (
+        f'Rebel Pathfinder should be Hidden after killing; got {conds}'
+    )
+
+
+def test_guerilla_does_not_fire_without_kill():
+    """No defeat → no Hide."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Alliance Ranger (Elite)-0-0': 'e5'},
+        2: {'Darth Vader-0-0': 'f5'},
+    }
+    fixture['dcMessageMeta']['hl1dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Alliance Ranger (Elite)',
+        'playerNum': 1,
+    }
+    fixture['p1DcList'] = [{'dcName': 'Alliance Ranger (Elite)', 'dgIndex': 0}]
+    g = _game(fixture)
+    orchestrate_attack(
+        g, 'Alliance Ranger (Elite)-0-0', 'Darth Vader-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red'],
+        defense_dice_override=['white'],
+    )
+    conds = (g.data.get('figureConditions') or {}).get(
+        'Alliance Ranger (Elite)-0-0') or []
+    assert 'Hide' not in conds, (
+        f'Hide should not apply without kill; got {conds}'
+    )
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()

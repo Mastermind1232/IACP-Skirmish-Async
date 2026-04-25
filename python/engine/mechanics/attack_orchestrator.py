@@ -599,6 +599,19 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
         except Exception:
             pass
 
+        # Guerilla (Rebel Pathfinder / Alliance Ranger): when the attack
+        # defeats the defender, the attacker becomes Hidden. JS uses an
+        # abilityText substring match (no specialAbilityIds entry).
+        # JS combat-bridge.js:625-633.
+        try:
+            from python.engine.data.dc_effects_loader import get_dc_effects
+            dc_eff = get_dc_effects() or {}
+            atk_text = (dc_eff.get(atk_dc) or {}).get('abilityText') or ''
+            if defeated and 'uerilla' in atk_text and attacker_key:
+                apply_condition(data, attacker_key, 'Hide')
+        except Exception:
+            pass
+
         # Fly-By (Jet Trooper Elite passive): after attack, attacker gains
         # 2 MP if target was within 2 spaces. JS combat-bridge.js:644-652.
         try:
