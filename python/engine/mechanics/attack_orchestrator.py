@@ -782,7 +782,7 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                     # this point — Phase 10 hasn't run yet).
                 # Second Chance: keyed by msg_id to player_num.
                 sc_map = data.get('secondChanceDcMsgId') or {}
-                if (isinstance(sc_map, dict)
+                if (defeated and isinstance(sc_map, dict)
                         and sc_map.get(def_msg_id) == def_player):
                     dcs = data.get('dcHealthState') or {}
                     heal_hp(dcs, data, def_msg_id, def_fig_idx, 2, def_player)
@@ -791,6 +791,30 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                     new_sc = dict(sc_map)
                     new_sc.pop(def_msg_id, None)
                     data['secondChanceDcMsgId'] = new_sc
+                # Sustained by Rage: target's DC has sustained_by_rage AND
+                # has not activated this round → save at 1 HP.
+                # JS combat-bridge.js:881-889.
+                if defeated:
+                    from python.engine.data.dc_effects_loader import get_dc_effects
+                    dc_eff = get_dc_effects() or {}
+                    def_sids = (dc_eff.get(def_dc) or {}).get(
+                        'specialAbilityIds') or []
+                    if 'sustained_by_rage' in def_sids:
+                        # Find the dgIndex for the defending DC.
+                        def_dc_list = data.get(f'p{def_player}DcList') or []
+                        dc_idx = None
+                        for i, dc in enumerate(def_dc_list):
+                            if (isinstance(dc, dict)
+                                    and dc.get('dcName') == def_dc):
+                                dc_idx = i
+                                break
+                        activated = (data.get(
+                            f'p{def_player}ActivatedDcIndices') or [])
+                        if dc_idx is not None and dc_idx not in activated:
+                            dcs = data.get('dcHealthState') or {}
+                            heal_hp(dcs, data, def_msg_id,
+                                    def_fig_idx, 1, def_player)
+                            defeated = False
             except Exception:
                 pass
 

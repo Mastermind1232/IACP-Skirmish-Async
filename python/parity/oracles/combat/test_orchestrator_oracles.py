@@ -1083,6 +1083,70 @@ def test_second_chance_saves_target_and_discards_card():
     assert 'hl2dc0' not in sc, 'Second Chance entry should be discarded'
 
 
+def test_sustained_by_rage_saves_unactivated_maul():
+    """Maul sustained_by_rage: defeat is prevented if not activated this round."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {'Maul-0-0': 'f5'},
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[1, 12]],
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Maul', 'playerNum': 2,
+    }
+    fixture['p2DcList'] = [{'dcName': 'Maul', 'dgIndex': 0}]
+    # No p2ActivatedDcIndices → Maul has not activated this round.
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Maul-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) == 0:
+        pytest.skip('miss on this seed')
+    assert not result.get('defeated'), (
+        'Maul should be saved by sustained_by_rage'
+    )
+    pos = (g.data.get('figurePositions') or {}).get(2, {}).get('Maul-0-0')
+    assert pos is not None
+    hp = g.data['dcHealthState']['hl2dc0'][0][0]
+    assert hp == 1, f'Maul should be at 1 HP; got {hp}'
+
+
+def test_sustained_by_rage_does_not_save_after_activation():
+    """Once Maul has activated, sustained_by_rage no longer prevents defeat."""
+    fixture = _base_fixture()
+    fixture['figurePositions'] = {
+        1: {'Luke Skywalker-0-0': 'e5'},
+        2: {'Maul-0-0': 'f5'},
+    }
+    fixture['dcHealthState'] = {
+        'hl1dc0': [[10, 10]],
+        'hl2dc0': [[1, 12]],
+    }
+    fixture['dcMessageMeta']['hl2dc0'] = {
+        'gameId': 'orch-oracle', 'dcName': 'Maul', 'playerNum': 2,
+    }
+    fixture['p2DcList'] = [{'dcName': 'Maul', 'dgIndex': 0}]
+    fixture['p2ActivatedDcIndices'] = [0]  # Maul has activated.
+    g = _game(fixture)
+    result = orchestrate_attack(
+        g, 'Luke Skywalker-0-0', 'Maul-0-0',
+        rng=random.Random(1),
+        attack_dice_override=['red', 'red'],
+        defense_dice_override=['white'],
+    )
+    if not result.get('hit') or result.get('damage', 0) == 0:
+        pytest.skip('miss on this seed')
+    assert result.get('defeated'), (
+        'Maul should be defeated normally after activation'
+    )
+
+
 def test_next_attacks_bonus_conditions_only_consumed_by_matching_player():
     """Player-2's pending bonus conditions don't fire on a P1 attack."""
     fixture = _base_fixture()
