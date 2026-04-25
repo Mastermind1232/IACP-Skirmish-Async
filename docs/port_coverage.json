@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T23:27:04.832898+00:00",
+  "generated": "2026-04-25T23:43:02.249903+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 299,
-      "stub": 11,
+      "real": 302,
+      "stub": 8,
       "missing": 0,
       "total": 310
     },
@@ -464,7 +464,7 @@
       "illicit_arms_bib": "real",
       "immune_onar": "real",
       "immune_snowtrooper_elite": "real",
-      "imperial_loadout_purge_trooper": "stub",
+      "imperial_loadout_purge_trooper": "real",
       "improper_procedure": "real",
       "improved_smugglers_instincts": "real",
       "improvised_cover_verena": "real",
@@ -558,8 +558,8 @@
       "service_r2d2": "real",
       "set_your_sights_loku": "real",
       "shady_contacts_saska": "stub",
-      "shape_clawdite_elite": "stub",
-      "shape_clawdite_reg": "stub",
+      "shape_clawdite_elite": "real",
+      "shape_clawdite_reg": "real",
       "shared_calculations_zuckuss": "real",
       "shared_intuition": "real",
       "sharpshooter": "real",
@@ -734,13 +734,10 @@
       "dirty_dealing_bib",
       "droid_kit_iden",
       "dubious_counterparts_aphra",
-      "imperial_loadout_purge_trooper",
       "last_wielder_darksaber_bokatan",
       "modular_heavy_stormtrooper",
       "scavenged_stock_jawa_elite",
-      "shady_contacts_saska",
-      "shape_clawdite_elite",
-      "shape_clawdite_reg"
+      "shady_contacts_saska"
     ],
     "missions": [
       "anchorhead-cantina-bar",

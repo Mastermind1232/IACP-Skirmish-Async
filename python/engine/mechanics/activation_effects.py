@@ -302,6 +302,56 @@ def apply_start_of_activation_effects(game: Any, *, dc_name: str, player_num: in
             ),
         })
 
+    # Imperial Loadout (Purge Trooper): start-of-activation prompt that
+    # displays the chosen loadout card. JS site:
+    # src/engine/activation-setup.js D32. The loadout pick itself happens
+    # at deploy-time (handlers/setup.js handleLoadoutConfirm) and writes
+    # to figureConfig[figureKey].loadout. The card's effects (stat
+    # modifiers, surge abilities) are read by ability/attachment lookups
+    # at the relevant sites — no mutation here.
+    if 'imperial_loadout_purge_trooper' in ability_ids:
+        figs = (data.get('figurePositions') or {}).get(player_num) or {}
+        first_fk = next(
+            (fk for fk in figs if fk.startswith(dc_name + '-') and figs.get(fk)),
+            None,
+        )
+        config = (data.get('figureConfig') or {}).get(first_fk or '') or {}
+        chosen_loadout = config.get('loadout')
+        if chosen_loadout:
+            applied.append({
+                'effect': 'Imperial Loadout',
+                'message': f'⚔️ **Imperial Loadout: {chosen_loadout}**',
+            })
+        else:
+            applied.append({
+                'effect': 'Imperial Loadout',
+                'message': '⚔️ **Imperial Loadout** — no loadout selected',
+            })
+
+    # Clawdite Shape (Elite/Reg): start-of-activation prompt displaying
+    # the chosen form. JS site: src/engine/activation-setup.js D33.
+    # Form pick at deploy-time (handleFormPick) writes to
+    # figureConfig[figureKey].form; card effects are scattered.
+    if ('shape_clawdite_elite' in ability_ids
+            or 'shape_clawdite_reg' in ability_ids):
+        figs = (data.get('figurePositions') or {}).get(player_num) or {}
+        first_fk = next(
+            (fk for fk in figs if fk.startswith(dc_name + '-') and figs.get(fk)),
+            None,
+        )
+        config = (data.get('figureConfig') or {}).get(first_fk or '') or {}
+        chosen_form = config.get('form')
+        if chosen_form:
+            applied.append({
+                'effect': 'Clawdite Shape',
+                'message': f'🦎 **Form: {chosen_form}**',
+            })
+        else:
+            applied.append({
+                'effect': 'Clawdite Shape',
+                'message': '🦎 **Clawdite Shape** — no form selected',
+            })
+
     # Scrap Battalion (Ugnaught Tinkerer Elite/Reg): Junk Droid
     # co-activates with the Ugnaught. JS marks the companion to
     # co-activate by stamping companionActivatedBefore[msgId] = 'co-activate'.

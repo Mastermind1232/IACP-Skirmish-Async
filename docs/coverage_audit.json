@@ -1388,7 +1388,7 @@
       "verdict": "UNVERIFIED"
     }
   ],
-  "generated": "2026-04-25T23:27:04.845202+00:00",
+  "generated": "2026-04-25T23:43:02.263288+00:00",
   "headline": {
     "action_types": 81,
     "drift_distinct_actions": 18,
@@ -1399,8 +1399,8 @@
     "live_coverage": {
       "abilities": {
         "missing": 0,
-        "real": 299,
-        "stub": 11,
+        "real": 302,
+        "stub": 8,
         "total": 310
       },
       "actions": {
@@ -1423,8 +1423,7 @@
     },
     "pattern_c_buckets": {
       "data-only-unreferenced": 10,
-      "deferred-handler-other": 3,
-      "wired-engine": 45
+      "wired-engine": 48
     },
     "pattern_c_total": 58,
     "port_audit_counts": {
@@ -1442,9 +1441,9 @@
     "weighted_estimate": {
       "layers": [
         {
-          "contribution": 24.11,
+          "contribution": 24.35,
           "layer": "Ability resolution",
-          "ratio": 0.965,
+          "ratio": 0.974,
           "weight": 25
         },
         {
@@ -1460,9 +1459,9 @@
           "weight": 20
         },
         {
-          "contribution": 7.76,
+          "contribution": 8.28,
           "layer": "Pattern C wired ratio",
-          "ratio": 0.776,
+          "ratio": 0.828,
           "weight": 10
         },
         {
@@ -1484,7 +1483,7 @@
           "weight": 10
         }
       ],
-      "score": 61.6
+      "score": 62.3
     }
   },
   "oracles_by_area": {
@@ -1670,9 +1669,9 @@
       "status": "wired-engine"
     },
     "imperial_loadout_purge_trooper": {
-      "js_site": "BLOCKED: requires setup-time loadout-card picker. Python handlers/setup.js port pending. JS sites: setup.js (deploy-time pick) + phase-gate.js (deploy gate) + activation-setup.js:1158 (start-of-activation render).",
-      "kind": "handler-other",
-      "status": "deferred-handler-other"
+      "js_site": "src/engine/activation-setup.js D32 \u2192 py mechanics/activation_effects.py (reads figureConfig[fk].loadout, logs start-of-activation prompt; loadout effects scattered across ability/attachment lookup sites)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "improvised_cover_verena": {
       "js_site": "src/handlers/combat.js:2131 \u2192 py mechanics/passive_combat.py:_handle_improvised_cover_verena (figure-adjacency clause; object/crate adjacency deferred until crates port)",
@@ -1750,14 +1749,14 @@
       "status": "data-only-unreferenced"
     },
     "shape_clawdite_elite": {
-      "js_site": "BLOCKED: requires setup-time form-card picker + per-round form-pick prompt. Python multi-handler port pending. JS sites: setup.js + round.js (per-round prompt) + phase-gate.js + activation-setup.js.",
-      "kind": "handler-other",
-      "status": "deferred-handler-other"
+      "js_site": "src/engine/activation-setup.js D33 \u2192 py mechanics/activation_effects.py (reads figureConfig[fk].form, logs prompt; form effects scattered)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "shape_clawdite_reg": {
-      "js_site": "BLOCKED: same as shape_clawdite_elite (regular variant).",
-      "kind": "handler-other",
-      "status": "deferred-handler-other"
+      "js_site": "src/engine/activation-setup.js D33 \u2192 py mechanics/activation_effects.py (regular variant)",
+      "kind": "engine",
+      "status": "wired-engine"
     },
     "shared_calculations_zuckuss": {
       "js_site": "src/handlers/combat.js \u2192 py mechanics/attack_orchestrator.py (force +1 def reroll if friendly DROID within 3 + LOS to target)",

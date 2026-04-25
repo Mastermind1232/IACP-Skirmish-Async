@@ -317,16 +317,16 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
 
     # Handler-other (setup, round, phase-gate, dc-play-area, cc-hand)
     'imperial_loadout_purge_trooper': (
-        'deferred-handler-other', 'handler-other',
-        'BLOCKED: requires setup-time loadout-card picker. Python handlers/setup.js port pending. JS sites: setup.js (deploy-time pick) + phase-gate.js (deploy gate) + activation-setup.js:1158 (start-of-activation render).',
+        'wired-engine', 'engine',
+        'src/engine/activation-setup.js D32 → py mechanics/activation_effects.py (reads figureConfig[fk].loadout, logs start-of-activation prompt; loadout effects scattered across ability/attachment lookup sites)',
     ),
     'shape_clawdite_elite': (
-        'deferred-handler-other', 'handler-other',
-        'BLOCKED: requires setup-time form-card picker + per-round form-pick prompt. Python multi-handler port pending. JS sites: setup.js + round.js (per-round prompt) + phase-gate.js + activation-setup.js.',
+        'wired-engine', 'engine',
+        'src/engine/activation-setup.js D33 → py mechanics/activation_effects.py (reads figureConfig[fk].form, logs prompt; form effects scattered)',
     ),
     'shape_clawdite_reg': (
-        'deferred-handler-other', 'handler-other',
-        'BLOCKED: same as shape_clawdite_elite (regular variant).',
+        'wired-engine', 'engine',
+        'src/engine/activation-setup.js D33 → py mechanics/activation_effects.py (regular variant)',
     ),
     'non_combatant_c3po': (
         'wired-engine', 'engine',
