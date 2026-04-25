@@ -453,6 +453,14 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
                     combat['bonusEvade'] = int(combat.get('bonusEvade') or 0) + 1
                 elif tt == 'Block':
                     combat['bonusBlock'] = int(combat.get('bonusBlock') or 0) + 1
+                    # Personal Combat Shield (Gar Saxon): when defender
+                    # spends a Block power token, +1 Evade.
+                    # JS: src/handlers/combat.js:5253-5263 + 5314-5322 + 5354-5364.
+                    if 'personal_combat_shield_gar_saxon' in defender_sids:
+                        combat['bonusEvade'] = int(combat.get('bonusEvade') or 0) + 1
+                        combat.setdefault('triggeredPassives', []).append(
+                            {'effect': 'personal_combat_shield_gar_saxon',
+                             'bonusEvade': 1})
                 elif tt == 'Dodge':
                     force_miss = True
             tokens_spent_detail.append({'figure_key': fk, 'token_type': tt})

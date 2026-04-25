@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T04:08:34.231201+00:00",
+  "generated": "2026-04-25T04:10:25.259219+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 269,
-      "stub": 41,
+      "real": 270,
+      "stub": 40,
       "missing": 0,
       "total": 310
     },
@@ -520,7 +520,7 @@
       "parting_shot_greedo": "real",
       "parting_shot_hired_gun_elite": "real",
       "parting_shot_hired_gun_reg": "real",
-      "personal_combat_shield_gar_saxon": "stub",
+      "personal_combat_shield_gar_saxon": "real",
       "power_converter_saska": "real",
       "precision_grand_inquisitor": "real",
       "programming_override_4lom": "real",
@@ -755,7 +755,6 @@
       "mon_cala_sf_loku",
       "non_combatant_c3po",
       "overload_saboteur",
-      "personal_combat_shield_gar_saxon",
       "pulse_cannon_iden",
       "scavenged_stock_jawa_elite",
       "scrap_battalion_ugnaught_elite",

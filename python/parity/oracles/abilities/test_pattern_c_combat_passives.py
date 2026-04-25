@@ -326,6 +326,43 @@ def test_squad_training_fires_with_adjacent_trooper():
                                                 'acc': 0, 'dmg': 0, 'surge': 0}
 
 
+# ── personal_combat_shield_gar_saxon (token-spend hook) ────────────────────
+
+def test_personal_combat_shield_grants_evade_on_block_token_spend():
+    """Verify the orchestrator-level +1 Evade applies when Gar Saxon
+    defends and spends a Block power token."""
+    from python.engine.mechanics.attack_orchestrator import orchestrate_attack
+    from python.engine.creation import create_game
+    g = create_game(map_id='mos-eisley-outskirts')
+    g.data['mapId'] = 'mos-eisley-outskirts'
+    g.data['figurePositions'] = {
+        1: {'Stormtrooper (Regular)-0-0': 'a1'},
+        2: {'Gar Saxon-0-0': 'a2'},  # adjacent for melee
+    }
+    # Give Gar Saxon a Block power token.
+    g.data['figurePowerTokens'] = {'Gar Saxon-0-0': ['Block']}
+    g.data['p1DcList'] = [{'dcName': 'Stormtrooper (Regular)', 'dgIndex': 0}]
+    g.data['p1DcMessageIds'] = ['hl1dc0']
+    g.data['p2DcList'] = [{'dcName': 'Gar Saxon', 'dgIndex': 0}]
+    g.data['p2DcMessageIds'] = ['hl2dc0']
+    g.data['dcHealthState'] = {'hl1dc0': [[3, 3]], 'hl2dc0': [[8, 8]]}
+    import random
+    rng = random.Random(99)
+    result = orchestrate_attack(
+        g.data, 'Stormtrooper (Regular)-0-0', 'Gar Saxon-0-0',
+        rng=rng,
+        spent_tokens=[{'figure_key': 'Gar Saxon-0-0', 'token_type': 'Block'}],
+    )
+    combat = result.get('combat') or {}
+    triggered = combat.get('triggeredPassives') or result.get('triggered') or []
+    # bonusBlock=+1 from Block token + bonusEvade=+1 from PCS.
+    assert combat.get('bonusBlock') == 1
+    assert combat.get('bonusEvade') == 1
+    fired = [t for t in triggered if isinstance(t, dict)
+              and t.get('effect') == 'personal_combat_shield_gar_saxon']
+    assert fired, f'PCS effect not in triggeredPassives: {triggered}'
+
+
 # ── cower_c3po / cower_imperial_officer_reg (post-roll) ───────────────────
 
 def test_cower_no_fire_without_adjacent_friendly():

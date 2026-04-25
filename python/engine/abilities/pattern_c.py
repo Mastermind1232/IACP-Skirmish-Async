@@ -253,8 +253,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'personal_combat_shield_gar_saxon': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js:5032/5091/5133',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:5253-5364 → py mechanics/attack_orchestrator.py Phase 4a (Block-token spend → +1 Evade)',
     ),
     'pulse_cannon_iden': (
         'deferred-handler-combat', 'handler-combat',
