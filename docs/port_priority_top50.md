@@ -1,6 +1,6 @@
 # Port Priority — Top-50 Missing Items
 
-Generated: 2026-04-25T04:13:04.590022+00:00
+Generated: 2026-04-25T04:18:19.276252+00:00
 
 Run `python3 python/parity/port_coverage.py` to refresh.
 
@@ -16,7 +16,7 @@ Total missing: **0**. Ranked by DC count using each ability.
 
 ## DC abilities — stub (registered but no-op)
 
-Total stub: **38**. Pattern D abilities backed only by install_pattern_d_stubs, or active-ability handlers that return applied=False.
+Total stub: **37**. Pattern D abilities backed only by install_pattern_d_stubs, or active-ability handlers that return applied=False.
 
 1. **overload_saboteur** — used by 2 DC(s): Rebel Saboteur (Elite), Rebel Saboteur (Regular)
 2. **tripod_eweb** — used by 2 DC(s): E-Web Engineer (Elite), E-Web Engineer (Regular)
@@ -53,6 +53,5 @@ Total stub: **38**. Pattern D abilities backed only by install_pattern_d_stubs, 
 33. **spiked_boots_snowtrooper** — used by 1 DC(s): Snowtrooper (Elite)
 34. **spray_fire_heavy_stormtrooper** — used by 1 DC(s): Heavy Stormtrooper (Elite)
 35. **this_is_the_way_armorer** — used by 1 DC(s): The Armorer
-36. **trust_goes_both_ways_jyn** — used by 1 DC(s): Jyn Erso
-37. **vague_and_unconvincing_k2s0** — used by 1 DC(s): K-2S0
-38. **versatile_weaponry_hk_elite** — used by 1 DC(s): HK Assassin Droid (Elite)
+36. **vague_and_unconvincing_k2s0** — used by 1 DC(s): K-2S0
+37. **versatile_weaponry_hk_elite** — used by 1 DC(s): HK Assassin Droid (Elite)

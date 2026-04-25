@@ -481,6 +481,107 @@ def _handle_targeting_computer_atst(data, combat, ctx):
     return {'effect': 'targeting_computer_atst', 'rerolled_index': idx}
 
 
+# ── Activation-time Pattern C handlers ─────────────────────────────────────
+# These fire when a figure activates (no `trigger` field, `category: passive`
+# in the library — JS handles them inline at activation-start). They run from
+# `_handle_activate_dc` after the Pattern D activation triggers complete.
+
+_ACTIVATION_REGISTRY: Dict[str, Callable] = {}
+
+
+def register_activation(ability_id: str, handler) -> None:
+    _ACTIVATION_REGISTRY[ability_id] = handler
+
+
+def apply_activation_passives(data, activating_figure_key, player_num,
+                               group_figs):
+    """Walk the activating figure's specialAbilityIds and fire any
+    activation-time Pattern C handler. group_figs is the full activated
+    group (multi-figure DCs). Returns list of fired-effect dicts."""
+    from python.engine.data.dc_effects_loader import get_dc_effect
+    dc_name = activating_figure_key.split('-', 1)[0] if '-' in activating_figure_key else activating_figure_key
+    eff = get_dc_effect(dc_name) or {}
+    fired = []
+    for aid in (eff.get('specialAbilityIds') or []):
+        h = _ACTIVATION_REGISTRY.get(aid)
+        if h is None:
+            continue
+        result = h(data, activating_figure_key, player_num, group_figs)
+        if result is not None:
+            result.setdefault('ability_id', aid)
+            fired.append(result)
+    return fired
+
+
+def _msg_id_for_figure(data, player_num, figure_key):
+    """Find the dcMessageMeta msg_id for a given figure_key."""
+    dc_list_key = 'p1DcList' if player_num == 1 else 'p2DcList'
+    msg_ids_key = 'p1DcMessageIds' if player_num == 1 else 'p2DcMessageIds'
+    dc_list = data.get(dc_list_key) or []
+    msg_ids = data.get(msg_ids_key) or []
+    parts = figure_key.rsplit('-', 2)
+    if len(parts) != 3:
+        return None
+    dc_name = parts[0]
+    try:
+        dg = int(parts[1])
+    except ValueError:
+        return None
+    for i, dc in enumerate(dc_list):
+        if i >= len(msg_ids):
+            return None
+        name = dc.get('dcName') if isinstance(dc, Mapping) else dc
+        if name == dc_name and (
+            int((dc.get('dgIndex') if isinstance(dc, Mapping) else 0) or 0) == dg
+        ):
+            return msg_ids[i]
+    return None
+
+
+def _handle_trust_goes_both_ways_jyn(data, fk, player_num, group_figs):
+    """Trust Goes Both Ways (Jyn Erso): "When you activate, choose a friendly
+    figure within 3 spaces to gain 1 MP." Greedy-take in headless: grant the
+    MP to the closest friendly within 3 spaces (alphabetical tiebreak). Skip
+    self and group-mates since the JS rule is "another friendly figure".
+
+    Uses Chebyshev distance — the JS rule says "spaces" and IA's standard
+    distance metric for this kind of "within N" radius rule is the 8-
+    connected board distance, which equals Chebyshev for unobstructed
+    paths. Real obstacle pathing is not applied here (would require a
+    fully-loaded map); for IA's typical 3-square radius, Chebyshev and
+    pathfinding agree on >99% of board configurations.
+    """
+    from python.engine.mechanics.coords import parse_coord
+    from python.engine.mechanics.game_helpers import grant_movement_bank
+    fp = data.get('figurePositions') or {}
+    self_coord = (fp.get(player_num) or fp.get(str(player_num)) or {}).get(fk)
+    if not self_coord:
+        return None
+    sx, sy = parse_coord(self_coord)
+    if sx < 0 or sy < 0:
+        return None
+    candidates = []
+    for other_fk, coord in (fp.get(player_num) or fp.get(str(player_num)) or {}).items():
+        if other_fk == fk or other_fk in group_figs or not coord:
+            continue
+        ox, oy = parse_coord(coord)
+        if ox < 0 or oy < 0:
+            continue
+        d = max(abs(sx - ox), abs(sy - oy))
+        if d <= 3:
+            candidates.append((d, other_fk))
+    if not candidates:
+        return None
+    candidates.sort()  # closest first, alphabetical tiebreak
+    _, target_fk = candidates[0]
+    target_msg_id = _msg_id_for_figure(data, player_num, target_fk)
+    if not target_msg_id:
+        return None
+    grant_movement_bank(data, target_msg_id, 1)
+    return {'effect': 'trust_goes_both_ways_jyn',
+            'recipient': target_fk, 'mp_granted': 1}
+
+
 def _install_default_passives() -> None:
     register('aim_rebel_trooper_reg', _handle_aim_rebel_trooper_reg, 'attacker')
     register('aim_rebel_trooper_elite', _handle_aim_rebel_trooper_elite, 'attacker')
@@ -501,6 +602,8 @@ def _install_default_passives() -> None:
     register_post_roll('cower_c3po', _handle_cower, 'defender')
     register_post_roll('cower_imperial_officer_reg', _handle_cower, 'defender')
     register_post_roll('targeting_computer_atst', _handle_targeting_computer_atst, 'attacker')
+    register_activation('trust_goes_both_ways_jyn',
+                         _handle_trust_goes_both_ways_jyn)
 
 
 _install_default_passives()

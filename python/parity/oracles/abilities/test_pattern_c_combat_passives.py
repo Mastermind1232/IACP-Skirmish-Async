@@ -326,6 +326,64 @@ def test_squad_training_fires_with_adjacent_trooper():
                                                 'acc': 0, 'dmg': 0, 'surge': 0}
 
 
+# ── trust_goes_both_ways_jyn (activation-time) ─────────────────────────────
+
+def test_trust_goes_both_ways_grants_mp_to_friendly_within_3():
+    from python.engine.mechanics.passive_combat import apply_activation_passives
+    from python.engine.data.dc_effects_loader import get_dc_effect
+    # Verify Jyn Odan actually carries this special ability.
+    eff = get_dc_effect('Jyn Erso')
+    assert 'trust_goes_both_ways_jyn' in (eff.get('specialAbilityIds') or []), \
+        'fixture assumes Jyn Erso has trust_goes_both_ways_jyn'
+
+    data = {
+        'gameId': 'test',
+        'mapId': 'mos-eisley-outskirts',
+        'figurePositions': {
+            1: {'Jyn Erso-0-0': 'a1',
+                 'Rebel Trooper (Regular)-0-0': 'b2',  # adj, within 3
+                 'Han Solo (Rebel Hero)-0-0': 'g7'},   # too far
+        },
+        'p1DcList': [
+            {'dcName': 'Jyn Erso', 'dgIndex': 0},
+            {'dcName': 'Rebel Trooper (Regular)', 'dgIndex': 0},
+            {'dcName': 'Han Solo (Rebel Hero)', 'dgIndex': 0},
+        ],
+        'p1DcMessageIds': ['hl1dc0', 'hl1dc1', 'hl1dc2'],
+    }
+    fired = apply_activation_passives(
+        data, 'Jyn Erso-0-0', 1, ['Jyn Erso-0-0'],
+    )
+    assert any(f['effect'] == 'trust_goes_both_ways_jyn' for f in fired)
+    # The closest friendly (Rebel Trooper at b2) should get the +1 MP.
+    bank = (data.get('movementBank') or {}).get('hl1dc1') or {}
+    assert bank.get('total') == 1
+    # Han Solo (too far) should NOT get the MP.
+    assert (data.get('movementBank') or {}).get('hl1dc2') is None
+
+
+def test_trust_goes_both_ways_no_friendly_within_3():
+    from python.engine.mechanics.passive_combat import apply_activation_passives
+    data = {
+        'gameId': 'test',
+        'mapId': 'mos-eisley-outskirts',
+        'figurePositions': {
+            1: {'Jyn Erso-0-0': 'a1',
+                 'Han Solo (Rebel Hero)-0-0': 'h8'},  # too far
+        },
+        'p1DcList': [
+            {'dcName': 'Jyn Erso', 'dgIndex': 0},
+            {'dcName': 'Han Solo (Rebel Hero)', 'dgIndex': 0},
+        ],
+        'p1DcMessageIds': ['hl1dc0', 'hl1dc1'],
+    }
+    fired = apply_activation_passives(
+        data, 'Jyn Erso-0-0', 1, ['Jyn Erso-0-0'],
+    )
+    assert not fired
+    assert not data.get('movementBank')
+
+
 # ── awkward_atst / non_combatant_c3po (legal_actions gates) ────────────────
 
 def test_awkward_atst_blocks_attack_on_adjacent_target():

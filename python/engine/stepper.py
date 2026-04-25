@@ -516,6 +516,15 @@ def _handle_activate_dc(game: GameState, action: Action) -> GameState:
                             })
                         except NotImplementedError:
                             pass
+
+        # Pattern C activation-time passives — `category: passive` abilities
+        # without a `trigger` field that nonetheless fire at activation time
+        # in JS. Routed inline here rather than via the trigger bus.
+        from python.engine.mechanics.passive_combat import (
+            apply_activation_passives,
+        )
+        for fk in group_figs:
+            apply_activation_passives(game.data, fk, player, group_figs)
     except Exception:
         pass
 

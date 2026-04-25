@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T04:13:04.590022+00:00",
+  "generated": "2026-04-25T04:18:19.276252+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 272,
-      "stub": 38,
+      "real": 273,
+      "stub": 37,
       "missing": 0,
       "total": 310
     },
@@ -615,7 +615,7 @@
       "trained_rancor": "real",
       "trample_bantha": "real",
       "tripod_eweb": "stub",
-      "trust_goes_both_ways_jyn": "stub",
+      "trust_goes_both_ways_jyn": "real",
       "tusken_cycler_elite": "real",
       "tusken_cycler_regular": "real",
       "twin_sabers_ahsoka": "real",
@@ -765,7 +765,6 @@
       "spray_fire_heavy_stormtrooper",
       "this_is_the_way_armorer",
       "tripod_eweb",
-      "trust_goes_both_ways_jyn",
       "vague_and_unconvincing_k2s0",
       "versatile_weaponry_hk_elite"
     ],

@@ -163,8 +163,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/engine/activation-setup.js',
     ),
     'trust_goes_both_ways_jyn': (
-        'deferred-bridge', 'bridge',
-        'src/engine/activation-setup.js + handlers/activation.js',
+        'wired-engine', 'engine',
+        'src/engine/activation-setup.js → py mechanics/passive_combat.py:_handle_trust_goes_both_ways_jyn (greedy: closest friendly within 3 gets +1 MP)',
     ),
     'defensive_fire_bokatan': (
         'deferred-bridge', 'bridge',
