@@ -43,12 +43,26 @@ PassiveHandler = Callable[[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
 # (ability_id, role) → handler. role ∈ {'attacker', 'defender'}.
 _REGISTRY: Dict[Tuple[str, str], PassiveHandler] = {}
 
+# Post-roll registry: handlers fire AFTER dice are rolled (dodge, block,
+# evade are known). Same shape as _REGISTRY but used at a different
+# pipeline stage in the orchestrator.
+_POST_ROLL_REGISTRY: Dict[Tuple[str, str], PassiveHandler] = {}
+
 
 def register(ability_id: str, handler: PassiveHandler, role: str) -> None:
-    """Register a passive handler. Idempotent — last write wins."""
+    """Register a pre-roll passive handler. Idempotent — last write wins."""
     if role not in ('attacker', 'defender'):
         raise ValueError(f'register: role must be attacker|defender, got {role!r}')
     _REGISTRY[(ability_id, role)] = handler
+
+
+def register_post_roll(ability_id: str, handler: PassiveHandler,
+                        role: str) -> None:
+    """Register a post-roll passive handler — fires after dice are rolled
+    (dodge/block/evade known) but before damage application."""
+    if role not in ('attacker', 'defender'):
+        raise ValueError(f'register_post_roll: role must be attacker|defender, got {role!r}')
+    _POST_ROLL_REGISTRY[(ability_id, role)] = handler
 
 
 def get_handler(ability_id: str, role: str) -> Optional[PassiveHandler]:
@@ -56,7 +70,38 @@ def get_handler(ability_id: str, role: str) -> Optional[PassiveHandler]:
 
 
 def registered_ids() -> List[str]:
-    return sorted({aid for aid, _ in _REGISTRY.keys()})
+    return sorted({aid for aid, _ in _REGISTRY.keys()}
+                  | {aid for aid, _ in _POST_ROLL_REGISTRY.keys()})
+
+
+def apply_post_roll_passives(data: Dict[str, Any],
+                              combat: Dict[str, Any],
+                              attacker_special_ids: List[str],
+                              defender_special_ids: List[str],
+                              ctx: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Walk both figures' specialAbilityIds and fire any registered POST-ROLL
+    passive. combat.attackRoll / combat.defenseRoll are populated by now.
+    """
+    fired: List[Dict[str, Any]] = []
+    for aid in attacker_special_ids or []:
+        h = _POST_ROLL_REGISTRY.get((aid, 'attacker'))
+        if h is None:
+            continue
+        result = h(data, combat, ctx)
+        if result is not None:
+            result.setdefault('ability_id', aid)
+            result.setdefault('role', 'attacker')
+            fired.append(result)
+    for aid in defender_special_ids or []:
+        h = _POST_ROLL_REGISTRY.get((aid, 'defender'))
+        if h is None:
+            continue
+        result = h(data, combat, ctx)
+        if result is not None:
+            result.setdefault('ability_id', aid)
+            result.setdefault('role', 'defender')
+            fired.append(result)
+    return fired
 
 
 def apply_combat_passives(data: Dict[str, Any],
@@ -237,6 +282,30 @@ def _handle_take_cover_defender(data, combat, ctx):
     return {'effect': 'take_cover', 'bonusBlock': 1, 'bonusEvade': -1}
 
 
+# ── Post-roll handlers ─────────────────────────────────────────────────────
+
+def _handle_lucky_r2d2(data, combat, ctx):
+    """Lucky (R2-D2): "While you are defending, if you roll a Dodge, you
+    recover 2 damage." Auto. Fires after defense roll."""
+    def_roll = combat.get('defenseRoll') or {}
+    if not def_roll.get('dodge'):
+        return None
+    from python.engine.mechanics.damage_helpers import heal_hp
+    msg_id = ctx.get('defender_msg_id')
+    fig_idx = ctx.get('defender_figure_index')
+    def_player = ctx.get('defender_player')
+    if not msg_id or fig_idx is None or def_player not in (1, 2):
+        return None
+    dchs = data.get('dcHealthState')
+    if not isinstance(dchs, dict):
+        return None
+    try:
+        heal_hp(dchs, data, msg_id, fig_idx, 2, def_player)
+    except Exception:
+        return None
+    return {'effect': 'lucky_r2d2', 'recovered': 2}
+
+
 def _install_default_passives() -> None:
     register('aim_rebel_trooper_reg', _handle_aim_rebel_trooper_reg, 'attacker')
     register('aim_rebel_trooper_elite', _handle_aim_rebel_trooper_elite, 'attacker')
@@ -247,6 +316,7 @@ def _install_default_passives() -> None:
     register('dead_precise_kotun', _handle_dead_precise_kotun, 'attacker')
     register('improvised_cover_verena', _handle_improvised_cover_verena,
              'defender')
+    register_post_roll('lucky_r2d2', _handle_lucky_r2d2, 'defender')
 
 
 _install_default_passives()

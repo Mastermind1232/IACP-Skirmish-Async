@@ -399,6 +399,22 @@ def orchestrate_attack(game: Any, attacker_key: str, target_key: str,
     combat['attackerRerolls'] = attacker_rerolls
     combat['defenderRerolls'] = defender_rerolls
 
+    # Pattern C post-roll passives — defender Dodge-on-roll effects
+    # (lucky_r2d2 etc.) fire here, after defenseRoll is finalized.
+    try:
+        from python.engine.mechanics.passive_combat import apply_post_roll_passives
+        post_ctx = dict(passive_ctx)
+        post_ctx.update({
+            'attacker_msg_id': atk_msg_id,
+            'defender_msg_id': def_msg_id,
+        })
+        post_fired = apply_post_roll_passives(
+            data, combat, attacker_sids, defender_sids, post_ctx,
+        )
+        triggered.extend(post_fired)
+    except Exception:
+        pass
+
     # Surge pool: rolled surges + surgeBonus (may have been bumped by a
     # Surge token spend above).
     rolled_surges = int(attack_roll.get('surge') or 0) + int(combat.get('surgeBonus') or 0)

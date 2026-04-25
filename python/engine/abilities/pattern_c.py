@@ -245,8 +245,8 @@ _CATALOG: Dict[str, Tuple[str, str, str]] = {
         'src/handlers/combat.js',
     ),
     'lucky_r2d2': (
-        'deferred-handler-combat', 'handler-combat',
-        'src/handlers/combat.js:4370 (dcHealthState gate)',
+        'wired-engine', 'engine',
+        'src/handlers/combat.js:4370 → py mechanics/passive_combat.py:_handle_lucky_r2d2 (post-roll Dodge → recover 2 HP)',
     ),
     'mon_cala_sf_loku': (
         'deferred-handler-combat', 'handler-combat',

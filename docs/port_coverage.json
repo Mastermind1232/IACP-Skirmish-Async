@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-25T03:52:47.831283+00:00",
+  "generated": "2026-04-25T03:55:11.023458+00:00",
   "summary": {
     "cc": {
       "real": 293,
@@ -8,8 +8,8 @@
       "total": 293
     },
     "abilities": {
-      "real": 260,
-      "stub": 50,
+      "real": 261,
+      "stub": 49,
       "missing": 0,
       "total": 310
     },
@@ -490,7 +490,7 @@
       "lightsaber_throw_gi": "real",
       "locked_and_loaded": "real",
       "long_laid_plans_thrawn": "real",
-      "lucky_r2d2": "stub",
+      "lucky_r2d2": "real",
       "mandalorian_whip": "real",
       "medical_loadout": "real",
       "military_efficiency": "real",
@@ -755,7 +755,6 @@
       "krayt_dragon_fury_tress",
       "last_wielder_darksaber_bokatan",
       "light_it_up_rebel_pathfinder",
-      "lucky_r2d2",
       "modular_heavy_stormtrooper",
       "mon_cala_sf_loku",
       "non_combatant_c3po",

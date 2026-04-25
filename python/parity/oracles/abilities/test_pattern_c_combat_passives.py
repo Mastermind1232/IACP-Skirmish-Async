@@ -152,6 +152,7 @@ def test_registry_includes_starter_set():
         'take_cover_jawa_elite', 'take_cover_jawa_reg',
         'adv_targeting_computer_dark_trooper',
         'dead_precise_kotun', 'improvised_cover_verena',
+        'lucky_r2d2',
     }
     assert expected.issubset(set(ids))
 
@@ -246,6 +247,39 @@ def test_adv_targeting_computer_idempotent_when_already_focused():
     # Already focused: don't double-stack the green die.
     assert (combat.get('attackInfo') or {}).get('dice') == ['blue', 'red']
     assert not fired
+
+
+# ── lucky_r2d2 (post-roll) ─────────────────────────────────────────────────
+
+def test_lucky_r2d2_recovers_2_hp_on_dodge():
+    from python.engine.mechanics.passive_combat import apply_post_roll_passives
+    data = _base_data()
+    data['dcHealthState'] = {'msg_def': [[5, 10]]}  # currentHP=5, max=10
+    combat = {'defenseRoll': {'dodge': True}}
+    ctx = _ctx()
+    ctx['defender_msg_id'] = 'msg_def'
+    ctx['defender_figure_index'] = 0
+    fired = apply_post_roll_passives(
+        data, combat, [], ['lucky_r2d2'], ctx,
+    )
+    assert any(f['effect'] == 'lucky_r2d2' for f in fired)
+    # HP recovered up to 7 (5 + 2).
+    assert data['dcHealthState']['msg_def'][0][0] == 7
+
+
+def test_lucky_r2d2_no_fire_without_dodge():
+    from python.engine.mechanics.passive_combat import apply_post_roll_passives
+    data = _base_data()
+    data['dcHealthState'] = {'msg_def': [[5, 10]]}
+    combat = {'defenseRoll': {'dodge': False}}
+    ctx = _ctx()
+    ctx['defender_msg_id'] = 'msg_def'
+    ctx['defender_figure_index'] = 0
+    fired = apply_post_roll_passives(
+        data, combat, [], ['lucky_r2d2'], ctx,
+    )
+    assert not fired
+    assert data['dcHealthState']['msg_def'][0][0] == 5
 
 
 def test_unknown_passive_id_is_silently_ignored():
