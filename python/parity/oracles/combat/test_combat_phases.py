@@ -487,3 +487,84 @@ def test_step_forced_reroll_recomputes_totals():
     assert pc['attackRoll'] == {
         'acc': expected_acc, 'dmg': expected_dmg, 'surge': expected_surge,
     }
+
+
+# ── step_attacker_reroll / step_defender_reroll ─────────────────────────
+
+
+def _make_combat_post_forced():
+    """Fixture: pendingCombat after forced-reroll gate cleared."""
+    return {
+        'pendingCombat': {
+            'phase': CombatPhase.POST_FORCED_GATE.value,
+            'attackerPlayerNum': 1,
+            'attackerRerollsRemaining': 1,
+            'defenderRerollsRemaining': 1,
+            'attackDiceResults': [
+                {'color': 'blue', 'acc': 0, 'dmg': 0, 'surge': 0},
+                {'color': 'green', 'acc': 2, 'dmg': 1, 'surge': 0},
+            ],
+            'attackRoll': {'acc': 2, 'dmg': 1, 'surge': 0},
+            'defenseDiceResults': [
+                {'color': 'white', 'block': 0, 'evade': 0, 'dodge': False},
+            ],
+            'defenseRoll': {'block': 0, 'evade': 0, 'dodge': False},
+        },
+    }
+
+
+def test_step_attacker_reroll_no_remaining_advances_gate():
+    from python.engine.mechanics.combat_phases import step_attacker_reroll
+    g = _make_combat_post_forced()
+    g['pendingCombat']['attackerRerollsRemaining'] = 0
+    step_attacker_reroll(g)
+    assert get_phase(g) == CombatPhase.POST_ATTACKER_GATE
+
+
+def test_step_attacker_reroll_picks_worst_die():
+    """No die_idx given — pick the worst (lowest acc+dmg+surge)."""
+    from python.engine.mechanics.combat_phases import step_attacker_reroll
+    g = _make_combat_post_forced()
+    step_attacker_reroll(g, rng=__import__('random').Random(42))
+    # Worst was index 0 (sum=0). Should be in rerolled list.
+    assert 0 in g['pendingCombat']['attackerRerolledIndices']
+    assert g['pendingCombat']['attackerRerollsRemaining'] == 0
+    assert get_phase(g) == CombatPhase.POST_ATTACKER_GATE
+
+
+def test_step_attacker_reroll_with_explicit_idx():
+    """Caller-supplied die_idx is honored."""
+    from python.engine.mechanics.combat_phases import step_attacker_reroll
+    g = _make_combat_post_forced()
+    step_attacker_reroll(g, die_idx=1, rng=__import__('random').Random(11))
+    assert 1 in g['pendingCombat']['attackerRerolledIndices']
+
+
+def test_step_attacker_reroll_multi_remaining():
+    """remaining=2 → first call decrements to 1, phase stays at
+    ATTACKER_REROLL."""
+    from python.engine.mechanics.combat_phases import step_attacker_reroll
+    g = _make_combat_post_forced()
+    g['pendingCombat']['attackerRerollsRemaining'] = 2
+    step_attacker_reroll(g, rng=__import__('random').Random(5))
+    assert g['pendingCombat']['attackerRerollsRemaining'] == 1
+    assert get_phase(g) == CombatPhase.ATTACKER_REROLL
+
+
+def test_step_defender_reroll_picks_worst_die():
+    from python.engine.mechanics.combat_phases import step_defender_reroll
+    g = _make_combat_post_forced()
+    g['pendingCombat']['phase'] = CombatPhase.POST_ATTACKER_GATE.value
+    step_defender_reroll(g, rng=__import__('random').Random(7))
+    assert 0 in g['pendingCombat']['defenderRerolledIndices']
+    assert g['pendingCombat']['defenderRerollsRemaining'] == 0
+    assert get_phase(g) == CombatPhase.POST_DEFENDER_GATE
+
+
+def test_step_defender_reroll_no_remaining_advances_gate():
+    from python.engine.mechanics.combat_phases import step_defender_reroll
+    g = _make_combat_post_forced()
+    g['pendingCombat']['phase'] = CombatPhase.POST_ATTACKER_GATE.value
+    g['pendingCombat']['defenderRerollsRemaining'] = 0
+    step_defender_reroll(g)
+    assert get_phase(g) == CombatPhase.POST_DEFENDER_GATE

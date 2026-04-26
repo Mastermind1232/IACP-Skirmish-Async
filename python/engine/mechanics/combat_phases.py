@@ -550,3 +550,169 @@ def step_forced_reroll(game: Any, *, dice_stream=None, recorder=None,
     data = game.data if hasattr(game, 'data') else game
     data['pendingCombat'] = pc
     return game
+
+
+# ── Attacker / defender reroll phases ───────────────────────────────────
+
+
+def _reroll_attack_die(pc: Dict[str, Any], die_idx: int, *,
+                       dice_stream=None, recorder=None, rng=None) -> None:
+    """Reroll attack die at given index; update totals + rerolled-index list."""
+    from python.engine.mechanics.dice import roll_single_attack_die
+    atk_dice = list(pc.get('attackDiceResults') or [])
+    if die_idx < 0 or die_idx >= len(atk_dice):
+        return
+    color = atk_dice[die_idx].get('color') or 'blue'
+    atk_dice[die_idx] = roll_single_attack_die(
+        color, stream=dice_stream, recorder=recorder, rng=rng,
+    )
+    pc['attackDiceResults'] = atk_dice
+    pc['attackRoll'] = {
+        'acc': sum(int(d.get('acc') or 0) for d in atk_dice),
+        'dmg': sum(int(d.get('dmg') or 0) for d in atk_dice),
+        'surge': sum(int(d.get('surge') or 0) for d in atk_dice),
+    }
+    rerolled = list(pc.get('attackerRerolledIndices') or [])
+    if die_idx not in rerolled:
+        rerolled.append(die_idx)
+    pc['attackerRerolledIndices'] = rerolled
+
+
+def _reroll_defense_die(pc: Dict[str, Any], die_idx: int, *,
+                         dice_stream=None, recorder=None, rng=None) -> None:
+    """Reroll defense die at given index; update totals + rerolled-index list."""
+    from python.engine.mechanics.dice import roll_single_defense_die
+    def_dice = list(pc.get('defenseDiceResults') or [])
+    if die_idx < 0 or die_idx >= len(def_dice):
+        return
+    color = def_dice[die_idx].get('color') or 'white'
+    def_dice[die_idx] = roll_single_defense_die(
+        color, stream=dice_stream, recorder=recorder, rng=rng,
+    )
+    pc['defenseDiceResults'] = def_dice
+    pc['defenseRoll'] = {
+        'block': sum(int(d.get('block') or 0) for d in def_dice),
+        'evade': sum(int(d.get('evade') or 0) for d in def_dice),
+        'dodge': any(d.get('dodge') for d in def_dice),
+    }
+    rerolled = list(pc.get('defenderRerolledIndices') or [])
+    if die_idx not in rerolled:
+        rerolled.append(die_idx)
+    pc['defenderRerolledIndices'] = rerolled
+
+
+def step_attacker_reroll(game: Any, die_idx: Optional[int] = None, *,
+                          dice_stream=None, recorder=None, rng=None) -> Any:
+    """Spend one attacker reroll on `die_idx` (or auto-pick worst die when
+    None). Decrements pendingCombat['attackerRerollsRemaining'].
+
+    Mirrors JS combat.js:3441 (combat.attackDiceResults mutated). Innate
+    rerolls are pre-loaded into attackerRerollsRemaining at declare time.
+
+    When attackerRerollsRemaining reaches 0, advances to
+    POST_ATTACKER_GATE and opens the gate.
+    """
+    pc = _require_pending_combat(game, 'step_attacker_reroll')
+    cur_phase = get_phase(game)
+    if cur_phase not in (
+        CombatPhase.POST_FORCED_GATE,
+        CombatPhase.ATTACKER_REROLL,
+    ):
+        raise CombatStateError(
+            f'step_attacker_reroll: cannot run from phase {cur_phase}'
+        )
+
+    remaining = int(pc.get('attackerRerollsRemaining') or 0)
+    if remaining <= 0:
+        # No rerolls available — advance to gate.
+        set_phase(game, CombatPhase.POST_ATTACKER_GATE)
+        open_gate(game, CombatPhase.POST_ATTACKER_GATE)
+        data = game.data if hasattr(game, 'data') else game
+        data['pendingCombat'] = pc
+        return game
+
+    set_phase(game, CombatPhase.ATTACKER_REROLL)
+
+    # Pick die to reroll: caller-supplied or worst (lowest sum).
+    if die_idx is None:
+        atk_dice = pc.get('attackDiceResults') or []
+        if atk_dice:
+            die_idx = min(
+                range(len(atk_dice)),
+                key=lambda i: (
+                    int(atk_dice[i].get('acc') or 0)
+                    + int(atk_dice[i].get('dmg') or 0)
+                    + int(atk_dice[i].get('surge') or 0)
+                ),
+            )
+
+    if die_idx is not None:
+        _reroll_attack_die(
+            pc, die_idx,
+            dice_stream=dice_stream, recorder=recorder, rng=rng,
+        )
+
+    pc['attackerRerollsRemaining'] = remaining - 1
+
+    if pc['attackerRerollsRemaining'] <= 0:
+        set_phase(game, CombatPhase.POST_ATTACKER_GATE)
+        open_gate(game, CombatPhase.POST_ATTACKER_GATE)
+
+    data = game.data if hasattr(game, 'data') else game
+    data['pendingCombat'] = pc
+    return game
+
+
+def step_defender_reroll(game: Any, die_idx: Optional[int] = None, *,
+                          dice_stream=None, recorder=None, rng=None) -> Any:
+    """Spend one defender reroll on `die_idx`. Mirror of step_attacker_reroll
+    for defender side. JS combat.js:3495 (combat.defenseDiceResults mutated).
+
+    When defenderRerollsRemaining reaches 0, advances to POST_DEFENDER_GATE.
+    """
+    pc = _require_pending_combat(game, 'step_defender_reroll')
+    cur_phase = get_phase(game)
+    if cur_phase not in (
+        CombatPhase.POST_ATTACKER_GATE,
+        CombatPhase.DEFENDER_REROLL,
+    ):
+        raise CombatStateError(
+            f'step_defender_reroll: cannot run from phase {cur_phase}'
+        )
+
+    remaining = int(pc.get('defenderRerollsRemaining') or 0)
+    if remaining <= 0:
+        set_phase(game, CombatPhase.POST_DEFENDER_GATE)
+        open_gate(game, CombatPhase.POST_DEFENDER_GATE)
+        data = game.data if hasattr(game, 'data') else game
+        data['pendingCombat'] = pc
+        return game
+
+    set_phase(game, CombatPhase.DEFENDER_REROLL)
+
+    if die_idx is None:
+        def_dice = pc.get('defenseDiceResults') or []
+        if def_dice:
+            die_idx = min(
+                range(len(def_dice)),
+                key=lambda i: (
+                    int(def_dice[i].get('block') or 0)
+                    + int(def_dice[i].get('evade') or 0)
+                ),
+            )
+
+    if die_idx is not None:
+        _reroll_defense_die(
+            pc, die_idx,
+            dice_stream=dice_stream, recorder=recorder, rng=rng,
+        )
+
+    pc['defenderRerollsRemaining'] = remaining - 1
+
+    if pc['defenderRerollsRemaining'] <= 0:
+        set_phase(game, CombatPhase.POST_DEFENDER_GATE)
+        open_gate(game, CombatPhase.POST_DEFENDER_GATE)
+
+    data = game.data if hasattr(game, 'data') else game
+    data['pendingCombat'] = pc
+    return game
