@@ -316,6 +316,146 @@ class PostgresStore:
             )
             return False
 
+    # ── domain_events — append-only event log ──────────────────────────────
+
+    def _ensure_domain_events_table(self):
+        try:
+            from sqlalchemy import (  # type: ignore[import]
+                Column, DateTime, Integer, MetaData, String, Table,
+                UniqueConstraint, func,
+            )
+            from sqlalchemy.dialects.postgresql import JSONB  # type: ignore[import]
+        except ImportError as e:
+            raise RuntimeError(
+                'PostgresStore requires sqlalchemy + psycopg: pip install '
+                'sqlalchemy psycopg'
+            ) from e
+        if getattr(self, '_events_table', None) is not None:
+            return self._events_table
+        self._ensure_engine()
+        events = Table(
+            'domain_events', self._metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('game_id', String, nullable=False),
+            Column('seq', Integer, nullable=False),
+            Column('type', String, nullable=False),
+            Column('correlation_id', String),
+            Column('player_id', String),
+            Column('aggregate_version', Integer, nullable=False),
+            Column('timestamp', DateTime(timezone=True),
+                   server_default=func.now()),
+            Column('payload', JSONB, nullable=False),
+            UniqueConstraint('game_id', 'seq',
+                             name='uq_domain_events_game_seq'),
+            extend_existing=True,
+        )
+        events.create(self._engine, checkfirst=True)
+        self._events_table = events
+        return events
+
+    def insert_domain_event(self, game_id: str, event: Dict[str, Any],
+                            *, bump_event_seq: bool = True) -> int:
+        """Append `event` to domain_events. Returns the assigned seq.
+
+        Mirrors src/db.js:insertDomainEvent.
+        """
+        from sqlalchemy import func as _func, select  # type: ignore[import]
+        events = self._ensure_domain_events_table()
+        with self._engine.begin() as conn:
+            if bump_event_seq:
+                row = conn.execute(
+                    select(_func.coalesce(_func.max(events.c.seq), 0))
+                    .where(events.c.game_id == game_id)
+                ).scalar()
+                seq = int(row or 0) + 1
+            else:
+                seq = int(event.get('seq') or 1)
+            conn.execute(events.insert().values(
+                game_id=game_id,
+                seq=seq,
+                type=event.get('type', 'unknown'),
+                correlation_id=event.get('correlationId'),
+                player_id=event.get('playerId'),
+                aggregate_version=int(event.get('aggregateVersion') or 1),
+                payload=event.get('payload') or event,
+            ))
+            return seq
+
+    # ── game_snapshots — periodic state snapshots ──────────────────────────
+
+    def _ensure_snapshots_table(self):
+        try:
+            from sqlalchemy import (  # type: ignore[import]
+                Column, DateTime, Integer, MetaData, String, Table,
+                UniqueConstraint, func,
+            )
+            from sqlalchemy.dialects.postgresql import JSONB  # type: ignore[import]
+        except ImportError as e:
+            raise RuntimeError('PostgresStore requires sqlalchemy + psycopg') from e
+        if getattr(self, '_snapshots_table', None) is not None:
+            return self._snapshots_table
+        self._ensure_engine()
+        snaps = Table(
+            'game_snapshots', self._metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('game_id', String, nullable=False),
+            Column('version', Integer, nullable=False),
+            Column('snapshot', JSONB, nullable=False),
+            Column('timestamp', DateTime(timezone=True),
+                   server_default=func.now()),
+            UniqueConstraint('game_id', 'version',
+                             name='uq_game_snapshots_game_version'),
+            extend_existing=True,
+        )
+        snaps.create(self._engine, checkfirst=True)
+        self._snapshots_table = snaps
+        return snaps
+
+    def insert_game_snapshot(self, game_id: str, version: int,
+                             snapshot: Dict[str, Any]) -> None:
+        """Record a snapshot of `game_data` at version `version`."""
+        snaps = self._ensure_snapshots_table()
+        with self._engine.begin() as conn:
+            conn.execute(snaps.insert().values(
+                game_id=game_id, version=int(version), snapshot=snapshot,
+            ))
+
+    # ── selfplay_runs — AI training artifacts ──────────────────────────────
+
+    def _ensure_selfplay_table(self):
+        try:
+            from sqlalchemy import (  # type: ignore[import]
+                Column, DateTime, Integer, MetaData, String, Table, func,
+            )
+            from sqlalchemy.dialects.postgresql import JSONB  # type: ignore[import]
+        except ImportError as e:
+            raise RuntimeError('PostgresStore requires sqlalchemy + psycopg') from e
+        if getattr(self, '_selfplay_table', None) is not None:
+            return self._selfplay_table
+        self._ensure_engine()
+        sp = Table(
+            'selfplay_runs', self._metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('run_id', String, nullable=False),
+            Column('artifact', JSONB, nullable=False),
+            Column('created_at', DateTime(timezone=True),
+                   server_default=func.now()),
+            extend_existing=True,
+        )
+        sp.create(self._engine, checkfirst=True)
+        self._selfplay_table = sp
+        return sp
+
+    def insert_selfplay_run(self, artifact: Dict[str, Any]) -> None:
+        """Record a self-play run artifact."""
+        sp = self._ensure_selfplay_table()
+        with self._engine.begin() as conn:
+            conn.execute(sp.insert().values(
+                run_id=str(artifact.get('runId') or artifact.get('run_id')
+                            or 'unknown'),
+                artifact=artifact,
+            ))
+
     def get_total_games(self) -> Dict[str, int]:
         """Return {total, draws} from completed_games."""
         try:
