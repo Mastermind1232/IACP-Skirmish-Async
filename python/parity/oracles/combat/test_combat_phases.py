@@ -881,6 +881,56 @@ def test_step_resolve_defeat_result_in_last_combat_result():
     assert 'defeatResult' in lcr
 
 
+# ── P1.12: pendingPostAttackConditions + Wild Fury ──────────────────────
+
+
+def test_step_resolve_applies_bonus_conditions():
+    """bonusConditions list is applied to defender via apply_condition."""
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=2)
+    g['pendingCombat']['bonusConditions'] = ['Bleed']
+    step_resolve(g)
+    fc = g.get('figureConditions') or {}
+    assert 'Bleed' in (fc.get('Boba Fett-1-0') or [])
+
+
+def test_step_resolve_applies_surge_conditions():
+    """surgeConditions list is applied to defender."""
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=2)
+    g['pendingCombat']['surgeConditions'] = ['Stun']
+    step_resolve(g)
+    fc = g.get('figureConditions') or {}
+    assert 'Stun' in (fc.get('Boba Fett-1-0') or [])
+
+
+def test_step_resolve_applies_multiple_conditions():
+    """Both bonusConditions and surgeConditions applied together."""
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=2)
+    g['pendingCombat']['bonusConditions'] = ['Bleed']
+    g['pendingCombat']['surgeConditions'] = ['Stun', 'Weaken']
+    step_resolve(g)
+    conds = (g.get('figureConditions') or {}).get('Boba Fett-1-0') or []
+    assert 'Bleed' in conds
+    assert 'Stun' in conds
+    assert 'Weaken' in conds
+
+
+def test_step_resolve_does_not_apply_conditions_on_miss():
+    """Missed attack should not apply post-attack conditions."""
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=2)
+    g['pendingCombat']['isRanged'] = True
+    g['pendingCombat']['attackRoll']['acc'] = 1
+    g['pendingCombat']['distanceToTarget'] = 10
+    g['pendingCombat']['bonusConditions'] = ['Bleed']
+    step_resolve(g)
+    # No conditions applied because attack missed.
+    fc = g.get('figureConditions') or {}
+    assert 'Bleed' not in (fc.get('Boba Fett-1-0') or [])
+
+
 # ── P1.13: dispatch_combat_gate_advance + run_combat_to_completion ─────
 
 
