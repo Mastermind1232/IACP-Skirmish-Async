@@ -666,3 +666,184 @@ def handle_move(game: Any, *, msg_id: str, player_num: int,
         'previousPosition': cur_pos,
         'cost': cost,
     }
+
+
+# ---------------------------------------------------------------------------
+# Action gating shared by interact / special (P2.10)
+
+
+def _validate_action_available(data: Dict[str, Any], *, msg_id: str,
+                               action_label: str, dc_name: str,
+                               display_name: str,
+                               ) -> Optional[Dict[str, Any]]:
+    """Common pre-action gates: actions remaining, To the Limit (no
+    Move on extra action), Disable for Special. Returns reject dict
+    or None when ok.
+    """
+    actions_data = (data.get('dcActionsData') or {}).get(msg_id)
+    actions_remaining = (
+        int(actions_data.get('remaining') or 0)
+        if isinstance(actions_data, dict) else 2
+    )
+
+    # Action availability — special-cases free attacks, MP-based specials,
+    # SpendMp and zero-cost specials are handled at call sites.
+    if actions_remaining <= 0 and action_label not in ('SpendMp',):
+        return {'ok': False, 'code': 'no_actions',
+                'message': 'No actions remaining this activation '
+                           '(2 per DC).'}
+
+    # To the Limit: extra action cannot be Move.
+    extra_then_stun = data.get('activationExtraActionThenStun') or {}
+    if action_label == 'Move' and isinstance(extra_then_stun, dict) \
+            and extra_then_stun.get(msg_id):
+        return {'ok': False, 'code': 'to_the_limit',
+                'message': '**To the Limit** — the extra action cannot be a '
+                           'Move. Choose Attack, Special, or Interact.'}
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Interact dispatch (P2.10)
+
+
+def handle_interact(game: Any, *, msg_id: str, player_num: int,
+                    dc_name: str, display_name: str,
+                    figure_key: str,
+                    ) -> Dict[str, Any]:
+    """Pure-state interact dispatch. Decrements actions and stamps a
+    pending interact-target choice for the caller to resolve.
+
+    Mission-specific terminal-interact resolution (VP awards, objective
+    advance) is dispatched from python/engine/mechanics/mission_rules.py
+    by the caller after this returns ok.
+
+    Returns:
+      {'ok': True, 'figureKey': ..., 'mpRemaining': ..., 'actionsRemaining': ...}
+      {'ok': False, 'code': ..., 'message': ...}
+    """
+    data = _data(game)
+
+    # Beast Tamer interact override: when set, the figure can interact
+    # even if the DC normally cannot (Non-Sentient creatures).
+    bt_override = (data.get('beastTamerInteractOverride') or {}).get(msg_id)
+    _ = bt_override  # informational; caller uses for messaging
+
+    reject = _validate_action_available(
+        data, msg_id=msg_id, action_label='Interact',
+        dc_name=dc_name, display_name=display_name,
+    )
+    if reject:
+        return reject
+
+    fig_pos = (data.get('figurePositions') or {}).get(player_num) or {}
+    if not fig_pos.get(figure_key):
+        return {'ok': False, 'code': 'no_position',
+                'message': f'{display_name} has no position '
+                           f'(deploy first).'}
+
+    # Decrement actions.
+    actions_data = (data.get('dcActionsData') or {}).get(msg_id)
+    if isinstance(actions_data, dict):
+        actions_data['remaining'] = max(
+            0, int(actions_data.get('remaining') or 0) - 1,
+        )
+
+    return {
+        'ok': True,
+        'figureKey': figure_key,
+        'msgId': msg_id,
+        'actionsRemaining': (
+            int(actions_data.get('remaining'))
+            if isinstance(actions_data, dict) else None
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Special action dispatch (P2.10)
+
+
+def handle_special(game: Any, *, msg_id: str, player_num: int,
+                   dc_name: str, display_name: str, figure_key: str,
+                   special_idx: int, special_name: str,
+                   action_cost: int = 1,
+                   ) -> Dict[str, Any]:
+    """Pure-state special-action dispatch.
+
+    Validates:
+      - Special not already used this activation.
+      - Disable gate.
+      - Action cost ≤ remaining (when cost > 0).
+      - To the Limit gate (Move-only restriction; specials never block).
+
+    On success:
+      - Pushes special_idx to dcActionsData[msg_id].specialsUsed.
+      - Decrements actions by action_cost (zero-cost specials skip).
+
+    Caller (Phase 3 handler / pattern_e chain) actually resolves the
+    ability effect after this returns ok. The engine port deliberately
+    stops here so resolution can fan out to the ability library.
+
+    Returns:
+      {'ok': True, 'specialName': ..., 'actionsRemaining': ...,
+       'cost': action_cost}
+      {'ok': False, 'code': ..., 'message': ...}
+    """
+    data = _data(game)
+    actions_data = (data.get('dcActionsData') or {}).get(msg_id)
+    actions_remaining = (
+        int(actions_data.get('remaining') or 0)
+        if isinstance(actions_data, dict) else 2
+    )
+    specials_used = (
+        list(actions_data.get('specialsUsed') or [])
+        if isinstance(actions_data, dict) else []
+    )
+
+    # Already used.
+    if special_idx in specials_used:
+        return {'ok': False, 'code': 'special_already_used',
+                'message': 'That special has already been used this '
+                           'activation (each special once per activation '
+                           'unless a card says otherwise).'}
+
+    # Disable gate.
+    disabled = data.get('disabledFigures') or []
+    if isinstance(disabled, list) and (
+        display_name in disabled or dc_name in disabled
+    ):
+        return {'ok': False, 'code': 'disabled',
+                'message': f'**{display_name}** is Disabled — cannot use '
+                           f'Special Actions this round.'}
+
+    # Action cost gate (zero-cost MP-based specials skip this check).
+    if action_cost > 0 and actions_remaining < action_cost:
+        cost_label = 'both actions' if action_cost > 1 else '1 action'
+        return {'ok': False, 'code': 'insufficient_actions',
+                'message': (
+                    f'**{special_name}** costs {cost_label} — you only have '
+                    f'{actions_remaining} action(s) remaining this activation.'
+                )}
+
+    # Apply mutations.
+    if isinstance(actions_data, dict):
+        if not isinstance(actions_data.get('specialsUsed'), list):
+            actions_data['specialsUsed'] = []
+        actions_data['specialsUsed'].append(special_idx)
+        if action_cost > 0:
+            actions_data['remaining'] = max(
+                0, int(actions_data.get('remaining') or 0) - action_cost,
+            )
+
+    return {
+        'ok': True,
+        'specialName': special_name,
+        'specialIdx': special_idx,
+        'cost': action_cost,
+        'actionsRemaining': (
+            int(actions_data.get('remaining'))
+            if isinstance(actions_data, dict) else None
+        ),
+    }
