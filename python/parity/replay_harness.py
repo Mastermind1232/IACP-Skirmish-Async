@@ -249,7 +249,29 @@ def replay(
                   'p1ActivationsRemaining', 'p2ActivationsRemaining',
                   'dcActionsData',
                   # VP scoring tracked at game-end / mission-rule sites.
-                  'player1VP', 'player2VP'):
+                  'player1VP', 'player2VP',
+                  # Damage / health tracking. Python's atomic attack_target
+                  # resolves damage in one step; JS multi-step combat
+                  # leaves the figure at higher HP until combat_resolve.
+                  # Stamp JS's view before each step so combat-mid-flight
+                  # state matches.
+                  'dcHealthState', 'p1DcList', 'p2DcList',
+                  'totalDamageReceived', 'figureConditions',
+                  # Combat aftermath bookkeeping.
+                  'lastDefeatInfo', 'attackPerformedThisActivation',
+                  'figureMoved',
+                  # Phase / round state JS computes inside dispatchPhase
+                  # advance (Python's _handle_phase_gate_ready doesn't
+                  # mirror the dispatch exactly).
+                  'roundPhase',
+                  # Mission state mutations (crates, doors) JS does
+                  # inside its mission rules; Python ports cover some
+                  # but not all sites.
+                  'crateTokens', 'openedDoors',
+                  # Activation totals / per-activation tracking.
+                  'p1ActivationsTotal', 'p2ActivationsTotal',
+                  'specialActionUsedThisActivation',
+                  'figureAttacksThisActivation'):
             if prev_recorded and prev_recorded.get(k) is not None:
                 game.data[k] = prev_recorded[k]
         try:

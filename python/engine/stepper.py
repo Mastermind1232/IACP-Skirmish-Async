@@ -627,6 +627,11 @@ def _handle_dc_end_activation(game: GameState, action: Action) -> GameState:
     # remaining=2 from activate_dc and _has_dc_actions_remaining_in_game
     # returns True forever, blocking end_activation_phase.
     dc_actions = dict(game.data.get('dcActionsData') or {})
+    # Mirror JS cleanupActivation (src/game/activation-state.js): on
+    # group end-of-activation, JS deletes the per-msgId entries from
+    # several state fields. movementBank is the most visible in drift.
+    cleanup_msg_ids = []
+    move_bank = dict(game.data.get('movementBank') or {})
     if dc_actions:
         for fk in active_keys:
             parsed = _dc_name_from_figure_key(fk)
@@ -647,8 +652,15 @@ def _handle_dc_end_activation(game: GameState, action: Action) -> GameState:
                 if (dc.get('dcName') == parsed
                         and int(dc.get('dgIndex') or 0) == group
                         and i < len(msg_ids)):
-                    dc_actions.pop(msg_ids[i], None)
+                    msg_id_cleared = msg_ids[i]
+                    dc_actions.pop(msg_id_cleared, None)
+                    cleanup_msg_ids.append(msg_id_cleared)
                     break
+    # Always also clean any movementBank entries for the cleared msgIds
+    # so the post-state matches JS's per-activation clean slate.
+    for mid in cleanup_msg_ids:
+        move_bank.pop(mid, None)
+    game.data['movementBank'] = move_bank
     game.data['dcActionsData'] = dc_actions
     return game
 
@@ -1555,11 +1567,18 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
     except Exception:
         pass
 
-    cur_round = int(game.get('round') or game.get('currentRound') or 1)
-    game['round'] = cur_round + 1
-    # Keep currentRound in sync if it was being used.
-    if 'currentRound' in game.data:
-        game['currentRound'] = cur_round + 1
+    # JS round/currentRound increment happens inside the post-end-of-round
+    # phase-gate dispatch (runStatusPhaseAfterEndOfRound), NOT here. Python's
+    # phase_gate_ready handler doesn't yet dispatch that branch, so we
+    # rely on replay's shim stamping prev_recorded.round/currentRound at
+    # each step. For non-replay paths (MCTS / AI self-play) the increment
+    # still needs to happen — gated by an explicit param so callers opt
+    # in.
+    if action.params.get('increment_round'):
+        cur_round = int(game.get('round') or game.get('currentRound') or 1)
+        game['round'] = cur_round + 1
+        if 'currentRound' in game.data:
+            game['currentRound'] = cur_round + 1
 
     p1_groups = _count_activations_from_board(game, 1)
     p2_groups = _count_activations_from_board(game, 2)
@@ -1571,7 +1590,8 @@ def _handle_end_end_of_round(game: GameState, action: Action) -> GameState:
     elif p1_groups == 0 or p2_groups == 0:
         game['phase'] = 'game_over'
         game['roundPhase'] = 'end'
-    else:
+    elif action.params.get('increment_round'):
+        # Only reset to activation if we actually advanced the round.
         game['roundPhase'] = 'activation'
 
     game['activationsRemaining'] = {1: p1_groups, 2: p2_groups}

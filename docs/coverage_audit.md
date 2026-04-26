@@ -1,6 +1,6 @@
 # Coverage Audit — Single Source of Truth
 
-Regenerated: `2026-04-25T23:43:02.263288+00:00`. Run `python3 python/parity/coverage_audit.py` to refresh.
+Regenerated: `2026-04-26T02:41:32.314997+00:00`. Run `python3 python/parity/coverage_audit.py` to refresh.
 
 This report cross-references the action enum, drift recordings, oracle tests, the live dispatch probe, the Pattern C catalog, and the file-by-file shape audit. It answers two questions:
 
