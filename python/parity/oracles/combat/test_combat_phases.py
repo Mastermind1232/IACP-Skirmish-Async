@@ -568,3 +568,83 @@ def test_step_defender_reroll_no_remaining_advances_gate():
     g['pendingCombat']['defenderRerollsRemaining'] = 0
     step_defender_reroll(g)
     assert get_phase(g) == CombatPhase.POST_DEFENDER_GATE
+
+
+# ── token phases ────────────────────────────────────────────────────────
+
+
+def _make_combat_post_def_gate():
+    return {
+        'pendingCombat': {
+            'phase': CombatPhase.POST_DEFENDER_GATE.value,
+            'attackerPlayerNum': 1,
+            'attackerFigureKey': 'Han Solo (Rebel Hero)-1-0',
+            'target': {'figureKey': 'Boba Fett-1-0'},
+        },
+        'figurePowerTokens': {
+            'Han Solo (Rebel Hero)-1-0': ['Hit', 'Block'],
+            'Boba Fett-1-0': ['Evade'],
+        },
+    }
+
+
+def test_step_token_attacker_damage_increments_bonus_hits():
+    from python.engine.mechanics.combat_phases import step_token_attacker
+    g = _make_combat_post_def_gate()
+    step_token_attacker(g, token_type='Damage')
+    assert g['pendingCombat']['bonusHits'] == 1
+    assert g['pendingCombat']['attackerSpentPowerToken'] is True
+    assert get_phase(g) == CombatPhase.TOKEN_ATTACKER
+
+
+def test_step_token_attacker_with_unhinged_grants_2():
+    from python.engine.mechanics.combat_phases import step_token_attacker
+    g = _make_combat_post_def_gate()
+    g['pendingCombat']['attackerUnhingedBonus'] = True
+    step_token_attacker(g, token_type='Block')
+    assert g['pendingCombat']['bonusBlock'] == 2
+
+
+def test_step_token_attacker_skip_advances_to_defender():
+    from python.engine.mechanics.combat_phases import step_token_attacker
+    g = _make_combat_post_def_gate()
+    step_token_attacker(g)  # no token_type → skip
+    assert get_phase(g) == CombatPhase.TOKEN_DEFENDER
+
+
+def test_step_token_attacker_removes_spent_token():
+    from python.engine.mechanics.combat_phases import step_token_attacker
+    g = _make_combat_post_def_gate()
+    step_token_attacker(
+        g, token_type='Damage',
+        figure_key='Han Solo (Rebel Hero)-1-0', token_idx=0,
+    )
+    # Hit token at index 0 should be popped.
+    assert g['figurePowerTokens']['Han Solo (Rebel Hero)-1-0'] == ['Block']
+
+
+def test_step_token_defender_block_sets_spent_block_flag():
+    """defenderSpentBlock is the Survival Is Strength gate input."""
+    from python.engine.mechanics.combat_phases import step_token_defender
+    g = _make_combat_post_def_gate()
+    g['pendingCombat']['phase'] = CombatPhase.TOKEN_ATTACKER.value
+    step_token_defender(g, token_type='Block')
+    assert g['pendingCombat']['bonusBlock'] == 1
+    assert g['pendingCombat']['defenderSpentBlock'] is True
+
+
+def test_step_token_defender_evade_does_not_set_spent_block():
+    from python.engine.mechanics.combat_phases import step_token_defender
+    g = _make_combat_post_def_gate()
+    g['pendingCombat']['phase'] = CombatPhase.TOKEN_ATTACKER.value
+    step_token_defender(g, token_type='Evade')
+    assert g['pendingCombat']['bonusEvade'] == 1
+    assert g['pendingCombat'].get('defenderSpentBlock') is None
+
+
+def test_step_token_defender_skip_advances_to_surge():
+    from python.engine.mechanics.combat_phases import step_token_defender
+    g = _make_combat_post_def_gate()
+    g['pendingCombat']['phase'] = CombatPhase.TOKEN_ATTACKER.value
+    step_token_defender(g)  # skip
+    assert get_phase(g) == CombatPhase.SURGE

@@ -716,3 +716,136 @@ def step_defender_reroll(game: Any, die_idx: Optional[int] = None, *,
     data = game.data if hasattr(game, 'data') else game
     data['pendingCombat'] = pc
     return game
+
+
+# ── Token spend phases ─────────────────────────────────────────────────
+
+
+def _apply_token_bonus(pc: Dict[str, Any], token_type: str,
+                        is_attacker: bool) -> None:
+    """Apply a power-token spend's bonus to the combat dict.
+
+    Mirrors JS combat.js:4040 applyTokenBonus(). Unhinged Director
+    grants +2 instead of +1 (read from combat.attackerUnhingedBonus
+    / combat.defenderUnhingedBonus).
+    """
+    unhinged = (
+        bool(pc.get('attackerUnhingedBonus'))
+        if is_attacker
+        else bool(pc.get('defenderUnhingedBonus'))
+    )
+    bonus = 2 if unhinged else 1
+    t = token_type.lower()
+    if t in ('damage', 'hit'):
+        pc['bonusHits'] = int(pc.get('bonusHits') or 0) + bonus
+    elif t == 'surge':
+        pc['tokenSurgeBonus'] = int(pc.get('tokenSurgeBonus') or 0) + bonus
+    elif t == 'block':
+        pc['bonusBlock'] = int(pc.get('bonusBlock') or 0) + bonus
+    elif t == 'evade':
+        pc['bonusEvade'] = int(pc.get('bonusEvade') or 0) + bonus
+
+
+def _remove_spent_token(game: Any, figure_key: str, token_idx: int) -> None:
+    """Pop a power token off game.figurePowerTokens[figureKey] by index.
+
+    Mirrors JS combat.js:4068 removeSpentToken().
+    """
+    data = game.data if hasattr(game, 'data') else game
+    fpt = data.get('figurePowerTokens') or {}
+    tokens = list(fpt.get(figure_key) or [])
+    if 0 <= token_idx < len(tokens):
+        tokens.pop(token_idx)
+        fpt[figure_key] = tokens
+        data['figurePowerTokens'] = fpt
+
+
+def step_token_attacker(game: Any, *, token_type: Optional[str] = None,
+                         figure_key: Optional[str] = None,
+                         token_idx: Optional[int] = None) -> Any:
+    """Attacker spends one power token of the given type.
+
+    Mirrors JS combat.js:5216-5269 token-phase logic. Each call spends
+    one token; caller invokes repeatedly to spend multiple.
+
+    When called with no args (token_type=None), advances to TOKEN_DEFENDER
+    without spending. Used by self-play to skip the phase.
+
+    JS combat.js:4644 sets combat.tokenPhase='attacker'.
+
+    Stamps:
+      - attackerSpentPowerToken=True (used by Pulse Cannon Iden gate)
+      - bonusHits/bonusBlock/bonusEvade/tokenSurgeBonus per token type
+      - removes token from figurePowerTokens[attacker_figure]
+    """
+    pc = _require_pending_combat(game, 'step_token_attacker')
+    cur_phase = get_phase(game)
+    if cur_phase not in (
+        CombatPhase.POST_DEFENDER_GATE,
+        CombatPhase.PASSIVE_WINDOW,
+        CombatPhase.TOKEN_ATTACKER,
+    ):
+        raise CombatStateError(
+            f'step_token_attacker: cannot run from phase {cur_phase}'
+        )
+    set_phase(game, CombatPhase.TOKEN_ATTACKER)
+    pc['tokenPhase'] = 'attacker'
+
+    if token_type is None:
+        # Skip / done — advance to defender token phase.
+        pc['tokenPhase'] = 'defender'
+        set_phase(game, CombatPhase.TOKEN_DEFENDER)
+        data = game.data if hasattr(game, 'data') else game
+        data['pendingCombat'] = pc
+        return game
+
+    _apply_token_bonus(pc, token_type, is_attacker=True)
+    pc['attackerSpentPowerToken'] = True
+    if figure_key and token_idx is not None:
+        _remove_spent_token(game, figure_key, token_idx)
+
+    data = game.data if hasattr(game, 'data') else game
+    data['pendingCombat'] = pc
+    return game
+
+
+def step_token_defender(game: Any, *, token_type: Optional[str] = None,
+                         figure_key: Optional[str] = None,
+                         token_idx: Optional[int] = None) -> Any:
+    """Defender spends one power token. Mirror of step_token_attacker.
+
+    JS combat.js:4649 sets combat.tokenPhase='defender'.
+
+    Block-token spends set defenderSpentBlock=True (used by Survival
+    Is Strength gate at JS combat.js:4665).
+    """
+    pc = _require_pending_combat(game, 'step_token_defender')
+    cur_phase = get_phase(game)
+    if cur_phase not in (
+        CombatPhase.TOKEN_ATTACKER,
+        CombatPhase.TOKEN_DEFENDER,
+        CombatPhase.PASSIVE_WINDOW,
+    ):
+        raise CombatStateError(
+            f'step_token_defender: cannot run from phase {cur_phase}'
+        )
+    set_phase(game, CombatPhase.TOKEN_DEFENDER)
+    pc['tokenPhase'] = 'defender'
+
+    if token_type is None:
+        # Skip / done — advance to surge phase.
+        pc['tokenPhase'] = None
+        set_phase(game, CombatPhase.SURGE)
+        data = game.data if hasattr(game, 'data') else game
+        data['pendingCombat'] = pc
+        return game
+
+    _apply_token_bonus(pc, token_type, is_attacker=False)
+    if token_type.lower() == 'block':
+        pc['defenderSpentBlock'] = True
+    if figure_key and token_idx is not None:
+        _remove_spent_token(game, figure_key, token_idx)
+
+    data = game.data if hasattr(game, 'data') else game
+    data['pendingCombat'] = pc
+    return game
