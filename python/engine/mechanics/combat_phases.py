@@ -1067,9 +1067,46 @@ def step_resolve(game: Any) -> Dict[str, Any]:
             except Exception:
                 pass
 
-    # 4. Stamp result on game.lastCombatResult (Discord layer reads this
-    # to render the final embed).
+    # 4. Stamp lastDefeatInfo BEFORE running the defeat handler so any
+    # CC-timing checks running inside it can read recent-defeat state.
+    # Mirrors JS combat-bridge.js:981.
     data = game.data if hasattr(game, 'data') else game
+    if defeated and target_fk:
+        target_dc_name = target_fk.rsplit('-', 2)[0] if '-' in target_fk else target_fk
+        data['lastDefeatInfo'] = {
+            'playerNum': int(def_player_num) if def_player_num else None,
+            'figureKey': target_fk,
+            'dcName': target_dc_name,
+        }
+
+    # 5. Run the universal defeat sequence (P1.9). Mirrors JS
+    # processFigureDefeat (defeat-handler.js): VP, attachment VP,
+    # activation decrement, CC attachment cleanup, position removal.
+    # Already imported as process_figure_defeat from mechanics.defeat.
+    defeat_result = None
+    if defeated and target_fk and def_player_num and pc.get('attackerPlayerNum'):
+        try:
+            from python.engine.mechanics.defeat import process_figure_defeat
+            defeat_result = process_figure_defeat(
+                data,
+                {
+                    'defeatedPlayerNum': int(def_player_num),
+                    'figureKey': target_fk,
+                    'attackerPlayerNum': int(pc.get('attackerPlayerNum')),
+                    'msgId': def_msg_id,
+                    'dcName': (
+                        target_fk.rsplit('-', 2)[0]
+                        if '-' in target_fk else target_fk
+                    ),
+                    'awardVp': True,
+                },
+            )
+        except Exception:
+            # Best-effort: don't crash combat resolution on defeat-handler
+            # errors. The defeated flag is still set; callers can retry.
+            defeat_result = None
+
+    # 6. Stamp final combat result for Discord rendering.
     final_result = {
         'hit': hit,
         'damage': damage,
@@ -1079,15 +1116,17 @@ def step_resolve(game: Any) -> Dict[str, Any]:
         'resultText': result_text,
         'attackerFigureKey': pc.get('attackerFigureKey'),
         'targetFigureKey': target_fk,
+        'defeatResult': defeat_result,
     }
     data['lastCombatResult'] = final_result
 
-    # 5. Defeated flag for caller (P1.9 will run process_figure_defeat).
+    # 7. Defeated flag on combat dict (informational; pendingCombat
+    # cleared next).
     pc['defeated'] = defeated
     pc['phase'] = CombatPhase.RESOLVE.value
 
-    # 6. Clear pendingCombat unless caller wants to inspect it. Mirror JS
-    # combat-bridge.js: combat dict cleared post-resolve.
+    # 8. Clear pendingCombat — combat over. Mirror JS combat-bridge.js
+    # final cleanup.
     data['pendingCombat'] = None
 
     return final_result

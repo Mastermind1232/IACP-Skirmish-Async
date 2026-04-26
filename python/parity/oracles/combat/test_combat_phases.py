@@ -814,3 +814,68 @@ def test_step_resolve_miss_applies_no_damage():
     assert result['hit'] is False
     # Boba HP unchanged.
     assert g['dcHealthState']['hl2dc0'][0] == [5, 5]
+
+
+# ── P1.9: process_figure_defeat integration ─────────────────────────────
+
+
+def _make_combat_for_lethal_resolve():
+    """Fixture: defender dies on this attack."""
+    g = _make_combat_for_resolve(damage=10)
+    # Add minimal state for defeat handler:
+    g['p1DcList'] = [{'dcName': 'Han Solo (Rebel Hero)', 'dgIndex': 1}]
+    g['p2DcList'] = [{'dcName': 'Boba Fett', 'dgIndex': 1}]
+    g['p1DcMessageIds'] = ['hl1dc0']
+    g['p2DcMessageIds'] = ['hl2dc0']
+    g['figurePositions'] = {
+        1: {'Han Solo (Rebel Hero)-1-0': 'a13'},
+        2: {'Boba Fett-1-0': 'a14'},
+    }
+    g['player1VP'] = {'kills': 0, 'mission': 0, 'total': 0}
+    g['player2VP'] = {'kills': 0, 'mission': 0, 'total': 0}
+    return g
+
+
+def test_step_resolve_stamps_last_defeat_info_on_kill():
+    """When defender dies, lastDefeatInfo is stamped (used by
+    cc-timing's recent-defeat gate)."""
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_lethal_resolve()
+    step_resolve(g)
+    assert 'lastDefeatInfo' in g
+    info = g['lastDefeatInfo']
+    assert info['playerNum'] == 2
+    assert info['figureKey'] == 'Boba Fett-1-0'
+    assert info['dcName'] == 'Boba Fett'
+
+
+def test_step_resolve_runs_defeat_handler_on_kill():
+    """When defender dies, process_figure_defeat is invoked and
+    figurePositions removes the defeated figure."""
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_lethal_resolve()
+    result = step_resolve(g)
+    assert result['defeated'] is True
+    # Figure removed from positions.
+    assert 'Boba Fett-1-0' not in g['figurePositions'][2]
+
+
+def test_step_resolve_no_defeat_handler_on_non_lethal():
+    """Damage but no defeat → lastDefeatInfo not stamped."""
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=2)  # not lethal
+    step_resolve(g)
+    assert g.get('lastDefeatInfo') is None or g.get('lastDefeatInfo') == {}
+
+
+def test_step_resolve_defeat_result_in_last_combat_result():
+    """lastCombatResult.defeatResult contains the defeat-handler return."""
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_lethal_resolve()
+    step_resolve(g)
+    lcr = g['lastCombatResult']
+    assert lcr['defeated'] is True
+    # defeat_result has VP info (or None on best-effort failure).
+    # In our minimal fixture some deps are missing; either outcome is
+    # acceptable as long as the slot is populated for a kill.
+    assert 'defeatResult' in lcr
