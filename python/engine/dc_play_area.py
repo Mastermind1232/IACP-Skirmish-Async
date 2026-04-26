@@ -1,8 +1,8 @@
-"""Pure-state subset of src/handlers/dc-play-area.js.
+"""Pure-state subset of src/handlers/dc-play-area.js + handle_attack_target.
 
-JS handle_dc_activate is async and tightly coupled to Discord (channel
-fetch, button rows, follow-ups). The pure-state subset here mirrors the
-validation gates + state mutations only:
+JS handle_dc_activate / handle_attack_target are async and tightly coupled
+to Discord (channel fetch, button rows, follow-ups). The pure-state
+subset here mirrors the validation gates + state mutations only:
 
   - validate_activation: gate stack (Sit Tight, Agitate, Force Vision,
     Force Slow, companion-host, Strength in Numbers) returning either
@@ -10,6 +10,10 @@ validation gates + state mutations only:
   - handle_dc_activate: full pipeline. Validation → finalize_activation
     (P2.2). Returns {'status': 'activated' | 'force_slow_skipped' |
     'rejected', ...}.
+  - handle_attack_target: free-attack vs normal-attack actions decrement,
+    pendingOverrideAttackDice / closeQuartersActive merging, pendingCombat
+    construction, advance to ROLL phase. Caller is responsible for
+    LOS/range validation before invoking.
 
 Discord layer (Phase 3) wraps with off-turn confirmation prompt, error
 follow-ups, channel/message fetch.
@@ -350,4 +354,228 @@ def handle_dc_activate(game: Any, *, player_num: int, dc_index: int,
         'startEffects': final['startEffects'],
         'dcActionsData': final['dcActionsData'],
         'sideEffects': side_effects,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Attack target dispatch (P2.8)
+
+
+# Free-attack source flags. Attack action does NOT consume a regular
+# action slot when one of these is set.
+_FREE_ATTACK_FLAGS = (
+    ('pendingBattlefieldLeadership', 'forMsgId', 'delete'),
+    ('fellSwoopFreeAttack',          None,        'msgkey'),
+    ('pendingEmperorInterrupt',      'forMsgId', 'delete'),
+    ('pendingExecutiveOrder',        'forMsgId', 'delete'),
+    ('pendingBombardmentSorin',      'forMsgId', 'delete'),
+    ('pendingCoordinatedRaid',       'forMsgId', 'delete'),
+    ('pendingFieldTactics',          'forMsgId', 'delete'),
+)
+
+
+def _consume_free_attack_flag(data: Dict[str, Any], msg_id: str) -> Optional[str]:
+    """If any free-attack flag matches `msg_id`, consume it and return
+    its name. Returns None when no free-attack flag matches.
+
+    Also handles pendingFiringSquad (a list rather than a scalar) and
+    fellSwoopFreeAttack (a dict keyed by msg_id).
+    """
+    # pendingFiringSquad list match.
+    pfs = data.get('pendingFiringSquad') or []
+    if isinstance(pfs, list) and any(
+        isinstance(p, dict) and p.get('forMsgId') == msg_id for p in pfs
+    ):
+        new_list = [p for p in pfs if not (isinstance(p, dict)
+                                           and p.get('forMsgId') == msg_id)]
+        if new_list:
+            data['pendingFiringSquad'] = new_list
+        else:
+            data.pop('pendingFiringSquad', None)
+        return 'pendingFiringSquad'
+
+    # Scalar / msg-keyed flags.
+    for flag, field, mode in _FREE_ATTACK_FLAGS:
+        cur = data.get(flag)
+        if mode == 'delete':
+            if isinstance(cur, dict) and cur.get(field) == msg_id:
+                data.pop(flag, None)
+                return flag
+        elif mode == 'msgkey':
+            if isinstance(cur, dict) and msg_id in cur:
+                del cur[msg_id]
+                if not cur:
+                    data.pop(flag, None)
+                # Clear stillFasterExcludeMsgId companion flag.
+                if flag == 'fellSwoopFreeAttack' and data.get('stillFasterExcludeMsgId'):
+                    data['stillFasterExcludeMsgId'] = None
+                return flag
+    return None
+
+
+def _build_attack_info(data: Dict[str, Any], *, attacker_dc_name: str,
+                       msg_id: str, attacker_stats: Dict[str, Any],
+                       target: Dict[str, Any]) -> Dict[str, Any]:
+    """Build attackInfo for pendingCombat. Mirrors JS combat.js:1162-1188.
+
+    Reads attackerStats.attack as base, then merges:
+      - pendingOverrideAttackDice[msgId]: dice/type/removeDieColor
+      - closeQuartersActive[msgId]: replace with adjacent hostile's dice
+        (handled in JS at 1189-1240; engine port keeps simpler shape —
+        full close-quarters resolution is in pattern_d).
+    """
+    base = (attacker_stats or {}).get('attack') or {'dice': ['red'], 'range': [1, 3]}
+    attack_info: Dict[str, Any] = dict(base)
+
+    override_map = data.get('pendingOverrideAttackDice') or {}
+    override = override_map.get(msg_id) if isinstance(override_map, dict) else None
+    if isinstance(override, dict):
+        if override.get('dice'):
+            attack_info['dice'] = list(override['dice'])
+        if override.get('type') == 'melee':
+            attack_info['range'] = [1, 1]
+        elif override.get('type') == 'ranged':
+            existing = attack_info.get('range') or [1, 3]
+            attack_info['attackType'] = 'Ranged'
+            attack_info['range'] = [
+                existing[0] if existing else 1,
+                max(existing[1] if len(existing) > 1 else 3, 99),
+            ]
+        if override.get('removeDieColor'):
+            new_dice = list(attack_info.get('dice') or [])
+            try:
+                new_dice.remove(override['removeDieColor'])
+            except ValueError:
+                pass
+            attack_info['dice'] = new_dice
+        if override.get('blockSurgeAbilities'):
+            data['_pendingBlockSurgeAbilities'] = True
+        # Consume override.
+        del override_map[msg_id]
+        if not override_map:
+            data.pop('pendingOverrideAttackDice', None)
+
+    return attack_info
+
+
+def handle_attack_target(game: Any, *, msg_id: str, attacker_player_num: int,
+                         attacker_dc_name: str, attacker_figure_key: str,
+                         attacker_figure_index: int, target: Dict[str, Any],
+                         attacker_stats: Optional[Dict[str, Any]] = None,
+                         ) -> Dict[str, Any]:
+    """Pure-state attack-target dispatch. Mirrors JS handle_attack_target.
+
+    Caller is responsible for LOS/range/declare-time validation. This
+    function:
+      1. Validates forced-target / multi-fire blocked / etiquette gates
+         that require state mutation (deletion of consumed flags).
+      2. Decides free-attack vs normal-attack and decrements
+         dcActionsData accordingly.
+      3. Builds attackInfo (with pendingOverrideAttackDice merging).
+      4. Stamps pendingCombat and sets phase to DECLARE.
+
+    Args:
+      target: dict with at least {'figureKey', 'playerNum', 'dist',
+        'isNpc', 'defense', 'defenseType', 'figureIndex'}.
+      attacker_stats: precomputed dc-stats dict (cost, attack, defense).
+        If None, falls back to dc_effects.
+
+    Returns:
+      {'ok': True, 'pendingCombat': <ref>, 'consumedFreeAttack': <flag>,
+       'attackInfo': {...}}
+      {'ok': False, 'code': <gate>, 'message': <user msg>}
+    """
+    data = _data(game)
+    target_fk = target.get('figureKey')
+
+    # Etiquette and Protocol gate.
+    etiq_pairs = data.get('etiquetteBlockPairs') or []
+    if etiq_pairs and target_fk:
+        for pair in etiq_pairs:
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                continue
+            a, b = pair[0], pair[1]
+            if (a == attacker_figure_key and b == target_fk) or \
+               (b == attacker_figure_key and a == target_fk):
+                return {'ok': False, 'code': 'etiquette',
+                        'message': '🚫 **Etiquette and Protocol**: these '
+                                   'two figures cannot attack each other '
+                                   'this round.'}
+
+    # Forced attack target gate.
+    forced_map = data.get('forcedAttackTarget') or {}
+    if isinstance(forced_map, dict) and msg_id in forced_map:
+        forced_fk = forced_map.get(msg_id)
+        if forced_fk and target_fk and target_fk != forced_fk:
+            forced_name = dc_name_from_figure_key(forced_fk)
+            return {'ok': False, 'code': 'forced_target',
+                    'message': f'You must target the specified figure '
+                               f'(**{forced_name}**).'}
+        # Consume on satisfaction.
+        del forced_map[msg_id]
+        if not forced_map:
+            data.pop('forcedAttackTarget', None)
+
+    # Multi-Fire blocked target gate.
+    mfbt = data.get('multiFireBlockedTarget') or {}
+    if isinstance(mfbt, dict) and msg_id in mfbt:
+        if mfbt.get(msg_id) == target_fk:
+            return {'ok': False, 'code': 'multi_fire',
+                    'message': '**Multi-Fire** — Second attack must target '
+                               'a **different figure**.'}
+        del mfbt[msg_id]
+        if not mfbt:
+            data.pop('multiFireBlockedTarget', None)
+
+    # Decrement actions or consume free-attack flag.
+    consumed_free = _consume_free_attack_flag(data, msg_id)
+    if consumed_free is None:
+        actions_map = data.get('dcActionsData') or {}
+        entry = actions_map.get(msg_id) if isinstance(actions_map, dict) else None
+        if isinstance(entry, dict):
+            entry['remaining'] = max(0, int(entry.get('remaining') or 0) - 1)
+
+    # Resolve attacker_stats from dc_effects if not provided.
+    if not attacker_stats:
+        eff = (get_dc_effects() or {}).get(attacker_dc_name) or {}
+        attacker_stats = eff
+
+    # Build attackInfo.
+    attack_info = _build_attack_info(
+        data,
+        attacker_dc_name=attacker_dc_name,
+        msg_id=msg_id,
+        attacker_stats=attacker_stats,
+        target=target,
+    )
+
+    # Construct pendingCombat. Shape mirrors what step_roll expects.
+    pending = {
+        'phase': 'declare',
+        'attackerMsgId': msg_id,
+        'attackerPlayerNum': attacker_player_num,
+        'attackerDcName': attacker_dc_name,
+        'attackerFigureKey': attacker_figure_key,
+        'attackerFigureIndex': attacker_figure_index,
+        'attackInfo': attack_info,
+        'target': dict(target),
+        'isRanged': attack_info.get('attackType') == 'Ranged'
+                    or (attack_info.get('range') or [1, 1])[1] > 1,
+    }
+
+    # Default defense type for step_roll fallback.
+    if 'defenseType' not in pending['target']:
+        defense_colors = pending['target'].get('defense')
+        if isinstance(defense_colors, list) and defense_colors:
+            pending['target']['defenseType'] = defense_colors[0]
+        else:
+            pending['target']['defenseType'] = 'white'
+
+    data['pendingCombat'] = pending
+
+    return {
+        'ok': True,
+        'pendingCombat': pending,
+        'consumedFreeAttack': consumed_free,
+        'attackInfo': attack_info,
     }
