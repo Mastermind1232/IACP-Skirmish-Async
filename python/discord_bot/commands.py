@@ -471,3 +471,191 @@ def _default_game_id(p1: str, p2: str) -> str:
     """Deterministic short id for the {p1, p2} pair."""
     a, b = sorted([p1 or '_', p2 or '_'])
     return f'{a[:6]}-{b[:6]}'
+
+
+# ---------------------------------------------------------------------------
+# Stats slash commands (read-only DB queries)
+
+
+def cmd_statcheck(user_id: str, deps: Dict[str, Any]) -> Dict[str, Any]:
+    """Show the global stats summary, or a specific player's record."""
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    summary = sq.get_stats_summary(store)
+    return {'ok': True, 'summary': summary}
+
+
+def cmd_statcheck_personal(user_id: str, deps: Dict[str, Any]
+                            ) -> Dict[str, Any]:
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    return {'ok': True, 'userId': user_id,
+            'summary': sq.get_stats_summary_for_player(store, user_id)}
+
+
+def cmd_affiliation_winrate_global(user_id: str, deps: Dict[str, Any]
+                                    ) -> Dict[str, Any]:
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    return {'ok': True, 'rates': sq.get_affiliation_win_rates(store)}
+
+
+def cmd_affiliation_winrate_personal(user_id: str, deps: Dict[str, Any]
+                                      ) -> Dict[str, Any]:
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    return {'ok': True, 'userId': user_id,
+            'rates': sq.get_affiliation_win_rates_personal(store, user_id)}
+
+
+def cmd_affiliation_pickrate_global(user_id: str, deps: Dict[str, Any]
+                                     ) -> Dict[str, Any]:
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    return {'ok': True, 'rates': sq.get_affiliation_pick_rates(store)}
+
+
+def cmd_affiliation_pickrate_personal(user_id: str, deps: Dict[str, Any]
+                                       ) -> Dict[str, Any]:
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    return {'ok': True, 'userId': user_id,
+            'rates': sq.get_affiliation_pick_rates_personal(store, user_id)}
+
+
+def cmd_dc_winrate_global(user_id: str, deps: Dict[str, Any]
+                           ) -> Dict[str, Any]:
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    return {'ok': True, 'rates': sq.get_dc_win_rates(store, limit=20)}
+
+
+def cmd_dc_winrate_personal(user_id: str, deps: Dict[str, Any]
+                             ) -> Dict[str, Any]:
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    return {'ok': True, 'userId': user_id,
+            'rates': sq.get_dc_win_rates_personal(store, user_id, limit=20)}
+
+
+def cmd_leaderboard(user_id: str, deps: Dict[str, Any]) -> Dict[str, Any]:
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    return {'ok': True, 'leaderboard': sq.get_leaderboard(store, limit=10)}
+
+
+def cmd_achievements(user_id: str, deps: Dict[str, Any]) -> Dict[str, Any]:
+    from python.discord_bot import stats_queries as sq
+    store = _game_store(deps)
+    return {'ok': True, 'userId': user_id,
+            'achievements': sq.get_earned_achievements(store, user_id)}
+
+
+# ---------------------------------------------------------------------------
+# Admin slash commands
+
+
+def cmd_botmenu(user_id: str, deps: Dict[str, Any]) -> Dict[str, Any]:
+    """Open the admin Bot Stuff menu (Kill Game). The actual
+    interactive panel renders via a follow-up handler in the bot
+    layer; this command surfaces a stub message."""
+    return {
+        'ok': True,
+        'message': 'Bot menu — Kill Game admin tool. Use the buttons '
+                   'in the followup message.',
+    }
+
+
+def cmd_power_token_list(user_id: str, deps: Dict[str, Any], *,
+                          game_id: str) -> Dict[str, Any]:
+    """List figures with active Power Tokens in the given game."""
+    game = _get(deps, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    data = game.data if hasattr(game, 'data') else game
+    tokens = data.get('figurePowerTokens') or {}
+    rows = [{'figureKey': fk, 'tokens': list(t)}
+            for fk, t in tokens.items() if t]
+    return {'ok': True, 'gameId': game_id, 'figures': rows}
+
+
+def cmd_power_token_add(user_id: str, deps: Dict[str, Any], *,
+                         game_id: str, figure_key: str, token_type: str
+                         ) -> Dict[str, Any]:
+    """Manually grant a Power Token to a figure (cap 2 of same type)."""
+    from python.engine.mechanics.tokens import grant_power_tokens
+    game = _get(deps, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    data = game.data if hasattr(game, 'data') else game
+    try:
+        grant_power_tokens(data, figure_key, token_type, 1)
+    except Exception as e:
+        return {'ok': False, 'reason': 'grant_failed',
+                'error': f'{type(e).__name__}: {e}'}
+    _save(deps, game_id, game)
+    return {'ok': True, 'gameId': game_id, 'figureKey': figure_key,
+            'tokens': (data.get('figurePowerTokens') or {}).get(figure_key, [])}
+
+
+def cmd_power_token_remove(user_id: str, deps: Dict[str, Any], *,
+                            game_id: str, figure_key: str, index: int
+                            ) -> Dict[str, Any]:
+    """Manually remove the Nth (1-based) Power Token from a figure."""
+    game = _get(deps, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    data = game.data if hasattr(game, 'data') else game
+    tokens_map = data.get('figurePowerTokens') or {}
+    tokens = list(tokens_map.get(figure_key) or [])
+    idx = int(index) - 1
+    if idx < 0 or idx >= len(tokens):
+        return {'ok': False, 'reason': 'index_out_of_range',
+                'count': len(tokens)}
+    removed = tokens.pop(idx)
+    if tokens:
+        tokens_map[figure_key] = tokens
+    else:
+        tokens_map.pop(figure_key, None)
+    data['figurePowerTokens'] = tokens_map
+    _save(deps, game_id, game)
+    return {'ok': True, 'gameId': game_id, 'figureKey': figure_key,
+            'removed': removed, 'remaining': tokens}
+
+
+def cmd_condition_add(user_id: str, deps: Dict[str, Any], *,
+                       game_id: str, figure_key: str, condition: str
+                       ) -> Dict[str, Any]:
+    """Manually apply a condition to a figure."""
+    from python.engine.mechanics.conditions import apply_condition
+    game = _get(deps, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    try:
+        apply_condition(game, figure_key, condition)
+    except Exception as e:
+        return {'ok': False, 'reason': 'apply_failed',
+                'error': f'{type(e).__name__}: {e}'}
+    _save(deps, game_id, game)
+    data = game.data if hasattr(game, 'data') else game
+    return {'ok': True, 'gameId': game_id, 'figureKey': figure_key,
+            'conditions': (data.get('figureConditions') or {}).get(figure_key, [])}
+
+
+def cmd_condition_remove(user_id: str, deps: Dict[str, Any], *,
+                          game_id: str, figure_key: str, condition: str
+                          ) -> Dict[str, Any]:
+    """Manually clear a condition from a figure."""
+    from python.engine.mechanics.conditions import filter_condition
+    game = _get(deps, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+    try:
+        filter_condition(game, figure_key, condition)
+    except Exception as e:
+        return {'ok': False, 'reason': 'remove_failed',
+                'error': f'{type(e).__name__}: {e}'}
+    _save(deps, game_id, game)
+    data = game.data if hasattr(game, 'data') else game
+    return {'ok': True, 'gameId': game_id, 'figureKey': figure_key,
+            'conditions': (data.get('figureConditions') or {}).get(figure_key, [])}
