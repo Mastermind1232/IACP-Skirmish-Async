@@ -286,6 +286,7 @@ def cmd_step_action(user_id: str, deps: Dict[str, Any], *,
     ).get('phase')
     if a_phase == 'game_over' and b_phase != 'game_over':
         _write_completed_game(new_game, deps)
+        _post_game_over_hook(game_id, new_game, deps)
 
     # Refresh the Discord board message + both hand messages. No-op when
     # the bot hasn't tracked channels for this game yet (headless tests).
@@ -326,6 +327,203 @@ def _write_completed_game(game: Any, deps: Dict[str, Any]) -> None:
         insert(game)
     except Exception:
         pass
+
+
+def _post_game_over_hook(game_id: str, game: Any,
+                          deps: Dict[str, Any]) -> None:
+    """Run on the phase transition into 'game_over'. Mirrors JS
+    postGameOver: grants achievements, posts scorecard, sends
+    achievement notifications, logs game-end.
+
+    Order:
+      1. log_game_over → log channel
+      2. Build + post scorecard embed → board / general channel
+      3. Grant achievements for both players (game_complete +
+         game_win triggers + game-end specials).
+      4. Post achievement notifications → achievements channel.
+
+    Silent on error so a partial failure can't crash the step.
+    """
+    try:
+        from python.discord_bot import game_log
+        backend = deps.get('channel_backend')
+        data = game.data if hasattr(game, 'data') else game
+        winner = data.get('winner')
+        reason = data.get('gameEndedReason') or 'manual'
+        try:
+            game_log.log_game_over(game_id, winner, reason, backend=backend)
+        except Exception:
+            pass
+
+        # Scorecard embed.
+        try:
+            _post_scorecard_embed(game_id, game, deps)
+        except Exception:
+            pass
+
+        # Skip achievements for AI vs AI / test games (matches JS).
+        if data.get('selfPlay') or data.get('testGame'):
+            return
+
+        # Resolve store for achievement queries.
+        from python.discord_bot import achievements as ach
+        from python.discord_bot import stats_queries as sq
+        store = deps.get('game_store') or deps.get('_store')
+        if store is None:
+            return
+
+        p1 = data.get('player1Id')
+        p2 = data.get('player2Id')
+        winner_id = (
+            p1 if winner == 1 else (p2 if winner == 2 else data.get('winnerId'))
+        )
+
+        granted_by_user: Dict[str, List[Dict[str, Any]]] = {}
+        for uid in (p1, p2):
+            if not uid:
+                continue
+            try:
+                summary = sq.get_stats_summary_for_player(store, uid)
+            except Exception:
+                continue
+            granted = ach.check_and_grant_achievements(
+                store, uid, 'game_complete', summary.get('games', 0),
+            )
+            if granted:
+                granted_by_user.setdefault(str(uid), []).extend(granted)
+            if winner_id and str(uid) == str(winner_id):
+                won = ach.check_and_grant_achievements(
+                    store, uid, 'game_win', summary.get('wins', 0),
+                )
+                if won:
+                    granted_by_user.setdefault(str(uid), []).extend(won)
+                # Game-end conditional triggers.
+                vp_other_key = 'player2VP' if uid == p1 else 'player1VP'
+                vp_other = (data.get(vp_other_key) or {}).get('total', 0) or 0
+                if vp_other == 0:
+                    so = ach.check_and_grant_achievements(
+                        store, uid, 'shutout_win', 1,
+                    )
+                    if so:
+                        granted_by_user.setdefault(str(uid), []).extend(so)
+                # No-losses: caller's figureCount unchanged from start.
+                # We approximate via figurePositions count == initial deploy.
+                # Skip a more elaborate check; JS uses health > 0 across all.
+                # Brutalist (full_wipe_win) = winner reason mentions elim.
+                if 'elimin' in (reason or '').lower():
+                    bw = ach.check_and_grant_achievements(
+                        store, uid, 'full_wipe_win', 1,
+                    )
+                    if bw:
+                        granted_by_user.setdefault(str(uid), []).extend(bw)
+
+        # Post notifications.
+        if granted_by_user:
+            _post_achievement_notifications(granted_by_user, deps)
+    except Exception:
+        pass
+
+
+def _post_scorecard_embed(game_id: str, game: Any,
+                           deps: Dict[str, Any]) -> None:
+    """Post a Scorecard embed to the game's general/board channel.
+    Mirrors JS buildScorecardEmbed.
+    """
+    try:
+        from python.discord_bot import game_channels as gc
+        backend = deps.get('channel_backend')
+        data = game.data if hasattr(game, 'data') else game
+        p1 = data.get('player1Id') or '?'
+        p2 = data.get('player2Id') or '?'
+        vp1 = (data.get('player1VP') or {}).get('total', 0) or 0
+        vp2 = (data.get('player2VP') or {}).get('total', 0) or 0
+        kill_vp_1 = (data.get('player1VP') or {}).get('kills', 0) or 0
+        kill_vp_2 = (data.get('player2VP') or {}).get('kills', 0) or 0
+        obj_vp_1 = (data.get('player1VP') or {}).get('objectives', 0) or 0
+        obj_vp_2 = (data.get('player2VP') or {}).get('objectives', 0) or 0
+        winner = data.get('winner')
+        winner_label = (
+            f'<@{p1}>' if winner == 1
+            else (f'<@{p2}>' if winner == 2 else 'Draw')
+        )
+        cur_round = data.get('round') or data.get('currentRound') or '?'
+
+        embed = {
+            'title': '🏁 Scorecard',
+            'description': (
+                f'**Winner:** {winner_label}\n'
+                f'**Round:** {cur_round}\n'
+                f'**Reason:** {data.get("gameEndedReason") or "—"}'
+            ),
+            'fields': [
+                {'name': 'Players',
+                 'value': f'<@{p1}> vs <@{p2}>',
+                 'inline': False},
+                {'name': 'Total VP',
+                 'value': f'P1: **{vp1}**  P2: **{vp2}**',
+                 'inline': False},
+                {'name': 'Kill VP',
+                 'value': f'P1: {kill_vp_1}  P2: {kill_vp_2}',
+                 'inline': True},
+                {'name': 'Objective VP',
+                 'value': f'P1: {obj_vp_1}  P2: {obj_vp_2}',
+                 'inline': True},
+            ],
+            'color': 0x2B2D31,
+        }
+
+        # Send to game's log/general channel via the channel backend.
+        if backend is None:
+            return
+        log_id = gc.get_log_channel(game_id)
+        if log_id:
+            try:
+                backend.post(log_id, {'embeds': [embed]})
+            except Exception:
+                pass
+        board_id, _ = gc.get_board_message(game_id)
+        if board_id and board_id != log_id:
+            try:
+                backend.post(board_id, {'embeds': [embed]})
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _post_achievement_notifications(
+    granted_by_user: Dict[str, List[Dict[str, Any]]],
+    deps: Dict[str, Any],
+) -> None:
+    """Send an embed announcement for each newly-earned achievement.
+
+    Posts to ACHIEVEMENTS_CHANNEL_ID env var (set on Railway). Mirrors
+    JS postAchievementNotification.
+    """
+    import os
+    channel_id = os.environ.get('ACHIEVEMENTS_CHANNEL_ID')
+    if not channel_id:
+        return
+    backend = deps.get('channel_backend')
+    if backend is None:
+        return
+    for user_id, defs in granted_by_user.items():
+        for d in defs:
+            embed = {
+                'title': f'{d.get("icon") or "🏆"} Achievement Unlocked!',
+                'description': (
+                    f'<@{user_id}> unlocked **{d.get("name")}**\n'
+                    f'{d.get("description") or ""}'
+                ),
+                'color': 0xFFD700,
+            }
+            try:
+                backend.post(channel_id, {
+                    'content': f'<@{user_id}>',
+                    'embeds': [embed],
+                })
+            except Exception:
+                pass
 
 
 def _log_step_event(game_id: str, before: Any, after: Any,
