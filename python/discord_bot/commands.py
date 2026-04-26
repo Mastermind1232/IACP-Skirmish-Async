@@ -284,6 +284,9 @@ def cmd_step_action(user_id: str, deps: Dict[str, Any], *,
     a_phase = (
         new_game.data if hasattr(new_game, 'data') else new_game
     ).get('phase')
+    # In-game achievement triggers (Devastator, kill streaks).
+    _check_in_game_achievements(game_id, before, new_game, action_type, deps)
+
     if a_phase == 'game_over' and b_phase != 'game_over':
         _write_completed_game(new_game, deps)
         _post_game_over_hook(game_id, new_game, deps)
@@ -325,6 +328,100 @@ def _write_completed_game(game: Any, deps: Dict[str, Any]) -> None:
         return
     try:
         insert(game)
+    except Exception:
+        pass
+
+
+def _check_in_game_achievements(game_id: str, before: Any, after: Any,
+                                  action_type: str,
+                                  deps: Dict[str, Any]) -> None:
+    """Fire mid-game achievement triggers by diffing state before/after.
+
+      - Devastator: lastCombatResult.appliedDamage >= 10 in a new
+        combat resolution.
+      - Activation kills (Double/Triple/Pentakill): increment a per-
+        player kill counter when a defeat happens this step; fire +
+        reset the counter when an activation ends.
+
+    Survivor (no_losses_win) fires from _post_game_over_hook (game-end
+    diff is needed there).
+    """
+    try:
+        from python.discord_bot import achievements as ach
+        store = deps.get('game_store') or deps.get('_store')
+        if store is None:
+            return
+        b_data = before.data if hasattr(before, 'data') else before
+        a_data = after.data if hasattr(after, 'data') else after
+        if a_data.get('selfPlay') or a_data.get('testGame'):
+            return
+
+        # Devastator: compare lastCombatResult before vs after.
+        b_lcr = b_data.get('lastCombatResult')
+        a_lcr = a_data.get('lastCombatResult')
+        if a_lcr and a_lcr is not b_lcr:
+            applied = int(a_lcr.get('appliedDamage') or 0)
+            if applied >= 10:
+                attacker_pn = a_data.get('lastCombatAttackerPlayerNum')
+                if attacker_pn is None:
+                    # Fall back to combat resolved against opponent of
+                    # initiative holder; best-effort.
+                    pc_before = b_data.get('pendingCombat') or {}
+                    attacker_pn = pc_before.get('attackerPlayerNum')
+                if attacker_pn in (1, 2):
+                    uid = a_data.get(f'player{attacker_pn}Id')
+                    if uid:
+                        granted = ach.check_and_grant_achievements(
+                            store, uid, 'single_attack_damage', applied,
+                        )
+                        if granted:
+                            _post_achievement_notifications(
+                                {str(uid): granted}, deps,
+                            )
+
+        # Activation kills counter — increment when a new defeat
+        # happens, fire when activation ends.
+        # Defeat detection: compare figure counts per player.
+        b_fp = (b_data.get('figurePositions') or {})
+        a_fp = (a_data.get('figurePositions') or {})
+
+        def _count(fp: Any, pn: int) -> int:
+            v = fp.get(pn) or fp.get(str(pn)) or {}
+            return sum(1 for k, p in v.items() if p) if isinstance(v, dict) else 0
+
+        for opp_pn in (1, 2):
+            losses = _count(b_fp, opp_pn) - _count(a_fp, opp_pn)
+            if losses > 0:
+                attacker_pn = 1 if opp_pn == 2 else 2
+                counter = a_data.get('_inGameKillCounter') or {}
+                counter[str(attacker_pn)] = (
+                    int(counter.get(str(attacker_pn), 0) or 0) + losses
+                )
+                a_data['_inGameKillCounter'] = counter
+
+        # On end-of-activation, fire kill achievements + reset counter.
+        if action_type in ('dc_end_activation', 'pass_activation_turn',
+                            'end_activation_phase', 'end_activation'):
+            counter = a_data.get('_inGameKillCounter') or {}
+            for pn_str, count in list(counter.items()):
+                count = int(count or 0)
+                if count <= 0:
+                    continue
+                try:
+                    pn = int(pn_str)
+                except ValueError:
+                    continue
+                uid = a_data.get(f'player{pn}Id')
+                if not uid:
+                    continue
+                granted = ach.check_and_grant_achievements(
+                    store, uid, 'activation_kills', count,
+                )
+                if granted:
+                    _post_achievement_notifications(
+                        {str(uid): granted}, deps,
+                    )
+            a_data['_inGameKillCounter'] = {}
     except Exception:
         pass
 
@@ -416,6 +513,28 @@ def _post_game_over_hook(game_id: str, game: Any,
                     )
                     if bw:
                         granted_by_user.setdefault(str(uid), []).extend(bw)
+                # Survivor (no_losses_win): winner has all initial
+                # figures still alive.
+                winner_pn = 1 if uid == p1 else 2
+                fp = (data.get('figurePositions') or {}).get(winner_pn) or {}
+                # Initial deploy count is captured if we have it; fall
+                # back to "any alive" check (no losses ⇒ count > 0
+                # AND no defeats recorded). We track this softly: if
+                # no figureDefeats recorded for the winner, treat as
+                # no-losses.
+                defeats_map = data.get('figureDefeats') or {}
+                winner_defeats = int(
+                    defeats_map.get(str(winner_pn))
+                    or defeats_map.get(winner_pn)
+                    or 0
+                )
+                alive_count = sum(1 for p in fp.values() if p)
+                if winner_defeats == 0 and alive_count > 0:
+                    sv = ach.check_and_grant_achievements(
+                        store, uid, 'no_losses_win', 1,
+                    )
+                    if sv:
+                        granted_by_user.setdefault(str(uid), []).extend(sv)
 
         # Post notifications.
         if granted_by_user:
