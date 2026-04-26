@@ -156,10 +156,10 @@ def wire_slash_commands(bot: Any, deps: Dict[str, Any]) -> int:
         # Build a closure per command so each keeps its own name.
         def _make(name: str, description: str):
             @tree.command(name=name, description=description)
-            async def _runner(interaction: 'discord.Interaction', **kwargs: Any):
+            async def _runner(interaction: 'discord.Interaction'):
                 user_id = str(interaction.user.id)
                 try:
-                    result = slash_command_dispatch(name, user_id, deps, **kwargs)
+                    result = slash_command_dispatch(name, user_id, deps)
                 except ValueError as e:
                     await interaction.response.send_message(
                         f'Error: {e}', ephemeral=True,
