@@ -410,3 +410,143 @@ def advance_combat_gate(game: Any, player_num: int = 0) -> Any:
     data = game.data if hasattr(game, 'data') else game
     data['pendingCombat'] = pc
     return game
+
+
+# ── Forced reroll queue ─────────────────────────────────────────────────
+
+
+def step_forced_reroll(game: Any, *, dice_stream=None, recorder=None,
+                       rng=None) -> Any:
+    """Drain pendingCombat['forcedRerollQueue'] one entry at a time.
+
+    Each queue entry is `{controlPlayer, pool: 'attack'|'defense'|'any',
+    remaining: int, source: str}`. JS sites populate this at
+    src/handlers/combat.js:2992-3036 (Versatile Weaponry, Shared
+    Calculations, Raider, Precision, Fyrnock Style).
+
+    Behavior per entry:
+      - Reroll one die from the indicated pool (worst die for the
+        controlPlayer's interest — attacker forces worst-defense reroll,
+        defender forces worst-attack reroll).
+      - Decrement remaining; pop entry when 0.
+    Recomputes attackRoll / defenseRoll totals after each reroll.
+
+    Advances to POST_FORCED_GATE when the queue is empty.
+
+    Self-play / atomic mode: drain the entire queue in one call.
+    Discord mode: caller invokes once per UI step.
+    """
+    from python.engine.mechanics.dice import (
+        roll_single_attack_die,
+        roll_single_defense_die,
+    )
+
+    pc = _require_pending_combat(game, 'step_forced_reroll')
+    cur_phase = get_phase(game)
+    if cur_phase not in (
+        CombatPhase.POST_ROLL_GATE,
+        CombatPhase.FORCED_REROLL,
+    ):
+        raise CombatStateError(
+            f'step_forced_reroll: cannot run from phase {cur_phase}'
+        )
+
+    queue = list(pc.get('forcedRerollQueue') or [])
+    if not queue:
+        # Nothing to do. Advance to post-forced gate.
+        set_phase(game, CombatPhase.POST_FORCED_GATE)
+        open_gate(game, CombatPhase.POST_FORCED_GATE)
+        data = game.data if hasattr(game, 'data') else game
+        data['pendingCombat'] = pc
+        return game
+
+    set_phase(game, CombatPhase.FORCED_REROLL)
+
+    # Drain one entry. In self-play mode caller can loop until empty.
+    entry = queue[0]
+    if not isinstance(entry, dict):
+        queue.pop(0)
+        pc['forcedRerollQueue'] = queue
+        data = game.data if hasattr(game, 'data') else game
+        data['pendingCombat'] = pc
+        return game
+
+    pool = entry.get('pool') or 'any'
+    remaining = int(entry.get('remaining') or 0)
+    control_player = int(entry.get('controlPlayer') or 0)
+
+    # Pick which side's pool to reroll from. JS picks based on
+    # controlPlayer's intent (attacker re-rolls defense; defender
+    # re-rolls attack). 'any' defaults to attack-side.
+    atk_player = int(pc.get('attackerPlayerNum') or 1)
+    if pool == 'attack' or (pool == 'any' and control_player != atk_player):
+        # Reroll one attack die — pick the worst (lowest acc+dmg+surge sum).
+        atk_dice = list(pc.get('attackDiceResults') or [])
+        if atk_dice:
+            worst_idx = min(
+                range(len(atk_dice)),
+                key=lambda i: (
+                    int(atk_dice[i].get('acc') or 0)
+                    + int(atk_dice[i].get('dmg') or 0)
+                    + int(atk_dice[i].get('surge') or 0)
+                ),
+            )
+            color = atk_dice[worst_idx].get('color') or 'blue'
+            new_die = roll_single_attack_die(
+                color, stream=dice_stream, recorder=recorder, rng=rng,
+            )
+            atk_dice[worst_idx] = new_die
+            pc['attackDiceResults'] = atk_dice
+            pc['attackRoll'] = {
+                'acc': sum(int(d.get('acc') or 0) for d in atk_dice),
+                'dmg': sum(int(d.get('dmg') or 0) for d in atk_dice),
+                'surge': sum(int(d.get('surge') or 0) for d in atk_dice),
+            }
+            rerolled = list(pc.get('attackerRerolledIndices') or [])
+            if worst_idx not in rerolled:
+                rerolled.append(worst_idx)
+            pc['attackerRerolledIndices'] = rerolled
+    else:
+        # Reroll one defense die — pick the worst (lowest block+evade).
+        def_dice = list(pc.get('defenseDiceResults') or [])
+        if def_dice:
+            worst_idx = min(
+                range(len(def_dice)),
+                key=lambda i: (
+                    int(def_dice[i].get('block') or 0)
+                    + int(def_dice[i].get('evade') or 0)
+                ),
+            )
+            color = def_dice[worst_idx].get('color') or 'white'
+            new_die = roll_single_defense_die(
+                color, stream=dice_stream, recorder=recorder, rng=rng,
+            )
+            def_dice[worst_idx] = new_die
+            pc['defenseDiceResults'] = def_dice
+            pc['defenseRoll'] = {
+                'block': sum(int(d.get('block') or 0) for d in def_dice),
+                'evade': sum(int(d.get('evade') or 0) for d in def_dice),
+                'dodge': any(d.get('dodge') for d in def_dice),
+            }
+            rerolled = list(pc.get('defenderRerolledIndices') or [])
+            if worst_idx not in rerolled:
+                rerolled.append(worst_idx)
+            pc['defenderRerolledIndices'] = rerolled
+
+    # Decrement remaining; pop entry when exhausted.
+    remaining -= 1
+    if remaining <= 0:
+        queue.pop(0)
+    else:
+        entry['remaining'] = remaining
+        queue[0] = entry
+    pc['forcedRerollQueue'] = queue
+
+    # If queue now empty, advance to post-forced gate.
+    if not queue:
+        set_phase(game, CombatPhase.POST_FORCED_GATE)
+        open_gate(game, CombatPhase.POST_FORCED_GATE)
+
+    data = game.data if hasattr(game, 'data') else game
+    data['pendingCombat'] = pc
+    return game

@@ -378,3 +378,112 @@ def test_advance_combat_gate_no_op_when_no_gate():
     advance_combat_gate(g, player_num=1)
     # No gate, no error, state unchanged.
     assert get_gate(g) is None
+
+
+# ── step_forced_reroll ──────────────────────────────────────────────────
+
+
+def _make_combat_with_rolled_dice():
+    """Fixture: pendingCombat after step_roll has populated dice."""
+    return {
+        'pendingCombat': {
+            'phase': CombatPhase.POST_ROLL_GATE.value,
+            'attackerPlayerNum': 1,
+            'attackDiceResults': [
+                {'color': 'blue', 'acc': 1, 'dmg': 0, 'surge': 0},
+                {'color': 'green', 'acc': 0, 'dmg': 2, 'surge': 1},
+            ],
+            'attackRoll': {'acc': 1, 'dmg': 2, 'surge': 1},
+            'defenseDiceResults': [
+                {'color': 'white', 'block': 0, 'evade': 1, 'dodge': False},
+            ],
+            'defenseRoll': {'block': 0, 'evade': 1, 'dodge': False},
+        },
+    }
+
+
+def test_step_forced_reroll_empty_queue_advances_to_post_forced_gate():
+    """No queue entries → just advance to POST_FORCED_GATE."""
+    from python.engine.mechanics.combat_phases import step_forced_reroll
+    g = _make_combat_with_rolled_dice()
+    step_forced_reroll(g)
+    assert get_phase(g) == CombatPhase.POST_FORCED_GATE
+    gate = get_gate(g)
+    assert gate is not None and gate.phase == CombatPhase.POST_FORCED_GATE.value
+
+
+def test_step_forced_reroll_drains_one_attack_entry():
+    """Defender forces 1 atk reroll. Worst attack die replaced; queue
+    pops; phase advances."""
+    from python.engine.mechanics.combat_phases import step_forced_reroll
+    g = _make_combat_with_rolled_dice()
+    g['pendingCombat']['forcedRerollQueue'] = [
+        {'controlPlayer': 2, 'pool': 'attack', 'remaining': 1, 'source': 'X'},
+    ]
+    step_forced_reroll(g, rng=__import__('random').Random(7))
+    assert g['pendingCombat']['forcedRerollQueue'] == []
+    # Worst die was index 0 (blue, sum=1). It got rerolled.
+    assert 0 in g['pendingCombat']['attackerRerolledIndices']
+    assert get_phase(g) == CombatPhase.POST_FORCED_GATE
+
+
+def test_step_forced_reroll_drains_one_defense_entry():
+    """Attacker forces 1 def reroll. Defender's worst die replaced."""
+    from python.engine.mechanics.combat_phases import step_forced_reroll
+    g = _make_combat_with_rolled_dice()
+    g['pendingCombat']['forcedRerollQueue'] = [
+        {'controlPlayer': 1, 'pool': 'defense', 'remaining': 1,
+         'source': 'Versatile Weaponry'},
+    ]
+    step_forced_reroll(g, rng=__import__('random').Random(11))
+    assert g['pendingCombat']['forcedRerollQueue'] == []
+    assert 0 in g['pendingCombat']['defenderRerolledIndices']
+    assert get_phase(g) == CombatPhase.POST_FORCED_GATE
+
+
+def test_step_forced_reroll_multi_remaining():
+    """Entry with remaining=2 is decremented but not popped."""
+    from python.engine.mechanics.combat_phases import step_forced_reroll
+    g = _make_combat_with_rolled_dice()
+    g['pendingCombat']['forcedRerollQueue'] = [
+        {'controlPlayer': 1, 'pool': 'defense', 'remaining': 2, 'source': 'X'},
+    ]
+    step_forced_reroll(g, rng=__import__('random').Random(3))
+    queue = g['pendingCombat']['forcedRerollQueue']
+    assert len(queue) == 1
+    assert queue[0]['remaining'] == 1
+    # Phase remains FORCED_REROLL since queue not empty.
+    assert get_phase(g) == CombatPhase.FORCED_REROLL
+
+
+def test_step_forced_reroll_multiple_entries_drain_one_at_a_time():
+    """Two entries — call drains the first, second remains."""
+    from python.engine.mechanics.combat_phases import step_forced_reroll
+    g = _make_combat_with_rolled_dice()
+    g['pendingCombat']['forcedRerollQueue'] = [
+        {'controlPlayer': 1, 'pool': 'defense', 'remaining': 1, 'source': 'A'},
+        {'controlPlayer': 2, 'pool': 'attack', 'remaining': 1, 'source': 'B'},
+    ]
+    step_forced_reroll(g, rng=__import__('random').Random(4))
+    assert len(g['pendingCombat']['forcedRerollQueue']) == 1
+    assert g['pendingCombat']['forcedRerollQueue'][0]['source'] == 'B'
+    # Phase still FORCED_REROLL — more queue work pending.
+    assert get_phase(g) == CombatPhase.FORCED_REROLL
+
+
+def test_step_forced_reroll_recomputes_totals():
+    """After reroll, attackRoll totals reflect the new dice."""
+    from python.engine.mechanics.combat_phases import step_forced_reroll
+    g = _make_combat_with_rolled_dice()
+    g['pendingCombat']['forcedRerollQueue'] = [
+        {'controlPlayer': 2, 'pool': 'attack', 'remaining': 1, 'source': 'X'},
+    ]
+    step_forced_reroll(g, rng=__import__('random').Random(99))
+    pc = g['pendingCombat']
+    # Totals derived from current dice list.
+    expected_acc = sum(d.get('acc', 0) for d in pc['attackDiceResults'])
+    expected_dmg = sum(d.get('dmg', 0) for d in pc['attackDiceResults'])
+    expected_surge = sum(d.get('surge', 0) for d in pc['attackDiceResults'])
+    assert pc['attackRoll'] == {
+        'acc': expected_acc, 'dmg': expected_dmg, 'surge': expected_surge,
+    }
