@@ -184,7 +184,11 @@ def test_end_turn_clears_pending_and_ends_activation():
         result = handler(_Interaction('end_turn_G1_hl1dc0', user_id='alice'), ctx)
         assert result['ok'] is True
         assert result['game'].data['pendingEndTurn'] is None
-        assert result['game'].data['movementBank'] is None
+        # JS behavior: cleanup_activation strips the msg_id entry,
+        # leaves movementBank as {} (was previously expected as None,
+        # but that was over-cleaning).
+        bank = result['game'].data.get('movementBank')
+        assert bank in (None, {}) or 'hl1dc0' not in bank
         assert result['game'].data['activePlayer'] == 2
     finally:
         _cleanup()
