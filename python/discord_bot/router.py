@@ -21,6 +21,47 @@ from python.discord_bot.handlers import find_handler
 RouteResult = Dict[str, Any]
 
 
+# Modal customId prefixes. Modals don't go through the registered-handler
+# auto-derive (they use their own form-submit dispatch). Mirror of JS
+# MODAL_PREFIXES in src/router.js.
+MODAL_PREFIXES = (
+    'squad_modal_',
+    'deploy_modal_',
+    'devaron_crate_modal_',
+    'krykna_push_modal_',
+    'dc_rename_modal_',
+    'fav_name_modal_',
+    'fav_rename_modal_',
+    'fav_list_rename_modal_',
+)
+
+
+def get_handler_key(custom_id: Optional[str], type_: str = 'button',
+                    ) -> Optional[str]:
+    """Return the longest prefix matching `custom_id` for the given type.
+
+    JS-parity entry point for src/router.js getHandlerKey(customId, type).
+    Returns None when no prefix matches.
+
+    Args:
+      custom_id: The button / select / modal customId.
+      type_: 'button' | 'select' | 'modal'. Modal type checks the
+        MODAL_PREFIXES set; button / select check the registered
+        handler prefixes.
+    """
+    if not custom_id or not isinstance(custom_id, str):
+        return None
+    if type_ == 'modal':
+        prefixes = sorted(MODAL_PREFIXES, key=len, reverse=True)
+    else:
+        from python.discord_bot.handlers import get_registered_prefixes
+        prefixes = get_registered_prefixes()
+    for p in prefixes:
+        if custom_id.startswith(p):
+            return p
+    return None
+
+
 def _extract_custom_id(interaction: Any) -> Optional[str]:
     """Get the customId string from a discord.py Interaction or a dict stub.
 
