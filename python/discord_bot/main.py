@@ -231,6 +231,10 @@ async def run_bot() -> None:
     # Let handlers both read and write via the store.
     if hasattr(game_store, 'save'):
         deps['save_game'] = game_store.save
+    if hasattr(game_store, 'list_ids'):
+        deps['list_game_ids'] = game_store.list_ids
+    if hasattr(game_store, 'delete'):
+        deps['delete_game'] = game_store.delete
     # Lobby state: thread_id → {creatorId, joinedId, status}.
     # Populated by the on_message listener below; consumed by
     # lobby_join_ / lobby_start_ button handlers.
@@ -257,6 +261,28 @@ async def run_bot() -> None:
         await bot.tree.sync()
         _LOG.info('Bot ready: %s (synced %d commands)',
                   bot.user, slash_count)
+        # Reconstruct lobbies from existing #new-games threads — survives
+        # bot restarts. Mirrors src/index.js lobby reconstruction loop.
+        try:
+            await _reconstruct_lobbies(bot, deps)
+        except Exception:
+            _LOG.exception('Lobby reconstruction failed')
+        # Auto-refresh active game views so post-redeploy UI reflects
+        # current state. Mirrors src/index.js startup auto-refresh.
+        try:
+            await _refresh_active_games(bot, deps)
+        except Exception:
+            _LOG.exception('Active game refresh failed')
+
+    @bot.event
+    async def on_guild_channel_delete(channel):  # noqa: D401
+        """When a game's channel is manually deleted, clean up its DB
+        records. Mirrors src/index.js client.on('channelDelete').
+        """
+        try:
+            await _handle_channel_delete(channel, deps)
+        except Exception:
+            _LOG.exception('on_guild_channel_delete failed')
 
     @bot.event
     async def on_message(message):  # noqa: D401
@@ -352,3 +378,173 @@ async def _update_lobby_thread_name(thread: Any,
     except Exception:
         # Discord rate-limits / perm errors are non-fatal here.
         pass
+
+
+# ---------------------------------------------------------------------------
+# Lobby reconstruction on bot restart
+
+
+async def _reconstruct_lobbies(bot: Any, deps: Dict[str, Any]) -> None:
+    """Scan every #new-games forum across every guild and rebuild the
+    in-memory lobby dict from the bot's existing 'Game Lobby' embeds.
+    Mirrors the JS reconstruction loop in src/index.js.
+    """
+    import re
+    import discord  # type: ignore[import]
+
+    lobbies = deps['lobbies']
+    embed_sent = deps['lobby_embed_sent']
+    total = 0
+    for guild in bot.guilds:
+        forum = next(
+            (c for c in guild.channels
+             if isinstance(c, discord.ForumChannel) and c.name == 'new-games'),
+            None,
+        )
+        if forum is None:
+            continue
+        try:
+            active = forum.threads
+        except Exception:
+            continue
+        for thread in active:
+            tid = str(thread.id)
+            if tid in lobbies:
+                continue
+            try:
+                # Find the bot's "Game Lobby" embed in the thread.
+                lobby_msg = None
+                async for m in thread.history(limit=10, oldest_first=True):
+                    if (m.author.id == bot.user.id and m.embeds
+                            and m.embeds[0].title == 'Game Lobby'):
+                        lobby_msg = m
+                        break
+                if lobby_msg is None:
+                    continue
+                desc = (lobby_msg.embeds[0].description or '')
+                player_ids = re.findall(r'<@(\d+)>', desc)
+                if not player_ids:
+                    continue
+                creator_id = player_ids[0]
+                joined_id = player_ids[1] if len(player_ids) >= 2 else None
+                # Skip threads where the game already launched.
+                tname = thread.name or ''
+                if tname.startswith('[Launched]'):
+                    continue
+                status = 'Full' if (tname.startswith('[Full]') or joined_id) else 'LFG'
+                lobbies[tid] = {
+                    'creatorId': creator_id,
+                    'joinedId': joined_id,
+                    'status': status,
+                }
+                embed_sent.add(tid)
+                total += 1
+            except Exception:
+                _LOG.warning(
+                    'Failed to reconstruct lobby for thread %s',
+                    thread.id, exc_info=True,
+                )
+    if total > 0:
+        _LOG.info('Reconstructed %d lobby/lobbies from #new-games', total)
+
+
+# ---------------------------------------------------------------------------
+# Active-game auto-refresh on startup
+
+
+async def _refresh_active_games(bot: Any, deps: Dict[str, Any]) -> None:
+    """Refresh game views for every active game so post-redeploy UI
+    reflects current state. Mirrors src/index.js startup loop.
+    """
+    get_game = deps.get('get_game')
+    list_ids = deps.get('list_game_ids')
+    if not (callable(get_game) and callable(list_ids)):
+        return
+    try:
+        from python.discord_bot import game_channels as gc
+    except Exception:
+        return
+    backend = deps.get('channel_backend')
+    refreshed = 0
+    for game_id in list_ids() or []:
+        try:
+            game = get_game(game_id)
+            if game is None:
+                continue
+            data = game.data if hasattr(game, 'data') else game
+            if not isinstance(data, dict):
+                continue
+            if data.get('archived') or data.get('killed'):
+                continue
+            if not data.get('selectedMap'):
+                continue
+            gc.refresh_game_view(game_id, game, backend=backend)
+            gc.refresh_hand_view(game_id, 1, game, backend=backend)
+            gc.refresh_hand_view(game_id, 2, game, backend=backend)
+            refreshed += 1
+        except Exception:
+            _LOG.warning(
+                'Failed to refresh active game %s', game_id, exc_info=True,
+            )
+    if refreshed > 0:
+        _LOG.info('Refreshed %d active game view(s)', refreshed)
+
+
+# ---------------------------------------------------------------------------
+# Channel-delete handler
+
+
+async def _handle_channel_delete(channel: Any, deps: Dict[str, Any]) -> None:
+    """Find the game associated with a deleted channel and clean up
+    its DB record. Mirrors src/index.js client.on('channelDelete').
+    """
+    channel_id = str(getattr(channel, 'id', '') or '')
+    if not channel_id:
+        return
+
+    get_game = deps.get('get_game')
+    list_ids = deps.get('list_game_ids')
+    delete_game = deps.get('delete_game')
+    if not (callable(get_game) and callable(list_ids)):
+        return
+
+    # Find the game whose channels include this one.
+    channel_keys = (
+        'gameCategoryId', 'generalId', 'chatId', 'boardId',
+        'gameLogId', 'p1PlayAreaId', 'p2PlayAreaId',
+        'p1HandId', 'p2HandId',
+    )
+    matched_id = None
+    for game_id in list_ids() or []:
+        game = get_game(game_id)
+        if game is None:
+            continue
+        data = game.data if hasattr(game, 'data') else game
+        if not isinstance(data, dict):
+            continue
+        for key in channel_keys:
+            if str(data.get(key) or '') == channel_id:
+                matched_id = game_id
+                break
+        if matched_id:
+            break
+
+    if matched_id is None:
+        return
+
+    # Re-entrancy guard: bot-initiated deletions also fire this event.
+    guard = deps.setdefault('_channel_delete_guard', set())
+    if matched_id in guard:
+        return
+    guard.add(matched_id)
+    try:
+        _LOG.info('External channel deletion for game %s — cleaning up',
+                  matched_id)
+        if callable(delete_game):
+            try:
+                delete_game(matched_id)
+            except Exception:
+                _LOG.warning('delete_game(%s) failed', matched_id,
+                              exc_info=True)
+    finally:
+        guard.discard(matched_id)
