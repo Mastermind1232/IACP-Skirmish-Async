@@ -728,3 +728,89 @@ def test_step_surge_bleed_appends_to_surge_conditions():
     g = _make_combat_at_surge()
     step_surge(g, ability_id='bleed')
     assert 'Bleed' in (g['pendingCombat'].get('surgeConditions') or [])
+
+
+# ── step_resolve ────────────────────────────────────────────────────────
+
+
+def _make_combat_for_resolve(damage=2):
+    """Fixture: pendingCombat ready to resolve. acc>=dist, damage>=block."""
+    return {
+        'pendingCombat': {
+            'phase': CombatPhase.POST_SURGE_GATE.value,
+            'attackerPlayerNum': 1,
+            'attackerFigureKey': 'Han Solo (Rebel Hero)-1-0',
+            'defenderPlayerNum': 2,
+            'defenderMsgId': 'hl2dc0',
+            'attackInfo': {'isRanged': False},
+            'attackRoll': {'acc': 5, 'dmg': damage, 'surge': 0},
+            'defenseRoll': {'block': 0, 'evade': 0, 'dodge': False},
+            'distanceToTarget': 1,
+            'target': {
+                'figureKey': 'Boba Fett-1-0',
+                'figureIndex': 0,
+            },
+            'attackerConds': [],
+            'defenderConds': [],
+        },
+        'dcHealthState': {
+            'hl2dc0': [[5, 5]],  # Boba: 5 current / 5 max HP
+        },
+    }
+
+
+def test_step_resolve_returns_hit_damage_result():
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=2)
+    result = step_resolve(g)
+    assert result['hit'] is True
+    assert result['damage'] == 2
+    assert result['defeated'] is False
+
+
+def test_step_resolve_applies_damage_to_dc_health_state():
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=2)
+    step_resolve(g)
+    # Boba was at 5/5; took 2 damage → 3/5.
+    assert g['dcHealthState']['hl2dc0'][0] == [3, 5]
+
+
+def test_step_resolve_clears_pending_combat():
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve()
+    step_resolve(g)
+    assert g['pendingCombat'] is None
+
+
+def test_step_resolve_stamps_last_combat_result():
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=2)
+    step_resolve(g)
+    lcr = g.get('lastCombatResult')
+    assert lcr is not None
+    assert lcr['hit'] is True
+    assert lcr['damage'] == 2
+    assert lcr['attackerFigureKey'] == 'Han Solo (Rebel Hero)-1-0'
+    assert lcr['targetFigureKey'] == 'Boba Fett-1-0'
+
+
+def test_step_resolve_marks_defeat_when_hp_zero():
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=10)  # overkill
+    result = step_resolve(g)
+    assert result['defeated'] is True
+    assert g['dcHealthState']['hl2dc0'][0][0] == 0
+
+
+def test_step_resolve_miss_applies_no_damage():
+    """Ranged attack with acc < distance is a miss."""
+    from python.engine.mechanics.combat_phases import step_resolve
+    g = _make_combat_for_resolve(damage=2)
+    g['pendingCombat']['isRanged'] = True
+    g['pendingCombat']['attackRoll']['acc'] = 1
+    g['pendingCombat']['distanceToTarget'] = 5  # acc 1 < dist 5 → miss
+    result = step_resolve(g)
+    assert result['hit'] is False
+    # Boba HP unchanged.
+    assert g['dcHealthState']['hl2dc0'][0] == [5, 5]

@@ -968,3 +968,126 @@ def step_surge(game: Any, ability_id: Optional[str] = None) -> Any:
     data = game.data if hasattr(game, 'data') else game
     data['pendingCombat'] = pc
     return game
+
+
+# ── Resolve phase ──────────────────────────────────────────────────────
+
+
+def step_resolve(game: Any) -> Dict[str, Any]:
+    """Apply damage from the rolled+surge-adjusted combat. Final phase.
+
+    Mirrors JS combat-bridge.js:122-500 (resolveCombatAfterRolls →
+    applyDamageAndFinishCombat).
+
+    Steps:
+      1. Run compute_combat_result on pendingCombat — produces {hit,
+         damage, effectiveBlock, resultText}.
+      2. If hit and damage > 0: call reduce_hp on the defender, sync DC
+         list, update totalDamageReceived.
+      3. Apply post-attack conditions (Bleed/Stun/Weaken from
+         bonusConditions + surgeConditions).
+      4. Stamp combat result on game.lastCombatResult for callers.
+      5. Set defeated flag if HP reached 0.
+      6. Clear pendingCombat (combat over).
+
+    Returns the result dict {hit, damage, effectiveBlock, defeated,
+    resultText} for caller use (defeat handler P1.9 uses defeated flag).
+
+    For the AI/MCTS path, P1.9 (process_figure_defeat) is invoked
+    separately if defeated=True.
+    """
+    from python.engine.mechanics.combat import compute_combat_result
+    from python.engine.mechanics.damage_helpers import reduce_hp
+    from python.engine.mechanics.conditions import apply_condition
+
+    pc = _require_pending_combat(game, 'step_resolve')
+    cur_phase = get_phase(game)
+    if cur_phase not in (
+        CombatPhase.POST_SURGE_GATE,
+        CombatPhase.SURGE,
+        CombatPhase.RESOLVE,
+    ):
+        raise CombatStateError(
+            f'step_resolve: cannot run from phase {cur_phase}'
+        )
+
+    set_phase(game, CombatPhase.RESOLVE)
+
+    # 1. Compute final result (mutates pc — Wookiee Avenger dodge→evade,
+    # attackResultReplaceWithStun, maxDamageToDefender clamp).
+    result = compute_combat_result(pc)
+    hit = bool(result.get('hit'))
+    damage = int(result.get('damage') or 0)
+    eff_block = int(result.get('effectiveBlock') or 0)
+    result_text = result.get('resultText') or ''
+
+    # 2. Apply damage to defender if hit.
+    target = pc.get('target') or {}
+    target_fk = target.get('figureKey')
+    def_player_num = pc.get('defenderPlayerNum')
+    def_msg_id = pc.get('defenderMsgId') or target.get('msgId')
+    def_fig_idx = target.get('figureIndex')
+    if def_fig_idx is None:
+        # Try parse from figure_key suffix.
+        try:
+            def_fig_idx = int((target_fk or '').rsplit('-', 1)[-1])
+        except (ValueError, AttributeError):
+            def_fig_idx = 0
+
+    defeated = False
+    applied_damage = 0
+    if hit and damage > 0 and target_fk and def_msg_id and def_player_num:
+        data = game.data if hasattr(game, 'data') else game
+        dc_health_state = data.get('dcHealthState')
+        if isinstance(dc_health_state, dict):
+            try:
+                rh = reduce_hp(
+                    dc_health_state, data, def_msg_id, def_fig_idx,
+                    damage, int(def_player_num),
+                )
+                applied_damage = int(rh.get('prevHp', 0) or 0) - int(rh.get('newHp', 0) or 0)
+                defeated = bool(rh.get('wasDefeated'))
+            except Exception:
+                # Best-effort: track that damage was supposed to be
+                # applied even if the helper rejected it.
+                applied_damage = damage
+
+    # 3. Apply post-attack conditions to the defender (Bleed/Stun/Weaken
+    # from rolled / surge sources). JS combat-bridge.js does this around
+    # line 350 for each condition entry.
+    if hit and target_fk:
+        for cond in (pc.get('bonusConditions') or []):
+            try:
+                apply_condition(game, target_fk, cond)
+            except Exception:
+                pass
+        for cond in (pc.get('surgeConditions') or []):
+            try:
+                apply_condition(game, target_fk, cond)
+            except Exception:
+                pass
+
+    # 4. Stamp result on game.lastCombatResult (Discord layer reads this
+    # to render the final embed).
+    data = game.data if hasattr(game, 'data') else game
+    final_result = {
+        'hit': hit,
+        'damage': damage,
+        'appliedDamage': applied_damage,
+        'effectiveBlock': eff_block,
+        'defeated': defeated,
+        'resultText': result_text,
+        'attackerFigureKey': pc.get('attackerFigureKey'),
+        'targetFigureKey': target_fk,
+    }
+    data['lastCombatResult'] = final_result
+
+    # 5. Defeated flag for caller (P1.9 will run process_figure_defeat).
+    pc['defeated'] = defeated
+    pc['phase'] = CombatPhase.RESOLVE.value
+
+    # 6. Clear pendingCombat unless caller wants to inspect it. Mirror JS
+    # combat-bridge.js: combat dict cleared post-resolve.
+    data['pendingCombat'] = None
+
+    return final_result
