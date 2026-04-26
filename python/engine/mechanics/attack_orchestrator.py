@@ -38,6 +38,7 @@ No Discord IO. Pure state mutation + deterministic resolution.
 from __future__ import annotations
 
 import random as _random
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Tuple
 
 from python.engine.data.dc_effects_loader import get_dc_effect
