@@ -648,3 +648,83 @@ def test_step_token_defender_skip_advances_to_surge():
     g['pendingCombat']['phase'] = CombatPhase.TOKEN_ATTACKER.value
     step_token_defender(g)  # skip
     assert get_phase(g) == CombatPhase.SURGE
+
+
+# ── step_surge ──────────────────────────────────────────────────────────
+
+
+def _make_combat_at_surge():
+    return {
+        'pendingCombat': {
+            'phase': CombatPhase.SURGE.value,
+            'attackerPlayerNum': 1,
+            'surgeRemaining': 2,
+            'attackRoll': {'acc': 0, 'dmg': 0, 'surge': 2},
+        },
+    }
+
+
+def test_step_surge_damage_increments_surge_damage():
+    from python.engine.mechanics.combat_phases import step_surge
+    g = _make_combat_at_surge()
+    step_surge(g, ability_id='damage 1')
+    assert g['pendingCombat']['surgeDamage'] == 1
+    assert g['pendingCombat']['surgeRemaining'] == 1
+    assert g['pendingCombat']['surgeSpentCount']['damage 1'] == 1
+    assert 'damage 1' in g['pendingCombat']['triggeredSurges']
+
+
+def test_step_surge_skip_advances_to_gate():
+    from python.engine.mechanics.combat_phases import step_surge
+    g = _make_combat_at_surge()
+    step_surge(g)  # ability_id=None
+    assert get_phase(g) == CombatPhase.POST_SURGE_GATE
+
+
+def test_step_surge_no_remaining_advances_gate():
+    from python.engine.mechanics.combat_phases import step_surge
+    g = _make_combat_at_surge()
+    g['pendingCombat']['surgeRemaining'] = 0
+    step_surge(g, ability_id='damage')
+    # Surge exhausted before this call — no spend, just advance.
+    assert get_phase(g) == CombatPhase.POST_SURGE_GATE
+
+
+def test_step_surge_exhausting_last_surge_advances_gate():
+    """Last surge spent → phase advances automatically."""
+    from python.engine.mechanics.combat_phases import step_surge
+    g = _make_combat_at_surge()
+    g['pendingCombat']['surgeRemaining'] = 1
+    step_surge(g, ability_id='pierce')
+    assert g['pendingCombat']['surgeRemaining'] == 0
+    assert get_phase(g) == CombatPhase.POST_SURGE_GATE
+
+
+def test_step_surge_per_ability_cap_default_one():
+    """Default cap: each ability_id can only be spent once per attack."""
+    from python.engine.mechanics.combat_phases import step_surge
+    g = _make_combat_at_surge()
+    step_surge(g, ability_id='damage 1')
+    step_surge(g, ability_id='damage 1')  # blocked by cap
+    assert g['pendingCombat']['surgeSpentCount']['damage 1'] == 1
+    # surgeRemaining only decremented once.
+    assert g['pendingCombat']['surgeRemaining'] == 1
+
+
+def test_step_surge_overload_saboteur_cap_2():
+    """surgeMaxUsesPerAbility=2 (overload_saboteur) lifts cap to 2."""
+    from python.engine.mechanics.combat_phases import step_surge
+    g = _make_combat_at_surge()
+    g['pendingCombat']['surgeMaxUsesPerAbility'] = 2
+    step_surge(g, ability_id='damage 1')
+    step_surge(g, ability_id='damage 1')
+    assert g['pendingCombat']['surgeSpentCount']['damage 1'] == 2
+    assert g['pendingCombat']['surgeRemaining'] == 0
+
+
+def test_step_surge_bleed_appends_to_surge_conditions():
+    """Bleed-on-surge appends 'Bleed' to surgeConditions list."""
+    from python.engine.mechanics.combat_phases import step_surge
+    g = _make_combat_at_surge()
+    step_surge(g, ability_id='bleed')
+    assert 'Bleed' in (g['pendingCombat'].get('surgeConditions') or [])

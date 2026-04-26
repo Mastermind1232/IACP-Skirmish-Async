@@ -849,3 +849,122 @@ def step_token_defender(game: Any, *, token_type: Optional[str] = None,
     data = game.data if hasattr(game, 'data') else game
     data['pendingCombat'] = pc
     return game
+
+
+# ── Surge selection ─────────────────────────────────────────────────────
+
+
+def step_surge(game: Any, ability_id: Optional[str] = None) -> Any:
+    """Spend one surge on `ability_id` (e.g. 'damage', 'bleed', 'pierce_2').
+
+    Mirrors JS combat.js:4869-5085 surge spend loop. Each call accumulates
+    one surge's modifiers into combat.surge* fields, which the resolve
+    phase reads.
+
+    ability_id=None → done with surges; advance to POST_SURGE_GATE.
+
+    Tracks pendingCombat['surgeSpentCount'][ability_id] so caller can
+    enforce per-ability use caps (e.g. overload_saboteur lifts the cap
+    from 1 to 2 — see attack_orchestrator surgeMaxUsesPerAbility flag).
+
+    Modifier accumulation:
+      - damage → surgeDamage
+      - pierce → surgePierce
+      - accuracy → surgeAccuracy
+      - blast → surgeBlast
+      - recover → surgeRecover
+      - cleave → surgeCleave
+      - conditions (Bleed/Stun/Weaken) → surgeConditions list
+
+    Reuses parse_surge_effect from python.engine.mechanics.surge — same
+    surge-key → modifiers map JS uses.
+    """
+    pc = _require_pending_combat(game, 'step_surge')
+    cur_phase = get_phase(game)
+    if cur_phase not in (
+        CombatPhase.TOKEN_ATTACKER,  # may skip token phase entirely
+        CombatPhase.TOKEN_DEFENDER,
+        CombatPhase.PASSIVE_WINDOW,
+        CombatPhase.SURGE,
+    ):
+        raise CombatStateError(
+            f'step_surge: cannot run from phase {cur_phase}'
+        )
+
+    set_phase(game, CombatPhase.SURGE)
+
+    # Skip / done.
+    if ability_id is None:
+        set_phase(game, CombatPhase.POST_SURGE_GATE)
+        open_gate(game, CombatPhase.POST_SURGE_GATE)
+        data = game.data if hasattr(game, 'data') else game
+        data['pendingCombat'] = pc
+        return game
+
+    surge_remaining = int(pc.get('surgeRemaining') or 0)
+    if surge_remaining <= 0:
+        # No surges to spend — advance.
+        set_phase(game, CombatPhase.POST_SURGE_GATE)
+        open_gate(game, CombatPhase.POST_SURGE_GATE)
+        data = game.data if hasattr(game, 'data') else game
+        data['pendingCombat'] = pc
+        return game
+
+    # Check per-ability use cap (overload_saboteur=2, default 1).
+    spent_count = dict(pc.get('surgeSpentCount') or {})
+    used = int(spent_count.get(ability_id) or 0)
+    cap = int(pc.get('surgeMaxUsesPerAbility') or 1)
+    if used >= cap:
+        # Cannot reuse — silently skip (matches JS: button greyed out).
+        data = game.data if hasattr(game, 'data') else game
+        data['pendingCombat'] = pc
+        return game
+
+    from python.engine.mechanics.surge import parse_surge_effect
+    eff = parse_surge_effect(ability_id) or {}
+
+    pc['surgeRemaining'] = surge_remaining - 1
+    spent_count[ability_id] = used + 1
+    pc['surgeSpentCount'] = spent_count
+
+    triggered = list(pc.get('triggeredSurges') or [])
+    triggered.append(ability_id)
+    pc['triggeredSurges'] = triggered
+
+    # Integer modifier accumulation.
+    for js_key, combat_key in (
+        ('damage', 'surgeDamage'),
+        ('pierce', 'surgePierce'),
+        ('accuracy', 'surgeAccuracy'),
+        ('blast', 'surgeBlast'),
+        ('recover', 'surgeRecover'),
+        ('cleave', 'surgeCleave'),
+    ):
+        delta = int(eff.get(js_key) or 0)
+        if delta:
+            pc[combat_key] = int(pc.get(combat_key) or 0) + delta
+
+    # Conditions accumulate into surgeConditions list.
+    for cond in (eff.get('conditions') or []):
+        lst = list(pc.get('surgeConditions') or [])
+        lst.append(cond)
+        pc['surgeConditions'] = lst
+
+    # Named flags read by resolve phase.
+    for flag in ('surgeCancel', 'surgeCancelDodge', 'replaceWithStun'):
+        if flag in eff:
+            if flag == 'surgeCancel':
+                pc['surgeCancel'] = (
+                    int(pc.get('surgeCancel') or 0) + int(eff[flag])
+                )
+            else:
+                pc[flag] = eff[flag]
+
+    # If surges exhausted, advance to gate.
+    if pc['surgeRemaining'] <= 0:
+        set_phase(game, CombatPhase.POST_SURGE_GATE)
+        open_gate(game, CombatPhase.POST_SURGE_GATE)
+
+    data = game.data if hasattr(game, 'data') else game
+    data['pendingCombat'] = pc
+    return game
