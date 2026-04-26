@@ -1130,3 +1130,188 @@ def step_resolve(game: Any) -> Dict[str, Any]:
     data['pendingCombat'] = None
 
     return final_result
+
+
+# ── Gate dispatch table ────────────────────────────────────────────────
+
+
+def dispatch_combat_gate_advance(game: Any, *, dice_stream=None,
+                                  recorder=None, rng=None) -> Any:
+    """Route through the gate's next-phase step after both-players-ready.
+
+    Mirrors JS combat.js:366-448 dispatchCombatGateAdvance: each gate
+    phase routes to the next concrete step. Caller invokes after
+    advance_combat_gate has cleared the gate (both p1Ready+p2Ready).
+
+    In self-play, this is invoked automatically inside the dispatch
+    loop. In Discord mode, the button click handler invokes this once
+    per gate clearance.
+
+    Returns the game (mutated in place); the caller can read the new
+    phase via get_phase to continue the orchestrator loop.
+    """
+    cur_phase = get_phase(game)
+    if cur_phase is None:
+        return game
+
+    # When a gate is still open, do nothing. Caller advance_combat_gate
+    # is responsible for clearing it first.
+    if get_gate(game) is not None:
+        return game
+
+    if cur_phase == CombatPhase.DECLARE:
+        # Declare → open the pre-combat gate.
+        send_combat_gate(game, CombatPhase.PRE_COMBAT_GATE)
+        return game
+
+    if cur_phase == CombatPhase.PRE_COMBAT_GATE:
+        # Pre-combat gate cleared → run roll phase next.
+        return step_roll(
+            game, dice_stream=dice_stream, recorder=recorder, rng=rng,
+        )
+
+    if cur_phase == CombatPhase.POST_ROLL_GATE:
+        # Post-roll gate cleared → run forced reroll queue (or skip
+        # straight to attacker reroll if queue empty).
+        pc = (game.data if hasattr(game, 'data') else game).get('pendingCombat') or {}
+        if pc.get('forcedRerollQueue'):
+            return step_forced_reroll(
+                game, dice_stream=dice_stream, recorder=recorder, rng=rng,
+            )
+        # Empty queue: open post-forced gate so attacker reroll can
+        # proceed next.
+        set_phase(game, CombatPhase.POST_FORCED_GATE)
+        open_gate(game, CombatPhase.POST_FORCED_GATE)
+        return game
+
+    if cur_phase == CombatPhase.POST_FORCED_GATE:
+        # Run attacker reroll if any innate rerolls remain; else
+        # advance to defender reroll gate.
+        pc = (game.data if hasattr(game, 'data') else game).get('pendingCombat') or {}
+        if int(pc.get('attackerRerollsRemaining') or 0) > 0:
+            return step_attacker_reroll(
+                game, dice_stream=dice_stream, recorder=recorder, rng=rng,
+            )
+        set_phase(game, CombatPhase.POST_ATTACKER_GATE)
+        open_gate(game, CombatPhase.POST_ATTACKER_GATE)
+        return game
+
+    if cur_phase == CombatPhase.POST_ATTACKER_GATE:
+        pc = (game.data if hasattr(game, 'data') else game).get('pendingCombat') or {}
+        if int(pc.get('defenderRerollsRemaining') or 0) > 0:
+            return step_defender_reroll(
+                game, dice_stream=dice_stream, recorder=recorder, rng=rng,
+            )
+        set_phase(game, CombatPhase.POST_DEFENDER_GATE)
+        open_gate(game, CombatPhase.POST_DEFENDER_GATE)
+        return game
+
+    if cur_phase == CombatPhase.POST_DEFENDER_GATE:
+        # Skip the passive window in self-play (no Discord prompts).
+        # Advance directly to token attacker phase.
+        set_phase(game, CombatPhase.TOKEN_ATTACKER)
+        return game
+
+    if cur_phase == CombatPhase.POST_SURGE_GATE:
+        # Post-surge gate cleared → resolve.
+        return step_resolve(game)
+
+    return game
+
+
+def run_combat_to_completion(game: Any, *, dice_stream=None,
+                              recorder=None, rng=None,
+                              max_iterations: int = 100) -> Dict[str, Any]:
+    """Drive a combat from current phase through to RESOLVE in self-play.
+
+    Loops: advance gate → run next step → repeat. Handles all 16 phases
+    automatically. Returns the final result dict from step_resolve, or
+    None if the loop terminated without resolving.
+
+    Used by AI/MCTS path and by drift replay's self-play assertions.
+    """
+    if not is_self_play(game):
+        # Caller didn't enable self-play — explicitly enable it for the
+        # duration of this run by overriding game data. (Discord mode
+        # invokes phase steps individually; this loop is for sync paths.)
+        data = game.data if hasattr(game, 'data') else game
+        data['_combat_run_self_play'] = True
+
+    final_result = None
+    for _ in range(max_iterations):
+        cur_phase = get_phase(game)
+        if cur_phase is None:
+            break  # No combat open.
+
+        gate = get_gate(game)
+        if gate is not None:
+            # Auto-clear in self-play.
+            advance_combat_gate(game, player_num=0)
+            # If we just cleared the post-surge gate, dispatch will
+            # call step_resolve which clears pendingCombat. Capture
+            # the result by checking lastCombatResult after.
+            was_post_surge = cur_phase == CombatPhase.POST_SURGE_GATE
+            dispatch_combat_gate_advance(
+                game, dice_stream=dice_stream, recorder=recorder, rng=rng,
+            )
+            if was_post_surge:
+                data = game.data if hasattr(game, 'data') else game
+                final_result = data.get('lastCombatResult')
+            continue
+
+        if cur_phase == CombatPhase.DECLARE:
+            # Open pre-combat gate to consolidate bonus stamps, then advance.
+            send_combat_gate(game, CombatPhase.PRE_COMBAT_GATE)
+            continue
+
+        if cur_phase == CombatPhase.ROLL:
+            step_roll(
+                game, dice_stream=dice_stream, recorder=recorder, rng=rng,
+            )
+            continue
+
+        if cur_phase == CombatPhase.FORCED_REROLL:
+            step_forced_reroll(
+                game, dice_stream=dice_stream, recorder=recorder, rng=rng,
+            )
+            continue
+
+        if cur_phase == CombatPhase.ATTACKER_REROLL:
+            step_attacker_reroll(
+                game, dice_stream=dice_stream, recorder=recorder, rng=rng,
+            )
+            continue
+
+        if cur_phase == CombatPhase.DEFENDER_REROLL:
+            step_defender_reroll(
+                game, dice_stream=dice_stream, recorder=recorder, rng=rng,
+            )
+            continue
+
+        if cur_phase == CombatPhase.PASSIVE_WINDOW:
+            set_phase(game, CombatPhase.TOKEN_ATTACKER)
+            continue
+
+        if cur_phase == CombatPhase.TOKEN_ATTACKER:
+            # Skip in self-play (no token-spend decisions).
+            step_token_attacker(game)
+            continue
+
+        if cur_phase == CombatPhase.TOKEN_DEFENDER:
+            step_token_defender(game)
+            continue
+
+        if cur_phase == CombatPhase.SURGE:
+            # In self-play, skip surge spends — atomic path applies them
+            # via attack_orchestrator.
+            step_surge(game)
+            continue
+
+        if cur_phase == CombatPhase.RESOLVE:
+            final_result = step_resolve(game)
+            break
+
+        # Unknown phase — bail.
+        break
+
+    return final_result

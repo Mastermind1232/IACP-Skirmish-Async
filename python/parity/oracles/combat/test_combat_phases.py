@@ -879,3 +879,115 @@ def test_step_resolve_defeat_result_in_last_combat_result():
     # In our minimal fixture some deps are missing; either outcome is
     # acceptable as long as the slot is populated for a kill.
     assert 'defeatResult' in lcr
+
+
+# ── P1.13: dispatch_combat_gate_advance + run_combat_to_completion ─────
+
+
+def test_dispatch_advance_post_roll_with_forced_queue():
+    """POST_ROLL_GATE cleared + queue present → step_forced_reroll runs."""
+    from python.engine.mechanics.combat_phases import (
+        dispatch_combat_gate_advance,
+    )
+    g = _game({
+        'pendingCombat': {
+            'phase': CombatPhase.POST_ROLL_GATE.value,
+            'attackerPlayerNum': 1,
+            'forcedRerollQueue': [
+                {'controlPlayer': 1, 'pool': 'defense', 'remaining': 1, 'source': 'X'},
+            ],
+            'attackDiceResults': [{'color': 'blue', 'acc': 0, 'dmg': 0, 'surge': 0}],
+            'defenseDiceResults': [{'color': 'white', 'block': 0, 'evade': 0, 'dodge': False}],
+        },
+    })
+    dispatch_combat_gate_advance(g, rng=__import__('random').Random(1))
+    # After dispatch, queue is drained → POST_FORCED_GATE.
+    assert get_phase(g) == CombatPhase.POST_FORCED_GATE
+
+
+def test_dispatch_advance_post_roll_empty_queue_skips_to_post_forced():
+    """POST_ROLL_GATE cleared + empty queue → POST_FORCED_GATE."""
+    from python.engine.mechanics.combat_phases import (
+        dispatch_combat_gate_advance,
+    )
+    g = _game({
+        'pendingCombat': {
+            'phase': CombatPhase.POST_ROLL_GATE.value,
+        },
+    })
+    dispatch_combat_gate_advance(g)
+    assert get_phase(g) == CombatPhase.POST_FORCED_GATE
+
+
+def test_dispatch_advance_post_forced_with_attacker_rerolls():
+    from python.engine.mechanics.combat_phases import (
+        dispatch_combat_gate_advance,
+    )
+    g = _game({
+        'pendingCombat': {
+            'phase': CombatPhase.POST_FORCED_GATE.value,
+            'attackerRerollsRemaining': 1,
+            'attackDiceResults': [{'color': 'blue', 'acc': 0, 'dmg': 0, 'surge': 0}],
+        },
+    })
+    dispatch_combat_gate_advance(g, rng=__import__('random').Random(2))
+    # Single reroll consumed → POST_ATTACKER_GATE.
+    assert get_phase(g) == CombatPhase.POST_ATTACKER_GATE
+
+
+def test_dispatch_advance_post_surge_routes_to_resolve():
+    from python.engine.mechanics.combat_phases import (
+        dispatch_combat_gate_advance,
+    )
+    g = _make_combat_for_resolve(damage=2)
+    g['pendingCombat']['phase'] = CombatPhase.POST_SURGE_GATE.value
+    dispatch_combat_gate_advance(g)
+    # step_resolve runs → pendingCombat cleared.
+    assert g['pendingCombat'] is None
+    assert g['lastCombatResult']['hit'] is True
+
+
+def test_dispatch_advance_no_op_when_gate_open():
+    """When a gate is still open, dispatch does nothing."""
+    from python.engine.mechanics.combat_phases import (
+        dispatch_combat_gate_advance,
+        send_combat_gate,
+    )
+    g = _game({'pendingCombat': {}})
+    send_combat_gate(g, CombatPhase.POST_ROLL_GATE)
+    dispatch_combat_gate_advance(g)
+    # Gate still open, phase unchanged.
+    assert get_phase(g) == CombatPhase.POST_ROLL_GATE
+    assert get_gate(g) is not None
+
+
+def test_run_combat_to_completion_self_play():
+    """End-to-end self-play loop drives DECLARE → RESOLVE in one call."""
+    from python.engine.mechanics.combat_phases import (
+        run_combat_to_completion,
+    )
+    g = {
+        'selfPlay': True,
+        'pendingCombat': {
+            'phase': CombatPhase.DECLARE.value,
+            'attackerPlayerNum': 1,
+            'attackerFigureKey': 'Han Solo (Rebel Hero)-1-0',
+            'defenderPlayerNum': 2,
+            'defenderMsgId': 'hl2dc0',
+            'attackInfo': {'dice': ['blue', 'green']},
+            'target': {
+                'figureKey': 'Boba Fett-1-0',
+                'figureIndex': 0,
+                'defense': ['white'],
+            },
+            'attackerConds': [],
+            'defenderConds': [],
+        },
+        'dcHealthState': {'hl2dc0': [[5, 5]]},
+    }
+    result = run_combat_to_completion(g, rng=__import__('random').Random(42))
+    # Combat resolved.
+    assert result is not None
+    assert g['pendingCombat'] is None
+    # Result has hit field (true or false depending on dice).
+    assert 'hit' in result
