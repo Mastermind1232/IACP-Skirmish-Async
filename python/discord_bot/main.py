@@ -231,6 +231,11 @@ async def run_bot() -> None:
     # Let handlers both read and write via the store.
     if hasattr(game_store, 'save'):
         deps['save_game'] = game_store.save
+    # Lobby state: thread_id → {creatorId, joinedId, status}.
+    # Populated by the on_message listener below; consumed by
+    # lobby_join_ / lobby_start_ button handlers.
+    deps.setdefault('lobbies', {})
+    deps.setdefault('lobby_embed_sent', set())
 
     # Register slash commands on the bot's tree.
     slash_count = wire_slash_commands(bot, deps)
@@ -253,4 +258,97 @@ async def run_bot() -> None:
         _LOG.info('Bot ready: %s (synced %d commands)',
                   bot.user, slash_count)
 
+    @bot.event
+    async def on_message(message):  # noqa: D401
+        """Watch #new-games forum for new posts → create a lobby.
+
+        Mirrors src/index.js maybeSetupLobbyFromFirstMessage. Discord
+        forum threads aren't messageable until the author posts the
+        first message, so we hook on_message rather than on_thread_create.
+        """
+        try:
+            if message.author.bot:
+                return
+            thread = message.channel
+            if not getattr(thread, 'parent', None):
+                return
+            parent_name = getattr(thread.parent, 'name', '') or ''
+            if parent_name != 'new-games':
+                return
+
+            lobbies = deps['lobbies']
+            embed_sent = deps['lobby_embed_sent']
+            tid = str(thread.id)
+            if tid in lobbies or tid in embed_sent:
+                return
+            embed_sent.add(tid)
+
+            lobby = {
+                'creatorId': str(message.author.id),
+                'joinedId': None,
+                'status': 'LFG',
+            }
+            lobbies[tid] = lobby
+            await _send_lobby_embed(thread, lobby)
+            await _update_lobby_thread_name(thread, lobby)
+        except Exception:
+            _LOG.exception('on_message lobby setup failed')
+
     await bot.start(token)
+
+
+async def _send_lobby_embed(thread: Any, lobby: Dict[str, Any]) -> None:
+    """Post the Game Lobby embed + Join Game button into the thread.
+    Mirrors getLobbyEmbed + getLobbyJoinButton from src/discord/.
+    """
+    import discord  # type: ignore[import]
+
+    creator_id = lobby.get('creatorId') or ''
+    joined_id = lobby.get('joinedId')
+    is_ready = bool(joined_id)
+    p1 = f'1. **Player 1:** <@{creator_id}>'
+    p2 = (f'2. **Player 2:** <@{joined_id}>' if joined_id
+          else '2. **Player 2:** *(not yet joined)*')
+    body = (f'{p1}\n{p2}\n\n'
+            + ('Both players ready! Click **Start Game** to begin.'
+               if is_ready
+               else 'Click **Join Game** to play!'))
+    embed = discord.Embed(title='Game Lobby', description=body, color=0x2B2D31)
+
+    # Build a button row.
+    view = discord.ui.View(timeout=None)
+    if is_ready:
+        view.add_item(discord.ui.Button(
+            style=discord.ButtonStyle.primary,
+            label='Start Game',
+            custom_id=f'lobby_start_{thread.id}',
+        ))
+    else:
+        view.add_item(discord.ui.Button(
+            style=discord.ButtonStyle.success,
+            label='Join Game',
+            custom_id=f'lobby_join_{thread.id}',
+        ))
+    await thread.send(embed=embed, view=view)
+
+
+async def _update_lobby_thread_name(thread: Any,
+                                    lobby: Dict[str, Any]) -> None:
+    """Rename the thread to reflect lobby status. Best-effort —
+    Discord rate-limits thread renames hard."""
+    status = lobby.get('status') or 'LFG'
+    cur_name = getattr(thread, 'name', '') or ''
+    # Strip any leading [STATUS] tag.
+    base = cur_name
+    if base.startswith('['):
+        idx = base.find(']')
+        if idx > 0:
+            base = base[idx + 1:].strip()
+    new_name = f'[{status}] {base}' if base else f'[{status}]'
+    if new_name == cur_name:
+        return
+    try:
+        await thread.edit(name=new_name)
+    except Exception:
+        # Discord rate-limits / perm errors are non-fatal here.
+        pass
