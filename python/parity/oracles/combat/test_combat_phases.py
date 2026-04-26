@@ -961,6 +961,92 @@ def test_dispatch_advance_no_op_when_gate_open():
     assert get_gate(g) is not None
 
 
+# ── P1.11: legal_combat_actions ─────────────────────────────────────────
+
+
+def test_legal_combat_actions_empty_when_no_combat():
+    from python.engine.mechanics.combat_phases import legal_combat_actions
+    assert legal_combat_actions(_game()) == []
+
+
+def test_legal_combat_actions_open_gate_offers_player_clicks():
+    from python.engine.mechanics.combat_phases import (
+        legal_combat_actions,
+        send_combat_gate,
+    )
+    g = _game({'pendingCombat': {}})
+    send_combat_gate(g, CombatPhase.POST_ROLL_GATE)
+    actions = legal_combat_actions(g)
+    # Both players need to click — two actions emitted.
+    assert len(actions) == 2
+    assert {a['player'] for a in actions} == {1, 2}
+    assert all(a['action'] == 'combat_gate' for a in actions)
+
+
+def test_legal_combat_actions_attacker_reroll_emits_per_die():
+    from python.engine.mechanics.combat_phases import legal_combat_actions
+    g = _game({'pendingCombat': {
+        'phase': CombatPhase.ATTACKER_REROLL.value,
+        'attackDiceResults': [
+            {'color': 'blue'}, {'color': 'green'}, {'color': 'red'},
+        ],
+        'attackerRerolledIndices': [1],  # green already rerolled
+    }})
+    actions = legal_combat_actions(g)
+    # 2 unrerolled dice + 1 done = 3 actions.
+    assert len(actions) == 3
+    die_idxs = [a.get('die_idx') for a in actions if a.get('die_idx') is not None]
+    assert die_idxs == [0, 2]
+
+
+def test_legal_combat_actions_token_attacker_offers_4_types_plus_skip():
+    from python.engine.mechanics.combat_phases import legal_combat_actions
+    g = _game({'pendingCombat': {
+        'phase': CombatPhase.TOKEN_ATTACKER.value,
+    }})
+    actions = legal_combat_actions(g)
+    types = [a.get('token_type') for a in actions if 'token_type' in a]
+    assert types == ['Damage', 'Surge', 'Block', 'Evade']
+    assert any(a.get('skip') for a in actions)
+
+
+def test_legal_combat_actions_token_defender_offers_block_evade_skip():
+    from python.engine.mechanics.combat_phases import legal_combat_actions
+    g = _game({'pendingCombat': {
+        'phase': CombatPhase.TOKEN_DEFENDER.value,
+    }})
+    actions = legal_combat_actions(g)
+    types = [a.get('token_type') for a in actions if 'token_type' in a]
+    assert types == ['Block', 'Evade']
+
+
+def test_legal_combat_actions_surge_caps_used_abilities():
+    from python.engine.mechanics.combat_phases import legal_combat_actions
+    g = _game({'pendingCombat': {
+        'phase': CombatPhase.SURGE.value,
+        'surgeSpentCount': {'damage 1': 1},
+        'surgeMaxUsesPerAbility': 1,
+    }})
+    actions = legal_combat_actions(g)
+    surge_ids = [a.get('ability_id') for a in actions if 'ability_id' in a]
+    # 'damage 1' spent + cap=1 → not available. Other canonical ones
+    # remain.
+    assert 'damage 1' not in surge_ids
+    assert 'pierce 1' in surge_ids
+
+
+def test_legal_combat_actions_resolve_phase_emits_resolve_ready():
+    from python.engine.mechanics.combat_phases import legal_combat_actions
+    g = _game({'pendingCombat': {
+        'phase': CombatPhase.RESOLVE.value,
+    }})
+    actions = legal_combat_actions(g)
+    assert any(a.get('action') == 'combat_resolve_ready' for a in actions)
+
+
+# ── End-to-end smoke ────────────────────────────────────────────────────
+
+
 def test_run_combat_to_completion_self_play():
     """End-to-end self-play loop drives DECLARE → RESOLVE in one call."""
     from python.engine.mechanics.combat_phases import (

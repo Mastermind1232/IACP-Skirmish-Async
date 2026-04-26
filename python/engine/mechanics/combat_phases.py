@@ -1315,3 +1315,126 @@ def run_combat_to_completion(game: Any, *, dice_stream=None,
         break
 
     return final_result
+
+
+# ── Combat-phase legal actions ──────────────────────────────────────────
+
+
+def legal_combat_actions(game: Any) -> List[Dict[str, Any]]:
+    """Return legal-action descriptors for the current combat phase.
+
+    Each descriptor is a dict {action: str, ...params}. The Discord
+    layer or AI training loop consumes these to render buttons or
+    select moves. Mirrors the JS getAvailableActions output for the
+    combat-phase branches.
+
+    Action types emitted (per phase):
+      - gate_click: {action: 'combat_gate', player: 1|2}
+      - reroll: {action: 'combat_reroll', side: 'attacker'|'defender',
+                 die_idx: int|None}
+      - reroll_done: {action: 'combat_reroll', side, done: True}
+      - token_spend: {action: 'combat_token', side, token_type, ...}
+      - token_skip: {action: 'combat_token', side, skip: True}
+      - surge_spend: {action: 'combat_surge', ability_id: str}
+      - surge_done: {action: 'combat_surge', skip: True}
+      - resolve: {action: 'combat_resolve_ready'}
+
+    Returns [] when no combat is open.
+    """
+    pc = (
+        (game.data if hasattr(game, 'data') else game).get('pendingCombat')
+        if isinstance(game.data if hasattr(game, 'data') else game, dict)
+        else None
+    )
+    if not isinstance(pc, dict) or not pc:
+        return []
+
+    phase = get_phase(game)
+    actions: List[Dict[str, Any]] = []
+
+    # Open gate: both players must click ready.
+    gate = get_gate(game)
+    if gate is not None:
+        if not gate.p1Ready:
+            actions.append({'action': 'combat_gate', 'player': 1})
+        if not gate.p2Ready:
+            actions.append({'action': 'combat_gate', 'player': 2})
+        return actions
+
+    if phase == CombatPhase.ATTACKER_REROLL:
+        n_dice = len(pc.get('attackDiceResults') or [])
+        rerolled = set(pc.get('attackerRerolledIndices') or [])
+        for i in range(n_dice):
+            if i not in rerolled:
+                actions.append({
+                    'action': 'combat_reroll', 'side': 'attacker', 'die_idx': i,
+                })
+        actions.append({
+            'action': 'combat_reroll', 'side': 'attacker', 'done': True,
+        })
+        return actions
+
+    if phase == CombatPhase.DEFENDER_REROLL:
+        n_dice = len(pc.get('defenseDiceResults') or [])
+        rerolled = set(pc.get('defenderRerolledIndices') or [])
+        for i in range(n_dice):
+            if i not in rerolled:
+                actions.append({
+                    'action': 'combat_reroll', 'side': 'defender', 'die_idx': i,
+                })
+        actions.append({
+            'action': 'combat_reroll', 'side': 'defender', 'done': True,
+        })
+        return actions
+
+    if phase == CombatPhase.TOKEN_ATTACKER:
+        # Always offer the four token types + skip; the handler enforces
+        # availability based on the attacker's actual token pool.
+        for t in ('Damage', 'Surge', 'Block', 'Evade'):
+            actions.append({
+                'action': 'combat_token', 'side': 'attacker',
+                'token_type': t,
+            })
+        actions.append({
+            'action': 'combat_token', 'side': 'attacker', 'skip': True,
+        })
+        return actions
+
+    if phase == CombatPhase.TOKEN_DEFENDER:
+        for t in ('Block', 'Evade'):
+            actions.append({
+                'action': 'combat_token', 'side': 'defender',
+                'token_type': t,
+            })
+        actions.append({
+            'action': 'combat_token', 'side': 'defender', 'skip': True,
+        })
+        return actions
+
+    if phase == CombatPhase.SURGE:
+        # Surge abilities depend on the attacker's available list.
+        # JS reads combat.bonusSurgeAbilities + the attack pool's
+        # default surges. For now emit just 'damage 1', 'pierce 1',
+        # 'accuracy 1' as the always-available canonical set; ability-
+        # specific surges layer in via combat.bonusSurgeAbilities.
+        canonical = ['damage 1', 'pierce 1', 'accuracy 1']
+        bonus = pc.get('bonusSurgeAbilities') or []
+        spent_count = pc.get('surgeSpentCount') or {}
+        cap = int(pc.get('surgeMaxUsesPerAbility') or 1)
+        all_surges = list(canonical) + [
+            a for a in bonus if a not in canonical
+        ]
+        for ability_id in all_surges:
+            if int(spent_count.get(ability_id) or 0) >= cap:
+                continue
+            actions.append({
+                'action': 'combat_surge', 'ability_id': ability_id,
+            })
+        actions.append({'action': 'combat_surge', 'skip': True})
+        return actions
+
+    if phase == CombatPhase.RESOLVE:
+        actions.append({'action': 'combat_resolve_ready'})
+        return actions
+
+    return []
