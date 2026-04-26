@@ -535,4 +535,14 @@ def apply_end_of_activation_effects(game: Any, *, dc_name: str, player_num: int,
                         'message': '**Son of Skywalker** — **Luke Skywalker** is automatically **Readied**.',
                     })
 
+    # Final cleanup: clear all activation-scoped flags for this msg_id /
+    # player / figure_keys. Mirrors JS cleanupActivation in
+    # src/game/activation-state.js. Must run last so prior steps can read
+    # any activation flags they need.
+    try:
+        from python.engine.mechanics.activation_state import cleanup_activation
+        cleanup_activation(game, msg_id, player_num, figure_keys)
+    except Exception:
+        pass
+
     return {'applied': applied}
