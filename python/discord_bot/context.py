@@ -138,3 +138,27 @@ def group_requires(group: str) -> List[str]:
     if group not in _GROUP_DEPS:
         raise ContextGroupNotFound(group)
     return list(_GROUP_DEPS[group])
+
+
+def validate_registry_at_startup() -> None:
+    """Verify every registered handler's group is known to the
+    context factory. Mirrors the JS startup-time fail-fast in
+    src/context-factory.js: an unregistered group means the handler
+    will silently receive an empty ctx, which is hard to debug.
+
+    Raises:
+      ContextGroupNotFound: if any handler is registered with a
+        group not declared in _GROUP_DEPS.
+    """
+    from python.discord_bot.handlers import get_registry
+
+    unknown = []
+    for prefix, _handler, group in get_registry():
+        if group not in _GROUP_DEPS:
+            unknown.append((prefix, group))
+    if unknown:
+        joined = ', '.join(f'{p!r}→{g!r}' for p, g in unknown[:5])
+        raise ContextGroupNotFound(
+            f'{len(unknown)} handler(s) registered with unknown groups: '
+            f'{joined}'
+        )
