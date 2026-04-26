@@ -3957,16 +3957,49 @@ def _handle_combat_ready(game: GameState, action: Action) -> GameState:
 
 
 def _handle_combat_gate(game: GameState, action: Action) -> GameState:
-    """Combat mid-attack gate — advance pendingCombat.phase by gate name.
+    """Combat mid-attack gate — both players click "ready" to proceed.
 
-    Required param: gate (str) — arbitrary phase label the caller wants
-    to stamp. Used for Assassinate / Close Quarters sub-phase dispatch.
+    Mirrors JS handleCombatGate (src/handlers/combat.js:292): operates
+    on combat.combatGate = {phase, p1Ready, p2Ready}. Both players must
+    click before the gate clears. When both ready, deletes combatGate.
+
+    Required param: action.player ∈ {1, 2}. Optional param: gate (str)
+    advances combat.phase even when no gate object exists (used by
+    callers that want to stamp a phase label directly).
     """
-    gate = action.params.get('gate')
-    if not isinstance(gate, str) or not gate:
-        raise ValueError('combat_gate requires gate (str) param')
     combat = _require_pending_combat(game, 'combat_gate')
-    combat['phase'] = gate
+    gate = action.params.get('gate')
+    player = int(action.player or 0)
+    cg = combat.get('combatGate') if isinstance(combat.get('combatGate'), Mapping) else None
+
+    # If the caller passed an explicit gate label and there's no open
+    # combatGate, stamp it as combat.phase (legacy direct-phase path).
+    if gate and not cg:
+        if not isinstance(gate, str):
+            raise ValueError('combat_gate requires gate (str) param')
+        combat['phase'] = gate
+        game.data['pendingCombat'] = combat
+        return game
+
+    # Open-gate path: record this player's ready click.
+    if cg is None:
+        # Open the gate using the gate-label from action.params, defaulting
+        # to combat.phase or a generic 'gate'.
+        cg = {'phase': gate or combat.get('phase') or 'gate',
+              'p1Ready': False, 'p2Ready': False}
+
+    if player == 1:
+        cg['p1Ready'] = True
+    elif player == 2:
+        cg['p2Ready'] = True
+
+    if cg.get('p1Ready') and cg.get('p2Ready'):
+        # Both ready — advance phase + delete combatGate.
+        combat['phase'] = cg.get('phase') or 'gate'
+        if 'combatGate' in combat:
+            del combat['combatGate']
+    else:
+        combat['combatGate'] = dict(cg)
     game.data['pendingCombat'] = combat
     return game
 
