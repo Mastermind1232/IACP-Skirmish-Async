@@ -370,6 +370,135 @@ def _handle_attach_done_confirm(interaction: Any,
     return {'ok': True, 'game': game, 'playerNum': player_num}
 
 
+# ─── Squad submission modal flow ───────────────────────────────────────────
+
+
+def _handle_squad_select(interaction: Any,
+                          ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """squad_select_{gameId}_{playerNum} button — opens the squad
+    submit modal. Mirrors src/handlers/cc-hand.js handleSquadSelect.
+    Returns metadata; the bot layer is responsible for actually
+    calling interaction.show_modal().
+    """
+    cid = _extract_custom_id(interaction)
+    suffix = _tail(cid, 'squad_select_')
+    if not suffix:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    parts = suffix.rsplit('_', 1)
+    if len(parts) != 2:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str = parts
+    try:
+        player_num = int(player_num_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_player_num'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    return {
+        'ok': True,
+        'showModal': True,
+        'modalCustomId': f'squad_modal_{game_id}_{player_num}',
+        'title': 'Submit Squad',
+        'gameId': game_id,
+        'playerNum': player_num,
+        'fields': [
+            {'custom_id': 'squad_name', 'label': 'Squad name',
+             'style': 'short', 'required': False,
+             'placeholder': "e.g. Vader's Fist"},
+            {'custom_id': 'squad_dc',
+             'label': 'Deployment Cards (one per line, max 40 pts)',
+             'style': 'paragraph', 'required': True,
+             'placeholder': 'Darth Vader\nStormtrooper\n...'},
+            {'custom_id': 'squad_cc',
+             'label': 'Command Cards (one per line, exactly 15)',
+             'style': 'paragraph', 'required': True,
+             'placeholder': 'Force Lightning\nBurst Fire\n...'},
+        ],
+    }
+
+
+def _handle_squad_modal_submit(interaction: Any,
+                                ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """squad_modal_{gameId}_{playerNum} modal submit — parses + stores
+    the squad. Mirrors src/handlers/cc-hand.js handleSquadModal.
+    """
+    cid = _extract_custom_id(interaction)
+    suffix = _tail(cid, 'squad_modal_')
+    if not suffix:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    parts = suffix.rsplit('_', 1)
+    if len(parts) != 2:
+        return {'ok': False, 'reason': 'malformed_custom_id'}
+    game_id, player_num_str = parts
+    try:
+        player_num = int(player_num_str)
+    except ValueError:
+        return {'ok': False, 'reason': 'malformed_player_num'}
+
+    game = _resolve_game(ctx, game_id)
+    if game is None:
+        return {'ok': False, 'reason': 'game_not_found', 'gameId': game_id}
+
+    user_id = _extract_user_id(interaction)
+    expected = (
+        game.data.get('player1Id') if player_num == 1
+        else game.data.get('player2Id')
+    )
+    if user_id and expected and str(user_id) != str(expected):
+        return {'ok': False, 'reason': 'not_player'}
+
+    # Pull values from the modal. Both raw discord.py fields and
+    # FakeInteraction.fields shapes supported.
+    fields = getattr(interaction, 'fields', None)
+    def _val(key: str) -> str:
+        if fields is None:
+            return ''
+        getter = getattr(fields, 'get_text_input_value', None)
+        if callable(getter):
+            try:
+                return (getter(key) or '').strip()
+            except Exception:
+                pass
+        # discord.py's ModalSubmitInteraction.data.components shape.
+        data = getattr(interaction, 'data', None)
+        if isinstance(data, dict):
+            for row in (data.get('components') or []):
+                for c in (row.get('components') or []):
+                    if c.get('custom_id') == key:
+                        return (c.get('value') or '').strip()
+        return ''
+
+    name = _val('squad_name') or 'Unnamed Squad'
+    dc_text = _val('squad_dc')
+    cc_text = _val('squad_cc')
+    dc_list = [s.strip() for s in dc_text.split('\n') if s.strip()]
+    cc_list = [s.strip() for s in cc_text.split('\n') if s.strip()]
+
+    squad = {
+        'name': name,
+        'deploymentCards': dc_list,
+        'ccCards': cc_list,
+        'dcCount': len(dc_list),
+        'ccCount': len(cc_list),
+    }
+    game.data[f'player{player_num}Squad'] = squad
+    save = ctx.get('save_games')
+    if callable(save):
+        save()
+
+    return {
+        'ok': True, 'gameId': game_id, 'playerNum': player_num,
+        'squadName': name, 'dcCount': len(dc_list), 'ccCount': len(cc_list),
+        'message': (
+            f'Parsed **{name}** ({len(dc_list)} DCs, {len(cc_list)} CCs). '
+            f'Review your list in the hand channel and confirm.'
+        ),
+    }
+
+
 # ─── Registration ──────────────────────────────────────────────────────────
 
 register('map_confirm_', _handle_map_confirm, 'setup')
@@ -381,3 +510,5 @@ register('determine_initiative_', _handle_determine_initiative, 'setup')
 register('deployment_done_', _handle_deployment_done, 'setup')
 register('attach_reselect_', _handle_attach_reselect, 'setup')
 register('attach_done_confirm_', _handle_attach_done_confirm, 'setup')
+register('squad_select_', _handle_squad_select, 'setup')
+register('squad_modal_', _handle_squad_modal_submit, 'setup')

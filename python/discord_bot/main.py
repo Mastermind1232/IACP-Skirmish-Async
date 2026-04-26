@@ -362,6 +362,12 @@ async def run_bot() -> None:
         except Exception:
             _LOG.exception('on_message lobby setup failed')
 
+        # Admin text commands (typed in #lfg or #bothelpers).
+        try:
+            await _maybe_handle_admin_text(message, deps)
+        except Exception:
+            _LOG.exception('admin text command handler failed')
+
     await bot.start(token)
 
 
@@ -590,3 +596,134 @@ async def _handle_channel_delete(channel: Any, deps: Dict[str, Any]) -> None:
                               exc_info=True)
     finally:
         guard.discard(matched_id)
+
+
+# ---------------------------------------------------------------------------
+# Admin text commands (typed in #lfg, #bothelpers)
+
+
+async def _maybe_handle_admin_text(message: Any,
+                                    deps: Dict[str, Any]) -> None:
+    """Dispatch admin text commands from #lfg / #bothelpers messages.
+
+    Mirrors the JS messageCreate text-command handlers:
+      - testready [@p2]   (#lfg only) — random test scenario.
+      - killgamemcp       (#bothelpers only) — kill all test/AI games.
+      - selfplaymcp ...   (#bothelpers only) — selfplay queue stub
+        (no-op since Python has no Discord-side selfplay loop).
+    """
+    content = (getattr(message, 'content', '') or '').strip()
+    if not content:
+        return
+    channel = getattr(message, 'channel', None)
+    channel_name = (getattr(channel, 'name', '') or '').lower()
+
+    lower = content.lower()
+
+    # testready — works in any channel named lfg.
+    if lower.startswith('testready') and channel_name == 'lfg':
+        await _handle_text_testready(message, deps)
+        return
+
+    # killgamemcp / selfplaymcp — restricted to #bothelpers.
+    if channel_name == 'bothelpers':
+        if lower.startswith('killgamemcp'):
+            await _handle_text_killgamemcp(message, deps)
+            return
+        if lower.startswith('selfplaymcp'):
+            await _handle_text_selfplaymcp(message, deps)
+            return
+
+
+async def _handle_text_testready(message: Any,
+                                   deps: Dict[str, Any]) -> None:
+    """Spin up a quick test game with the message author as P1.
+    Optional second player from a Discord mention.
+    """
+    try:
+        from python.discord_bot.commands import cmd_testgame
+    except Exception:
+        return
+    user_id = str(message.author.id)
+    guild_id = str(getattr(message.guild, 'id', '') or '') or None
+    result = cmd_testgame(user_id, deps, guild_id=guild_id)
+    msg = (
+        f'✅ Test game **{result.get("gameId")}** created. {result.get("message", "")}'
+        if result.get('ok')
+        else f'❌ testready failed: {result.get("reason")}'
+    )
+    try:
+        await message.channel.send(msg)
+    except Exception:
+        pass
+
+
+async def _handle_text_killgamemcp(message: Any,
+                                     deps: Dict[str, Any]) -> None:
+    """Delete all games marked testGame=True or selfPlay=True.
+    Mirrors the JS killgamemcp admin command.
+    """
+    list_ids = deps.get('list_game_ids')
+    get_game = deps.get('get_game')
+    delete_game = deps.get('delete_game')
+    if not (callable(list_ids) and callable(get_game) and callable(delete_game)):
+        try:
+            await message.channel.send('❌ killgamemcp: deps not wired.')
+        except Exception:
+            pass
+        return
+    killed = 0
+    for game_id in list_ids() or []:
+        try:
+            g = get_game(game_id)
+            if g is None:
+                continue
+            data = g.data if hasattr(g, 'data') else g
+            if not (data.get('testGame') or data.get('selfPlay')):
+                continue
+            delete_game(game_id)
+            killed += 1
+        except Exception:
+            continue
+    try:
+        await message.channel.send(f'🪦 Killed {killed} test/selfplay game(s).')
+    except Exception:
+        pass
+
+
+async def _handle_text_selfplaymcp(message: Any,
+                                     deps: Dict[str, Any]) -> None:
+    """selfplaymcp text command. Python has no Discord-side selfplay
+    queue (training-only), so most subcommands are stubs that report
+    the gap honestly. status / coverage delegate to DB queries when
+    available.
+    """
+    parts = (getattr(message, 'content', '') or '').split()
+    sub = parts[1].lower() if len(parts) >= 2 else 'status'
+    try:
+        if sub == 'status':
+            await message.channel.send(
+                'ℹ️ selfplay status: Discord-side selfplay queue not '
+                'ported to Python. Headless training runs in '
+                '`python/mcts/`. No live queue to report.'
+            )
+        elif sub in ('start', 'stop', 'pause', 'resume', 'seed'):
+            await message.channel.send(
+                f'❌ selfplaymcp {sub}: Discord-side selfplay queue not '
+                f'ported to Python. Run headless training scripts under '
+                f'`python/mcts/` instead.'
+            )
+        elif sub == 'coverage':
+            await message.channel.send(
+                'ℹ️ Coverage: HTTP endpoints not ported to Python. '
+                'Coverage data lives in the `exploration_episodes` / '
+                '`exploration_transitions` Postgres tables; query '
+                'directly for now.'
+            )
+        else:
+            await message.channel.send(
+                'Usage: selfplaymcp [status|start|stop|pause|resume|'
+                'seed|coverage]'
+            )
+    except Exception:
+        pass
