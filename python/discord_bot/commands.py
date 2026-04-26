@@ -642,6 +642,73 @@ def cmd_condition_add(user_id: str, deps: Dict[str, Any], *,
             'conditions': (data.get('figureConditions') or {}).get(figure_key, [])}
 
 
+def cmd_testgame(user_id: str, deps: Dict[str, Any], *,
+                  scenario: Optional[str] = None,
+                  guild_id: Optional[str] = None,
+                  ) -> Dict[str, Any]:
+    """Spin up a self-vs-self test game for development. Caller is
+    both player 1 and player 2 (with a synthetic 'test_p2' second
+    player so the game-id namespace doesn't collide with real games).
+
+    Mirrors the JS testgame shortcut (POST /testgame + #lfg "testgame"
+    message handler) for local Cursor / terminal-driven testing.
+
+    Optional scenario hooks come later; for now this just gives you
+    a working game state to drive through /squad + /startbattle.
+    """
+    p2 = f'test_p2_{user_id}'
+    gid = f'test-{user_id[:6]}'
+    if _get(deps, gid) is not None:
+        # Append a counter to avoid collisions on repeat invocations.
+        i = 2
+        while _get(deps, f'{gid}-{i}') is not None and i < 100:
+            i += 1
+        gid = f'{gid}-{i}'
+    g = new_game(user_id, p2, game_id=gid)
+    data = g.data if hasattr(g, 'data') else g
+    data['testGame'] = True  # marker for filtering / cleanup
+    _save(deps, gid, g)
+
+    channels: Dict[str, Any] = {}
+    if guild_id:
+        try:
+            from python.discord_bot import game_channels as gc
+            from python.discord_bot.channel_factory import (
+                create_game_channels,
+            )
+            factory = deps.get('channel_factory')
+            channels = create_game_channels(
+                gid, guild_id, user_id, p2, backend=factory,
+            )
+            for k, setter in (
+                ('board_channel_id',  lambda v: gc.set_board_message(gid, v, None)),
+                ('log_channel_id',    lambda v: gc.set_log_channel(gid, v)),
+                ('p1_play_area_channel_id',
+                 lambda v: gc.set_play_area(gid, 1, v)),
+                ('p2_play_area_channel_id',
+                 lambda v: gc.set_play_area(gid, 2, v)),
+                ('p1_hand_channel_id', lambda v: gc.set_hand_channel(gid, 1, v)),
+                ('p2_hand_channel_id', lambda v: gc.set_hand_channel(gid, 2, v)),
+            ):
+                v = channels.get(k)
+                if v:
+                    setter(v)
+        except Exception:
+            pass
+
+    return {
+        'ok': True, 'gameId': gid,
+        'player1Id': user_id, 'player2Id': p2,
+        'testGame': True, 'scenario': scenario,
+        'channels': channels,
+        'message': (
+            f'Test game **{gid}** created — you are both players. '
+            f'Submit squads with `/squad` (use this game id), then '
+            f'`/startbattle` to begin.'
+        ),
+    }
+
+
 def cmd_condition_remove(user_id: str, deps: Dict[str, Any], *,
                           game_id: str, figure_key: str, condition: str
                           ) -> Dict[str, Any]:

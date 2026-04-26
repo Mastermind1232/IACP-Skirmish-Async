@@ -133,6 +133,8 @@ _SLASH_COMMANDS = [
      'cmd_condition_add', ['game_id', 'figure_key', 'condition']),
     ('conditionremove', 'Manually clear a condition from a figure.',
      'cmd_condition_remove', ['game_id', 'figure_key', 'condition']),
+    ('testgame', 'Spin up a self-vs-self test game (dev shortcut).',
+     'cmd_testgame', ['scenario?']),
 ]
 
 
@@ -249,6 +251,15 @@ async def run_bot() -> None:
     # Persistent store — Postgres / JSON file / in-memory.
     game_store = make_store()
     _LOG.info('Game store: %s', type(game_store).__name__)
+
+    # Seed achievement definitions on startup. No-op when no DB.
+    try:
+        from python.discord_bot.achievements import seed_achievements
+        n = seed_achievements(game_store)
+        if n:
+            _LOG.info('Seeded %d achievement definitions', n)
+    except Exception:
+        _LOG.exception('Achievement seeding failed')
 
     # Wire discord.py-backed channel + factory backends as the defaults,
     # so game_channels.refresh_game_view / create_game_channels post to
