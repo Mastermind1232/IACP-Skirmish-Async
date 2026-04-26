@@ -579,3 +579,90 @@ def handle_attack_target(game: Any, *, msg_id: str, attacker_player_num: int,
         'consumedFreeAttack': consumed_free,
         'attackInfo': attack_info,
     }
+
+
+# ---------------------------------------------------------------------------
+# Move dispatch (P2.9)
+
+
+def handle_move(game: Any, *, msg_id: str, player_num: int,
+                figure_key: str, target_space: str, cost: int,
+                ) -> Dict[str, Any]:
+    """Pure-state move dispatch. Mirrors JS handleMovePick state mutations.
+
+    Caller (Discord layer or stepper) is responsible for resolving
+    `target_space` + `cost` from the movement cache. This function:
+      1. Validates figure is on the board.
+      2. Applies Cripple gate (cannot voluntarily exit space).
+      3. Validates cost ≤ movementBank remaining.
+      4. Updates figurePositions[player_num][figure_key].
+      5. Decrements movementBank[msg_id].remaining by cost.
+      6. Stamps figureMoved[figure_key] = True for trigger lookups.
+
+    Returns:
+      {'ok': True, 'newPosition': ..., 'mpRemaining': ...}
+      {'ok': False, 'code': ..., 'message': ...}
+    """
+    data = _data(game)
+    fig_pos = (data.get('figurePositions') or {}).get(player_num) or {}
+    cur_pos = fig_pos.get(figure_key)
+    if not cur_pos:
+        return {'ok': False, 'code': 'no_position',
+                'message': f'Figure {figure_key} not on board.'}
+
+    # Cripple gate: cannot voluntarily exit current space.
+    crippled = data.get('crippledFigures') or []
+    if isinstance(crippled, list) and figure_key in crippled:
+        if str(target_space).lower() != str(cur_pos).lower():
+            return {'ok': False, 'code': 'cripple',
+                    'message': (
+                        f'**{figure_key}** is Crippled — cannot voluntarily '
+                        f'exit its space this round.'
+                    )}
+
+    # Movement bank check.
+    bank = data.get('movementBank') or {}
+    bank_entry = bank.get(msg_id) if isinstance(bank, dict) else None
+    if not isinstance(bank_entry, dict):
+        return {'ok': False, 'code': 'no_bank',
+                'message': f'No movement bank for {msg_id}.'}
+    mp_remaining = int(bank_entry.get('remaining') or 0)
+    cost = int(cost)
+    if cost < 0:
+        return {'ok': False, 'code': 'invalid_cost',
+                'message': 'Move cost cannot be negative.'}
+    if cost > mp_remaining:
+        return {'ok': False, 'code': 'insufficient_mp',
+                'message': (
+                    f'Not enough movement points '
+                    f'(need {cost}, have {mp_remaining}).'
+                )}
+
+    # Apply move.
+    fp_all = data.get('figurePositions')
+    if not isinstance(fp_all, dict):
+        fp_all = {}
+        data['figurePositions'] = fp_all
+    fp_player = fp_all.get(player_num)
+    if not isinstance(fp_player, dict):
+        fp_player = dict(fig_pos)
+        fp_all[player_num] = fp_player
+    fp_player[figure_key] = target_space
+
+    # Decrement bank.
+    bank_entry['remaining'] = mp_remaining - cost
+
+    # Stamp figureMoved (per-activation flag, msg_id-keyed sub-dict).
+    moved_map = data.get('figureMoved')
+    if not isinstance(moved_map, dict):
+        moved_map = {}
+        data['figureMoved'] = moved_map
+    moved_map[figure_key] = True
+
+    return {
+        'ok': True,
+        'newPosition': target_space,
+        'mpRemaining': bank_entry['remaining'],
+        'previousPosition': cur_pos,
+        'cost': cost,
+    }
