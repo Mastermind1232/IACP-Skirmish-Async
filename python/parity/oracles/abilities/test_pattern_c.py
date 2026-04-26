@@ -107,16 +107,13 @@ def test_every_catalog_status_is_recognised():
 
 
 def test_status_counts_match_expected_distribution():
+    """Sanity-check the catalog distribution. All 52 portable Pattern C
+    abilities are now wired-engine; the 11 data-only-unreferenced
+    entries are inert in JS too. Total stays at 63.
+    """
     counts = pattern_c_status_counts()
-    # Snapshot the D3.5 distribution. This pins the audit: any future Pattern
-    # C additions must update the catalog AND bump the expected count here.
     expected = {
-        'wired-engine': 25,
-        'deferred-bridge': 7,
-        'deferred-handler-combat': 13,
-        'deferred-handler-other': 3,
-        'deferred-cc-timing': 3,
-        'deferred-abilities-js': 1,
+        'wired-engine': 52,
         'data-only-unreferenced': 11,
     }
     assert counts == expected, f'Pattern C status counts drifted: {counts}'
@@ -177,21 +174,26 @@ def test_cower_c3po_is_deferred_handler_combat():
     assert 'handlers/combat.js' in r['js_site']
 
 
-def test_spiked_boots_is_deferred_abilities_js():
+def test_spiked_boots_is_wired_engine():
+    """spiked_boots_snowtrooper now resolved by Python's
+    push_target_within_range._spiked_boots_blocks gate."""
     r = resolve_pattern_c({}, 'spiked_boots_snowtrooper', {})
-    assert r['status'] == 'deferred-abilities-js'
-    assert r['consumption_layer'] == 'abilities-js-push'
+    assert r['status'] == 'wired-engine'
+    assert 'push_target_within_range' in r['js_site']
 
 
-def test_defensive_fire_bokatan_is_deferred_bridge():
+def test_defensive_fire_bokatan_is_wired_engine():
+    """defensive_fire_bokatan now wired into attack_orchestrator
+    post-attack hook (grants 1 Block token after ranged attack)."""
     r = resolve_pattern_c({}, 'defensive_fire_bokatan', {})
-    assert r['status'] == 'deferred-bridge'
-    assert 'combat-bridge.js' in r['js_site']
+    assert r['status'] == 'wired-engine'
+    assert 'attack_orchestrator' in r['js_site']
 
 
-def test_adaptive_skills_is_deferred_cc_timing():
+def test_adaptive_skills_is_wired_engine():
+    """adaptive_skills_mara_jade wired into cc_timing.py."""
     r = resolve_pattern_c({}, 'adaptive_skills_mara_jade', {})
-    assert r['status'] == 'deferred-cc-timing'
+    assert r['status'] == 'wired-engine'
 
 
 def test_attached_dio_is_data_only_unreferenced():
@@ -199,11 +201,14 @@ def test_attached_dio_is_data_only_unreferenced():
     assert r['status'] == 'data-only-unreferenced'
 
 
-def test_deferred_list_is_nonempty():
+def test_deferred_list_is_empty_after_full_port():
+    """All portable Pattern C abilities are now wired-engine. Only
+    data-only-unreferenced entries remain (inert in JS too — no port
+    needed). The deferred list should be empty."""
     deferred = pattern_c_deferred_to_handler()
-    # Loose bound — exact count fluctuates as abilities promote from
-    # deferred to wired-engine. Sanity is "still some deferred work".
-    assert len(deferred) > 0
+    assert deferred == [], (
+        f'Pattern C should have no deferred abilities (full port complete): {deferred}'
+    )
 
 
 # ── Fail-loud boundaries ────────────────────────────────────────────────────
