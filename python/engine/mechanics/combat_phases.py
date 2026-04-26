@@ -244,3 +244,169 @@ def is_self_play(game: Any) -> bool:
     if not isinstance(data, dict):
         return False
     return bool(data.get('selfPlay') or data.get('headless'))
+
+
+# ── Phase steps ─────────────────────────────────────────────────────────
+
+
+class CombatStateError(ValueError):
+    """Raised when a phase step is called on a game whose pendingCombat
+    is missing or in the wrong phase. Replay paths catch this and skip."""
+
+
+def _require_pending_combat(game: Any, label: str) -> Dict[str, Any]:
+    """Return game['pendingCombat'] or raise CombatStateError."""
+    data = game.data if hasattr(game, 'data') else game
+    pc = (data.get('pendingCombat') if isinstance(data, dict) else None)
+    if not isinstance(pc, dict) or not pc:
+        raise CombatStateError(
+            f'{label}: no pendingCombat open (phase={get_phase(game)})'
+        )
+    return pc
+
+
+def step_roll(game: Any, *, dice_stream=None, recorder=None, rng=None) -> Any:
+    """Roll attack + defense dice. Mirrors JS combat.js:2730-2793.
+
+    Reads attack dice colors from pendingCombat['attackInfo']['dice']
+    and defense color from pendingCombat['defense'] (or 'white' default).
+    Stores results in pendingCombat:
+      - attackDiceResults: List[{color, acc, dmg, surge}]
+      - attackRoll: {acc, dmg, surge}
+      - defenseDiceResults: [{color, block, evade, dodge}]
+      - defenseRoll: {block, evade, dodge}
+
+    Advances phase to POST_ROLL_GATE (and opens that gate).
+
+    Optional kwargs:
+      dice_stream: pre-recorded DiceStream (for replay parity).
+      recorder: DiceRecorder to capture rolls.
+      rng: random.Random instance (for deterministic AI training).
+
+    JS calls rollAttackDice / rollDefenseDice directly. Python wires
+    to the byte-identical equivalents in mechanics.dice.
+    """
+    from python.engine.mechanics.dice import (
+        roll_attack_dice as _roll_attack,
+        roll_defense_dice as _roll_defense,
+    )
+
+    pc = _require_pending_combat(game, 'step_roll')
+    cur_phase = get_phase(game)
+    if cur_phase not in (None, CombatPhase.DECLARE,
+                          CombatPhase.PRE_COMBAT_GATE, CombatPhase.ROLL):
+        raise CombatStateError(
+            f'step_roll: cannot roll from phase {cur_phase}'
+        )
+
+    # Attack dice colors from attackInfo or fallback to top-level 'dice'.
+    attack_info = pc.get('attackInfo') or {}
+    dice_colors = (
+        attack_info.get('dice')
+        if isinstance(attack_info, dict) else None
+    )
+    if not dice_colors:
+        dice_colors = pc.get('dice') or []
+    if not dice_colors:
+        raise CombatStateError('step_roll: pendingCombat has no attack dice')
+
+    atk_result = _roll_attack(
+        list(dice_colors),
+        stream=dice_stream, recorder=recorder, rng=rng,
+    )
+
+    # Defense dice — JS rolls one die per defense color (Imperial Officer
+    # has white+black; most figures have one). target.defense is a list.
+    target = pc.get('target') or {}
+    defense_colors = target.get('defense') if isinstance(target, dict) else None
+    if not isinstance(defense_colors, list) or not defense_colors:
+        # Singular default — JS's rollDefenseDice takes one type.
+        defense_colors = [pc.get('defenseType') or 'white']
+
+    def_results = []
+    block_total = 0
+    evade_total = 0
+    dodge_any = False
+    for color in defense_colors:
+        d = _roll_defense(color, stream=dice_stream, recorder=recorder, rng=rng)
+        def_results.append(d)
+        block_total += int(d.get('block', 0) or 0)
+        evade_total += int(d.get('evade', 0) or 0)
+        if d.get('dodge'):
+            dodge_any = True
+
+    pc['attackDiceResults'] = atk_result['dice']
+    pc['attackRoll'] = {
+        'acc': atk_result['acc'],
+        'dmg': atk_result['dmg'],
+        'surge': atk_result['surge'],
+    }
+    pc['defenseDiceResults'] = def_results
+    pc['defenseRoll'] = {
+        'block': block_total,
+        'evade': evade_total,
+        'dodge': dodge_any,
+    }
+    pc['defenseDiceCount'] = len(def_results)
+
+    # Advance to post-roll gate.
+    set_phase(game, CombatPhase.POST_ROLL_GATE)
+    open_gate(game, CombatPhase.POST_ROLL_GATE)
+
+    data = game.data if hasattr(game, 'data') else game
+    data['pendingCombat'] = pc
+    return game
+
+
+# ── Gate advance ────────────────────────────────────────────────────────
+
+
+def send_combat_gate(game: Any, sub_phase: CombatPhase) -> Any:
+    """Open a combat gate that guards `sub_phase`.
+
+    Mirrors JS sendCombatGate (combat.js:266). Sets pendingCombat.phase
+    to the sub_phase and opens the combat gate. In self-play mode, the
+    caller will immediately advance through the gate via dispatch_combat
+    _gate_advance — JS calls this branch synchronously
+    (`if (game.selfPlay) await dispatchCombatGateAdvance(...)`).
+    """
+    set_phase(game, sub_phase)
+    open_gate(game, sub_phase)
+    return game
+
+
+def advance_combat_gate(game: Any, player_num: int = 0) -> Any:
+    """Process a player's "Ready" click on the open combat gate.
+
+    Mirrors JS handleCombatGateReady (combat.js:294-359). Sets the
+    appropriate p{N}Ready flag; when both flags are true, clears the
+    gate and returns control to the caller (which then runs the next
+    phase step).
+
+    `player_num` 0 (default) is auto-mode: in self-play, both flags are
+    set to True at once (mirrors `if (game.isTestGame && isP1)` shortcut
+    + the selfPlay auto-advance path).
+    """
+    pc = _require_pending_combat(game, 'advance_combat_gate')
+    gate_dict = pc.get('combatGate')
+    if not isinstance(gate_dict, dict):
+        # No gate open; nothing to do.
+        return game
+
+    if player_num == 0 or is_self_play(game):
+        # Auto-advance: set both flags. JS uses this in self-play.
+        gate_dict['p1Ready'] = True
+        gate_dict['p2Ready'] = True
+    elif player_num == 1:
+        gate_dict['p1Ready'] = True
+    elif player_num == 2:
+        gate_dict['p2Ready'] = True
+
+    if gate_dict.get('p1Ready') and gate_dict.get('p2Ready'):
+        # Both ready: clear the gate. The caller (dispatch_combat_gate
+        # _advance) routes to the next phase step.
+        clear_gate(game)
+
+    data = game.data if hasattr(game, 'data') else game
+    data['pendingCombat'] = pc
+    return game

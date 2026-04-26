@@ -214,3 +214,167 @@ def test_gate_open_then_clear_transitions():
     assert get_gate(g).both_ready() is True
     clear_gate(g)
     assert get_gate(g) is None
+
+
+# ── step_roll ──────────────────────────────────────────────────────────
+
+
+def _make_combat_for_roll():
+    """Minimal fixture: pendingCombat set up with declared attack info,
+    ready to roll."""
+    return {
+        'pendingCombat': {
+            'phase': CombatPhase.DECLARE.value,
+            'attackInfo': {'dice': ['blue', 'green']},
+            'target': {'defense': ['white']},
+        },
+    }
+
+
+def test_step_roll_populates_attack_results():
+    from python.engine.mechanics.combat_phases import step_roll
+    g = _make_combat_for_roll()
+    step_roll(g, rng=__import__('random').Random(42))
+    pc = g['pendingCombat']
+    assert 'attackDiceResults' in pc
+    assert isinstance(pc['attackDiceResults'], list)
+    assert len(pc['attackDiceResults']) == 2  # two attack dice rolled
+    assert 'attackRoll' in pc
+    assert {'acc', 'dmg', 'surge'} <= set(pc['attackRoll'].keys())
+
+
+def test_step_roll_populates_defense_results():
+    from python.engine.mechanics.combat_phases import step_roll
+    g = _make_combat_for_roll()
+    step_roll(g, rng=__import__('random').Random(7))
+    pc = g['pendingCombat']
+    assert 'defenseDiceResults' in pc
+    assert len(pc['defenseDiceResults']) == 1  # single white die
+    assert 'defenseRoll' in pc
+    assert {'block', 'evade', 'dodge'} <= set(pc['defenseRoll'].keys())
+
+
+def test_step_roll_advances_to_post_roll_gate():
+    from python.engine.mechanics.combat_phases import step_roll
+    g = _make_combat_for_roll()
+    step_roll(g, rng=__import__('random').Random(1))
+    assert get_phase(g) == CombatPhase.POST_ROLL_GATE
+    gate = get_gate(g)
+    assert gate is not None
+    assert gate.phase == CombatPhase.POST_ROLL_GATE.value
+    assert gate.both_ready() is False
+
+
+def test_step_roll_raises_when_no_pending_combat():
+    from python.engine.mechanics.combat_phases import (
+        CombatStateError,
+        step_roll,
+    )
+    try:
+        step_roll(_game())
+        assert False, 'expected CombatStateError'
+    except CombatStateError:
+        pass
+
+
+def test_step_roll_raises_when_no_attack_dice():
+    from python.engine.mechanics.combat_phases import (
+        CombatStateError,
+        step_roll,
+    )
+    g = {'pendingCombat': {'phase': CombatPhase.DECLARE.value}}
+    try:
+        step_roll(g)
+        assert False, 'expected CombatStateError'
+    except CombatStateError:
+        pass
+
+
+def test_step_roll_handles_multi_color_defense():
+    """Imperial Officer-style multi-die defense (white + black)."""
+    from python.engine.mechanics.combat_phases import step_roll
+    g = {
+        'pendingCombat': {
+            'phase': CombatPhase.DECLARE.value,
+            'attackInfo': {'dice': ['blue']},
+            'target': {'defense': ['white', 'black']},
+        },
+    }
+    step_roll(g, rng=__import__('random').Random(99))
+    pc = g['pendingCombat']
+    assert len(pc['defenseDiceResults']) == 2
+
+
+def test_step_roll_deterministic_with_same_rng_seed():
+    """Same seed → same rolls. Required for AI training reproducibility."""
+    from python.engine.mechanics.combat_phases import step_roll
+    g1 = _make_combat_for_roll()
+    g2 = _make_combat_for_roll()
+    step_roll(g1, rng=__import__('random').Random(123))
+    step_roll(g2, rng=__import__('random').Random(123))
+    assert g1['pendingCombat']['attackDiceResults'] == g2['pendingCombat']['attackDiceResults']
+    assert g1['pendingCombat']['defenseDiceResults'] == g2['pendingCombat']['defenseDiceResults']
+
+
+# ── send_combat_gate / advance_combat_gate ──────────────────────────────
+
+
+def test_send_combat_gate_sets_phase_and_opens_gate():
+    from python.engine.mechanics.combat_phases import send_combat_gate
+    g = _game({'pendingCombat': {}})
+    send_combat_gate(g, CombatPhase.POST_ROLL_GATE)
+    assert get_phase(g) == CombatPhase.POST_ROLL_GATE
+    gate = get_gate(g)
+    assert gate is not None
+    assert gate.phase == CombatPhase.POST_ROLL_GATE.value
+    assert gate.both_ready() is False
+
+
+def test_advance_combat_gate_player1_only():
+    """Single p1 click — gate stays open waiting for p2."""
+    from python.engine.mechanics.combat_phases import (
+        advance_combat_gate,
+        send_combat_gate,
+    )
+    g = _game({'pendingCombat': {}})
+    send_combat_gate(g, CombatPhase.POST_ROLL_GATE)
+    advance_combat_gate(g, player_num=1)
+    gate = get_gate(g)
+    assert gate is not None  # still open
+    assert gate.p1Ready is True
+    assert gate.p2Ready is False
+
+
+def test_advance_combat_gate_both_players_clears_gate():
+    """p1 then p2 → gate clears."""
+    from python.engine.mechanics.combat_phases import (
+        advance_combat_gate,
+        send_combat_gate,
+    )
+    g = _game({'pendingCombat': {}})
+    send_combat_gate(g, CombatPhase.POST_ROLL_GATE)
+    advance_combat_gate(g, player_num=1)
+    advance_combat_gate(g, player_num=2)
+    assert get_gate(g) is None  # cleared
+
+
+def test_advance_combat_gate_self_play_auto():
+    """In self-play mode, advance with player_num=0 sets both flags
+    and clears the gate in one call."""
+    from python.engine.mechanics.combat_phases import (
+        advance_combat_gate,
+        send_combat_gate,
+    )
+    g = _game({'pendingCombat': {}, 'selfPlay': True})
+    send_combat_gate(g, CombatPhase.POST_ROLL_GATE)
+    advance_combat_gate(g)  # no player_num — auto
+    assert get_gate(g) is None
+
+
+def test_advance_combat_gate_no_op_when_no_gate():
+    """Calling advance with no gate open is a no-op (does not raise)."""
+    from python.engine.mechanics.combat_phases import advance_combat_gate
+    g = _game({'pendingCombat': {'phase': 'declare'}})
+    advance_combat_gate(g, player_num=1)
+    # No gate, no error, state unchanged.
+    assert get_gate(g) is None
