@@ -201,9 +201,10 @@ async def run_bot() -> None:
     )
     from python.discord_bot.db import make_store
 
-    token = os.environ.get('DISCORD_BOT_TOKEN')
+    # Accept either DISCORD_TOKEN (JS-bot legacy) or DISCORD_BOT_TOKEN.
+    token = os.environ.get('DISCORD_TOKEN') or os.environ.get('DISCORD_BOT_TOKEN')
     if not token:
-        raise RuntimeError('DISCORD_BOT_TOKEN env var required')
+        raise RuntimeError('DISCORD_TOKEN or DISCORD_BOT_TOKEN env var required')
 
     intents = discord.Intents.default()
     intents.message_content = True

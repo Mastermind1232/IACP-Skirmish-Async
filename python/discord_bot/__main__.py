@@ -3,7 +3,7 @@
 Reads config from env vars and boots the bot via main.run_bot.
 
 Required env:
-  DISCORD_BOT_TOKEN — Discord bot token.
+  DISCORD_TOKEN (or DISCORD_BOT_TOKEN) — Discord bot token.
 
 Optional env:
   DATABASE_URL         — Postgres DSN (enables PostgresStore).
@@ -32,9 +32,9 @@ def main() -> None:
     _configure_logging()
     log = logging.getLogger('skirbo.main')
 
-    token = os.environ.get('DISCORD_BOT_TOKEN')
+    token = os.environ.get('DISCORD_TOKEN') or os.environ.get('DISCORD_BOT_TOKEN')
     if not token:
-        log.error('DISCORD_BOT_TOKEN env var is required.')
+        log.error('DISCORD_TOKEN or DISCORD_BOT_TOKEN env var is required.')
         raise SystemExit(1)
 
     # Lazy import so --help and dry-run imports don't pull discord.py.
