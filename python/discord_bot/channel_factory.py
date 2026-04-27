@@ -23,8 +23,11 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple
 _LOG = logging.getLogger('skirbo.channel_factory')
 
 
-# Category names — kept in sync with src/index.js CATEGORIES.
+# Category names. JS uses '⚔️ Games' (with emoji); some servers
+# created the category as plain 'Games'. Match either form so we
+# don't silently strand new games at the server root.
 GAMES_CATEGORY = '⚔️ Games'
+GAMES_CATEGORY_FALLBACKS = ('⚔️ Games', 'Games', '⚔ Games')
 
 # Game-ID category pattern. e.g. "IA Game #00042".
 _GAME_CATEGORY_RE = re.compile(r'^IA Game #(\d+)$')
@@ -275,8 +278,14 @@ def create_game_channels(game_id: str, guild_id: str,
     cat_name = f'IA Game #{pad}'
     ch_prefix = f'IA{pad}'
 
-    # Position: directly after the "⚔️ Games" category if present.
-    games_cat = be.find_category_by_name(guild_id, GAMES_CATEGORY)
+    # Position: directly after the "Games" category if present (try
+    # JS form '⚔️ Games' first, fall back to plain 'Games' for
+    # servers without the emoji).
+    games_cat = None
+    for candidate in GAMES_CATEGORY_FALLBACKS:
+        games_cat = be.find_category_by_name(guild_id, candidate)
+        if games_cat:
+            break
     position = None
     if games_cat:
         try:
