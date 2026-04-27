@@ -1962,6 +1962,26 @@ client.once('ready', async () => {
       }
     }
     console.log('Auto-refresh complete.');
+
+    // After a Railway redeploy, an in-flight AI turn is lost. Kick the
+    // AI hook for any active vs-SKIRBO game so SKIRBO resumes whatever
+    // it was supposed to do without requiring the human to click first.
+    for (const game of activeGames) {
+      if (!game.aiPlayerNum || game.selfPlay || game.ended) continue;
+      console.log(`  Resuming AI turn for game ${game.gameId} (player ${game.aiPlayerNum})`);
+      setTimeout(async () => {
+        try {
+          await runAiTurnLive(game, client, buildAllDeps, getGame, {
+            maxSteps: 50,
+            delayMs: 1500,
+            deps: { dcMessageMeta, dcExhaustedState },
+            atomicOpts,
+          });
+        } catch (err) {
+          console.error(`[AI resume] game ${game.gameId}:`, err.message);
+        }
+      }, 2000);
+    }
   }
 
   // Auto-recovery is available on-demand via the Recover button in /botmenu.
