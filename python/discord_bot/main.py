@@ -96,8 +96,42 @@ def build_deps(game_store: Any, client: Any = None) -> Dict[str, Any]:
     }
 
 
+_game_locks: Dict[str, 'asyncio.Lock'] = {}
+
+
+def _lock_for(game_id: str) -> 'asyncio.Lock':
+    """Lazy-create a per-game asyncio.Lock. Two concurrent clicks on
+    the same game serialize through this lock so state mutations
+    don't clobber each other.
+    """
+    import asyncio
+    lock = _game_locks.get(game_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _game_locks[game_id] = lock
+    return lock
+
+
 async def route_interaction(interaction: Any, deps: Dict[str, Any]) -> Dict[str, Any]:
-    """Callback for the Discord on_interaction event. Route + return result."""
+    """Callback for the Discord on_interaction event. Route + return result.
+
+    Acquires a per-game lock when the customId carries a game_id so
+    concurrent clicks on the same game serialize. Lobby-level
+    interactions (no game_id parseable) skip the lock.
+    """
+    custom_id = (
+        (getattr(interaction, 'data', {}) or {}).get('custom_id')
+        or getattr(interaction, 'custom_id', '') or ''
+    )
+    game_id = None
+    try:
+        from python.discord_bot.handlers.stepper_bridge import _extract_game_id
+        game_id = _extract_game_id(custom_id)
+    except Exception:
+        game_id = None
+    if game_id:
+        async with _lock_for(game_id):
+            return await route(interaction, deps)
     return await route(interaction, deps)
 
 
