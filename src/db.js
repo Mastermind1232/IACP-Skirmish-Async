@@ -462,12 +462,16 @@ export async function saveGamesToDb(gamesMap) {
   return savePromise;
 }
 
-/** Remove a game and all related data from the database (when game is killed). */
+/** Remove a game from the active-games registry (when game is killed).
+ *
+ * Note: domain_events and game_snapshots are intentionally preserved as a
+ * historical record. Discord channels are deleted separately by the caller;
+ * the on-disk action log stays so an AI rules-judge can replay completed
+ * games and flag rules bugs after the fact.
+ */
 export async function deleteGameFromDb(gameId) {
   if (!pool) return;
   try {
-    await pool.query('DELETE FROM domain_events WHERE game_id = $1', [gameId]);
-    await pool.query('DELETE FROM game_snapshots WHERE game_id = $1', [gameId]);
     await pool.query('DELETE FROM games WHERE game_id = $1', [gameId]);
   } catch (err) {
     console.error('[DB] Delete failed:', err.message);
