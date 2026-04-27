@@ -128,13 +128,16 @@ export async function createHandThreads(client, game, deps) {
  */
 export async function createGameChannels(guild, player1Id, player2Id, deps) {
   const { CATEGORIES, getGameIdCounter, setGameIdCounter } = deps;
+  // Match category names like "IA Game #00001" with an optional emoji prefix
+  // (e.g. "🤖 IA Game #00001" for SKIRBO games, "⚔️ IA Game #00001" for PvP).
+  const categoryNameRe = /IA Game #(\d+)$/;
   // Scan for existing IA Game #XXXXX categories (active, archived, completed) so we never reuse an ID
   await guild.channels.fetch();
   const gameCategories = guild.channels.cache.filter(
-    (c) => c.type === ChannelType.GuildCategory && /^IA Game #(\d+)$/.test(c.name)
+    (c) => c.type === ChannelType.GuildCategory && categoryNameRe.test(c.name)
   );
   const maxId = gameCategories.reduce((max, c) => {
-    const m = c.name.match(/^IA Game #(\d+)$/);
+    const m = c.name.match(categoryNameRe);
     const n = m ? parseInt(m[1], 10) : 0;
     return Math.max(max, n);
   }, 0);
@@ -144,6 +147,9 @@ export async function createGameChannels(guild, player1Id, player2Id, deps) {
   const prefix = `IA${gameId}`;
   const everyoneRole = guild.roles.everyone;
   const botId = guild.client.user.id;
+  // Emoji prefix telegraphs game type at a glance: 🤖 vs SKIRBO, ⚔️ PvP.
+  const isVsAi = typeof player2Id === 'string' && player2Id.startsWith('ai_player_');
+  const categoryEmoji = isVsAi ? '🤖' : '⚔️';
 
   const isSnowflake = isDiscordSnowflake;
   const playerPerms = [
@@ -163,7 +169,7 @@ export async function createGameChannels(guild, player1Id, player2Id, deps) {
   const position = gamesCategory ? gamesCategory.position + 1 : bottomPosition;
 
   const gameCategory = await guild.channels.create({
-    name: `IA Game #${gameId}`,
+    name: `${categoryEmoji} IA Game #${gameId}`,
     type: ChannelType.GuildCategory,
     permissionOverwrites: playerPerms,
     position,
