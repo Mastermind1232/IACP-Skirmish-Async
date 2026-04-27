@@ -124,7 +124,7 @@ import { getActiveSelfPlayGameId, runSelfPlayLoop, captureManualKillDiagnostic, 
 import { startQueue, stopQueue, pauseQueue, resumeQueue, getQueueStatus } from './src/ai/self-play-queue.js';
 import { parseTransitionKey } from './src/exploration/transition-key.js';
 import { getTopValidationCandidate } from './src/exploration/rank-seeds.js';
-import { snowflakeUsers, sanitizeMentions } from './src/discord/channel-helpers.js';
+import { snowflakeUsers, sanitizeMentions, installAiSanitizer } from './src/discord/channel-helpers.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
   getMissionTokenLabel as _getMissionTokenLabelPure,
@@ -1696,6 +1696,11 @@ function setupServer(guild) {
 }
 
 client.once('ready', async () => {
+  // Patch all outbound send / reply / followUp / edit methods to rewrite
+  // dead AI mentions (`<@ai_player_2>`) as `**SKIRBO**`. Done here so it
+  // applies to the entire bot lifetime — a single hook covers every direct
+  // channel.send / interaction.* call site without needing audit grunt work.
+  installAiSanitizer();
   console.log(`Logged in as ${client.user.tag}`);
   try {
     const rest = new REST().setToken(process.env.DISCORD_TOKEN);

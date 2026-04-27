@@ -2,6 +2,13 @@
  * Centralized channel-fetch helpers to replace scattered client.channels.fetch() calls.
  */
 
+import {
+  TextChannel, NewsChannel, ThreadChannel, DMChannel, VoiceChannel,
+  ChatInputCommandInteraction, ButtonInteraction, ModalSubmitInteraction,
+  StringSelectMenuInteraction, UserSelectMenuInteraction,
+  RoleSelectMenuInteraction, MentionableSelectMenuInteraction,
+  ChannelSelectMenuInteraction, AutocompleteInteraction, Message,
+} from 'discord.js';
 import { withDiscordRetry } from '../error-handling.js';
 
 /** Check if a string is a valid Discord snowflake (filters synthetic AI user IDs). */
@@ -22,6 +29,13 @@ function rewriteAi(s) {
   return typeof s === 'string' && s.includes('<@ai_player_')
     ? s.replace(AI_MENTION_RE, AI_DISPLAY)
     : s;
+}
+
+/** Apply the AI-mention rewrite to any outbound payload (string or object). */
+export function sanitizeOut(input) {
+  if (input == null) return input;
+  if (typeof input === 'string') return rewriteAi(input);
+  return sanitizeMentions(input);
 }
 
 /**
@@ -90,5 +104,61 @@ export async function fetchGameChannel(client, channelId) {
   } catch {
     // Non-retryable error (channel deleted, invalid ID, etc.)
     return null;
+  }
+}
+
+/**
+ * Monkey-patch every Discord channel + interaction send method so that
+ * outbound payloads always run through sanitizeOut. This catches direct
+ * `channel.send(...)`, `interaction.followUp(...)`, etc. that bypass our
+ * own helpers — the audit found ~22 such call sites with player-mention
+ * interpolation, and there's no way to be sure we found them all.
+ *
+ * Idempotent: a `__skirboSanitized` flag on the prototype prevents
+ * double-wrapping.
+ */
+export function installAiSanitizer() {
+  const channelClasses = [TextChannel, NewsChannel, ThreadChannel, DMChannel, VoiceChannel];
+  for (const cls of channelClasses) {
+    const proto = cls?.prototype;
+    if (!proto || proto.__skirboSanitized) continue;
+    if (typeof proto.send === 'function') {
+      const orig = proto.send;
+      proto.send = function patchedSend(payload) {
+        return orig.call(this, sanitizeOut(payload));
+      };
+    }
+    proto.__skirboSanitized = true;
+  }
+  const interactionClasses = [
+    ChatInputCommandInteraction, ButtonInteraction, ModalSubmitInteraction,
+    StringSelectMenuInteraction, UserSelectMenuInteraction,
+    RoleSelectMenuInteraction, MentionableSelectMenuInteraction,
+    ChannelSelectMenuInteraction, AutocompleteInteraction,
+  ];
+  for (const cls of interactionClasses) {
+    const proto = cls?.prototype;
+    if (!proto || proto.__skirboSanitized) continue;
+    for (const method of ['reply', 'followUp', 'editReply', 'update', 'deferReply', 'showModal']) {
+      if (typeof proto[method] !== 'function') continue;
+      const orig = proto[method];
+      // deferReply / showModal don't carry user content; skip rewriting their
+      // payloads but still trace the override path is set.
+      if (method === 'deferReply' || method === 'showModal') continue;
+      proto[method] = function patchedInteraction(payload) {
+        return orig.call(this, sanitizeOut(payload));
+      };
+    }
+    proto.__skirboSanitized = true;
+  }
+  // Also patch Message.edit (used in many lobby/board refresh paths)
+  if (Message?.prototype && !Message.prototype.__skirboSanitized) {
+    if (typeof Message.prototype.edit === 'function') {
+      const orig = Message.prototype.edit;
+      Message.prototype.edit = function patchedMessageEdit(payload) {
+        return orig.call(this, sanitizeOut(payload));
+      };
+    }
+    Message.prototype.__skirboSanitized = true;
   }
 }
