@@ -294,9 +294,27 @@ async def run_bot() -> None:
         itype = getattr(interaction, 'type', None)
         if itype is None or str(itype).endswith('application_command'):
             return
+        # Custom-id prefixes that need to open a Discord modal must NOT
+        # be defer()-acknowledged first — show_modal() must be the
+        # initial response. For all others, defer immediately so Discord
+        # doesn't show "The interaction failed" while the handler runs.
+        custom_id = getattr(interaction, 'custom_id', '') or ''
+        needs_modal = custom_id.startswith('squad_select_')
+        if not needs_modal:
+            try:
+                resp = getattr(interaction, 'response', None)
+                if resp is not None and not resp.is_done():
+                    await resp.defer(ephemeral=True)
+            except Exception:
+                pass
         result = await on_interaction(interaction, deps)
         if not result.get('ok'):
             _LOG.warning('Route failed: %s', result)
+        # Per-handler UI follow-ups.
+        try:
+            await _post_route_ui_followup(interaction, result, bot, deps)
+        except Exception:
+            _LOG.exception('post-route UI follow-up failed')
 
     @bot.event
     async def on_ready():  # noqa: D401
@@ -600,6 +618,164 @@ async def _handle_channel_delete(channel: Any, deps: Dict[str, Any]) -> None:
 
 # ---------------------------------------------------------------------------
 # Admin text commands (typed in #lfg, #bothelpers)
+
+
+async def _post_route_ui_followup(interaction: Any,
+                                   result: Dict[str, Any],
+                                   bot: Any,
+                                   deps: Dict[str, Any]) -> None:
+    """After a button handler runs, render any UI follow-up the
+    handler signaled (lobby embed refresh, modal show, ephemeral
+    error message, etc.).
+
+    The router-level defer() already acknowledged the interaction;
+    this helper sends the actual user-facing response.
+    """
+    if not isinstance(result, dict):
+        return
+
+    # Modal show: handlers that need a popup (e.g. squad_select_)
+    # return showModal=True with a modal definition. We routed without
+    # deferring for these; now build + show the modal.
+    if result.get('showModal'):
+        try:
+            await _show_modal_from_handler_result(interaction, result)
+        except Exception:
+            _LOG.exception(
+                'show_modal failed for custom_id %s',
+                getattr(interaction, 'custom_id', None),
+            )
+        return
+
+    custom_id = getattr(interaction, 'custom_id', None)
+    if not isinstance(custom_id, str):
+        return
+
+    prefix = result.get('prefix') or ''
+
+    # Lobby join → refresh the lobby embed in the thread.
+    if prefix == 'lobby_join_' and result.get('ok'):
+        thread_id = custom_id[len('lobby_join_'):]
+        await _refresh_lobby_thread(bot, thread_id, deps)
+
+    # Lobby start → render post-start state (creates game channels).
+    if prefix == 'lobby_start_' and result.get('ok'):
+        thread_id = custom_id[len('lobby_start_'):]
+        await _refresh_lobby_thread(bot, thread_id, deps,
+                                    status_override='Started')
+
+    # Default ephemeral acknowledgment if the handler returned an error.
+    if not result.get('ok'):
+        try:
+            reason = result.get('reason') or 'unknown'
+            await interaction.followup.send(
+                f'❌ {reason}', ephemeral=True,
+            )
+        except Exception:
+            pass
+
+
+async def _show_modal_from_handler_result(interaction: Any,
+                                            result: Dict[str, Any]) -> None:
+    """Build a discord.ui.Modal from a handler's showModal result and
+    send it via interaction.response.send_modal().
+    """
+    import discord  # type: ignore[import]
+
+    modal_id = result.get('modalCustomId') or 'modal'
+    title = result.get('title') or 'Submit'
+    fields = result.get('fields') or []
+
+    class _DynModal(discord.ui.Modal):
+        def __init__(self) -> None:
+            super().__init__(title=title, custom_id=modal_id)
+            for f in fields:
+                style = (
+                    discord.TextStyle.paragraph
+                    if (f.get('style') or '').lower() == 'paragraph'
+                    else discord.TextStyle.short
+                )
+                self.add_item(discord.ui.TextInput(
+                    custom_id=f.get('custom_id') or '',
+                    label=(f.get('label') or '')[:45] or 'Field',
+                    style=style,
+                    required=bool(f.get('required', True)),
+                    placeholder=(f.get('placeholder') or '')[:100] or None,
+                ))
+
+        async def on_submit(self, _interaction: Any) -> None:
+            # Submission routes back through on_interaction_event via
+            # the discord.py interaction system; this stub satisfies
+            # the abstract method.
+            await _interaction.response.defer(ephemeral=True)
+
+    await interaction.response.send_modal(_DynModal())
+
+
+async def _refresh_lobby_thread(bot: Any, thread_id: str,
+                                 deps: Dict[str, Any],
+                                 status_override: Optional[str] = None,
+                                 ) -> None:
+    """Re-render the Game Lobby embed + button row in `thread_id` to
+    reflect the latest lobby state (after join / start)."""
+    lobbies = deps.get('lobbies') or {}
+    lobby = lobbies.get(str(thread_id))
+    if lobby is None:
+        return
+    if status_override:
+        lobby['status'] = status_override
+    try:
+        thread = bot.get_channel(int(thread_id))
+        if thread is None:
+            thread = await bot.fetch_channel(int(thread_id))
+        # Find prior lobby embed message and edit it; if not found,
+        # send a new one.
+        latest_lobby_msg = None
+        async for m in thread.history(limit=20, oldest_first=False):
+            if (m.author.id == bot.user.id and m.embeds
+                    and m.embeds[0].title == 'Game Lobby'):
+                latest_lobby_msg = m
+                break
+        if latest_lobby_msg is None:
+            await _send_lobby_embed(thread, lobby)
+        else:
+            await _edit_lobby_embed(latest_lobby_msg, thread, lobby)
+        await _update_lobby_thread_name(thread, lobby)
+    except Exception:
+        _LOG.exception('lobby thread refresh failed for %s', thread_id)
+
+
+async def _edit_lobby_embed(message: Any, thread: Any,
+                             lobby: Dict[str, Any]) -> None:
+    """Edit an existing lobby embed message to reflect updated lobby state."""
+    import discord  # type: ignore[import]
+
+    creator_id = lobby.get('creatorId') or ''
+    joined_id = lobby.get('joinedId')
+    is_ready = bool(joined_id)
+    p1 = f'1. **Player 1:** <@{creator_id}>'
+    p2 = (f'2. **Player 2:** <@{joined_id}>' if joined_id
+          else '2. **Player 2:** *(not yet joined)*')
+    body = (f'{p1}\n{p2}\n\n'
+            + ('Both players ready! Click **Start Game** to begin.'
+               if is_ready
+               else 'Click **Join Game** to play!'))
+    embed = discord.Embed(title='Game Lobby', description=body, color=0x2B2D31)
+
+    view = discord.ui.View(timeout=None)
+    if is_ready:
+        view.add_item(discord.ui.Button(
+            style=discord.ButtonStyle.primary,
+            label='Start Game',
+            custom_id=f'lobby_start_{thread.id}',
+        ))
+    else:
+        view.add_item(discord.ui.Button(
+            style=discord.ButtonStyle.success,
+            label='Join Game',
+            custom_id=f'lobby_join_{thread.id}',
+        ))
+    await message.edit(embed=embed, view=view)
 
 
 async def _maybe_handle_admin_text(message: Any,
