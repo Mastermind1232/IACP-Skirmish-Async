@@ -1912,7 +1912,18 @@ client.once('ready', async () => {
           const playerIds = [...desc.matchAll(/<@(\d+)>/g)].map((m) => m[1]);
           if (playerIds.length === 0) continue;
           const creatorId = playerIds[0];
-          const joinedId = playerIds.length >= 2 ? playerIds[1] : null;
+          // SKIRBO games render as "🤖 SKIRBO (AI)" in the embed, so the
+          // numeric-ID regex returns only the creator. Detect them via
+          // the embed text (or the applied 'Player vs SKIRBO' tag) and
+          // restore the AI sentinel as joinedId.
+          const isSkirboLobby = /SKIRBO/i.test(desc) || (thread.appliedTags || []).some((tagId) => {
+            const tag = (thread.parent?.availableTags || []).find((t) => t.id === tagId);
+            return /skirbo/i.test(tag?.name || '');
+          });
+          let joinedId;
+          if (playerIds.length >= 2) joinedId = playerIds[1];
+          else if (isSkirboLobby) joinedId = `${AI_USER_PREFIX}2`;
+          else joinedId = null;
           // Determine status from thread name prefix
           let status = 'LFG';
           if (thread.name.startsWith('[Launched]')) continue; // game already created, skip

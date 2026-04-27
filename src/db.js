@@ -334,6 +334,12 @@ export async function initDb() {
 /** Write a row to completed_games when a game ends (DB2). Call in the same path that sets game.ended. */
 export async function insertCompletedGame(game) {
   if (!pool || !game?.ended) return;
+  // SKIRBO / self-play games never count toward leaderboards or stats.
+  // Skip the insert entirely so winrate / pickrate / leaderboard queries
+  // don't have to filter the sentinel ID out of every aggregate.
+  const p1 = game.player1Id ?? '';
+  const p2 = game.player2Id ?? '';
+  if (p1.startsWith('ai_player_') || p2.startsWith('ai_player_') || game.selfPlay) return;
   try {
     const winnerId = game.winnerId ?? null;
     const player1Id = game.player1Id ?? '';
