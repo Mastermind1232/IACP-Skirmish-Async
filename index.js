@@ -2260,6 +2260,11 @@ client.once('ready', async () => {
 
 const requestsWithButtons = new Set();
 
+// gameId → source channelId where the most recent @bothelpers ping came from.
+// Used by the bothelpers route-back path so a `[iaXXXXX] ...` reply in #bothelpers
+// posts back into the same channel the user pinged from.
+const helpRequestSourceMap = new Map();
+
 // Forum posts: thread isn't messageable until the author sends their first message.
 // So we set up the lobby on the first message in a new-games thread.
 async function maybeSetupLobbyFromFirstMessage(message) {
@@ -2730,6 +2735,47 @@ client.on('messageCreate', async (message) => {
   }
   // ── End MCP killgame trigger ──────────────────────────────────────────────
 
+  // ── Bothelpers route-back: [iaXXXXX] reply in support channel → game ─────
+  // Any message in #bothelpers that starts with `[ia<gameId>]` gets forwarded
+  // back into the source channel (where the original @bothelpers ping came from,
+  // falling back to the game's chat channel).
+  if (message.channel.id === '1481314970666008607') {
+    const tagMatch = (message.content || '').match(/^\s*\[ia([A-Za-z0-9]+)\]\s*([\s\S]+)$/);
+    if (tagMatch) {
+      const taggedGameId = tagMatch[1];
+      const replyBody = tagMatch[2].trim();
+      if (replyBody) {
+        try {
+          const taggedGame = getGame(taggedGameId);
+          if (taggedGame) {
+            const targetChannelId =
+              helpRequestSourceMap.get(taggedGameId) || taggedGame.chatId || taggedGame.generalId;
+            if (targetChannelId) {
+              const targetCh = await client.channels.fetch(targetChannelId).catch(() => null);
+              if (targetCh) {
+                const author = message.member?.displayName || message.author?.username || 'bothelper';
+                await targetCh.send({
+                  content: `💬 **${author}** (via bothelpers):\n${replyBody}`,
+                  allowedMentions: { parse: ['users'] },
+                });
+                await message.react('✅').catch(() => {});
+              } else {
+                await message.react('⚠️').catch(() => {});
+              }
+            } else {
+              await message.react('⚠️').catch(() => {});
+            }
+          } else {
+            await message.react('❓').catch(() => {});
+          }
+        } catch (err) {
+          console.error('Bothelpers route-back error:', err);
+        }
+        return;
+      }
+    }
+  }
+
   // Allow bot-authored selfplaymcp commands in the MCP bothelpers channel
   // (enables remote triggering via Discord API without a human in the loop)
   if (message.author.bot) {
@@ -2770,8 +2816,9 @@ client.on('messageCreate', async (message) => {
             new ButtonBuilder().setCustomId(`bothelper_jump_${gameId}`).setLabel('Jump In!').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`bothelper_resolve_${gameId}_${message.id}`).setLabel('Resolve').setStyle(ButtonStyle.Secondary),
           );
+          helpRequestSourceMap.set(gameId, message.channel.id);
           await bothelpersCh.send({
-            content: `<@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}>:\n\n> ${message.content.replace(/<@&\d+>/g, '@bothelpers').split('\n').join('\n> ')}\n\n[Jump to message](${sourceLink})`,
+            content: `🆘 **\\[ia${gameId}\\]** <@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>:\n\n> ${message.content.replace(/<@&\d+>/g, '@bothelpers').split('\n').join('\n> ')}\n\n[Jump to message](${sourceLink})\n\n_Reply with_ \`[ia${gameId}] your message\` _to send a response back to the game._`,
             components: [jumpRow],
             allowedMentions: { roles: [BOTHELPERS_ROLE_ID] },
           });
