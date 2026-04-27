@@ -198,8 +198,41 @@ def _translate_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             for f in payload['files']
             if isinstance(f, dict) and 'content' in f
         ]
-    # Components require View objects — left to the caller to build.
-    # For now, skip; a future pass will translate dict components to Views.
+    # Translate dict-shape components into a discord.ui.View. Each
+    # component is an ActionRow (type=1) containing Buttons (type=2).
+    # Buttons get added to a single timeout=None View so the bot
+    # routes click events through on_interaction.
+    if payload.get('components'):
+        try:
+            from discord import ui as _ui
+            view = _ui.View(timeout=None)
+            for row in payload['components']:
+                if not isinstance(row, dict) or row.get('type') != 1:
+                    continue
+                for c in (row.get('components') or []):
+                    if not isinstance(c, dict) or c.get('type') != 2:
+                        continue
+                    style_int = int(c.get('style', 2))
+                    style = {
+                        1: discord.ButtonStyle.primary,
+                        2: discord.ButtonStyle.secondary,
+                        3: discord.ButtonStyle.success,
+                        4: discord.ButtonStyle.danger,
+                        5: discord.ButtonStyle.link,
+                    }.get(style_int, discord.ButtonStyle.secondary)
+                    view.add_item(_ui.Button(
+                        style=style,
+                        label=c.get('label') or '',
+                        custom_id=c.get('custom_id'),
+                        url=c.get('url') if style_int == 5 else None,
+                        disabled=bool(c.get('disabled', False)),
+                    ))
+            if len(view.children) > 0:
+                out['view'] = view
+        except Exception:
+            # Logger not in scope here; skip silently rather than
+            # crash the post pathway.
+            pass
     return out
 
 

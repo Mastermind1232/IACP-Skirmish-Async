@@ -208,6 +208,134 @@ class DiscordFactoryBackend:
             _LOG.exception('create_thread failed for %s', name)
             return None
 
+    def add_thread_member(self, thread_id: str, user_id: str) -> bool:
+        """Add a user to a private thread so they can see it.
+        Mirrors JS thread.members.add(playerId).
+        """
+        try:
+            import discord  # type: ignore[import]
+        except ImportError:
+            return False
+        try:
+            thread = self.client.get_channel(int(thread_id))
+            if thread is None:
+                return False
+            user_obj = discord.Object(id=int(user_id))
+            async def _do():
+                await thread.add_user(user_obj)
+                return True
+            return bool(self._run(_do))
+        except Exception:
+            _LOG.exception('add_thread_member failed for %s/%s',
+                            thread_id, user_id)
+            return False
+
+    def build_player_overwrites(self, guild_id: str, p1_id: str, p2_id: str,
+                                 *, kind: str = 'play') -> Dict[Any, Any]:
+        """Construct discord.py PermissionOverwrite map mirroring JS
+        playerPerms / playAreaPerms / boardPerms patterns.
+        """
+        try:
+            import discord  # type: ignore[import]
+        except ImportError:
+            return {}
+        guild = self._guild(guild_id)
+        if guild is None:
+            return {}
+
+        everyone = guild.default_role
+        bot_member = guild.me
+        p1_obj = discord.Object(id=int(p1_id)) if p1_id and p1_id.isdigit() else None
+        p2_obj = discord.Object(id=int(p2_id)) if p2_id and p2_id.isdigit() else None
+
+        # Build admin role override (if Admin role exists).
+        admin_role = None
+        for role in guild.roles:
+            if role.name.lower() == 'admin':
+                admin_role = role
+                break
+
+        ow: Dict[Any, Any] = {}
+
+        if kind == 'play':
+            # General Chat / Game Log: hide from @everyone, players +
+            # bot + admin can see + send.
+            ow[everyone] = discord.PermissionOverwrite(view_channel=False)
+            if p1_obj is not None:
+                ow[p1_obj] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True,
+                )
+            if p2_obj is not None:
+                ow[p2_obj] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True,
+                )
+            if bot_member is not None:
+                ow[bot_member] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True,
+                    manage_messages=True, embed_links=True,
+                    attach_files=True,
+                )
+            if admin_role is not None:
+                ow[admin_role] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True,
+                    manage_messages=True,
+                )
+
+        elif kind == 'read_only':
+            # Map Updates: players see, only bot writes.
+            ow[everyone] = discord.PermissionOverwrite(view_channel=False)
+            if p1_obj is not None:
+                ow[p1_obj] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=False,
+                )
+            if p2_obj is not None:
+                ow[p2_obj] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=False,
+                )
+            if bot_member is not None:
+                ow[bot_member] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True,
+                    manage_messages=True, embed_links=True,
+                    attach_files=True,
+                )
+            if admin_role is not None:
+                ow[admin_role] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True,
+                )
+
+        elif kind in ('play_area_p1', 'play_area_p2'):
+            # Play areas: opponent reads (cannot send), player can send
+            # in threads only, bot does everything. Mirrors JS playAreaPerms.
+            owner_id = p1_obj if kind == 'play_area_p1' else p2_obj
+            opponent_id = p2_obj if kind == 'play_area_p1' else p1_obj
+            ow[everyone] = discord.PermissionOverwrite(
+                view_channel=False, send_messages=False,
+            )
+            if owner_id is not None:
+                ow[owner_id] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=False,
+                    send_messages_in_threads=True,
+                )
+            if opponent_id is not None:
+                ow[opponent_id] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=False,
+                )
+            if bot_member is not None:
+                ow[bot_member] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True,
+                    create_private_threads=True,
+                    create_public_threads=True,
+                    manage_threads=True,
+                    send_messages_in_threads=True,
+                    embed_links=True, attach_files=True,
+                )
+            if admin_role is not None:
+                ow[admin_role] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True,
+                )
+
+        return ow
+
 
 # Default backend singleton.
 _default_factory: Optional[ChannelFactoryBackend] = None
@@ -244,6 +372,33 @@ def _next_game_id_number(backend: ChannelFactoryBackend, guild_id: str) -> int:
             except (TypeError, ValueError):
                 continue
     return max_id + 1
+
+
+def _build_player_overwrites(backend: 'ChannelFactoryBackend',
+                              guild_id: str, p1_id: str, p2_id: str,
+                              *, kind: str = 'play') -> Dict[str, Any]:
+    """Build a discord.py PermissionOverwrite map mirroring JS's
+    playerPerms: hide from @everyone, allow players + bot.
+
+    `kind`:
+      - 'play': both players read+write (general/log channels).
+      - 'read_only': both players read; only bot writes (board channel).
+      - 'play_area_p<n>': only player_n writes; opponent reads.
+
+    Returns the dict shape discord.py's create_text_channel /
+    create_category accepts as the `overwrites` kwarg.
+
+    For non-discord backends (in-memory tests), returns a plain
+    dict that the backend can ignore or store for assertion.
+    """
+    builder = getattr(backend, 'build_player_overwrites', None)
+    if callable(builder):
+        try:
+            return builder(guild_id, p1_id, p2_id, kind=kind) or {}
+        except Exception:
+            _LOG.exception('build_player_overwrites failed')
+            return {}
+    return {}
 
 
 def create_game_channels(game_id: str, guild_id: str,
@@ -305,7 +460,21 @@ def create_game_channels(game_id: str, guild_id: str,
         'p2_hand_channel_id': None,
     }
 
-    cat_id = be.create_category(guild_id, cat_name, position=position)
+    # Build permission overwrite presets once.
+    play_perms = _build_player_overwrites(be, guild_id, p1_id, p2_id, kind='play')
+    read_only_perms = _build_player_overwrites(
+        be, guild_id, p1_id, p2_id, kind='read_only',
+    )
+    p1_play_perms = _build_player_overwrites(
+        be, guild_id, p1_id, p2_id, kind='play_area_p1',
+    )
+    p2_play_perms = _build_player_overwrites(
+        be, guild_id, p1_id, p2_id, kind='play_area_p2',
+    )
+
+    cat_id = be.create_category(
+        guild_id, cat_name, position=position, overwrites=play_perms,
+    )
     out['game_category_id'] = cat_id
     if cat_id is None:
         _LOG.error('Failed to create game category %s', cat_name)
@@ -313,18 +482,23 @@ def create_game_channels(game_id: str, guild_id: str,
 
     out['log_channel_id'] = be.create_text_channel(
         guild_id, f'{ch_prefix} Game Log', parent_id=cat_id,
+        overwrites=play_perms,
     )
     out['chat_channel_id'] = be.create_text_channel(
         guild_id, f'{ch_prefix} General Chat', parent_id=cat_id,
+        overwrites=play_perms,
     )
     out['board_channel_id'] = be.create_text_channel(
         guild_id, f'{ch_prefix} Map Updates', parent_id=cat_id,
+        overwrites=read_only_perms,
     )
     out['p1_play_area_channel_id'] = be.create_text_channel(
         guild_id, f'{ch_prefix} P1 Play Area', parent_id=cat_id,
+        overwrites=p1_play_perms,
     )
     out['p2_play_area_channel_id'] = be.create_text_channel(
         guild_id, f'{ch_prefix} P2 Play Area', parent_id=cat_id,
+        overwrites=p2_play_perms,
     )
 
     # Hand threads inside each play-area channel.

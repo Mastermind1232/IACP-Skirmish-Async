@@ -97,6 +97,25 @@ def cmd_startgame(user_id: str, deps: Dict[str, Any], *,
                 gc.set_hand_channel(gid, 1, channels['p1_hand_channel_id'])
             if channels.get('p2_hand_channel_id'):
                 gc.set_hand_channel(gid, 2, channels['p2_hand_channel_id'])
+            # Add each player to their own private hand thread so
+            # they can actually see it (mirrors JS thread.members.add).
+            add_member = getattr(factory, 'add_thread_member', None)
+            if callable(add_member):
+                if channels.get('p1_hand_channel_id'):
+                    add_member(channels['p1_hand_channel_id'], user_id)
+                if channels.get('p2_hand_channel_id'):
+                    add_member(channels['p2_hand_channel_id'], opponent_id)
+            # Advance game phase: lobby → map_selection. The setup
+            # buttons posted below let the player drive map selection.
+            game.data['phase'] = 'map_selection'
+            _save(deps, gid, game)
+            # Post setup message + Map Selection buttons to General
+            # Chat. Without this, the new channels are silent and the
+            # players have no buttons to advance the game.
+            backend = deps.get('channel_backend')
+            log_chan_id = channels.get('log_channel_id')
+            if backend is not None and log_chan_id:
+                _post_setup_buttons(backend, log_chan_id, gid, user_id, opponent_id)
         except Exception:
             _LOG.exception('startgame channel setup failed for game %s', gid)
 
@@ -802,6 +821,67 @@ def _default_game_id(p1: str, p2: str) -> str:
     """Deterministic short id for the {p1, p2} pair."""
     a, b = sorted([p1 or '_', p2 or '_'])
     return f'{a[:6]}-{b[:6]}'
+
+
+def _post_setup_buttons(backend: Any, channel_id: str, game_id: str,
+                         p1_id: str, p2_id: str) -> None:
+    """Post the initial setup embed + Map Selection buttons to the
+    game's general/log channel. Mirrors the JS post in
+    src/handlers/setup.js after createGameChannels.
+
+    Buttons (4): map_type_<gameId>_competitive, _random, _draw, _pick.
+    These route through the legacy custom router → setup.py
+    _handle_map_type_choice (registered in handlers/setup.py).
+    """
+    try:
+        embed = {
+            'title': '⚔️ Game Setup',
+            'description': (
+                f'<@{p1_id}> vs <@{p2_id}>\n\n'
+                f'**Step 1 — Map Selection.** Choose how the map for '
+                f'this game is decided:\n'
+                f'• **Competitive** — random map from the current '
+                f'tournament rotation\n'
+                f'• **Random** — random from all maps\n'
+                f'• **Select Draw** — pick 2+ maps; one chosen at random\n'
+                f'• **Selection** — pick the exact map'
+            ),
+            'color': 0xFFD700,
+        }
+        components = [
+            {
+                'type': 1,  # ActionRow
+                'components': [
+                    {
+                        'type': 2, 'style': 1,  # Button, Primary
+                        'label': 'Competitive',
+                        'custom_id': f'map_type_{game_id}_competitive',
+                    },
+                    {
+                        'type': 2, 'style': 2,
+                        'label': 'Random',
+                        'custom_id': f'map_type_{game_id}_random',
+                    },
+                    {
+                        'type': 2, 'style': 2,
+                        'label': 'Select Draw',
+                        'custom_id': f'map_type_{game_id}_draw',
+                    },
+                    {
+                        'type': 2, 'style': 2,
+                        'label': 'Selection',
+                        'custom_id': f'map_type_{game_id}_pick',
+                    },
+                ],
+            }
+        ]
+        backend.post(channel_id, {
+            'content': f'<@{p1_id}> <@{p2_id}>',
+            'embeds': [embed],
+            'components': components,
+        })
+    except Exception:
+        _LOG.exception('post_setup_buttons failed for game %s', game_id)
 
 
 # ---------------------------------------------------------------------------
