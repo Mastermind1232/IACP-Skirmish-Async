@@ -2870,8 +2870,10 @@ client.on('messageCreate', async (message) => {
     console.error('Request buttons error:', err);
   }
 
-  // Bothelper support request: detect @bothelpers role mention in a game channel
-  const BOTHELPERS_ROLE_ID = '1472145489817374720';
+  // Bothelper support request: detect @Bothelpers role mention in a game channel.
+  // Pinging the Bothelpers role from inside a game forwards the message into
+  // #bothelpers and pings every Bothelpers-role member there to summon a human.
+  const BOTHELPERS_ROLE_ID = '1498454240375603391';
   const BOTHELPERS_CHANNEL_ID = '1481314970666008607';
   try {
     if (message.mentions.roles.has(BOTHELPERS_ROLE_ID)) {
@@ -2896,7 +2898,7 @@ client.on('messageCreate', async (message) => {
           await message.react('✅').catch(discordCatch);
           // Quick text ack in the source channel so the user knows the ping landed.
           await message.channel.send({
-            content: `👀 forwarded to bothelpers — claude is looking now, hang tight.`,
+            content: `👀 forwarded to bothelpers — i'm on it, hang tight.`,
             allowedMentions: { parse: [] },
           }).catch(discordCatch);
         }
