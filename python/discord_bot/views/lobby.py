@@ -106,12 +106,17 @@ class LobbyJoinButton(
         lobby['status'] = 'Full'
 
         # Edit the original lobby message in place to show the new
-        # state and swap Join → Start.
+        # state and swap Join → Start. Refresh runs as a background
+        # task so a thread-rename rate-limit (Discord caps thread
+        # renames to ~2/10min) doesn't block the user's followup.
         await interaction.response.defer(ephemeral=True)
+        import asyncio
         try:
-            await _refresh_lobby_message(interaction, self.thread_id, lobby)
+            asyncio.create_task(
+                _refresh_lobby_message(interaction, self.thread_id, lobby),
+            )
         except Exception:
-            _LOG.exception('lobby refresh failed after join')
+            _LOG.exception('scheduling lobby refresh failed')
         try:
             await interaction.followup.send(
                 f'✅ You joined the lobby. Now <@{creator_id}> can click '
@@ -180,18 +185,14 @@ class LobbyStartButton(
         lobby['status'] = 'Started'
 
         await interaction.response.defer(ephemeral=True)
-        try:
-            await _refresh_lobby_message(interaction, self.thread_id, lobby)
-        except Exception:
-            _LOG.exception('lobby refresh failed after start')
 
-        # Hand off to the game-creation flow. The cmd_startgame
-        # command + game_channels module create the channel set.
+        # Game creation FIRST (the user-facing thing that matters).
+        # Lobby cosmetic refresh fires-and-forgets afterward so a
+        # thread-rename rate-limit doesn't block channel creation.
         # cmd_startgame is SYNC and internally blocks waiting for
-        # discord.py coroutines (channel_factory.create_text_channel
-        # uses future.result). Running it on the event loop deadlocks.
-        # asyncio.to_thread offloads it to a thread pool, freeing the
-        # loop so the coroutines can resolve.
+        # discord.py coroutines via run_coroutine_threadsafe; running
+        # it on the event loop deadlocks. asyncio.to_thread offloads
+        # it so the loop stays free for the scheduled coroutines.
         import asyncio
         try:
             from python.discord_bot.commands import cmd_startgame
@@ -223,6 +224,18 @@ class LobbyStartButton(
                 )
             except Exception:
                 pass
+
+        # Cosmetic lobby refresh — fire-and-forget. Discord rate-limits
+        # thread renames to ~2 per 10 minutes; if we're capped, the
+        # PATCH sleeps 500+ seconds. We don't want that to block the
+        # main flow OR the user's followup. asyncio.create_task lets
+        # it run in the background without blocking this coroutine.
+        try:
+            asyncio.create_task(
+                _refresh_lobby_message(interaction, self.thread_id, lobby),
+            )
+        except Exception:
+            _LOG.exception('scheduling lobby refresh failed')
 
 
 # ── Embed + view builders ──────────────────────────────────────────────
