@@ -17,6 +17,11 @@ export const isDiscordSnowflake = (id) => /^\d{17,20}$/.test(id);
 /** Filter an array of user IDs to only valid snowflakes (safe for allowedMentions / permissionOverwrites). */
 export const snowflakeUsers = (ids) => ids.filter(isDiscordSnowflake);
 
+// AI sentinel prefix lives in src/ai/ai-discord.js (`AI_USER_PREFIX`).
+// Re-export the canonical helper here so other modules don't have to
+// take a dependency on the AI module just for one ID check.
+export { AI_USER_PREFIX, isAiUserId } from '../ai/ai-discord.js';
+
 /**
  * Pattern: literal AI-sentinel mentions like `<@ai_player_2>` that creep
  * into log messages and embed text. Discord renders these as a dead/literal

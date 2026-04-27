@@ -19,6 +19,9 @@ import { withAtomicGameLock } from '../game/action-queue.js';
 /** Sentinel user ID prefix for AI players. */
 export const AI_USER_PREFIX = 'ai_player_';
 
+/** True when an id is an AI sentinel (e.g. `ai_player_2`). */
+export const isAiUserId = (id) => typeof id === 'string' && id.startsWith(AI_USER_PREFIX);
+
 /**
  * Check if a game has an AI player.
  * @param {object} game

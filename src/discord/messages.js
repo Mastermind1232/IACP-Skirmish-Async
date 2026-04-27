@@ -5,7 +5,7 @@ import { EmbedBuilder, ChannelType, ThreadAutoArchiveDuration, ActionRowBuilder,
 import { getActivationsMessageId, getActivationsRemaining, getActivationsTotal, getPlayAreaId } from '../game/player-helpers.js';
 import { enforceContentLimit, DISCORD_CONTENT_LIMIT } from './limits.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
-import { fetchGameChannel, sanitizeMentions } from './channel-helpers.js';
+import { fetchGameChannel, sanitizeMentions, isAiUserId } from './channel-helpers.js';
 import { insertIncident, updateIncidentMirrorPosted, setIncidentMirrorFailed } from '../db.js';
 
 /** Orange sidebar color for phase embeds */
@@ -354,7 +354,7 @@ export async function getThreadName(thread, lobby) {
   let p1Name = 'Creator';
   let p2Name = lobby.joinedId ? 'Joiner' : '(waiting)';
   // SKIRBO sentinel: never try to fetch — there's no Discord user behind it.
-  const aiOpponent = typeof lobby.joinedId === 'string' && lobby.joinedId.startsWith('ai_player_');
+  const aiOpponent = isAiUserId(lobby.joinedId);
   if (aiOpponent) p2Name = 'SKIRBO';
   try {
     const p1 = await thread.client.users.fetch(lobby.creatorId);

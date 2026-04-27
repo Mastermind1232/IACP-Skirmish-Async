@@ -8,6 +8,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getPlayerId, getInitiativePlayerNum } from './game/player-helpers.js';
+import { isAiUserId } from './discord/channel-helpers.js';
 
 const __dbDirname = dirname(fileURLToPath(import.meta.url));
 
@@ -337,9 +338,7 @@ export async function insertCompletedGame(game) {
   // SKIRBO / self-play games never count toward leaderboards or stats.
   // Skip the insert entirely so winrate / pickrate / leaderboard queries
   // don't have to filter the sentinel ID out of every aggregate.
-  const p1 = game.player1Id ?? '';
-  const p2 = game.player2Id ?? '';
-  if (p1.startsWith('ai_player_') || p2.startsWith('ai_player_') || game.selfPlay) return;
+  if (isAiUserId(game.player1Id) || isAiUserId(game.player2Id) || game.selfPlay) return;
   try {
     const winnerId = game.winnerId ?? null;
     const player1Id = game.player1Id ?? '';

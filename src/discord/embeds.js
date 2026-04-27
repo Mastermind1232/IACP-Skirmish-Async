@@ -2,6 +2,7 @@ import { EmbedBuilder } from 'discord.js';
 import { getPlayerId, getCcDeck, getDcList, getSquad, getInitiativePlayerNum } from '../game/player-helpers.js';
 import { enforceContentLimit, DISCORD_EMBED_FIELD_LIMIT } from './limits.js';
 import { COLORS } from './colors.js';
+import { isAiUserId } from './channel-helpers.js';
 
 /**
  * Initiative zone label for scorecard (e.g. "[RED] P1 has the initiative!").
@@ -176,7 +177,7 @@ export function getLobbyRosterText(lobby) {
   let p2;
   if (!lobby.joinedId) {
     p2 = `2. **Player 2:** *(not yet joined)*`;
-  } else if (lobby.joinedId.startsWith('ai_player_')) {
+  } else if (isAiUserId(lobby.joinedId)) {
     p2 = `2. **Player 2:** 🤖 SKIRBO (AI)`;
   } else {
     p2 = `2. **Player 2:** <@${lobby.joinedId}>`;

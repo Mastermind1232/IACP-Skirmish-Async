@@ -2,7 +2,7 @@
  * Win condition functions extracted from index.js.
  * Handles VP checks, tiebreakers, game-over posting, and defeat-related bookkeeping.
  */
-import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
+import { fetchGameChannel, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { cleanupAllSpacePicks } from '../discord/components.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 
@@ -152,8 +152,8 @@ export async function postGameOver(game, client, winnerId, reason, deps) {
   }
   if (deps.isDbConfigured()) {
     deps.insertCompletedGame(game).catch((err) => console.error('[DB] insertCompletedGame:', err));
-    // Skip achievements for AI selfplay games — AI player IDs start with 'ai_player_'
-    const isAiGame = game.player1Id?.startsWith('ai_player_') || game.player2Id?.startsWith('ai_player_');
+    // Skip achievements for AI / selfplay games.
+    const isAiGame = isAiUserId(game.player1Id) || isAiUserId(game.player2Id);
     if (deps.achievementsChannelId && game.player1Id && game.player2Id && !isAiGame) {
       (async () => {
         try {

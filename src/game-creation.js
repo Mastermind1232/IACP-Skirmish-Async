@@ -16,7 +16,7 @@ import {
 } from 'discord.js';
 import { PHASES } from './game/phase.js';
 import { discordCatch } from './error-handling.js';
-import { fetchGameChannel, isDiscordSnowflake, snowflakeUsers } from './discord/channel-helpers.js';
+import { fetchGameChannel, isDiscordSnowflake, isAiUserId, snowflakeUsers } from './discord/channel-helpers.js';
 import { computeDeckHash } from './game/deck-hash.js';
 import { getFavoriteDeckByHash } from './db.js';
 
@@ -148,8 +148,7 @@ export async function createGameChannels(guild, player1Id, player2Id, deps) {
   const everyoneRole = guild.roles.everyone;
   const botId = guild.client.user.id;
   // Emoji prefix telegraphs game type at a glance: 🤖 vs SKIRBO, ⚔️ PvP.
-  const isVsAi = typeof player2Id === 'string' && player2Id.startsWith('ai_player_');
-  const categoryEmoji = isVsAi ? '🤖' : '⚔️';
+  const categoryEmoji = isAiUserId(player2Id) ? '🤖' : '⚔️';
 
   const isSnowflake = isDiscordSnowflake;
   const playerPerms = [
