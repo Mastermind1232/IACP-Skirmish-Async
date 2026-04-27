@@ -353,10 +353,13 @@ export async function getThreadName(thread, lobby) {
   const truncate = (s) => (s.length > 18 ? s.slice(0, 15) + '…' : s);
   let p1Name = 'Creator';
   let p2Name = lobby.joinedId ? 'Joiner' : '(waiting)';
+  // SKIRBO sentinel: never try to fetch — there's no Discord user behind it.
+  const aiOpponent = typeof lobby.joinedId === 'string' && lobby.joinedId.startsWith('ai_player_');
+  if (aiOpponent) p2Name = 'SKIRBO';
   try {
     const p1 = await thread.client.users.fetch(lobby.creatorId);
     p1Name = truncate(p1.username || p1.globalName || 'P1');
-    if (lobby.joinedId) {
+    if (lobby.joinedId && !aiOpponent) {
       const p2 = await thread.client.users.fetch(lobby.joinedId);
       p2Name = truncate(p2.username || p2.globalName || 'P2');
     }
