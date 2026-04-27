@@ -1,1 +1,1 @@
-worker: python -m python.discord_bot
+worker: node index.js
