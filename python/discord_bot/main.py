@@ -674,9 +674,33 @@ async def _post_route_ui_followup(interaction: Any,
     if not result.get('ok'):
         try:
             reason = result.get('reason') or 'unknown'
-            await interaction.followup.send(
-                f'❌ {reason}', ephemeral=True,
+            cid = (
+                getattr(interaction, 'custom_id', None)
+                or (getattr(interaction, 'data', {}) or {}).get('custom_id')
+                or '?'
             )
+            # Map common reasons to plain-English messages.
+            msg_map = {
+                'no_handler': (
+                    f"⚠️ This button isn't wired up yet on the new bot "
+                    f"(`{cid}`). It worked on the old JavaScript bot but "
+                    f"the Python port doesn't have a handler for it. "
+                    f"Tell @corndog19 with that ID."
+                ),
+                'fallback_error': (
+                    f"❌ Action failed: {result.get('error', 'unknown')}"
+                ),
+                'no_custom_id': "⚠️ Button has no customId — likely a bug.",
+                'lobby_not_found': (
+                    "⚠️ Lobby state lost (bot may have restarted). "
+                    "Create a new forum post in #new-games."
+                ),
+                'lobby_full': (
+                    "⚠️ Lobby is already full. The other player joined."
+                ),
+            }
+            text = msg_map.get(reason) or f'❌ {reason}'
+            await interaction.followup.send(text, ephemeral=True)
         except Exception:
             pass
 

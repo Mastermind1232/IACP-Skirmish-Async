@@ -113,6 +113,53 @@ def _auto_refresh(result: Any, deps: Dict[str, Any]) -> None:
         pass
 
 
+def _try_engine_fallback(
+    custom_id: str, interaction: Any, deps: Dict[str, Any],
+) -> Optional[RouteResult]:
+    """Attempt to dispatch an unhandled customId through the engine's
+    action_parser → stepper. Returns a RouteResult when the parser
+    accepts (success or error). Returns None when even the parser
+    can't handle it (caller falls back to no_handler).
+    """
+    try:
+        from python.engine.action_parser import (
+            UnparseableCustomId, step_custom_id,
+        )
+        from python.discord_bot.handlers.stepper_bridge import (
+            _extract_user_id, _extract_game_id,
+        )
+    except Exception:
+        return None
+    game_id = _extract_game_id(custom_id)
+    if not game_id:
+        return None
+    get_game = deps.get('get_game')
+    if not callable(get_game):
+        return None
+    game = get_game(game_id)
+    if game is None:
+        return None
+    user_id = _extract_user_id(interaction)
+    try:
+        new_game = step_custom_id(game, custom_id, user_id, action_opts={})
+        save = deps.get('save_games')
+        if callable(save):
+            save()
+        return {
+            'ok': True, 'prefix': '<bridge-fallback>',
+            'group': 'fallback', 'gameId': game_id, 'game': new_game,
+        }
+    except UnparseableCustomId:
+        return None
+    except NotImplementedError:
+        return None
+    except Exception as e:
+        return {
+            'ok': False, 'reason': 'fallback_error',
+            'error': f'{type(e).__name__}: {e}', 'customId': custom_id,
+        }
+
+
 async def route(interaction: Any, deps: Dict[str, Any]) -> RouteResult:
     """Route a button interaction to its registered handler.
 
@@ -127,6 +174,9 @@ async def route(interaction: Any, deps: Dict[str, Any]) -> RouteResult:
 
     match = find_handler(custom_id)
     if match is None:
+        fb = _try_engine_fallback(custom_id, interaction, deps)
+        if fb is not None:
+            return fb
         return {'ok': False, 'reason': 'no_handler', 'customId': custom_id}
 
     prefix, handler, group = match
@@ -161,6 +211,9 @@ def route_sync(interaction: Any, deps: Dict[str, Any]) -> RouteResult:
 
     match = find_handler(custom_id)
     if match is None:
+        fb = _try_engine_fallback(custom_id, interaction, deps)
+        if fb is not None:
+            return fb
         return {'ok': False, 'reason': 'no_handler', 'customId': custom_id}
 
     prefix, handler, group = match
