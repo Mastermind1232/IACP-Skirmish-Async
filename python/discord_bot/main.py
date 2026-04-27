@@ -76,7 +76,7 @@ def build_deps(game_store: Any, client: Any = None) -> Dict[str, Any]:
     }
 
 
-async def on_interaction(interaction: Any, deps: Dict[str, Any]) -> Dict[str, Any]:
+async def route_interaction(interaction: Any, deps: Dict[str, Any]) -> Dict[str, Any]:
     """Callback for the Discord on_interaction event. Route + return result."""
     return await route(interaction, deps)
 
@@ -288,7 +288,9 @@ async def run_bot() -> None:
     _LOG.info('Registered %d slash commands', slash_count)
 
     @bot.event
-    async def on_interaction_event(interaction):  # noqa: D401
+    async def on_interaction(interaction):  # noqa: D401
+        # discord.py event name is 'on_interaction'. Function name MUST
+        # match for @bot.event registration to wire up.
         # Only route non-slash interactions (buttons, modals) through the
         # router. Slash commands are dispatched via the tree above.
         itype = getattr(interaction, 'type', None)
@@ -298,7 +300,11 @@ async def run_bot() -> None:
         # be defer()-acknowledged first — show_modal() must be the
         # initial response. For all others, defer immediately so Discord
         # doesn't show "The interaction failed" while the handler runs.
-        custom_id = getattr(interaction, 'custom_id', '') or ''
+        custom_id = (
+            (getattr(interaction, 'data', {}) or {}).get('custom_id')
+            or getattr(interaction, 'custom_id', '')
+            or ''
+        )
         needs_modal = custom_id.startswith('squad_select_')
         if not needs_modal:
             try:
@@ -307,7 +313,7 @@ async def run_bot() -> None:
                     await resp.defer(ephemeral=True)
             except Exception:
                 pass
-        result = await on_interaction(interaction, deps)
+        result = await route_interaction(interaction, deps)
         if not result.get('ok'):
             _LOG.warning('Route failed: %s', result)
         # Per-handler UI follow-ups.
