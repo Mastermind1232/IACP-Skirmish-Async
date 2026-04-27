@@ -36,6 +36,7 @@ function channelSafeName(displayName) {
  * Get a short channel-safe display name for a user ID.
  */
 async function getPlayerChannelName(guild, userId) {
+  if (isAiUserId(userId)) return 'skirbo';
   if (!isDiscordSnowflake(userId)) return channelSafeName(userId.replace(/[^a-z0-9]/gi, '').slice(0, 16) || 'ai');
   try {
     const member = await guild.members.fetch(userId);
