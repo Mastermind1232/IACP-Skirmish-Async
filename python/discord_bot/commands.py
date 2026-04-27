@@ -10,7 +10,10 @@ at minimum {'ok': bool} plus command-specific fields.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Mapping, Optional
+
+_LOG = logging.getLogger('skirbo.commands')
 
 from python.discord_bot.game_lifecycle import (
     end_game,
@@ -91,7 +94,7 @@ def cmd_startgame(user_id: str, deps: Dict[str, Any], *,
             if channels.get('p2_hand_channel_id'):
                 gc.set_hand_channel(gid, 2, channels['p2_hand_channel_id'])
         except Exception:
-            pass
+            _LOG.exception('startgame channel setup failed for game %s', gid)
 
     return {
         'ok': True, 'gameId': gid, 'player1Id': user_id,
@@ -313,7 +316,7 @@ def _refresh_discord_views(game_id: str, game: Any,
         gc.refresh_hand_view(game_id, 1, game, backend=backend)
         gc.refresh_hand_view(game_id, 2, game, backend=backend)
     except Exception:
-        pass
+        _LOG.exception('refresh_discord_views failed for game %s', game_id)
 
 
 def _write_completed_game(game: Any, deps: Dict[str, Any]) -> None:
@@ -329,7 +332,7 @@ def _write_completed_game(game: Any, deps: Dict[str, Any]) -> None:
     try:
         insert(game)
     except Exception:
-        pass
+        _LOG.exception('insert_completed_game failed')
 
 
 def _check_in_game_achievements(game_id: str, before: Any, after: Any,
@@ -423,7 +426,7 @@ def _check_in_game_achievements(game_id: str, before: Any, after: Any,
                     )
             a_data['_inGameKillCounter'] = {}
     except Exception:
-        pass
+        _LOG.exception('check_in_game_achievements failed for game %s', game_id)
 
 
 def _post_game_over_hook(game_id: str, game: Any,
@@ -450,13 +453,13 @@ def _post_game_over_hook(game_id: str, game: Any,
         try:
             game_log.log_game_over(game_id, winner, reason, backend=backend)
         except Exception:
-            pass
+            _LOG.exception('log_game_over failed for game %s', game_id)
 
         # Scorecard embed.
         try:
             _post_scorecard_embed(game_id, game, deps)
         except Exception:
-            pass
+            _LOG.exception('scorecard embed failed for game %s', game_id)
 
         # Skip achievements for AI vs AI / test games (matches JS).
         if data.get('selfPlay') or data.get('testGame'):
@@ -482,6 +485,7 @@ def _post_game_over_hook(game_id: str, game: Any,
             try:
                 summary = sq.get_stats_summary_for_player(store, uid)
             except Exception:
+                _LOG.exception('stats summary lookup failed for user %s', uid)
                 continue
             granted = ach.check_and_grant_achievements(
                 store, uid, 'game_complete', summary.get('games', 0),
@@ -540,7 +544,7 @@ def _post_game_over_hook(game_id: str, game: Any,
         if granted_by_user:
             _post_achievement_notifications(granted_by_user, deps)
     except Exception:
-        pass
+        _LOG.exception('post_game_over_hook failed for game %s', game_id)
 
 
 def _post_scorecard_embed(game_id: str, game: Any,
@@ -599,15 +603,15 @@ def _post_scorecard_embed(game_id: str, game: Any,
             try:
                 backend.post(log_id, {'embeds': [embed]})
             except Exception:
-                pass
+                _LOG.exception('scorecard log-channel post failed')
         board_id, _ = gc.get_board_message(game_id)
         if board_id and board_id != log_id:
             try:
                 backend.post(board_id, {'embeds': [embed]})
             except Exception:
-                pass
+                _LOG.exception('scorecard board-channel post failed')
     except Exception:
-        pass
+        _LOG.exception('scorecard embed assembly failed for game %s', game_id)
 
 
 def _post_achievement_notifications(
@@ -645,7 +649,10 @@ def _post_achievement_notifications(
                     'embeds': [embed],
                 })
             except Exception:
-                pass
+                _LOG.exception(
+                    'achievement notification post failed for user %s '
+                    'def %s', user_id, d.get('id'),
+                )
 
 
 def _log_step_event(game_id: str, before: Any, after: Any,
@@ -717,7 +724,7 @@ def _log_step_event(game_id: str, before: Any, after: Any,
                 backend=backend,
             )
     except Exception:
-        pass
+        _LOG.exception('log_step_event failed for game %s', game_id)
 
 
 def cmd_setup_channels(user_id: str, deps: Dict[str, Any], *,

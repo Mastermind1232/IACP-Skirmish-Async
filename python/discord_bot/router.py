@@ -12,7 +12,10 @@ The prefix set is auto-derived from the registry, sorted longest-first so
 from __future__ import annotations
 
 import inspect
+import logging
 from typing import Any, Awaitable, Callable, Dict, Optional, Union
+
+_LOG = logging.getLogger('skirbo.router')
 
 from python.discord_bot.context import build_context
 from python.discord_bot.handlers import find_handler
@@ -110,7 +113,7 @@ def _auto_refresh(result: Any, deps: Dict[str, Any]) -> None:
         gc.refresh_hand_view(game_id, 1, game, backend=backend)
         gc.refresh_hand_view(game_id, 2, game, backend=backend)
     except Exception:
-        pass
+        _LOG.exception('auto_refresh failed for game %s', game_id)
 
 
 def _try_engine_fallback(
@@ -196,6 +199,14 @@ async def route(interaction: Any, deps: Dict[str, Any]) -> RouteResult:
     # Auto-refresh Discord views after successful dispatches.
     if isinstance(result, dict) and result.get('ok'):
         _auto_refresh(result, deps)
+    # Propagate the handler's ok/reason. Was: always ok=True, hiding
+    # handler errors. Annotate prefix/group so the caller still knows
+    # which handler ran.
+    if isinstance(result, dict):
+        merged = dict(result)
+        merged.setdefault('prefix', prefix)
+        merged.setdefault('group', group)
+        return merged
     return {'ok': True, 'prefix': prefix, 'group': group}
 
 

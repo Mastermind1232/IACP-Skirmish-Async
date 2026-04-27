@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 from functools import lru_cache
 from typing import Any, Dict, Optional, Tuple
+
+_LOG = logging.getLogger('skirbo.board_renderer')
 
 
 CELL_SIZE = 24
@@ -238,4 +241,4 @@ def _overlay_tokens(data, map_id, draw, selected, center_fn, cell_size):
             draw.rectangle([cx - r, cy - r, cx + r, cy + r],
                             fill=(80, 200, 220), outline=(130, 230, 250))
     except Exception:
-        pass
+        _LOG.exception('token overlay failed for map_id=%s', map_id)
