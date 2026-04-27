@@ -325,11 +325,47 @@ export async function initDb() {
       }
     } catch {}
 
+    // ── bothelper_members: snapshot of which Discord users are in a given role ──
+    // Written by the Railway bot on guildMemberUpdate; read by the local
+    // sync script that updates ~/.claude/channels/discord/access.json.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bothelper_members (
+        role_id     TEXT PRIMARY KEY,
+        member_ids  JSONB NOT NULL DEFAULT '[]',
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
     console.log('[DB] PostgreSQL connected, all tables ready.');
   } catch (err) {
     console.error('[DB] Failed to connect:', err.message);
     pool = null;
   }
+}
+
+/** Upsert the current member-id list for a role. Called when role membership changes. */
+export async function upsertBothelperMembers(roleId, memberIds) {
+  if (!pool) return;
+  const sorted = [...new Set(memberIds)].sort();
+  await pool.query(
+    `INSERT INTO bothelper_members (role_id, member_ids, updated_at)
+     VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (role_id) DO UPDATE
+       SET member_ids = EXCLUDED.member_ids, updated_at = NOW()`,
+    [roleId, JSON.stringify(sorted)],
+  );
+}
+
+/** Read the latest member-id list for a role. Returns [] if no row yet. */
+export async function getBothelperMembers(roleId) {
+  if (!pool) return [];
+  const { rows } = await pool.query(
+    `SELECT member_ids FROM bothelper_members WHERE role_id = $1`,
+    [roleId],
+  );
+  if (rows.length === 0) return [];
+  const ids = rows[0].member_ids;
+  return Array.isArray(ids) ? ids : [];
 }
 
 /** Write a row to completed_games when a game ends (DB2). Call in the same path that sets game.ended. */

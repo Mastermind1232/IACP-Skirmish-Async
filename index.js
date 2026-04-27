@@ -52,6 +52,7 @@ import {
   resolveIncident,
   getCoverageSummary,
   getCoverageGaps,
+  upsertBothelperMembers,
 } from './src/db.js';
 import {
   getGame,
@@ -747,6 +748,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -2256,6 +2258,54 @@ client.once('ready', async () => {
   });
   botReady = true;
   console.log('Bot fully ready — accepting interactions.');
+
+  // Initial snapshot of bothelpers role members → Postgres.
+  try {
+    await syncBothelperRoleMembers('startup');
+  } catch (err) {
+    console.error('[bothelpers] Initial sync failed:', err.message);
+  }
+});
+
+// ── Bothelpers role → DB sync (Phase 2) ──────────────────────────────────
+// Whenever a guild member's roles change (or they join/leave), recompute the
+// current member list of the bothelpers role and upsert it to Postgres so the
+// local sync script can read role membership without re-logging-in to Discord.
+const BOTHELPERS_ROLE_ID_FOR_SYNC = '1498454240375603391';
+
+async function syncBothelperRoleMembers(reason) {
+  const memberIds = new Set();
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      await guild.members.fetch();
+    } catch (err) {
+      console.warn(`[bothelpers] members.fetch failed for guild ${guild.id}: ${err.message}`);
+      continue;
+    }
+    const role = guild.roles.cache.get(BOTHELPERS_ROLE_ID_FOR_SYNC);
+    if (!role) continue;
+    for (const m of role.members.values()) memberIds.add(m.id);
+  }
+  await upsertBothelperMembers(BOTHELPERS_ROLE_ID_FOR_SYNC, [...memberIds]);
+  console.log(`[bothelpers] synced ${memberIds.size} member(s) (${reason})`);
+}
+
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+  const had = oldMember.roles?.cache?.has(BOTHELPERS_ROLE_ID_FOR_SYNC);
+  const has = newMember.roles?.cache?.has(BOTHELPERS_ROLE_ID_FOR_SYNC);
+  if (had === has) return;
+  try { await syncBothelperRoleMembers('memberUpdate'); }
+  catch (err) { console.error('[bothelpers] memberUpdate sync failed:', err.message); }
+});
+
+client.on('guildMemberAdd', async () => {
+  try { await syncBothelperRoleMembers('memberAdd'); }
+  catch (err) { console.error('[bothelpers] memberAdd sync failed:', err.message); }
+});
+
+client.on('guildMemberRemove', async () => {
+  try { await syncBothelperRoleMembers('memberRemove'); }
+  catch (err) { console.error('[bothelpers] memberRemove sync failed:', err.message); }
 });
 
 const requestsWithButtons = new Set();

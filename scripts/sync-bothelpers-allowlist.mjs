@@ -1,20 +1,19 @@
 #!/usr/bin/env node
-// Syncs the members of a Discord role into the discord-MCP access allowlist
-// (~/.claude/channels/discord/access.json), so anyone with that role can
-// message Claude in the configured channel without manual user-ID upkeep.
+// Reads the bothelpers role's current member list from Postgres (written by
+// the Railway bot on guildMemberUpdate) and applies it to the discord-MCP
+// access allowlist (~/.claude/channels/discord/access.json). Local-only —
+// the bot does the Discord-side membership tracking.
 //
-// Run on demand (`node scripts/sync-bothelpers-allowlist.mjs`) or wire into
-// launchd/cron for automatic syncs.
+// Run on demand or wire into launchd/cron for periodic syncs.
 //
 // Requirements:
-//   1. DISCORD_TOKEN in .env (same token the Railway bot uses).
-//   2. "Server Members Intent" enabled for the bot at
-//      https://discord.com/developers/applications/<app-id>/bot
-//   3. Bot must already be a member of the guild containing the role.
+//   1. DATABASE_URL in .env (Railway public-proxy connection string).
+//   2. Railway bot must already be writing to the bothelper_members table
+//      (initDb + guildMemberUpdate listeners).
 //
 // Override defaults via env: BOTHELPERS_SYNC_ROLE_ID, BOTHELPERS_SYNC_CHANNEL_ID.
 
-import { Client, GatewayIntentBits } from 'discord.js';
+import pg from 'pg';
 import { readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -24,34 +23,28 @@ const ROLE_ID = process.env.BOTHELPERS_SYNC_ROLE_ID || '1498454240375603391';
 const CHANNEL_ID = process.env.BOTHELPERS_SYNC_CHANNEL_ID || '1481314970666008607';
 const ACCESS_PATH = join(homedir(), '.claude', 'channels', 'discord', 'access.json');
 
-if (!process.env.DISCORD_TOKEN) {
-  console.error('DISCORD_TOKEN not set. Add it to .env or export it before running.');
+if (!process.env.DATABASE_URL) {
+  console.error('DATABASE_URL not set. Add the Railway public proxy connection string to .env.');
   process.exit(1);
 }
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
-});
+const { Pool } = pg;
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const ready = new Promise((resolve) => client.once('ready', resolve));
-await client.login(process.env.DISCORD_TOKEN);
-await ready;
-
-const memberIds = new Set();
-for (const guild of client.guilds.cache.values()) {
-  try {
-    await guild.members.fetch();
-  } catch (err) {
-    console.error(`Failed to fetch members for guild ${guild.id} (${guild.name}):`, err.message);
-    console.error('Hint: enable the "Server Members Intent" in the Discord Developer Portal for this bot.');
-    await client.destroy();
-    process.exit(1);
+let memberIds = [];
+try {
+  const { rows } = await pool.query(
+    `SELECT member_ids FROM bothelper_members WHERE role_id = $1`,
+    [ROLE_ID],
+  );
+  if (rows.length === 0) {
+    console.warn(`[${new Date().toISOString()}] No bothelper_members row for role ${ROLE_ID} yet — bot may not have synced once.`);
+  } else {
+    const raw = rows[0].member_ids;
+    memberIds = Array.isArray(raw) ? raw : [];
   }
-  const role = guild.roles.cache.get(ROLE_ID);
-  if (!role) continue;
-  for (const member of role.members.values()) {
-    memberIds.add(member.id);
-  }
+} finally {
+  await pool.end();
 }
 
 const access = JSON.parse(readFileSync(ACCESS_PATH, 'utf8'));
@@ -59,12 +52,17 @@ access.groups = access.groups || {};
 const group = access.groups[CHANNEL_ID];
 if (!group) {
   console.error(`Channel ${CHANNEL_ID} not configured in access.json groups. Add it via /discord:access first.`);
-  await client.destroy();
   process.exit(1);
 }
 
-const newList = [...memberIds].sort();
+const newList = [...new Set(memberIds)].sort();
 const oldList = (group.allowFrom || []).slice().sort();
+
+if (JSON.stringify(newList) === JSON.stringify(oldList)) {
+  // No-op — silent to keep launchd logs clean at high frequency.
+  process.exit(0);
+}
+
 group.allowFrom = newList;
 writeFileSync(ACCESS_PATH, JSON.stringify(access, null, 2) + '\n');
 
@@ -74,7 +72,3 @@ const stamp = new Date().toISOString();
 console.log(`[${stamp}] Synced ${newList.length} member(s) for role ${ROLE_ID} → channel ${CHANNEL_ID}.`);
 if (added.length) console.log('  added:  ', added.join(', '));
 if (removed.length) console.log('  removed:', removed.join(', '));
-if (!added.length && !removed.length) console.log('  no changes.');
-
-await client.destroy();
-process.exit(0);

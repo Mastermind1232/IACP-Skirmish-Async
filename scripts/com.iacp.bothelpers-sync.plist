@@ -29,7 +29,7 @@
   <string>/Users/adammeehan/Public/IACP-Skirmish-Async</string>
 
   <key>StartInterval</key>
-  <integer>600</integer>
+  <integer>5</integer>
 
   <key>RunAtLoad</key>
   <true/>
