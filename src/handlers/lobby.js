@@ -147,7 +147,7 @@ export async function handleLobbyStart(interaction, ctx) {
     setGame(gameId, game);
 
     const setupMsg = await generalChannel.send({
-      content: `<@${game.player1Id}> <@${game.player2Id}>`,
+      content: `<@${game.player1Id}> vs <@${game.player2Id}>`,
       allowedMentions: { users: snowflakeUsers([...new Set([game.player1Id, game.player2Id])]) },
       embeds: [
         new EmbedBuilder()
