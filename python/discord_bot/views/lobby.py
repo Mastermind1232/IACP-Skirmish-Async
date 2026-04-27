@@ -187,13 +187,19 @@ class LobbyStartButton(
 
         # Hand off to the game-creation flow. The cmd_startgame
         # command + game_channels module create the channel set.
+        # cmd_startgame is SYNC and internally blocks waiting for
+        # discord.py coroutines (channel_factory.create_text_channel
+        # uses future.result). Running it on the event loop deadlocks.
+        # asyncio.to_thread offloads it to a thread pool, freeing the
+        # loop so the coroutines can resolve.
+        import asyncio
         try:
             from python.discord_bot.commands import cmd_startgame
             guild_id = (
                 str(interaction.guild.id) if interaction.guild else None
             )
-            result = cmd_startgame(
-                creator_id, deps,
+            result = await asyncio.to_thread(
+                cmd_startgame, creator_id, deps,
                 opponent_id=lobby['joinedId'],
                 guild_id=guild_id,
             )
