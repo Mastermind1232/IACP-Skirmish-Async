@@ -210,6 +210,21 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
       .filter(a => !(a.type === 'play_cc' && a.params?.cardName && suppressedCcPlays.has(a.params.cardName)))
       .map(a => ({ ...a, actingPlayer: aiPlayerNum }));
     if (!actions || actions.length === 0) {
+      // AI has no legal actions but the game isn't over. The game is
+      // probably waiting on a non-button UI (modal / select menu) the
+      // AI can't handle. Dump diagnostic state so we can see where it
+      // hangs and add a programmatic auto-resolve next time.
+      if (!currentGame.ended && step === 0) {
+        const phaseTag = `${currentGame.phase || '?'}/${currentGame.roundPhase || '?'}`;
+        const pendingFlags = Object.keys(currentGame).filter(
+          (k) => /^pending/i.test(k) && currentGame[k] != null,
+        );
+        console.warn(
+          `[AI] STUCK: game ${currentGame.gameId} player ${aiPlayerNum} has no legal actions. ` +
+          `phase=${phaseTag} round=${currentGame.currentRound ?? '?'} ` +
+          `pending=[${pendingFlags.join(',') || 'none'}]`,
+        );
+      }
       return { steps: step, actions: actionLog };
     }
 
