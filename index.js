@@ -2894,6 +2894,11 @@ client.on('messageCreate', async (message) => {
             await bothelpersCh.send(payload);
           }
           await message.react('✅').catch(discordCatch);
+          // Quick text ack in the source channel so the user knows the ping landed.
+          await message.channel.send({
+            content: `👀 forwarded to bothelpers — claude is looking now, hang tight.`,
+            allowedMentions: { parse: [] },
+          }).catch(discordCatch);
         }
       }
     }
