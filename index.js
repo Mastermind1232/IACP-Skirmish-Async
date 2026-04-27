@@ -2236,11 +2236,20 @@ async function maybeSetupLobbyFromFirstMessage(message) {
   if (hasLobby(thread.id) || hasLobbyEmbedSent(thread.id)) return false;
   markLobbyEmbedSent(thread.id);
   const creator = message.author.id;
-  const lobby = { creatorId: creator, joinedId: null, status: 'LFG' };
+  // "Player vs SKIRBO" tag: auto-fill SKIRBO as player 2 so the creator
+  // can start the game alone. Tag matched by name on the parent forum.
+  const appliedTagIds = thread.appliedTags || [];
+  const availableTags = parent.availableTags || [];
+  const skirboTag = availableTags.find(
+    (t) => appliedTagIds.includes(t.id) && /skirbo/i.test(t.name || ''),
+  );
+  const lobby = skirboTag
+    ? { creatorId: creator, joinedId: `${AI_USER_PREFIX}2`, status: 'Full', vsSkirbo: true }
+    : { creatorId: creator, joinedId: null, status: 'LFG' };
   setLobby(thread.id, lobby);
   await thread.send({
     embeds: [getLobbyEmbed(lobby)],
-    components: [getLobbyJoinButton(thread.id)],
+    components: [skirboTag ? getLobbyStartButton(thread.id) : getLobbyJoinButton(thread.id)],
   });
   await updateThreadName(thread, lobby);
   return true;

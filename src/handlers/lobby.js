@@ -7,6 +7,7 @@ import { CURRENT_GAME_VERSION } from '../game-state.js';
 import { PHASES } from '../game/phase.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { snowflakeUsers } from '../discord/channel-helpers.js';
+import { AI_USER_PREFIX } from '../ai/ai-discord.js';
 
 /**
  * Handle Join Game button in a lobby post.
@@ -88,12 +89,14 @@ export async function handleLobbyStart(interaction, ctx) {
     await interaction.followUp({ content: 'This game is already being created. Please wait.', ephemeral: true });
     return;
   }
+  const isAiOpponent = lobby.joinedId?.startsWith(AI_USER_PREFIX);
   if (interaction.user.id !== lobby.creatorId && interaction.user.id !== lobby.joinedId) {
     await interaction.followUp({ content: 'Only players in this game can start it.', ephemeral: true });
     return;
   }
   const c1 = countActiveGamesForPlayer(lobby.creatorId);
-  const c2 = countActiveGamesForPlayer(lobby.joinedId);
+  // SKIRBO has no game-count limit — only the human creator's count matters.
+  const c2 = isAiOpponent ? 0 : countActiveGamesForPlayer(lobby.joinedId);
   if (c1 >= MAX_ACTIVE_GAMES_PER_PLAYER || c2 >= MAX_ACTIVE_GAMES_PER_PLAYER) {
     const who = [];
     if (c1 >= MAX_ACTIVE_GAMES_PER_PLAYER) who.push('<@' + lobby.creatorId + '>');
@@ -136,6 +139,9 @@ export async function handleLobbyStart(interaction, ctx) {
       player2VP: { total: 0, kills: 0, objectives: 0 },
       phase: PHASES.MAP_SELECTION,
       ended: false,
+      // Vs-SKIRBO games: AI takes player 2 and auto-fills its squad after
+      // the human's submission (see applySquadSubmission).
+      ...(isAiOpponent ? { aiPlayerNum: 2, guildId: interaction.guild?.id } : {}),
     };
 
     setGame(gameId, game);

@@ -173,9 +173,14 @@ export function getDiscardPileEmbed(discardCount) {
 /** Roster text for lobby (Player 1 / Player 2). */
 export function getLobbyRosterText(lobby) {
   const p1 = `1. **Player 1:** <@${lobby.creatorId}>`;
-  const p2 = lobby.joinedId
-    ? `2. **Player 2:** <@${lobby.joinedId}>`
-    : `2. **Player 2:** *(not yet joined)*`;
+  let p2;
+  if (!lobby.joinedId) {
+    p2 = `2. **Player 2:** *(not yet joined)*`;
+  } else if (lobby.joinedId.startsWith('ai_player_')) {
+    p2 = `2. **Player 2:** 🤖 SKIRBO (AI)`;
+  } else {
+    p2 = `2. **Player 2:** <@${lobby.joinedId}>`;
+  }
   return `${p1}\n${p2}`;
 }
 

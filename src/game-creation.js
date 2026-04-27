@@ -387,6 +387,13 @@ export async function applySquadSubmission(game, isP1, squad, client, deps) {
 
   if (isP1) game.player1Squad = squad;
   else game.player2Squad = squad;
+  // SKIRBO auto-submit: when the human (P1) submits in a vs-SKIRBO game,
+  // pick a Destruct deck of a non-matching affiliation for SKIRBO (P2).
+  // Done synchronously so the rest of this function sees both squads in place.
+  if (isP1 && game.aiPlayerNum === 2 && !game.player2Squad) {
+    const { pickSkirboDeckForOpponent } = await import('./ai/skirbo-deck-picker.js');
+    game.player2Squad = pickSkirboDeckForOpponent(squad);
+  }
   const playerId = isP1 ? game.player1Id : game.player2Id;
   const playerNum = isP1 ? 1 : 2;
   // Use saved favorite name if this deck matches one
