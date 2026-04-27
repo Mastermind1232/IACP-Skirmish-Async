@@ -232,11 +232,13 @@ def wire_slash_commands(bot: Any, deps: Dict[str, Any]) -> int:
     return registered_count
 
 
-async def run_bot() -> None:
+async def run_bot(cfg: 'BotConfig' = None) -> None:
     """Boot the bot with discord.py and hand button events to the router.
 
-    Requires the DISCORD_BOT_TOKEN env var. Imports discord lazily so
-    import-time errors in the rest of the package surface before this.
+    Accepts a BotConfig (load_from_env()) — preferred entry. For
+    backwards compat, a None argument falls back to env-loading
+    inside this function (so existing tests + ad-hoc invocations
+    don't break).
 
     Picks a game store via db.make_store (DATABASE_URL → Postgres,
     SKIRBO_GAMES_PATH → JSON, else InMemory). Wires a DiscordBackend
@@ -252,12 +254,12 @@ async def run_bot() -> None:
     from python.discord_bot.channels import (
         DiscordBackend, set_default_backend,
     )
+    from python.discord_bot.config import BotConfig
     from python.discord_bot.db import make_store
 
-    # Accept either DISCORD_TOKEN (JS-bot legacy) or DISCORD_BOT_TOKEN.
-    token = os.environ.get('DISCORD_TOKEN') or os.environ.get('DISCORD_BOT_TOKEN')
-    if not token:
-        raise RuntimeError('DISCORD_TOKEN or DISCORD_BOT_TOKEN env var required')
+    if cfg is None:
+        cfg = BotConfig.load_from_env()
+    token = cfg.discord_token
 
     intents = discord.Intents.default()
     intents.message_content = True
@@ -304,6 +306,11 @@ async def run_bot() -> None:
 
     deps = build_deps(game_store, bot)
     deps['channel_backend'] = channel_backend
+    # Surface validated config so consumers (e.g. achievements channel
+    # poster, max-active-games gate) read typed fields instead of
+    # calling os.environ.get themselves.
+    deps['config'] = cfg
+    deps['MAX_ACTIVE_GAMES_PER_PLAYER'] = cfg.max_active_games_per_player
     # Let handlers both read and write via the store.
     if hasattr(game_store, 'save'):
         deps['save_game'] = game_store.save

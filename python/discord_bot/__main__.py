@@ -20,8 +20,7 @@ import logging
 import os
 
 
-def _configure_logging() -> None:
-    level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+def _configure_logging(level: str) -> None:
     logging.basicConfig(
         level=getattr(logging, level, logging.INFO),
         format='%(asctime)s [%(name)s] %(levelname)s %(message)s',
@@ -29,19 +28,26 @@ def _configure_logging() -> None:
 
 
 def main() -> None:
-    _configure_logging()
-    log = logging.getLogger('skirbo.main')
-
-    token = os.environ.get('DISCORD_TOKEN') or os.environ.get('DISCORD_BOT_TOKEN')
-    if not token:
-        log.error('DISCORD_TOKEN or DISCORD_BOT_TOKEN env var is required.')
+    # Load + validate config FIRST so a missing DISCORD_TOKEN dies with
+    # a clear field-named message rather than a cryptic discord.py
+    # failure deeper in setup.
+    from python.discord_bot.config import BotConfig, ConfigError
+    try:
+        cfg = BotConfig.load_from_env()
+    except ConfigError as e:
+        # Log at ERROR even before logging is fully configured.
+        logging.basicConfig(level=logging.ERROR)
+        logging.getLogger('skirbo.main').error('%s', e)
         raise SystemExit(1)
+
+    _configure_logging(cfg.log_level)
+    log = logging.getLogger('skirbo.main')
 
     # Lazy import so --help and dry-run imports don't pull discord.py.
     from python.discord_bot.main import run_bot
 
     log.info('Booting Skirbo Discord bot…')
-    asyncio.run(run_bot())
+    asyncio.run(run_bot(cfg))
 
 
 if __name__ == '__main__':

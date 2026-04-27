@@ -619,8 +619,11 @@ def _post_achievement_notifications(
     Posts to ACHIEVEMENTS_CHANNEL_ID env var (set on Railway). Mirrors
     JS postAchievementNotification.
     """
-    import os
-    channel_id = os.environ.get('ACHIEVEMENTS_CHANNEL_ID')
+    cfg = deps.get('config')
+    channel_id = (
+        cfg.achievements_channel_id if cfg is not None
+        else __import__('os').environ.get('ACHIEVEMENTS_CHANNEL_ID')
+    )
     if not channel_id:
         return
     backend = deps.get('channel_backend')
