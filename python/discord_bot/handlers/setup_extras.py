@@ -125,7 +125,7 @@ _handle_setup_attach_to = _make_player_handler('setup_attach_to_')
 _handle_attach_confirm = _make_player_handler('attach_confirm_')
 _handle_attach_done_redo = _make_player_handler('attach_done_redo_')
 _handle_squad_confirm = _make_player_handler('squad_confirm_')
-_handle_squad_select = _make_player_handler('squad_select_')
+# squad_select_ now lives in setup.py (real modal-opening handler).
 _handle_default_deck = _make_player_handler('default_deck_')
 
 
@@ -145,5 +145,5 @@ register('setup_attach_to_', _handle_setup_attach_to, 'core')
 register('attach_confirm_', _handle_attach_confirm, 'core')
 register('attach_done_redo_', _handle_attach_done_redo, 'core')
 register('squad_confirm_', _handle_squad_confirm, 'core')
-register('squad_select_', _handle_squad_select, 'core')
+# squad_select_ registered in setup.py (real modal-opening handler).
 register('default_deck_', _handle_default_deck, 'core')
