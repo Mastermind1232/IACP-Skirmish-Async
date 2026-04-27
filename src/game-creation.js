@@ -59,6 +59,10 @@ function getAdminOverride(guild) {
 /**
  * Create p1 and p2 Play Area channels.
  */
+// Bothelpers role auto-gets view access on every game's public channels (game
+// log, general chat, map updates, both play areas) — never private hand threads.
+export const BOTHELPERS_ROLE_ID = '1498454240375603391';
+
 export async function createPlayAreaChannels(guild, gameCategory, prefix, player1Id, player2Id) {
   const p1Name = await getPlayerChannelName(guild, player1Id);
   const p2Name = await getPlayerChannelName(guild, player2Id);
@@ -67,6 +71,7 @@ export async function createPlayAreaChannels(guild, gameCategory, prefix, player
     ...getAdminOverride(guild),
     ...(isDiscordSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages }] : []),
     ...(isDiscordSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages }] : []),
+    { id: BOTHELPERS_ROLE_ID, allow: PermissionFlagsBits.ViewChannel },
     { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.CreatePrivateThreads | PermissionFlagsBits.ManageThreads | PermissionFlagsBits.SendMessagesInThreads },
   ];
   const p1 = await guild.channels.create({
@@ -157,6 +162,7 @@ export async function createGameChannels(guild, player1Id, player2Id, deps) {
     ...getAdminOverride(guild),
     ...(isSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel }] : []),
     ...(isSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel }] : []),
+    { id: BOTHELPERS_ROLE_ID, allow: PermissionFlagsBits.ViewChannel },
     { id: botId, allow: PermissionFlagsBits.ViewChannel },
   ];
 
@@ -205,6 +211,7 @@ export async function createBoardChannel(guild, gameCategory, prefix, player1Id,
     ...getAdminOverride(guild),
     ...(isDiscordSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages }] : []),
     ...(isDiscordSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages }] : []),
+    { id: BOTHELPERS_ROLE_ID, allow: PermissionFlagsBits.ViewChannel },
     { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
   ];
   return await guild.channels.create({
@@ -213,6 +220,31 @@ export async function createBoardChannel(guild, gameCategory, prefix, player1Id,
     parent: gameCategory.id,
     permissionOverwrites: boardPerms,
   });
+}
+
+/**
+ * Backfill: grant the Bothelpers role view access on the public channels of a
+ * single existing game (game category, game log, general chat, map updates,
+ * both play areas). Skips private hand threads.
+ */
+export async function backfillBothelpersRoleAccess(client, game) {
+  const channelIds = [
+    game.gameCategoryId,
+    game.generalId,
+    game.chatId,
+    game.boardId,
+    game.p1PlayAreaId,
+    game.p2PlayAreaId,
+  ].filter(Boolean);
+  for (const id of channelIds) {
+    try {
+      const ch = await client.channels.fetch(id).catch(() => null);
+      if (!ch) continue;
+      await ch.permissionOverwrites.edit(BOTHELPERS_ROLE_ID, { ViewChannel: true });
+    } catch (err) {
+      console.warn(`[bothelpers] backfill failed for channel ${id}: ${err.message}`);
+    }
+  }
 }
 
 /**

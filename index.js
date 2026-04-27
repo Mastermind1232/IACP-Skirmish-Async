@@ -78,6 +78,7 @@ import {
   createTestGame as _createTestGame,
   applySquadSubmission as _applySquadSubmission,
   setupServer as _setupServer,
+  backfillBothelpersRoleAccess,
 } from './src/game-creation.js';
 import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
@@ -2265,6 +2266,19 @@ client.once('ready', async () => {
   } catch (err) {
     console.error('[bothelpers] Initial sync failed:', err.message);
   }
+
+  // Backfill: grant Bothelpers role view access on every active game's public
+  // channels (no-op for games created with the new perms, fixes pre-existing ones).
+  try {
+    const allGames = [...getGamesMap().values()];
+    for (const g of allGames) {
+      if (g.ended) continue;
+      await backfillBothelpersRoleAccess(client, g);
+    }
+    console.log(`[bothelpers] role-access backfill complete (${allGames.filter((g) => !g.ended).length} games)`);
+  } catch (err) {
+    console.error('[bothelpers] role-access backfill failed:', err.message);
+  }
 });
 
 // ── Bothelpers role → DB sync (Phase 2) ──────────────────────────────────
@@ -2870,13 +2884,17 @@ client.on('messageCreate', async (message) => {
     console.error('Request buttons error:', err);
   }
 
-  // Bothelper support request: detect @Bothelpers role mention in a game channel.
-  // Pinging the Bothelpers role from inside a game forwards the message into
-  // #bothelpers and pings every Bothelpers-role member there to summon a human.
+  // Forward role-pings from inside game channels into #bothelpers:
+  //   - @Bothelpers  → summons humans (other Bothelpers role members)
+  //   - @SKIRBO      → escalates a bug to Skirbo (the AI)
+  // Both reuse the same webhook + tag-based route-back; only the framing differs.
   const BOTHELPERS_ROLE_ID = '1498454240375603391';
+  const SKIRBO_ROLE_ID = '1472145489817374720';
   const BOTHELPERS_CHANNEL_ID = '1481314970666008607';
   try {
-    if (message.mentions.roles.has(BOTHELPERS_ROLE_ID)) {
+    const pingedBothelpers = message.mentions.roles.has(BOTHELPERS_ROLE_ID);
+    const pingedSkirbo = message.mentions.roles.has(SKIRBO_ROLE_ID);
+    if (pingedBothelpers || pingedSkirbo) {
       const gameMatch = findGameByChannel(getGamesMap(), message.channel.id);
       if (gameMatch) {
         const { gameId } = gameMatch;
@@ -2886,9 +2904,21 @@ client.on('messageCreate', async (message) => {
           const sourceLink = `https://discord.com/channels/${message.guild.id}/${message.channel.id}/${message.id}`;
           helpRequestSourceMap.set(gameId, message.channel.id);
           const webhook = await getBothelpersWebhook(bothelpersCh);
+          const targetRoleId = pingedSkirbo ? SKIRBO_ROLE_ID : BOTHELPERS_ROLE_ID;
+          const headerEmoji = pingedSkirbo ? '🐛' : '🆘';
+          const headerText = pingedSkirbo
+            ? `<@&${SKIRBO_ROLE_ID}> **Bug escalation** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`
+            : `<@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`;
+          const ackText = pingedSkirbo
+            ? `🐛 escalated to skirbo — i'm looking, hang tight.`
+            : `👀 forwarded to bothelpers — give them a second to jump in.`;
+          const cleanedQuote = message.content
+            .replace(new RegExp(`<@&${BOTHELPERS_ROLE_ID}>`, 'g'), '@Bothelpers')
+            .replace(new RegExp(`<@&${SKIRBO_ROLE_ID}>`, 'g'), '@SKIRBO')
+            .split('\n').join('\n> ');
           const payload = {
-            content: `🆘 **\\[ia${gameId}\\]** <@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>:\n\n> ${message.content.replace(/<@&\d+>/g, '@bothelpers').split('\n').join('\n> ')}\n\n[Jump to message](${sourceLink})\n\n_Reply with_ \`[ia${gameId}] your message\` _to send a response back to the game._`,
-            allowedMentions: { roles: [BOTHELPERS_ROLE_ID] },
+            content: `${headerEmoji} **\\[ia${gameId}\\]** ${headerText}:\n\n> ${cleanedQuote}\n\n[Jump to message](${sourceLink})\n\n_Reply with_ \`[ia${gameId}] your message\` _to send a response back to the game._`,
+            allowedMentions: { roles: [targetRoleId] },
           };
           if (webhook) {
             await webhook.send({ ...payload, username: 'Skirbo Bothelpers' });
@@ -2896,9 +2926,8 @@ client.on('messageCreate', async (message) => {
             await bothelpersCh.send(payload);
           }
           await message.react('✅').catch(discordCatch);
-          // Quick text ack in the source channel so the user knows the ping landed.
           await message.channel.send({
-            content: `👀 forwarded to bothelpers — i'm on it, hang tight.`,
+            content: ackText,
             allowedMentions: { parse: [] },
           }).catch(discordCatch);
         }
