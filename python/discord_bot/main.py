@@ -311,6 +311,15 @@ async def run_bot() -> None:
     async def on_interaction(interaction):  # noqa: D401
         # discord.py event name is 'on_interaction'. Function name MUST
         # match for @bot.event registration to wire up.
+        cid_dbg = (
+            (getattr(interaction, 'data', {}) or {}).get('custom_id')
+            or getattr(interaction, 'custom_id', '')
+            or '<no-cid>'
+        )
+        _LOG.info(
+            'on_interaction fired: type=%s custom_id=%s',
+            getattr(interaction, 'type', None), cid_dbg,
+        )
         # Only route non-slash interactions (buttons, modals) through the
         # router. Slash commands are dispatched via the tree above.
         itype = getattr(interaction, 'type', None)
