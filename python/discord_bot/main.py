@@ -264,6 +264,20 @@ async def run_bot() -> None:
     # Use commands.Bot so we get a `tree` for slash-command registration.
     bot = _commands.Bot(command_prefix='!', intents=intents)
 
+    # Register discord.py-native DynamicItem buttons (lobby first).
+    # Each class' regex template lets the framework route clicks
+    # without our custom router. Persistent across restarts.
+    try:
+        from python.discord_bot import views as _views
+        for cls in _views.all_dynamic_item_classes():
+            bot.add_dynamic_items(cls)
+        _LOG.info(
+            'Registered %d dynamic-item button classes',
+            len(_views.all_dynamic_item_classes()),
+        )
+    except Exception:
+        _LOG.exception('Dynamic-item registration failed')
+
     # Self-register all handler modules
     registered = register_all_handlers()
     _LOG.info('Registered %d handler modules', registered)
@@ -303,27 +317,35 @@ async def run_bot() -> None:
     deps.setdefault('lobbies', {})
     deps.setdefault('lobby_embed_sent', set())
 
+    # Hang deps off the bot so DynamicItem callbacks (which only
+    # receive the interaction) can reach them via interaction.client.
+    bot._skirbo_deps = deps
+
     # Register slash commands on the bot's tree.
     slash_count = wire_slash_commands(bot, deps)
     _LOG.info('Registered %d slash commands', slash_count)
 
-    @bot.event
+    # Prefix list of custom_ids handled by DynamicItems. Our custom
+    # router skips these so we don't double-respond. Each entry is
+    # the prefix portion of the DynamicItem's regex template.
+    DYNAMIC_ITEM_PREFIXES = ('lobby_join_', 'lobby_start_')
+
+    @bot.listen('on_interaction')
     async def on_interaction(interaction):  # noqa: D401
-        # discord.py event name is 'on_interaction'. Function name MUST
-        # match for @bot.event registration to wire up.
-        cid_dbg = (
-            (getattr(interaction, 'data', {}) or {}).get('custom_id')
-            or getattr(interaction, 'custom_id', '')
-            or '<no-cid>'
-        )
-        _LOG.info(
-            'on_interaction fired: type=%s custom_id=%s',
-            getattr(interaction, 'type', None), cid_dbg,
-        )
-        # Only route non-slash interactions (buttons, modals) through the
-        # router. Slash commands are dispatched via the tree above.
+        # ADDITIVE listener (bot.listen, NOT bot.event). This means
+        # discord.py's default on_interaction still runs — which is
+        # what dispatches DynamicItems (lobby buttons) and slash
+        # commands. Our listener handles legacy prefix-based custom
+        # router for buttons not yet migrated to View classes.
         itype = getattr(interaction, 'type', None)
         if itype is None or str(itype).endswith('application_command'):
+            return
+        # Skip — DynamicItem already handles these.
+        cid_check = (
+            (getattr(interaction, 'data', {}) or {}).get('custom_id', '')
+            or getattr(interaction, 'custom_id', '') or ''
+        )
+        if any(cid_check.startswith(p) for p in DYNAMIC_ITEM_PREFIXES):
             return
         # Custom-id prefixes that need to open a Discord modal must NOT
         # be defer()-acknowledged first — show_modal() must be the
@@ -410,7 +432,8 @@ async def run_bot() -> None:
                 'status': 'LFG',
             }
             lobbies[tid] = lobby
-            await _send_lobby_embed(thread, lobby)
+            from python.discord_bot.views import lobby as _lobby_view
+            await _lobby_view.send_lobby_embed(thread, lobby)
             await _update_lobby_thread_name(thread, lobby)
         except Exception:
             _LOG.exception('on_message lobby setup failed')

@@ -113,5 +113,9 @@ def _handle_lobby_start(interaction: Any,
     }
 
 
-register('lobby_join_', _handle_lobby_join, 'core')
-register('lobby_start_', _handle_lobby_start, 'core')
+# Lobby buttons migrated to discord.py-native DynamicItems in
+# python/discord_bot/views/lobby.py. Custom-router registration
+# is intentionally disabled to avoid double-dispatch.
+#
+# register('lobby_join_', _handle_lobby_join, 'core')
+# register('lobby_start_', _handle_lobby_start, 'core')
