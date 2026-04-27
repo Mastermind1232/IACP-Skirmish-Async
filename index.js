@@ -786,10 +786,8 @@ const CATEGORIES = {
 };
 
 const GAME_TAGS = [
-  { name: 'Slow' },
-  { name: 'Normal' },
-  { name: 'Fast' },
-  { name: 'Hyperspeed' },
+  { name: 'Player vs Player' },
+  { name: 'Player vs SKIRBO' },
 ];
 
 const SAMPLE_DECK_P1 = {
@@ -1870,7 +1868,8 @@ client.once('ready', async () => {
         const forum = guild.channels.cache.find(
           (c) => c.type === ChannelType.GuildForum && c.name === 'new-games'
         );
-        if (forum) {
+        if (forum && (forum.availableTags?.length ?? 0) === 0) {
+          // Only seed tags when none exist — never clobber admin customizations.
           await forum.setAvailableTags(GAME_TAGS);
         }
         const generalCat = guild.channels.cache.find(
