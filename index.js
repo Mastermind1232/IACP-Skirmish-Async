@@ -2315,6 +2315,26 @@ const requestsWithButtons = new Set();
 // posts back into the same channel the user pinged from.
 const helpRequestSourceMap = new Map();
 
+// Cache of the webhook used to post forward-in messages so the local discord-MCP
+// (which shares the bot account) doesn't filter forward-ins as self-authored
+// and Claude actually gets notified about them.
+let _bothelpersWebhook = null;
+async function getBothelpersWebhook(channel) {
+  if (_bothelpersWebhook) return _bothelpersWebhook;
+  try {
+    const hooks = await channel.fetchWebhooks();
+    let hook = hooks.find((h) => h.name === 'Skirbo Bothelpers' && h.token);
+    if (!hook) {
+      hook = await channel.createWebhook({ name: 'Skirbo Bothelpers' });
+    }
+    _bothelpersWebhook = hook;
+    return hook;
+  } catch (err) {
+    console.error('[bothelpers] webhook setup failed:', err.message);
+    return null;
+  }
+}
+
 // Forum posts: thread isn't messageable until the author sends their first message.
 // So we set up the lobby on the first message in a new-games thread.
 async function maybeSetupLobbyFromFirstMessage(message) {
@@ -2857,21 +2877,22 @@ client.on('messageCreate', async (message) => {
     if (message.mentions.roles.has(BOTHELPERS_ROLE_ID)) {
       const gameMatch = findGameByChannel(getGamesMap(), message.channel.id);
       if (gameMatch) {
-        const { gameId, game } = gameMatch;
+        const { gameId } = gameMatch;
         const bothelpersCh = await client.channels.fetch(BOTHELPERS_CHANNEL_ID).catch(() => null);
         if (bothelpersCh) {
           const requester = message.author;
           const sourceLink = `https://discord.com/channels/${message.guild.id}/${message.channel.id}/${message.id}`;
-          const jumpRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`bothelper_jump_${gameId}`).setLabel('Jump In!').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`bothelper_resolve_${gameId}_${message.id}`).setLabel('Resolve').setStyle(ButtonStyle.Secondary),
-          );
           helpRequestSourceMap.set(gameId, message.channel.id);
-          await bothelpersCh.send({
+          const webhook = await getBothelpersWebhook(bothelpersCh);
+          const payload = {
             content: `🆘 **\\[ia${gameId}\\]** <@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>:\n\n> ${message.content.replace(/<@&\d+>/g, '@bothelpers').split('\n').join('\n> ')}\n\n[Jump to message](${sourceLink})\n\n_Reply with_ \`[ia${gameId}] your message\` _to send a response back to the game._`,
-            components: [jumpRow],
             allowedMentions: { roles: [BOTHELPERS_ROLE_ID] },
-          });
+          };
+          if (webhook) {
+            await webhook.send({ ...payload, username: 'Skirbo Bothelpers' });
+          } else {
+            await bothelpersCh.send(payload);
+          }
           await message.react('✅').catch(discordCatch);
         }
       }
@@ -4772,66 +4793,6 @@ client.on('interactionCreate', async (interaction) => {
       'join_game': async (i) => {
         await i.followUp({ content: 'Browse **#new-games** and click **Join Game** on a lobby post that needs an opponent.', components: [getMainMenu()], ephemeral: true }).catch(discordCatch);
       },
-      'bothelper_jump_': async (i) => {
-        const gameId = i.customId.replace('bothelper_jump_', '');
-        const game = getGame(gameId);
-        if (!game) {
-          await i.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-          return;
-        }
-        const helperId = i.user.id;
-        if (helperId === game.player1Id || helperId === game.player2Id) {
-          await i.followUp({ content: 'You are already a player in this game.', ephemeral: true }).catch(discordCatch);
-          return;
-        }
-        const guild = i.guild;
-        if (!guild) return;
-        // Grant read access to all game channels via category + individual channels
-        const channelIds = [game.gameCategoryId, game.generalId, game.chatId, game.boardId, game.p1PlayAreaId, game.p2PlayAreaId].filter(Boolean);
-        for (const chId of channelIds) {
-          try {
-            const ch = await guild.channels.fetch(chId);
-            if (ch) {
-              await ch.permissionOverwrites.create(helperId, {
-                ViewChannel: true,
-                SendMessagesInThreads: true,
-              });
-            }
-          } catch (err) {
-            console.error(`Bothelper permission error for channel ${chId}:`, err);
-          }
-        }
-        // Add to hand threads (private threads need explicit member add)
-        for (const threadId of [game.p1HandId, game.p2HandId].filter(Boolean)) {
-          try {
-            const thread = await client.channels.fetch(threadId);
-            if (thread?.isThread()) await thread.members.add(helperId).catch(discordCatch);
-          } catch (err) {
-            console.error(`Bothelper thread add error for ${threadId}:`, err);
-          }
-        }
-        // Track helpers on the game object
-        if (!game.bothelpers) game.bothelpers = [];
-        if (!game.bothelpers.includes(helperId)) {
-          game.bothelpers.push(helperId);
-          saveGames();
-        }
-        // Update the bothelpers channel message to show who jumped in
-        const existingContent = i.message.content;
-        const helperMention = `<@${helperId}>`;
-        const updatedContent = existingContent + `\n${helperMention} has jumped in to assist!`;
-        await i.message.edit({ content: updatedContent, components: i.message.components }).catch(discordCatch);
-        await i.followUp({ content: `You now have access to **IA Game #${gameId}**. Head to the game channels to help out!`, ephemeral: true }).catch(discordCatch);
-        // Notify the game log
-        try {
-          const generalCh = await client.channels.fetch(game.generalId);
-          if (generalCh) {
-            await generalCh.send(sanitizeMentions({ content: `🛟 <@${helperId}> has joined as a **Bothelper** to assist with this game.`, allowedMentions: { users: [helperId] } })).catch(discordCatch);
-          }
-        } catch (err) {
-          console.error('Bothelper game log notification error:', err);
-        }
-      },
       'botlog_resolve_': async (i) => {
         // Resolve incident in Postgres (source of truth)
         const incidentId = i.customId.replace('botlog_resolve_', '');
@@ -4863,31 +4824,6 @@ client.on('interactionCreate', async (interaction) => {
           components: [],
           allowedMentions: { users: [] },
         }).catch(discordCatch);
-      },
-      'bothelper_resolve_': async (i) => {
-        const remainder = i.customId.replace('bothelper_resolve_', '');
-        const sepIdx = remainder.indexOf('_');
-        const gameId = sepIdx >= 0 ? remainder.slice(0, sepIdx) : remainder;
-        const game = getGame(gameId);
-        if (!game) {
-          await i.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-          return;
-        }
-        const helperId = i.user.id;
-        // Only bothelpers who jumped in (or players) can resolve
-        const isHelper = game.bothelpers?.includes(helperId);
-        const isPlayer = helperId === game.player1Id || helperId === game.player2Id;
-        if (!isHelper && !isPlayer) {
-          await i.followUp({ content: 'Only bothelpers who jumped in or game players can resolve this request.', ephemeral: true }).catch(discordCatch);
-          return;
-        }
-        // Mark message as resolved
-        const existingContent = i.message.content;
-        await i.message.edit({
-          content: existingContent + `\n\n**Resolved** by <@${helperId}>`,
-          components: [], // remove buttons
-        }).catch(discordCatch);
-        await i.followUp({ content: 'Support request resolved.', ephemeral: true }).catch(discordCatch);
       },
     };
     const localHandler = LOCAL_HANDLERS[buttonKey];
