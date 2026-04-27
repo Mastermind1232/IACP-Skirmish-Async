@@ -53,6 +53,22 @@ def get_log_channel(game_id: str) -> Optional[str]:
     return (_channel_map.get(game_id) or {}).get('log_channel_id')
 
 
+def set_game_category(game_id: str, category_id: str) -> None:
+    _slot(game_id)['game_category_id'] = category_id
+
+
+def get_game_category(game_id: str) -> Optional[str]:
+    return (_channel_map.get(game_id) or {}).get('game_category_id')
+
+
+def set_chat_channel(game_id: str, channel_id: str) -> None:
+    _slot(game_id)['chat_channel_id'] = channel_id
+
+
+def get_chat_channel(game_id: str) -> Optional[str]:
+    return (_channel_map.get(game_id) or {}).get('chat_channel_id')
+
+
 def set_play_area(game_id: str, player_num: int, channel_id: str) -> None:
     key = f'p{player_num}_play_area_channel_id'
     _slot(game_id)[key] = channel_id

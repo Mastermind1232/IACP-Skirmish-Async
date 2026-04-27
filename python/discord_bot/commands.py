@@ -81,10 +81,14 @@ def cmd_startgame(user_id: str, deps: Dict[str, Any], *,
             channels = create_game_channels(
                 gid, guild_id, user_id, opponent_id, backend=factory,
             )
+            if channels.get('game_category_id'):
+                gc.set_game_category(gid, channels['game_category_id'])
             if channels.get('board_channel_id'):
                 gc.set_board_message(gid, channels['board_channel_id'], None)
             if channels.get('log_channel_id'):
                 gc.set_log_channel(gid, channels['log_channel_id'])
+            if channels.get('chat_channel_id'):
+                gc.set_chat_channel(gid, channels['chat_channel_id'])
             if channels.get('p1_play_area_channel_id'):
                 gc.set_play_area(gid, 1, channels['p1_play_area_channel_id'])
             if channels.get('p2_play_area_channel_id'):
