@@ -171,6 +171,33 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
       return { steps: step, actions: actionLog };
     }
 
+    // Deployment phase: the UI requires typing a coord into a modal,
+    // which the AI fakeInteraction can't fill. Place all undeployed
+    // figures programmatically and let the loop continue with
+    // deployment_done (which IS clickable).
+    const deployMeta = aiPlayerNum === 1
+      ? currentGame.player1DeployMetadata
+      : currentGame.player2DeployMetadata;
+    if (Array.isArray(deployMeta) && deployMeta.length > 0) {
+      const positions = currentGame.figurePositions?.[aiPlayerNum] || {};
+      const undeployed = deployMeta.some((m) => {
+        if (!m?.dcName) return false;
+        const key = `${m.dcName}-${m.dgIndex}-${m.figureIndex}`;
+        return !positions[key];
+      });
+      if (undeployed) {
+        const { autoDeployForAi } = await import('./skirbo-deploy.js');
+        const r = autoDeployForAi(currentGame, aiPlayerNum);
+        console.log(`[AI] Auto-deployed for player ${aiPlayerNum}: ${r.placed} placed, ${r.skipped} skipped, ${r.alreadyDeployed} already deployed`);
+        // Persist via buildAllDeps if it exposes saveGames; the in-memory
+        // mutation is enough for the next loop iteration regardless.
+        try { buildAllDeps()?.saveGames?.(); } catch {}
+        // Loop again — next iteration sees figures placed and clicks
+        // deployment_done (which IS a non-modal action AI can handle).
+        continue;
+      }
+    }
+
     // Clear CC suppression when game phase changes
     const curPhase = `${currentGame.roundPhase || '?'}|${currentGame.currentActivatingDcIndex ?? 'x'}`;
     if (curPhase !== lastRoundPhase) {
