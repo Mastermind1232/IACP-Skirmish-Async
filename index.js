@@ -2929,11 +2929,6 @@ client.on('messageCreate', async (message) => {
             : isReplyToBot
               ? `<@&${SKIRBO_ROLE_ID}> **Reply** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`
               : `<@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`;
-          const ackText = pingedSkirbo
-            ? `Message received, looking into it 🫡`
-            : isReplyToBot
-              ? `Looping back in 🫡`
-              : `Forwarded to helpers 🫡`;
           let cleanedQuote = message.content
             .replace(new RegExp(`<@&${BOTHELPERS_ROLE_ID}>`, 'g'), '@Bothelpers');
           for (const id of SKIRBO_ROLE_IDS) {
@@ -2949,11 +2944,9 @@ client.on('messageCreate', async (message) => {
           } else {
             await bothelpersCh.send(payload);
           }
+          // ✅ react confirms the forward landed without a noisy auto-ack;
+          // the human/AI responder's own first reply carries the substance.
           await message.react('✅').catch(discordCatch);
-          await message.channel.send({
-            content: ackText,
-            allowedMentions: { parse: [] },
-          }).catch(discordCatch);
         }
       }
     }
