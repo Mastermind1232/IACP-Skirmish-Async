@@ -71,12 +71,16 @@ describe('PROBE-PD-LOS-016: corner-to-corner LOS lines are non-intersecting and 
       'pathsOverlap rejection guards distinct-lines invariant — CRR-LOS-016');
   });
 
-  it('016e: source — interior corner-intersection blocks LOS at ≥2-obstacle corners', () => {
-    // CRR p.22: a ray cannot trace through a corner where 2+ obstacles meet.
-    // Implemented in getLosFromCornerToCorner as the wallEndpoints + adjacent-
-    // cell obstacle-count loop.
+  it('016e: source — corner-intersection blocking via intersectionBlocksPath state machine', () => {
+    // CRR p.22 corner rules. Implemented as Nick Hansen's intersectionBlocksPath
+    // (4 cases: line through, line ends here, line starts here, line both
+    // starts and ends here) called for every wall-junction corner the LOS
+    // line touches.
     assert.match(ENGINE_SRC,
-      /if \(count >= 2\) return false;/,
-      'engine must reject rays threading a ≥2-obstacle corner — CRR-LOS-016 companion');
+      /function intersectionBlocksPath\(/,
+      'engine must define intersectionBlocksPath for CRR-p.22 corner rules — CRR-LOS-016 companion');
+    assert.match(ENGINE_SRC,
+      /if \(intersectionBlocksPath\(bi,/,
+      'getLosFromCornerToCorner must invoke intersectionBlocksPath per intersection.');
   });
 });

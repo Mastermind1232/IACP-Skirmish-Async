@@ -350,7 +350,7 @@ function adjacentTilesBlocked(fromX, fromY, toX, toY, sx, sy, ex, ey,
 // ── corner-to-corner / point-to-point LOS ──────────────────────────────────
 
 function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, ctx) {
-  const { walls, wallSet, blockingTiles, figureBlockers, offMapTiles, wallEndpoints } = ctx;
+  const { walls, wallSet, blockingTiles, figureBlockers, offMapTiles, blockingIntersections } = ctx;
   const sx = attCorner.x, sy = attCorner.y, ex = defCorner.x, ey = defCorner.y;
 
   const vEdges = getVerticalEdges(sx, sy, ex, ey);
@@ -367,35 +367,159 @@ function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, 
   if (adjacentTilesBlocked(fromX, fromY, toX, toY, sx, sy, ex, ey,
                             wallSet, blockingTiles, figureBlockers, offMapTiles)) return false;
 
-  // Interior corner intersections per CRR p.22: LOS cannot trace through a
-  // corner where ≥2 obstacles meet. Obstacles at corner (x, y) include:
-  //   - wall endpoints — number of walls touching the corner
-  //   - blocking-terrain cells with the corner on their boundary
-  //   - figure-blocking cells with the corner on their boundary
-  // Skip line endpoints (att / def corners) — we only block on *passing
-  // through* an obstacle corner.
-  if (wallEndpoints && wallEndpoints.size > 0) {
+  // Nick Hansen's intersectionBlocksPath state machine: at each integer-grid
+  // intersection the line passes through (or starts/ends at), check whether
+  // the wall connections at that corner block the line per CRR p.22 corner
+  // rules. This catches cases pure edge-crossing checks miss — wall endpoints
+  // tangent to lines, walls running through corners on a perpendicular axis
+  // to the line, lines starting/ending on wall corners, etc.
+  if (blockingIntersections && blockingIntersections.size > 0) {
     const intersections = getIntersections(sx, sy, ex, ey);
     for (const p of intersections) {
-      if (p.x === sx && p.y === sy) continue;
-      if (p.x === ex && p.y === ey) continue;
-      let count = 0;
-      const wallsHere = wallEndpoints.get(`${p.x},${p.y}`) ?? 0;
-      count += wallsHere;
-      // Cells touching corner: (p.x-1, p.y-1), (p.x, p.y-1), (p.x-1, p.y), (p.x, p.y)
-      const adj = [[p.x - 1, p.y - 1], [p.x, p.y - 1], [p.x - 1, p.y], [p.x, p.y]];
-      for (const [cx, cy] of adj) {
-        if (cx === fromX && cy === fromY) continue;
-        if (cx === toX && cy === toY) continue;
-        const key = `${cx},${cy}`;
-        if (blockingTiles.has(key)) count++;
-        else if (figureBlockers.has(key)) count++;
-      }
-      if (count >= 2) return false;
+      const bi = blockingIntersections.get(`${p.x},${p.y}`);
+      if (!bi) continue;
+      if (intersectionBlocksPath(bi, fromX, fromY, toX, toY, sx, sy, ex, ey)) return false;
     }
   }
 
   return true;
+}
+
+/** Faithful port of Nick Hansen's intersectionBlocksPath. Determines whether
+ *  the LOS line is blocked at the given wall-junction corner based on which
+ *  of its 4 cardinal connections (top/right/bottom/left) have walls AND on
+ *  the line's geometry (start/end/through, attacker/defender position
+ *  relative to the corner, line direction). */
+function intersectionBlocksPath(bi, fromTileX, fromTileY, toTileX, toTileY, startX, startY, endX, endY) {
+  const deltaX = endX - startX;
+  const deltaY = endY - startY;
+  const attL = fromTileX < bi.x;
+  const attR = !attL;
+  const attA = fromTileY < bi.y;
+  const attB = !attA;
+  const defL = toTileX < bi.x;
+  const defR = !defL;
+  const defA = toTileY < bi.y;
+  const defB = !defA;
+  const top = bi.connections.has(`${bi.x},${bi.y - 1}`);
+  const right = bi.connections.has(`${bi.x + 1},${bi.y}`);
+  const left = bi.connections.has(`${bi.x - 1},${bi.y}`);
+  const bottom = bi.connections.has(`${bi.x},${bi.y + 1}`);
+  let blocked = false;
+
+  // Case A: line both starts AND ends at this intersection (rare zero-length).
+  if (bi.x === startX && bi.y === startY && bi.x === endX && bi.y === endY) {
+    if (attL && attA) {
+      if (defR && defA) blocked = (top && left) || (top && right) || (top && bottom);
+      else if (defR && defB) blocked = (top && left) || (top && bottom) || (bottom && right) || (left && right);
+      else if (defL && defB) blocked = (top && left) || (left && bottom) || (left && right);
+    } else if (attR && attA) {
+      if (defL && defA) blocked = (top && left) || (top && right) || (top && bottom);
+      else if (defR && defB) blocked = (top && right) || (bottom && right) || (left && right);
+      else if (defL && defB) blocked = (top && right) || (left && bottom) || (top && bottom) || (left && right);
+    } else if (attR && attB) {
+      if (defL && defA) blocked = (left && top) || (bottom && right) || (top && bottom) || (left && right);
+      else if (defR && defA) blocked = (bottom && right) || (top && right) || (left && right);
+      else if (defL && defB) blocked = (left && bottom) || (top && bottom) || (bottom && right);
+    } else if (attL && attB) {
+      if (defL && defA) blocked = (left && top) || (left && right) || (left && bottom);
+      else if (defR && defA) blocked = (left && bottom) || (top && right) || (left && right) || (top && bottom);
+      else if (defR && defB) blocked = (left && bottom) || (bottom && right) || (top && bottom);
+    }
+    return blocked;
+  }
+  // Case B: line ENDS at this intersection.
+  if (bi.x === endX && bi.y === endY) {
+    if (defL && defA) {
+      if (deltaX > 0 && deltaY > 0) return false;
+      else if (deltaX < 0 && deltaY > 0) blocked = (left && top) || (top && right) || (top && bottom);
+      else if (deltaX < 0 && deltaY < 0) blocked = (left && top) || (bottom && right) || (top && bottom) || (left && right);
+      else if (deltaX > 0 && deltaY < 0) blocked = (left && top) || (left && bottom) || (left && right);
+      else if (deltaX > 0) return false;
+      else if (deltaX < 0) blocked = (left && top) || (top && bottom) || (top && right);
+      else if (deltaY > 0) return false;
+      else if (deltaY < 0) blocked = (left && top) || (left && right) || (left && bottom);
+    } else if (defR && defA) {
+      if (deltaX > 0 && deltaY > 0) blocked = (left && top) || (top && right) || (top && bottom);
+      else if (deltaX < 0 && deltaY > 0) return false;
+      else if (deltaX < 0 && deltaY < 0) blocked = (top && right) || (bottom && right) || (left && right);
+      else if (deltaX > 0 && deltaY < 0) blocked = (top && right) || (left && bottom) || (top && bottom) || (left && right);
+      else if (deltaX > 0) blocked = (top && right) || (top && left) || (top && bottom);
+      else if (deltaX < 0) return false;
+      else if (deltaY > 0) return false;
+      else if (deltaY < 0) blocked = (top && right) || (left && right) || (right && bottom);
+    } else if (defR && defB) {
+      if (deltaX > 0 && deltaY > 0) blocked = (left && top) || (bottom && right) || (left && right) || (top && bottom);
+      else if (deltaX < 0 && deltaY > 0) blocked = (top && right) || (bottom && right) || (left && right);
+      else if (deltaX < 0 && deltaY < 0) return false;
+      else if (deltaX > 0 && deltaY < 0) blocked = (left && bottom) || (bottom && right) || (top && bottom);
+      else if (deltaX > 0) blocked = (bottom && right) || (top && bottom) || (left && bottom);
+      else if (deltaX < 0) return false;
+      else if (deltaY > 0) blocked = (bottom && right) || (left && right) || (top && right);
+      else if (deltaY < 0) return false;
+    } else if (defL && defB) {
+      if (deltaX > 0 && deltaY > 0) blocked = (left && top) || (left && bottom) || (left && right);
+      else if (deltaX < 0 && deltaY > 0) blocked = (left && bottom) || (top && right) || (left && right) || (top && bottom);
+      else if (deltaX < 0 && deltaY < 0) blocked = (left && bottom) || (bottom && right) || (top && bottom);
+      else if (deltaX > 0 && deltaY < 0) return false;
+      else if (deltaX > 0) return false;
+      else if (deltaX < 0) blocked = (left && bottom) || (top && bottom) || (bottom && right);
+      else if (deltaY > 0) blocked = (left && bottom) || (left && right) || (left && top);
+      else if (deltaY < 0) return false;
+    }
+    return blocked;
+  }
+  // Case C: line STARTS at this intersection.
+  if (bi.x === startX && bi.y === startY) {
+    if (attL && attA) {
+      if (deltaX > 0 && deltaY > 0) blocked = (top && left) || (bottom && right) || (top && bottom) || (left && right);
+      else if (deltaX < 0 && deltaY > 0) blocked = (left && bottom) || (left && top) || (left && right);
+      else if (deltaX < 0 && deltaY < 0) return false;
+      else if (deltaX > 0 && deltaY < 0) blocked = (left && top) || (top && right) || (top && bottom);
+      else if (deltaX > 0) blocked = (left && top) || (top && bottom);
+      else if (deltaX < 0) return false;
+      else if (deltaY > 0) blocked = (left && top) || (left && right);
+      else if (deltaY < 0) return false;
+    } else if (attR && attA) {
+      if (deltaX > 0 && deltaY > 0) blocked = (top && right) || (bottom && right) || (left && right);
+      else if (deltaX < 0 && deltaY > 0) blocked = (left && bottom) || (top && right) || (top && bottom) || (left && right);
+      else if (deltaX < 0 && deltaY < 0) blocked = (top && right) || (left && top) || (top && bottom);
+      else if (deltaX > 0 && deltaY < 0) return false;
+      else if (deltaX > 0) return false;
+      else if (deltaX < 0) blocked = (top && right) || (top && bottom);
+      else if (deltaY > 0) blocked = (top && right) || (left && right);
+      else if (deltaY < 0) return false;
+    } else if (attR && attB) {
+      if (deltaX > 0 && deltaY > 0) return false;
+      else if (deltaX < 0 && deltaY > 0) blocked = (left && bottom) || (bottom && right) || (top && bottom);
+      else if (deltaX < 0 && deltaY < 0) blocked = (left && top) || (bottom && right) || (top && bottom) || (left && right);
+      else if (deltaX > 0 && deltaY < 0) blocked = (bottom && right) || (top && right) || (left && right);
+      else if (deltaX > 0) return false;
+      else if (deltaX < 0) blocked = (bottom && right) || (top && bottom);
+      else if (deltaY > 0) return false;
+      else if (deltaY < 0) blocked = (bottom && right) || (left && right);
+    } else if (attL && attB) {
+      if (deltaX > 0 && deltaY > 0) blocked = (left && bottom) || (bottom && right) || (top && bottom);
+      else if (deltaX < 0 && deltaY > 0) return false;
+      else if (deltaX < 0 && deltaY < 0) blocked = (left && bottom) || (left && top) || (left && right);
+      else if (deltaX > 0 && deltaY < 0) blocked = (left && bottom) || (top && right) || (top && bottom) || (left && right);
+      else if (deltaX > 0) blocked = (left && bottom) || (top && bottom);
+      else if (deltaX < 0) return false;
+      else if (deltaY > 0) return false;
+      else if (deltaY < 0) blocked = (left && bottom) || (left && right);
+    }
+    return blocked;
+  }
+  // Case D: line passes THROUGH this intersection (interior).
+  if (deltaX > 0 && deltaY > 0) blocked = (left && top) || (bottom && right) || (top && bottom) || (left && right);
+  else if (deltaX < 0 && deltaY > 0) blocked = (left && bottom) || (top && right) || (top && bottom) || (left && right);
+  else if (deltaX < 0 && deltaY < 0) blocked = (left && top) || (bottom && right) || (top && bottom) || (left && right);
+  else if (deltaX > 0 && deltaY < 0) blocked = (left && bottom) || (top && right) || (top && bottom) || (left && right);
+  else if (deltaX > 0) blocked = (top && bottom);
+  else if (deltaX < 0) blocked = (top && bottom) || (top && right) || (bottom && right);
+  else if (deltaY > 0) blocked = (left && right);
+  else if (deltaY < 0) blocked = (left && right);
+  return blocked;
 }
 
 function getLosFromPointToPoint(fromX, fromY, toX, toY, fromPt, toPt, ctx) {

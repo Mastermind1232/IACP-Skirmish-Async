@@ -137,9 +137,13 @@ describe('LOS-06 A3: diagonal-corner shield intersection', () => {
       // Edge-midpoint visibility pin.
       assert.ok(/getLosFromPointToPoint\s*\(\s*fromX,\s*fromY,\s*toX,\s*toY,\s*aCorner,\s*mid,\s*ctx\s*\)/.test(src),
         'Edge-midpoint LOS check missing.');
-      // Corner-obstacle counter pin (CRR p.22 ≥2 obstacles blocks rule).
-      assert.ok(/if \(count >= 2\) return false;/.test(src),
-        'Corner-obstacle ≥2 counter missing — CRR p.22 corner-intersection rule removed.');
+      // Intersection state machine pin (CRR p.22 corner rules — Nick's
+      // intersectionBlocksPath, ported faithfully). Replaces the old simple
+      // ≥2-obstacle counter with the full per-direction connection logic.
+      assert.ok(/function intersectionBlocksPath\(/.test(src),
+        'intersectionBlocksPath state machine missing — CRR p.22 corner rules not implemented.');
+      assert.ok(/if \(intersectionBlocksPath\(bi,/.test(src),
+        'getLosFromCornerToCorner must invoke intersectionBlocksPath at each line intersection.');
     });
   });
 });

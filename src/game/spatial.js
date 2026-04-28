@@ -185,18 +185,27 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
     blockingCorners.add(`${p.col + 1},${p.row + 1}`);
   }
 
-  // Wall endpoints: how many wall segments touch each corner. Used by the
-  // CRR-p.22 "≥2 obstacles at corner blocks LOS" interior-intersection check.
-  const wallEndpoints = new Map();
-  for (const w of walls) {
-    for (const p of w) {
-      const k = `${p.x},${p.y}`;
-      wallEndpoints.set(k, (wallEndpoints.get(k) ?? 0) + 1);
+  // Build blockingIntersections per Nick Hansen: for every wall, both
+  // endpoints become "intersection" corners; their `connections` set lists
+  // every adjacent corner (1 unit away) that's connected via a wall.
+  // intersectionBlocksPath uses these to apply CRR-p.22 corner rules.
+  const blockingIntersections = new Map();
+  const addConn = (cx, cy, ox, oy) => {
+    const key = `${cx},${cy}`;
+    let bi = blockingIntersections.get(key);
+    if (!bi) {
+      bi = { x: cx, y: cy, connections: new Set() };
+      blockingIntersections.set(key, bi);
     }
+    bi.connections.add(`${ox},${oy}`);
+  };
+  for (const w of walls) {
+    addConn(w[0].x, w[0].y, w[1].x, w[1].y);
+    addConn(w[1].x, w[1].y, w[0].x, w[0].y);
   }
 
   return tileToTileLos(a.col, a.row, b.col, b.row, {
-    walls, wallSet, wallEndpoints, blockingTiles, figureBlockers, blockingCorners, offMapTiles: null,
+    walls, wallSet, blockingIntersections, blockingTiles, figureBlockers, blockingCorners, offMapTiles: null,
   });
 }
 
