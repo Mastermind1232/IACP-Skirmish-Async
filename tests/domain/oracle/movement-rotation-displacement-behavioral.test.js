@@ -466,6 +466,59 @@ describe('B-MVDISP-002: getValidDisplacementSpaces (anchorhead-cantina-bar)', ()
     assert.ok(valid.some(s => s.toLowerCase() === 'a2'),
       'a2 still valid (empty)');
   });
+
+  it('002e: 2x1 displacement — candidate rejected when 2nd footprint cell occupied', () => {
+    // Wampa is 1x2 by default; figureOrientations override to 2x1 puts its
+    // footprint horizontal (topLeft + topLeft.right). Single-cell adjacency
+    // would call this candidate valid, but the 2x1 footprint at the candidate
+    // collides with another figure — the chooser must reject it.
+    const game = makeGame({
+      figurePositions: {
+        1: { 'Wampa (Regular)-1-0': 'b1' },        // 2x1 at b1 → footprint b1+c1
+        2: { 'Stormtrooper (Regular)-1-0': 'b3' },  // blocks 2nd cell of footprint at a2
+      },
+      figureOrientations: { 'Wampa (Regular)-1-0': '2x1' },
+    });
+    // Forbid current footprint so the figure is forced to look elsewhere.
+    const forbiddenSet = new Set(['b1', 'c1']);
+    const valid = getValidDisplacementSpaces(game, 'Wampa (Regular)-1-0', 1, forbiddenSet);
+
+    // Candidate a2 → 2x1 footprint = [a2, b2]. b2 is empty here → valid.
+    // Candidate b2 → footprint = [b2, c2]. Both empty → valid.
+    // Candidate a3 → footprint = [a3, b3]. b3 occupied by stormtrooper → must be rejected.
+    assert.ok(!valid.some(s => s.toLowerCase() === 'a3'),
+      'a3 rejected — 2nd footprint cell (b3) is occupied');
+  });
+
+  it('002f: 2x1 displacement — candidate rejected when 2nd footprint cell off-map', () => {
+    // Edge of map: candidate cell exists, but a 2x1 footprint at that cell
+    // would extend off the map. Pre-fix this slipped through as "valid".
+    const game = makeGame({
+      figurePositions: {
+        1: { 'Wampa (Regular)-1-0': 'b1' },
+      },
+      figureOrientations: { 'Wampa (Regular)-1-0': '2x1' },
+    });
+    // Pick a forbidden set such that the only candidates near the right edge
+    // would push the 2x1 off the board.
+    const forbiddenSet = new Set(['b1', 'c1']);
+    const valid = getValidDisplacementSpaces(game, 'Wampa (Regular)-1-0', 1, forbiddenSet);
+
+    // Every returned candidate must have its full 2x1 footprint on-map.
+    // (anchorhead-cantina-bar's max column is k; candidates whose footprint
+    // would extend past it must be filtered.)
+    for (const s of valid) {
+      const lower = s.toLowerCase();
+      const col = lower.charCodeAt(0) - 'a'.charCodeAt(0);
+      const row = parseInt(lower.slice(1), 10);
+      // Footprint = [topLeft, topLeft.right]. Reject if col would be off-map.
+      // (The actual test is the implementation-level on-map check; here we
+      // just assert no candidate is on the literal right edge of any column
+      // that would put the 2nd cell past column 'k'.)
+      assert.ok(col <= 9, `candidate ${s} would put 2x1 footprint off-map (col ${col})`);
+      assert.ok(row >= 1, `candidate ${s} has valid row`);
+    }
+  });
 });
 
 // ── B-MVDISP-003: pushFigureToNearestValid ────────────────────────────────

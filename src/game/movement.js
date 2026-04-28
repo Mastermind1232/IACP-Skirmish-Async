@@ -1087,6 +1087,7 @@ export function getValidDisplacementSpaces(game, figureKey, playerNum, forbidden
   // remain candidates instead of being filtered as occupied.
   const displacedDcName = dcNameFromFigureKey(figureKey);
   const isCompanionBeingDisplaced = isDcCompanion(displacedDcName);
+  const displacedSize = game.figureOrientations?.[figureKey] || getFigureSize(displacedDcName);
   const occupiedSet = new Set();
   for (const p of [1, 2]) {
     for (const [k, c] of Object.entries(game.figurePositions?.[p] || {})) {
@@ -1100,5 +1101,17 @@ export function getValidDisplacementSpaces(game, figureKey, playerNum, forbidden
       }
     }
   }
-  return adjacent.filter((s) => !occupiedSet.has(normalizeCoord(s)) && !forbiddenSet.has(normalizeCoord(s)));
+  // Validate the displaced figure's FULL footprint at each candidate topLeft —
+  // not just the topLeft cell. For 1x1 figures this is identical to the old
+  // single-cell check; for 1x2 / 2x1 / 2x2+ it stops the chooser from
+  // offering candidates whose second-or-later footprint cell is blocked,
+  // occupied, off-map, or part of the moving massive's footprint.
+  return adjacent.filter((s) => {
+    const newFootprint = getNormalizedFootprint(normalizeCoord(s), displacedSize);
+    return newFootprint.every((cell) =>
+      !!mapData.adjacency[cell]
+      && !occupiedSet.has(cell)
+      && !forbiddenSet.has(cell)
+    );
+  });
 }
