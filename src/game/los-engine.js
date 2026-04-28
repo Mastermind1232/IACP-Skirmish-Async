@@ -407,24 +407,37 @@ function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, 
   // handled by the state machine above with direction nuance — this catches
   // shield+wall, shield+shield, shield+blocking-terrain, etc. Skip line
   // endpoints (att/def corners) — that's "passing through," not "ending at."
-  const shieldCells = ctx.cornerObstacleCells; // Set<"x,y">
-  if (shieldCells && shieldCells.size > 0) {
+  const shieldCells = ctx.cornerObstacleCells || new Set(); // Set<"x,y">
+  // Run the corner-obstacle check whenever there's anything that could
+  // contribute (shields, walls, or blocking-terrain). Blocking-terrain alone
+  // counts toward the ≥2 obstacle threshold via the inner adj loop.
+  if (shieldCells.size > 0 || blockingTiles.size > 0 || figureBlockers.size > 0 || (blockingIntersections && blockingIntersections.size > 0)) {
     const intersections2 = getIntersections(sx, sy, ex, ey);
     for (const p of intersections2) {
-      if (p.x === sx && p.y === sy) continue;
-      if (p.x === ex && p.y === ey) continue;
-      let count = 0;
-      const wallsHere = blockingIntersections?.get(`${p.x},${p.y}`)?.connections?.size ?? 0;
-      count += wallsHere > 0 ? 1 : 0;
+      // Corner-obstacle rule per Destruct CRR audit:
+      //   - ≥2 non-figure obstacles (walls + shields + blocking-terrain) at
+      //     the corner blocks. Shields' tangent-touch to a single obstacle
+      //     stays legal because the count threshold isn't met.
+      //   - WALL × FIGURE specifically also blocks (Destruct, row 21 hint:
+      //     Q19 figure + wall (r19,q19) at corner blocks LOS). Figures alone,
+      //     figure+blocking-terrain, figure+shield don't block — only
+      //     figure+wall does.
+      // Both LINE ENDPOINTS and INTERIOR points are checked: "originates at
+      // the intersection ... not legal. It also cannot pass through."
+      const hasWall = (blockingIntersections?.get(`${p.x},${p.y}`)?.connections?.size ?? 0) > 0;
+      let nonFigureCount = hasWall ? 1 : 0;
+      let figureCount = 0;
       const adj = [[p.x - 1, p.y - 1], [p.x, p.y - 1], [p.x - 1, p.y], [p.x, p.y]];
       for (const [cx, cy] of adj) {
         if (cx === fromX && cy === fromY) continue;
         if (cx === toX && cy === toY) continue;
         const key = `${cx},${cy}`;
-        if (shieldCells.has(key)) count++;
-        else if (blockingTiles.has(key) && !(ctx.spireExempt && ctx.spireExempt.has(key))) count++;
+        if (shieldCells.has(key)) nonFigureCount++;
+        else if (blockingTiles.has(key) && !(ctx.spireExempt && ctx.spireExempt.has(key))) nonFigureCount++;
+        else if (figureBlockers.has(key)) figureCount++;
       }
-      if (count >= 2) return false;
+      if (nonFigureCount >= 2) return false;
+      if (hasWall && figureCount >= 1) return false;
     }
   }
 

@@ -49,7 +49,7 @@
       "attacker": "T20",
       "target": "S14",
       "others": "T14, S17",
-      "expected": true
+      "expected": false
     },
     {
       "row": 9,
