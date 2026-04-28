@@ -34,7 +34,7 @@
  * }
  * @returns {boolean}
  */
-export function nickLineOfSight(fromTileX, fromTileY, toTileX, toTileY, state) {
+function nickLineOfSight(fromTileX, fromTileY, toTileX, toTileY, state) {
   const walls                  = state.walls                  || [];
   const blockingTiles          = state.blockingTiles          || [];
   const blockingEdges          = state.blockingEdges          || [];
@@ -705,13 +705,9 @@ export function nickLineOfSight(fromTileX, fromTileY, toTileX, toTileY, state) {
   ];
   let anyOpen = false;
   for (const a of attackerCorners) {
-    // CRR clarification (Destruct, 2026-04-28): a LOS line that ORIGINATES
-    // from a corner at the intersection of an energy shield and a wall is
-    // illegal — the entire attacker-corner is poisoned for that pair.
-    const attackerCornerBlocked = blockingCornerSet && blockingCornerSet.has(a.x + ',' + a.y);
     for (const [d1, d2, mid] of defenderPairs) {
       const overlaps = pathsOverlap(a, d1, d2);
-      const c1 = !attackerCornerBlocked && !overlaps && getLosFromCornerToCorner(fromTileX, fromTileY, toTileX, toTileY, a, d1);
+      const c1 = !overlaps && getLosFromCornerToCorner(fromTileX, fromTileY, toTileX, toTileY, a, d1);
       const c2 = c1         && getLosFromCornerToCorner(fromTileX, fromTileY, toTileX, toTileY, a, d2);
       const m  = c2         && getLosFromPointToPoint  (fromTileX, fromTileY, toTileX, toTileY, a, mid);
       const open = !!(c1 && c2 && m);
@@ -732,3 +728,5 @@ export function nickLineOfSight(fromTileX, fromTileY, toTileX, toTileY, state) {
   }
   return anyOpen;
 }
+
+window.nickLineOfSight = nickLineOfSight;

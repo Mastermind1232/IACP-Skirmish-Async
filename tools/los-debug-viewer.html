@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LOS debug viewer — Lothal Wastes</title>
+<style>
+  body { font: 13px ui-monospace, monospace; background: #1a1a1a; color: #eee; margin: 16px; }
+  h1 { font-size: 16px; margin: 0 0 8px; }
+  .row { display: flex; gap: 16px; align-items: flex-start; }
+  .panel { background: #222; border: 1px solid #444; padding: 12px; border-radius: 6px; }
+  .panel h2 { font-size: 13px; margin: 0 0 6px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+  .panel { width: 360px; flex-shrink: 0; }
+  .map-panel { width: auto; }
+  select, button { background: #333; color: #eee; border: 1px solid #555; padding: 4px 8px; font: inherit; border-radius: 3px; }
+  select { width: 100%; }
+  .legend { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .legend .swatch { width: 12px; height: 12px; display: inline-block; border: 1px solid #777; }
+  .case-info { margin-top: 8px; font-size: 12px; line-height: 1.6; }
+  .case-info b { color: #fc6; }
+  .verdict.ok { color: #4f4; }
+  .verdict.fail { color: #f66; font-weight: bold; }
+  .scroller { max-height: 80vh; overflow: auto; border: 1px solid #444; border-radius: 4px; background: #000; }
+  svg { display: block; }
+  text.coord { font: 11px ui-monospace, monospace; fill: #fff; pointer-events: none; paint-order: stroke; stroke: #000; stroke-width: 3px; stroke-linejoin: round; }
+  .ctl { margin: 8px 0; }
+  .ctl label { display: block; margin: 3px 0; }
+</style>
+</head>
+<body>
+<h1>LOS debug viewer — Lothal Wastes (real map image overlay)</h1>
+<div class="row">
+  <div class="panel">
+    <h2>Case</h2>
+    <select id="caseSel"></select>
+    <div class="case-info" id="caseInfo"></div>
+    <div class="legend">
+      <span><span class="swatch" style="background:rgba(0,255,0,0.45)"></span>attacker</span>
+      <span><span class="swatch" style="background:rgba(80,170,255,0.55)"></span>target</span>
+      <span><span class="swatch" style="background:rgba(255,220,0,0.55)"></span>shield</span>
+      <span><span class="swatch" style="background:rgba(255,80,80,0.55)"></span>figure (other)</span>
+    </div>
+    <h2 style="margin-top:14px">Overlays</h2>
+    <div class="ctl">
+      <label><input type="checkbox" id="showLines" checked> 16 corner-to-corner lines (engine attempts)</label>
+      <label><input type="checkbox" id="showWalls"> mark walls (red lines)</label>
+      <label><input type="checkbox" id="showBlocking"> mark blocking-terrain cells</label>
+      <label><input type="checkbox" id="showCoords" checked> coord labels on attacker/target/shield only</label>
+      <label><input type="checkbox" id="showAllCoords"> coord labels on every cell</label>
+      <label><input type="checkbox" id="showFingerprint"> tint shield-relevant corners</label>
+    </div>
+    <h2 style="margin-top:14px">What to look for on the failing rows</h2>
+    <div style="font-size:11px; line-height:1.5; color:#bbb">
+      <b>64 / 65 / 69:</b> attacker R19 → target Q17. The shield (Q20 or R20) is BEHIND the attacker. The white lines from R19 to Q17 don't go anywhere near the shield. My engine returns TRUE; Destruct says FALSE. There must be a rule I'm missing where a shield adjacent to the attacker still affects the shot.
+      <br><br>
+      <b>58:</b> Q19→R20, shield Q20. Shield sits between them; line skirts a shield corner.
+      <br><br>
+      <b>70:</b> R19→Q20, shield R20. Tight diagonal where shield+wall meet at a single corner.
+    </div>
+  </div>
+  <div class="panel map-panel">
+    <h2>Map</h2>
+    <div class="scroller" id="scroller">
+      <svg id="grid"></svg>
+    </div>
+  </div>
+</div>
+
+<script src="los-engine-bundle.js"></script>
+<script src="los-data.js"></script>
+<script>
+const FAILING_ROWS = new Set([58, 64, 65, 69, 70]);
+const ALL_SHIELD_ROWS = new Set([58, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70]);
+
+const lw = window.__LW;
+const fixture = window.__FIX;
+
+// Vassal grid alignment for Lothal Wastes — from data/map-registry.json:
+// grid: { dx:50, dy:50, x0:25, y0:25 } over a 1351×1451 image.
+const IMG_PATH = '../vassal_extracted/images/maps/Map_Lothal Wastes.gif';
+const IMG_W = 1351, IMG_H = 1451;
+const GRID = { dx: 50, dy: 50, x0: 25, y0: 25 };
+
+function cellRect(col, row) {
+  return {
+    x: GRID.x0 + col * GRID.dx,
+    y: GRID.y0 + row * GRID.dy,
+    w: GRID.dx,
+    h: GRID.dy,
+  };
+}
+function corner(col, row, dx, dy) {
+  // dx/dy ∈ {0,1}: 0=top/left, 1=bottom/right
+  return [GRID.x0 + (col + dx) * GRID.dx, GRID.y0 + (row + dy) * GRID.dy];
+}
+
+function parseCoord(c) {
+  c = c.toLowerCase();
+  return { col: c.charCodeAt(0) - 97, row: parseInt(c.slice(1)) - 1 };
+}
+function parseCells(s) {
+  if (!s || /^none$/i.test(s)) return [];
+  const m = s.match(/([A-Za-z])(\d+)(?:-([A-Za-z])(\d+))?/);
+  if (!m) return [];
+  if (m[3]) {
+    const c1 = m[1].toUpperCase().charCodeAt(0) - 65;
+    const r1 = +m[2];
+    const c2 = m[3].toUpperCase().charCodeAt(0) - 65;
+    const r2 = +m[4];
+    const out = [];
+    for (let c = Math.min(c1,c2); c <= Math.max(c1,c2); c++)
+      for (let r = Math.min(r1,r2); r <= Math.max(r1,r2); r++)
+        out.push(String.fromCharCode(97 + c) + r);
+    return out;
+  }
+  return [(m[1] + m[2]).toLowerCase()];
+}
+function splitOthers(s) {
+  if (!s || /^none$/i.test(s)) return [];
+  const parts = [];
+  let work = s;
+  while (work.trim()) {
+    const m = work.match(/^\s*((?:Massive|Mobile)\s+figure\s+(?:in\s+)?[A-Za-z]\d+(?:-[A-Za-z]\d+)?)/i)
+      || work.match(/^\s*(Energy\s+shield\s+(?:in\s+)?[A-Za-z]\d+)/i)
+      || work.match(/^\s*([A-Za-z]\d+)/);
+    if (!m) break;
+    parts.push(m[1].trim());
+    work = work.slice(m[0].length).replace(/^\s*,\s*/, '');
+  }
+  return parts;
+}
+
+// Recover walls in our (col, row) cell-edge format from nickLos.walls.
+// IMPORTANT: the Nick↔ours transform preserves cell-to-cell mapping but
+// not corner-by-corner geometry (it's a 90° rotation that maps a cell's
+// 4 corners onto 4 different cells' corners). So we must determine which
+// Nick CELLS each wall separates, map those cells to ours, and then
+// derive the wall location from the cell pair. This matches what the
+// Python import did when generating `wallEdges` originally.
+const wallEdges = []; // {kind:'h'|'v', col, row} — h: horizontal wall on top edge of (col,row); v: vertical wall on left edge of (col,row)
+if (lw.nickLos?.walls) {
+  const [xA, xB] = lw.nickLos.transform.xFromRow;  // x = xA*row + xB
+  const [yA, yB] = lw.nickLos.transform.yFromCol;  // y = yA*col + yB
+  // Cell-to-cell inverse: given Nick cell (nx, ny), our cell (col, row).
+  const cellToOurs = (nx, ny) => ({ col: (ny - yB) / yA, row: (nx - xB) / xA });
+  for (const w of lw.nickLos.walls) {
+    const a = w[0], b = w[1];
+    if (a.x === b.x) {
+      // Vertical wall in Nick (same x, different y) → separates Nick cells
+      // (a.x - 1, yMin) on the LEFT and (a.x, yMin) on the RIGHT.
+      const yMin = Math.min(a.y, b.y);
+      const left  = cellToOurs(a.x - 1, yMin);
+      const right = cellToOurs(a.x,     yMin);
+      // Wall is on the shared edge of left/right in our frame.
+      // Determine orientation by which axis differs.
+      if (left.row === right.row && left.col !== right.col) {
+        // horizontally-adjacent in our frame → wall is vertical in our frame
+        wallEdges.push({ kind: 'v', col: Math.max(left.col, right.col), row: left.row });
+      } else if (left.col === right.col && left.row !== right.row) {
+        // vertically-adjacent in our frame → wall is horizontal in our frame
+        wallEdges.push({ kind: 'h', col: left.col, row: Math.max(left.row, right.row) });
+      }
+    } else if (a.y === b.y) {
+      // Horizontal wall in Nick (same y, different x) → separates Nick cells
+      // (xMin, a.y - 1) ABOVE and (xMin, a.y) BELOW.
+      const xMin = Math.min(a.x, b.x);
+      const above = cellToOurs(xMin, a.y - 1);
+      const below = cellToOurs(xMin, a.y);
+      if (above.row === below.row && above.col !== below.col) {
+        wallEdges.push({ kind: 'v', col: Math.max(above.col, below.col), row: above.row });
+      } else if (above.col === below.col && above.row !== below.row) {
+        wallEdges.push({ kind: 'h', col: above.col, row: Math.max(above.row, below.row) });
+      }
+    }
+  }
+}
+
+// Build dropdown
+const caseSel = document.getElementById('caseSel');
+const sortedCases = [...fixture.cases].sort((a, b) => {
+  const aF = FAILING_ROWS.has(a.row), bF = FAILING_ROWS.has(b.row);
+  if (aF !== bF) return aF ? -1 : 1;
+  const aS = ALL_SHIELD_ROWS.has(a.row), bS = ALL_SHIELD_ROWS.has(b.row);
+  if (aS !== bS) return aS ? -1 : 1;
+  return a.row - b.row;
+});
+for (const c of sortedCases) {
+  const opt = document.createElement('option');
+  const failTag = FAILING_ROWS.has(c.row) ? '❌ FAIL ' : '';
+  opt.value = c.row;
+  opt.textContent = `${failTag}row ${c.row}: ${c.attacker} → ${c.target} | others=${c.others} | exp=${c.expected ? 'TRUE' : 'FALSE'}`;
+  caseSel.appendChild(opt);
+}
+
+const svg = document.getElementById('grid');
+const NS = 'http://www.w3.org/2000/svg';
+function el(name, attrs, parent, text) {
+  const e = document.createElementNS(NS, name);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function render() {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const showLines = document.getElementById('showLines').checked;
+  const showWalls = document.getElementById('showWalls').checked;
+  const showBlocking = document.getElementById('showBlocking').checked;
+  const showCoords = document.getElementById('showCoords').checked;
+  const showAllCoords = document.getElementById('showAllCoords').checked;
+  const showFingerprint = document.getElementById('showFingerprint').checked;
+
+  svg.setAttribute('width', IMG_W);
+  svg.setAttribute('height', IMG_H);
+  svg.setAttribute('viewBox', `0 0 ${IMG_W} ${IMG_H}`);
+
+  // Background image
+  el('image', { href: IMG_PATH, x: 0, y: 0, width: IMG_W, height: IMG_H }, svg);
+
+  // Get current case
+  const c = fixture.cases.find(c => c.row === parseInt(caseSel.value));
+  const attCells = parseCells(c.attacker);
+  const tgtCells = parseCells(c.target);
+  const others = splitOthers(c.others);
+  const shieldCells = new Set();
+  const figureCells = new Set();
+  for (const o of others) {
+    const isShield = /energy shield/i.test(o);
+    for (const cell of parseCells(o)) {
+      if (isShield) shieldCells.add(cell);
+      else figureCells.add(cell);
+    }
+  }
+
+  function fill(col, row, color, label) {
+    const r = cellRect(col, row);
+    el('rect', { x: r.x, y: r.y, width: r.w, height: r.h, fill: color, stroke: '#fff', 'stroke-width': 2 }, svg);
+    if (label) {
+      el('text', { x: r.x + r.w / 2, y: r.y + r.h / 2 + 4, 'text-anchor': 'middle', class: 'coord' }, svg, label);
+    }
+  }
+
+  // Optional: highlight blocking-terrain cells
+  if (showBlocking) {
+    for (const cell of (lw.blocking || [])) {
+      const p = parseCoord(cell);
+      const r = cellRect(p.col, p.row);
+      el('rect', { x: r.x, y: r.y, width: r.w, height: r.h, fill: 'rgba(120,120,120,0.35)', stroke: '#999', 'stroke-width': 1, 'stroke-dasharray': '4 3' }, svg);
+    }
+  }
+
+  // Walls (if requested)
+  if (showWalls) {
+    for (const w of wallEdges) {
+      if (w.kind === 'h') {
+        // horizontal wall on top edge of (col, row) → from (x0+col*dx, y0+row*dy) to (+dx, +0)
+        const x1 = GRID.x0 + w.col * GRID.dx;
+        const y = GRID.y0 + w.row * GRID.dy;
+        el('line', { x1, y1: y, x2: x1 + GRID.dx, y2: y, stroke: '#f33', 'stroke-width': 5, 'stroke-opacity': 0.9 }, svg);
+      } else {
+        const x = GRID.x0 + w.col * GRID.dx;
+        const y1 = GRID.y0 + w.row * GRID.dy;
+        el('line', { x1: x, y1, x2: x, y2: y1 + GRID.dy, stroke: '#f33', 'stroke-width': 5, 'stroke-opacity': 0.9 }, svg);
+      }
+    }
+  }
+
+  // Shields, figures, target, attacker (last so they paint on top)
+  for (const cell of figureCells) {
+    const p = parseCoord(cell);
+    fill(p.col, p.row, 'rgba(255,80,80,0.55)', showCoords ? cell.toUpperCase() : null);
+  }
+  for (const cell of shieldCells) {
+    const p = parseCoord(cell);
+    fill(p.col, p.row, 'rgba(255,220,0,0.55)', showCoords ? cell.toUpperCase() + ' (shield)' : null);
+  }
+  for (const cell of tgtCells) {
+    const p = parseCoord(cell);
+    fill(p.col, p.row, 'rgba(80,170,255,0.55)', showCoords ? cell.toUpperCase() + ' (target)' : null);
+  }
+  for (const cell of attCells) {
+    const p = parseCoord(cell);
+    fill(p.col, p.row, 'rgba(0,255,0,0.45)', showCoords ? cell.toUpperCase() + ' (attacker)' : null);
+  }
+
+  // 16 corner-to-corner attempted lines (run the actual engine for each
+  // attacker × defender-pair combo and color by individual outcome).
+  if (showLines && attCells.length && tgtCells.length) {
+    // Build engine state in Nick's frame.
+    const nl = lw.nickLos;
+    const [xA, xB] = nl.transform.xFromRow;  // x = xA*row + xB     (cell-id forward)
+    const [yA, yB] = nl.transform.yFromCol;  // y = yA*col + yB     (cell-id forward)
+    const toX = (col, row) => xA * row + xB;
+    const toY = (col, row) => yA * col + yB;
+
+    // Cell IDs and points need DIFFERENT inverses. The forward transform
+    // maps our cell-id (col, row) to Nick's cell-id (x, y) — both indexed
+    // by their TL corners. But the underlying frame rotation flips axes,
+    // so Nick's TL CORNER POINT (x, y) is NOT physically our TL CORNER
+    // POINT (col, row); the cells occupy the same square but their TL
+    // labels point at different physical corners.
+    //
+    // For drawing Nick CORNER POINTS in our pixel frame, derive a
+    // POINT-PRESERVING inverse by flipping the sign-axis offsets:
+    // For lothal-wastes (xA=1, xB=-3, yA=-1, yB=23), the cell-id inverse
+    // is (col=23-ny, row=nx+3), but the point inverse is
+    // (col=24-ny, row=nx+3) — shift +1 along the axis whose sign is
+    // negative (the y/col axis).
+    const pointToCol = ny => (yA < 0 ? (yB + 1) - ny : (ny - yB) / yA);
+    const pointToRow = nx => (xA < 0 ? (xB + 1) - nx : (nx - xB) / xA);
+    function pxFromNick(nx, ny) {
+      return [GRID.x0 + pointToCol(ny) * GRID.dx, GRID.y0 + pointToRow(nx) * GRID.dy];
+    }
+    // Augment blockingTiles + blockingCornerSet for shields, mirroring the
+    // logic in src/game/spatial.js#hasLineOfSight (Nick-native path).
+    const blockingTiles = [...nl.blockingTiles];
+    const shieldNick = [];
+    for (const cell of shieldCells) {
+      const p = parseCoord(cell);
+      const x = toX(p.col, p.row), y = toY(p.col, p.row);
+      // Skip attacker/target cell shields (per oracle convention).
+      const isAtt = attCells.some(c => { const q = parseCoord(c); return q.col === p.col && q.row === p.row; });
+      const isTgt = tgtCells.some(c => { const q = parseCoord(c); return q.col === p.col && q.row === p.row; });
+      if (isAtt || isTgt) continue;
+      if (!blockingTiles.some(t => t.x === x && t.y === y)) blockingTiles.push({ x, y });
+      shieldNick.push({ x, y });
+    }
+    const blockingCornerSet = new Set();
+    if (shieldNick.length) {
+      const cnt = new Map();
+      const bump = (x, y) => cnt.set(`${x},${y}`, (cnt.get(`${x},${y}`) || 0) + 1);
+      for (const w of (nl.walls || [])) { bump(w[0].x, w[0].y); bump(w[1].x, w[1].y); }
+      for (const s of shieldNick) {
+        bump(s.x, s.y); bump(s.x + 1, s.y); bump(s.x, s.y + 1); bump(s.x + 1, s.y + 1);
+      }
+      for (const s of shieldNick) {
+        for (const [cx, cy] of [[s.x,s.y],[s.x+1,s.y],[s.x,s.y+1],[s.x+1,s.y+1]]) {
+          const k = `${cx},${cy}`;
+          if ((cnt.get(k) || 0) >= 2) blockingCornerSet.add(k);
+        }
+      }
+    }
+    const blockers = [];
+    for (const cell of figureCells) {
+      const p = parseCoord(cell);
+      blockers.push({ x: toX(p.col, p.row), y: toY(p.col, p.row) });
+    }
+
+    // For each attacker × target tile pair, run the engine ONCE with a
+    // debug callback that records each corner-pair attempt; then draw.
+    for (const ac of attCells) {
+      const ap = parseCoord(ac);
+      for (const tc of tgtCells) {
+        const tp = parseCoord(tc);
+        const aX = toX(ap.col, ap.row), aY = toY(ap.col, ap.row);
+        const tX = toX(tp.col, tp.row), tY = toY(tp.col, tp.row);
+        const attempts = [];
+        window.nickLineOfSight(aX, aY, tX, tY, {
+          walls: nl.walls || [],
+          blockingTiles,
+          blockingEdges: nl.blockingEdges || [],
+          blockingIntersections: nl.blockingIntersections || [],
+          blockers,
+          offMapTiles: nl.offMapTiles || [],
+          spireTiles: nl.spireTiles || [],
+          blockingCornerSet: blockingCornerSet.size ? blockingCornerSet : null,
+          debugCornerPair: (info) => attempts.push(info),
+        });
+        // Draw each attempt: the two corner-corner lines + the midpoint
+        // segment, color-coded.
+        for (const att of attempts) {
+          const color = att.open ? '#0f0' : '#f44';
+          const opacity = att.open ? 0.95 : 0.45;
+          const w = att.open ? 2.5 : 1;
+          const [ax, ay] = pxFromNick(att.attacker.x, att.attacker.y);
+          const [d1x, d1y] = pxFromNick(att.defender1.x, att.defender1.y);
+          const [d2x, d2y] = pxFromNick(att.defender2.x, att.defender2.y);
+          const [mx, my] = pxFromNick(att.midpoint.x, att.midpoint.y);
+          el('line', { x1: ax, y1: ay, x2: d1x, y2: d1y, stroke: color, 'stroke-width': w, 'stroke-opacity': opacity }, svg);
+          el('line', { x1: ax, y1: ay, x2: d2x, y2: d2y, stroke: color, 'stroke-width': w, 'stroke-opacity': opacity }, svg);
+          if (att.open) {
+            el('line', { x1: ax, y1: ay, x2: mx, y2: my, stroke: '#0f0', 'stroke-width': 1.2, 'stroke-opacity': 0.55, 'stroke-dasharray': '3 3' }, svg);
+          }
+        }
+      }
+    }
+  }
+
+  // Optional: tint shield-related corners (where shield meets a wall or another shield)
+  if (showFingerprint && shieldCells.size) {
+    // Build corner counts from walls + shields, in OUR (col,row) corner frame.
+    const cornerCount = new Map();
+    const bump = (col, row) => {
+      const k = `${col},${row}`;
+      cornerCount.set(k, (cornerCount.get(k) || 0) + 1);
+    };
+    for (const w of wallEdges) {
+      if (w.kind === 'h') { bump(w.col, w.row); bump(w.col + 1, w.row); }
+      else { bump(w.col, w.row); bump(w.col, w.row + 1); }
+    }
+    for (const cell of shieldCells) {
+      const p = parseCoord(cell);
+      bump(p.col, p.row); bump(p.col + 1, p.row);
+      bump(p.col, p.row + 1); bump(p.col + 1, p.row + 1);
+    }
+    for (const cell of shieldCells) {
+      const p = parseCoord(cell);
+      for (const [cc, rr] of [[p.col,p.row],[p.col+1,p.row],[p.col,p.row+1],[p.col+1,p.row+1]]) {
+        if ((cornerCount.get(`${cc},${rr}`) || 0) >= 2) {
+          const [px, py] = [GRID.x0 + cc * GRID.dx, GRID.y0 + rr * GRID.dy];
+          el('circle', { cx: px, cy: py, r: 8, fill: 'rgba(255,0,0,0.9)', stroke: '#fff', 'stroke-width': 2 }, svg);
+        }
+      }
+    }
+  }
+
+  // All-cell coord labels (debug)
+  if (showAllCoords) {
+    for (const space of (lw.spaces || [])) {
+      const p = parseCoord(space);
+      const r = cellRect(p.col, p.row);
+      el('text', { x: r.x + r.w / 2, y: r.y + r.h / 2 + 4, 'text-anchor': 'middle', class: 'coord' }, svg, space.toUpperCase());
+    }
+  }
+
+  // Info panel
+  const info = document.getElementById('caseInfo');
+  const failing = FAILING_ROWS.has(c.row);
+  info.innerHTML =
+    `<div><b>Row ${c.row}:</b> ${c.attacker} → ${c.target}</div>
+     <div>Others: ${c.others}</div>
+     <div>Expected per Destruct: <b>${c.expected ? 'LOS=TRUE' : 'LOS=FALSE'}</b></div>
+     <div>Engine returns: <span class="verdict ${failing ? 'fail' : 'ok'}">${failing ? 'WRONG (returns ' + (!c.expected ? 'TRUE' : 'FALSE') + ')' : 'CORRECT'}</span></div>`;
+
+  // Auto-scroll the relevant area into view (centered on attacker)
+  if (attCells.length) {
+    const p = parseCoord(attCells[0]);
+    const r = cellRect(p.col, p.row);
+    const scroller = document.getElementById('scroller');
+    scroller.scrollLeft = Math.max(0, r.x + r.w / 2 - scroller.clientWidth / 2);
+    scroller.scrollTop = Math.max(0, r.y + r.h / 2 - scroller.clientHeight / 2);
+  }
+}
+
+caseSel.addEventListener('change', render);
+for (const id of ['showLines','showWalls','showBlocking','showCoords','showAllCoords','showFingerprint']) {
+  document.getElementById(id).addEventListener('change', render);
+}
+
+caseSel.value = '64';
+render();
+</script>
+</body>
+</html>
