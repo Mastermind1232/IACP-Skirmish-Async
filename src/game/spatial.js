@@ -185,10 +185,12 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
     blockingCorners.add(`${p.col + 1},${p.row + 1}`);
   }
 
-  // Build blockingIntersections per Nick Hansen: for every wall, both
-  // endpoints become "intersection" corners; their `connections` set lists
-  // every adjacent corner (1 unit away) that's connected via a wall.
-  // intersectionBlocksPath uses these to apply CRR-p.22 corner rules.
+  // Build blockingIntersections by deriving from walls. Each wall endpoint
+  // becomes a corner with its connections set listing every adjacent
+  // corner walls connect to. (Nick's data has additional intersection
+  // entries that don't correspond to wall endpoints — those need his
+  // exact state-machine processing which our port approximates; using his
+  // data verbatim with our state machine over-blocks.)
   const blockingIntersections = new Map();
   const addConn = (cx, cy, ox, oy) => {
     const key = `${cx},${cy}`;
