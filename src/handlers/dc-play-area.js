@@ -1951,7 +1951,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const losValid = [];
       for (const sp of allSpaces) {
         if (sp === String(pos).toLowerCase()) continue;
-        if (hasLineOfSight && hasLineOfSight(pos, sp, ms, null)) losValid.push(sp);
+        if (ctx.hasLineOfSightByCoord && ctx.hasLineOfSightByCoord(game, pos, sp, ms, ctx.getFigureSize, { blocking: null })) losValid.push(sp);
       }
       if (losValid.length === 0) {
         await thread.send('**Overwatch** — No valid spaces in LOS to place the token.').catch(discordCatch);
@@ -2910,7 +2910,9 @@ export async function handleFalseOrdersAction(interaction, ctx) {
         }
       }
     }
-    const los = hasLineOfSight ? hasLineOfSight(controlledPos, targetPos, losMs, losBlockingCoords) : true;
+    const los = ctx.hasLineOfSightByCoord
+      ? ctx.hasLineOfSightByCoord(game, controlledPos, targetPos, losMs, ctx.getFigureSize, { blocking: losBlockingCoords })
+      : true;
     const fkMatch = figKey.match(/^(.+)-(\d+)-(\d+)$/);
     const targetDcName = fkMatch ? dcNameFromFigureKey(figKey) : figKey;
     const dg = fkMatch ? fkMatch[2] : '1';

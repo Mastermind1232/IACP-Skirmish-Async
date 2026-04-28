@@ -5,6 +5,7 @@
  */
 import { parseCoord, colRowToCoord, getFootprintCells } from './coords.js';
 import { nickLineOfSight } from './los-engine-vendored.js';
+import { dcNameFromFigureKey } from './dc-helpers.js';
 
 /**
  * Manhattan distance between two coords.
@@ -262,8 +263,10 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords, 
 // ── Figure enumeration ──────────────────────────────────────────────────────
 
 /**
- * Collect all figure coordinates from both players (normalized to lowercase).
- * Used as the blocking-figure list for LOS checks.
+ * Collect HEAD coordinates of all figures (lowercased).
+ * NOTE: this returns single head cells, NOT full multi-cell footprints.
+ * For LOS blocking purposes, prefer `getAllFigureFootprints(game, getFigureSize)`
+ * which expands multi-cell figures (AT-ST, Rancor, etc.) to all their cells.
  * @param {object} game
  * @returns {Set<string>}
  */
@@ -272,6 +275,114 @@ export function getAllFigureCoords(game) {
   for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) coords.add(String(fp).toLowerCase());
   for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) coords.add(String(fp).toLowerCase());
   return coords;
+}
+
+/**
+ * Get the full footprint (all occupied cells, lowercased) of a figure.
+ * @param {object} game
+ * @param {number} playerNum 1 or 2
+ * @param {string} figureKey
+ * @param {function} getFigureSize - (dcName) => '1x1'|'2x1'|'2x2'|'3x3'|...
+ * @returns {string[]} list of lowercased coords, or [] if figure is missing
+ */
+export function getFigureFootprint(game, playerNum, figureKey, getFigureSize) {
+  const pos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!pos) return [];
+  const dcName = dcNameFromFigureKey(figureKey);
+  const size = game.figureOrientations?.[figureKey]
+    || (typeof getFigureSize === 'function' ? getFigureSize(dcName) : null);
+  if (!size || size === '1x1') return [String(pos).toLowerCase()];
+  return getFootprintCells(pos, size).map(c => String(c).toLowerCase());
+}
+
+/**
+ * Collect FULL footprint coords of every figure (both players, lowercased).
+ * Use this — not getAllFigureCoords — when building a figure-blocking set
+ * for LOS checks. Multi-cell figures contribute all their cells, so they
+ * block LOS through their full footprint per IA rules.
+ * @param {object} game
+ * @param {function} getFigureSize
+ * @returns {Set<string>}
+ */
+export function getAllFigureFootprints(game, getFigureSize) {
+  const set = new Set();
+  for (const pn of [1, 2]) {
+    for (const fk of Object.keys(game.figurePositions?.[pn] || {})) {
+      for (const c of getFigureFootprint(game, pn, fk, getFigureSize)) set.add(c);
+    }
+  }
+  return set;
+}
+
+/**
+ * Expand a coord to the full footprint of whichever figure is at that coord
+ * (head cell). If no figure occupies the coord, returns just the coord itself.
+ * Useful for auxiliary LOS callers that have a `pos` (head) but want to do
+ * multi-cell-aware LOS without a figureKey lookup.
+ */
+export function expandCoordToFigureFootprint(game, coord, getFigureSize) {
+  if (!coord) return [];
+  const lc = String(coord).toLowerCase();
+  for (const pn of [1, 2]) {
+    const poses = game?.figurePositions?.[pn] || {};
+    for (const [fk, fp] of Object.entries(poses)) {
+      if (!fp) continue;
+      if (String(fp).toLowerCase() === lc) {
+        return getFigureFootprint(game, pn, fk, getFigureSize);
+      }
+    }
+  }
+  return [lc];
+}
+
+/**
+ * Multi-cell-aware LOS by raw coords. Auto-expands each coord to its
+ * occupying figure's full footprint (or single cell if no figure there).
+ * Default blocking set is `getAllFigureFootprints(game)` if `blocking`
+ * isn't passed; pass `null` to skip figure blocking entirely (MASSIVE,
+ * Priority Target, Marksman, etc.).
+ */
+export function hasLineOfSightByCoord(game, fromCoord, toCoord, mapSpaces, getFigureSize, opts) {
+  const fromFp = expandCoordToFigureFootprint(game, fromCoord, getFigureSize);
+  const toFp   = expandCoordToFigureFootprint(game, toCoord, getFigureSize);
+  const blocking = (opts && 'blocking' in opts)
+    ? opts.blocking
+    : getAllFigureFootprints(game, getFigureSize);
+  return hasFigureLineOfSight(fromFp, toFp, mapSpaces, blocking);
+}
+
+/**
+ * Multi-cell-aware LOS check between two figures (or between two arbitrary
+ * footprints).
+ *
+ * Iterates every (from-cell × to-cell) pair and excludes BOTH footprints
+ * from the figure-blocking set — IA rule: a figure's own cells don't block
+ * its own LOS, and a target's cells don't block LOS to itself.
+ *
+ * @param {string[]|Set<string>} fromFootprint - source figure cells (or a
+ *   single coord wrapped in a list — works for both 1x1 and multi-cell).
+ * @param {string[]|Set<string>} toFootprint - target cells.
+ * @param {object} mapSpaces
+ * @param {Set<string>|null} figureBlockingCoords - all blocker cells
+ *   (typically `getAllFigureFootprints(game, getFigureSize)` or a curated
+ *   subset like `buildFigureBlockingCoords` produces). Pass `null` to
+ *   skip figure blocking entirely (e.g. MASSIVE / Priority Target / Marksman).
+ * @returns {boolean} true if LOS exists between any cell pair.
+ */
+export function hasFigureLineOfSight(fromFootprint, toFootprint, mapSpaces, figureBlockingCoords) {
+  const fromArr = [...fromFootprint].map(c => String(c).toLowerCase());
+  const toArr   = [...toFootprint  ].map(c => String(c).toLowerCase());
+  if (!fromArr.length || !toArr.length) return false;
+  // Exclude both footprints from the blocking set for this check.
+  const exclude = new Set([...fromArr, ...toArr]);
+  for (const a of fromArr) {
+    for (const b of toArr) {
+      if (hasLineOfSight(a, b, mapSpaces, figureBlockingCoords, { excludeBlocking: exclude })) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // ── BFS adjacency ───────────────────────────────────────────────────────────

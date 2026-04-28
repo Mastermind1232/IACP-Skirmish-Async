@@ -18,7 +18,7 @@ import {
 import { countGameSpaces } from '../game/board-helpers.js';
 import { awrRange, enumerateAwrTargets } from '../game/awr-helpers.js';
 import { detectDroidKitTrigger } from '../game/droid-kit-helpers.js';
-import { getAllFigureCoords } from '../game/spatial.js';
+import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, grantMovementBank, figureChoiceLabels, isCompanionHostDefeated, reduceHp } from '../game/index.js';
 import { cardNameIncludes } from '../game/card-names.js';
@@ -506,12 +506,14 @@ export async function finalizeActivation({
     const _udDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _udSelfFk = `${dcName}-${_udDgIndex}-0`;
     const _udSelfPos = game.figurePositions?.[playerNum]?.[_udSelfFk];
-    const _udAllFigCoords = getAllFigureCoords(game);
+    const _udAllFootprints = getAllFigureFootprints(game, getFigureSize);
+    const _udSelfFp = getFigureFootprint(game, playerNum, _udSelfFk, getFigureSize);
     const _udFriendlies = [];
-    if (_udSelfPos && hasLineOfSight && _udMapSpaces) {
-      for (const [fk, fp] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-        if (!fp) continue;
-        if (hasLineOfSight(String(_udSelfPos).toLowerCase(), String(fp).toLowerCase(), _udMapSpaces, _udAllFigCoords)) {
+    if (_udSelfPos && _udMapSpaces) {
+      for (const fk of Object.keys(game.figurePositions?.[playerNum] || {})) {
+        const fp = getFigureFootprint(game, playerNum, fk, getFigureSize);
+        if (!fp.length) continue;
+        if (hasFigureLineOfSight(_udSelfFp, fp, _udMapSpaces, _udAllFootprints)) {
           _udFriendlies.push({ figureKey: fk, dcName: dcNameFromFigureKey(fk) });
         }
       }
@@ -926,15 +928,17 @@ export async function finalizeActivation({
       const _motSelfFk = `${dcName}-${_motDgIndex}-0`;
       const _motSelfPos = game.figurePositions?.[playerNum]?.[_motSelfFk];
       const _motSelfCost = getDcStatsFn(dcName)?.cost ?? 99;
-      const _motAllFigCoords = getAllFigureCoords(game);
+      const _motAllFootprints = getAllFigureFootprints(game, getFigureSize);
+      const _motSelfFp = getFigureFootprint(game, playerNum, _motSelfFk, getFigureSize);
       const _motFriendlies = _motSelfPos ? Object.entries(game.figurePositions?.[playerNum] || {})
         .filter(([fk, fp]) => {
           if (fk === _motSelfFk || !fp) return false;
           const dcN = dcNameFromFigureKey(fk);
           const cost = getDcStatsFn(dcN)?.cost ?? 99;
           if (cost >= _motSelfCost) return false;
-          if (hasLineOfSight && _motMapSpaces) {
-            return hasLineOfSight(String(_motSelfPos).toLowerCase(), String(fp).toLowerCase(), _motMapSpaces, _motAllFigCoords);
+          if (_motMapSpaces) {
+            const fkFp = getFigureFootprint(game, playerNum, fk, getFigureSize);
+            return hasFigureLineOfSight(_motSelfFp, fkFp, _motMapSpaces, _motAllFootprints);
           }
           return true;
         }) : [];

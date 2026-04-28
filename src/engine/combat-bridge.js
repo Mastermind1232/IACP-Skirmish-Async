@@ -257,7 +257,10 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
  * handleCleaveTarget.
  */
 export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, deps) {
-  const { getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN, hasLineOfSight, getFigureLabel } = deps;
+  const {
+    getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN,
+    hasFigureLineOfSight, getFigureFootprint, getFigureSize, getFigureLabel,
+  } = deps;
   if (!game.selectedMap?.id) return [];
   const mapId = game.selectedMap.id;
   const attackerPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
@@ -286,9 +289,12 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
   } else {
     const totalAcc = (combat.attackRoll?.acc || 0) + (combat.surgeAccuracy || 0) + (combat.bonusAccuracy || 0);
     const mapSpaces = getEffectiveMapSpaces(game, mapId);
+    const attackerFp = getFigureFootprint(game, combat.attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
     for (const [fk, fCoord] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
       if (fk === combat.target?.figureKey) continue;
-      if (!isWithinN(attackerPos, fCoord, totalAcc, mapId) || !hasLineOfSight(attackerPos, fCoord, mapSpaces, null)) continue;
+      if (!isWithinN(attackerPos, fCoord, totalAcc, mapId)) continue;
+      const candFp = getFigureFootprint(game, defenderPlayerNum, fk, getFigureSize);
+      if (!hasFigureLineOfSight(attackerFp, candFp, mapSpaces, null)) continue;
       targets.push({ figureKey: fk, playerNum: defenderPlayerNum });
     }
     if (game.cratePositions) {
@@ -320,6 +326,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     getDcList, getDcMessageIds, getDcStats, getDcEffects, getDcEffect, getDcKeywords,
     getPlayerId, getMapData, getEffectiveMapSpaces,
     isWithinN, hasLineOfSight,
+    hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints,
     getFiguresAdjacentToTarget, getFiguresAdjacentToCoord, getFiguresOnOrAdjacentToSpace,
     getEffectiveFigureSize, getFootprintCells, getFigureSize,
     findDcMessageIdForFigure, lookupFigureDcIndex, getFigureLabel,
@@ -824,14 +831,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           const _dfMapSp = getEffectiveMapSpaces(game, getMapData(game.selectedMap.id));
           // Scan the defender's side for alive Rebel Pathfinder figures
           const _dfFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
+          const _dfAtkFp = getFigureFootprint(game, attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
           for (const [_dfFk, _dfPos] of Object.entries(_dfFriendlyFigs)) {
             const _dfDcName = dcNameFromFigureKey(_dfFk);
             const _dfEff = getDcEffects()?.[_dfDcName];
             if (!(_dfEff?.specialAbilityIds || []).includes('distracting_fire_rebel_pathfinder')) continue;
-            // Check LOS from Pathfinder to attacker
-            const _dfAtkCoord = String(_dfAtkPos).toLowerCase();
-            const _dfPathCoord = String(_dfPos).toLowerCase();
-            if (!hasLineOfSight(_dfPathCoord, _dfAtkCoord, _dfMapSp, null)) continue;
+            // Check LOS from Pathfinder (full footprint) to attacker (full footprint)
+            const _dfPathFp = getFigureFootprint(game, defenderPlayerNum, _dfFk, getFigureSize);
+            if (!hasFigureLineOfSight(_dfPathFp, _dfAtkFp, _dfMapSp, null)) continue;
             // Deal 1 Damage to the attacker
             const _dfAtkFigIdx = combat.attackerFigureIndex ?? 0;
             const { newHp: _dfAtkNew, prevHp: _dfAtkPrev, wasDefeated: _dfAtkDefeated } = reduceHp(dcHealthState, game, combat.attackerMsgId, _dfAtkFigIdx, 1, attackerPlayerNum);
@@ -1974,7 +1981,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     : (effectiveCleave > 0 ? [{ value: effectiveCleave, label: `Cleave ${effectiveCleave}` }] : []);
   if (hit && damage > 0 && cleaveQueue.length > 0 && game.selectedMap?.id) {
     const cleaveTargets = computeCleaveEligibleTargets(game, combat, defenderPlayerNum, {
-      getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN, hasLineOfSight, getFigureLabel,
+      getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN,
+      hasFigureLineOfSight, getFigureFootprint, getFigureSize, getFigureLabel,
     });
     if (cleaveTargets.length > 0) {
       const firstSource = cleaveQueue.shift();
@@ -2303,6 +2311,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     getDcList, getDcMessageIds, getDcStats, getDcEffect, getDcEffects, getDcKeywords,
     getPlayerId, getPlayAreaId, getMapData,
     isWithinN, hasLineOfSight,
+    hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints,
+    getFigureSize,
     findDcMessageIdForFigure, getFigureLabel,
     getCcHand, getCcEffectsData,
     _applyCondition,
@@ -2491,15 +2501,15 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _hsAtkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
     if (_hsTargetPos && _hsAtkPos) {
       const _hsMapSpaces = getMapData(game.selectedMap.id);
-      const _hsAllFigCoords = new Set();
-      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _hsAllFigCoords.add(String(fp).toLowerCase());
-      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _hsAllFigCoords.add(String(fp).toLowerCase());
+      const _hsAllFootprints = getAllFigureFootprints(game, getFigureSize);
+      const _hsAtkFp = getFigureFootprint(game, combat.attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
       const _hsEligible = [];
       for (const pn of [1, 2]) {
         for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
           if (!pos || fk === combat.attackerFigureKey) continue;
           if (!isWithinN(pos, _hsTargetPos, 2, game.selectedMap.id)) continue;
-          if (!hasLineOfSight(String(_hsAtkPos).toLowerCase(), String(pos).toLowerCase(), _hsMapSpaces, _hsAllFigCoords)) continue;
+          const candFp = getFigureFootprint(game, pn, fk, getFigureSize);
+          if (!hasFigureLineOfSight(_hsAtkFp, candFp, _hsMapSpaces, _hsAllFootprints)) continue;
           const { label: lbl } = getFigureLabel(game, pn, fk);
           _hsEligible.push({ figureKey: fk, playerNum: pn, label: lbl });
         }
@@ -2535,9 +2545,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _dflAtkPN = combat.attackerPlayerNum;
     // Check defender and adjacent friendlies for deflect
     const _dflMapSpaces = getMapData(game.selectedMap.id);
-    const _dflAllFigCoords = new Set();
-    for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _dflAllFigCoords.add(String(fp).toLowerCase());
-    for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _dflAllFigCoords.add(String(fp).toLowerCase());
+    const _dflAllFootprints = getAllFigureFootprints(game, getFigureSize);
     // Gather all figures on the defender's team that have deflect and are either the target or adjacent to the target
     const _dflTargetPos = game.figurePositions?.[_dflDefPN]?.[combat.target.figureKey];
     const _dflCandidates = [];
@@ -2557,9 +2565,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     for (const _dflCand of _dflCandidates) {
       // Find hostiles in this figure's LOS
       const _dflHostiles = [];
+      const _dflCandFp = getFigureFootprint(game, _dflDefPN, _dflCand.figureKey, getFigureSize);
       for (const [fk, pos] of Object.entries(game.figurePositions?.[_dflAtkPN] || {})) {
         if (!pos) continue;
-        if (!hasLineOfSight(String(_dflCand.pos).toLowerCase(), String(pos).toLowerCase(), _dflMapSpaces, _dflAllFigCoords)) continue;
+        const candFp = getFigureFootprint(game, _dflAtkPN, fk, getFigureSize);
+        if (!hasFigureLineOfSight(_dflCandFp, candFp, _dflMapSpaces, _dflAllFootprints)) continue;
         const { label: lbl } = getFigureLabel(game, _dflAtkPN, fk);
         _dflHostiles.push({ figureKey: fk, playerNum: _dflAtkPN, label: lbl });
       }

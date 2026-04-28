@@ -163,6 +163,8 @@ describe('B-DC-003: resolveAbility — Force Choke', () => {
         dcMessageMeta,
         dcHealthState,
         hasLineOfSight: () => hasLos,
+        hasLineOfSightByCoord: () => hasLos,
+        getFigureSize: () => '1x1',
         getRange: () => 5,
         getMapData: () => ({ adjacency: {}, spaces: ['b3', 'c5', 'd7'] }),
         choiceIndex,

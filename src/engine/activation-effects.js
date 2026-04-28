@@ -8,7 +8,8 @@ import { grantPowerTokens, grantMovementBank } from '../game/game-helpers.js';
 import { opponentPlayerNum, getActivatedDcIndices, setActivatedDcIndices, getCcHand, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
 import { reduceHp } from '../game/damage-helpers.js';
-import { hasLineOfSight, getAllFigureCoords } from '../game/spatial.js';
+import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
+import { getFigureSize } from '../data-loader.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 
@@ -86,10 +87,12 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
     let surgeCount = 0;
     if (selfPos && ms) {
       const enemyNum = opponentPlayerNum(playerNum);
-      const allFigCoords = getAllFigureCoords(game);
-      for (const [, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
-        if (!ePos) continue;
-        if (hasLineOfSight(String(selfPos).toLowerCase(), String(ePos).toLowerCase(), ms, allFigCoords)) surgeCount++;
+      const allFootprints = getAllFigureFootprints(game, getFigureSize);
+      const selfFp = getFigureFootprint(game, playerNum, selfFk, getFigureSize);
+      for (const [eFk] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+        const eFp = getFigureFootprint(game, enemyNum, eFk, getFigureSize);
+        if (!eFp.length) continue;
+        if (hasFigureLineOfSight(selfFp, eFp, ms, allFootprints)) surgeCount++;
       }
     }
     if (surgeCount > 0) {
@@ -257,10 +260,12 @@ export function applyEndOfActivationEffects(game, { dcName, playerNum, displayNa
     if (htlPos) {
       const enemyNum = opponentPlayerNum(playerNum);
       const ms = getMapData(game.selectedMap?.id);
-      const allFigCoords = getAllFigureCoords(game);
-      for (const [, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
-        if (!ePos) continue;
-        if (hasLineOfSight(String(htlPos).toLowerCase(), String(ePos).toLowerCase(), ms, allFigCoords)) blockCount++;
+      const allFootprints = getAllFigureFootprints(game, getFigureSize);
+      const htlFp = getFigureFootprint(game, playerNum, htlFk, getFigureSize);
+      for (const [eFk] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+        const eFp = getFigureFootprint(game, enemyNum, eFk, getFigureSize);
+        if (!eFp.length) continue;
+        if (hasFigureLineOfSight(htlFp, eFp, ms, allFootprints)) blockCount++;
       }
     }
     if (blockCount > 0) {

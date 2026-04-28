@@ -1045,7 +1045,7 @@ export async function handleAttackTarget(interaction, ctx) {
     return;
   }
   const attackerPlayerNum = meta.playerNum;
-  const { hasLineOfSight } = ctx;
+  const { hasLineOfSight, hasLineOfSightByCoord, getFigureSize } = ctx;
   // Compute graph-distance dependencies for countSpaces calls
   const _csMapId = game.selectedMap?.id;
   const _csRawMs = _csMapId ? getMapData(_csMapId) : null;
@@ -1972,7 +1972,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!isHunterFriendly(fkEff)) continue;
         if (!sharedIntuitionInRange(countSpaces(_csRawMs, attackerPos, pos, _csClosedDoorEdges))) continue;
-        if (!hasLineOfSight(pos, targetCoord, mapSpaces, null)) continue;
+        if (!hasLineOfSightByCoord(game, pos, targetCoord, mapSpaces, getFigureSize, { blocking: null })) continue;
         const r = applySharedIntuitionHit(game.pendingCombat);
         game.pendingCombat.bonusHits = r.bonusHits;
         await thread.send(`**Shared Intuition** — ${fkDcName} (HUNTER) is within 3 spaces with LOS to target: +1 Hit.`);
@@ -2687,12 +2687,14 @@ export async function handleCombatRoll(interaction, ctx) {
     const _otlMapSpaces = _otlMapId ? getMapData(_otlMapId) : null;
     const _otlAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
     const _otlDefPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target?.figureKey];
-    if (_otlMapSpaces && _otlAtkPos && _otlDefPos && ctx.hasLineOfSight) {
-      const _otlHasLOS = ctx.hasLineOfSight(
+    if (_otlMapSpaces && _otlAtkPos && _otlDefPos && ctx.hasLineOfSightByCoord) {
+      const _otlHasLOS = ctx.hasLineOfSightByCoord(
+        game,
         String(_otlAtkPos).toLowerCase(),
         String(_otlDefPos).toLowerCase(),
         _otlMapSpaces,
-        null,
+        ctx.getFigureSize,
+        { blocking: null },
       );
       if (!_otlHasLOS) {
         combat.forceMiss = true;
@@ -2938,13 +2940,13 @@ export async function handleCombatRoll(interaction, ctx) {
           const chFigs = game.figurePositions?.[attackerPlayerNum] || {};
           const chMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
           const chAtkPos = chFigs[combat.attackerFigureKey];
-          if (chAtkPos && chMapSp && ctx.hasLineOfSight) {
+          if (chAtkPos && chMapSp && ctx.hasLineOfSightByCoord) {
             for (const [fk, pos] of Object.entries(chFigs)) {
               if (fk === combat.attackerFigureKey) continue;
               const fn = dcNameFromFigureKey(fk);
               const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
               if (!(fe?.specialAbilityIds || []).includes('coordinated_hunt_purge_commander')) continue;
-              if (pos && ctx.hasLineOfSight(String(pos).toLowerCase(), String(chAtkPos).toLowerCase(), chMapSp)) {
+              if (pos && ctx.hasLineOfSightByCoord(game, String(pos).toLowerCase(), String(chAtkPos).toLowerCase(), chMapSp, ctx.getFigureSize)) {
                 atkSpecialReroll += 1; _chApplied = true; break;
               }
             }
@@ -2956,8 +2958,8 @@ export async function handleCombatRoll(interaction, ctx) {
     if (atkSIds.includes('light_it_up_rebel_pathfinder')) {
       const liuStartPos = game.activationStartPositions?.[combat.attackerFigureKey];
       const liuMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
-      if (liuStartPos && combat.target?.coord && liuMapSp && ctx.hasLineOfSight) {
-        const targetHadLos = ctx.hasLineOfSight(String(combat.target.coord).toLowerCase(), String(liuStartPos).toLowerCase(), liuMapSp);
+      if (liuStartPos && combat.target?.coord && liuMapSp && ctx.hasLineOfSightByCoord) {
+        const targetHadLos = ctx.hasLineOfSightByCoord(game, String(combat.target.coord).toLowerCase(), String(liuStartPos).toLowerCase(), liuMapSp, ctx.getFigureSize);
         if (!targetHadLos) atkSpecialReroll += 1;
       }
     }
@@ -2968,7 +2970,7 @@ export async function handleCombatRoll(interaction, ctx) {
       delete game.pendingSlingBarrage[combat.attackerMsgId];
       const sbMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
       const sbDefCoord = combat.target?.coord ? String(combat.target.coord).toLowerCase() : null;
-      if (sbMapSp && sbDefCoord && ctx.hasLineOfSight) {
+      if (sbMapSp && sbDefCoord && ctx.hasLineOfSightByCoord) {
         const parts = String(combat.attackerFigureKey).split('-');
         const sbGroupPrefix = parts.length >= 3 ? `${parts.slice(0, -1).join('-')}-` : null;
         if (sbGroupPrefix) {
@@ -2978,7 +2980,7 @@ export async function handleCombatRoll(interaction, ctx) {
             if (fk === combat.attackerFigureKey) continue;
             if (!fk.startsWith(sbGroupPrefix)) continue;
             if (!pos) continue;
-            if (ctx.hasLineOfSight(String(pos).toLowerCase(), sbDefCoord, sbMapSp)) sbBonus += 1;
+            if (ctx.hasLineOfSightByCoord(game, String(pos).toLowerCase(), sbDefCoord, sbMapSp, ctx.getFigureSize)) sbBonus += 1;
           }
           if (sbBonus > 0) {
             atkSpecialReroll += sbBonus;
@@ -3006,7 +3008,7 @@ export async function handleCombatRoll(interaction, ctx) {
           if (!(fe?.keywords || []).some(k => String(k).toUpperCase() === 'DROID')) continue;
           if (!pos) continue;
           if (!isWithinSpaces(scMapSp, String(pos).toLowerCase(), String(combat.target.coord).toLowerCase(), 3)) continue;
-          if (ctx.hasLineOfSight && ctx.hasLineOfSight(String(pos).toLowerCase(), String(combat.target.coord).toLowerCase(), scMapSp)) {
+          if (ctx.hasLineOfSightByCoord && ctx.hasLineOfSightByCoord(game, String(pos).toLowerCase(), String(combat.target.coord).toLowerCase(), scMapSp, ctx.getFigureSize)) {
             combat.forcedRerollQueue.push({ controlPlayer: attackerPlayerNum, pool: 'defense', remaining: 1, source: 'Shared Calculations' });
             break;
           }
@@ -5492,12 +5494,14 @@ export async function handleCleaveTarget(interaction, ctx) {
     const {
       computeCleaveEligibleTargets: ctxComputeCleaveEligibleTargets,
       getCleaveTargetButtons: ctxGetCleaveTargetButtons,
-      getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN, hasLineOfSight, getFigureLabel,
+      getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN,
+      hasFigureLineOfSight, getFigureFootprint, getFigureSize, getFigureLabel,
     } = ctx;
     if (ctxComputeCleaveEligibleTargets && ctxGetCleaveTargetButtons) {
       const defPN = pending.defenderPlayerNum ?? opponentPlayerNum(pending.attackerPlayerNum);
       const nextTargets = ctxComputeCleaveEligibleTargets(game, pending.combat, defPN, {
-        getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN, hasLineOfSight, getFigureLabel,
+        getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN,
+        hasFigureLineOfSight, getFigureFootprint, getFigureSize, getFigureLabel,
       });
       if (nextTargets.length > 0) {
         const nextSource = cleaveQueue.shift();

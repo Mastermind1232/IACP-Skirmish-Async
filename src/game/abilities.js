@@ -49,7 +49,8 @@ import { applyCondition, resetCondition, filterCondition, isConditionImmune, HAR
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure } from './player-helpers.js';
-import { hasLineOfSight } from './spatial.js';
+import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
+import { getFigureSize } from '../data-loader.js';
 import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
 
 
@@ -300,7 +301,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'dcSpecial' && entry.pushTargetWithinRange && typeof entry.pushTargetWithinRange === 'object') {
     const { range = 3, requiresSmall = false, requiresLos = false, hostileOnly = false } = entry.pushTargetWithinRange;
     const { mustAdjacentToActivator = false, maxDistanceFromTarget } = entry.pushLandingEffect || {};
-    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSight: losCheck, getRange: getRng, getMapData: getMs, targetFigureKey, chosenSpace } = context;
+    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSightByCoord: losCheck, getRange: getRng, getMapData: getMs, getFigureSize: gfs, targetFigureKey, chosenSpace } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
     const enemyNum = opponentPlayerNum(playerNum);
     const label = entry.label || 'Push';
@@ -421,9 +422,9 @@ export function resolveAbility(abilityId, context) {
       }
       // Range check
       if (attackerPos && countGameSpaces(game, attackerPos, coord) > range) continue;
-      // LOS check
+      // LOS check (multi-cell-aware via byCoord helper)
       if (requiresLos && losCheck && attackerPos && mapSpaces) {
-        if (!losCheck(attackerPos, coord, mapSpaces)) continue;
+        if (!losCheck(game, attackerPos, coord, mapSpaces, gfs)) continue;
       }
       validTargets.push(fk);
     }
@@ -455,7 +456,7 @@ export function resolveAbility(abilityId, context) {
   // First call: returns requiresChoice with enemy figure list; second call: applies effect to chosen figure.
   if (entry.type === 'dcSpecial' && entry.targetHostileFigure && typeof entry.targetHostileFigure === 'object') {
     const { damage = 0, strain = 0, applyCondition: condToApply, requiresLos = false, range: maxRange = 999, splashDamageNote, splashDamage = 0, splashConditions = [] } = entry.targetHostileFigure;
-    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSight: losCheck, getRange: getRng, getMapData: getMs, choiceIndex, targetFigureKey } = context;
+    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSightByCoord: losCheck, getRange: getRng, getMapData: getMs, getFigureSize: gfs, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.logMessage || `Resolve ${entry.label} manually.` };
     const enemyPlayerNum = opponentPlayerNum(playerNum);
     const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
@@ -575,7 +576,7 @@ export function resolveAbility(abilityId, context) {
         if (dist > maxRange) continue;
       }
       if (requiresLos && losCheck && attackerPos && mapSpaces) {
-        if (!losCheck(attackerPos, coord, mapSpaces)) continue;
+        if (!losCheck(game, attackerPos, coord, mapSpaces, gfs)) continue;
       }
       // Token adjacency filter (System Shock: target must be on/adjacent to terminal)
       if (_thfTgtTokenType && _tgtTokenPositions.length > 0) {
@@ -2244,13 +2245,13 @@ export function resolveAbility(abilityId, context) {
       if (!mapId || !activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
       const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
       const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
-      const { hasLineOfSight: losCheck, getRange: getRng } = context;
+      const { hasLineOfSightByCoord: losCheck, getRange: getRng, getFigureSize: gfs } = context;
       const validTargets = [];
       for (const [fk, pos] of Object.entries(enemyPositions)) {
         if (!pos) continue;
         const dist = countGameSpaces(game, activatingPos, pos);
         if (dist > maxRange) continue;
-        if (requiresLos && typeof losCheck === 'function' && !losCheck(activatingPos, pos, getMapData(mapId))) continue;
+        if (requiresLos && typeof losCheck === 'function' && !losCheck(game, activatingPos, pos, getMapData(mapId), gfs)) continue;
         validTargets.push({ figureKey: fk, dist });
       }
       if (validTargets.length === 0) return { applied: false, manualMessage: `No hostile figures within ${maxRange} spaces${requiresLos ? ' and LOS' : ''}. **${entry.label}** has no valid targets.` };
@@ -4800,7 +4801,7 @@ export function resolveAbility(abilityId, context) {
       const defCoord = cbt.target?.coord;
       const mapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
       if (atkStartPos && defCoord && mapSp) {
-        const targetHadLos = hasLineOfSight(String(defCoord).toLowerCase(), String(atkStartPos).toLowerCase(), mapSp);
+        const targetHadLos = hasLineOfSightByCoord(game, String(defCoord).toLowerCase(), String(atkStartPos).toLowerCase(), mapSp, getFigureSize);
         if (targetHadLos) {
           return { applied: false, manualMessage: 'Element of Surprise: target had LOS to you at activation start — card cannot be applied. Override if incorrect.' };
         }
@@ -5130,7 +5131,7 @@ export function resolveAbility(abilityId, context) {
   // Phase 1: find hostiles in LOS from activating figure, return picker
   // Phase 2: chosen hostile → set up pendingLure for combat delegation (like False Orders)
   if (entry.type === 'ccEffect' && entry.lureOfTheDarkSide) {
-    const { game, playerNum, dcMessageMeta, chosenFigureKey, hasLineOfSight: losCheck, getMapData: getMs } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, hasLineOfSightByCoord: losCheck, getMapData: getMs, getFigureSize: gfs } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const oppNum = opponentPlayerNum(playerNum);
     // Find activating figure (the FORCE USER playing this card)
@@ -5169,7 +5170,7 @@ export function resolveAbility(abilityId, context) {
     const candidates = [];
     for (const [fk, pos] of Object.entries(hostilePoses)) {
       // Check LOS from activating figure to hostile
-      const inLos = losCheck && mapSpaces ? losCheck(activatingPos, pos, mapSpaces) : true;
+      const inLos = losCheck && mapSpaces ? losCheck(game, activatingPos, pos, mapSpaces, gfs) : true;
       if (inLos) {
         candidates.push({ figureKey: fk, label: dcNameFromFigureKey(fk) });
       }
@@ -5245,14 +5246,15 @@ export function resolveAbility(abilityId, context) {
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
     if (!activatorPos) return { applied: false, manualMessage: 'Resolve manually: position unknown.' };
-    const losCheck = context.hasLineOfSight ?? null;
+    const losCheck = context.hasLineOfSightByCoord ?? null;
+    const gfs = context.getFigureSize;
     const mapId = game.selectedMap?.id;
     const mapSpaces = mapId ? getMapData(mapId) : null;
     const hostiles = [];
     for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
       if (!coord) continue;
       if (countGameSpaces(game, activatorPos, coord) > 3) continue;
-      if (losCheck && mapSpaces && !losCheck(activatorPos, coord, mapSpaces)) continue;
+      if (losCheck && mapSpaces && !losCheck(game, activatorPos, coord, mapSpaces, gfs)) continue;
       hostiles.push(fk);
     }
     if (hostiles.length === 0) return { applied: true, logMessage: 'No hostile within 3 spaces with LOS.' };
@@ -5724,7 +5726,8 @@ export function resolveAbility(abilityId, context) {
     const cahRange = cah.range ?? 1;
     const cahLos = cah.requiresLos ?? false;
     const cahAll = cah.targetAll ?? false;
-    const losCheck = context.hasLineOfSight ?? null;
+    const losCheck = context.hasLineOfSightByCoord ?? null;
+    const gfs = context.getFigureSize;
     const mapSpacesForLos = cahLos ? getMapData(mapId) : null;
     // Activator position for range/LOS checks
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
@@ -5744,7 +5747,7 @@ export function resolveAbility(abilityId, context) {
         if (!coord) continue;
         if (activatorPos && countGameSpaces(game, activatorPos, coord) > cahRange) continue;
         if (cahLos && losCheck && activatorPos && mapSpacesForLos) {
-          if (!losCheck(activatorPos, coord, mapSpacesForLos)) continue;
+          if (!losCheck(game, activatorPos, coord, mapSpacesForLos, gfs)) continue;
         }
         hostileSet.add(fk);
       }

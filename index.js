@@ -346,6 +346,10 @@ import {
   isCcPlayLegalByRestriction,
   getRange as _getRange,
   hasLineOfSight as _hasLineOfSight,
+  hasLineOfSightByCoord as _hasLineOfSightByCoord,
+  hasFigureLineOfSight as _hasFigureLineOfSight,
+  getFigureFootprint as _getFigureFootprint,
+  getAllFigureFootprints as _getAllFigureFootprints,
   isWithinSpaces,
   isAdjacentCoords,
   isWithinRange,
@@ -534,6 +538,10 @@ const getRange = _getRange;
 
 // LOS + helpers delegated to src/game/spatial.js (canonical implementation)
 const hasLineOfSight = _hasLineOfSight;
+const hasLineOfSightByCoord = _hasLineOfSightByCoord;
+const hasFigureLineOfSight = _hasFigureLineOfSight;
+const getFigureFootprint = _getFigureFootprint;
+const getAllFigureFootprints = _getAllFigureFootprints;
 
 async function clearMoveGridMessages(game, moveKey, channel) {
   return _clearMoveGridMessagesPure(game, moveKey, channel);
@@ -3405,7 +3413,8 @@ function buildAllDeps() {
     createPlayAreaChannels, createBoardChannel, createHandThreads,
     refreshAllGameComponents, applyDirectDamageToFigure,
     getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert, sendSquadConfirmation, buildSquadConfirmText,
-    runDraftRandom, getRange, hasLineOfSight,
+    runDraftRandom, getRange, hasLineOfSight, hasLineOfSightByCoord,
+    hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints,
     getDeploymentZones,
     // Combat special effects deps
     calculateKillVp, decrementActivationIfGroupDefeated,
