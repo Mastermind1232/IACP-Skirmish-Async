@@ -107,6 +107,9 @@ _GROUP_DEPS: Dict[str, List[str]] = {
     # Minimal fallback for ad-hoc registrations
     'core': [
         'get_game', 'save_games', 'client', 'log_game_action',
+        'lobbies', 'lobby_embed_sent', 'channel_backend',
+        'list_game_ids', 'delete_game', 'save_game',
+        'MAX_ACTIVE_GAMES_PER_PLAYER', 'count_active_games_for_player',
     ],
 }
 

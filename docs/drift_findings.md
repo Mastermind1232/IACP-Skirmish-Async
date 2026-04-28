@@ -2,7 +2,7 @@
 
 - Files replayed: **43** (clean: 16)
 - Steps replayed: **8,541**
-- Diffs surfaced: **7,440**
+- Diffs surfaced: **7,434**
 - Steps that errored: **0**
 
 ## Top diverging state fields
@@ -29,12 +29,12 @@ Each row: how many step-level diffs touched that top-level state field. "Top-lev
 | 136 | `activationDamagedFigures` |
 | 132 | `specialActionUsedThisActivation` |
 | 86 | `player1VP` |
-| 84 | `player2VP` |
 | 81 | `harshEnvironmentActive` |
 | 81 | `noCommandDrawThisRound` |
 | 81 | `p1LaunchPanelFlippedThisRound` |
 | 81 | `p2LaunchPanelFlippedThisRound` |
 | 81 | `powerConverterUsedThisRound` |
+| 78 | `player2VP` |
 | 51 | `pendingDcAbilityChoice` |
 | 49 | `pendingPounceSpaceChoice` |
 | 47 | `pendingBoRifleKallus` |
@@ -85,8 +85,6 @@ Each row: how many step-level diffs touched that top-level state field. "Top-lev
   - attackPerformedThisActivation = {'hl2dc1': True}  (only in left)
   ~ dcActionsData.hl2dc1.remaining: 2 != 1
   + pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': False, 'p2Ready': False, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False}  (only in right)
-  ~ player2VP.kills: 5 != 0
-  ~ player2VP.total: 5 != 0
 ```
 
 ### `combat_gate`

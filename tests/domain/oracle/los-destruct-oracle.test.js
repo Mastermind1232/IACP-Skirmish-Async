@@ -87,11 +87,20 @@ function computeLosForCase(c, mapSpaces) {
   const tgt = parseDescriptor(c.target);
   const others = splitOthers(c.others).map(parseDescriptor).filter(Boolean);
 
-  // Energy shields go into the LOS-blocking terrain set; they are NOT
-  // figures. (Phase 2.3 will refine attacker/target-on-shield exclusions.)
-  const extraBlocking = others.filter(o => o.isShield).flatMap(o => o.cells);
-  const effectiveMs = extraBlocking.length > 0
-    ? { ...mapSpaces, blocking: [...(mapSpaces.blocking || []), ...extraBlocking] }
+  // Energy shields per CRR p.28: block LOS through their cell *and* through
+  // their corners. Skip shield blocking entirely if the attacker or target
+  // sits on the shield's cell (shield is the attacker / target).
+  const shieldCells = new Set();
+  for (const o of others) if (o.isShield) for (const c of o.cells) shieldCells.add(c);
+  const attCells = new Set(att?.cells || []);
+  const tgtCells = new Set(tgt?.cells || []);
+  const activeShields = [...shieldCells].filter(c => !attCells.has(c) && !tgtCells.has(c));
+  const effectiveMs = activeShields.length > 0
+    ? {
+        ...mapSpaces,
+        blocking: [...(mapSpaces.blocking || []), ...activeShields],
+        cornerBlockingTiles: [...(mapSpaces.cornerBlockingTiles || []), ...activeShields],
+      }
     : mapSpaces;
 
   // Figure-blocking set. Per IACP CRR (Destruct, 2026-04-28):

@@ -169,8 +169,24 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
       if (p.col >= 0) figureBlockers.add(`${p.col},${p.row}`);
     }
   }
+  // Blocking corners come from energy shields / smoke grenades — the cells
+  // listed in `mapSpaces.cornerBlockingTiles` (if provided) contribute their
+  // 4 grid corners to a "no LOS through this corner" set, per CRR p.28.
+  // Shields where the attacker or target IS the shield are excluded.
+  const blockingCorners = new Set();
+  const cornerCells = mapSpaces?.cornerBlockingTiles || [];
+  for (const cell of cornerCells) {
+    const p = parseCoord(String(cell).toLowerCase());
+    if (p.col < 0) continue;
+    if ((p.col === a.col && p.row === a.row) || (p.col === b.col && p.row === b.row)) continue;
+    blockingCorners.add(`${p.col},${p.row}`);
+    blockingCorners.add(`${p.col + 1},${p.row}`);
+    blockingCorners.add(`${p.col},${p.row + 1}`);
+    blockingCorners.add(`${p.col + 1},${p.row + 1}`);
+  }
+
   return tileToTileLos(a.col, a.row, b.col, b.row, {
-    walls, wallSet, blockingTiles, figureBlockers, offMapTiles: null,
+    walls, wallSet, blockingTiles, figureBlockers, blockingCorners, offMapTiles: null,
   });
 }
 

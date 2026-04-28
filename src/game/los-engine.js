@@ -439,8 +439,39 @@ function pathsOverlap(att, d1, d2) {
  * @param {object} ctx { wallSet, blockingTiles, figureBlockers, offMapTiles }
  * @returns {boolean}
  */
+/** True if the LOS line passes through any cell-corner that is a blocking
+ *  intersection — i.e., a corner of an energy-shield cell where the shield
+ *  isn't the attacker or target. Per CRR p.28, shields block LOS through
+ *  their corners as well as through their interior. */
+function passesThroughBlockingCorner(sx, sy, ex, ey, blockingCorners) {
+  if (blockingCorners.size === 0) return false;
+  const dx = ex - sx, dy = ey - sy;
+  if (dx === 0 && dy === 0) return false;
+  // Sample integer-coord points the line passes through.
+  for (const cornerKey of blockingCorners) {
+    const [cx, cy] = cornerKey.split(',').map(Number);
+    // Skip line endpoints — those are att/def corners, not "through" points.
+    if ((cx === sx && cy === sy) || (cx === ex && cy === ey)) continue;
+    // Is (cx, cy) on the segment? Parametric check.
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      if (dx === 0) continue;
+      const t = (cx - sx) / dx;
+      if (t <= 0 || t >= 1) continue;
+      const expectedY = sy + t * dy;
+      if (Math.abs(expectedY - cy) < 1e-9) return true;
+    } else {
+      const t = (cy - sy) / dy;
+      if (t <= 0 || t >= 1) continue;
+      const expectedX = sx + t * dx;
+      if (Math.abs(expectedX - cx) < 1e-9) return true;
+    }
+  }
+  return false;
+}
+
 export function tileToTileLos(fromX, fromY, toX, toY, ctx) {
   if (fromX === toX && fromY === toY) return true;
+  const blockingCorners = ctx.blockingCorners ?? new Set();
 
   const att = {
     tl: { x: fromX,     y: fromY     },
@@ -469,8 +500,6 @@ export function tileToTileLos(fromX, fromY, toX, toY, ctx) {
   ];
   for (const aCorner of [att.tl, att.tr, att.bl, att.br]) {
     for (const [d1, d2, mid] of pairs) {
-      // Two distinct lines required. A zero-length "line" (attacker corner ===
-      // defender corner) doesn't qualify as one of the two lines IACP demands.
       if (aCorner.x === d1.x && aCorner.y === d1.y) continue;
       if (aCorner.x === d2.x && aCorner.y === d2.y) continue;
       if (pathsOverlap(aCorner, d1, d2)) continue;

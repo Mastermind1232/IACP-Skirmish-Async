@@ -2,7 +2,7 @@
   "totals": {
     "files": 43,
     "clean_files": 16,
-    "total_diffs": 7440,
+    "total_diffs": 7434,
     "total_errors": 0,
     "total_replayed": 8541
   },
@@ -80,10 +80,6 @@
       86
     ],
     [
-      "player2VP",
-      84
-    ],
-    [
       "harshEnvironmentActive",
       81
     ],
@@ -102,6 +98,10 @@
     [
       "powerConverterUsedThisRound",
       81
+    ],
+    [
+      "player2VP",
+      78
     ],
     [
       "pendingDcAbilityChoice",
@@ -228,9 +228,7 @@
       "diffs": [
         "  - attackPerformedThisActivation = {'hl2dc1': True}  (only in left)",
         "  ~ dcActionsData.hl2dc1.remaining: 2 != 1",
-        "  + pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': False, 'p2Ready': False, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False}  (only in right)",
-        "  ~ player2VP.kills: 5 != 0",
-        "  ~ player2VP.total: 5 != 0"
+        "  + pendingCombat = {'gameId': '00001', 'attackerPlayerNum': 2, 'defenderPlayerNum': 1, 'attackerMsgId': 'hl2dc1', 'attackerDcName': 'Stormtrooper (Regular)', 'defenderDcName': 'Han Solo (Rebel Hero)', 'bonusPierce': 0, 'attackerDisplayName': 'Stormtrooper (Regular)', 'attackerFigureIndex': 0, 'attackerFigureKey': 'Stormtrooper (Regular)-1-0', 'target': {'figureKey': 'Han Solo (Rebel Hero)-1-0', 'coord': 'c12', 'label': 'Han Solo (Rebel Hero)', 'hasLOS': True, 'dist': 1}, 'targetStats': {'defense': ['white'], 'cost': 5, 'figures': 1}, 'blockSurgeAbilities': False, 'defensePoolRemoveMax': 0, 'attackInfo': {'dice': ['blue', 'green'], 'type': 'range'}, 'isRanged': True, 'distanceToTarget': 1, 'combatThreadId': 'thread-fake-msg-1', 'combatDeclareMsgId': 'fake-msg-1', 'combatPreMsgId': 'fake-msg-2', 'p1Ready': False, 'p2Ready': False, 'attackTargetMsgId': 'fake-msg', 'darksaberBlastToCleave': False}  (only in right)"
       ]
     },
     "combat_ready": {
@@ -384,7 +382,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 540,
+      "diffs": 538,
       "clean": false
     },
     {
@@ -400,7 +398,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 565,
+      "diffs": 567,
       "clean": false
     },
     {
@@ -416,7 +414,7 @@
       "replayed": 198,
       "unsupported": 2,
       "errored": 0,
-      "diffs": 203,
+      "diffs": 205,
       "clean": false
     },
     {
@@ -432,7 +430,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 233,
+      "diffs": 235,
       "clean": false
     },
     {
@@ -504,7 +502,7 @@
       "replayed": 199,
       "unsupported": 1,
       "errored": 0,
-      "diffs": 438,
+      "diffs": 432,
       "clean": false
     },
     {
@@ -520,7 +518,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 482,
+      "diffs": 484,
       "clean": false
     },
     {
@@ -560,7 +558,7 @@
       "replayed": 198,
       "unsupported": 2,
       "errored": 0,
-      "diffs": 289,
+      "diffs": 287,
       "clean": false
     },
     {
@@ -592,7 +590,7 @@
       "replayed": 200,
       "unsupported": 0,
       "errored": 0,
-      "diffs": 575,
+      "diffs": 571,
       "clean": false
     },
     {
