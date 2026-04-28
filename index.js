@@ -2889,11 +2889,16 @@ client.on('messageCreate', async (message) => {
   //   - @SKIRBO      → escalates a bug to Skirbo (the AI)
   // Both reuse the same webhook + tag-based route-back; only the framing differs.
   const BOTHELPERS_ROLE_ID = '1498454240375603391';
+  // Two SKIRBO roles exist: the original manual role and the auto-created
+  // managed role Discord made when the bot joined. Either ping should trigger
+  // the forward; the outgoing ping uses the manual ID since both are matched
+  // by the Claude Channels mentionPatterns.
   const SKIRBO_ROLE_ID = '1472145489817374720';
+  const SKIRBO_ROLE_IDS = [SKIRBO_ROLE_ID, '1498471815423590605'];
   const BOTHELPERS_CHANNEL_ID = '1481314970666008607';
   try {
     const pingedBothelpers = message.mentions.roles.has(BOTHELPERS_ROLE_ID);
-    const pingedSkirbo = message.mentions.roles.has(SKIRBO_ROLE_ID);
+    const pingedSkirbo = SKIRBO_ROLE_IDS.some((id) => message.mentions.roles.has(id));
     // Native Discord reply to a bot-authored message in a game channel also
     // counts as a help-request — saves players re-typing @Bothelpers when
     // following up on a forwarded reply.
@@ -2930,10 +2935,12 @@ client.on('messageCreate', async (message) => {
             : isReplyToBot
               ? `💬 looped skirbo back in — one sec.`
               : `👀 forwarded to bothelpers — give them a second to jump in.`;
-          const cleanedQuote = message.content
-            .replace(new RegExp(`<@&${BOTHELPERS_ROLE_ID}>`, 'g'), '@Bothelpers')
-            .replace(new RegExp(`<@&${SKIRBO_ROLE_ID}>`, 'g'), '@SKIRBO')
-            .split('\n').join('\n> ');
+          let cleanedQuote = message.content
+            .replace(new RegExp(`<@&${BOTHELPERS_ROLE_ID}>`, 'g'), '@Bothelpers');
+          for (const id of SKIRBO_ROLE_IDS) {
+            cleanedQuote = cleanedQuote.replace(new RegExp(`<@&${id}>`, 'g'), '@SKIRBO');
+          }
+          cleanedQuote = cleanedQuote.split('\n').join('\n> ');
           const payload = {
             content: `${headerEmoji} **\\[ia${gameId}\\]** ${headerText}:\n\n> ${cleanedQuote}\n\n[Jump to message](${sourceLink})\n\n_Reply with_ \`[ia${gameId}] your message\` _to send a response back to the game._`,
             allowedMentions: { roles: [targetRoleId] },
