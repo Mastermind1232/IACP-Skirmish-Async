@@ -425,6 +425,47 @@ describe('B-MVDISP-002: getValidDisplacementSpaces (anchorhead-cantina-bar)', ()
     assert.ok(!valid.some(s => s.toLowerCase() === 'a1'), 'a1 excluded — occupied');
     assert.ok(valid.some(s => s.toLowerCase() === 'a2'), 'a2 is valid');
   });
+
+  it('002c: companion displacement — friendly-occupied spaces remain valid', () => {
+    // Companions can end on spaces occupied by friendly figures (G39).
+    // The Child being pushed by a Massive must still see friendly squares
+    // as candidates so the controller gets a chooser instead of an
+    // auto-pushed empty cell.
+    const game = makeGame({
+      figurePositions: {
+        1: {
+          'The Child-1-0': 'b1',
+          'Mandalorian-1-0': 'a1',  // friendly figure The Child can share with
+        },
+        2: {},
+      },
+    });
+    const forbiddenSet = new Set(['b1', 'c1', 'b2', 'c2']);
+    const valid = getValidDisplacementSpaces(game, 'The Child-1-0', 1, forbiddenSet);
+
+    // a1 is friendly-occupied. For a non-companion this would be excluded;
+    // for The Child it must remain valid because companions share with friendlies.
+    assert.ok(valid.some(s => s.toLowerCase() === 'a1'),
+      'friendly-occupied a1 stays valid for companion displacement');
+  });
+
+  it('002d: companion displacement — enemy-occupied spaces still excluded', () => {
+    // Companions can NOT end on spaces occupied by enemy figures, so the
+    // companion bypass must only apply to friendlies.
+    const game = makeGame({
+      figurePositions: {
+        1: { 'The Child-1-0': 'b1' },
+        2: { 'Stormtrooper (Regular)-1-0': 'a1' },  // enemy on a1
+      },
+    });
+    const forbiddenSet = new Set(['b1', 'c1', 'b2', 'c2']);
+    const valid = getValidDisplacementSpaces(game, 'The Child-1-0', 1, forbiddenSet);
+
+    assert.ok(!valid.some(s => s.toLowerCase() === 'a1'),
+      'enemy-occupied a1 stays excluded even for companion');
+    assert.ok(valid.some(s => s.toLowerCase() === 'a2'),
+      'a2 still valid (empty)');
+  });
 });
 
 // ── B-MVDISP-003: pushFigureToNearestValid ────────────────────────────────

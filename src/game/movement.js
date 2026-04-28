@@ -1082,12 +1082,17 @@ export function getValidDisplacementSpaces(game, figureKey, playerNum, forbidden
   const mapData = getMapData(mapId);
   if (!mapData?.adjacency) return [];
   const adjacent = mapData.adjacency[normalizeCoord(coord)] || [];
-  // Build occupiedSet from full footprints, excluding the figure being displaced
+  // Companions can end on spaces occupied by FRIENDLY figures, mirroring their
+  // normal movement rules — so when displacing a companion, those spaces must
+  // remain candidates instead of being filtered as occupied.
+  const displacedDcName = dcNameFromFigureKey(figureKey);
+  const isCompanionBeingDisplaced = isDcCompanion(displacedDcName);
   const occupiedSet = new Set();
   for (const p of [1, 2]) {
     for (const [k, c] of Object.entries(game.figurePositions?.[p] || {})) {
       if (!c) continue;
       if (p === playerNum && k === figureKey) continue;
+      if (isCompanionBeingDisplaced && p === playerNum) continue;
       const dcName = dcNameFromFigureKey(k);
       const size = game.figureOrientations?.[k] || getFigureSize(dcName);
       for (const cell of getNormalizedFootprint(c, size)) {
