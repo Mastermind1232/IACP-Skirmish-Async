@@ -205,7 +205,9 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
   }
 
   return tileToTileLos(a.col, a.row, b.col, b.row, {
-    walls, wallSet, blockingIntersections, blockingTiles, figureBlockers, blockingCorners, offMapTiles: null,
+    walls, wallSet, blockingIntersections, blockingTiles, figureBlockers, blockingCorners,
+    offMapTiles: null,
+    ignoreBlockingTerrain: !!mapSpaces?._ignoreBlockingTerrain,
   });
 }
 

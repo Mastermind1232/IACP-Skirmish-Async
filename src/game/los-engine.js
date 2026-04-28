@@ -257,11 +257,11 @@ function coincidentWallBlocks(walls, sx, sy, ex, ey) {
   return false;
 }
 
-function tileBlocked(pathTiles, blockingTiles, figureBlockers, offMapTiles) {
+function tileBlocked(pathTiles, blockingTiles, figureBlockers, offMapTiles, ignoreBlockingTerrain) {
   for (const t of pathTiles) {
     const key = k(t.x, t.y);
     if (figureBlockers.has(key)) return true;
-    if (blockingTiles.has(key)) return true;
+    if (!ignoreBlockingTerrain && blockingTiles.has(key)) return true;
     if (offMapTiles && offMapTiles.has(key)) return true;
   }
   return false;
@@ -350,7 +350,8 @@ function adjacentTilesBlocked(fromX, fromY, toX, toY, sx, sy, ex, ey,
 // ── corner-to-corner / point-to-point LOS ──────────────────────────────────
 
 function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, ctx) {
-  const { walls, wallSet, blockingTiles, figureBlockers, offMapTiles, blockingIntersections } = ctx;
+  const { walls, wallSet, blockingTiles, figureBlockers, offMapTiles, blockingIntersections,
+          ignoreBlockingTerrain } = ctx;
   const sx = attCorner.x, sy = attCorner.y, ex = defCorner.x, ey = defCorner.y;
 
   const vEdges = getVerticalEdges(sx, sy, ex, ey);
@@ -362,10 +363,11 @@ function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, 
   if (coincidentWallBlocks(walls, sx, sy, ex, ey)) return false;
 
   const tiles = getTiles(vEdges, hEdges, fromX, fromY, toX, toY, sx, sy, ex, ey);
-  if (tileBlocked(tiles, blockingTiles, figureBlockers, offMapTiles)) return false;
+  if (tileBlocked(tiles, blockingTiles, figureBlockers, offMapTiles, ignoreBlockingTerrain)) return false;
 
   if (adjacentTilesBlocked(fromX, fromY, toX, toY, sx, sy, ex, ey,
-                            wallSet, blockingTiles, figureBlockers, offMapTiles)) return false;
+                            wallSet, ignoreBlockingTerrain ? new Set() : blockingTiles,
+                            figureBlockers, offMapTiles)) return false;
 
   // Nick Hansen's intersectionBlocksPath state machine: at each integer-grid
   // intersection the line passes through (or starts/ends at), check whether
