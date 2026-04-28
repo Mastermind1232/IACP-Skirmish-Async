@@ -185,8 +185,18 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
     blockingCorners.add(`${p.col + 1},${p.row + 1}`);
   }
 
+  // Wall endpoints: how many wall segments touch each corner. Used by the
+  // CRR-p.22 "≥2 obstacles at corner blocks LOS" interior-intersection check.
+  const wallEndpoints = new Map();
+  for (const w of walls) {
+    for (const p of w) {
+      const k = `${p.x},${p.y}`;
+      wallEndpoints.set(k, (wallEndpoints.get(k) ?? 0) + 1);
+    }
+  }
+
   return tileToTileLos(a.col, a.row, b.col, b.row, {
-    walls, wallSet, blockingTiles, figureBlockers, blockingCorners, offMapTiles: null,
+    walls, wallSet, wallEndpoints, blockingTiles, figureBlockers, blockingCorners, offMapTiles: null,
   });
 }
 

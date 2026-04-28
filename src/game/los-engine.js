@@ -350,7 +350,7 @@ function adjacentTilesBlocked(fromX, fromY, toX, toY, sx, sy, ex, ey,
 // ── corner-to-corner / point-to-point LOS ──────────────────────────────────
 
 function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, ctx) {
-  const { walls, wallSet, blockingTiles, figureBlockers, offMapTiles } = ctx;
+  const { walls, wallSet, blockingTiles, figureBlockers, offMapTiles, wallEndpoints } = ctx;
   const sx = attCorner.x, sy = attCorner.y, ex = defCorner.x, ey = defCorner.y;
 
   const vEdges = getVerticalEdges(sx, sy, ex, ey);
@@ -359,8 +359,6 @@ function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, 
   const hEdges = getHorizontalEdges(sx, sy, ex, ey);
   if (edgeBlocked(hEdges, wallSet)) return false;
 
-  // Walls coincident with (or running along) the LOS line — Nick handles
-  // this through blockingIntersections; we use a direct co-linear test.
   if (coincidentWallBlocks(walls, sx, sy, ex, ey)) return false;
 
   const tiles = getTiles(vEdges, hEdges, fromX, fromY, toX, toY, sx, sy, ex, ey);
@@ -368,6 +366,34 @@ function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, 
 
   if (adjacentTilesBlocked(fromX, fromY, toX, toY, sx, sy, ex, ey,
                             wallSet, blockingTiles, figureBlockers, offMapTiles)) return false;
+
+  // Interior corner intersections per CRR p.22: LOS cannot trace through a
+  // corner where ≥2 obstacles meet. Obstacles at corner (x, y) include:
+  //   - wall endpoints — number of walls touching the corner
+  //   - blocking-terrain cells with the corner on their boundary
+  //   - figure-blocking cells with the corner on their boundary
+  // Skip line endpoints (att / def corners) — we only block on *passing
+  // through* an obstacle corner.
+  if (wallEndpoints && wallEndpoints.size > 0) {
+    const intersections = getIntersections(sx, sy, ex, ey);
+    for (const p of intersections) {
+      if (p.x === sx && p.y === sy) continue;
+      if (p.x === ex && p.y === ey) continue;
+      let count = 0;
+      const wallsHere = wallEndpoints.get(`${p.x},${p.y}`) ?? 0;
+      count += wallsHere;
+      // Cells touching corner: (p.x-1, p.y-1), (p.x, p.y-1), (p.x-1, p.y), (p.x, p.y)
+      const adj = [[p.x - 1, p.y - 1], [p.x, p.y - 1], [p.x - 1, p.y], [p.x, p.y]];
+      for (const [cx, cy] of adj) {
+        if (cx === fromX && cy === fromY) continue;
+        if (cx === toX && cy === toY) continue;
+        const key = `${cx},${cy}`;
+        if (blockingTiles.has(key)) count++;
+        else if (figureBlockers.has(key)) count++;
+      }
+      if (count >= 2) return false;
+    }
+  }
 
   return true;
 }
