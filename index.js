@@ -2894,7 +2894,16 @@ client.on('messageCreate', async (message) => {
   try {
     const pingedBothelpers = message.mentions.roles.has(BOTHELPERS_ROLE_ID);
     const pingedSkirbo = message.mentions.roles.has(SKIRBO_ROLE_ID);
-    if (pingedBothelpers || pingedSkirbo) {
+    // Native Discord reply to a bot-authored message in a game channel also
+    // counts as a help-request — saves players re-typing @Bothelpers when
+    // following up on a forwarded reply.
+    let isReplyToBot = false;
+    const refId = message.reference?.messageId;
+    if (refId && !pingedBothelpers && !pingedSkirbo) {
+      const ref = await message.channel.messages.fetch(refId).catch(() => null);
+      if (ref?.author?.id === client.user.id) isReplyToBot = true;
+    }
+    if (pingedBothelpers || pingedSkirbo || isReplyToBot) {
       const gameMatch = findGameByChannel(getGamesMap(), message.channel.id);
       if (gameMatch) {
         const { gameId } = gameMatch;
