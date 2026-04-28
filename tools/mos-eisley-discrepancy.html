@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mos Eisley Outskirts — Nick vs ours blocking discrepancy</title>
+<style>
+  body { font: 13px ui-monospace, monospace; background: #1a1a1a; color: #eee; margin: 16px; }
+  h1 { font-size: 16px; margin: 0 0 8px; }
+  .row { display: flex; gap: 16px; align-items: flex-start; }
+  .panel { background: #222; border: 1px solid #444; padding: 12px; border-radius: 6px; width: 360px; flex-shrink: 0; }
+  .panel.wide { width: auto; }
+  .panel h2 { font-size: 13px; margin: 0 0 6px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+  .legend { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: 12px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 14px; height: 14px; display: inline-block; border: 1px solid #777; }
+  .scroller { max-height: 80vh; overflow: auto; border: 1px solid #444; border-radius: 4px; background: #000; }
+  svg { display: block; }
+  text.coord { font: 11px ui-monospace, monospace; fill: #fff; pointer-events: none; paint-order: stroke; stroke: #000; stroke-width: 3px; stroke-linejoin: round; }
+  .summary { margin-top: 8px; font-size: 12px; line-height: 1.6; }
+  .summary b { color: #fc6; }
+  .discrepancy { color: #f55; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>Mos Eisley Outskirts — blocking discrepancy</h1>
+<div class="row">
+  <div class="panel">
+    <h2>Discrepancy</h2>
+    <div class="summary" id="summary"></div>
+    <h2 style="margin-top:14px">Legend</h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:rgba(120,200,255,0.55)"></span>blocking in OUR data</span>
+      <span><span class="swatch" style="background:rgba(255,220,0,0.55)"></span>blocking in NICK's data</span>
+      <span><span class="swatch" style="background:rgba(120,255,140,0.55)"></span>blocking in BOTH (matches)</span>
+      <span><span class="swatch" style="background:rgba(255,80,80,0.85)"></span>discrepancy (one has, other doesn't)</span>
+    </div>
+    <h2 style="margin-top:14px">Apply transform</h2>
+    <div class="summary" id="transform-info"></div>
+  </div>
+  <div class="panel wide">
+    <h2>Map</h2>
+    <div class="scroller" id="scroller">
+      <svg id="grid"></svg>
+    </div>
+  </div>
+</div>
+
+<script src="los-data.js"></script>
+<script>
+const MAP_ID = 'mos-eisley-outskirts';
+const IMG_PATH = '../vassal_extracted/images/maps/Map_Mos Eisley Outskirts.gif';
+const IMG_W = 1351, IMG_H = 1351;  // mos-eisley map image is 1351×1351
+const GRID = { dx: 50, dy: 50, x0: 25, y0: 25 };
+
+const ms = window.__MS[MAP_ID];
+const nick = ms.nickLos;
+const TRANSFORM = nick ? nick.transform
+  // Fallback (now obsolete since L18 was added and import succeeded):
+  : { x: { from: 'col', scale: 1, offset: -4 }, y: { from: 'row', scale: 1, offset: -4 } };
+
+function parseCoord(c) {
+  c = c.toLowerCase();
+  return { col: c.charCodeAt(0) - 97, row: parseInt(c.slice(1)) - 1 };
+}
+function coordStr(col, row) {
+  if (col < 0 || row < 0) return null;
+  return String.fromCharCode(97 + col) + (row + 1);
+}
+function applyInverse(t, nx, ny) {
+  // Recover (col, row) from Nick (nx, ny).
+  const tx = t.x, ty = t.y;
+  if (tx.from === ty.from) return null;
+  if (tx.from === 'col') {
+    const col = (nx - tx.offset) / tx.scale;
+    const row = (ny - ty.offset) / ty.scale;
+    if (!Number.isInteger(col) || !Number.isInteger(row)) return null;
+    return { col, row };
+  } else {
+    const row = (nx - tx.offset) / tx.scale;
+    const col = (ny - ty.offset) / ty.scale;
+    if (!Number.isInteger(col) || !Number.isInteger(row)) return null;
+    return { col, row };
+  }
+}
+
+// Build comparison sets.
+const ourBlocking = new Set((ms.blocking || []).map(s => s.toLowerCase()));
+const NICK_BLOCKING = (nick?.blockingTiles || []).map(t => [t.x, t.y]);
+const nickMappedBlocking = NICK_BLOCKING.map(([nx, ny]) => {
+  const inv = applyInverse(TRANSFORM, nx, ny);
+  return inv ? coordStr(inv.col, inv.row) : null;
+});
+
+// Build per-cell tags.
+const cellTag = new Map();  // coord → 'ours-only' | 'nick-only' | 'both'
+for (const cell of ourBlocking) cellTag.set(cell, 'ours-only');
+for (const m of nickMappedBlocking) {
+  if (!m) continue;
+  if (cellTag.has(m)) cellTag.set(m, 'both');
+  else cellTag.set(m, 'nick-only');
+}
+
+// Render
+const svg = document.getElementById('grid');
+const NS = 'http://www.w3.org/2000/svg';
+function el(name, attrs, parent, text) {
+  const e = document.createElementNS(NS, name);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function cellRect(col, row) {
+  return { x: GRID.x0 + col * GRID.dx, y: GRID.y0 + row * GRID.dy, w: GRID.dx, h: GRID.dy };
+}
+
+function render() {
+  svg.setAttribute('width', IMG_W);
+  svg.setAttribute('height', IMG_H);
+  svg.setAttribute('viewBox', `0 0 ${IMG_W} ${IMG_H}`);
+  el('image', { href: IMG_PATH, x: 0, y: 0, width: IMG_W, height: IMG_H }, svg);
+  // axis labels
+  for (let c = 0; c < 24; c++) {
+    el('text', { x: GRID.x0 + c * GRID.dx + GRID.dx / 2, y: GRID.y0 - 6, 'text-anchor': 'middle', class: 'coord' },
+      svg, String.fromCharCode(65 + c));
+  }
+  for (let r = 0; r < 24; r++) {
+    el('text', { x: GRID.x0 - 6, y: GRID.y0 + r * GRID.dy + GRID.dy / 2 + 4, 'text-anchor': 'end', class: 'coord' },
+      svg, (r + 1).toString());
+  }
+
+  // Tagged cells
+  for (const [coord, tag] of cellTag.entries()) {
+    const p = parseCoord(coord);
+    const r = cellRect(p.col, p.row);
+    let fill, stroke = '#fff', strokeWidth = 2;
+    if (tag === 'both') fill = 'rgba(120,255,140,0.55)';
+    else if (tag === 'ours-only') fill = 'rgba(120,200,255,0.55)';
+    else if (tag === 'nick-only') fill = 'rgba(255,220,0,0.7)';
+    el('rect', { x: r.x, y: r.y, width: r.w, height: r.h, fill, stroke, 'stroke-width': strokeWidth }, svg);
+    const label = coord.toUpperCase() + (tag === 'nick-only' ? ' (Nick only)' : tag === 'ours-only' ? ' (ours only)' : ' (match)');
+    el('text', { x: r.x + r.w / 2, y: r.y + r.h / 2 + 4, 'text-anchor': 'middle', class: 'coord' }, svg, label);
+  }
+
+  // Build summary
+  const both = [...cellTag.entries()].filter(([_, t]) => t === 'both').length;
+  const oursOnly = [...cellTag.entries()].filter(([_, t]) => t === 'ours-only');
+  const nickOnly = [...cellTag.entries()].filter(([_, t]) => t === 'nick-only');
+  document.getElementById('summary').innerHTML =
+    `<div>Nick blocking tiles: <b>${NICK_BLOCKING.length}</b></div>
+     <div>Our blocking tiles: <b>${ourBlocking.size}</b></div>
+     <div>Matching: <b>${both}</b></div>
+     ${oursOnly.length ? `<div class="discrepancy">In OURS but NOT Nick: ${oursOnly.map(([c]) => c.toUpperCase()).join(', ')}</div>` : ''}
+     ${nickOnly.length ? `<div class="discrepancy">In NICK but NOT ours: ${nickOnly.map(([c]) => c.toUpperCase()).join(', ')}</div>` : ''}`;
+  document.getElementById('transform-info').innerHTML =
+    `<code>x = col - 4</code><br>
+     <code>y = row - 4</code><br>
+     <span style="color:#aaa">i.e. Nick's (x, y) is just our (col, row) shifted by -4 each axis. No rotation.</span>`;
+
+  // Auto-scroll to first discrepancy
+  const target = nickOnly[0] || oursOnly[0];
+  if (target) {
+    const p = parseCoord(target[0]);
+    const r = cellRect(p.col, p.row);
+    const sc = document.getElementById('scroller');
+    sc.scrollLeft = Math.max(0, r.x + r.w / 2 - sc.clientWidth / 2);
+    sc.scrollTop = Math.max(0, r.y + r.h / 2 - sc.clientHeight / 2);
+  }
+}
+
+render();
+</script>
+</body>
+</html>

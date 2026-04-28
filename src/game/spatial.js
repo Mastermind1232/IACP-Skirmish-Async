@@ -102,10 +102,12 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
   // running it natively is the only correctness-preserving option.
   if (mapSpaces?.nickLos) {
     const nl = mapSpaces.nickLos;
-    const [xA, xB] = nl.transform.xFromRow;  // x = xA*row + xB
-    const [yA, yB] = nl.transform.yFromCol;  // y = yA*col + yB
-    const toX = (col, row) => xA * row + xB;
-    const toY = (col, row) => yA * col + yB;
+    // Generalized transform: x and y each derive from {col, row} with sign
+    // and offset. Supports all 8 grid isometries (rotations + reflections),
+    // not just the original 90°-rotated lothal-wastes case.
+    const tx = nl.transform.x, ty = nl.transform.y;
+    const toX = (col, row) => tx.scale * (tx.from === 'col' ? col : row) + tx.offset;
+    const toY = (col, row) => ty.scale * (ty.from === 'col' ? col : row) + ty.offset;
 
     const aX = toX(a.col, a.row), aY = toY(a.col, a.row);
     const bX = toX(b.col, b.row), bY = toY(b.col, b.row);
