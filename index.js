@@ -2913,14 +2913,23 @@ client.on('messageCreate', async (message) => {
           const sourceLink = `https://discord.com/channels/${message.guild.id}/${message.channel.id}/${message.id}`;
           helpRequestSourceMap.set(gameId, message.channel.id);
           const webhook = await getBothelpersWebhook(bothelpersCh);
-          const targetRoleId = pingedSkirbo ? SKIRBO_ROLE_ID : BOTHELPERS_ROLE_ID;
-          const headerEmoji = pingedSkirbo ? '🐛' : '🆘';
+          // Reply-to-bot routes via SKIRBO so it actually reaches my terminal
+          // (the channel listener filters on @SKIRBO mention patterns, not
+          // @Bothelpers). Framing differs so #bothelpers readers can tell a
+          // bug-escalation apart from a conversational follow-up.
+          const routeToSkirbo = pingedSkirbo || isReplyToBot;
+          const targetRoleId = routeToSkirbo ? SKIRBO_ROLE_ID : BOTHELPERS_ROLE_ID;
+          const headerEmoji = pingedSkirbo ? '🐛' : isReplyToBot ? '💬' : '🆘';
           const headerText = pingedSkirbo
             ? `<@&${SKIRBO_ROLE_ID}> **Bug escalation** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`
-            : `<@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`;
+            : isReplyToBot
+              ? `<@&${SKIRBO_ROLE_ID}> **Reply** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`
+              : `<@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`;
           const ackText = pingedSkirbo
             ? `🐛 escalated to skirbo — i'm looking, hang tight.`
-            : `👀 forwarded to bothelpers — give them a second to jump in.`;
+            : isReplyToBot
+              ? `💬 looped skirbo back in — one sec.`
+              : `👀 forwarded to bothelpers — give them a second to jump in.`;
           const cleanedQuote = message.content
             .replace(new RegExp(`<@&${BOTHELPERS_ROLE_ID}>`, 'g'), '@Bothelpers')
             .replace(new RegExp(`<@&${SKIRBO_ROLE_ID}>`, 'g'), '@SKIRBO')
