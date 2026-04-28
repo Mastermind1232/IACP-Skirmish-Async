@@ -113,45 +113,33 @@ describe('LOS-06 A3: diagonal-corner shield intersection', () => {
     });
   });
 
-  describe('PROBE-LOS-06-DC-005: source pin on hasLineOfSight geometry primitives', () => {
-    it('spatial.js still uses INSET=0.49, strict-endpoint wall exclusion, and Math.round rasterization', () => {
-      const src = readFileSync(resolve(__dirname, '../../../src/game/spatial.js'), 'utf8');
-      // INSET pin: the corner inset is the reason corner-threading rays
-      // exist at all. Any change to this constant invalidates the gap
-      // measurements above.
-      assert.ok(/const\s+INSET\s*=\s*0\.49\b/.test(src),
-        'INSET=0.49 constant missing from spatial.js — A3 probe measurements ' +
-        'depend on this exact corner-inset value.');
-      // Wall strict-endpoint exclusion pin: if segmentsStrictlyIntersect
-      // ever stops excluding t=0/1 or u=0/1 endpoints, the wall-corner
-      // gap in DC-003/DC-004 closes automatically.
-      assert.ok(/t\s*>\s*EPS\s*&&\s*t\s*<\s*1\s*-\s*EPS\s*&&\s*u\s*>\s*EPS\s*&&\s*u\s*<\s*1\s*-\s*EPS/.test(src),
-        'segmentsStrictlyIntersect strict-endpoint EPS guard missing — ' +
-        'A3 DC-003/DC-004 wall-corner gap depends on this exclusion.');
-      // Rasterizer pin: Math.round sampling bias is the reason the very
-      // short corner-threading rays do not catch the diagonal blocker pair.
-      assert.ok(/Math\.round\(x1\s*\+\s*t\s*\*\s*dx\)/.test(src)
-        || /col\s*=\s*Math\.round\(/.test(src),
-        'getCellsAlongLine Math.round rasterization missing — ' +
-        'A3 DC-002 shield-shield gap depends on this sampling approach.');
-      // Self-exclusion pin: cements LOS-06 001/002 carveout behavior for
-      // the non-corner cases. Also required by A3 probes above because
-      // the threading ray from (0.49, 0.49) to (0.51, 0.51) only rasterizes
-      // source + dest cells, both self-excluded.
-      assert.ok(/if\s*\(col\s*===\s*a\.col\s*&&\s*row\s*===\s*a\.row\)\s*continue/.test(src),
-        'source-cell self-exclusion missing from hasLineOfSight.');
-      assert.ok(/if\s*\(col\s*===\s*b\.col\s*&&\s*row\s*===\s*b\.row\)\s*continue/.test(src),
-        'destination-cell self-exclusion missing from hasLineOfSight.');
-      // Corner-obstacle counter pin: the CRR p.22/p.28 corner-intersection
-      // fix relies on getThreadedCorners + an in-loop counter that sums
-      // blocking cells (minus source/dest) and wall endpoints at each
-      // threaded grid corner. Removing either trips this pin.
-      assert.ok(/function\s+getThreadedCorners\s*\(/.test(src),
-        'getThreadedCorners helper missing — A3 corner-intersection fix removed.');
-      assert.ok(/getThreadedCorners\s*\(\s*ax\s*,\s*ay\s*,\s*bx\s*,\s*by\s*\)/.test(src),
-        'hasLineOfSight must invoke getThreadedCorners for each target-corner ray.');
-      assert.ok(/count\s*>=\s*2/.test(src),
-        'Corner-obstacle counter must block when ≥2 obstacles meet at a threaded corner.');
+  describe('PROBE-LOS-06-DC-005: source pin on LOS geometry primitives (post-rewrite 2026-04-28)', () => {
+    it('los-engine.js implements integer corners + 16-pair structure + corner-obstacle counter', () => {
+      const src = readFileSync(resolve(__dirname, '../../../src/game/los-engine.js'), 'utf8');
+      // Integer-corner pin (replaces the old INSET=0.49 pin). The Nick Hansen
+      // rewrite uses exact integer corner points so the corner-thread case
+      // works correctly. Reintroducing INSET would re-break BT-1's
+      // corellian-underground LOS.
+      assert.ok(!/const\s+INSET\s*=\s*0\.49\b/.test(src),
+        'INSET=0.49 must NOT exist in los-engine.js — corners must be exact integers post-rewrite.');
+      // Attacker corners pinned at integer offsets from fromX/fromY.
+      assert.ok(/tl: \{ x: fromX,\s+y: fromY\s+\}/.test(src),
+        'Attacker corners must use integer offsets.');
+      // 16-combo structure pin: outer iter over 4 attacker corners, inner over
+      // the 4 adjacent-defender-corner-pair-with-edge-midpoint combinations.
+      assert.ok(/for \(const aCorner of \[att\.tl, att\.tr, att\.bl, att\.br\]\)/.test(src),
+        'Outer attacker-corner loop missing — 16-combo structure broken.');
+      assert.ok(/for \(const \[d1, d2, mid\] of pairs\)/.test(src),
+        'Inner pair loop missing — 16-combo structure broken.');
+      // pathsOverlap rejection pin (CRR-LOS-016 distinct-lines invariant).
+      assert.ok(/if \(pathsOverlap\(aCorner, d1, d2\)\) continue;/.test(src),
+        'pathsOverlap rejection missing — distinct-lines guard removed.');
+      // Edge-midpoint visibility pin.
+      assert.ok(/getLosFromPointToPoint\s*\(\s*fromX,\s*fromY,\s*toX,\s*toY,\s*aCorner,\s*mid,\s*ctx\s*\)/.test(src),
+        'Edge-midpoint LOS check missing.');
+      // Corner-obstacle counter pin (CRR p.22 ≥2 obstacles blocks rule).
+      assert.ok(/if \(count >= 2\) return false;/.test(src),
+        'Corner-obstacle ≥2 counter missing — CRR p.22 corner-intersection rule removed.');
     });
   });
 });
