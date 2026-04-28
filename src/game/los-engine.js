@@ -257,11 +257,19 @@ function coincidentWallBlocks(walls, sx, sy, ex, ey) {
   return false;
 }
 
-function tileBlocked(pathTiles, blockingTiles, figureBlockers, offMapTiles, ignoreBlockingTerrain) {
+function tileBlocked(pathTiles, blockingTiles, figureBlockers, offMapTiles, ignoreBlockingTerrain, spireExempt) {
+  // Spire exception (per Nick Hansen + IACP): when the attacker or target is
+  // on a spire tile, blocking-terrain cells orthogonally adjacent to that
+  // spire are exempted from blocking the line.
+  let effective = blockingTiles;
+  if (spireExempt && spireExempt.size > 0 && !ignoreBlockingTerrain) {
+    effective = new Set();
+    for (const cell of blockingTiles) if (!spireExempt.has(cell)) effective.add(cell);
+  }
   for (const t of pathTiles) {
     const key = k(t.x, t.y);
     if (figureBlockers.has(key)) return true;
-    if (!ignoreBlockingTerrain && blockingTiles.has(key)) return true;
+    if (!ignoreBlockingTerrain && effective.has(key)) return true;
     if (offMapTiles && offMapTiles.has(key)) return true;
   }
   return false;
@@ -351,7 +359,7 @@ function adjacentTilesBlocked(fromX, fromY, toX, toY, sx, sy, ex, ey,
 
 function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, ctx) {
   const { walls, wallSet, blockingTiles, figureBlockers, offMapTiles, blockingIntersections,
-          ignoreBlockingTerrain } = ctx;
+          ignoreBlockingTerrain, spireExempt } = ctx;
   const sx = attCorner.x, sy = attCorner.y, ex = defCorner.x, ey = defCorner.y;
 
   const vEdges = getVerticalEdges(sx, sy, ex, ey);
@@ -363,11 +371,18 @@ function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, 
   if (coincidentWallBlocks(walls, sx, sy, ex, ey)) return false;
 
   const tiles = getTiles(vEdges, hEdges, fromX, fromY, toX, toY, sx, sy, ex, ey);
-  if (tileBlocked(tiles, blockingTiles, figureBlockers, offMapTiles, ignoreBlockingTerrain)) return false;
+  if (tileBlocked(tiles, blockingTiles, figureBlockers, offMapTiles, ignoreBlockingTerrain, spireExempt)) return false;
 
+  // Effective blocking-terrain set for adjacent-tile check applies the same
+  // spire exemption.
+  let adjBlockingSet = blockingTiles;
+  if (ignoreBlockingTerrain) adjBlockingSet = new Set();
+  else if (spireExempt && spireExempt.size > 0) {
+    adjBlockingSet = new Set();
+    for (const cell of blockingTiles) if (!spireExempt.has(cell)) adjBlockingSet.add(cell);
+  }
   if (adjacentTilesBlocked(fromX, fromY, toX, toY, sx, sy, ex, ey,
-                            wallSet, ignoreBlockingTerrain ? new Set() : blockingTiles,
-                            figureBlockers, offMapTiles)) return false;
+                            wallSet, adjBlockingSet, figureBlockers, offMapTiles)) return false;
 
   // Nick Hansen's intersectionBlocksPath state machine: at each integer-grid
   // intersection the line passes through (or starts/ends at), check whether

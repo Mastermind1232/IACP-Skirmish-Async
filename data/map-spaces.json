@@ -22972,7 +22972,10 @@
           "t19"
         ]
       ],
-      "playReady": true
+      "playReady": true,
+      "spireTiles": [
+        "n20"
+      ]
     },
     "development-facility": {
       "spaces": [

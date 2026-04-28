@@ -204,10 +204,27 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
     addConn(w[1].x, w[1].y, w[0].x, w[0].y);
   }
 
+  // Spire exception (per Destruct CRR audit + Nick Hansen reference):
+  // When the attacker or target is on a spire cell, blocking-terrain cells
+  // orthogonally adjacent (N/E/S/W, not diagonal) to that spire are exempted
+  // from path-blocking. Build the exemption set here.
+  const spireSet = new Set((mapSpaces?.spireTiles || []).map(s => String(s).toLowerCase()));
+  const spireExempt = new Set();
+  const addSpireExempt = (col, row) => {
+    if (!spireSet.has(colRowToCoord(col, row))) return;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nbr = colRowToCoord(col + dx, row + dy);
+      if (blockingTiles.has(`${col + dx},${row + dy}`)) spireExempt.add(`${col + dx},${row + dy}`);
+    }
+  };
+  addSpireExempt(a.col, a.row);
+  addSpireExempt(b.col, b.row);
+
   return tileToTileLos(a.col, a.row, b.col, b.row, {
     walls, wallSet, blockingIntersections, blockingTiles, figureBlockers, blockingCorners,
     offMapTiles: null,
     ignoreBlockingTerrain: !!mapSpaces?._ignoreBlockingTerrain,
+    spireExempt,
   });
 }
 
