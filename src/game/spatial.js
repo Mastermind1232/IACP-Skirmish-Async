@@ -4,6 +4,7 @@
  * Manhattan distance, LOS, BFS adjacency, figure enumeration.
  */
 import { parseCoord, colRowToCoord, getFootprintCells } from './coords.js';
+import { tileToTileLos, impassableEdgesToWalls, wallSetFromSegments } from './los-engine.js';
 
 /**
  * Manhattan distance between two coords.
@@ -41,6 +42,18 @@ export function isWithinRange(coord1, coord2, range) {
 }
 
 // ── LOS helpers (private) ───────────────────────────────────────────────────
+
+function edgeKey2(a, b) {
+  const aL = String(a).toLowerCase(), bL = String(b).toLowerCase();
+  return aL < bL ? `${aL}|${bL}` : `${bL}|${aL}`;
+}
+
+/** Return edges in `a` that are not in `b`, normalizing each to lowercase
+ *  unordered pairs. */
+function subtractEdgeSets(a, b) {
+  const bSet = new Set((b || []).map(e => edgeKey2(e[0], e[1])));
+  return (a || []).filter(e => !bSet.has(edgeKey2(e[0], e[1])));
+}
 
 function impassableEdgeToWallSegment(c1, c2) {
   const a = parseCoord(String(c1).toLowerCase());
@@ -130,78 +143,35 @@ function getThreadedCorners(x1, y1, x2, y2) {
  * @returns {boolean}
  */
 export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) {
-  const blockingSet = new Set((mapSpaces?.blocking || []).map((s) => String(s).toLowerCase()));
-  const impassableEdges = mapSpaces?.impassableEdges || [];
   const a = parseCoord(coord1);
   const b = parseCoord(coord2);
   if (a.col < 0 || a.row < 0 || b.col < 0 || b.row < 0) return false;
   if (a.col === b.col && a.row === b.row) return true;
 
-  const walls = [];
-  for (const edge of impassableEdges) {
-    const seg = impassableEdgeToWallSegment(edge[0], edge[1]);
-    if (seg) walls.push(seg);
+  // LOS-blocking walls. Per IACP CRR, walls block LOS but impassable
+  // *terrain* (cliffs, chasms) blocks movement only — yet historically the
+  // map data lumps both into `impassableEdges`. If a curated `wallEdges`
+  // field is present on the map, prefer it (LOS-only walls); otherwise fall
+  // back to impassableEdges minus movementBlockingEdges (heuristic split).
+  const losEdges = mapSpaces?.wallEdges
+    ?? subtractEdgeSets(mapSpaces?.impassableEdges || [], mapSpaces?.movementBlockingEdges || []);
+  const walls = impassableEdgesToWalls(losEdges, parseCoord);
+  const wallSet = wallSetFromSegments(walls);
+  const blockingTiles = new Set();
+  for (const cell of (mapSpaces?.blocking || [])) {
+    const p = parseCoord(String(cell).toLowerCase());
+    if (p.col >= 0) blockingTiles.add(`${p.col},${p.row}`);
   }
-
-  const INSET = 0.49;
-  const corners = (col, row) => [
-    [col - INSET, row - INSET],
-    [col + INSET, row - INSET],
-    [col - INSET, row + INSET],
-    [col + INSET, row + INSET],
-  ];
-
-  const aCorners = corners(a.col, a.row);
-  const bCorners = corners(b.col, b.row);
-
-  // IACP LOS rule: from any single point on the attacker's space, must see
-  // at least 2 corners of the target's space.  We test from each attacker
-  // corner as representative points.
-  for (const [ax, ay] of aCorners) {
-    let visibleTargetCorners = 0;
-    for (const [bx, by] of bCorners) {
-      let wallBlocked = false;
-      for (const w of walls) {
-        if (segmentsStrictlyIntersect(ax, ay, bx, by, w.x1, w.y1, w.x2, w.y2)) {
-          wallBlocked = true;
-          break;
-        }
-      }
-      if (wallBlocked) continue;
-      const cells = getCellsAlongLine(ax, ay, bx, by);
-      let spaceBlocked = false;
-      for (const [col, row] of cells) {
-        if (col === a.col && row === a.row) continue;
-        if (col === b.col && row === b.row) continue;
-        if (blockingSet.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
-        if (figureBlockingCoords?.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
-      }
-      if (!spaceBlocked) {
-        // CRR p.22 / p.28: LOS cannot trace through a corner where
-        // ≥2 obstacles (walls, blocking terrain, energy shields) intersect.
-        // Only diagonal-slope rays thread half-integer grid corners.
-        let cornerBlocked = false;
-        for (const [cx, cy] of getThreadedCorners(ax, ay, bx, by)) {
-          let count = 0;
-          const k = Math.round(cx - 0.5), l = Math.round(cy - 0.5);
-          for (const [cc, cr] of [[k, l], [k + 1, l], [k, l + 1], [k + 1, l + 1]]) {
-            if (cc === a.col && cr === a.row) continue;
-            if (cc === b.col && cr === b.row) continue;
-            const coord = colRowToCoord(cc, cr);
-            if (blockingSet.has(coord) || figureBlockingCoords?.has(coord)) count++;
-          }
-          for (const w of walls) {
-            if ((Math.abs(w.x1 - cx) < 1e-6 && Math.abs(w.y1 - cy) < 1e-6) ||
-                (Math.abs(w.x2 - cx) < 1e-6 && Math.abs(w.y2 - cy) < 1e-6)) count++;
-          }
-          if (count >= 2) { cornerBlocked = true; break; }
-        }
-        if (!cornerBlocked) visibleTargetCorners++;
-      }
-      if (visibleTargetCorners >= 2) return true;
+  const figureBlockers = new Set();
+  if (figureBlockingCoords) {
+    for (const cell of figureBlockingCoords) {
+      const p = parseCoord(String(cell).toLowerCase());
+      if (p.col >= 0) figureBlockers.add(`${p.col},${p.row}`);
     }
   }
-  return false;
+  return tileToTileLos(a.col, a.row, b.col, b.row, {
+    walls, wallSet, blockingTiles, figureBlockers, offMapTiles: null,
+  });
 }
 
 // ── Figure enumeration ──────────────────────────────────────────────────────

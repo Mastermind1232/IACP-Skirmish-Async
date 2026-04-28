@@ -1,0 +1,489 @@
+{
+  "source": "LOS_Tests.xlsx (Destruct, 2026-04-28)",
+  "map": "lothal-wastes",
+  "cases": [
+    {
+      "row": 2,
+      "attacker": "T14",
+      "target": "T14",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 3,
+      "attacker": "T20",
+      "target": "T14",
+      "others": "T16",
+      "expected": false
+    },
+    {
+      "row": 4,
+      "attacker": "T20",
+      "target": "S14",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 5,
+      "attacker": "T20",
+      "target": "S14",
+      "others": "T16",
+      "expected": true
+    },
+    {
+      "row": 6,
+      "attacker": "T20",
+      "target": "S14",
+      "others": "S14",
+      "expected": true
+    },
+    {
+      "row": 7,
+      "attacker": "T20",
+      "target": "S14",
+      "others": "T14, S15",
+      "expected": false
+    },
+    {
+      "row": 8,
+      "attacker": "T20",
+      "target": "S14",
+      "others": "T14, S17",
+      "expected": true
+    },
+    {
+      "row": 9,
+      "attacker": "T20",
+      "target": "S14",
+      "others": "T14, S18",
+      "expected": true
+    },
+    {
+      "row": 10,
+      "attacker": "T20",
+      "target": "T14",
+      "others": "T19, S20",
+      "expected": false
+    },
+    {
+      "row": 11,
+      "attacker": "T20",
+      "target": "S14",
+      "others": "T19, S20",
+      "expected": true
+    },
+    {
+      "row": 12,
+      "attacker": "Massive figure in S18-T20",
+      "target": "S14",
+      "others": "S15, T15",
+      "expected": true
+    },
+    {
+      "row": 13,
+      "attacker": "T20",
+      "target": "Massive figure in S12-T14",
+      "others": "S15, T15",
+      "expected": true
+    },
+    {
+      "row": 14,
+      "attacker": "Massive figure in S18-T20",
+      "target": "Massive figure in S12-T14",
+      "others": "S15, T15",
+      "expected": true
+    },
+    {
+      "row": 15,
+      "attacker": "Massive figure in S18-T20",
+      "target": "Massive figure in S12-T14",
+      "others": "Massive figure in S15-T17",
+      "expected": true
+    },
+    {
+      "row": 16,
+      "attacker": "T20",
+      "target": "S14",
+      "others": "Massive figure in S15-T17",
+      "expected": false
+    },
+    {
+      "row": 17,
+      "attacker": "Massive figure in S18-T20",
+      "target": "S14",
+      "others": "Massive figure in S15-T17",
+      "expected": true
+    },
+    {
+      "row": 18,
+      "attacker": "T20",
+      "target": "Massive figure in S12-T14",
+      "others": "Massive figure in S15-T17",
+      "expected": true
+    },
+    {
+      "row": 19,
+      "attacker": "R19",
+      "target": "Q16",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 20,
+      "attacker": "R19",
+      "target": "R16",
+      "others": "None",
+      "expected": false
+    },
+    {
+      "row": 21,
+      "attacker": "R19",
+      "target": "Q16",
+      "others": "Q19",
+      "expected": false
+    },
+    {
+      "row": 22,
+      "attacker": "R19",
+      "target": "Q16",
+      "others": "Q20",
+      "expected": true
+    },
+    {
+      "row": 23,
+      "attacker": "R19",
+      "target": "L17",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 24,
+      "attacker": "R19",
+      "target": "K17",
+      "others": "None",
+      "expected": false
+    },
+    {
+      "row": 25,
+      "attacker": "R19",
+      "target": "J17",
+      "others": "None",
+      "expected": false
+    },
+    {
+      "row": 26,
+      "attacker": "R19",
+      "target": "I17",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 27,
+      "attacker": "R19",
+      "target": "P14",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 28,
+      "attacker": "R19",
+      "target": "O14",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 29,
+      "attacker": "R19",
+      "target": "O15",
+      "others": "None",
+      "expected": false
+    },
+    {
+      "row": 30,
+      "attacker": "R19",
+      "target": "Mobile figure in O19",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 31,
+      "attacker": "R19",
+      "target": "Mobile figure in O20",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 32,
+      "attacker": "R19",
+      "target": "Mobile figure in O21",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 33,
+      "attacker": "R19",
+      "target": "Mobile figure in N19",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 34,
+      "attacker": "R19",
+      "target": "Mobile figure in N20",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 35,
+      "attacker": "R19",
+      "target": "Mobile figure in N21",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 36,
+      "attacker": "R19",
+      "target": "Mobile figure M19",
+      "others": "None",
+      "expected": false
+    },
+    {
+      "row": 37,
+      "attacker": "R19",
+      "target": "Mobile figure M20",
+      "others": "None",
+      "expected": false
+    },
+    {
+      "row": 38,
+      "attacker": "R19",
+      "target": "Mobile figure M21",
+      "others": "None",
+      "expected": false
+    },
+    {
+      "row": 39,
+      "attacker": "Q15",
+      "target": "O15",
+      "others": "None",
+      "expected": false
+    },
+    {
+      "row": 40,
+      "attacker": "Q15",
+      "target": "O14",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 41,
+      "attacker": "Q15",
+      "target": "O14",
+      "others": "P14",
+      "expected": false
+    },
+    {
+      "row": 42,
+      "attacker": "Q15",
+      "target": "O14",
+      "others": "Q14",
+      "expected": true
+    },
+    {
+      "row": 43,
+      "attacker": "R19",
+      "target": "Q19",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 44,
+      "attacker": "R19",
+      "target": "P19",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 45,
+      "attacker": "P19",
+      "target": "R19",
+      "others": "None",
+      "expected": false
+    },
+    {
+      "row": 46,
+      "attacker": "Q19",
+      "target": "R19",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 47,
+      "attacker": "R19",
+      "target": "Q19",
+      "others": "R20",
+      "expected": true
+    },
+    {
+      "row": 48,
+      "attacker": "R19",
+      "target": "P19",
+      "others": "R20",
+      "expected": true
+    },
+    {
+      "row": 49,
+      "attacker": "P19",
+      "target": "R19",
+      "others": "R20",
+      "expected": false
+    },
+    {
+      "row": 50,
+      "attacker": "Q19",
+      "target": "R19",
+      "others": "R20",
+      "expected": true
+    },
+    {
+      "row": 51,
+      "attacker": "T12",
+      "target": "S17",
+      "others": "S13, T15, T16",
+      "expected": true
+    },
+    {
+      "row": 52,
+      "attacker": "T12",
+      "target": "S17",
+      "others": "S13, T14, T16",
+      "expected": false
+    },
+    {
+      "row": 53,
+      "attacker": "T12",
+      "target": "S13",
+      "others": "S12, T13",
+      "expected": true
+    },
+    {
+      "row": 54,
+      "attacker": "O13",
+      "target": "Q15",
+      "others": "None",
+      "expected": true
+    },
+    {
+      "row": 55,
+      "attacker": "O13",
+      "target": "Q15",
+      "others": "P14",
+      "expected": false
+    },
+    {
+      "row": 56,
+      "attacker": "O13",
+      "target": "Q15",
+      "others": "Q14",
+      "expected": false
+    },
+    {
+      "row": 57,
+      "attacker": "Q15",
+      "target": "O13",
+      "others": "Q14",
+      "expected": true
+    },
+    {
+      "row": 58,
+      "attacker": "Q19",
+      "target": "R20",
+      "others": "Energy shield in Q20",
+      "expected": false
+    },
+    {
+      "row": 59,
+      "attacker": "Q19",
+      "target": "Q20",
+      "others": "Energy shield in Q20",
+      "expected": true
+    },
+    {
+      "row": 60,
+      "attacker": "Q17",
+      "target": "Q20",
+      "others": "Energy shield in Q20",
+      "expected": true
+    },
+    {
+      "row": 61,
+      "attacker": "Q20",
+      "target": "Q17",
+      "others": "Energy shield in Q20",
+      "expected": true
+    },
+    {
+      "row": 62,
+      "attacker": "Q20",
+      "target": "Q19",
+      "others": "Energy shield in Q20",
+      "expected": true
+    },
+    {
+      "row": 63,
+      "attacker": "Q21",
+      "target": "Q17",
+      "others": "Energy shield in Q20",
+      "expected": false
+    },
+    {
+      "row": 64,
+      "attacker": "R19",
+      "target": "Q17",
+      "others": "Energy shield in Q20",
+      "expected": false
+    },
+    {
+      "row": 65,
+      "attacker": "R19",
+      "target": "Q17",
+      "others": "Energy shield in R20",
+      "expected": false
+    },
+    {
+      "row": 66,
+      "attacker": "O22",
+      "target": "R19",
+      "others": "Energy shield in Q20",
+      "expected": false
+    },
+    {
+      "row": 67,
+      "attacker": "P22",
+      "target": "R19",
+      "others": "Energy shield in Q20",
+      "expected": true
+    },
+    {
+      "row": 68,
+      "attacker": "P22",
+      "target": "R19",
+      "others": "Energy shield in R20",
+      "expected": false
+    },
+    {
+      "row": 69,
+      "attacker": "R19",
+      "target": "Q17",
+      "others": "Energy shield in R20",
+      "expected": false
+    },
+    {
+      "row": 70,
+      "attacker": "R19",
+      "target": "Q20",
+      "others": "Energy shield in R20",
+      "expected": false
+    }
+  ]
+}
