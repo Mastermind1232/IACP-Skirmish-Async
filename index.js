@@ -2837,9 +2837,8 @@ client.on('messageCreate', async (message) => {
             if (targetChannelId) {
               const targetCh = await client.channels.fetch(targetChannelId).catch(() => null);
               if (targetCh) {
-                const author = message.member?.displayName || message.author?.username || 'bothelper';
                 await targetCh.send({
-                  content: `💬 **${author}** (via bothelpers):\n${replyBody}`,
+                  content: replyBody,
                   allowedMentions: { parse: ['users'] },
                 });
                 await message.react('✅').catch(() => {});
@@ -2931,10 +2930,10 @@ client.on('messageCreate', async (message) => {
               ? `<@&${SKIRBO_ROLE_ID}> **Reply** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`
               : `<@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}> in <#${message.channel.id}>`;
           const ackText = pingedSkirbo
-            ? `🐛 escalated to skirbo — i'm looking, hang tight.`
+            ? `Message received, looking into it 🫡`
             : isReplyToBot
-              ? `💬 looped skirbo back in — one sec.`
-              : `👀 forwarded to bothelpers — give them a second to jump in.`;
+              ? `Looping back in 🫡`
+              : `Forwarded to helpers 🫡`;
           let cleanedQuote = message.content
             .replace(new RegExp(`<@&${BOTHELPERS_ROLE_ID}>`, 'g'), '@Bothelpers');
           for (const id of SKIRBO_ROLE_IDS) {
