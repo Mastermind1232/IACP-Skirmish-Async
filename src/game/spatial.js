@@ -220,8 +220,21 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
   addSpireExempt(a.col, a.row);
   addSpireExempt(b.col, b.row);
 
+  // Cells contributing "corner obstacles" that pair with walls/blocking
+  // terrain at intersections — energy shields + smoke grenades. Per Destruct
+  // CRR clarification, shield × wall/blocking-terrain at a corner blocks
+  // LOS through that corner.
+  const cornerObstacleCells = new Set();
+  for (const cell of (mapSpaces?.cornerBlockingTiles || [])) {
+    const p = parseCoord(String(cell).toLowerCase());
+    if (p.col < 0) continue;
+    if ((p.col === a.col && p.row === a.row) || (p.col === b.col && p.row === b.row)) continue;
+    cornerObstacleCells.add(`${p.col},${p.row}`);
+  }
+
   return tileToTileLos(a.col, a.row, b.col, b.row, {
     walls, wallSet, blockingIntersections, blockingTiles, figureBlockers, blockingCorners,
+    cornerObstacleCells,
     offMapTiles: null,
     ignoreBlockingTerrain: !!mapSpaces?._ignoreBlockingTerrain,
     spireExempt,

@@ -399,6 +399,35 @@ function getLosFromCornerToCorner(fromX, fromY, toX, toY, attCorner, defCorner, 
     }
   }
 
+  // Per Destruct CRR clarification: the intersection of an energy shield and
+  // a wall (or blocking terrain) blocks LOS. Generalized: any corner where
+  // ≥2 obstacles meet blocks LOS through it. Obstacles include wall endpoints,
+  // shield cells with this corner as one of their 4, and blocking-terrain
+  // cells with this corner as one of their 4. The wall+wall case is already
+  // handled by the state machine above with direction nuance — this catches
+  // shield+wall, shield+shield, shield+blocking-terrain, etc. Skip line
+  // endpoints (att/def corners) — that's "passing through," not "ending at."
+  const shieldCells = ctx.cornerObstacleCells; // Set<"x,y">
+  if (shieldCells && shieldCells.size > 0) {
+    const intersections2 = getIntersections(sx, sy, ex, ey);
+    for (const p of intersections2) {
+      if (p.x === sx && p.y === sy) continue;
+      if (p.x === ex && p.y === ey) continue;
+      let count = 0;
+      const wallsHere = blockingIntersections?.get(`${p.x},${p.y}`)?.connections?.size ?? 0;
+      count += wallsHere > 0 ? 1 : 0;
+      const adj = [[p.x - 1, p.y - 1], [p.x, p.y - 1], [p.x - 1, p.y], [p.x, p.y]];
+      for (const [cx, cy] of adj) {
+        if (cx === fromX && cy === fromY) continue;
+        if (cx === toX && cy === toY) continue;
+        const key = `${cx},${cy}`;
+        if (shieldCells.has(key)) count++;
+        else if (blockingTiles.has(key) && !(ctx.spireExempt && ctx.spireExempt.has(key))) count++;
+      }
+      if (count >= 2) return false;
+    }
+  }
+
   return true;
 }
 
