@@ -144,15 +144,7 @@
         "setup": "Players do not deploy normally. instead, players alternate deploying groups, following the rules for passing. When a figure is deployed, it may move up to 8 spaces.",
         "persistent": "",
         "startOfRound": "",
-        "endOfRound": "Each player gains 2 VPs for each critical position that player controls.",
-        "rules": {
-          "endOfRound": {
-            "vpPerControlledSpaceInList": {
-              "vp": 2,
-              "vpMessage": "critical positions controlled ({count} × 2 VP)"
-            }
-          }
-        }
+        "endOfRound": "Each player gains 2 VPs for each critical position that player controls."
       },
       "b": {
         "name": "Fluctuations",
@@ -161,16 +153,7 @@
         "setup": "",
         "persistent": "",
         "startOfRound": "",
-        "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Damage Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round.",
-        "rules": {
-          "endOfRound": {
-            "vpPerControlledFluctuation": {
-              "vp": 1,
-              "grantPowerToken": true,
-              "vpMessage": "fluctuations controlled ({count} × 1 VP)"
-            }
-          }
-        }
+        "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Damage Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round."
       }
     },
     "devaron-garrison": {

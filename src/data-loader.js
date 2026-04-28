@@ -51,6 +51,14 @@ function loadAll() {
     const msData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-spaces.json'), 'utf8'));
     mapSpacesData = msData.maps || {};
   } catch {}
+  // Merge Nick Hansen LOS data (kept separate from map-spaces.json so the
+  // in-browser map tool can never strip it during a save round-trip).
+  try {
+    const nlData = JSON.parse(readFileSync(join(rootDir, 'data', 'nick-los.json'), 'utf8'));
+    for (const [mapId, nl] of Object.entries(nlData.maps || {})) {
+      if (mapSpacesData[mapId]) mapSpacesData[mapId].nickLos = nl;
+    }
+  } catch {}
   try {
     const effData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-effects.json'), 'utf8'));
     dcEffects = effData.cards || {};
