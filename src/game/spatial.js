@@ -87,9 +87,17 @@ function cellPairToWallSegment(c1, c2) {
  * @param {string} coord2
  * @param {object} mapSpaces - { blocking, impassableEdges }
  * @param {Set<string>|null} [figureBlockingCoords] - additional blocking coords (large figures)
+ * @param {object} [opts]
+ * @param {Iterable<string>} [opts.excludeBlocking] - coords to drop from
+ *   figureBlockingCoords for this check. Used by callers iterating
+ *   attacker × target footprint cells to exclude the target's OWN cells
+ *   (multi-cell figures don't block LOS to themselves).
  * @returns {boolean}
  */
-export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) {
+export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords, opts) {
+  const excludeBlockingSet = opts?.excludeBlocking
+    ? new Set([...opts.excludeBlocking].map(s => String(s).toLowerCase()))
+    : null;
   const a = parseCoord(coord1);
   const b = parseCoord(coord2);
   if (a.col < 0 || a.row < 0 || b.col < 0 || b.row < 0) return false;
@@ -161,7 +169,9 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
     const blockers = [];
     if (figureBlockingCoords) {
       for (const cell of figureBlockingCoords) {
-        const p = parseCoord(String(cell).toLowerCase());
+        const cellLc = String(cell).toLowerCase();
+        if (excludeBlockingSet && excludeBlockingSet.has(cellLc)) continue;
+        const p = parseCoord(cellLc);
         if (p.col < 0) continue;
         if ((p.col === a.col && p.row === a.row) || (p.col === b.col && p.row === b.row)) continue;
         blockers.push({ x: toX(p.col, p.row), y: toY(p.col, p.row) });
@@ -210,7 +220,9 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) 
   const blockers = [];
   if (figureBlockingCoords) {
     for (const cell of figureBlockingCoords) {
-      const p = parseCoord(String(cell).toLowerCase());
+      const cellLc = String(cell).toLowerCase();
+      if (excludeBlockingSet && excludeBlockingSet.has(cellLc)) continue;
+      const p = parseCoord(cellLc);
       if (p.col < 0) continue;
       if ((p.col === a.col && p.row === a.row) || (p.col === b.col && p.row === b.row)) continue;
       blockers.push({ x: p.col, y: p.row });
