@@ -296,6 +296,10 @@ const CONTEXT_GROUPS = {
     'populatePlayAreas', 'createPlayAreaChannels', 'createBoardChannel',
     'buildBoardMapPayload',
     'dcMessageMeta', 'dcExhaustedState',
+    // Resync needs the Refresh All path + recompute helper to do its
+    // second + third phases (re-render UI, recompute derived state).
+    'refreshAllGameComponents', 'recomputeActivationCounts',
+    'repopulateDcMapsForGame',
   ],
 
   phaseGate: [

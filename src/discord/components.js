@@ -314,17 +314,13 @@ export function getMissionSelectionPickMenu(gameId, options, selectedValue) {
   return new ActionRowBuilder().addComponents(select);
 }
 
-/** F16/F11: Bot Stuff menu — Kill Game + Refresh All (shown via /botmenu in Game Log). */
+/** F16/F11: Bot Stuff menu — Resync + Kill Game (shown via /botmenu in Game Log). */
 export function getBotmenuButtons(gameId, { showForfeit = false } = {}) {
   const buttons = [
     new ButtonBuilder()
-      .setCustomId(`refresh_all_${gameId}`)
-      .setLabel('Refresh All')
+      .setCustomId(`resync_${gameId}`)
+      .setLabel('Resync (Rebuild UI buttons / recover current state)')
       .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`botmenu_recover_${gameId}`)
-      .setLabel('Recover')
-      .setStyle(ButtonStyle.Secondary),
   ];
   if (showForfeit) {
     buttons.push(

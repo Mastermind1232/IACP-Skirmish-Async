@@ -132,7 +132,7 @@ import {
   handleForfeitYes,
   handleForfeitNo,
 } from './botmenu.js';
-import { handleBotmenuRecover } from './recover.js';
+import { handleBotmenuRecover, handleResync } from './recover.js';
 import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll } from './combat-reactions.js';
@@ -405,6 +405,7 @@ register('phase_gate_unready_', handlePhaseGateUnready, 'phaseGate');
 
 // --- Botmenu ---
 register('botmenu_recover_', handleBotmenuRecover, 'recover');
+register('resync_', handleResync, 'recover');
 register('botmenu_kill_', handleBotmenuKill, 'botmenu');
 register('botmenu_kill_yes_', handleBotmenuKillYes, 'botmenu');
 register('botmenu_kill_no_', handleBotmenuKillNo, 'botmenu');
@@ -696,7 +697,7 @@ export {
   handleForfeitYes,
   handleForfeitNo,
 } from './botmenu.js';
-export { handleBotmenuRecover, runRecovery } from './recover.js';
+export { handleBotmenuRecover, handleResync, runRecovery } from './recover.js';
 export { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 export { getWaitingPlayers } from '../game/phase-gate.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';

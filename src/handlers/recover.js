@@ -50,6 +50,102 @@ export async function handleBotmenuRecover(interaction, ctx) {
 }
 
 /**
+ * Resync handler — combines Recover (re-send missing prompts) AND Refresh All
+ * (re-render existing UI from current state). Single user-facing button so
+ * the player doesn't have to guess which "fix it" tool to try.
+ *
+ * Order matters: Recover runs FIRST so any state-flag adjustments it makes
+ * (e.g. clearing a sticky `roundActivationButtonShown`) feed into the
+ * Refresh All re-render. Refresh All runs LAST so the final visible UI
+ * reflects the recovered state.
+ *
+ * Robustness:
+ *   - Each step is wrapped so a failure in one doesn't kill the other.
+ *   - Recompute activation counts up-front (Refresh All also does this,
+ *     but doing it first means Recover sees the corrected counts).
+ *   - Reset stuck UI-only flags whose underlying conditions have changed
+ *     (e.g. `roundActivationButtonShown` when the round isn't actually
+ *     over) so Refresh All can re-render the proper turn message.
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx — buildAllDeps result; has refreshAllGameComponents +
+ *   everything Recover needs.
+ */
+export async function handleResync(interaction, ctx) {
+  const { getGame, saveGames, client, refreshAllGameComponents, recomputeActivationCounts, repopulateDcMapsForGame } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'resync_');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.editReply({ content: 'Game not found.', components: [] }).catch(discordCatch);
+    return;
+  }
+  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
+    await interaction.editReply({ content: 'Only game participants can use Resync.', components: [] }).catch(discordCatch);
+    return;
+  }
+
+  const phases = [];
+
+  // Phase 0: rebuild side-channel Maps (dcMessageMeta, dcExhaustedState,
+  // dcHealthState) from current game state. These live OUTSIDE game.* so
+  // a corrupted in-memory state — e.g. after partial undo or a bot
+  // restart that didn't fully repopulate — leaves DC embeds pointing at
+  // stale msgId metadata. Repopulating before any UI work guarantees
+  // every downstream lookup sees current truth.
+  try {
+    if (repopulateDcMapsForGame) {
+      repopulateDcMapsForGame(gameId);
+      phases.push('rebuilt DC Maps from current state');
+    }
+  } catch (err) {
+    console.error('[resync] dc-maps repopulate failed:', err);
+    phases.push(`[ERROR] dc-maps: ${err.message}`);
+  }
+
+  // Phase 1: recompute derived state up-front so Recover sees current truth.
+  try {
+    if (recomputeActivationCounts) {
+      recomputeActivationCounts(game, 1);
+      recomputeActivationCounts(game, 2);
+      phases.push('recomputed activation counts');
+    }
+  } catch (err) {
+    console.error('[resync] recompute failed:', err);
+    phases.push(`[ERROR] recompute: ${err.message}`);
+  }
+
+  // Phase 2: re-send missing prompts.
+  let recoveryResults = [];
+  try {
+    recoveryResults = await runRecovery(game, gameId, ctx);
+    if (recoveryResults.length > 0) phases.push(`recovered ${recoveryResults.length} prompt(s)`);
+  } catch (err) {
+    console.error('[resync] recovery failed:', err);
+    phases.push(`[ERROR] recovery: ${err.message}`);
+  }
+
+  // Phase 3: re-render existing UI (board, DC embeds, hand visuals, round
+  // activation message, activation counters, etc.).
+  try {
+    if (refreshAllGameComponents) {
+      await refreshAllGameComponents(game, client);
+      phases.push('re-rendered all UI');
+    }
+  } catch (err) {
+    console.error('[resync] refresh-all failed:', err);
+    phases.push(`[ERROR] refresh: ${err.message}`);
+  }
+
+  saveGames();
+
+  const summary = [
+    `**Resync complete.** ${phases.join(' · ')}.`,
+    recoveryResults.length > 0 ? `Recovered prompts:\n${recoveryResults.map(r => `- ${r}`).join('\n')}` : null,
+  ].filter(Boolean).join('\n\n');
+  await interaction.editReply({ content: summary, components: [] }).catch(discordCatch);
+}
+
+/**
  * Core recovery logic — also called by auto-recovery on startup.
  * Returns array of description strings for each recovered prompt.
  *

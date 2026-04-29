@@ -596,7 +596,10 @@ export function buildHeadlessDeps(options = {}) {
     updateHandChannelMessages, updateHandVisualMessage,
     updateDiscardPileMessage, updatePlayAreaDcButtons,
     clearMoveGridMessages, maybeShowEndActivationPhaseButton,
-    refreshAllGameComponents, sendRoundActivationPhaseMessage,
+    refreshAllGameComponents, recomputeActivationCounts, sendRoundActivationPhaseMessage,
+    // Resync rebuilds DC side-channel Maps for in-Discord recovery; in
+    // headless these maps are already managed externally — noop is safe.
+    repopulateDcMapsForGame: () => {},
     sendBleedingPrompt, sendDeckIllegalAlert, sendSquadConfirmation,
     postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons,
     updateDeployPromptMessages, getDcPlayAreaComponents,
