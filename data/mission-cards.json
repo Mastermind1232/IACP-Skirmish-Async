@@ -19,7 +19,7 @@
             "vpPerLaunchPanelControlled": {
               "green": 5,
               "gray": 2,
-              "vpMessage": "launch panels controlled (5 VP green / 2 VP gray)"
+              "vpMessage": "[Mission VP] Get to the Ship — launch panels controlled (green = 5 VP, gray = 2 VP)"
             }
           }
         }
@@ -41,7 +41,7 @@
           "endOfRound": {
             "vpPerContrabandInDeploymentZone": {
               "vp": 15,
-              "vpMessage": "contraband carried in deployment zone (15 VP each)"
+              "vpMessage": "[Mission VP] Smuggled Goods — contraband carried in deployment zone (15 VP each)"
             }
           }
         }
@@ -61,7 +61,8 @@
           "endOfRound": {
             "vpForControllingNamedArea": {
               "areaName": "Cantina",
-              "vp": 6
+              "vp": 6,
+              "vpMessage": "[Mission VP] Local Trouble — controlling the Cantina (6 VP)"
             }
           }
         }
@@ -86,7 +87,7 @@
               "controlCell": "m14",
               "tokenCountKey": "sabaccTokenCount",
               "vpPerToken": 1,
-              "vpMessage": "controlling the Sabacc table ({count} Cantina token(s) at 1 VP each)"
+              "vpMessage": "[Mission VP] Sabacc Standoff — controlled the Cantina with {count} VP up for grabs"
             }
           }
         }
@@ -130,7 +131,7 @@
             "vpPerStrainOnControlledSpaces": {
               "vpPerStrain": 2,
               "strainStateKey": "signalMarkerStrain",
-              "vpMessage": "signal markers controlled ({count} strain removed × 2 VP)"
+              "vpMessage": "[Mission VP] Powered Perimeter — {count} strain removed from controlled signal markers (2 VP each)"
             }
           }
         }
@@ -144,7 +145,15 @@
         "setup": "Players do not deploy normally. instead, players alternate deploying groups, following the rules for passing. When a figure is deployed, it may move up to 8 spaces.",
         "persistent": "",
         "startOfRound": "",
-        "endOfRound": "Each player gains 2 VPs for each critical position that player controls."
+        "endOfRound": "Each player gains 2 VPs for each critical position that player controls.",
+        "rules": {
+          "endOfRound": {
+            "vpPerControlledSpaceInList": {
+              "vp": 2,
+              "vpMessage": "[Mission VP] Blitz — {count} critical position(s) controlled (2 VP each)"
+            }
+          }
+        }
       },
       "b": {
         "name": "Fluctuations",
@@ -153,7 +162,16 @@
         "setup": "",
         "persistent": "",
         "startOfRound": "",
-        "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Damage Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round."
+        "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Damage Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round.",
+        "rules": {
+          "endOfRound": {
+            "vpPerControlledFluctuation": {
+              "vp": 1,
+              "grantPowerToken": true,
+              "vpMessage": "[Mission VP] Fluctuations — {count} fluctuation(s) controlled (1 VP each)"
+            }
+          }
+        }
       }
     },
     "devaron-garrison": {
@@ -264,11 +282,12 @@
           "endOfRound": {
             "vpPerControlledDeploymentZone": {
               "vp": 3,
-              "vpMessage": "deployment zone(s) controlled (3 VP each)"
+              "vpMessage": "[Mission VP] Inside Job — deployment zone(s) controlled (3 VP each)"
             },
             "vpForControllingNamedArea": {
               "areaName": "Command Center",
-              "vp": 3
+              "vp": 3,
+              "vpMessage": "[Mission VP] Inside Job — controlling the Command Center (3 VP)"
             }
           }
         }
@@ -289,7 +308,7 @@
           "endOfRound": {
             "vpPerContrabandInOpponentDeploymentZone": {
               "vp": 4,
-              "vpMessage": "explosive(s) discarded in opponent's deployment zone (4 VP each)"
+              "vpMessage": "[Mission VP] Bomb Drop — explosive(s) discarded in opponent's deployment zone (4 VP each)"
             }
           }
         }

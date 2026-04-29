@@ -99,14 +99,17 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
   if (!rules || typeof rules !== 'object') return { gameEnded };
 
   if (rules.vpForControllingNamedArea && mapId) {
-    const { areaName, vp } = rules.vpForControllingNamedArea;
+    const { areaName, vp, vpMessage } = rules.vpForControllingNamedArea;
     if (areaName && typeof vp === 'number') {
       const controller = getNamedAreaController(game, mapId, areaName, getMapTokensData);
       if (controller) {
         const vpVal = vp;
         const pid = getPlayerId(game, controller);
         awardObjectiveVp(game, controller, vpVal);
-        await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** for controlling **${areaName}**.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+        const msg = vpMessage
+          ? vpMessage.replace('{vp}', String(vpVal)).replace('{area}', areaName)
+          : `controlling **${areaName}**`;
+        await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
         await checkWinConditions(game, client);
         if (game.ended) return { gameEnded: true };
       }
@@ -281,7 +284,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         }
       }
       if (grantPowerToken) {
-        await logGameAction(game, client, `**Fluctuations:** Figures on fluctuation spaces received power tokens (Yellow→Surge, Blue→Evade, Green→Block, Red→Hit). _(Reminder: each player may now swap 1 fluctuation.)_`, { phase: 'ROUND', icon: 'round' });
+        await logGameAction(game, client, `🎯 **[Mission Effect] Fluctuations** — Figures standing on fluctuation spaces received Power Tokens (Yellow→Surge, Blue→Evade, Green→Block, Red→Damage). _Reminder: each player may now swap 1 fluctuation with another._`, { phase: 'ROUND', icon: 'round' });
       }
     }
   }
