@@ -2068,9 +2068,11 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     if (targetSize === '1x1') {
       const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
       // Only LEGAL push destinations: not blocking, not occupied, not across
-      // a closed door / cliff. Multi-cell-aware via getValidPushDestinations.
+      // a closed door / cliff, not blocked by Spiked Boots.
       const { getValidPushDestinations } = await import('../game/movement.js');
-      const adjSpaces = getValidPushDestinations(game, combat.target.figureKey, defenderPlayerNum);
+      const _pusherDc = dcNameFromFigureKey(combat.attackerFigureKey);
+      const _pusherKws = (getDcStats(_pusherDc)?.keywords || []).map(k => String(k).toUpperCase());
+      const adjSpaces = getValidPushDestinations(game, combat.target.figureKey, defenderPlayerNum, { pusherIsMassive: _pusherKws.includes('MASSIVE') });
       if (adjSpaces.length > 0) {
         const { msgId: targetMsgId, label: targetLabel } = getFigureLabel(game, defenderPlayerNum, combat.target.figureKey, targetDcName);
         game.pendingConcussiveBolt = {

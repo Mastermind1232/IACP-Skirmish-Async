@@ -38,19 +38,21 @@ describe('PROBE-PD-PSH-006: pushed large figure — no diagonal step, no rotatio
       'pushFigureToNearestValid must be the exported BFS push helper — CRR-PSH-006');
   });
 
-  it('006b: source — pushFigureToNearestValid BFS uses orthogonal-only moveVectors', () => {
+  it('006b: source — pushFigureToNearestValid BFS uses cardinal-only for LARGE figures', () => {
     const m = MOVEMENT_SRC.match(/export function pushFigureToNearestValid[\s\S]*?\n\}/);
     assert.ok(m, 'pushFigureToNearestValid must be parseable');
     const body = m[0];
-    // Orthogonal four vectors present.
+    // The body must branch on profile.isLarge and pick a cardinal-only
+    // moveVector list when the figure is large (CRR-PSH-006). Small
+    // figures may step diagonally — that's standard IA movement, not
+    // restricted by the push rule.
+    assert.match(body, /profile\.isLarge/,
+      'BFS must check profile.isLarge to select cardinal-only steps for large figures — CRR-PSH-006');
+    // Orthogonal four vectors must be present (used in the large branch).
     assert.match(body, /\{ dx: 1, dy: 0 \}/, 'must include +x vector — CRR-PSH-006');
     assert.match(body, /\{ dx: -1, dy: 0 \}/, 'must include -x vector — CRR-PSH-006');
     assert.match(body, /\{ dx: 0, dy: 1 \}/, 'must include +y vector — CRR-PSH-006');
     assert.match(body, /\{ dx: 0, dy: -1 \}/, 'must include -y vector — CRR-PSH-006');
-    // No diagonal vectors in the push BFS (both components non-zero).
-    const diagMatches = body.match(/\{ dx: -?1, dy: -?1 \}/g) || [];
-    assert.equal(diagMatches.length, 0,
-      'push BFS must NOT contain diagonal moveVectors — CRR-PSH-006');
   });
 
   it('006c: source — large-figure movement expander rejects diagonal neighbours', () => {
@@ -67,21 +69,23 @@ describe('PROBE-PD-PSH-006: pushed large figure — no diagonal step, no rotatio
       'pushFigure body must not touch figureOrientations (no rotate on push) — CRR-PSH-006/LF-007');
   });
 
-  it('006e: behavior — a direct pushFigureToNearestValid BFS simulation takes only orthogonal steps', () => {
-    // Mirror the BFS expansion step: from a starting cell, legal next steps are exactly the 4 orthogonal neighbours.
-    const expand = (x, y) => {
+  it('006e: behavior — a LARGE-figure pushFigureToNearestValid BFS step takes only orthogonal moves', () => {
+    // Mirror the BFS expansion for a large figure: legal next steps are
+    // exactly the 4 orthogonal neighbours. Small figures can take 8 steps;
+    // that's not restricted by CRR-PSH-006.
+    const expandLarge = (x, y) => {
       const neighbors = [];
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         neighbors.push([x + dx, y + dy]);
       }
       return neighbors;
     };
-    const n = expand(2, 2);
+    const n = expandLarge(2, 2);
     const keys = new Set(n.map(([x, y]) => `${x},${y}`));
     assert.ok(keys.has('3,2') && keys.has('1,2') && keys.has('2,3') && keys.has('2,1'),
-      'BFS must reach all 4 orthogonal neighbours — CRR-PSH-006');
+      'large-figure BFS must reach all 4 orthogonal neighbours — CRR-PSH-006');
     assert.ok(!keys.has('3,3') && !keys.has('1,1') && !keys.has('3,1') && !keys.has('1,3'),
-      'BFS must NOT reach any diagonal neighbour — CRR-PSH-006');
+      'large-figure BFS must NOT reach any diagonal neighbour — CRR-PSH-006');
   });
 
   it('006f: behavior — large-figure diagonal guard predicate matches CRR semantics', () => {

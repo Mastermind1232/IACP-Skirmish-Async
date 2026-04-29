@@ -18,6 +18,7 @@ import {
   getMapRegistry,
   getMapTokensData,
   getDcKeywords,
+  getDcEffects,
   getFigureSize,
   isDcCompanion,
 } from '../data-loader.js';
@@ -846,12 +847,20 @@ export function pushFigureToNearestValid(game, playerNum, figureKey, forbiddenSe
       pushFigure(game, playerNum, figureKey, topLeft);
       return true;
     }
-    const moveVectors = [
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: 0, dy: -1 },
-    ];
+    // CRR-PSH-006: a pushed LARGE figure cannot step diagonally — only
+    // cardinal. Small figures can step in any of the 8 directions during
+    // push (matching standard movement rules).
+    const moveVectors = profile.isLarge
+      ? [
+          { dx: 1, dy: 0 },  { dx: -1, dy: 0 },
+          { dx: 0, dy: 1 },  { dx: 0, dy: -1 },
+        ]
+      : [
+          { dx: 1, dy: 0 },  { dx: -1, dy: 0 },
+          { dx: 0, dy: 1 },  { dx: 0, dy: -1 },
+          { dx: 1, dy: 1 },  { dx: -1, dy: 1 },
+          { dx: 1, dy: -1 }, { dx: -1, dy: -1 },
+        ];
     for (const vec of moveVectors) {
       const nextTopLeft = shiftCoord(topLeft, vec.dx, vec.dy);
       if (!board.spacesSet.has(nextTopLeft)) continue;
@@ -1131,12 +1140,21 @@ export function getValidDisplacementSpaces(game, figureKey, playerNum, forbidden
  *   - Doesn't enter blocking terrain (unless figure has Mobile or Massive).
  *   - Doesn't cross a movement-blocking edge (closed doors, cliffs).
  *
+ * Also enforces Spiked Boots (Snowtrooper Elite): if the target has the
+ * `spiked_boots_snowtrooper` ability AND the pusher isn't MASSIVE, the
+ * push fails outright (returns []). Per CRR: "cannot be pushed except
+ * by MASSIVE figures."
+ *
  * @param {object} game
  * @param {string} pushedFigureKey
  * @param {number} pushedPlayerNum
+ * @param {object} [opts]
+ * @param {boolean} [opts.pusherIsMassive=false] - true if the pushing
+ *   figure has the MASSIVE keyword. Used for Spiked Boots gate.
  * @returns {string[]} list of legal destination top-left coords (lowercased).
+ *   Empty when no legal destination exists OR Spiked Boots blocks the push.
  */
-export function getValidPushDestinations(game, pushedFigureKey, pushedPlayerNum) {
+export function getValidPushDestinations(game, pushedFigureKey, pushedPlayerNum, opts = {}) {
   const fromCoord = game.figurePositions?.[pushedPlayerNum]?.[pushedFigureKey];
   if (!fromCoord) return [];
   const mapId = game.selectedMap?.id;
@@ -1148,6 +1166,14 @@ export function getValidPushDestinations(game, pushedFigureKey, pushedPlayerNum)
 
   const dcName = dcNameFromFigureKey(pushedFigureKey);
   const size = game.figureOrientations?.[pushedFigureKey] || getFigureSize(dcName) || '1x1';
+
+  // Spiked Boots gate: target with `spiked_boots_snowtrooper` cannot be
+  // pushed except by MASSIVE figures.
+  const targetEffects = getDcEffects()?.[dcName];
+  const targetSpecials = targetEffects?.specialAbilityIds || [];
+  if (targetSpecials.includes('spiked_boots_snowtrooper') && !opts.pusherIsMassive) {
+    return [];
+  }
 
   // Figure ignores blocking if it has MOBILE or MASSIVE keyword.
   const keywords = (getDcKeywords(game)?.[dcName] || []).map((k) => String(k).toUpperCase());
@@ -1182,9 +1208,22 @@ export function getValidPushDestinations(game, pushedFigureKey, pushedPlayerNum)
     blockedEdgeSet.add(k2);
   }
 
+  // CRR-PSH-006: large figures cannot diagonal-step during push. Filter
+  // out diagonal neighbors when the pushed figure is large.
+  const sizeParts = String(size).toLowerCase().split('x').map(Number);
+  const isLarge = (sizeParts[0] || 1) > 1 || (sizeParts[1] || 1) > 1;
+  const fromParsed = parseCoord(fromLc);
+
   return adjacent.filter((s) => {
     // Edge between fromLc and s must not be movement-blocked.
     if (blockedEdgeSet.has(`${fromLc}|${s}`)) return false;
+    // Large figures can't step diagonally during push (CRR-PSH-006).
+    if (isLarge) {
+      const sParsed = parseCoord(s);
+      const dCol = Math.abs(sParsed.col - fromParsed.col);
+      const dRow = Math.abs(sParsed.row - fromParsed.row);
+      if (dCol > 0 && dRow > 0) return false;
+    }
     // Full-footprint legality check.
     const newFootprint = getNormalizedFootprint(s, size);
     return newFootprint.every((cell) =>

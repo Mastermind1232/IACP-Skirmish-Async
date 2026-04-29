@@ -2116,8 +2116,10 @@ export function resolveAbility(abilityId, context) {
               if (activPos) {
                 // Push destinations are adjacent to the TARGET (where it
                 // will move), not the attacker. Use the multi-cell-aware
-                // validator that respects blocking, walls, occupancy.
-                const validPushSpaces = getValidPushDestinations(game, targetFigureKey, enemyPlayerNum);
+                // validator that respects blocking, walls, occupancy, and
+                // Spiked Boots.
+                const _pusherKws = (getStatsForDc(meta.dcName)?.keywords || []).map(k => String(k).toUpperCase());
+                const validPushSpaces = getValidPushDestinations(game, targetFigureKey, enemyPlayerNum, { pusherIsMassive: _pusherKws.includes('MASSIVE') });
                 if (validPushSpaces.length > 0) {
                   return {
                     applied: false,

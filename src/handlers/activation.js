@@ -1670,7 +1670,8 @@ export async function handleActPassive(interaction, ctx) {
           const targetKws = getDcKeywords(game)?.[targetDcName] || [];
           const isSmall = !targetKws.some(k => /large|massive/i.test(String(k)));
           if (isSmall && targetPlayerNum) {
-            const legal = getValidPushDestinations(game, targetFk, targetPlayerNum);
+            const _pusherKws = (getDcStats(meta.dcName)?.keywords || []).map(k => String(k).toUpperCase());
+            const legal = getValidPushDestinations(game, targetFk, targetPlayerNum, { pusherIsMassive: _pusherKws.includes('MASSIVE') });
             if (legal.length === 0) {
               resultParts.push(`Surge rolled — would push **${targetDcName}** 1 space, but no legal destinations`);
             } else if (legal.length === 1) {
