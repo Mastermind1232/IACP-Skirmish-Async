@@ -11,6 +11,7 @@ import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels } from '../game/index.js';
+import { getValidPushDestinations } from '../game/movement.js';
 import { getAllFigureCoords } from '../game/spatial.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { isFieldTacticsDc, fieldTacticsRoundKey, enumerateFieldTacticsTargets } from '../game/field-tactics-helpers.js';
@@ -1664,12 +1665,40 @@ export async function handleActPassive(interaction, ctx) {
             resultParts.push(`Apply ${hits} Damage to **${targetDcName}** manually`);
           }
         }
-        // Surge + SMALL check: push (player chooses push direction — no space picker for single push)
+        // Surge + SMALL check: push 1 space (attacker picks direction)
         if (surges > 0) {
           const targetKws = getDcKeywords(game)?.[targetDcName] || [];
           const isSmall = !targetKws.some(k => /large|massive/i.test(String(k)));
-          if (isSmall) {
-            resultParts.push(`Surge rolled and target is SMALL — push **${targetDcName}** 1 space`);
+          if (isSmall && targetPlayerNum) {
+            const legal = getValidPushDestinations(game, targetFk, targetPlayerNum);
+            if (legal.length === 0) {
+              resultParts.push(`Surge rolled — would push **${targetDcName}** 1 space, but no legal destinations`);
+            } else if (legal.length === 1) {
+              // Single legal space — apply automatically.
+              const { prevPos, newPos } = pushFigure(game, targetPlayerNum, targetFk, legal[0]) || {};
+              resultParts.push(`Surge — pushed **${targetDcName}** ${prevPos?.toUpperCase()} → ${String(newPos).toUpperCase()}`);
+            } else {
+              // 2+ options — set up pending state + button picker.
+              game.pendingDurasteelFistPush = {
+                gameId, msgId,
+                attackerPlayerNum: meta.playerNum,
+                targetPlayerNum,
+                targetFigureKey: targetFk,
+                targetDcName,
+                legalSpaces: legal,
+              };
+              const btns = legal.slice(0, 5).map((sp) =>
+                new ButtonBuilder()
+                  .setCustomId(`durasteel_push_${gameId}_${sp}`)
+                  .setLabel(sp.toUpperCase())
+                  .setStyle(ButtonStyle.Danger)
+              );
+              await interaction.followUp({
+                content: `🤜 **Durasteel Fist** — Surge rolled, push **${targetDcName}** 1 space. Pick a destination:`,
+                components: [new ActionRowBuilder().addComponents(btns)],
+              }).catch(discordCatch);
+              resultParts.push(`Surge — push prompt sent`);
+            }
           }
         }
         await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Target: **${targetDcName}**. ${resultParts.join('. ')}.`, components: [] }).catch(discordCatch);

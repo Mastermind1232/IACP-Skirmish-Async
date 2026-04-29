@@ -506,6 +506,28 @@ export async function handleConcussiveBoltPush(interaction, ctx) {
   saveGames();
 }
 
+/** Durasteel Fist push: durasteel_push_{gameId}_{space} */
+export async function handleDurasteelPush(interaction, ctx) {
+  const { getGame, saveGames, client, canActAsPlayer, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^durasteel_push_([^_]+)_([a-z0-9]+)$/);
+  if (!m) return;
+  const [, gameId, space] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingDurasteelFistPush) return;
+  const pending = game.pendingDurasteelFistPush;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can choose the Durasteel Fist push direction.')) return;
+  if (!pending.legalSpaces.includes(space)) {
+    await interaction.followUp({ content: 'Invalid push destination.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const { prevPos, newPos } = pushFigure(game, pending.targetPlayerNum, pending.targetFigureKey, space) || {};
+  await logGameAction(game, client, `**Durasteel Fist** — Pushed **${pending.targetDcName}** from ${String(prevPos).toUpperCase()} to **${String(newPos).toUpperCase()}**.`, { phase: 'ACTIVATION', icon: 'activate' });
+  delete game.pendingDurasteelFistPush;
+  saveGames();
+}
+
 /** Concussive Bolt skip: concussive_bolt_skip_{gameId} */
 export async function handleConcussiveBoltSkip(interaction, ctx) {
   const { getGame, saveGames, client, finishCombatResolution } = ctx;

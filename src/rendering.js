@@ -35,6 +35,7 @@ import {
   getMapData,
   getMapSpaceSet,
   getFigureSize,
+  isDcCompanion,
 } from './data-loader.js';
 import { dcMessageMeta } from './game-state.js';
 import { getSquad } from './game/player-helpers.js';
@@ -200,6 +201,7 @@ export function getFiguresForRender(game) {
         powerTokens,
         conditions,
         damage,
+        isCompanion: isDcCompanion(dcName),
       });
     }
   }

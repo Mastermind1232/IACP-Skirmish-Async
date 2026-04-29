@@ -462,7 +462,7 @@ export async function runStartOfRoundRules(game, mapId, variant, rules, ctx = {}
       game[gameKey] = hand.length;
       if (logGameAction && client) {
         const missionName = game.selectedMission?.name || 'Mission Effect';
-        await logGameAction(game, client, `📊 **${missionName}** — Cantina tokens set to **${hand.length}** (initiative player's hand size).`, { phase: 'ROUND', icon: 'round' });
+        await logGameAction(game, client, `🎯 **[Mission VP] ${missionName}** — Cantina holds **${hand.length} VP** this round (= initiative player's hand size). Control the cantina to score them at end of round.`, { phase: 'ROUND', icon: 'round' });
       }
     }
   }

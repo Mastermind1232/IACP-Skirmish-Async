@@ -47,7 +47,7 @@ function getStatsForDc(dcName) {
 }
 import { applyCondition, resetCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
-import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces } from './movement.js';
+import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces, getValidPushDestinations } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure } from './player-helpers.js';
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize } from '../data-loader.js';
@@ -2114,11 +2114,10 @@ export function resolveAbility(abilityId, context) {
               const activFk = `${meta.dcName}-${_dgI}-${_selFig}`;
               const activPos = game.figurePositions?.[playerNum]?.[activFk];
               if (activPos) {
-                const mapSpaces = getMapData(mapId);
-                const adjSpaces = mapSpaces?.adjacency?.[activPos] || [];
-                const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
-                const targetCurPos = game.figurePositions?.[enemyPlayerNum]?.[targetFigureKey];
-                const validPushSpaces = adjSpaces.filter(s => !occupiedSet.has(s) || s === targetCurPos);
+                // Push destinations are adjacent to the TARGET (where it
+                // will move), not the attacker. Use the multi-cell-aware
+                // validator that respects blocking, walls, occupancy.
+                const validPushSpaces = getValidPushDestinations(game, targetFigureKey, enemyPlayerNum);
                 if (validPushSpaces.length > 0) {
                   return {
                     applied: false,

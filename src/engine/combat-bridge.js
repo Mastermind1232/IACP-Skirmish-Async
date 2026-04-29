@@ -2067,8 +2067,10 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     const targetSize = getFigureSize(targetDcName);
     if (targetSize === '1x1') {
       const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
-      const ms = getMapData(game.selectedMap.id);
-      const adjSpaces = (ms?.adjacency?.[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase());
+      // Only LEGAL push destinations: not blocking, not occupied, not across
+      // a closed door / cliff. Multi-cell-aware via getValidPushDestinations.
+      const { getValidPushDestinations } = await import('../game/movement.js');
+      const adjSpaces = getValidPushDestinations(game, combat.target.figureKey, defenderPlayerNum);
       if (adjSpaces.length > 0) {
         const { msgId: targetMsgId, label: targetLabel } = getFigureLabel(game, defenderPlayerNum, combat.target.figureKey, targetDcName);
         game.pendingConcussiveBolt = {

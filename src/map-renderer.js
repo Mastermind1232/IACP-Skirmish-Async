@@ -549,7 +549,17 @@ export async function renderMap(mapId, options = {}) {
     ctx.arcTo(x, y, x + cr, y, cr);
     ctx.closePath();
   }
-  for (const fig of figures) {
+  // Identify base cells (non-companion figures) so a companion sharing the
+  // cell can render small in the bottom-right corner instead of overlapping
+  // the base figure. Render companions LAST so they paint on top.
+  const _baseCellsLc = new Set();
+  for (const _f of figures) {
+    if (_f.isCompanion) continue;
+    if (!_f.coord) continue;
+    _baseCellsLc.add(String(_f.coord).toLowerCase());
+  }
+  const _renderOrder = [...figures].sort((a, b) => (a.isCompanion ? 1 : 0) - (b.isCompanion ? 1 : 0));
+  for (const fig of _renderOrder) {
     const coord = fig.coord?.toLowerCase?.() || fig.coord;
     if (!coord) continue;
     const letter = coord.match(/[a-z]+/)?.[0] || '';
@@ -561,15 +571,33 @@ export async function renderMap(mapId, options = {}) {
     if (row < 0 || col < 0) continue;
     const size = (fig.figureSize || '1x1').toLowerCase();
     const [cols = 1, rows = 1] = size.split('x').map(Number);
-    const centerCol = col + cols / 2;
-    const centerRow = row + rows / 2;
+    // Companion-on-base: when a companion shares its cell with a base
+    // figure, render the companion at 1/3 scale anchored to the bottom-right
+    // corner of the cell. If the companion is alone in the cell (host
+    // defeated), fall through to normal rendering.
+    const _isCompanionOverBase = !!fig.isCompanion && _baseCellsLc.has(coord);
+    let centerCol, centerRow;
+    if (_isCompanionOverBase) {
+      // Bottom-right of the cell: shift center 2/3 of the way toward
+      // (col+1, row+1) so a 1/3-scale token tucks into the corner.
+      centerCol = col + 5 / 6;
+      centerRow = row + 5 / 6;
+    } else {
+      centerCol = col + cols / 2;
+      centerRow = row + rows / 2;
+    }
     const cx = sx0 + centerCol * sdx;
     const cy = sy0 + centerRow * sdy;
     // For square footprints use a circle; for rectangular use a rounded rect matching footprint
     const isSquare = cols === rows;
     const fillFactor = 0.9;
-    const clipW = isSquare ? baseTokenSize * (cols === 1 ? 0.92 : cols * 1.05) / 2 : cols * sdx * fillFactor / 2;
-    const clipH = isSquare ? baseTokenSize * (rows === 1 ? 0.92 : rows * 1.05) / 2 : rows * sdy * fillFactor / 2;
+    let clipW = isSquare ? baseTokenSize * (cols === 1 ? 0.92 : cols * 1.05) / 2 : cols * sdx * fillFactor / 2;
+    let clipH = isSquare ? baseTokenSize * (rows === 1 ? 0.92 : rows * 1.05) / 2 : rows * sdy * fillFactor / 2;
+    // Companion-on-base: render at 1/3 scale.
+    if (_isCompanionOverBase) {
+      clipW *= 1 / 3;
+      clipH *= 1 / 3;
+    }
     const clipRadius = isSquare ? clipW : Math.min(clipW, clipH);
     const cornerRadius = Math.max(8, Math.round(12 * scale));
     let drewImage = false;

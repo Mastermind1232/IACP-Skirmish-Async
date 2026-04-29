@@ -1115,3 +1115,82 @@ export function getValidDisplacementSpaces(game, figureKey, playerNum, forbidden
     );
   });
 }
+
+/**
+ * Get valid push destinations adjacent to `fromCoord` for a single figure.
+ *
+ * Used by surge-push effects (Concussive Bolt, Slam, Smash, Ram, Durasteel
+ * Fist, etc.). Different from `getValidDisplacementSpaces` (which assumes
+ * the figure is being shoved aside by a Massive overlap and runs in the
+ * iterative-displacement engine context) — this is a one-shot "where can
+ * the attacker push this 1-space" check.
+ *
+ * Filters adjacent spaces to those where the pushed figure's FULL footprint:
+ *   - Lies entirely on map (every cell is in `mapData.adjacency`).
+ *   - Doesn't overlap any other figure (multi-cell-aware).
+ *   - Doesn't enter blocking terrain (unless figure has Mobile or Massive).
+ *   - Doesn't cross a movement-blocking edge (closed doors, cliffs).
+ *
+ * @param {object} game
+ * @param {string} pushedFigureKey
+ * @param {number} pushedPlayerNum
+ * @returns {string[]} list of legal destination top-left coords (lowercased).
+ */
+export function getValidPushDestinations(game, pushedFigureKey, pushedPlayerNum) {
+  const fromCoord = game.figurePositions?.[pushedPlayerNum]?.[pushedFigureKey];
+  if (!fromCoord) return [];
+  const mapId = game.selectedMap?.id;
+  if (!mapId) return [];
+  const mapData = getMapData(mapId);
+  if (!mapData?.adjacency) return [];
+  const fromLc = normalizeCoord(fromCoord);
+  const adjacent = (mapData.adjacency[fromLc] || []).map(normalizeCoord);
+
+  const dcName = dcNameFromFigureKey(pushedFigureKey);
+  const size = game.figureOrientations?.[pushedFigureKey] || getFigureSize(dcName) || '1x1';
+
+  // Figure ignores blocking if it has MOBILE or MASSIVE keyword.
+  const keywords = (getDcKeywords(game)?.[dcName] || []).map((k) => String(k).toUpperCase());
+  const ignoreBlocking = keywords.includes('MOBILE') || keywords.includes('MASSIVE');
+
+  const blockingSet = new Set((ignoreBlocking ? [] : (mapData.blocking || [])).map((c) => String(c).toLowerCase()));
+
+  // Build occupied set excluding the pushed figure's own footprint.
+  const occupiedSet = new Set();
+  for (const pn of [1, 2]) {
+    const poses = game.figurePositions?.[pn] || {};
+    for (const [fk, c] of Object.entries(poses)) {
+      if (!c) continue;
+      if (pn === pushedPlayerNum && fk === pushedFigureKey) continue;
+      const fkDc = dcNameFromFigureKey(fk);
+      const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDc) || '1x1';
+      for (const cell of getNormalizedFootprint(c, fkSize)) occupiedSet.add(cell);
+    }
+  }
+
+  // Movement-blocking edges (closed doors, cliffs). Open-door overrides apply.
+  const movementBlockingEdges = mapData.movementBlockingEdges || [];
+  const openedDoors = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
+  const blockedEdgeSet = new Set();
+  for (const e of movementBlockingEdges) {
+    const a = String(e[0]).toLowerCase();
+    const b = String(e[1]).toLowerCase();
+    const k1 = `${a}|${b}`;
+    const k2 = `${b}|${a}`;
+    if (openedDoors.has(k1) || openedDoors.has(k2)) continue;
+    blockedEdgeSet.add(k1);
+    blockedEdgeSet.add(k2);
+  }
+
+  return adjacent.filter((s) => {
+    // Edge between fromLc and s must not be movement-blocked.
+    if (blockedEdgeSet.has(`${fromLc}|${s}`)) return false;
+    // Full-footprint legality check.
+    const newFootprint = getNormalizedFootprint(s, size);
+    return newFootprint.every((cell) =>
+      !!mapData.adjacency[cell]
+      && !occupiedSet.has(cell)
+      && !blockingSet.has(cell)
+    );
+  });
+}

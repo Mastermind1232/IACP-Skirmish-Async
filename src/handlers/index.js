@@ -153,6 +153,7 @@ import {
   handleIndiscriminateFireDie, handleIndiscriminateFireSkip,
   handleFightingKnifeTarget, handleFightingKnifeSkip,
   handleConcussiveBoltPush, handleConcussiveBoltSkip,
+  handleDurasteelPush,
   handleSpreadThePainFigPick, handleSpreadThePainSkip,
   handleMissileSalvoDie, handleMissileSalvoDone,
   handleHeavyFireUse, handleHeavyFireSkip,
@@ -513,6 +514,7 @@ register('indiscriminate_skip_', handleIndiscriminateFireSkip, 'combatSpecialEff
 register('fighting_knife_target_', handleFightingKnifeTarget, 'combatSpecialEffects');
 register('fighting_knife_skip_', handleFightingKnifeSkip, 'combatSpecialEffects');
 register('concussive_bolt_push_', handleConcussiveBoltPush, 'combatSpecialEffects');
+register('durasteel_push_', handleDurasteelPush, 'combatSpecialEffects');
 register('concussive_bolt_skip_', handleConcussiveBoltSkip, 'combatSpecialEffects');
 register('spread_pain_fig_', handleSpreadThePainFigPick, 'combatSpecialEffects');
 register('spread_pain_skip_', handleSpreadThePainSkip, 'combatSpecialEffects');
@@ -710,6 +712,7 @@ export {
   handleIndiscriminateFireDie, handleIndiscriminateFireSkip,
   handleFightingKnifeTarget, handleFightingKnifeSkip,
   handleConcussiveBoltPush, handleConcussiveBoltSkip,
+  handleDurasteelPush,
   handleSpreadThePainFigPick, handleSpreadThePainSkip,
   handleMissileSalvoDie, handleMissileSalvoDone,
   handleHeavyFireUse, handleHeavyFireSkip,
