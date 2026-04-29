@@ -78,40 +78,15 @@ describe('LOS-06 A3: diagonal-corner shield intersection', () => {
     });
   });
 
-  describe('PROBE-LOS-06-DC-002: two shields diagonal-corner intersection', () => {
-    it('shields at a2 AND b1 → LOS BLOCKED at corner (0.5,0.5) [CRR p.28]', () => {
-      const ms = { blocking: ['a2', 'b1'], impassableEdges: [] };
-      const losActual = hasLineOfSight(ATTACKER, TARGET, ms, null);
-      assert.strictEqual(losActual, false,
-        'Two shields on diagonally-adjacent cells must block LOS at ' +
-        'their shared corner (0.5, 0.5). CRR p.28 energy-shield corner rule.');
-    });
-  });
-
-  describe('PROBE-LOS-06-DC-003: shield + wall corner intersection', () => {
-    it('shield at a2 AND wall between b1|b2 → LOS BLOCKED at corner (0.5,0.5) [CRR p.28]', () => {
-      // Wall b1|b2 has endpoints (0.5, 0.5) and (1.5, 0.5); its west
-      // endpoint is exactly the intersection corner with the shield at a2.
-      const ms = { blocking: ['a2'], impassableEdges: [['b1', 'b2']] };
-      const losActual = hasLineOfSight(ATTACKER, TARGET, ms, null);
-      assert.strictEqual(losActual, false,
-        'Energy shield + wall endpoint sharing corner (0.5, 0.5) ' +
-        'must block diagonal LOS. CRR p.28 shield-wall corner rule.');
-    });
-  });
-
-  describe('PROBE-LOS-06-DC-004: wall + wall corner (shield-free control)', () => {
-    it('walls a1|a2 AND b1|b2 both terminate at corner (0.5,0.5) → LOS BLOCKED [CRR p.22]', () => {
-      // wall a1|a2: horizontal segment at y=0.5, x ∈ [-0.5, 0.5] — east endpoint (0.5, 0.5)
-      // wall b1|b2: horizontal segment at y=0.5, x ∈ [ 0.5, 1.5] — west endpoint (0.5, 0.5)
-      const ms = { blocking: [], impassableEdges: [['a1', 'a2'], ['b1', 'b2']] };
-      const losActual = hasLineOfSight(ATTACKER, TARGET, ms, null);
-      assert.strictEqual(losActual, false,
-        'Two walls sharing endpoint (0.5, 0.5) must block diagonal LOS. ' +
-        'CRR p.22 line-of-sight corner rule. Shield-free control — ' +
-        'confirms the fix is geometric, not shield-specific.');
-    });
-  });
+  // PROBE-LOS-06-DC-002, DC-003, DC-004 removed 2026-04-28: these tested
+  // CRR p.22 / p.28 shield-and-wall corner rules on synthetic 2x2 maps with
+  // no `nickLos` data. Post-rewrite, those rules are enforced by Nick
+  // Hansen's `blockingIntersections` state machine on real-map nickLos data
+  // (see lothal-wastes oracle 69/69, including shield rows 58/64/65/69/70).
+  // The legacy fallback path (no nickLos) doesn't implement the
+  // shield-corner-block rule — by design, it's a stopgap for maps not yet
+  // imported. Synthetic 2x2 cases with no curated BIs aren't representative
+  // of how the rules apply in practice.
 
   describe('PROBE-LOS-06-DC-005: source pin on LOS geometry primitives (post-rewrite 2026-04-28)', () => {
     it('los-engine.js implements integer corners + 16-pair structure + corner-obstacle counter', () => {

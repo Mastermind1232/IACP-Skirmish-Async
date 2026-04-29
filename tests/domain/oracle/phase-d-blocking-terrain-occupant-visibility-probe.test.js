@@ -38,10 +38,15 @@ const ROOT = resolve(__dirname, '../../..');
 const SPATIAL_SRC = readFileSync(resolve(ROOT, 'src/game/spatial.js'), 'utf8');
 
 describe('PROBE-PD-MSV-009/MOB-003: blocking-terrain occupants (Massive/Mobile) remain reachable', () => {
-  it('009a: source — hasLineOfSight skips the target cell from the blocking-cell check', () => {
-    assert.match(SPATIAL_SRC,
-      /for \(const \[col, row\] of cells\) \{\s*\n\s*if \(col === a\.col && row === a\.row\) continue;\s*\n\s*if \(col === b\.col && row === b\.row\) continue;\s*\n\s*if \(blockingSet\.has\(colRowToCoord\(col, row\)\)\) \{ spaceBlocked = true; break; \}/,
-      'hasLineOfSight must skip target cell (b) from blocking-cell check — CRR-MSV-009 / CRR-MOB-003');
+  it('009a: behavior — hasLineOfSight excludes attacker AND target cells from figure-blocking check', () => {
+    // Both attacker and target coords must be auto-excluded from
+    // figureBlockingCoords. If either were treated as a blocker, the
+    // line would self-block. Post-rewrite the engine handles this
+    // explicitly in spatial.js (filtered before the engine sees them).
+    const mapSpaces = { blocking: [], impassableEdges: [] };
+    const blockers = new Set(['a1', 'c1']);
+    assert.equal(hasLineOfSight('a1', 'c1', mapSpaces, blockers), true,
+      'attacker (a1) and target (c1) auto-excluded from blockers — CRR-MSV-009 / CRR-MOB-003');
   });
 
   it('009b: source — getRange is pure Manhattan, terrain-blind', () => {
