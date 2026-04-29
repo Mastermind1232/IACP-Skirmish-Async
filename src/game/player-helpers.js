@@ -61,7 +61,15 @@ export function syncHealthStateToList(game, playerNum, msgId, healthState) {
 
 // ── Setters (for properties that are reassigned, not just mutated) ──────────
 
-export function setActivationsRemaining(game, pn, v) { if (pn === 1) game.p1ActivationsRemaining = v; else game.p2ActivationsRemaining = v; }
+export function setActivationsRemaining(game, pn, v) {
+  // Floor at 0 — a negative remaining count is never correct, and silently
+  // letting a stale decrement push the value below zero locks pass/activate
+  // logic (both gate on `remaining > 0`). If something dec'd past zero, the
+  // upstream caller has a bug — recompute should self-heal on next event.
+  const clamped = Math.max(0, v | 0);
+  if (pn === 1) game.p1ActivationsRemaining = clamped;
+  else game.p2ActivationsRemaining = clamped;
+}
 export function setActivationsTotal(game, pn, v)     { if (pn === 1) game.p1ActivationsTotal = v; else game.p2ActivationsTotal = v; }
 export function setActivatedDcIndices(game, pn, v)   { if (pn === 1) game.p1ActivatedDcIndices = v; else game.p2ActivatedDcIndices = v; }
 

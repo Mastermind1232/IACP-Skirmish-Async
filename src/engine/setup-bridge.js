@@ -372,6 +372,13 @@ export async function runDraftRandom(game, client, deps, options = {}) {
   game.currentRound = 1;
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   game.draftRandomUsed = true;
+  // Recompute activation counts NOW that figures are on the board.
+  // populatePlayAreas runs an earlier recompute, but at that point
+  // figurePositions is empty — leaving total=0 for both players. Without
+  // this re-run, the round starts with 0/0 remaining and pass/activate
+  // both lock up. (Bug originally surfaced in IA Game #00001.)
+  deps.recomputeActivationCounts(game, 1);
+  deps.recomputeActivationCounts(game, 2);
   deps.setPhase(game, deps.PHASES.ROUND_ACTIVE, deps.ROUND_PHASES.START_OF_ROUND);
   game.startOfRoundWhoseTurn = game.initiativePlayerId;
 
