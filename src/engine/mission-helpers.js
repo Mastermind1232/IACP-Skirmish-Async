@@ -49,12 +49,32 @@ export function getAnchorheadPatronVpBonus(game) {
   return { p1: VP_TABLE[Math.min(p1, 4)] || 0, p2: VP_TABLE[Math.min(p2, 4)] || 0 };
 }
 
+/**
+ * Compute Sabacc Standoff (Corellian Underground B) "considered to have +N VP" buff.
+ * Per CRR: "Until the end of the next round, the player who controls the Sabacc
+ * table is considered to have 1 additional VP for each token next to the Cantina."
+ *
+ * The buff is recomputed/overwritten at each end-of-round rule firing — see
+ * `setTemporaryVpBuffForControllingCell` in mission-rules.js. This reader is
+ * called by win-condition + scorecard code so the buff counts toward the
+ * 40-VP threshold and is shown in the displayed total during the round it's
+ * active.
+ */
+export function getSabaccTableBuff(game) {
+  if (game?.selectedMap?.id !== 'corellian-underground' || game?.selectedMission?.variant !== 'b') {
+    return { p1: 0, p2: 0 };
+  }
+  const buff = game.sabaccTableBuff || {};
+  return { p1: buff.p1 || 0, p2: buff.p2 || 0 };
+}
+
 /** Combined mission VP bonus. Returns { p1, p2 } or undefined if no bonuses apply. */
 export function getMissionVpBonus(game, deps) {
   const crate = getCrateDeploymentVpBonus(game, deps);
   const patron = getAnchorheadPatronVpBonus(game);
-  const p1 = crate.p1 + patron.p1;
-  const p2 = crate.p2 + patron.p2;
+  const sabacc = getSabaccTableBuff(game);
+  const p1 = crate.p1 + patron.p1 + sabacc.p1;
+  const p2 = crate.p2 + patron.p2 + sabacc.p2;
   return (p1 || p2) ? { p1, p2 } : undefined;
 }
 

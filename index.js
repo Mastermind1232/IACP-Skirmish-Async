@@ -132,6 +132,7 @@ import {
   getMissionTokenLabel as _getMissionTokenLabelPure,
   getCrateDeploymentVpBonus as _getCrateDeploymentVpBonusPure,
   getAnchorheadPatronVpBonus as _getAnchorheadPatronVpBonusPure,
+  getSabaccTableBuff as _getSabaccTableBuffPure,
   getMissionVpBonus as _getMissionVpBonusPure,
   calculateKillVp as _calculateKillVpPure,
 } from './src/engine/mission-helpers.js';
@@ -1130,6 +1131,11 @@ function getAnchorheadPatronVpBonus(game) {
   return _getAnchorheadPatronVpBonusPure(game);
 }
 
+/** Sabacc Standoff (Corellian Underground B) "considered to have +N VP" buff. */
+function getSabaccTableBuff(game) {
+  return _getSabaccTableBuffPure(game);
+}
+
 /** Combined mission VP bonus (crate deployment + patron tokens). Returns { p1, p2 } or undefined if no bonuses apply. */
 function getMissionVpBonus(game) {
   return _getMissionVpBonusPure(game, { getMapTokensData, normalizeCoord, getInitiativePlayerNum, getDeploymentZones, getPlayerDeploymentZones });
@@ -1137,7 +1143,7 @@ function getMissionVpBonus(game) {
 
 async function checkWinConditions(game, client) {
   return _checkWinConditionsPure(game, client, {
-    getCrateDeploymentVpBonus, getAnchorheadPatronVpBonus, postGameOver, logGameAction, getDiceData,
+    getCrateDeploymentVpBonus, getAnchorheadPatronVpBonus, getSabaccTableBuff, postGameOver, logGameAction, getDiceData,
   });
 }
 

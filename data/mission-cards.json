@@ -83,11 +83,12 @@
             }
           },
           "endOfRound": {
-            "vpPerTokenForControllingCell": {
+            "setTemporaryVpBuffForControllingCell": {
               "controlCell": "m14",
               "tokenCountKey": "sabaccTokenCount",
+              "buffStateKey": "sabaccTableBuff",
               "vpPerToken": 1,
-              "vpMessage": "[Mission VP] Sabacc Standoff — controlled the Cantina with {count} VP up for grabs"
+              "vpMessage": "[Mission VP] Sabacc Standoff — controls the Cantina with {count} token{s} (+{vp} VP active during next round; expires at end of next round per CRR)"
             }
           }
         }

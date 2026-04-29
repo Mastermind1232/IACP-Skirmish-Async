@@ -16,8 +16,9 @@ import { countGameSpaces } from '../game/board-helpers.js';
 export async function checkWinConditions(game, client, deps) {
   const crateBonus = deps.getCrateDeploymentVpBonus(game);
   const patronBonus = deps.getAnchorheadPatronVpBonus(game);
-  const vp1 = (game.player1VP?.total ?? 0) + crateBonus.p1 + patronBonus.p1;
-  const vp2 = (game.player2VP?.total ?? 0) + crateBonus.p2 + patronBonus.p2;
+  const sabaccBuff = deps.getSabaccTableBuff ? deps.getSabaccTableBuff(game) : { p1: 0, p2: 0 };
+  const vp1 = (game.player1VP?.total ?? 0) + crateBonus.p1 + patronBonus.p1 + sabaccBuff.p1;
+  const vp2 = (game.player2VP?.total ?? 0) + crateBonus.p2 + patronBonus.p2 + sabaccBuff.p2;
   const p1Figures = Object.keys(game.figurePositions?.[1] || {}).length;
   const p2Figures = Object.keys(game.figurePositions?.[2] || {}).length;
 

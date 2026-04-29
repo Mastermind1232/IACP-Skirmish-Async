@@ -364,6 +364,7 @@ export function buildHeadlessDeps(options = {}) {
       ...combatDeps,
       getCrateDeploymentVpBonus: () => ({ p1: 0, p2: 0 }),
       getAnchorheadPatronVpBonus: () => ({ p1: 0, p2: 0 }),
+      getSabaccTableBuff: () => ({ p1: 0, p2: 0 }),
       postGameOver: async (g, c, winnerId, reason) => {
         g.ended = true;
         setPhase(g, PHASES.ENDED);

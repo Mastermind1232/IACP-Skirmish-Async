@@ -184,6 +184,40 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
     }
   }
 
+  // setTemporaryVpBuffForControllingCell: per CRR "is considered to have N
+  // additional VP" mechanic (Sabacc Standoff). Unlike vpPerTokenForControllingCell
+  // (permanent award), this stores a temporary buff that's added to the
+  // player's effective VP for win-condition + display purposes, and gets
+  // overwritten the next time this rule fires (= end of next round).
+  // Token count is consumed (reset to 0) just like the permanent variant.
+  if (rules.setTemporaryVpBuffForControllingCell && mapId) {
+    const { controlCell, vpPerToken, tokenCountKey, buffStateKey, vpMessage: tokenVpMsg } = rules.setTemporaryVpBuffForControllingCell;
+    if (controlCell && tokenCountKey && buffStateKey && typeof vpPerToken === 'number') {
+      // CRR: "Until end of next round" — at the moment this rule fires
+      // (end of next round), the OLD buff expires. Reset both players'
+      // buff slots, then set fresh.
+      game[buffStateKey] = { p1: 0, p2: 0 };
+      const controller = getSpaceController(game, mapId, controlCell);
+      const count = typeof game[tokenCountKey] === 'number' ? game[tokenCountKey] : 0;
+      if (controller && count > 0) {
+        const vpVal = vpPerToken * count;
+        game[buffStateKey][`p${controller}`] = vpVal;
+        game[tokenCountKey] = 0;
+        const pid = getPlayerId(game, controller);
+        const ctrlMsg = tokenVpMsg
+          ? tokenVpMsg.replace('{vp}', String(vpVal)).replace('{count}', String(count))
+          : `controlling the objective (${count} token${count !== 1 ? 's' : ''})`;
+        await logGameAction(game, client, `<@${pid}> is considered to have **+${vpVal} VP** during the next round — ${ctrlMsg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+        await checkWinConditions(game, client);
+        if (game.ended) return { gameEnded: true };
+      } else if (controller === null && count > 0) {
+        // Tokens still on table but no one controls — log and consume.
+        game[tokenCountKey] = 0;
+        await logGameAction(game, client, `🎯 **[Mission VP] Sabacc Standoff** — no one controlled the Cantina; ${count} token${count !== 1 ? 's' : ''} discarded.`, { phase: 'ROUND', icon: 'round' });
+      }
+    }
+  }
+
   if (rules.vpPerTokenForControllingCell && mapId) {
     const { controlCell, vpPerToken, tokenCountKey, vpMessage: tokenVpMsg } = rules.vpPerTokenForControllingCell;
     if (controlCell && tokenCountKey && typeof vpPerToken === 'number') {
