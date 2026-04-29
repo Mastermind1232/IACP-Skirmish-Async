@@ -403,6 +403,43 @@ export async function refreshAllGameComponents(game, client, deps) {
     }
   }
 
+  // Re-render the round-activation message in the general channel with the
+  // CURRENT pass-button state. This message holds the "Pass" button and is
+  // normally only updated by activation/pass/LiA-placement handlers — meaning
+  // a stuck state (e.g. corrupted activation counts that hid the pass button)
+  // can leave the button missing even after the underlying counts are fixed.
+  // Refresh All re-renders it from current state so the button reflects truth.
+  if (game.roundActivationMessageId && game.generalId && !game.roundActivationButtonShown) {
+    try {
+      const ch = await fetchGameChannel(client, game.generalId);
+      const msg = await ch.messages.fetch(game.roundActivationMessageId);
+      const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+      const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
+      const otherNum = turnPlayerNum === 1 ? 2 : 1;
+      const myRem = (turnPlayerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining) ?? 0;
+      const otherRem = (otherNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining) ?? 0;
+      const round = game.currentRound || 1;
+      const passRows = [];
+      if (otherRem > myRem && myRem > 0) {
+        passRows.push(new deps.ActionRowBuilder().addComponents(
+          new deps.ButtonBuilder()
+            .setCustomId(`pass_activation_turn_${gameId}`)
+            .setLabel(`Pass (opponent has ${otherRem - myRem} more activation${otherRem - myRem !== 1 ? 's' : ''} than you)`)
+            .setStyle(deps.ButtonStyle.Secondary)
+        ));
+      }
+      const turnZone = turnPlayerId === game.player1Id ? 'red' : 'blue';
+      const passHint = passRows.length ? ' You may pass (opponent has more activations).' : '';
+      await msg.edit({
+        content: `<@${turnPlayerId}> (${turnZone === 'red' ? '🔴 ' : '🔵 '}**Player ${turnPlayerNum}**) **Round ${round}** — Your turn to activate!${passHint}`,
+        components: passRows,
+        allowedMentions: { users: [turnPlayerId] },
+      }).catch(deps.discordCatch);
+    } catch (err) {
+      console.error('Refresh All: round-activation message refresh failed', err);
+    }
+  }
+
   await updateHandChannelMessages(game, client, deps);
   for (const pn of [1, 2]) {
     await updateHandVisualMessage(game, pn, client, deps);
