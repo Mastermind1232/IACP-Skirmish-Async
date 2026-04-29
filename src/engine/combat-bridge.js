@@ -1386,7 +1386,17 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           await logGameAction(game, client, `\u{1F4A5} **Blast ${effectiveBlast}** \u2014 Crate @ ${String(curCoord).toUpperCase()} suffers ${effectiveBlast} damage (${game.crateHealth[origCoord]}/5 HP).`, { phase: 'ROUND', icon: 'attack' });
           if (game.crateHealth[origCoord] <= 0) {
             delete game.cratePositions[origCoord];
-            await logGameAction(game, client, `\u{1F4A5} Crate at **${String(curCoord).toUpperCase()}** destroyed by Blast!`, { phase: 'ROUND', icon: 'attack' });
+            // CRR (Devaron Garrison B): "When a crate is destroyed, all
+            // figures and objects on or adjacent to that crate suffer 2
+            // Damage." Direct-attack destruction already applies this;
+            // blast destruction was missing it (paraphrase bug).
+            const _bcCurLow = String(curCoord).toLowerCase();
+            await logGameAction(game, client, `\u{1F4A5} Crate at **${String(curCoord).toUpperCase()}** destroyed by Blast! All figures on or adjacent suffer 2 Damage.`, { phase: 'ROUND', icon: 'attack' });
+            for (const pn of [1, 2]) {
+              for (const figKey of getFiguresOnOrAdjacentToSpace(game, pn, _bcCurLow, game.selectedMap?.id)) {
+                await _applyNpcDamageToFigure(game, pn, figKey, 2, 'Crate explosion (Blast)', logGameAction, client, dcHealthState, dcMessageMeta);
+              }
+            }
             await checkWinConditions(game, client);
           }
         }
