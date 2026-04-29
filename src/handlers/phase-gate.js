@@ -11,6 +11,7 @@ import {
   getPlayerId, getHandChannelId,
 } from '../game/player-helpers.js';
 import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from '../game/phase.js';
+import { recomputeActivationCounts } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
@@ -274,6 +275,12 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
 
     case 'cc_drawn': {
       setPhase(game, PHASES.ROUND_ACTIVE, ROUND_PHASES.START_OF_ROUND);
+      // Recompute activation counts now that figures are deployed and we're
+      // entering the round. Mirror of the fix in setup-bridge.js#runDraftRandom
+      // — the populatePlayAreas recompute fires before figures are placed,
+      // so the round can otherwise open with 0/0 remaining.
+      recomputeActivationCounts(game, 1);
+      recomputeActivationCounts(game, 2);
       const { getMissionRules, getMapTokensData, runStartOfRoundRules, runStartOfRoundContinuation } = ctx;
 
       // Round 1 enters start-of-round here (Round 2+ uses _runInitiativeSwapAndContinue).

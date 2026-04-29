@@ -409,6 +409,15 @@ export async function refreshAllGameComponents(game, client, deps) {
   // a stuck state (e.g. corrupted activation counts that hid the pass button)
   // can leave the button missing even after the underlying counts are fixed.
   // Refresh All re-renders it from current state so the button reflects truth.
+  //
+  // If the End Activation Phase button was previously shown but the round
+  // is no longer over (counts changed since), clear the sticky flag so we
+  // can re-render the normal turn message.
+  if (game.roundActivationButtonShown
+      && deps.shouldShowEndActivationPhaseButton
+      && !deps.shouldShowEndActivationPhaseButton(game, gameId)) {
+    game.roundActivationButtonShown = false;
+  }
   if (game.roundActivationMessageId && game.generalId && !game.roundActivationButtonShown) {
     try {
       const ch = await fetchGameChannel(client, game.generalId);
