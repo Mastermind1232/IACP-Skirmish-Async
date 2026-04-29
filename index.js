@@ -3417,7 +3417,7 @@ function buildAllDeps() {
     getDeploymentMapAttachment, filterValidTopLeftSpaces,
     updateDeployPromptMessages, finishSetupAttachments, reorderPlayAreaAfterAttachments,
     createPlayAreaChannels, createBoardChannel, createHandThreads,
-    refreshAllGameComponents, applyDirectDamageToFigure,
+    refreshAllGameComponents, recomputeActivationCounts, repopulateDcMapsForGame, applyDirectDamageToFigure,
     getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert, sendSquadConfirmation, buildSquadConfirmText,
     runDraftRandom, getRange, hasLineOfSight, hasLineOfSightByCoord,
     hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints,
