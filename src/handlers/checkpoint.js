@@ -283,7 +283,7 @@ export async function handleCheckpointLoadIngamePrompt(interaction, ctx) {
       description: `round ${cp.round_at_save ?? 0} · ${new Date(parseInt(cp.created_at, 10)).toLocaleString()}`.slice(0, 100),
       value: cp.id,
     })));
-  await interaction.reply({
+  await interaction.followUp({
     content: '📂 **Load Checkpoint (this game)** — pick one. *Loads wipe current state; an undo entry is pushed first.*',
     components: [new ActionRowBuilder().addComponents(select)],
     ephemeral: true,
@@ -369,12 +369,12 @@ export async function handleCheckpointNewGameOpen(interaction, ctx) {
   const game = await requireGame(interaction, getGameDep, gameId);
   if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this lobby can pick a checkpoint.', ephemeral: true }).catch(discordCatch);
+    await interaction.followUp({ content: 'Only players in this lobby can pick a checkpoint.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const checkpoints = await listAllCheckpoints({ limit: 25 });
   if (!checkpoints.length) {
-    await interaction.reply({ content: 'No checkpoints saved yet. Save one from any active game using **/botmenu → 💾 Save Checkpoint**.', ephemeral: true }).catch(discordCatch);
+    await interaction.followUp({ content: 'No checkpoints saved yet. Save one from any active game using **/botmenu → 💾 Save Checkpoint**.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const select = new StringSelectMenuBuilder()
@@ -389,7 +389,7 @@ export async function handleCheckpointNewGameOpen(interaction, ctx) {
         value: cp.id,
       };
     }));
-  await interaction.reply({
+  await interaction.followUp({
     content: '🔀 **Pick a checkpoint** — the saved state will be loaded into this lobby.',
     components: [new ActionRowBuilder().addComponents(select)],
     ephemeral: true,
