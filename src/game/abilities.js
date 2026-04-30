@@ -4774,6 +4774,30 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: addForcedRerollEntry (Capitalize) — push an entry into the
+  // active combat's forcedRerollQueue. Resolved during step-3 reroll window
+  // by the existing forced-reroll handler (combat.js handleCombatReroll).
+  // Per CRR p.11 (special situations): "An ability that allows a player to
+  // reroll dice can only be used during step 3 of the attack."
+  if (entry.type === 'ccEffect' && entry.addForcedRerollEntry) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (!cbt) return { applied: false, manualMessage: 'Play during an attack. No active combat found.' };
+    const cfg = entry.addForcedRerollEntry;
+    const ctrl = cfg.controlPlayer === 'attacker' ? cbt.attackerPlayerNum
+              : cfg.controlPlayer === 'defender' ? (cbt.defenderPlayerNum ?? opponentPlayerNum(cbt.attackerPlayerNum))
+              : playerNum;
+    cbt.forcedRerollQueue = cbt.forcedRerollQueue || [];
+    cbt.forcedRerollQueue.push({
+      controlPlayer: ctrl,
+      pool: cfg.pool || 'any',
+      remaining: cfg.remaining || 1,
+      source: cfg.source || entry.label || 'Force Reroll',
+    });
+    return { applied: true, logMessage: `**${cfg.source || entry.label}** — Forced reroll added (${cfg.pool || 'any'} pool, controller: P${ctrl}). Resolves during the reroll window.` };
+  }
+
   // ccEffect: defensePoolRemoveAll only when NOT attacker's activation (One in a Million)
   if (entry.type === 'ccEffect' && entry.defensePoolRemoveAll && entry.defensePoolRemoveOnlyWhenNotAttackerActivation) {
     const { game, playerNum, combat } = context;
@@ -8457,19 +8481,32 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: options };
   }
 
-  // ccEffect: demoralizingMonologueEffect (Demoralizing Monologue) — force defender to reroll 1 die during attack
+  // ccEffect: demoralizingMonologueEffect (Demoralizing Monologue) — Moff
+  // Gideon. Card text: "Use while attacking to choose and reroll 1 defense
+  // die. Then you may reveal your hand. If you reveal 2 or more cards this
+  // way, remove the chosen die's results from the defense results."
+  //
+  // Old impl: increment defenderRerollsRemaining (DEFENDER controls the
+  // reroll, plays own die). Per card, the ATTACKER chooses the die — that
+  // means a forced reroll on the defense pool, controlled by the attacker.
+  // New impl: push a forced-reroll queue entry tagged with `demoralizingMonologue: true`
+  // so the forced-reroll handler in combat.js can post the reveal-hand
+  // prompt after the reroll fires.
   if (entry.type === 'ccEffect' && entry.demoralizingMonologueEffect) {
     const { game, playerNum, combat } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     if (!combat) return { applied: false, manualMessage: 'Play during an attack. No active combat found.' };
-    // If already in reroll phase, increment defender's remaining rerolls directly
-    if (combat.defenderRerollsRemaining != null) {
-      combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
-      return { applied: true, logMessage: "**Demoralizing Monologue** — Added 1 forced reroll to defender (attacker chooses which die)." };
-    }
-    // Otherwise set flag to be consumed when the reroll window opens
-    game.forceDefenderRerollOne = { attackerPlayerNum: combat.attackerPlayerNum };
-    return { applied: true, logMessage: "**Demoralizing Monologue** — Defender will be forced to reroll 1 die. Flag set — applies when reroll window opens." };
+    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+    combat.forcedRerollQueue.push({
+      controlPlayer: combat.attackerPlayerNum,
+      pool: 'defense',
+      remaining: 1,
+      source: 'Demoralizing Monologue',
+      demoralizingMonologue: true,
+      casterPlayerNum: playerNum,
+    });
+    combat.demoralizingMonologueApplied = true;
+    return { applied: true, logMessage: "**Demoralizing Monologue** — Forced defense-die reroll added (attacker chooses). After reroll, attacker may reveal hand to remove the die's results." };
   }
 
   // ccEffect: doubleOrNothingEffect (Double or Nothing) — choose a die; reroll it; if same icon type, may double those icons

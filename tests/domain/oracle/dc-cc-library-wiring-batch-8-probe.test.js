@@ -42,7 +42,7 @@ const BATCH = [
   ['Brace Yourself',          ['applyDefenseBonusBlock', 'defenseBonusOnlyWhenNotAttackerActivation']],
   ['Built on Hope',           ['builtOnHopeEffect']],
   ['Call the Vanguard',       ['callTheVanguardEffect']],
-  ['Capitalize',              ['defensePoolRemoveMax']],
+  ['Capitalize',              ['addForcedRerollEntry']],
   ['cc:against_the_odds',     ['focusGainToUpToNFigures', 'vpCondition']],
   ['cc:eyes_on_the_prize',    ['informational']],
   ['cc:gauntlet_blade',       ['rollOneDie', 'rollOneDieTarget', 'rollOneDieSurgeSelfPowerToken']],
@@ -59,7 +59,7 @@ const BATCH = [
   ['De Wanna Wanga',          ['shuffleOneFromDiscardIntoDeck']],
   ['Deadeye',                 ['attackAccuracyBonus']],
   ['Deadly Precision',        ['attackAccuracyBonus']],
-  ['Demoralizing Monologue',  ['demoralizingMonologueEffect', 'forceDefenderRerollOne']],
+  ['Demoralizing Monologue',  ['demoralizingMonologueEffect']],
   ['Devotion',                ['devotionEffect']],
 ];
 

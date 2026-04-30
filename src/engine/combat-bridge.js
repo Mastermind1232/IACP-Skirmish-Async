@@ -526,6 +526,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // Also skip on Extra Protection re-entry since conditions were already applied.
       if (damage > 0 && !_epReentry) {
         let allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+        // CRR p.13 (ATTACKING OBJECTS): "Conditions cannot be applied to objects,
+        // and objects cannot suffer Strain." Crates (and other object targets) are
+        // skipped here — NPC FIGURES like Thugs / Krykna are still condition-eligible.
+        const _targetIsObject = combat.target?.isCrate || combat.target?.npcType === 'crate';
+        if (_targetIsObject && allConditions.length) {
+          await logGameAction(game, client, `🪵 **Object target** — Conditions skipped (objects cannot have conditions per CRR).`, { phase: 'ROUND', icon: 'card' });
+          allConditions = [];
+        }
         // Condition Immunity: filter out harmful conditions for immune figures
         if (allConditions.length && isConditionImmune(game, combat.target.figureKey)) {
           const blocked = allConditions.filter((c) => HARMFUL_CONDITIONS.includes(c));

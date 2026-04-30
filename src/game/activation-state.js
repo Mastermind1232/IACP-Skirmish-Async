@@ -329,7 +329,6 @@ const ROUND_NULL_FLAGS = [
   'pendingSelfDestruct',
   'pendingLastResort',
   'nextDefeatedFriendlyVpReduction',
-  'forceDefenderRerollOne',
   'doubleMatchingIconsOnReroll',
   'pendingHunterProtocol',
   'holdGroundPlayerNum',

@@ -407,12 +407,9 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
         combat.rerollPhase = 'forced';
         await sendRerollUI(thread, game, combat, 'forced');
       } else {
-        // Demoralizing Monologue: add forced defender reroll if pending
-        if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
-          combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
-          combat.demoralizingMonologueApplied = true;
-          game.forceDefenderRerollOne = null;
-        }
+        // Demoralizing Monologue is now wired via the forced-reroll queue (per
+        // CRR: card text says "choose and reroll 1 defense die" — ATTACKER
+        // chooses, controller forces). Old flag-based path removed.
         if ((combat.defenderRerollsRemaining || 0) > 0) {
           combat.rerollPhase = 'defender';
           await sendRerollUI(thread, game, combat, 'defender');
@@ -426,11 +423,6 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
 
     case 'post_forced_reroll': {
       // Forced done → defender rerolls
-      if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
-        combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
-        combat.demoralizingMonologueApplied = true;
-        game.forceDefenderRerollOne = null;
-      }
       if ((combat.defenderRerollsRemaining || 0) > 0) {
         combat.rerollPhase = 'defender';
         await sendRerollUI(thread, game, combat, 'defender');
@@ -3056,13 +3048,11 @@ export async function handleCombatRoll(interaction, ctx) {
       }
     }
 
-    // Demoralizing Monologue: if flag set before reroll window, count 1 forced reroll for defender
-    let _dmForcedReroll = 0;
-    if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
-      _dmForcedReroll = 1;
-      combat.demoralizingMonologueApplied = true;
-      game.forceDefenderRerollOne = null;
-    }
+    // Demoralizing Monologue moved to forced-reroll queue (per CRR: ATTACKER
+    // chooses the die; controller forces reroll). Old defender-reroll-grant
+    // path removed; the queue entry is added by the abilities.js dispatcher
+    // when the card is played, and resolves through the standard forced-
+    // reroll handler with a post-reveal-hand prompt.
     // Power Converter (Saska): now handled as combat-time prompt (see PC check after reroll counts calc)
     // Trusted Ally (Skirmish Upgrade): if a friendly DROID within 3 has this attachment (not exhausted), +1 atk reroll
     {
@@ -3096,7 +3086,7 @@ export async function handleCombatRoll(interaction, ctx) {
     }
     const selfAugReroll = game.selfAugmentationMsgId?.[combat.attackerMsgId] ? 1 : 0;
     const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll + selfAugReroll;
-    const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll + _dmForcedReroll;
+    const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll;
     // Build pre-reroll prompt queue early (before any interrupts that might save+return)
     combat.pendingPreRerolls = [];
     if (atkSIds.includes('twin_sabers_ahsoka')) {
@@ -3542,6 +3532,32 @@ export async function handleCombatReroll(interaction, ctx) {
           if (!combat.defenderRerolledIndices.includes(idx)) combat.defenderRerolledIndices.push(idx);
           const dodgeTag = newDie.dodge ? '/DODGE' : '';
           await thread.send(`**${_frEntry.source}** forced reroll DEF ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
+          // Demoralizing Monologue (Moff Gideon): after the forced defense reroll,
+          // the caster MAY reveal their hand. If they reveal 2+ cards, the rerolled
+          // die's results are removed from defense. Pause the queue, post the prompt;
+          // continue via handleDemoralizingMonologueReveal.
+          if (_frEntry.demoralizingMonologue) {
+            const _dmCasterPN = _frEntry.casterPlayerNum || combat.attackerPlayerNum;
+            const _dmCasterId = getPlayerId(game, _dmCasterPN);
+            combat.demoralizingMonologuePending = {
+              rerolledDieIdx: idx,
+              rerolledDieBlock: newDie.block || 0,
+              rerolledDieEvade: newDie.evade || 0,
+              rerolledDieDodge: !!newDie.dodge,
+              casterPlayerNum: _dmCasterPN,
+            };
+            const _dmRow = new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId(`demoralizing_reveal_use_${gameId}`).setLabel('Reveal Hand (need ≥2 cards)').setStyle(ButtonStyle.Primary),
+              new ButtonBuilder().setCustomId(`demoralizing_reveal_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+            );
+            await thread.send(sanitizeMentions({
+              content: `<@${_dmCasterId}> **Demoralizing Monologue** — Reveal your hand publicly? If you have 2+ cards, the rerolled die's results are removed from defense.`,
+              allowedMentions: { users: [_dmCasterId] },
+              components: [_dmRow],
+            })).catch(discordCatch);
+            saveGames();
+            return; // pause; reveal handler resumes the queue
+          }
         }
       }
     }
@@ -6382,6 +6398,83 @@ export async function handleZilloDiscard(interaction, ctx) {
   combat.zilloDiscardResolved = true;
   saveGames();
   if (thread) await proceedAfterRerolls(thread, game, combat, ctx);
+}
+
+/**
+ * Demoralizing Monologue (Moff Gideon) post-reroll prompt handler.
+ *
+ * Card text: "Use while attacking to choose and reroll 1 defense die. Then
+ * you may reveal your hand. If you reveal 2 or more cards this way, remove
+ * the chosen die's results from the defense results."
+ *
+ * Prompts the caster after the forced defense-die reroll fires. On "Reveal":
+ * post the caster's hand publicly to the combat thread; if hand size ≥ 2,
+ * subtract the rerolled die's block/evade/dodge from defense totals. On
+ * "Skip": no further effect. Either way, advance the forced-reroll queue.
+ */
+export async function handleDemoralizingMonologueReveal(interaction, ctx) {
+  const { getGame, saveGames, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const isUse = interaction.customId.startsWith('demoralizing_reveal_use_');
+  const gameId = parseCustomId(interaction.customId, isUse ? 'demoralizing_reveal_use_' : 'demoralizing_reveal_skip_');
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const combat = game.pendingCombat;
+  const pending = combat?.demoralizingMonologuePending;
+  if (!combat || !pending) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    return;
+  }
+  const casterPN = pending.casterPlayerNum;
+  const ownerId = getPlayerId(game, casterPN);
+  if (interaction.user.id !== ownerId && !game.isTestGame) {
+    await interaction.followUp({ content: 'Only the caster can choose this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
+  if (isUse) {
+    const handKey = ccHandKey(casterPN);
+    const hand = game[handKey] || [];
+    const handSize = hand.length;
+    // Reveal publicly
+    if (thread) {
+      const handList = handSize > 0 ? hand.map((c) => `\`${c}\``).join(', ') : '_(empty)_';
+      await thread.send(`**Demoralizing Monologue — Hand Revealed**: ${handList} (${handSize} card${handSize === 1 ? '' : 's'})`).catch(discordCatch);
+    }
+    if (handSize >= 2) {
+      // Remove the rerolled die's results from defense
+      const def = combat.defenseRoll || { block: 0, evade: 0, dodge: false };
+      const newBlock = Math.max(0, (def.block || 0) - (pending.rerolledDieBlock || 0));
+      const newEvade = Math.max(0, (def.evade || 0) - (pending.rerolledDieEvade || 0));
+      const newDodge = pending.rerolledDieDodge ? false : !!def.dodge;
+      combat.defenseRoll = { block: newBlock, evade: newEvade, dodge: newDodge };
+      // Also strip the die's contribution from defenseDiceResults so totals stay consistent
+      if (Array.isArray(combat.defenseDiceResults) && combat.defenseDiceResults[pending.rerolledDieIdx]) {
+        combat.defenseDiceResults[pending.rerolledDieIdx] = { ...combat.defenseDiceResults[pending.rerolledDieIdx], block: 0, evade: 0, dodge: false };
+      }
+      if (thread) await thread.send(`**Demoralizing Monologue** — 2+ cards revealed: rerolled die results removed. New defense: ${newBlock} block, ${newEvade} evade${newDodge ? ' DODGE' : ''}.`).catch(discordCatch);
+      await interaction.message.edit({ content: '**Demoralizing Monologue** — Hand revealed; die results removed.', components: [] }).catch(discordCatch);
+    } else {
+      if (thread) await thread.send(`**Demoralizing Monologue** — Fewer than 2 cards revealed: rerolled die results stand.`).catch(discordCatch);
+      await interaction.message.edit({ content: '**Demoralizing Monologue** — Hand revealed; <2 cards, no removal.', components: [] }).catch(discordCatch);
+    }
+  } else {
+    await interaction.message.edit({ content: '**Demoralizing Monologue** — Skipped (no reveal).', components: [] }).catch(discordCatch);
+  }
+  delete combat.demoralizingMonologuePending;
+  // Advance the forced-reroll queue: shift the entry (it's now resolved) and continue.
+  if (Array.isArray(combat.forcedRerollQueue) && combat.forcedRerollQueue.length > 0) {
+    const _entry = combat.forcedRerollQueue[0];
+    if (_entry?.demoralizingMonologue) combat.forcedRerollQueue.shift();
+  }
+  saveGames();
+  if (thread) {
+    if ((combat.forcedRerollQueue || []).length > 0) {
+      await sendRerollUI(thread, game, combat, 'forced');
+    } else {
+      await sendCombatGate(thread, game, combat, 'post_forced_reroll', ctx);
+    }
+  }
 }
 
 // ─── Power Token Overflow (G73) ─────────────────────────────────────────────

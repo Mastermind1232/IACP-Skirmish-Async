@@ -25,7 +25,7 @@ import {
   handleCompanionDeployPick,
 } from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure } from './movement.js';
-import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCrossTrainingReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloPierceCancel, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleCombatGateReady } from './combat.js';
+import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCrossTrainingReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloPierceCancel, handleDemoralizingMonologueReveal, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleCombatGateReady } from './combat.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
   handleMapSelection,
@@ -270,6 +270,8 @@ register('zillo_discard_skip_', handleZilloDiscard, 'combat');
 register('zillo_discard_', handleZilloDiscard, 'combat');
 register('zillo_pierce_use_', handleZilloPierceCancel, 'combat');
 register('zillo_pierce_skip_', handleZilloPierceCancel, 'combat');
+register('demoralizing_reveal_use_', handleDemoralizingMonologueReveal, 'combat');
+register('demoralizing_reveal_skip_', handleDemoralizingMonologueReveal, 'combat');
 register('strain_choice_alldmg_', handleStrainChoice, 'combat');
 register('strain_choice_discard_', handleStrainChoice, 'combat');
 register('ud_deplete_use_', handleUnderDuress, 'combat');

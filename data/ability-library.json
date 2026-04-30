@@ -597,8 +597,13 @@
     },
     "Capitalize": {
       "type": "ccEffect",
-      "label": "While attacking: remove 1 defense die from pool (die removed automatically when played during attack)",
-      "defensePoolRemoveMax": 1,
+      "label": "While attacking: choose 1 die (atk or def). Player who rolled it must reroll that die.",
+      "addForcedRerollEntry": {
+        "controlPlayer": "attacker",
+        "pool": "any",
+        "remaining": 1,
+        "source": "Capitalize"
+      },
       "wiredStatus": "wired"
     },
     "Capture the Weary": {
