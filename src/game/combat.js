@@ -339,32 +339,39 @@ export function computeCombatResult(combat) {
   const recoverText = combat.surgeRecover ? ` Recover ${combat.surgeRecover}` : '';
   const cleaveText = combat.surgeCleave ? ` Cleave ${combat.surgeCleave}` : '';
 
-  let resultText = `**Result:** Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
-  if (bonusAcc) resultText += ` | bonus: +${bonusAcc} acc`;
-  if (bonusHits || perDefDieDamage) resultText += ` | bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
-  if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) resultText += ` | bonus: ${bonusBlock > 0 ? '+' : ''}${bonusBlock} Block`;
-  if (cunningBonus) resultText += ` | **Cunning**: +${cunningBonus} Block (from ${defRoll.evade} evade)`;
-  if (combat.ignoreDefenseResultsNotOnDice) resultText += ' | CC: ignore defense not on dice';
-  if (evadeCancelled > 0) resultText += ` | Evade cancelled ${evadeCancelled} surge`;
-  if (bonusEvade) resultText += ` | bonus: ${bonusEvade > 0 ? '+' : ''}${bonusEvade} Evade`;
-  if (bonusPierce) resultText += ` | bonus: +${bonusPierce} pierce`;
-  if (bonusBlast) resultText += ` | bonus: Blast ${bonusBlast}`;
-  if ((combat.bonusConditions || []).length) resultText += ` | CC bonus: ${combat.bonusConditions.join(', ')}`;
-  if (surgeCancel) resultText += ` | **Cancel ${surgeCancel}**: -${surgeCancel} block`;
+  // Headline: Result: HIT (N damage) | Result: MISS (reason)
+  let headline;
+  if (!hit) {
+    headline = missReason ? `**Result: MISS** — ${missReason}` : '**Result: MISS**';
+  } else {
+    headline = `**Result: HIT** — ${damage} damage${conditionsText}`;
+    if (combat.attackResultReplaceWithStun) headline += ' (Set for Stun: 0 damage, Stunned)';
+  }
+  // Details on a separate line so the headline reads at a glance.
+  let details = `Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
+  if (bonusAcc) details += ` | bonus: +${bonusAcc} acc`;
+  if (bonusHits || perDefDieDamage) details += ` | bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
+  if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) details += ` | bonus: ${bonusBlock > 0 ? '+' : ''}${bonusBlock} Block`;
+  if (cunningBonus) details += ` | **Cunning**: +${cunningBonus} Block (from ${defRoll.evade} evade)`;
+  if (combat.ignoreDefenseResultsNotOnDice) details += ' | CC: ignore defense not on dice';
+  if (evadeCancelled > 0) details += ` | Evade cancelled ${evadeCancelled} surge`;
+  if (bonusEvade) details += ` | bonus: ${bonusEvade > 0 ? '+' : ''}${bonusEvade} Evade`;
+  if (bonusPierce) details += ` | bonus: +${bonusPierce} pierce`;
+  if (bonusBlast) details += ` | bonus: Blast ${bonusBlast}`;
+  if ((combat.bonusConditions || []).length) details += ` | CC bonus: ${combat.bonusConditions.join(', ')}`;
+  if (surgeCancel) details += ` | **Cancel ${surgeCancel}**: -${surgeCancel} block`;
   if (surgeD || surgeP || surgeA || conditionsText || blastText || recoverText || cleaveText) {
-    resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}${blastText}${recoverText}${cleaveText}`;
+    details += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}${blastText}${recoverText}${cleaveText}`;
   }
   if (combat.isRanged && combat.distanceToTarget != null) {
-    resultText += ` | Accuracy: ${totalAccuracy} vs ${combat.distanceToTarget} distance`;
+    details += ` | Accuracy: ${totalAccuracy} vs ${combat.distanceToTarget} distance`;
   }
-  if (attackerWeakened) resultText += ` | **Weakened** (attacker -1 dmg)`;
-  if (defenderWeakened) resultText += ` | **Weakened** (defender -1 block)`;
-  if (defenderHidden) resultText += ` | **Hidden** (defender -2 accuracy)`;
-  if (defenderAccPenalty) resultText += ` | **CC** (defender -${defenderAccPenalty} accuracy)`;
-  if (defRoll.dodge && combat.surgeCancelDodge) resultText += ` | **Deadly Spin**: Dodge cancelled`;
-  if (!hit) resultText += missReason ? ` → **Miss** (${missReason})` : ' → **Miss**';
-  else resultText += ` → **${damage} damage**${conditionsText}`;
-  if (combat.attackResultReplaceWithStun) resultText += ' (Set for Stun: 0 damage, Stunned)';
+  if (attackerWeakened) details += ` | **Weakened** (attacker -1 dmg)`;
+  if (defenderWeakened) details += ` | **Weakened** (defender -1 block)`;
+  if (defenderHidden) details += ` | **Hidden** (defender -2 accuracy)`;
+  if (defenderAccPenalty) details += ` | **CC** (defender -${defenderAccPenalty} accuracy)`;
+  if (defRoll.dodge && combat.surgeCancelDodge) details += ` | **Deadly Spin**: Dodge cancelled`;
+  let resultText = `${headline}\n${details}`;
 
   return { hit, damage, effectiveBlock, resultText };
 }

@@ -142,7 +142,7 @@ test('computeCombatResult ranged attack miss on insufficient accuracy', () => {
   });
   assert.strictEqual(r.hit, false);
   assert.strictEqual(r.damage, 0);
-  assert.ok(r.resultText.includes('Miss'));
+  assert.ok(/MISS|Miss/.test(r.resultText));
   assert.ok(r.resultText.includes('insufficient accuracy'));
 });
 

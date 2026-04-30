@@ -149,7 +149,7 @@ describe('ORACLE-ACCPEN-004: Ranged Miss From Accuracy Penalty', () => {
     assert.equal(result.hit, false, 'Attack should miss: totalAccuracy 2 < distance 4');
     assert.equal(result.damage, 0, 'Miss should deal 0 damage');
     assert.ok(
-      result.resultText.includes('Miss'),
+      /MISS|Miss/.test(result.resultText),
       'Result text should indicate a miss'
     );
   });
