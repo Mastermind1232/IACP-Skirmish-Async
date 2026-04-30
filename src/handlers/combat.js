@@ -3060,6 +3060,36 @@ export async function handleCombatRoll(interaction, ctx) {
       const fsPlayer = atkSIds.includes('fyrnock_style_tress') ? attackerPlayerNum : defenderPlayerNum;
       combat.forcedRerollQueue.push({ controlPlayer: fsPlayer, pool: 'attack', remaining: 1, source: 'Fyrnock Style' });
     }
+    // Survival is Strength (Armorer): if defender spent a Block (PT) during this attack
+    // and an Armorer with the ability is within 3 spaces of the defender, that Armorer's
+    // player may force 1 attack-die reroll. Per CRR p.10 step 3, all rerolls fire here
+    // (not at modifier or post-modifier stage). Once-per-round tracked on the Armorer's
+    // figureKey: marked-used only when the player actually rerolls (skip preserves the
+    // ability). The defenderSpentBlock trigger is set during the pre-roll PT phase.
+    if (combat.defenderSpentBlock && combat.target?.figureKey) {
+      const _sisFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
+      const _sisDefCoord = _sisFriendlyFigs[combat.target.figureKey];
+      const _sisMapSp = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
+      if (_sisDefCoord && _sisMapSp) {
+        for (const [_sisFk, _sisPos] of Object.entries(_sisFriendlyFigs)) {
+          const _sisDcName = dcNameFromFigureKey(_sisFk);
+          const _sisEff = getDcEff()[_sisDcName] || getDcEff()[_sisDcName?.replace(/\s*\[.*\]\s*$/, '')];
+          if (!(_sisEff?.specialAbilityIds || []).includes('survival_is_strength_armorer')) continue;
+          if (game.roundFigureAbilityUsed?.[`${_sisFk}_survival_is_strength`]) continue;
+          if (!_sisPos) continue;
+          if (isWithinSpaces(_sisMapSp, String(_sisPos).toLowerCase(), String(_sisDefCoord).toLowerCase(), 3)) {
+            combat.forcedRerollQueue.push({
+              controlPlayer: defenderPlayerNum,
+              pool: 'attack',
+              remaining: 1,
+              source: 'Survival is Strength',
+              armorerFigKey: _sisFk,
+            });
+            break; // first eligible Armorer triggers; once-per-round per Armorer
+          }
+        }
+      }
+    }
 
     // Demoralizing Monologue: if flag set before reroll window, count 1 forced reroll for defender
     let _dmForcedReroll = 0;
@@ -3523,6 +3553,12 @@ export async function handleCombatReroll(interaction, ctx) {
           // G12: mark this die index as rerolled (forced)
           if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
           if (!combat.attackerRerolledIndices.includes(idx)) combat.attackerRerolledIndices.push(idx);
+          // Survival is Strength (Armorer): mark used once the reroll actually fires.
+          // Skip-without-reroll preserves the ability (CRR "may" semantics).
+          if (_frEntry.source === 'Survival is Strength' && _frEntry.armorerFigKey) {
+            game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+            game.roundFigureAbilityUsed[`${_frEntry.armorerFigKey}_survival_is_strength`] = true;
+          }
           await thread.send(`**${_frEntry.source}** forced reroll ATK ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
         }
       } else {
@@ -4282,45 +4318,6 @@ export async function handleCombatPassive(interaction, ctx) {
     combat.callTheShotsResolved = true;
     delete combat.pendingCombatPassive;
     delete combat.callTheShotsFigKey;
-  } else if (abilityKey === 'survival') {
-    // Survival is Strength: reroll 1 attack die (chosen by defender's team)
-    if (combat.survivalFigKey) {
-      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-      game.roundFigureAbilityUsed[`${combat.survivalFigKey}_survival_is_strength`] = true;
-    }
-    if (choice === 'skip') {
-      await thread.send('**Survival is Strength** — Skipped.');
-    } else {
-      const dieIdx = parseInt(choice, 10);
-      const dice = combat.attackDiceResults;
-      if (dice && dieIdx >= 0 && dieIdx < dice.length) {
-        const getDiceData = ctx.getDiceData || (() => ({}));
-        const diceData = getDiceData();
-        const oldDie = dice[dieIdx];
-        const color = oldDie.color;
-        const faces = diceData?.[color];
-        if (faces?.length) {
-          const newFace = faces[Math.floor(Math.random() * faces.length)];
-          // Update the die result
-          dice[dieIdx] = { ...newFace, color };
-          // Recalculate attackRoll totals
-          combat.attackRoll = { dmg: 0, surge: 0, acc: 0 };
-          for (const d of dice) {
-            combat.attackRoll.dmg += (d.dmg || 0);
-            combat.attackRoll.surge += (d.surge || 0);
-            combat.attackRoll.acc += (d.acc || 0);
-          }
-          await thread.send(`**Survival is Strength** — Rerolled 1 ${color} attack die. New roll: ${newFace.dmg || 0} Hit, ${newFace.surge || 0} Surge, ${newFace.acc || 0} Acc.`);
-        }
-      }
-    }
-    combat.survivalResolved = true;
-    delete combat.pendingCombatPassive;
-    delete combat.survivalFigKey;
-    // Survival triggers during token phase — resume there, not in reroll phase
-    saveGames();
-    await proceedAfterTokens(thread, game, combat, ctx);
-    return;
   } else if (abilityKey === 'hr') {
     // Heavy Repeater (Paz Vizsla)
     if (choice === 'hit') {
@@ -4831,53 +4828,9 @@ async function postRollDiceButton(thread, game, combat, ctx) {
 async function proceedAfterTokens(thread, game, combat, ctx) {
   const saveGames = ctx.saveGames;
 
-  // Survival is Strength (Armorer): after a friendly within 3 defending spent a Block,
-  // Armorer's player may force reroll 1 attack die. Once per round.
-  if (!combat.survivalResolved && combat.defenderSpentBlock && combat.target?.figureKey && combat.attackDiceResults?.length > 0) {
-    const _sisDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const defPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
-    const friendlyFigs = game.figurePositions?.[defPlayerNum] || {};
-    const defCoord = friendlyFigs[combat.target.figureKey];
-    const mapSp = getMapData(game.selectedMap?.id);
-    let _sisArmorerFk = null;
-    if (defCoord && mapSp) {
-      for (const [fk, pos] of Object.entries(friendlyFigs)) {
-        const fDcName = dcNameFromFigureKey(fk);
-        const fEff = _sisDcEff[fDcName] || _sisDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
-        if (!(fEff?.specialAbilityIds || []).includes('survival_is_strength_armorer')) continue;
-        if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 3)) {
-          _sisArmorerFk = fk;
-          break;
-        }
-      }
-    }
-    if (_sisArmorerFk && !game.roundFigureAbilityUsed?.[`${_sisArmorerFk}_survival_is_strength`]) {
-      combat.pendingCombatPassive = 'survival';
-      combat.survivalFigKey = _sisArmorerFk;
-      const _sisArmorerDcName = dcNameFromFigureKey(_sisArmorerFk);
-      const dice = combat.attackDiceResults;
-      const btns = dice.map((d, i) =>
-        new ButtonBuilder()
-          .setCustomId(`combat_passive_${game.gameId}_survival_${i}`)
-          .setLabel(`${d.color} die (${d.dmg || 0}H/${d.surge || 0}S/${d.acc || 0}A)`)
-          .setStyle(ButtonStyle.Danger)
-      );
-      btns.push(
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_survival_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary)
-      );
-      const rows = chunkButtonsToRows(btns);
-      await thread.send({
-        content: `**Survival is Strength** (${_sisArmorerDcName}): Defender spent a Block token — choose an attack die to force reroll, or skip.`,
-        components: rows,
-      });
-      saveGames?.();
-      return;
-    }
-    combat.survivalResolved = true;
-  }
-
-  // Pulse Cannon and Negotiate moved to proceedAfterRerolls (CRR step-4 attacker
-  // modifiers; per Destruct's reading, attacker mods fire before defender mods).
+  // Survival is Strength (Armorer) moved to the forced-reroll queue (step 3 timing
+  // per CRR p.10). Pulse Cannon and Negotiate moved to proceedAfterRerolls
+  // (step-4 attacker modifiers, slice 2).
 
   const { getAttackerSurgeAbilities, SURGE_LABELS } = ctx;
   const getAbility = ctx.getAbility || (() => null);
