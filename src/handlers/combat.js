@@ -220,8 +220,15 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after.
- * Now uses the combat gate system so both players must confirm. */
+ * Now uses the combat gate system so both players must confirm.
+ *
+ * Per CRR step-4 modifier timing + Destruct: Zillo Technique's exhaust window
+ * to cancel 2 Pierce fires HERE — after attacker has resolved any pierce
+ * surges, before damage calc. If Zillo prompts, this defers the gate until
+ * the defender responds (handleZilloPierceCancel re-enters this function).
+ */
 export async function sendReadyToResolveRolls(thread, gameId, game, ctx) {
+  if (await maybePromptZilloPierceCancel(thread, game, ctx)) return;
   if (game?.pendingCombat) {
     await sendCombatGate(thread, game, game.pendingCombat, 'pre_resolve', ctx);
     return;
@@ -1618,7 +1625,16 @@ export async function handleAttackTarget(interaction, ctx) {
         await thread.send('**Feeding Frenzy** — Exhausted: target has suffered damage, +1 Hit applied.').catch(discordCatch);
       }
     }
-    // --- Zillo Technique (I51-I52): defender's team SU — exhaust: reduce Pierce by 2; discard CC: +1 Block ---
+    // --- Zillo Technique (I51-I52): defender's team SU ---
+    // The exhaust-to-cancel-2-Pierce effect is now offered after the attacker
+    // resolves surge spending (see sendReadyToResolveRolls), per CRR step-4
+    // modifier timing + Destruct: "exhaust for Zillo has a special timing
+    // window here, to cancel 2 pierce, after attacker decides whether or not
+    // to surge for pierce". Auto-exhaust at declare was wrong — it removed
+    // the defender's choice and burned the card even when no pierce existed.
+    //
+    // The discard-CC for +1 Block prompt stays at declare for now — that's a
+    // step-4 result-modifier and not part of Destruct's CRR-pierce concern.
     if (!target.isNpc) {
       const _ztDefPN = game.pendingCombat.defenderPlayerNum;
       const _ztDcList = getDcList(game, _ztDefPN) || [];
@@ -1628,16 +1644,6 @@ export async function handleAttackTarget(interaction, ctx) {
         if (_ztDcList[_ztI]?.dcName === '[Zillo Technique]') { _ztMsgId = _ztDcMsgIds[_ztI] || null; break; }
       }
       if (_ztMsgId) {
-        const _ztExh = game.exhaustedSkirmishUpgrades?.[_ztMsgId] || [];
-        const _ztDepleted = (game.p1DepletedDcMessageIds || []).includes(_ztMsgId) || (game.p2DepletedDcMessageIds || []).includes(_ztMsgId);
-        // Exhaust effect: reduce Pierce by 2
-        if (!cardNameIncludes(_ztExh, 'Zillo Technique') && !_ztDepleted) {
-          _pc.defenderReducePierce = (_pc.defenderReducePierce || 0) + 2;
-          game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-          game.exhaustedSkirmishUpgrades[_ztMsgId] = [..._ztExh, 'Zillo Technique'];
-          await thread.send('**Zillo Technique** — Exhausted: Pierce reduced by 2 for this attack.').catch(discordCatch);
-        }
-        // Discard CC effect: +1 Block (limit once per attack, no exhaust/deplete cost)
         const _ztHandKey = ccHandKey(_ztDefPN);
         const _ztHand = game[_ztHandKey] || [];
         if (_ztHand.length > 0) {
@@ -6271,6 +6277,108 @@ export async function handleGuidanceSystems(interaction, ctx) {
     }).catch(discordCatch);
     saveGames();
   }
+}
+
+/**
+ * Zillo Technique exhaust prompt: offer the defender the chance to cancel
+ * 2 Pierce by exhausting their Zillo Technique skirmish upgrade card.
+ *
+ * Timing: between step-5 surge spending and step-7 damage calc — i.e. once
+ * the attacker's total Pierce is finalized. Per CRR step-4 + Destruct's
+ * read: "exhaust for Zillo has a special timing window here, to cancel 2
+ * pierce, after attacker decides whether or not to surge for pierce".
+ *
+ * Returns true if the prompt was sent (caller must defer the resolve gate
+ * until handleZilloPierceCancel re-enters sendReadyToResolveRolls). Returns
+ * false when no prompt fires (no Zillo, already exhausted, or no pierce to
+ * cancel) — caller continues normally.
+ */
+async function maybePromptZilloPierceCancel(thread, game, ctx) {
+  const combat = game?.pendingCombat;
+  if (!combat) return false;
+  if (combat.zilloPierceCancelPrompted) return false; // once per attack
+  if (combat.target?.isNpc) return false;
+  const defPN = combat.defenderPlayerNum;
+  if (!defPN) return false;
+  // Only offer when there's pierce worth cancelling.
+  const totalPierce = (combat.bonusPierce || 0)
+    + (combat.surgePierce || 0)
+    + (combat.attackInfo?.pierce || 0)
+    - (combat.defenderReducePierce || 0);
+  if (totalPierce <= 0) return false;
+  // Locate Zillo Technique card on defender's side and check exhaust state.
+  const dcList = getDcList(game, defPN) || [];
+  const dcMsgIds = getDcMessageIds(game, defPN) || [];
+  let ztMsgId = null;
+  for (let i = 0; i < dcList.length; i++) {
+    if (dcList[i]?.dcName === '[Zillo Technique]') { ztMsgId = dcMsgIds[i] || null; break; }
+  }
+  if (!ztMsgId) return false;
+  const exh = game.exhaustedSkirmishUpgrades?.[ztMsgId] || [];
+  if (cardNameIncludes(exh, 'Zillo Technique')) return false;
+  const depleted = (game.p1DepletedDcMessageIds || []).includes(ztMsgId)
+    || (game.p2DepletedDcMessageIds || []).includes(ztMsgId);
+  if (depleted) return false;
+  combat.zilloPierceCancelPrompted = true;
+  combat.zilloPierceCancelMsgId = ztMsgId;
+  const defOwnerId = getPlayerId(game, defPN);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`zillo_pierce_use_${game.gameId}`).setLabel('Exhaust Zillo: cancel 2 Pierce').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`zillo_pierce_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+  );
+  await thread.send(sanitizeMentions({
+    content: `<@${defOwnerId}> **Zillo Technique** — Attacker has **${totalPierce}** Pierce. Exhaust **Zillo Technique** to reduce Pierce by 2 (min 0)?`,
+    allowedMentions: { users: [defOwnerId] },
+    components: [row],
+  })).catch(discordCatch);
+  if (ctx?.saveGames) ctx.saveGames();
+  return true;
+}
+
+/**
+ * Handle the post-surge Zillo Pierce cancel prompt. On "use", exhaust the
+ * Zillo Technique card and add 2 to defenderReducePierce. Either way,
+ * re-enter sendReadyToResolveRolls to advance to the pre_resolve gate.
+ */
+export async function handleZilloPierceCancel(interaction, ctx) {
+  const { getGame, saveGames, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const isUse = interaction.customId.startsWith('zillo_pierce_use_');
+  const gameId = parseCustomId(interaction.customId, isUse ? 'zillo_pierce_use_' : 'zillo_pierce_skip_');
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const combat = game.pendingCombat;
+  if (!combat) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    return;
+  }
+  const defPN = combat.defenderPlayerNum;
+  const ownerId = getPlayerId(game, defPN);
+  if (interaction.user.id !== ownerId && !game.isTestGame) {
+    await interaction.followUp({ content: 'Only the defender can choose this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
+  if (isUse) {
+    const ztMsgId = combat.zilloPierceCancelMsgId;
+    if (ztMsgId) {
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      const exh = game.exhaustedSkirmishUpgrades[ztMsgId] || [];
+      game.exhaustedSkirmishUpgrades[ztMsgId] = [...exh, 'Zillo Technique'];
+    }
+    combat.defenderReducePierce = (combat.defenderReducePierce || 0) + 2;
+    await interaction.message.edit({
+      content: '**Zillo Technique** — Exhausted: Pierce reduced by 2 for this attack.',
+      components: [],
+    }).catch(discordCatch);
+  } else {
+    await interaction.message.edit({
+      content: '**Zillo Technique** — Skipped (Pierce not cancelled).',
+      components: [],
+    }).catch(discordCatch);
+  }
+  saveGames();
+  if (thread) await sendReadyToResolveRolls(thread, gameId, game, ctx);
 }
 
 /**
