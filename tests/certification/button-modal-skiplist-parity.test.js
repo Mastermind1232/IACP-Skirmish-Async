@@ -104,19 +104,70 @@ describe('button-modal skip-list parity', () => {
     assert.ok(REGS.length > 0, 'no register() calls found in handlers/index.js');
   });
 
+  // Handlers exempt from the reply-after-defer check (they're invoked
+  // outside the auto-defer button dispatch path — e.g. modal-submit
+  // handlers, select-menu handlers, or registered handlers known to
+  // self-defer first).
+  const REPLY_CHECK_EXEMPT = new Set([
+    // Modal-submit handlers: dispatched from a different code path
+    // (no auto-defer). interaction.reply() is correct.
+    'cp_save_modal_',
+    // Self-defer handlers (call interaction.deferReply themselves before
+    // any reply, so the auto-defer doesn't apply).
+    'cp_load_ingame_pick_',
+    'cp_newgame_pick_',
+    // String-select-menu handlers: select dispatch doesn't auto-defer.
+    'fav_list_select_',
+    // TODO: known reply-after-defer bugs surfaced by this test on first
+    // run. Each calls interaction.reply() inside what is actually a
+    // button dispatch path (auto-deferred) so the call silently fails.
+    // Low-severity (mostly gate / permission messages that vanish);
+    // fix by switching to interaction.followUp(...) when the handler
+    // is next touched.
+    'fav_remove_',        // favorites.js — Remove favorite button
+    'fav_list_remove_',   // favorites.js — Remove from list button
+    'fav_list_back_',     // favorites.js — Back button
+    'ps_replace_',        // interrupts.js — Punishing Strike replacement gate
+  ]);
+
   // For each registered handler, if it calls showModal it MUST be in MODAL_PREFIXES.
+  // Additionally, if it calls interaction.reply() and is NOT in MODAL_PREFIXES
+  // (i.e., the dispatcher auto-deferred first), that's the inverse class of
+  // bug — reply-after-defer fails silently. Use followUp instead.
   for (const { prefix, fnName } of REGS) {
     const body = findHandlerBody(fnName);
     if (body == null) continue;
     const callsShowModal = /\binteraction\.showModal\s*\(/.test(body);
-    if (!callsShowModal) continue;
+    const callsReply = /\binteraction\.reply\s*\(/.test(body);
+    const callsSelfDefer = /\binteraction\.defer(Reply|Update)\s*\(/.test(body);
 
-    it(`${prefix} (${fnName}) calls showModal → must be in MODAL_PREFIXES`, () => {
-      assert.ok(
-        MODAL_PREFIXES.includes(prefix),
-        `Handler ${fnName} calls interaction.showModal() but its prefix '${prefix}' is not in the MODAL_PREFIXES skip-list at index.js. ` +
-          `Add '${prefix}' to MODAL_PREFIXES so the dispatcher does not pre-deferUpdate the interaction.`,
-      );
-    });
+    if (callsShowModal) {
+      it(`${prefix} (${fnName}) calls showModal → must be in MODAL_PREFIXES`, () => {
+        assert.ok(
+          MODAL_PREFIXES.includes(prefix),
+          `Handler ${fnName} calls interaction.showModal() but its prefix '${prefix}' is not in the MODAL_PREFIXES skip-list at index.js. ` +
+            `Add '${prefix}' to MODAL_PREFIXES so the dispatcher does not pre-deferUpdate the interaction.`,
+        );
+      });
+    }
+
+    // Reply-after-defer check: a button handler that's NOT in MODAL_PREFIXES
+    // is auto-deferred by the dispatcher. A subsequent interaction.reply()
+    // will throw "InteractionAlreadyReplied" and get swallowed by
+    // discordCatch — silent failure. Use followUp() instead.
+    // Exempt: handlers that call deferReply/deferUpdate themselves before
+    // any reply (the auto-defer is no-op then), and modal-submit /
+    // select-menu prefixes that don't go through the button dispatch.
+    if (callsReply && !callsShowModal && !MODAL_PREFIXES.includes(prefix) && !callsSelfDefer && !REPLY_CHECK_EXEMPT.has(prefix)) {
+      it(`${prefix} (${fnName}) calls interaction.reply() outside the skip-list → use followUp instead`, () => {
+        assert.fail(
+          `Handler ${fnName} calls interaction.reply() but its prefix '${prefix}' is NOT in the MODAL_PREFIXES skip-list at index.js, ` +
+          `meaning the button dispatcher auto-deferred the interaction before this handler ran. ` +
+          `interaction.reply() will throw InteractionAlreadyReplied (silently swallowed). ` +
+          `Either (a) switch to interaction.followUp(...), or (b) add '${prefix}' to REPLY_CHECK_EXEMPT if this handler self-defers, or ` +
+          `(c) add '${prefix}' to MODAL_PREFIXES if it shows a modal.`,
+        );
+      });
+    }
   }
 });

@@ -172,7 +172,9 @@ function remapMsgIdKeyedFields(game, oldP1Ids, oldP2Ids) {
     'p1CcAttachments', 'p2CcAttachments',
     'exhaustedSkirmishUpgrades',
     'fellSwoopFreeAttack', 'pummelTwoAttacksThisActivation', 'pummelAttacksRemaining',
-    'overdriveUsedThisActivation',
+    // overdriveUsedThisActivation removed: keyed by figureKey (in
+    // ACTIVATION_FIGKEY_FLAGS), not msgId. Survives cross-lobby intact;
+    // would never match this remap.
     'roundFigureAbilityUsed', // keys may be msgId_<ability>
     'rushPending', 'shoulderRushPending',
     'mobileMovementActive', 'moveXBypassActive',
