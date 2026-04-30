@@ -80,7 +80,6 @@ import {
   setupServer as _setupServer,
   backfillBothelpersRoleAccess,
 } from './src/game-creation.js';
-import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
 import {
   buildBoardMapPayload as _buildBoardMapPayload,

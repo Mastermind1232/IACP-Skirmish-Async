@@ -199,7 +199,6 @@ async function mutateToCombat(game, client, deps, userId) {
   }
 
   // Set up activation state for attacker's DC
-  game.currentActivatingDcMsgId = attackerMsgId;
   if (!game.dcActionsData) game.dcActionsData = {};
   game.dcActionsData[attackerMsgId] = { actions: 2, moved: false };
   dcExhaustedState.set(attackerMsgId, false);

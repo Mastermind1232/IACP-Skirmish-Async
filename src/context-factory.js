@@ -342,11 +342,6 @@ const CONTEXT_GROUPS = {
     'validateDeckLegal', 'sendSquadConfirmation', 'saveGames', 'client',
   ],
 
-  favorites: [
-    'getGame', 'pendingSquadConfirm', 'PENDING_ILLEGAL_TTL_MS',
-    'validateDeckLegal', 'sendSquadConfirmation', 'saveGames', 'client',
-  ],
-
   favList: [
     'validateDeckLegal', 'buildSquadConfirmText',
   ],

@@ -137,7 +137,6 @@ import {
   handleCheckpointSaveModal,
   handleCheckpointLoadIngamePrompt,
   handleCheckpointLoadIngamePick,
-  handleCheckpointLoadNewLobbyPrompt,
   handleCheckpointNewGameOpen,
   handleCheckpointNewGamePick,
 } from './checkpoint.js';
@@ -423,7 +422,6 @@ register('cp_save_modal_', handleCheckpointSaveModal, 'checkpoint');
 register('cp_save_', handleCheckpointSavePrompt, 'checkpoint');
 register('cp_load_ingame_pick_', handleCheckpointLoadIngamePick, 'checkpoint');
 register('cp_load_ingame_', handleCheckpointLoadIngamePrompt, 'checkpoint');
-register('cp_load_newlobby_', handleCheckpointLoadNewLobbyPrompt, 'checkpoint');
 register('cp_newgame_pick_', handleCheckpointNewGamePick, 'checkpoint');
 register('cp_newgame_open_', handleCheckpointNewGameOpen, 'checkpoint');
 register('botmenu_kill_', handleBotmenuKill, 'botmenu');

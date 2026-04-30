@@ -27,17 +27,15 @@ import {
   TextInputStyle, StringSelectMenuBuilder, EmbedBuilder,
 } from 'discord.js';
 import { discordCatch } from '../error-handling.js';
-import { logGameAction } from '../discord/messages.js';
 import { requireGame } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
-import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
-import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
+import { parseCustomId } from '../discord/custom-id.js';
 import {
-  insertCheckpoint, listCheckpointsForUser, listCheckpointsForGame,
-  listAllCheckpoints, getCheckpointById, deleteCheckpoint,
+  insertCheckpoint, listCheckpointsForGame,
+  listAllCheckpoints, getCheckpointById,
   countCheckpointsByUser,
 } from '../db.js';
-import { CURRENT_GAME_VERSION, repopulateDcMapsForGame, getGame } from '../game-state.js';
+import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
 
 const MAX_CHECKPOINTS_PER_USER = 50;
 const CHECKPOINT_NAME_MAX_LEN = 80;
@@ -138,11 +136,12 @@ function remapMsgIdKeyedFields(game, oldP1Ids, oldP2Ids) {
     'overdriveUsedThisActivation',
     'roundFigureAbilityUsed', // keys may be msgId_<ability>
     'rushPending', 'shoulderRushPending',
-    'mobileMovementActive', 'moveXBypassActive', 'moveCleaveActive',
+    'mobileMovementActive', 'moveXBypassActive',
     'movementBank',
     // figurePowerTokens removed: keyed by figureKey (e.g. "Trooper-1-0"), not
     // msgId, so it survives cross-lobby intact and never matched here anyway.
-    'roundDcAbilityUsed',
+    // moveCleaveActive + roundDcAbilityUsed removed: declared but never written
+    // anywhere in the codebase.
     'overrunDamagedThisMove',
   ];
   for (const flagName of MSGID_FLAGS) {
@@ -466,28 +465,6 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
     if (settingUpMsg) settingUpMsg.delete().catch(() => {});
     await general.send({ content: `❌ Checkpoint load failed: ${err.message}` }).catch(discordCatch);
   }
-}
-
-// ── Load Checkpoint into NEW Lobby (cross-game) — legacy stub ───────────────
-
-export async function handleCheckpointLoadNewLobbyPrompt(interaction, ctx) {
-  // For now, stub: list saved checkpoints visible to this user. Full new-lobby
-  // creation flow is wired through game-creation; this handler is currently
-  // posted in-game and would normally trigger lobby creation. The simplest
-  // first-cut is to instruct the user to use the new-lobby creation menu.
-  const { getGame: getGameDep } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'cp_load_newlobby_');
-  const game = await requireGame(interaction, getGameDep, gameId);
-  if (!game) return;
-  const checkpoints = await listCheckpointsForUser(interaction.user.id, { limit: 25 });
-  if (!checkpoints.length) {
-    await interaction.followUp({ content: 'You have no saved checkpoints yet. Use **💾 Save Checkpoint** first.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  await interaction.reply({
-    content: '🔀 **Load into New Lobby** — to spawn a fresh lobby with a saved state, create a new game with the **/new-game** command and pick the **Load from Checkpoint** option there. Your saved checkpoints will appear in the dropdown.\n\nFor in-place restoration of this game, use **📂 Load Checkpoint (this game)** instead.',
-    ephemeral: true,
-  }).catch(discordCatch);
 }
 
 /**
