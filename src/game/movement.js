@@ -212,17 +212,30 @@ export function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = nul
  * Used by Blast when the target's position may already be removed (defeat),
  * and by Cleave for attacker-based eligibility.
  */
-export function getFiguresAdjacentToCoord(game, coord, mapId, excludeFigureKey) {
+/**
+ * Adjacent-figures lookup. Pass `coordSize` for multi-cell origins (e.g.
+ * blast adjacency around a defeated LARGE/MASSIVE target whose footprint
+ * spanned multiple cells); without it, treats `coord` as a single 1x1 origin.
+ *
+ * Per CRR step 8: blast/cleave-eligible adjacency uses the target's full
+ * pre-defeat footprint, not just one cell.
+ */
+export function getFiguresAdjacentToCoord(game, coord, mapId, excludeFigureKey, coordSize = null) {
   if (!coord || !mapId) return [];
   const rawMapSpaces = getMapData(mapId);
   if (!rawMapSpaces?.adjacency) return [];
   const mapDef = getMapRegistry().find((m) => m.id === mapId);
   const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
   const adjacency = mapSpaces.adjacency || {};
-  const normCoord = normalizeCoord(coord);
+  // Origin cells: just the single normalized coord, or all footprint cells when coordSize is given.
+  const originCells = coordSize
+    ? getFootprintCells(coord, coordSize).map((c) => normalizeCoord(c))
+    : [normalizeCoord(coord)];
   const adjacentSet = new Set();
-  for (const n of adjacency[normCoord] || []) adjacentSet.add(normalizeCoord(n));
-  adjacentSet.add(normCoord);
+  for (const oc of originCells) {
+    adjacentSet.add(oc);
+    for (const n of adjacency[oc] || []) adjacentSet.add(normalizeCoord(n));
+  }
   const poses = game?.figurePositions || { 1: {}, 2: {} };
   const out = [];
   for (const p of [1, 2]) {

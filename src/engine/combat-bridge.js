@@ -486,8 +486,16 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     console.log(`[COMBAT-TRACE] ${combat.attackerDcName} → ${targetDcName} | hit=${hit} dmg=${damage} | atk=[${_ctRoll.dmg}d,${_ctRoll.acc}a,${_ctRoll.surge}s] def=[${_ctDef.block}b,${_ctDef.evade}e,${_ctDef.dodge ? 'D' : '-'}] | surge_dmg=${combat.surgeDamage || 0} pierce=${(combat.surgePierce || 0) + (combat.bonusPierce || 0)} | hp=${_ctPrevHp}/${_ctMaxHp}→${hit ? Math.max(0, _ctPrevHp - damage) : _ctPrevHp} | defeated=${hit && _ctPrevHp > 0 && (_ctPrevHp - damage) <= 0 ? 'YES' : 'no'}`);
   }
 
-  // Wave 3: Save target position before potential defeat (Blast needs coord after target removed from figurePositions)
+  // Wave 3: Save target position + size before potential defeat. Blast / cleave-eligible
+  // adjacency must use the FULL footprint of multi-cell targets (LARGE 2x2, MASSIVE 2x3),
+  // not a single cell. Per CRR step 8: "If the main target is defeated, the figure is
+  // removed before legitimate target spaces are calculated for these abilities" — so
+  // adjacency uses target's pre-defeat footprint, with the target itself excluded.
   const _targetCoordBeforeDefeat = game.figurePositions?.[defenderPlayerNum]?.[combat.target?.figureKey];
+  const _targetDcName = combat.target?.figureKey ? dcNameFromFigureKey(combat.target.figureKey) : null;
+  const _targetSizeBeforeDefeat = combat.target?.figureKey
+    ? (game.figureOrientations?.[combat.target.figureKey] || (_targetDcName ? getFigureSize(_targetDcName) : null))
+    : null;
 
   let _fdNeedsEmbedRefresh = false;
   if (damage > 0 && targetMsgId) {
@@ -1333,9 +1341,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     // Flame Trooper attachment upgrades (for Blast Fireproof check below; also computed at function level for Incinerate)
     const _ftAtkUpgradesBlast = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
     if (effectiveBlast > 0 && hit && damage > 0 && game.selectedMap?.id) {
-      // Wave 3: Use saved target coord (target may be defeated/removed from figurePositions by now)
+      // Wave 3 + CRR step 8: Use saved target coord+size (target may be defeated/removed by now,
+      // and multi-cell targets need full-footprint adjacency).
       const adjacent = _targetCoordBeforeDefeat
-        ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey)
+        ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey, _targetSizeBeforeDefeat)
         : [];
       for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
         // Flame Trooper Fireproof: own Blast does not affect friendly figures
@@ -1739,8 +1748,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
     // Blast damage also triggers Incinerate Strain on adjacent damaged figures — auto-apply
     if (effectiveBlast > 0 && game.selectedMap?.id) {
+      // CRR step 8: full-footprint adjacency (target may be a defeated multi-cell figure).
       const _ftBlastAdj = _targetCoordBeforeDefeat
-        ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey)
+        ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey, _targetSizeBeforeDefeat)
         : [];
       for (const { figureKey: _ftBlastFk, playerNum: _ftBlastPn } of _ftBlastAdj) {
         // Fireproof: skip friendly figures with Flame Trooper attachment
@@ -1935,10 +1945,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   }
-  // Embed refresh for Blast damage already applied earlier in this function
+  // Embed refresh for Blast damage already applied earlier in this function.
+  // CRR step 8: full-footprint adjacency for multi-cell defeated targets.
   if (totalBlast > 0 && hit && game.selectedMap?.id) {
     const blastAdjacent = _targetCoordBeforeDefeat
-      ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey)
+      ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey, _targetSizeBeforeDefeat)
       : [];
     for (const { figureKey: bk, playerNum: bp } of blastAdjacent) {
       const mid = findDcMessageIdForFigure(game.gameId, bp, bk);
