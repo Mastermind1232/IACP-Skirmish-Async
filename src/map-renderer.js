@@ -103,7 +103,7 @@ function colToLetter(col) {
  */
 
 export async function renderMap(mapId, options = {}) {
-  const { figures = [], tokens = {}, showGrid = true, maxWidth = 1200, cropToZone = null, gridStyle = 'default', showGridOnlyOnCoords = null } = options;
+  const { figures = [], tokens = {}, showGrid = true, maxWidth = 2500, cropToZone = null, gridStyle = 'default', showGridOnlyOnCoords = null } = options;
   const mapDef = getMap(mapId);
   if (!mapDef) throw new Error(`Map not found: ${mapId}`);
 

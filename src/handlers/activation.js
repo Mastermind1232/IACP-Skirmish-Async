@@ -235,7 +235,9 @@ export async function handlePassActivationTurn(interaction, ctx) {
   const turnZone = getPlayerZoneLabel(game, turnPlayerId);
   const roundContentBefore = `<@${turnPlayerId}> (${turnZone}**Player ${turnNum}**) **Round ${round}** — Your turn to activate! You may pass back if the other player has more activations.`;
   game.currentActivationTurnPlayerId = otherPlayerId;
-  const passLogMsg = await logGameAction(game, client, `<@${turnPlayerId}> passed the turn to <@${otherPlayerId}> (Player ${otherPlayerNum} has more activations remaining).`, { phase: 'ROUND', icon: 'activate', allowedMentions: { users: [otherPlayerId] } });
+  const _otherWord = otherRem === 1 ? 'activation' : 'activations';
+  const _myWord = myRem === 1 ? 'activation' : 'activations';
+  const passLogMsg = await logGameAction(game, client, `<@${turnPlayerId}> passed the turn to <@${otherPlayerId}> (Player ${otherPlayerNum} has **${otherRem}** ${_otherWord} remaining; you have **${myRem}** ${_myWord}).`, { phase: 'ROUND', icon: 'activate', allowedMentions: { users: [otherPlayerId] } });
   pushUndo(game, {
     type: 'pass_turn',
     previousTurnPlayerId: turnPlayerId,
