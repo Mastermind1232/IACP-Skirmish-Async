@@ -252,10 +252,14 @@ export async function sendReadyToResolveRolls(thread, gameId, game, ctx) {
 // (e.g. "I'd only Zillo if you Bib").
 
 const COMBAT_GATE_LABELS = {
-  post_roll:              '🎲 Dice rolled. Next: attacker may reroll.',
-  post_attacker_reroll:   '🔄 Attacker rerolls complete. Next: defender rerolls (if any).',
-  post_forced_reroll:     '🔄 Forced rerolls complete. Next: defender rerolls (if any).',
-  post_defender_reroll:   '🔄 All rerolls complete. Next: power tokens, then surge spending.',
+  post_roll:              '🎲 **Dice rolled** (CRR step 2). Next: rerolls (step 3).',
+  post_attacker_reroll:   '🔄 **Attacker rerolls done**. Next: defender rerolls (if any).',
+  post_forced_reroll:     '🔄 **Forced rerolls done**. Next: defender rerolls (if any).',
+  // Step 4 of an attack per CRR: Apply Modifiers. This is when CCs that
+  // modify the attack (Take Cover, Concentrated Fire, etc.) and ability
+  // triggers fire. Both players: play any modifier CCs from your hand
+  // channel, then click Ready to advance to step 5 (surge).
+  post_defender_reroll:   '🛠️ **Apply Modifiers** (CRR step 4) — play any CCs or abilities that modify this attack. Click Ready when done. Next: spend surge (step 5).',
   pre_resolve:            '⚔️ Resolving attack...',
 };
 
