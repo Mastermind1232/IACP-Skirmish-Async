@@ -3215,6 +3215,35 @@ function buildActionRows(buttons) {
   return chunkButtonsToRows(buttons);
 }
 
+/**
+ * One die per row layout for reroll UI: each die button on its own row so
+ * the dice values are easy to read top-to-bottom. Trailing control buttons
+ * (Done / Skip / Cross Training) share the final row.
+ *
+ * Discord caps message components at 5 rows × 5 buttons. When dice count
+ * would exceed 4 rows (leaving 1 for controls), we fall back to packed
+ * rows so all buttons remain reachable.
+ */
+function buildRerollRows(dieButtons, trailingButtons) {
+  const trailing = trailingButtons || [];
+  const MAX_ROWS = 5;
+  const rows = [];
+  if (dieButtons.length <= MAX_ROWS - (trailing.length > 0 ? 1 : 0)) {
+    for (const btn of dieButtons) rows.push(new ActionRowBuilder().addComponents(btn));
+    if (trailing.length > 0) rows.push(new ActionRowBuilder().addComponents(...trailing.slice(0, 5)));
+    return rows;
+  }
+  // Fallback: pack dice into rows of 5, reserve last row for trailing controls
+  for (let i = 0; i < dieButtons.length; i += 5) {
+    if (rows.length >= MAX_ROWS - (trailing.length > 0 ? 1 : 0)) break;
+    rows.push(new ActionRowBuilder().addComponents(...dieButtons.slice(i, i + 5)));
+  }
+  if (trailing.length > 0 && rows.length < MAX_ROWS) {
+    rows.push(new ActionRowBuilder().addComponents(...trailing.slice(0, 5)));
+  }
+  return rows;
+}
+
 /** Format individual dice for display in reroll UI */
 function formatAttackDie(d, i) {
   return `${d.color} #${i + 1}: ${d.acc}acc/${d.dmg}dmg/${d.surge}surge`;
@@ -3293,26 +3322,25 @@ export async function sendRerollUI(thread, game, combat, phase) {
     }
     const dice = combat.attackDiceResults || [];
     const alreadyRerolled = combat.attackerRerolledIndices || [];
-    const buttons = [];
+    const dieButtons = [];
     for (let i = 0; i < dice.length; i++) {
       if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
-      buttons.push(
+      dieButtons.push(
         new ButtonBuilder()
           .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
           .setLabel(`Reroll ${formatAttackDie(dice[i], i)}`)
           .setStyle(ButtonStyle.Secondary)
       );
     }
-    buttons.push(
+    const trailing = [
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_atk_done`)
         .setLabel('Done (no rerolls)')
-        .setStyle(ButtonStyle.Primary)
-    );
-    const actionRows = buildActionRows(buttons);
+        .setStyle(ButtonStyle.Primary),
+    ];
     await thread.send({
       content: `**Reroll Window (Attacker)** — ${remaining} reroll${remaining > 1 ? 's' : ''} available. Choose an attack die to reroll, or Done.`,
-      components: actionRows,
+      components: buildRerollRows(dieButtons, trailing),
     });
   } else if (phase === 'forced') {
     const entry = (combat.forcedRerollQueue || [])[0];
@@ -3321,14 +3349,14 @@ export async function sendRerollUI(thread, game, combat, phase) {
       await _advanceFromForced();
       return;
     }
-    const buttons = [];
+    const dieButtons = [];
     const atkAlreadyRerolled = combat.attackerRerolledIndices || []; // G12
     const defAlreadyRerolled = combat.defenderRerolledIndices || []; // G12
     if (entry.pool === 'attack' || entry.pool === 'any') {
       const aDice = combat.attackDiceResults || [];
       for (let i = 0; i < aDice.length; i++) {
         if (atkAlreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
-        buttons.push(
+        dieButtons.push(
           new ButtonBuilder()
             .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
             .setLabel(`Force ATK ${formatAttackDie(aDice[i], i)}`)
@@ -3340,7 +3368,7 @@ export async function sendRerollUI(thread, game, combat, phase) {
       const dDice = combat.defenseDiceResults || [];
       for (let i = 0; i < dDice.length; i++) {
         if (defAlreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
-        buttons.push(
+        dieButtons.push(
           new ButtonBuilder()
             .setCustomId(`combat_reroll_${gameId}_def_${i}`)
             .setLabel(`Force DEF ${formatDefenseDie(dDice[i], i)}`)
@@ -3348,17 +3376,16 @@ export async function sendRerollUI(thread, game, combat, phase) {
         );
       }
     }
-    buttons.push(
+    const trailing = [
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_atk_done`)
         .setLabel('Skip (no forced reroll)')
-        .setStyle(ButtonStyle.Secondary)
-    );
-    const actionRows = buildActionRows(buttons);
+        .setStyle(ButtonStyle.Secondary),
+    ];
     const poolLabel = entry.pool === 'any' ? '' : entry.pool + ' ';
     await thread.send({
       content: `**${entry.source}** (Forced Reroll) — Pick a ${poolLabel}die to force reroll (${entry.remaining} remaining), or Skip.`,
-      components: actionRows,
+      components: buildRerollRows(dieButtons, trailing),
     });
   } else {
     const remaining = combat.defenderRerollsRemaining || 0;
@@ -3369,11 +3396,11 @@ export async function sendRerollUI(thread, game, combat, phase) {
     }
     const dice = combat.defenseDiceResults || [];
     const alreadyRerolled = combat.defenderRerolledIndices || [];
-    const buttons = [];
+    const dieButtons = [];
     for (let i = 0; i < dice.length; i++) {
       if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
       if (remaining > 0) {
-        buttons.push(
+        dieButtons.push(
           new ButtonBuilder()
             .setCustomId(`combat_reroll_${gameId}_def_${i}`)
             .setLabel(`Reroll ${formatDefenseDie(dice[i], i)}`)
@@ -3381,22 +3408,22 @@ export async function sendRerollUI(thread, game, combat, phase) {
         );
       }
     }
-    // Cross Training: separate exhaust-to-reroll with color swap
+    const trailing = [];
     if (ctAvailable) {
-      buttons.push(
+      trailing.push(
         new ButtonBuilder()
           .setCustomId(`ct_reroll_${gameId}_pick`)
           .setLabel('⚔️ Cross Training (Exhaust)')
           .setStyle(ButtonStyle.Primary)
       );
     }
-    buttons.push(
+    trailing.push(
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_def_done`)
         .setLabel('Done (no rerolls)')
         .setStyle(ButtonStyle.Primary)
     );
-    const actionRows = buildActionRows(buttons);
+    const actionRows = buildRerollRows(dieButtons, trailing);
     const parts = [];
     if (remaining > 0) parts.push(`${remaining} reroll${remaining > 1 ? 's' : ''}`);
     if (ctAvailable) parts.push('Cross Training');
