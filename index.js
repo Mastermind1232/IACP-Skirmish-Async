@@ -2384,9 +2384,13 @@ async function maybeSetupLobbyFromFirstMessage(message) {
   const skirboTag = availableTags.find(
     (t) => appliedTagIds.includes(t.id) && /skirbo/i.test(t.name || ''),
   );
+  const loadCheckpointTag = availableTags.find(
+    (t) => appliedTagIds.includes(t.id) && /load\s*checkpoint/i.test(t.name || ''),
+  );
   const lobby = skirboTag
     ? { creatorId: creator, joinedId: `${AI_USER_PREFIX}2`, status: 'Full', vsSkirbo: true }
     : { creatorId: creator, joinedId: null, status: 'LFG' };
+  if (loadCheckpointTag) lobby.loadCheckpoint = true;
   setLobby(thread.id, lobby);
   await thread.send({
     embeds: [getLobbyEmbed(lobby)],

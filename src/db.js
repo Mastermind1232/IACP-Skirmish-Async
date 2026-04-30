@@ -1743,6 +1743,20 @@ export async function listCheckpointsForUser(userId, { limit = 50 } = {}) {
 }
 
 /** List checkpoints saved against a specific game. */
+/** List all checkpoints, newest first. Used by the new-lobby load flow. */
+export async function listAllCheckpoints({ limit = 25 } = {}) {
+  if (!pool) return [];
+  const { rows } = await pool.query(
+    `SELECT id, name, origin_game_id, created_by, created_at,
+            round_at_save, p1_username, p2_username, map_id
+     FROM checkpoints
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    [limit],
+  );
+  return rows;
+}
+
 export async function listCheckpointsForGame(originGameId) {
   if (!pool) return [];
   const { rows } = await pool.query(

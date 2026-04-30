@@ -29,7 +29,8 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import {
   insertCheckpoint, listCheckpointsForUser, listCheckpointsForGame,
-  getCheckpointById, deleteCheckpoint, countCheckpointsByUser,
+  listAllCheckpoints, getCheckpointById, deleteCheckpoint,
+  countCheckpointsByUser,
 } from '../db.js';
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame, getGame } from '../game-state.js';
 
@@ -322,7 +323,118 @@ export async function handleCheckpointLoadIngamePick(interaction, ctx) {
   }
 }
 
-// ── Load Checkpoint into NEW Lobby (cross-game) ─────────────────────────────
+// ── New-lobby checkpoint flow (lobby tagged "Load Checkpoint") ──────────────
+
+/**
+ * Button handler: cp_newgame_open_<gameId>
+ * Posts an ephemeral select with all global checkpoints. Either player
+ * in the lobby may press it.
+ */
+export async function handleCheckpointNewGameOpen(interaction, ctx) {
+  const { getGame: getGameDep } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'cp_newgame_open_');
+  const game = await requireGame(interaction, getGameDep, gameId);
+  if (!game) return;
+  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
+    await interaction.reply({ content: 'Only players in this lobby can pick a checkpoint.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const checkpoints = await listAllCheckpoints({ limit: 25 });
+  if (!checkpoints.length) {
+    await interaction.reply({ content: 'No checkpoints saved yet. Save one from any active game using **/botmenu → 💾 Save Checkpoint**.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`cp_newgame_pick_${gameId}`)
+    .setPlaceholder('Choose a checkpoint to load...')
+    .addOptions(checkpoints.map((cp) => {
+      const ts = new Date(parseInt(cp.created_at, 10)).toLocaleString();
+      const players = [cp.p1_username, cp.p2_username].filter(Boolean).join(' vs ') || cp.origin_game_id || 'unknown';
+      return {
+        label: cp.name.slice(0, 100),
+        description: `${players} · round ${cp.round_at_save ?? 0} · ${ts}`.slice(0, 100),
+        value: cp.id,
+      };
+    }));
+  await interaction.reply({
+    content: '🔀 **Pick a checkpoint** — the saved state will be loaded into this lobby.',
+    components: [new ActionRowBuilder().addComponents(select)],
+    ephemeral: true,
+  }).catch(discordCatch);
+}
+
+/**
+ * Select handler: cp_newgame_pick_<gameId>
+ * Loads the chosen checkpoint into this fresh lobby. Creates board +
+ * play-area channels using the saved map/squads, then runs
+ * applyCheckpointToNewLobby to post DCs with their saved state.
+ */
+export async function handleCheckpointNewGamePick(interaction, ctx) {
+  const {
+    getGame: getGameDep, saveGames, client,
+    createBoardChannel, createPlayAreaChannels, populatePlayAreas,
+    buildBoardMapPayload, sendRoundActivationPhaseMessage,
+  } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'cp_newgame_pick_');
+  const cpId = interaction.values?.[0];
+  await interaction.deferUpdate().catch(discordCatch);
+  const game = await requireGame(interaction, getGameDep, gameId);
+  if (!game) return;
+  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
+    await interaction.followUp({ content: 'Only players in this lobby can pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const cp = await getCheckpointById(cpId);
+  if (!cp) {
+    await interaction.followUp({ content: 'Checkpoint not found (it may have been deleted).', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (cp.game_version !== CURRENT_GAME_VERSION) {
+    await interaction.followUp({ content: `Checkpoint version mismatch (saved ${cp.game_version}, current ${CURRENT_GAME_VERSION}). Refusing to load.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Tell players the load is starting
+  const general = await fetchGameChannel(client, game.generalId);
+  const settingUpMsg = await general.send({ content: '⏳ Loading checkpoint and creating channels...' }).catch(() => null);
+
+  try {
+    // Create board + play-area channels using the new lobby's player IDs.
+    const guild = general.guild;
+    const gameCategory = await guild.channels.fetch(game.gameCategoryId || general.parentId);
+    const prefix = `IA${game.gameId}`;
+    if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
+      const { p1PlayAreaChannel, p2PlayAreaChannel } = await createPlayAreaChannels(
+        guild, gameCategory, prefix, game.player1Id, game.player2Id,
+      );
+      game.p1PlayAreaId = p1PlayAreaChannel.id;
+      game.p2PlayAreaId = p2PlayAreaChannel.id;
+    }
+    if (!game.boardId) {
+      const boardChannel = await createBoardChannel(
+        guild, gameCategory, prefix, game.player1Id, game.player2Id,
+      );
+      game.boardId = boardChannel.id;
+    }
+
+    // Apply checkpoint state on top of the now-prepared lobby.
+    await applyCheckpointToNewLobby(game, cp, client, {
+      populatePlayAreas, buildBoardMapPayload, sendRoundActivationPhaseMessage, saveGames,
+    });
+
+    if (settingUpMsg) settingUpMsg.delete().catch(() => {});
+    await general.send({
+      content: `<@${game.player1Id}> <@${game.player2Id}> — 📂 Loaded checkpoint **"${cp.name}"** (round ${cp.round_at_save ?? 0}). Resume play in <#${game.p1PlayAreaId}> / <#${game.p2PlayAreaId}>.`,
+    }).catch(discordCatch);
+    saveGames?.(game.gameId);
+  } catch (err) {
+    console.error('checkpoint new-lobby load failed:', err);
+    if (settingUpMsg) settingUpMsg.delete().catch(() => {});
+    await general.send({ content: `❌ Checkpoint load failed: ${err.message}` }).catch(discordCatch);
+  }
+}
+
+// ── Load Checkpoint into NEW Lobby (cross-game) — legacy stub ───────────────
 
 export async function handleCheckpointLoadNewLobbyPrompt(interaction, ctx) {
   // For now, stub: list saved checkpoints visible to this user. Full new-lobby

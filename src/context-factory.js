@@ -307,6 +307,9 @@ const CONTEXT_GROUPS = {
     'refreshAllGameComponents', 'recomputeActivationCounts',
     'repopulateDcMapsForGame',
     'dcMessageMeta', 'dcExhaustedState',
+    // New-lobby load needs to spin up channels + render board.
+    'createBoardChannel', 'createPlayAreaChannels', 'populatePlayAreas',
+    'buildBoardMapPayload', 'sendRoundActivationPhaseMessage',
   ],
 
   phaseGate: [

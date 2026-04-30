@@ -2,6 +2,7 @@
  * Lobby handlers: lobby_join_, lobby_start_.
  * Dependencies passed via context from index (no import from index).
  */
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
 import { CURRENT_GAME_VERSION } from '../game-state.js';
 import { PHASES } from '../game/phase.js';
@@ -142,25 +143,52 @@ export async function handleLobbyStart(interaction, ctx) {
       // Vs-SKIRBO games: AI takes player 2 and auto-fills its squad after
       // the human's submission (see applySquadSubmission).
       ...(isAiOpponent ? { aiPlayerNum: 2, guildId: interaction.guild?.id } : {}),
+      // Lobbies tagged "Load Checkpoint" skip the standard map/squad flow —
+      // both players pick a saved state instead.
+      ...(lobby.loadCheckpoint ? { loadCheckpoint: true } : {}),
     };
 
     setGame(gameId, game);
 
-    const setupMsg = await generalChannel.send({
-      content: `<@${game.player1Id}> vs <@${game.player2Id}>`,
-      allowedMentions: { users: snowflakeUsers([...new Set([game.player1Id, game.player2Id])]) },
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('Game Setup')
-          .setDescription('Select your **map and mission** below to begin. Once confirmed, Play Areas and **Your Hand** threads will appear for squad selection.')
-          .setColor(COLORS.DARK_EMBED),
-      ],
-      components: [getGeneralSetupButtons(game)],
-    });
+    let setupMsg;
+    if (lobby.loadCheckpoint) {
+      setupMsg = await generalChannel.send({
+        content: `<@${game.player1Id}> vs <@${game.player2Id}>`,
+        allowedMentions: { users: snowflakeUsers([...new Set([game.player1Id, game.player2Id])]) },
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('🔀 Load Checkpoint')
+            .setDescription('This lobby was tagged **Load Checkpoint** — instead of building a fresh game, pick a saved state to resume from. Either player can press the button below.')
+            .setColor(COLORS.DARK_EMBED),
+        ],
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`cp_newgame_open_${gameId}`)
+              .setLabel('📂 Pick a checkpoint')
+              .setStyle(ButtonStyle.Primary),
+          ),
+        ],
+      });
+    } else {
+      setupMsg = await generalChannel.send({
+        content: `<@${game.player1Id}> vs <@${game.player2Id}>`,
+        allowedMentions: { users: snowflakeUsers([...new Set([game.player1Id, game.player2Id])]) },
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('Game Setup')
+            .setDescription('Select your **map and mission** below to begin. Once confirmed, Play Areas and **Your Hand** threads will appear for squad selection.')
+            .setColor(COLORS.DARK_EMBED),
+        ],
+        components: [getGeneralSetupButtons(game)],
+      });
+    }
     game.generalSetupMessageId = setupMsg.id;
     saveGames();
     await interaction.followUp({
-      content: `Game **IA Game #${gameId}** is ready! Head to <#${generalChannel.id}> to select your map.`,
+      content: lobby.loadCheckpoint
+        ? `Game **IA Game #${gameId}** is ready! Head to <#${generalChannel.id}> to pick a checkpoint.`
+        : `Game **IA Game #${gameId}** is ready! Head to <#${generalChannel.id}> to select your map.`,
       ephemeral: true,
     });
     await updateThreadName(interaction.channel, lobby);
