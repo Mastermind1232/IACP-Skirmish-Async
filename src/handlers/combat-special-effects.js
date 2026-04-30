@@ -14,6 +14,7 @@ import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
+import { updateDcCardMessage } from '../engine/message-updaters.js';
 
 // ── Internal helpers ─────────────────────────────
 
@@ -808,16 +809,13 @@ export async function handleHeavyFireUse(interaction, ctx) {
     dcExhaustedState.set(pending.hfMsgId, true);
     game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
     if (!game.abilityExhaustedMsgIds.includes(pending.hfMsgId)) game.abilityExhaustedMsgIds.push(pending.hfMsgId);
-    // Refresh the Heavy Fire DC embed
-    try {
-      const hfMeta = dcMessageMeta.get(pending.hfMsgId);
-      if (hfMeta) {
-        const ch = await fetchGameChannel(client, getPlayAreaId(game, hfMeta.playerNum));
-        const msg = await ch.messages.fetch(pending.hfMsgId);
-        const { embed, files } = await renderDcEmbed(game, pending.hfMsgId, ctx);
-        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
-      }
-    } catch {}
+    // Refresh the Heavy Fire DC embed AND its components — exhaust just
+    // changed, so the toggle row's button label needs to update too.
+    // Previously this site edited only { embeds, files } which preserved
+    // stale buttons (Heavy Fire is figureless; the toggle row depends on
+    // `bothDrawn` and `exhausted`). Fixed by routing through
+    // updateDcCardMessage which always rebuilds components from current state.
+    await updateDcCardMessage(client, game, pending.hfMsgId, ctx, true, 'Heavy Fire DC refresh failed:');
   }
   await logGameAction(game, client, `**Heavy Fire** — Exhausted by P${pending.attackerPlayerNum} after **${pending.attackerDcName}** resolved an attack.`, { phase: 'ROUND', icon: 'card' });
 
