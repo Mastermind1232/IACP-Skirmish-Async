@@ -65,6 +65,24 @@ export function whyMidAction(game) {
 }
 
 /**
+ * Fetch a checkpoint and validate it's loadable. On any failure, posts an
+ * ephemeral followUp with the reason and returns null. Both load handlers
+ * (in-game and new-lobby) share these exact pre-flight checks.
+ */
+async function loadCheckpointOrFollowUp(interaction, cpId) {
+  const cp = await getCheckpointById(cpId);
+  if (!cp) {
+    await interaction.followUp({ content: 'Checkpoint not found (it may have been deleted).', ephemeral: true }).catch(discordCatch);
+    return null;
+  }
+  if (cp.game_version !== CURRENT_GAME_VERSION) {
+    await interaction.followUp({ content: `Checkpoint version mismatch (saved ${cp.game_version}, current ${CURRENT_GAME_VERSION}). Refusing to load.`, ephemeral: true }).catch(discordCatch);
+    return null;
+  }
+  return cp;
+}
+
+/**
  * Strip non-serializable / runtime-only fields from a game object before save.
  * - undoStack: separately managed; not part of the immutable state we want to restore
  * - any function values: silently dropped by JSON.stringify but be explicit
@@ -297,15 +315,8 @@ export async function handleCheckpointLoadIngamePick(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const game = await requireGame(interaction, getGameDep, gameId);
   if (!game) return;
-  const cp = await getCheckpointById(cpId);
-  if (!cp) {
-    await interaction.followUp({ content: 'Checkpoint not found (it may have been deleted).', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (cp.game_version !== CURRENT_GAME_VERSION) {
-    await interaction.followUp({ content: `Checkpoint version mismatch (saved ${cp.game_version}, current ${CURRENT_GAME_VERSION}). Refusing to load.`, ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const cp = await loadCheckpointOrFollowUp(interaction, cpId);
+  if (!cp) return;
   // Push current state to undo so the load is recoverable
   game.undoStack = game.undoStack || [];
   game.undoStack.push({
@@ -417,15 +428,8 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
     await interaction.followUp({ content: 'Only players in this lobby can pick.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const cp = await getCheckpointById(cpId);
-  if (!cp) {
-    await interaction.followUp({ content: 'Checkpoint not found (it may have been deleted).', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (cp.game_version !== CURRENT_GAME_VERSION) {
-    await interaction.followUp({ content: `Checkpoint version mismatch (saved ${cp.game_version}, current ${CURRENT_GAME_VERSION}). Refusing to load.`, ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const cp = await loadCheckpointOrFollowUp(interaction, cpId);
+  if (!cp) return;
 
   // Tell players the load is starting
   const general = await fetchGameChannel(client, game.generalId);
