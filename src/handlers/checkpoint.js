@@ -2,7 +2,17 @@
  * Checkpoint save / load handlers.
  *
  * Save: serializes full game state (minus undoStack + checkpoints field) to
- * the `checkpoints` DB table. Cross-game discoverable.
+ * the `checkpoints` DB table. Cross-game discoverable. Saves are GATED to
+ * clean boundaries — no mid-combat / mid-move / mid-space-pick saves. See
+ * whyMidAction() below for the exact predicate.
+ *
+ * Why the boundary gate: at a clean boundary, the engine's own cleanup
+ * (cleanupActivation, cleanupRoundStart) has already wiped every transient
+ * msgId-keyed field. Anything msgId-keyed that survives is persistent state
+ * (DC attachments, depleted DCs, etc.) which the existing index-walking
+ * translation in applyCheckpointToNewLobby handles correctly. Allowing
+ * mid-action saves would require migrating ~75 transient fields per load —
+ * a fragility tax we deliberately skip by forbidding the bad-input case.
  *
  * Load (in-game): replaces current game state with checkpoint state in
  * the SAME lobby. Channel + message IDs unchanged. Side-channel Maps
@@ -11,11 +21,6 @@
  * Load (cross-game / new lobby): the user creates a new lobby and selects
  * a checkpoint to load. State is restored with channel/player IDs remapped
  * to the new lobby; all message IDs cleared and re-rendered fresh.
- *
- * Tier 1 fidelity: pending* state (combat, modals, queues, active activation
- * threads) is cleared on load. Game resumes between actions. Mid-action
- * resumption is intentionally not supported — testing patterns benefit
- * from saving at clean boundaries.
  */
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder,
@@ -40,6 +45,25 @@ const CHECKPOINT_NAME_MAX_LEN = 80;
 /** Generate a unique checkpoint ID. */
 function makeCheckpointId() {
   return `cp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Returns a human-readable reason if the game is mid-action, else ''.
+ * Used by the save handler to refuse non-boundary saves.
+ *
+ * Boundary = no combat in flight, no open move grid, no open space-pick,
+ * no started-but-unfinished activation actions. At those moments,
+ * cleanupActivation has already wiped activation-scope state and (if we're
+ * between rounds) cleanupRoundStart has wiped round-scope state, so the
+ * saved snapshot has no transient msgId-keyed orphans to worry about.
+ */
+export function whyMidAction(game) {
+  if (!game) return '';
+  if (game.pendingCombat) return 'combat is in progress';
+  if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) return 'a move is in progress';
+  if (game.pendingSpacePick && Object.keys(game.pendingSpacePick).length > 0) return 'a space pick is open';
+  if (game.dcActionsData && Object.keys(game.dcActionsData).length > 0) return 'an activation is in progress (use End Activation first)';
+  return '';
 }
 
 /**
@@ -116,7 +140,8 @@ function remapMsgIdKeyedFields(game, oldP1Ids, oldP2Ids) {
     'rushPending', 'shoulderRushPending',
     'mobileMovementActive', 'moveXBypassActive', 'moveCleaveActive',
     'movementBank',
-    'figurePowerTokens',
+    // figurePowerTokens removed: keyed by figureKey (e.g. "Trooper-1-0"), not
+    // msgId, so it survives cross-lobby intact and never matched here anyway.
     'roundDcAbilityUsed',
     'overrunDamagedThisMove',
   ];
@@ -180,6 +205,15 @@ export async function handleCheckpointSaveModal(interaction, ctx) {
   const name = (interaction.fields.getTextInputValue('checkpoint_name') || '').trim();
   if (!name) {
     await interaction.editReply({ content: 'Checkpoint name cannot be empty.' }).catch(discordCatch);
+    return;
+  }
+  // Boundary gate: refuse mid-action saves. At a clean boundary the engine's
+  // own cleanupActivation/cleanupRoundStart has wiped transient msgId-keyed
+  // state, so the saved snapshot is restorable without per-field translation
+  // gymnastics. Loaded state remains coherent because nothing was in flight.
+  const reason = whyMidAction(game);
+  if (reason) {
+    await interaction.editReply({ content: `❌ Can't save mid-action — ${reason}. Finish your current action (or end the activation) and try again.` }).catch(discordCatch);
     return;
   }
   // Cap per user
