@@ -1440,6 +1440,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     getDcList, getDcMessageIds, getDcStats, getDcEffects, getDcEffect, getDcKeywords,
     getPlayerId, getMapData, getEffectiveMapSpaces,
     isWithinN, hasLineOfSight, getRange,
+    hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints,
     getFiguresAdjacentToTarget, getFiguresAdjacentToCoord, getFiguresOnOrAdjacentToSpace,
     getEffectiveFigureSize, getFootprintCells, getFigureSize,
     findDcMessageIdForFigure, lookupFigureDcIndex, getFigureLabel,
