@@ -10,7 +10,6 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { COLORS } from './discord/colors.js';
 import { isAiUserId } from './discord/channel-helpers.js';
-import { snowflakeUsers } from './discord/channel-helpers.js';
 import { getDisplayNameFromId } from './discord/user-helpers.js';
 import { renderMap } from './map-renderer.js';
 import { getCommandCardImagePath, getDcImagePath, getFigureImagePath, resolveAssetPath, UPGRADE_IMAGE_OVERRIDES } from './asset-paths.js';
@@ -473,8 +472,13 @@ export async function buildBoardMapPayload(gameId, map, game, client, { getMissi
   const imagePath = resolvedMapPath ? join(rootDir, resolvedMapPath) : null;
   const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
 
-  const rawUsers = game ? snowflakeUsers([...new Set([game.player1Id, game.player2Id])]) : [];
-  const allowedMentions = rawUsers.length > 0 ? { users: rawUsers } : undefined;
+  // Map updates re-post on every figure move / refresh. The scorecard
+  // embed contains `<@ID>` mentions for the Players + Initiative fields,
+  // which Discord renders as @username (good — clickable, shows display
+  // name) but ALSO pings if those IDs are listed in allowedMentions.users.
+  // Set allowedMentions to suppress all user pings while keeping the
+  // names rendered as text.
+  const allowedMentions = { users: [] };
   // Player labels: Discord names over each player's deployment zone
   const playerLabels = [];
   if (game?.deploymentZoneChosen && game?.player1Id && game?.player2Id) {
