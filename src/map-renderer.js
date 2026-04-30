@@ -572,16 +572,19 @@ export async function renderMap(mapId, options = {}) {
     const size = (fig.figureSize || '1x1').toLowerCase();
     const [cols = 1, rows = 1] = size.split('x').map(Number);
     // Companion-on-base: when a companion shares its cell with a base
-    // figure, render the companion at 1/3 scale anchored to the bottom-right
-    // corner of the cell. If the companion is alone in the cell (host
-    // defeated), fall through to normal rendering.
+    // figure, render the companion at COMPANION_SCALE of its normal token
+    // size, anchored to the bottom-right corner of the cell. If the
+    // companion is alone in the cell (host defeated), fall through to
+    // normal rendering.
+    const COMPANION_SCALE = (1 / 3) * 1.33; // 33% bigger than the original 1/3 baseline
+    const COMPANION_HALF = COMPANION_SCALE / 2; // half-cell offset from the corner to the token center
     const _isCompanionOverBase = !!fig.isCompanion && _baseCellsLc.has(coord);
     let centerCol, centerRow;
     if (_isCompanionOverBase) {
-      // Bottom-right of the cell: shift center 2/3 of the way toward
-      // (col+1, row+1) so a 1/3-scale token tucks into the corner.
-      centerCol = col + 5 / 6;
-      centerRow = row + 5 / 6;
+      // Anchor the token's bottom-right corner at (col+1, row+1) so the
+      // outline sits flush against the cell edge regardless of the scale.
+      centerCol = col + 1 - COMPANION_HALF;
+      centerRow = row + 1 - COMPANION_HALF;
     } else {
       centerCol = col + cols / 2;
       centerRow = row + rows / 2;
@@ -593,10 +596,10 @@ export async function renderMap(mapId, options = {}) {
     const fillFactor = 0.9;
     let clipW = isSquare ? baseTokenSize * (cols === 1 ? 0.92 : cols * 1.05) / 2 : cols * sdx * fillFactor / 2;
     let clipH = isSquare ? baseTokenSize * (rows === 1 ? 0.92 : rows * 1.05) / 2 : rows * sdy * fillFactor / 2;
-    // Companion-on-base: render at 1/3 scale.
+    // Companion-on-base: shrink to COMPANION_SCALE of normal token size.
     if (_isCompanionOverBase) {
-      clipW *= 1 / 3;
-      clipH *= 1 / 3;
+      clipW *= COMPANION_SCALE;
+      clipH *= COMPANION_SCALE;
     }
     const clipRadius = isSquare ? clipW : Math.min(clipW, clipH);
     const cornerRadius = Math.max(8, Math.round(12 * scale));
