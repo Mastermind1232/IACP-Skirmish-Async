@@ -12,6 +12,7 @@ import { PHASES } from '../game/phase.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { captureManualKillDiagnostic } from '../ai/self-play.js';
+import { repopulateDcMapsForGame } from '../game-state.js';
 
 /** Build a short description of the current game state after an undo, so players know what to do next. */
 function describeGameState(game) {
@@ -204,6 +205,17 @@ export async function handleUndo(interaction, ctx) {
     }
     Object.assign(game, last.snapshot);
     game.undoStack = savedStack;
+
+    // Side-channel Maps (dcMessageMeta, dcExhaustedState, dcHealthState) are
+    // module-scoped — JSON.stringify(game) doesn't capture them, so without
+    // this rebuild the Maps would still hold POST-action HP / exhaust state
+    // after the snapshot restore. Resync had the same gap; using the same
+    // repopulator keeps undo and Resync structurally aligned.
+    try {
+      repopulateDcMapsForGame(gameId);
+    } catch (err) {
+      console.error('Failed to repopulate DC maps after undo:', err);
+    }
 
     // If restored snapshot has an active phase gate, re-send gate messages
     // (old Discord messages are stale after undo)
