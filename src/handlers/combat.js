@@ -1345,7 +1345,8 @@ export async function handleAttackTarget(interaction, ctx) {
       .setStyle(ButtonStyle.Secondary)
   );
   const preCombatMsg = await withDiscordRetry(() => thread.send({
-    content: '**Pre-combat window** — Both players: resolve any Command Cards, add/remove dice, apply/block damage, etc. When ready, click **Ready to roll combat dice** below.',
+    content: `<@${game.player1Id}> <@${game.player2Id}> — **Pre-combat window** — Both players: resolve any Command Cards, add/remove dice, apply/block damage, etc. When ready, click **Ready to roll combat dice** below.`,
+    allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
     components: [readyRow],
   }));
   if (target.droidArmLOS) await thread.send(`**Droid Arm** — LOS drawn from adjacent space (1 Power Token discarded).`).catch(discordCatch);
@@ -6128,7 +6129,8 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
       .setStyle(ButtonStyle.Secondary)
   );
   const preCombatMsg = await thread.send({
-    content: '**Pre-combat window** — Both players: resolve any Command Cards, etc. When ready, click **Ready to roll combat dice** below.',
+    content: `<@${game.player1Id}> <@${game.player2Id}> — **Pre-combat window** — Both players: resolve any Command Cards, etc. When ready, click **Ready to roll combat dice** below.`,
+    allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
     components: [readyRow],
   });
   const isRanged = attackInfo.type === 'range';
