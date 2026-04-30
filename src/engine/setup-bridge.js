@@ -501,62 +501,80 @@ export async function runDraftRandom(game, client, deps, options = {}) {
  * @param {object} client - Discord client
  * @param {object} deps
  */
-export async function populatePlayAreas(game, client, deps) {
+/**
+ * Populate play areas — fresh-game default. Pass `loadFromState: true` (e.g.
+ * during a checkpoint cross-game load) to use the existing
+ * game.p1DcList / game.p2DcList + per-DC healthState verbatim, instead of
+ * re-deriving from squads with full HP. The loadFromState path also
+ * preserves activatedDcIndices, attachments, activation counts.
+ */
+export async function populatePlayAreas(game, client, deps, opts = {}) {
+  const loadFromState = !!opts.loadFromState;
   const p1PlayArea = await fetchGameChannel(client, game.p1PlayAreaId);
   const p2PlayArea = await fetchGameChannel(client, game.p2PlayAreaId);
   const gameId = game.gameId;
 
-  // Activation counts are set below after dcList is populated (recomputeActivationCounts)
+  let p1Dcs;
+  let p2Dcs;
+  if (loadFromState) {
+    // Use the DC lists already present on the game (from checkpoint state).
+    // Each entry is expected to have { dcName, displayName, healthState, dgIndex }.
+    p1Dcs = (game.p1DcList || []).slice();
+    p2Dcs = (game.p2DcList || []).slice();
+  } else {
+    const processDcList = (dcList) => {
+      const counts = {};
+      const totals = {};
+      for (const d of dcList) {
+        const n = deps.resolveDcName(d);
+        if (n) totals[n] = (totals[n] || 0) + 1;
+      }
+      return dcList.map((entry) => {
+        const dcName = deps.resolveDcName(entry);
+        counts[dcName] = (counts[dcName] || 0) + 1;
+        const dgIndex = counts[dcName];
+        const displayName = totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
+        const stats = deps.getDcStats(dcName);
+        const figureless = deps.isFigurelessDc(dcName);
+        const health = figureless ? null : (stats.health ?? '?');
+        const figures = figureless ? 0 : (stats.figures ?? 1);
+        const healthState = figureless ? [] : Array.from({ length: figures }, () => [health, health]);
+        return { dcName, displayName, healthState, dgIndex };
+      });
+    };
 
-  const processDcList = (dcList) => {
-    const counts = {};
-    const totals = {};
-    for (const d of dcList) {
-      const n = deps.resolveDcName(d);
-      if (n) totals[n] = (totals[n] || 0) + 1;
-    }
-    return dcList.map((entry) => {
-      const dcName = deps.resolveDcName(entry);
-      counts[dcName] = (counts[dcName] || 0) + 1;
-      const dgIndex = counts[dcName];
-      const displayName = totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
-      const stats = deps.getDcStats(dcName);
-      const figureless = deps.isFigurelessDc(dcName);
-      const health = figureless ? null : (stats.health ?? '?');
-      const figures = figureless ? 0 : (stats.figures ?? 1);
-      const healthState = figureless ? [] : Array.from({ length: figures }, () => [health, health]);
-      return { dcName, displayName, healthState, dgIndex };
-    });
-  };
+    const p1DcsRaw = processDcList(game.player1Squad.dcList || []);
+    const p2DcsRaw = processDcList(game.player2Squad.dcList || []);
+    p1Dcs = p1DcsRaw.filter((dc) => !deps.isDcAttachment(dc.dcName));
+    p2Dcs = p2DcsRaw.filter((dc) => !deps.isDcAttachment(dc.dcName));
+    // Sort: figure DCs by cost descending (most expensive first), figureless DCs (skirmish upgrades) last
+    const _dcSortKey = (dc) => {
+      if (deps.isFigurelessDc(dc.dcName)) return -Infinity;
+      return deps.getDcStats(dc.dcName)?.cost ?? 0;
+    };
+    p1Dcs.sort((a, b) => _dcSortKey(b) - _dcSortKey(a));
+    p2Dcs.sort((a, b) => _dcSortKey(b) - _dcSortKey(a));
+    game.p1DcList = p1Dcs;
+    game.p2DcList = p2Dcs;
+    game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || [];
+    game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || [];
+    // Derive activation counts from board state (handles LiA set-aside automatically)
+    deps.recomputeActivationCounts(game, 1);
+    deps.recomputeActivationCounts(game, 2);
+  }
 
-  const p1DcsRaw = processDcList(game.player1Squad.dcList || []);
-  const p2DcsRaw = processDcList(game.player2Squad.dcList || []);
-  const p1Dcs = p1DcsRaw.filter((dc) => !deps.isDcAttachment(dc.dcName));
-  const p2Dcs = p2DcsRaw.filter((dc) => !deps.isDcAttachment(dc.dcName));
-  // Sort: figure DCs by cost descending (most expensive first), figureless DCs (skirmish upgrades) last
-  const _dcSortKey = (dc) => {
-    if (deps.isFigurelessDc(dc.dcName)) return -Infinity;
-    return deps.getDcStats(dc.dcName)?.cost ?? 0;
-  };
-  p1Dcs.sort((a, b) => _dcSortKey(b) - _dcSortKey(a));
-  p2Dcs.sort((a, b) => _dcSortKey(b) - _dcSortKey(a));
-  game.p1DcList = p1Dcs;
-  game.p2DcList = p2Dcs;
-  game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || [];
-  game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || [];
-  // Derive activation counts from board state (handles LiA set-aside automatically)
-  deps.recomputeActivationCounts(game, 1);
-  deps.recomputeActivationCounts(game, 2);
   game.p1DcMessageIds = [];
   game.p2DcMessageIds = [];
   game.p1DcAttachmentMessageIds = [];
   game.p2DcAttachmentMessageIds = [];
   game.p1DcCompanionMessageIds = [];
   game.p2DcCompanionMessageIds = [];
-  game.p1CcAttachments = game.p1CcAttachments || {};
-  game.p2CcAttachments = game.p2CcAttachments || {};
-  game.p1DcAttachments = game.p1DcAttachments || {};
-  game.p2DcAttachments = game.p2DcAttachments || {};
+  if (!loadFromState) {
+    game.p1CcAttachments = game.p1CcAttachments || {};
+    game.p2CcAttachments = game.p2CcAttachments || {};
+    game.p1DcAttachments = game.p1DcAttachments || {};
+    game.p2DcAttachments = game.p2DcAttachments || {};
+  }
 
   // Tooltip embeds at top of each Play Area
   await p1PlayArea.send({ embeds: [deps.getPlayAreaTooltipEmbed(game, 1)] });
@@ -582,31 +600,42 @@ export async function populatePlayAreas(game, client, deps) {
   game.p1DiscardPileMessageId = p1DiscardMsg.id;
   game.p2DiscardPileMessageId = p2DiscardMsg.id;
 
-  const p1ActivationsMsg = await p1PlayArea.send(deps.getActivationsLine(game.p1ActivationsTotal, game.p1ActivationsTotal));
-  const p2ActivationsMsg = await p2PlayArea.send(deps.getActivationsLine(game.p2ActivationsTotal, game.p2ActivationsTotal));
+  const p1ActSent = game.p1ActivationsRemaining ?? game.p1ActivationsTotal ?? 0;
+  const p2ActSent = game.p2ActivationsRemaining ?? game.p2ActivationsTotal ?? 0;
+  const p1ActTotal = game.p1ActivationsTotal ?? p1ActSent;
+  const p2ActTotal = game.p2ActivationsTotal ?? p2ActSent;
+  const p1ActivationsMsg = await p1PlayArea.send(deps.getActivationsLine(p1ActSent, p1ActTotal));
+  const p2ActivationsMsg = await p2PlayArea.send(deps.getActivationsLine(p2ActSent, p2ActTotal));
   game.p1ActivationsMessageId = p1ActivationsMsg.id;
   game.p2ActivationsMessageId = p2ActivationsMsg.id;
 
-  for (const { dcName, displayName, healthState } of p1Dcs) {
-    const { embed, files } = await deps.buildDcEmbedAndFiles(dcName, false, displayName, healthState, undefined, [], null, null, deps.getNicknamesForDcMessage(game, { dcName, displayName }));
+  // Build set of activated DC indices for exhaust state on load.
+  const p1ActivatedSet = new Set(game.p1ActivatedDcIndices || []);
+  const p2ActivatedSet = new Set(game.p2ActivatedDcIndices || []);
+  for (let i = 0; i < p1Dcs.length; i++) {
+    const { dcName, displayName, healthState } = p1Dcs[i];
+    const exhausted = loadFromState && p1ActivatedSet.has(i);
+    const { embed, files } = await deps.buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, undefined, [], null, null, deps.getNicknamesForDcMessage(game, { dcName, displayName }));
     const msg = await p1PlayArea.send({ embeds: [embed], files });
     deps.dcMessageMeta.set(msg.id, { gameId, playerNum: 1, dcName, displayName });
-    deps.dcExhaustedState.set(msg.id, false);
+    deps.dcExhaustedState.set(msg.id, exhausted);
     deps.dcHealthState.set(msg.id, healthState);
-    const p1Components = deps.getDcPlayAreaComponents(msg.id, false, game, dcName);
+    const p1Components = deps.getDcPlayAreaComponents(msg.id, exhausted, game, dcName);
     await msg.edit({ components: p1Components });
     game.p1DcMessageIds.push(msg.id);
     // Attachments: only create when DC has attachments; create on demand in updateAttachmentMessageForDc
     game.p1DcAttachmentMessageIds.push(null);
     game.p1DcCompanionMessageIds.push(null);
   }
-  for (const { dcName, displayName, healthState } of p2Dcs) {
-    const { embed, files } = await deps.buildDcEmbedAndFiles(dcName, false, displayName, healthState, undefined, [], null, null, deps.getNicknamesForDcMessage(game, { dcName, displayName }));
+  for (let i = 0; i < p2Dcs.length; i++) {
+    const { dcName, displayName, healthState } = p2Dcs[i];
+    const exhausted = loadFromState && p2ActivatedSet.has(i);
+    const { embed, files } = await deps.buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, undefined, [], null, null, deps.getNicknamesForDcMessage(game, { dcName, displayName }));
     const msg = await p2PlayArea.send({ embeds: [embed], files });
     deps.dcMessageMeta.set(msg.id, { gameId, playerNum: 2, dcName, displayName });
-    deps.dcExhaustedState.set(msg.id, false);
+    deps.dcExhaustedState.set(msg.id, exhausted);
     deps.dcHealthState.set(msg.id, healthState);
-    const p2Components = deps.getDcPlayAreaComponents(msg.id, false, game, dcName);
+    const p2Components = deps.getDcPlayAreaComponents(msg.id, exhausted, game, dcName);
     await msg.edit({ components: p2Components });
     game.p2DcMessageIds.push(msg.id);
     // Attachments: only create when DC has attachments; create on demand in updateAttachmentMessageForDc

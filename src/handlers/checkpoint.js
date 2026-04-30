@@ -399,12 +399,8 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
   clearPendingAndPerMsgIdState(newGame);
   // 7. Run the state-aware play-area populator (posts DCs with their saved
   //    healthState, registers side-channel Maps with new msgIds).
-  if (deps.populatePlayAreasFromState) {
-    await deps.populatePlayAreasFromState(newGame, client);
-  } else if (deps.populatePlayAreas) {
-    // Fallback: vanilla populatePlayAreas re-derives from squad → fresh HP.
-    // Acceptable when no state-aware variant is wired yet.
-    await deps.populatePlayAreas(newGame, client);
+  if (deps.populatePlayAreas) {
+    await deps.populatePlayAreas(newGame, client, { loadFromState: true });
   }
   // 8. Remap all msgId-keyed game-state fields from old → new.
   remapMsgIdKeyedFields(newGame, oldP1DcIds, oldP2DcIds);

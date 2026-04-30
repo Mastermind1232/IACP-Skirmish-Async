@@ -1691,14 +1691,14 @@ async function updatePlayAreaDcButtons(game, client) {
   });
 }
 
-async function populatePlayAreas(game, client) {
+async function populatePlayAreas(game, client, opts = {}) {
   return _populatePlayAreasPure(game, client, {
     isFigurelessDc, resolveDcName, getDcStats, isDcAttachment, buildDcEmbedAndFiles,
     getNicknamesForDcMessage, dcMessageMeta, dcExhaustedState, dcHealthState,
     getDcPlayAreaComponents, getPlayAreaTooltipEmbed, getHandVisualEmbed,
     getDiscardPileEmbed, getDiscardPileButtons, getActivationsLine,
     recomputeActivationCounts,
-  });
+  }, opts);
 }
 
 // applySquadSubmission – delegated to src/engine/game-creation-bridge.js
