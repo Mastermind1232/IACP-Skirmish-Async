@@ -304,7 +304,7 @@ const CONTEXT_GROUPS = {
 
   checkpoint: [
     'getGame', 'saveGames', 'client', 'logGameAction',
-    'refreshAllGameComponents', 'recomputeActivationCounts',
+    'recomputeActivationCounts',
     'repopulateDcMapsForGame',
     'dcMessageMeta', 'dcExhaustedState',
     // New-lobby load needs to spin up channels + render board.

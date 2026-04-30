@@ -327,10 +327,6 @@ export function getBotmenuButtons(gameId, { showForfeit = false } = {}) {
       .setCustomId(`cp_save_${gameId}`)
       .setLabel('💾 Save Checkpoint')
       .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`cp_load_ingame_${gameId}`)
-      .setLabel('📂 Load Checkpoint (this game)')
-      .setStyle(ButtonStyle.Secondary),
   );
   const dangerButtons = [];
   if (showForfeit) {

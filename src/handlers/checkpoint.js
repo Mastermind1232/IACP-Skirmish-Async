@@ -31,8 +31,7 @@ import { requireGame } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import {
-  insertCheckpoint, listCheckpointsForGame,
-  listAllCheckpoints, getCheckpointById,
+  insertCheckpoint, listAllCheckpoints, getCheckpointById,
   countCheckpointsByUser,
 } from '../db.js';
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
@@ -295,89 +294,6 @@ export async function handleCheckpointSaveModal(interaction, ctx) {
     try {
       const ch = await fetchGameChannel(client, game.generalId);
       await ch.send(`💾 <@${userId}> saved checkpoint **"${name}"** at round ${game.currentRound ?? 0}.`).catch(discordCatch);
-    } catch {}
-  }
-}
-
-// ── Load Checkpoint (in-game / same lobby) ──────────────────────────────────
-
-export async function handleCheckpointLoadIngamePrompt(interaction, ctx) {
-  const { getGame: getGameDep } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'cp_load_ingame_');
-  const game = await requireGame(interaction, getGameDep, gameId);
-  if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can load checkpoints.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const checkpoints = await listCheckpointsForGame(gameId);
-  if (!checkpoints.length) {
-    await interaction.followUp({ content: 'No checkpoints saved for this game yet.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(`cp_load_ingame_pick_${gameId}`)
-    .setPlaceholder('Choose a checkpoint to restore...')
-    .addOptions(checkpoints.slice(0, 25).map((cp) => ({
-      label: cp.name.slice(0, 100),
-      description: `round ${cp.round_at_save ?? 0} · ${new Date(parseInt(cp.created_at, 10)).toLocaleString()}`.slice(0, 100),
-      value: cp.id,
-    })));
-  await interaction.followUp({
-    content: '📂 **Load Checkpoint (this game)** — pick one. *Loads wipe current state; an undo entry is pushed first.*',
-    components: [new ActionRowBuilder().addComponents(select)],
-    ephemeral: true,
-  }).catch(discordCatch);
-}
-
-export async function handleCheckpointLoadIngamePick(interaction, ctx) {
-  const { getGame: getGameDep, saveGames, client, refreshAllGameComponents } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'cp_load_ingame_pick_');
-  const cpId = interaction.values?.[0];
-  await interaction.deferUpdate().catch(discordCatch);
-  const game = await requireGame(interaction, getGameDep, gameId);
-  if (!game) return;
-  const cp = await loadCheckpointOrFollowUp(interaction, cpId);
-  if (!cp) return;
-  // Push current state to undo so the load is recoverable
-  game.undoStack = game.undoStack || [];
-  game.undoStack.push({
-    type: 'checkpoint_load',
-    label: `Load checkpoint "${cp.name}"`,
-    snapshot: snapshotGameState(game),
-    ts: Date.now(),
-  });
-  // Restore state in place — preserve undoStack + same channel/player IDs
-  // (in-game = same lobby, so we keep all Discord refs).
-  const savedStack = game.undoStack;
-  const savedChannelIds = {
-    generalId: game.generalId,
-    boardId: game.boardId,
-    p1HandId: game.p1HandId,
-    p2HandId: game.p2HandId,
-    p1PlayAreaId: game.p1PlayAreaId,
-    p2PlayAreaId: game.p2PlayAreaId,
-    player1Id: game.player1Id,
-    player2Id: game.player2Id,
-    gameId: game.gameId,
-  };
-  restoreGameStateInPlace(game, cp.game_state, savedChannelIds);
-  game.undoStack = savedStack;
-  clearPendingAndPerMsgIdState(game);
-  // Side-channel Map rebuild
-  try { repopulateDcMapsForGame(gameId); } catch (err) {
-    console.error('repopulateDcMapsForGame failed during checkpoint load:', err);
-  }
-  // UI rebuild — same as Resync
-  if (refreshAllGameComponents) {
-    try { await refreshAllGameComponents(game, client); }
-    catch (err) { console.error('refreshAllGameComponents failed:', err); }
-  }
-  saveGames?.(gameId);
-  if (game.generalId) {
-    try {
-      const ch = await fetchGameChannel(client, game.generalId);
-      await ch.send(`📂 <@${interaction.user.id}> loaded checkpoint **"${cp.name}"** (round ${cp.round_at_save ?? 0}).`).catch(discordCatch);
     } catch {}
   }
 }
