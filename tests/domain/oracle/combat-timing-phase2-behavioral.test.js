@@ -225,7 +225,7 @@ describe('B-CTIME2-003: handleCombatReroll guard — wrong player', () => {
     await handleCombatReroll(interaction, ctx);
 
     const msg = interaction._followUpCalls.find(m =>
-      m.ephemeral && m.content?.includes('Only P'));
+      m.ephemeral && /Only\s+\*?\*?(P\d|Player \d)/.test(m.content || ''));
     assert.ok(msg, 'ephemeral wrong-player reject sent');
     assert.strictEqual(calls.saveGames.length, 0, 'saveGames not called');
   });

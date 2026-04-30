@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { COLORS } from './discord/colors.js';
 import { isAiUserId } from './discord/channel-helpers.js';
 import { snowflakeUsers } from './discord/channel-helpers.js';
+import { getDisplayNameFromId } from './discord/user-helpers.js';
 import { renderMap } from './map-renderer.js';
 import { getCommandCardImagePath, getDcImagePath, getFigureImagePath, resolveAssetPath, UPGRADE_IMAGE_OVERRIDES } from './asset-paths.js';
 import {
@@ -483,12 +484,8 @@ export async function buildBoardMapPayload(gameId, map, game, client, { getMissi
     const p1IsInit = game.player1Id === game.initiativePlayerId;
     const p1ZoneCells = zoneData[p1IsInit ? initZone : otherZone] || [];
     const p2ZoneCells = zoneData[p1IsInit ? otherZone : initZone] || [];
-    const p1User = client.users.cache.get(game.player1Id);
-    const p2User = client.users.cache.get(game.player2Id);
-    const p1Name = isAiUserId(game.player1Id) ? 'SKIRBO'
-      : (p1User?.globalName || p1User?.username || 'P1');
-    const p2Name = isAiUserId(game.player2Id) ? 'SKIRBO'
-      : (p2User?.globalName || p2User?.username || 'P2');
+    const p1Name = getDisplayNameFromId(client, game.player1Id, 'P1');
+    const p2Name = getDisplayNameFromId(client, game.player2Id, 'P2');
     if (p1ZoneCells.length > 0) playerLabels.push({ label: p1Name, zone: p1ZoneCells });
     if (p2ZoneCells.length > 0) playerLabels.push({ label: p2Name, zone: p2ZoneCells });
   }

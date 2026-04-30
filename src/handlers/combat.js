@@ -1,7 +1,7 @@
 /**
  * Combat handlers: attack_target_, combat_ready_, combat_roll_, combat_surge_, combat_resolve_ready_ (F10), cleave_target_ (F6)
  */
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
@@ -200,6 +200,8 @@ import {
   applyEvadeDebuff,
 } from '../game/evade-debuff-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
+import { getPlayerDisplayName } from '../discord/user-helpers.js';
+import { renderAttackDiceImage, renderDefenseDiceImage } from '../discord/dice-renderer.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
@@ -243,11 +245,11 @@ export async function sendReadyToResolveRolls(thread, gameId, game, ctx) {
 // (e.g. "I'd only Zillo if you Bib").
 
 const COMBAT_GATE_LABELS = {
-  post_roll:              '🎲 Dice rolled — review results before rerolls.',
-  post_attacker_reroll:   '🔄 Attacker rerolls complete — review before proceeding.',
-  post_forced_reroll:     '🔄 Forced rerolls complete — review before proceeding.',
-  post_defender_reroll:   '🔄 All rerolls complete — review before modifications.',
-  pre_resolve:            '⚔️ Ready to resolve combat?',
+  post_roll:              '🎲 Dice rolled. Next: attacker may reroll.',
+  post_attacker_reroll:   '🔄 Attacker rerolls complete. Next: defender rerolls (if any).',
+  post_forced_reroll:     '🔄 Forced rerolls complete. Next: defender rerolls (if any).',
+  post_defender_reroll:   '🔄 All rerolls complete. Next: power tokens, then surge spending.',
+  pre_resolve:            '⚔️ Ready to apply damage and resolve after-attack effects?',
 };
 
 /**
@@ -277,8 +279,10 @@ export async function sendCombatGate(thread, game, combat, subPhase, ctx) {
       .setStyle(ButtonStyle.Success),
   );
 
-  const atkLabel = atkId ? `<@${atkId}>` : `P${atkPn}`;
-  const defLabel = defId ? `<@${defId}>` : `P${defPn}`;
+  const atkName = getPlayerDisplayName(game, atkPn, ctx?.client);
+  const defName = getPlayerDisplayName(game, defPn, ctx?.client);
+  const atkLabel = atkId ? `<@${atkId}> **${atkName}**` : `**${atkName}**`;
+  const defLabel = defId ? `<@${defId}> **${defName}**` : `**${defName}**`;
   const content = `🔔 ${label}\n${atkLabel} (ATK) ⏳ | ${defLabel} (DEF) ⏳\nBoth players: click **Ready** when done with reactions. Play Command Cards from your Hand first.`;
 
   await withDiscordRetry(() => thread.send({
@@ -332,8 +336,10 @@ export async function handleCombatGateReady(interaction, ctx) {
   const defPn = opponentPlayerNum(atkPn);
   const atkId = getPlayerId(game, atkPn);
   const defId = getPlayerId(game, defPn);
-  const atkLabel = atkId ? `<@${atkId}>` : `P${atkPn}`;
-  const defLabel = defId ? `<@${defId}>` : `P${defPn}`;
+  const atkName = getPlayerDisplayName(game, atkPn, interaction.client);
+  const defName = getPlayerDisplayName(game, defPn, interaction.client);
+  const atkLabel = atkId ? `<@${atkId}> **${atkName}**` : `**${atkName}**`;
+  const defLabel = defId ? `<@${defId}> **${defName}**` : `**${defName}**`;
   const atkStatus = (atkPn === 1 ? gate.p1Ready : gate.p2Ready) ? '✅' : '⏳';
   const defStatus = (defPn === 1 ? gate.p1Ready : gate.p2Ready) ? '✅' : '⏳';
 
@@ -536,12 +542,14 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
           const discardKey = ccDiscardKey(playerNum);
           game[discardKey] = game[discardKey] || [];
           game[discardKey].push(discarded);
-          await thread.send(`**Headhunter** — Strain reduced by 1. P${playerNum} discards **${discarded}** from hand.`).catch(discordCatch);
-          if (logGameAction) await logGameAction(game, client, `**Headhunter** — Reduced Strain on **${dcName}**; P${playerNum} discards **${discarded}**.`, { phase: 'ROUND', icon: 'card' });
+          const _hhUserName = getPlayerDisplayName(game, playerNum, client);
+          await thread.send(`**Headhunter** — Strain reduced by 1. **${_hhUserName}** discards **${discarded}** from hand.`).catch(discordCatch);
+          if (logGameAction) await logGameAction(game, client, `**Headhunter** — Reduced Strain on **${dcName}**; **${_hhUserName}** discards **${discarded}**.`, { phase: 'ROUND', icon: 'card' });
         } else {
           headhunterDmg = 1;
-          await thread.send(`**Headhunter** — Strain reduced by 1, but P${playerNum} has no CCs. **${dcName}** suffers 1 Damage instead.`).catch(discordCatch);
-          if (logGameAction) await logGameAction(game, client, `**Headhunter** — Reduced Strain on **${dcName}**; no CCs, dealt 1 Damage.`, { phase: 'ROUND', icon: 'card' });
+          const _hhUserName2 = getPlayerDisplayName(game, playerNum, client);
+          await thread.send(`**Headhunter** — Strain reduced by 1, but **${_hhUserName2}** has no CCs. **${dcName}** suffers 1 Damage instead.`).catch(discordCatch);
+          if (logGameAction) await logGameAction(game, client, `**Headhunter** — Reduced Strain on **${dcName}**; **${_hhUserName2}** has no CCs, dealt 1 Damage.`, { phase: 'ROUND', icon: 'card' });
         }
         break;
       }
@@ -907,9 +915,10 @@ export async function handleUnderDuress(interaction, ctx) {
     delete pending.underDuressDepleteMsgId;
     delete pending.underDuressOpponentNum;
 
-    await thread.send(`**[Under Duress]** — Depleted! P${udOwnerNum} now resolves strain choices for **${pending.dcName}**.`).catch(discordCatch);
+    const _udOwnerName = getPlayerDisplayName(game, udOwnerNum, client);
+    await thread.send(`**[Under Duress]** — Depleted! **${_udOwnerName}** now resolves strain choices for **${pending.dcName}**.`).catch(discordCatch);
     if (ctx.logGameAction) {
-      await ctx.logGameAction(game, client, `**[Under Duress]** — Depleted by P${udOwnerNum}. Controlling strain choice for **${pending.dcName}**.`, { phase: 'ROUND', icon: 'card' });
+      await ctx.logGameAction(game, client, `**[Under Duress]** — Depleted by **${_udOwnerName}**. Controlling strain choice for **${pending.dcName}**.`, { phase: 'ROUND', icon: 'card' });
     }
 
     // Show strain choice buttons to the UD owner (discards come from figure owner's deck top)
@@ -1314,15 +1323,20 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
-  const combatDeclare = `**P${attackerPlayerNum}:** "${attackerDisplayName}" is attacking **P${defenderPlayerNum}:** "${target.label}"!`;
+  const attackerUserName = getPlayerDisplayName(game, attackerPlayerNum, client);
+  const defenderUserName = getPlayerDisplayName(game, defenderPlayerNum, client);
+  const combatDeclare = `**${attackerUserName}**'s **${attackerDisplayName}** is attacking **${defenderUserName}**'s **${target.label}**!`;
 
   const generalChannel = await fetchGameChannel(client, game.generalId);
   const declareMsg = await generalChannel.send({
     content: `${ACTION_ICONS.attack || '⚔️'} <t:${Math.floor(Date.now() / 1000)}:t> — ${combatDeclare}`,
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
+  // Discord thread name limit is 100 chars; truncate components conservatively.
+  const _threadAtk = `${attackerUserName}: ${attackerDisplayName}`.slice(0, 45);
+  const _threadDef = `${defenderUserName}: ${target.label}`.slice(0, 45);
   const thread = await declareMsg.startThread({
-    name: `Combat: P${attackerPlayerNum} vs P${defenderPlayerNum}`,
+    name: `Combat — ${_threadAtk} → ${_threadDef}`,
     autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
   });
   const readyRow = new ActionRowBuilder().addComponents(
@@ -2618,7 +2632,8 @@ export async function handleCombatReady(interaction, ctx) {
   if (playerNum === 1) combat.p1Ready = true;
   else combat.p2Ready = true;
   if (!interaction.message?.channel) throw new Error(`handleCombatReady: interaction.message.channel is null (gameId=${gameId}, generalId=${game.generalId})`);
-  await interaction.message.channel.send(`**Player ${playerNum}** has indicated they are ready to roll combat.`);
+  const _readyName = getPlayerDisplayName(game, playerNum, interaction.client);
+  await interaction.message.channel.send(`**${_readyName}** is ready to roll combat.`);
   if (!combat.p1Ready || !combat.p2Ready) {
     saveGames();
     return;
@@ -2712,7 +2727,7 @@ export async function handleCombatRoll(interaction, ctx) {
   }
 
   if (!combat.attackRoll) {
-    if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerPlayerNum, canActAsPlayer, `Only the attacker (P${effectiveAttackerPlayerNum}) may roll attack dice.`)) return;
+    if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerPlayerNum, canActAsPlayer, `Only the attacker (**${getPlayerDisplayName(game, effectiveAttackerPlayerNum, interaction.client)}**) may roll attack dice.`)) return;
     const baseDice = combat.attackInfo?.dice || [];
     const bonusDice = combat.attackBonusDice || 0;
     const bonusColors = combat.attackBonusDiceColors || [];
@@ -2732,8 +2747,15 @@ export async function handleCombatRoll(interaction, ctx) {
     const result = rollAttackDice(dice);
     combat.attackRoll = { acc: result.acc, dmg: result.dmg, surge: result.surge };
     combat.attackDiceResults = result.dice;
-    const diceDetail = result.dice.map((d, i) => `${d.color}(${d.acc}a/${d.dmg}d/${d.surge}s)`).join(', ');
-    await thread.send(`**Attack roll** — ${result.acc} accuracy, ${result.dmg} damage, ${result.surge} surge  [${diceDetail}]`);
+    const _atkRollerName = getPlayerDisplayName(game, attackerPlayerNum, interaction.client);
+    const _atkRollContent = `🎲 **${_atkRollerName}** rolled attack — **${result.acc}** accuracy, **${result.dmg}** damage, **${result.surge}** surge`;
+    const _atkRollImg = await renderAttackDiceImage(result.dice).catch(() => null);
+    if (_atkRollImg) {
+      await thread.send({ content: _atkRollContent, files: [new AttachmentBuilder(_atkRollImg, { name: 'attack-roll.png' })] }).catch(discordCatch);
+    } else {
+      const diceDetail = result.dice.map((d) => `${d.color}(${d.acc}a/${d.dmg}d/${d.surge}s)`).join(', ');
+      await thread.send(`${_atkRollContent}  [${diceDetail}]`).catch(discordCatch);
+    }
     // Veteran Instincts: attacker may add +1 Hit or +1 Surge to this roll
     if (game.vetInstinctsActiveThisActivation?.[attackerPlayerNum] && !combat.vetInstinctsAttackApplied) {
       const _viRow = new ActionRowBuilder().addComponents(
@@ -2761,7 +2783,7 @@ export async function handleCombatRoll(interaction, ctx) {
   }
 
   if (!combat.defenseRoll) {
-    if (!await requirePlayer(interaction, game, interaction.user.id, defenderPlayerNum, canActAsPlayer, `Only the defender (P${defenderPlayerNum}) may roll defense dice.`)) return;
+    if (!await requirePlayer(interaction, game, interaction.user.id, defenderPlayerNum, canActAsPlayer, `Only the defender (**${getPlayerDisplayName(game, defenderPlayerNum, interaction.client)}**) may roll defense dice.`)) return;
     const baseDef = combat.targetStats.defense || 'white';
     const baseDice = Array.isArray(baseDef) ? baseDef : [baseDef];
     const bonusDice = combat.defenseBonusDice || [];
@@ -2795,9 +2817,16 @@ export async function handleCombatRoll(interaction, ctx) {
     combat.defenseRoll = { block, evade, dodge };
     combat.defenseDiceResults = defDiceResults;
     combat.defenseDiceCount = diceToRoll.length;
-    const diceDetail = defDiceResults.map((d) => `${d.color}(${d.block}b/${d.evade}e${d.dodge ? '/dodge' : ''})`).join(', ');
     const dodgeText = dodge ? ' **DODGE!**' : '';
-    await thread.send(`**Defense roll** — ${block} block, ${evade} evade${dodgeText}  [${diceDetail}]`);
+    const _defRollerName = getPlayerDisplayName(game, defenderPlayerNum, interaction.client);
+    const _defRollContent = `🛡️ **${_defRollerName}** rolled defense — **${block}** block, **${evade}** evade${dodgeText}`;
+    const _defRollImg = await renderDefenseDiceImage(defDiceResults).catch(() => null);
+    if (_defRollImg) {
+      await thread.send({ content: _defRollContent, files: [new AttachmentBuilder(_defRollImg, { name: 'defense-roll.png' })] }).catch(discordCatch);
+    } else {
+      const diceDetail = defDiceResults.map((d) => `${d.color}(${d.block}b/${d.evade}e${d.dodge ? '/dodge' : ''})`).join(', ');
+      await thread.send(`${_defRollContent}  [${diceDetail}]`).catch(discordCatch);
+    }
 
     // There Is No Try (TINT): if thereIsNoTryPlayerNum is set for the defender, and the defending DC has REBEL + FORCE USER keywords
     if (game.thereIsNoTryPlayerNum === defenderPlayerNum && !combat.tintResolved) {
@@ -3414,7 +3443,7 @@ export async function handleCombatReroll(interaction, ctx) {
   } else {
     expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
   }
-  if (!expectedPlayer || !await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only P${expectedPlayer} can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`)) return;
+  if (!expectedPlayer || !await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only **${getPlayerDisplayName(game, expectedPlayer, interaction.client)}** can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`)) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   if (!thread) throw new Error(`handleCombatReroll: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
 
@@ -3629,7 +3658,7 @@ export async function handleCrossTrainingReroll(interaction, ctx) {
     return;
   }
   const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
-  if (!await requirePlayer(interaction, game, interaction.user.id, defenderPlayerNum, canActAsPlayer, `Only the defender (P${defenderPlayerNum}) may use Cross Training.`)) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, defenderPlayerNum, canActAsPlayer, `Only the defender (**${getPlayerDisplayName(game, defenderPlayerNum, interaction.client)}**) may use Cross Training.`)) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
 
   const action = interaction.customId.replace(`ct_reroll_${gameId}_`, '');
@@ -3758,7 +3787,7 @@ export async function handlePreReroll(interaction, ctx) {
   }
   const pr = (combat.pendingPreRerolls || [])[0];
   if (!pr) { await interaction.followUp({ content: 'No pending pre-reroll.', ephemeral: true }).catch(discordCatch); return; }
-  if (!await requirePlayer(interaction, game, interaction.user.id, pr.playerNum, canActAsPlayer, `Only P${pr.playerNum} can make this choice.`)) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pr.playerNum, canActAsPlayer, `Only **${getPlayerDisplayName(game, pr.playerNum, interaction.client)}** can make this choice.`)) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
 
   // Process choice
@@ -5971,14 +6000,18 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const targetStats = getDcStats(targetDcName);
   const targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
   const defenderPlayerNum = opponentPlayerNum(controlledPlayerNum);
-  const combatDeclare = `**False Orders** — P${controllerPlayerNum} controls "${controlledName}" attacking "${target.label}"!`;
+  const controllerUserName = getPlayerDisplayName(game, controllerPlayerNum, client);
+  const defenderUserName = getPlayerDisplayName(game, defenderPlayerNum, client);
+  const combatDeclare = `**False Orders** — ${controllerUserName} controls **${controlledName}** attacking **${defenderUserName}**'s **${target.label}**!`;
   const generalChannel = await fetchGameChannel(client, game.generalId);
   const declareMsg = await generalChannel.send({
     content: `${ACTION_ICONS?.attack || '⚔️'} <t:${Math.floor(Date.now() / 1000)}:t> — ${combatDeclare}`,
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
+  const _foThreadCtl = `${controllerUserName}: ${controlledName}`.slice(0, 40);
+  const _foThreadDef = `${defenderUserName}: ${target.label}`.slice(0, 40);
   const thread = await declareMsg.startThread({
-    name: `Combat (False Orders): P${controllerPlayerNum} vs P${defenderPlayerNum}`,
+    name: `Combat (False Orders) — ${_foThreadCtl} → ${_foThreadDef}`,
     autoArchiveDuration: ThreadAutoArchiveDuration?.OneWeek ?? 10080,
   });
   const readyRow = new ActionRowBuilder().addComponents(
@@ -6029,7 +6062,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || []);
   const abilityLabel = fo.isLure ? 'Lure of the Dark Side' : 'False Orders';
   await interaction.message.edit({ content: `**${abilityLabel} — Attack declared**. See thread in Game Log.`, components: [] }).catch(discordCatch);
-  if (logGameAction) await logGameAction(game, client, `⚔️ **${abilityLabel}** — P${controllerPlayerNum} controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  if (logGameAction) await logGameAction(game, client, `⚔️ **${abilityLabel}** — **${controllerUserName}** controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   saveGames();
 }
 

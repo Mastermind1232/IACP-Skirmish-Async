@@ -53,7 +53,7 @@ export function rollAttackDice(diceColors) {
     if (!faces?.length) continue;
     const idx = _drawIndex('attack', normColor, faces.length);
     const face = faces[idx];
-    const result = { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0 };
+    const result = { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0, faceIdx: idx };
     _record('attack', normColor, idx, { acc: result.acc, dmg: result.dmg, surge: result.surge });
     dice.push(result);
     acc += result.acc;
@@ -67,10 +67,10 @@ export function rollDefenseDice(defenseType) {
   const color = defenseType || 'white';
   const normColor = color.toLowerCase();
   const faces = getDiceData().defense?.[normColor];
-  if (!faces?.length) return { color, block: 0, evade: 0, dodge: false };
+  if (!faces?.length) return { color, block: 0, evade: 0, dodge: false, faceIdx: -1 };
   const idx = _drawIndex('defense', normColor, faces.length);
   const face = faces[idx];
-  const result = { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+  const result = { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge, faceIdx: idx };
   _record('defense', normColor, idx, { block: result.block, evade: result.evade, dodge: result.dodge });
   return result;
 }
@@ -79,10 +79,10 @@ export function rollDefenseDice(defenseType) {
 export function rollSingleAttackDie(color) {
   const normColor = color.toLowerCase();
   const faces = getDiceData().attack?.[normColor];
-  if (!faces?.length) return { color, acc: 0, dmg: 0, surge: 0 };
+  if (!faces?.length) return { color, acc: 0, dmg: 0, surge: 0, faceIdx: -1 };
   const idx = _drawIndex('attack', normColor, faces.length);
   const face = faces[idx];
-  const result = { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0 };
+  const result = { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0, faceIdx: idx };
   _record('attack', normColor, idx, { acc: result.acc, dmg: result.dmg, surge: result.surge });
   return result;
 }
@@ -91,10 +91,10 @@ export function rollSingleAttackDie(color) {
 export function rollSingleDefenseDie(color) {
   const normColor = (color || 'white').toLowerCase();
   const faces = getDiceData().defense?.[normColor];
-  if (!faces?.length) return { color, block: 0, evade: 0, dodge: false };
+  if (!faces?.length) return { color, block: 0, evade: 0, dodge: false, faceIdx: -1 };
   const idx = _drawIndex('defense', normColor, faces.length);
   const face = faces[idx];
-  const result = { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+  const result = { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge, faceIdx: idx };
   _record('defense', normColor, idx, { block: result.block, evade: result.evade, dodge: result.dodge });
   return result;
 }
