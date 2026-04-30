@@ -4418,6 +4418,15 @@ client.on('interactionCreate', async (interaction) => {
       if (modalKey === 'fav_name_modal_') await handleFavNameModal(interaction, favCtx);
       else if (modalKey === 'fav_rename_modal_') await handleFavRenameModal(interaction, favCtx);
       else await handleFavListRenameModal(interaction, favCtx);
+    } else {
+      // Table-driven fallthrough: any modal whose prefix is registered via
+      // `register()` dispatches through the same path as buttons/selects.
+      const _modalHandler = getHandler(modalKey);
+      if (_modalHandler) {
+        const _group = getHandlerGroup(modalKey);
+        const _ctx = _group ? buildContext(_group, buildAllDeps()) : {};
+        await _modalHandler(interaction, _ctx);
+      }
     }
     }); // end withAtomicGameLock (modal)
     return;
@@ -4576,7 +4585,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
   // Don't deferUpdate for handlers that need to show a modal (modal requires unacknowledged interaction)
-  const MODAL_PREFIXES = ['devaron_crate_push_', 'krykna_push_', 'fav_save_', 'fav_rename_', 'fav_list_rename_', 'fav_choose_'];
+  const MODAL_PREFIXES = ['devaron_crate_push_', 'krykna_push_', 'fav_save_', 'fav_rename_', 'fav_list_rename_', 'fav_choose_', 'cp_save_'];
   if (!MODAL_PREFIXES.includes(buttonKey)) {
     await interaction.deferUpdate().catch(discordCatch);
   }

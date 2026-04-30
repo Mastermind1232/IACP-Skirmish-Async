@@ -30,6 +30,7 @@ const MODAL_PREFIXES = [
   'fav_name_modal_',
   'fav_rename_modal_',
   'fav_list_rename_modal_',
+  'cp_save_modal_',
 ];
 
 /**
