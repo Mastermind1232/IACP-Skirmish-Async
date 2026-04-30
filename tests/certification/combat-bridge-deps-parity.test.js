@@ -127,39 +127,39 @@ function extractWrapperDepsObject(idxSrc, pureCallName, depsArgIndex) {
   throw new Error(`Object literal in ${pureCallName} not closed`);
 }
 
-describe('Combat-bridge deps parity (production wrappers in index.js)', () => {
-  it('applyDamageAndFinishCombat: every destructured key is provided by the index.js wrapper', () => {
-    const fnBody = extractFunctionBody(CB_SRC, 'applyDamageAndFinishCombat');
-    const required = extractDestructuredKeys(extractFirstDepsDestructure(fnBody));
-    // applyDamageAndFinishCombat wrapper: _applyDamageAndFinishCombatPure(game, combat, params, client, deps)
-    // → deps is the 5th positional arg (index 4).
-    const wrapperBag = extractWrapperDepsObject(IDX_SRC, '_applyDamageAndFinishCombatPure', 4);
-    const provided = extractDestructuredKeys(wrapperBag);
-    const missing = [...required].filter((k) => !provided.has(k));
-    if (missing.length) {
-      assert.fail(
-        `${missing.length} dep(s) destructured by applyDamageAndFinishCombat are missing from the wrapper at index.js:applyDamageAndFinishCombat (the deps bag passed to _applyDamageAndFinishCombatPure):\n\n` +
-        missing.map((k) => `  • ${k}`).join('\n') +
-        `\n\nFix: add the missing keys to the wrapper. This bug-class crashed prod once (commit d6842d1 added 3 keys to combat-bridge but missed the wrapper).`
-      );
-    }
-    assert.ok(true);
-  });
+/**
+ * Each combat-bridge.js function that destructures `deps` has a paired wrapper
+ * in index.js that builds the deps bag and forwards. Mismatch = runtime crash.
+ *
+ * Format: [combat-bridge function name, index.js _pure call name, 0-indexed
+ *          position of the deps object in the wrapper's call signature].
+ */
+const PARITY_CASES = [
+  ['applyNpcDamageToFigure',   '_applyNpcDamageToFigurePure',     5],
+  ['applyDirectDamageToFigure','_applyDirectDamageToFigurePure',  8],
+  ['sendBleedingPrompt',       '_sendBleedingPromptPure',         5],
+  ['resolveCombatAfterRolls',  '_resolveCombatAfterRollsPure',    3],
+  ['applyDamageAndFinishCombat','_applyDamageAndFinishCombatPure',4],
+  ['checkPostCombatSurges',    '_checkPostCombatSurgesPure',      7],
+  ['finishCombatResolution',   '_finishCombatResolutionPure',     5],
+];
 
-  it('resolveCombatAfterRolls: every destructured key is provided by the index.js wrapper', () => {
-    const fnBody = extractFunctionBody(CB_SRC, 'resolveCombatAfterRolls');
-    const required = extractDestructuredKeys(extractFirstDepsDestructure(fnBody));
-    // resolveCombatAfterRolls wrapper: _resolveCombatAfterRollsPure(game, combat, client, deps)
-    // → deps is the 4th positional arg (index 3).
-    const wrapperBag = extractWrapperDepsObject(IDX_SRC, '_resolveCombatAfterRollsPure', 3);
-    const provided = extractDestructuredKeys(wrapperBag);
-    const missing = [...required].filter((k) => !provided.has(k));
-    if (missing.length) {
-      assert.fail(
-        `${missing.length} dep(s) destructured by resolveCombatAfterRolls are missing from the wrapper at index.js:resolveCombatAfterRolls:\n\n` +
-        missing.map((k) => `  • ${k}`).join('\n')
-      );
-    }
-    assert.ok(true);
-  });
+describe('Combat-bridge deps parity (production wrappers in index.js)', () => {
+  for (const [fnName, pureCallName, depsArgIndex] of PARITY_CASES) {
+    it(`${fnName}: every destructured dep key is provided by ${pureCallName} wrapper`, () => {
+      const fnBody = extractFunctionBody(CB_SRC, fnName);
+      const required = extractDestructuredKeys(extractFirstDepsDestructure(fnBody));
+      const wrapperBag = extractWrapperDepsObject(IDX_SRC, pureCallName, depsArgIndex);
+      const provided = extractDestructuredKeys(wrapperBag);
+      const missing = [...required].filter((k) => !provided.has(k));
+      if (missing.length) {
+        assert.fail(
+          `${missing.length} dep(s) destructured by ${fnName} are missing from the wrapper at index.js (deps bag passed to ${pureCallName}):\n\n` +
+          missing.map((k) => `  • ${k}`).join('\n') +
+          `\n\nFix: add the missing keys to the wrapper. This bug-class crashed prod once (commit d6842d1 added 3 keys to applyDamageAndFinishCombat's destructure but missed its wrapper).`
+        );
+      }
+      assert.ok(true);
+    });
+  }
 });
