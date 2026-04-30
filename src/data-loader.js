@@ -312,6 +312,28 @@ export function getMissionRules(mapId, variant) {
   return rules && typeof rules === 'object' ? rules : {};
 }
 
+/**
+ * Look up a mission-rules flag across all timing buckets (top-level,
+ * persistent, startOfRound, endOfRound, immediate). Returns the value if
+ * found, else null. Use this to drive mechanics off data instead of
+ * hardcoded `mapId === 'X' && variant === 'Y'` checks.
+ */
+export function getMissionFlag(mapId, variant, flagName) {
+  const rules = getMissionRules(mapId, variant);
+  if (!rules) return null;
+  if (rules[flagName] !== undefined) return rules[flagName];
+  for (const bucket of ['persistent', 'startOfRound', 'endOfRound', 'immediate']) {
+    if (rules[bucket] && rules[bucket][flagName] !== undefined) return rules[bucket][flagName];
+  }
+  return null;
+}
+
+/** Truthy check for a mission-rules flag — convenience over getMissionFlag. */
+export function hasMissionFlag(mapId, variant, flagName) {
+  const v = getMissionFlag(mapId, variant, flagName);
+  return v !== null && v !== false && v !== undefined;
+}
+
 /** D4: Tournament rotation mission IDs (mapId:variant). Empty if not configured. */
 export function getTournamentRotation() {
   return tournamentRotation;

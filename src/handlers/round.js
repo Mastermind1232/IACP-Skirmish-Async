@@ -11,7 +11,7 @@ import { sendPowerTokenOverflowUI } from './combat.js';
 import { countSpaces } from '../game/spatial.js';
 import { edgeKey } from '../game/coords.js';
 import { cardNameIncludes } from '../game/card-names.js';
-import { getDeploymentZones, getCcEffect } from '../data-loader.js';
+import { getDeploymentZones, getCcEffect, hasMissionFlag } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
@@ -790,8 +790,8 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
   }
 
-  // NPC thug activation (Corellian Underground A)
-  if (runNpcThugActivation && mapId === 'corellian-underground' && variant === 'a') {
+  // NPC thug activation (Corellian Underground A — driven by rules.npcThugs flag)
+  if (runNpcThugActivation && hasMissionFlag(mapId, variant, 'npcThugs')) {
     const { logs: thugLogs, damageEvents } = runNpcThugActivation(game, mapId, { getMapTokensData, getMapData, getMapRegistry, filterMapSpacesByBounds });
     for (const line of thugLogs) {
       await logGameAction(game, client, `🔫 **Thug:** ${line}`, { phase: 'ROUND', icon: 'attack' });
@@ -813,8 +813,8 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
 
   // NOTE: Hardy + Regenerate already processed above (lines 103-154). Duplicate block removed.
 
-  // Fluctuation swap gate (Lothal Wastes B): each player may swap 1 fluctuation in initiative order
-  if (mapId === 'lothal-wastes' && variant === 'b') {
+  // Fluctuation swap gate (Lothal Wastes B — driven by rules.fluctuationSwapGate flag)
+  if (hasMissionFlag(mapId, variant, 'fluctuationSwapGate')) {
     const _fInitNum = getInitiativePlayerNum(game);
     const _fOtherNum = opponentPlayerNum(_fInitNum);
     game.pendingFluctuationSwapQueue = [_fInitNum, _fOtherNum];
@@ -964,9 +964,10 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
     }
   }
 
-  // Devaron Garrison B: terminal→door selection + crate push prompts (posted after round starts)
+  // Devaron Garrison B: terminal→door selection + crate push prompts.
+  // Driven by rules.openDoorPerTerminal flag (CRR mission card data).
   const generalChannel = await fetchGameChannel(client, game.generalId);
-  if (mapId === 'devaron-garrison' && variant === 'b') {
+  if (hasMissionFlag(mapId, variant, 'openDoorPerTerminal')) {
     if (!game.cratePositions) {
       const dMap = getMapTokensData()['devaron-garrison'];
       const allCrates = Object.values(dMap?.missionB?.positions || {}).flat().filter(Boolean).map((c) => String(c).toLowerCase());
@@ -987,8 +988,9 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
     }
   }
 
-  // Chopper Base A: build Krykna push queue and post buttons (damage fires after all pushes in modal handler)
-  if (mapId === 'chopper-base-atollon' && variant === 'a' && postKryknaPushButtons) {
+  // Krykna push queue + buttons (damage fires after all pushes in modal handler).
+  // Driven by rules.npcKryknaActivation flag.
+  if (hasMissionFlag(mapId, variant, 'npcKryknaActivation') && postKryknaPushButtons) {
     // Lazy-init npcKrykna from missionA token positions (breaks chicken-and-egg with self-play.js)
     if (!game.npcKrykna) {
       const missionData = getMapTokensData()['chopper-base-atollon']?.missionA;

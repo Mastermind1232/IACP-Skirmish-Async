@@ -6,7 +6,7 @@ import { awardObjectiveVp } from './vp-helpers.js';
 import { getPlayerId, getCcHand, getInitiativePlayerNum } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
-import { getDeploymentZones } from '../data-loader.js';
+import { getDeploymentZones, getMissionFlag } from '../data-loader.js';
 import { getPlayerOccupiedCellsForControl } from './board-helpers.js';
 import { snowflakeUsers } from '../discord/channel-helpers.js';
 import { normalizeCoord } from './coords.js';
@@ -218,27 +218,10 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
     }
   }
 
-  if (rules.vpPerTokenForControllingCell && mapId) {
-    const { controlCell, vpPerToken, tokenCountKey, vpMessage: tokenVpMsg } = rules.vpPerTokenForControllingCell;
-    if (controlCell && tokenCountKey && typeof vpPerToken === 'number') {
-      const controller = getSpaceController(game, mapId, controlCell);
-      const count = typeof game[tokenCountKey] === 'number' ? game[tokenCountKey] : 0;
-      if (controller && count > 0) {
-        const vpVal = vpPerToken * count;
-        const pid = getPlayerId(game, controller);
-        awardObjectiveVp(game, controller, vpVal);
-        game[tokenCountKey] = 0;
-        const ctrlMsg = tokenVpMsg
-          ? tokenVpMsg.replace('{vp}', String(vpVal)).replace('{count}', String(count))
-          : `controlling the objective (${count} token${count !== 1 ? 's' : ''})`;
-        await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${ctrlMsg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
-        await checkWinConditions(game, client);
-        if (game.ended) return { gameEnded: true };
-      } else if (count > 0) {
-        game[tokenCountKey] = 0;
-      }
-    }
-  }
+  // vpPerTokenForControllingCell handler removed: orphan after Sabacc Standoff
+  // switched to setTemporaryVpBuffForControllingCell (CRR "considered to have +N
+  // VP until end of next round"). No mission-cards.json data uses this key any
+  // more. Re-add only when a mission with permanent token-VP scoring ships.
 
   // vpPerControlledSpaceInList: iterate all mission token positions, award vp to controller of each space.
   // Used by Lothal Wastes A (Blitz): 2 VP per critical position controlled.
@@ -607,16 +590,23 @@ export function runNpcKryknaActivation(game, mapId, ctx = {}) {
   const logs = [];
   const damageEvents = [];
 
+  // Read damage value from the mission rule's damageAdjacentToNpc payload
+  // rather than hardcoding 2. Per data: chopper-base-atollon a's
+  // damageAdjacentToNpc = { npcTag: "Krykna", damage: 2 }.
+  const variant = ctx.variant || game.selectedMission?.variant || 'a';
+  const adjacentDamageRule = getMissionFlag(mapId, variant, 'damageAdjacentToNpc');
+  const adjDamage = (typeof adjacentDamageRule?.damage === 'number') ? adjacentDamageRule.damage : 2;
+
   for (const pn of [1, 2]) {
     for (const [figKey, figCoord] of Object.entries(game.figurePositions?.[pn] || {})) {
       const fc = normalizeCoord(figCoord);
       const adjToKrykna = (adjacency[fc] || []).some((n) => kryknaCoords.has(normalizeCoord(n)));
-      if (adjToKrykna) damageEvents.push({ figureKey: figKey, playerNum: pn, damage: 2 });
+      if (adjToKrykna) damageEvents.push({ figureKey: figKey, playerNum: pn, damage: adjDamage });
     }
   }
 
   if (damageEvents.length > 0) {
-    logs.push(`${damageEvents.length} hostile figure(s) adjacent to Krykna each suffer **2 damage**.`);
+    logs.push(`${damageEvents.length} hostile figure(s) adjacent to Krykna each suffer **${adjDamage} damage**.`);
   }
 
   // Flag whether any claimed Krykna need interactive placement (after damage resolves)

@@ -14,7 +14,7 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
-import { getLoadoutCards } from '../data-loader.js';
+import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
@@ -1078,16 +1078,16 @@ async function buildAndSendAttackTargets(
     const excluded = new Set(excludeFigureKeys);
     targets.splice(0, targets.length, ...targets.filter(t => !excluded.has(t.figureKey)));
   }
-  // NPC targets: thugs (Corellian A) and Krykna (Chopper A) — added after player targets
-  // Lazy-init NPC arrays if not yet created (so players can attack them before the first EoR)
+  // NPC targets: thugs (Corellian A) and Krykna (Chopper A) — added after player targets.
+  // Lazy-init NPC arrays driven by mission-rules flags (data, not mapId/variant strings).
   const mapId = game.selectedMap?.id;
   const variant = game.selectedMission?.variant;
   if (getMapTokensData && mapId) {
-    if (!game.npcThugs && mapId === 'corellian-underground' && variant === 'a') {
+    if (!game.npcThugs && hasMissionFlag(mapId, variant, 'npcThugs')) {
       const positions = Object.values(getMapTokensData()[mapId]?.missionA?.positions || {}).flat().filter(Boolean);
       if (positions.length > 0) game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: String(coord).toLowerCase(), hp: 4, maxHp: 4, defeated: false }));
     }
-    if (!game.npcKrykna && mapId === 'chopper-base-atollon' && variant === 'a') {
+    if (!game.npcKrykna && hasMissionFlag(mapId, variant, 'npcKryknaActivation')) {
       const positions = Object.values(getMapTokensData()[mapId]?.missionA?.positions || {}).flat().filter(Boolean);
       if (positions.length > 0) game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: String(coord).toLowerCase(), hp: 8, maxHp: 8, defeated: false }));
     }

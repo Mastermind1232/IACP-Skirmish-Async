@@ -76,7 +76,7 @@ describe('PROBE-PD-MSN-001: mission tokens have no inherent effects; all behavio
       'rules.vpPerLaunchPanelControlled',
       'rules.vpPerContrabandInDeploymentZone',
       'rules.vpForControllingNamedArea',
-      'rules.vpPerTokenForControllingCell',
+      'rules.setTemporaryVpBuffForControllingCell', // Sabacc Standoff (CRR temporary buff)
       'rules.placeTokensOnCrates',
     ];
     for (const key of missionShapedRuleKeys) {

@@ -241,45 +241,9 @@ describe('PROBE-VP-007: vpPerContrabandInDeploymentZone — contraband in own DZ
 });
 
 // ── PROBE-VP-008: vpPerTokenForControllingCell ────────────────────────────
-
-describe('PROBE-VP-008: vpPerTokenForControllingCell — tokens + controller → VP + reset', () => {
-  const RULES = {
-    vpPerTokenForControllingCell: {
-      controlCell: 'm13',
-      vpPerToken: 3,
-      tokenCountKey: 'missionObjectiveTokens',
-    },
-  };
-
-  it('008a: P2 controls cell with 4 tokens → 12 VP, token count reset to 0', async () => {
-    const game = buildGame(
-      {},
-      {},
-      { missionObjectiveTokens: 4 },
-    );
-    const ctx = buildCtx({
-      getSpaceController: (_g, _m, coord) => coord === 'm13' ? 2 : null,
-    });
-
-    await runEndOfRoundRules(game, MAP_ID, VARIANT, RULES, ctx);
-    assert.equal(game.player2VP.objectives, 12, 'P2 gains 3×4 = 12 VP');
-    assert.equal(game.player2VP.total, 12);
-    assert.equal(game.missionObjectiveTokens, 0, 'Token count reset to 0');
-  });
-
-  it('008b: no controller but tokens present → tokens reset to 0, no VP', async () => {
-    const game = buildGame(
-      {},
-      {},
-      { missionObjectiveTokens: 3 },
-    );
-    const ctx = buildCtx({
-      getSpaceController: () => null,
-    });
-
-    await runEndOfRoundRules(game, MAP_ID, VARIANT, RULES, ctx);
-    assert.equal(game.player1VP.objectives, 0, 'No VP without controller');
-    assert.equal(game.player2VP.objectives, 0);
-    assert.equal(game.missionObjectiveTokens, 0, 'Token count still reset to 0 (no controller path)');
-  });
-});
+// Removed: rule key was orphaned after Sabacc Standoff switched to
+// setTemporaryVpBuffForControllingCell (CRR "considered to have +N VP until
+// end of next round" semantics). The handler had no live data caller and
+// was removed in slice 8 (mission-rules dispatch consolidation).
+// Re-add when a mission with permanent token-VP scoring ships, with the
+// behavior pinned to that specific mission's variant.

@@ -6,6 +6,7 @@ import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum } from '../game/
 import { edgeKey, normalizeCoord } from '../game/coords.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+import { getMissionFlag } from '../data-loader.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
@@ -69,6 +70,11 @@ export async function handleDevaronCratePush(interaction, ctx) {
     const controller = getSpaceController(game, 'devaron-garrison', curCoord);
     if (!controller) { await interaction.followUp({ content: 'No one controls this crate currently.', ephemeral: true }).catch(discordCatch); return; }
     if (!await requirePlayer(interaction, game, interaction.user.id, controller, canActAsPlayer, 'Only the controlling player can push this crate.')) return;
+    // Push distance from rule data — pushControlledCratesUpTo: 3 in
+    // mission-cards.json's devaron-garrison b rules. Read so the UI label and
+    // (downstream) validation aren't hardcoded.
+    const pushMaxRule = getMissionFlag('devaron-garrison', game.selectedMission?.variant || 'b', 'pushControlledCratesUpTo');
+    const pushMax = typeof pushMaxRule === 'number' ? pushMaxRule : 3;
     const modal = new ModalBuilder()
       .setCustomId(`devaron_crate_modal_${gameId}_${origCoord}`)
       .setTitle(`Push crate (at ${curCoord.toUpperCase()})`);
@@ -76,7 +82,7 @@ export async function handleDevaronCratePush(interaction, ctx) {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('target_coord')
-          .setLabel(`Target space (up to 3 spaces, e.g. K12)`)
+          .setLabel(`Target space (up to ${pushMax} spaces, e.g. K12)`)
           .setStyle(TextInputStyle.Short)
           .setPlaceholder(curCoord.toUpperCase())
           .setRequired(true)
