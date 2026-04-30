@@ -3314,8 +3314,80 @@ function formatDefenseDie(d, i) {
 }
 
 /** Show reroll UI for the current phase (attacker or defender) */
+/**
+ * Post a Y/N prompt asking whether the player wants to reroll, before
+ * showing the dice picker. Per Destruct's UX request — clearer
+ * signposting per CRR step 3 (Rerolls). Returns true if the prompt was
+ * sent (caller should return); false to fall through to the picker.
+ *
+ * Skips the prompt for forced rerolls (they're not optional) and for
+ * pre-reroll abilities (they have their own prompt format).
+ */
+async function maybePromptRerollYn(thread, game, combat, phase) {
+  const gameId = game.gameId;
+  if (phase === 'attacker') {
+    if (combat.rerollYnAskedAttacker) return false;
+    if ((combat.pendingPreRerolls || []).length > 0) return false; // pre-roll abilities use their own prompts
+    const remaining = combat.attackerRerollsRemaining || 0;
+    if (remaining <= 0) return false;
+    combat.rerollYnAskedAttacker = true;
+    const atkPn = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1;
+    const atkOwnerId = atkPn === 1 ? game.player1Id : game.player2Id;
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`combat_reroll_yn_${gameId}_atk_yes`)
+        .setLabel(`Yes — pick dice (${remaining} reroll${remaining !== 1 ? 's' : ''})`)
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`combat_reroll_yn_${gameId}_atk_no`)
+        .setLabel('No — skip')
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: `<@${atkOwnerId}> — **Reroll attack dice?**`,
+      components: [row],
+      allowedMentions: { users: [atkOwnerId] },
+    }).catch(discordCatch);
+    return true;
+  }
+  if (phase === 'defender') {
+    if (combat.rerollYnAskedDefender) return false;
+    const remaining = combat.defenderRerollsRemaining || 0;
+    const ctAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
+    if (remaining <= 0 && !ctAvailable) return false;
+    combat.rerollYnAskedDefender = true;
+    const defPn = opponentPlayerNum(combat.attackerPlayerNum ?? 1);
+    const defOwnerId = defPn === 1 ? game.player1Id : game.player2Id;
+    const parts = [];
+    if (remaining > 0) parts.push(`${remaining} reroll${remaining !== 1 ? 's' : ''}`);
+    if (ctAvailable) parts.push('Cross Training');
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`combat_reroll_yn_${gameId}_def_yes`)
+        .setLabel(`Yes — pick (${parts.join(' + ')})`.slice(0, 80))
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`combat_reroll_yn_${gameId}_def_no`)
+        .setLabel('No — skip')
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: `<@${defOwnerId}> — **Reroll defense dice?**`,
+      components: [row],
+      allowedMentions: { users: [defOwnerId] },
+    }).catch(discordCatch);
+    return true;
+  }
+  return false;
+}
+
 export async function sendRerollUI(thread, game, combat, phase) {
   const gameId = game.gameId;
+  // Q5a: post a Y/N prompt before the dice picker for attacker/defender
+  // (forced rerolls are not optional and skip the gate).
+  if (phase === 'attacker' || phase === 'defender') {
+    if (await maybePromptRerollYn(thread, game, combat, phase)) return;
+  }
   // Helper: advance from forced to defender (or null)
   const _advanceFromForced = async () => {
     if ((combat.forcedRerollQueue || []).length > 0) {
@@ -3493,6 +3565,58 @@ export async function sendRerollUI(thread, game, combat, phase) {
       components: actionRows,
     });
   }
+}
+
+/**
+ * Handle the explicit "Reroll? Y/N" prompt that fires before the dice
+ * picker. Yes → call sendRerollUI, which now sees the YnAsked flag set
+ * and falls through to the picker. No → emit a "done" interaction so
+ * the existing handleCombatReroll handles advancing the phase.
+ */
+export async function handleCombatRerollYn(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const match = interaction.customId.match(/^combat_reroll_yn_([^_]+)_(atk|def)_(yes|no)$/);
+  if (!match) return;
+  const [, gameId, side, choice] = match;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) return;
+  // Color-toggle the clicked button green, disable the other.
+  try {
+    const clickedId = interaction.customId;
+    const newRows = (interaction.message?.components || []).map((row) => {
+      const newRow = new ActionRowBuilder();
+      for (const c of row.components) {
+        const btn = ButtonBuilder.from(c);
+        btn.setDisabled(true);
+        if (c.customId === clickedId) {
+          btn.setStyle(choice === 'yes' ? ButtonStyle.Success : ButtonStyle.Secondary);
+        }
+        newRow.addComponents(btn);
+      }
+      return newRow;
+    });
+    if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
+  } catch (_e) { /* non-fatal */ }
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (!thread) return;
+  if (choice === 'yes') {
+    // Show the picker. The YnAsked flag is set so sendRerollUI falls through.
+    await sendRerollUI(thread, game, combat, side === 'atk' ? 'attacker' : 'defender');
+    saveGames();
+    return;
+  }
+  // No: advance as if the user clicked "Done (no rerolls)" on the picker.
+  // Synthesize a 'done' click on combat_reroll_<gameId>_<side>_done.
+  const fakeInteraction = {
+    ...interaction,
+    customId: `combat_reroll_${gameId}_${side}_done`,
+    deferUpdate: async () => {},
+    followUp: async () => {},
+  };
+  await handleCombatReroll(fakeInteraction, ctx);
 }
 
 /**
