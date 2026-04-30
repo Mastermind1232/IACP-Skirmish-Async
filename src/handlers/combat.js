@@ -4400,7 +4400,9 @@ export async function handleCombatPassive(interaction, ctx) {
     combat.negotiateResolved = true;
     delete combat.pendingCombatPassive;
     saveGames();
-    await proceedAfterTokens(thread, game, combat, ctx);
+    // After Negotiate (ATK modifier) resolves, re-enter the modifier sequence so
+    // Call the Shots / Heavy Repeater / Lasat Honor Guard / DEF blocks can fire.
+    await proceedAfterRerolls(thread, game, combat, ctx);
     return;
   }
 
@@ -4436,6 +4438,140 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     }
     delete combat.shrewdScoundrelGuess;
   }
+
+  // ── CRR step 4: ATTACKER modifiers (fire BEFORE defender modifiers per CRR p.10
+  //    + Destruct: "modifiers stage. Attacker modifiers first, then defender.") ──
+
+  // Pulse Cannon (Iden Versio): if attacker spent a Power Token, apply +4 Accuracy and +1 Hit
+  if (combat.attackerSpentPowerToken && !combat.pulseCannonResolved) {
+    const _pcDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _pcAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const _pcAtkEff = _pcDcEff[_pcAtkDcName] || _pcDcEff[(_pcAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((_pcAtkEff?.specialAbilityIds || []).includes('pulse_cannon_iden')) {
+      combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
+      combat.bonusHits = (combat.bonusHits || 0) + 1;
+      await thread.send('**Pulse Cannon** — Iden Versio spent a Power Token: **+4 Accuracy, +1 Hit** applied.');
+    }
+    combat.pulseCannonResolved = true;
+  }
+
+  // Negotiate (Hondo): +2 Damage unless defender pays 2 VP
+  if (!combat.negotiateResolved) {
+    const _negDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _negAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const _negAtkEff = _negDcEff[_negAtkDcName] || _negDcEff[(_negAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((_negAtkEff?.specialAbilityIds || []).includes('negotiate_hondo')) {
+      const _negDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      const _negDefVpKey = _negDefPN === 1 ? 'player1VP' : 'player2VP';
+      const _negDefVpTotal = game[_negDefVpKey]?.total ?? 0;
+      if (_negDefVpTotal < 2) {
+        combat.bonusHits = (combat.bonusHits || 0) + 2;
+        combat.negotiateResolved = true;
+        await thread.send('**Negotiate** — Defender has fewer than 2 VP; +2 Damage auto-applied.');
+      } else {
+        const _negDefId = getPlayerId(game, _negDefPN);
+        combat.pendingCombatPassive = 'negotiate';
+        const _negRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_pay`).setLabel('Pay 2 VP (avoid +2 Damage)').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_accept`).setLabel('Accept +2 Damage').setStyle(ButtonStyle.Danger),
+        );
+        await thread.send(sanitizeMentions({
+          content: `<@${_negDefId}> **Negotiate** — Hondo demands tribute! Pay **2 VP** to avoid +2 Damage, or accept the +2 Damage:`,
+          allowedMentions: { users: [_negDefId] },
+          components: [_negRow],
+        })).catch(discordCatch);
+        saveGames?.();
+        return;
+      }
+    }
+  }
+
+  // Call the Shots (Hera): while a friendly within 3 is attacking, apply +2 Acc, +1 Hit, or +1 Surge (once/round)
+  if (!combat.callTheShotsResolved && combat.attackerFigureKey) {
+    const _ctsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const atkPlayerNum = combat.attackerPlayerNum;
+    const friendlyFigs = game.figurePositions?.[atkPlayerNum] || {};
+    const atkCoord = friendlyFigs[combat.attackerFigureKey];
+    const mapSp = getMapData(game.selectedMap?.id);
+    let _ctsHeraFk = null;
+    if (atkCoord && mapSp) {
+      for (const [fk, pos] of Object.entries(friendlyFigs)) {
+        if (fk === combat.attackerFigureKey) continue; // "another friendly"
+        const fDcName = dcNameFromFigureKey(fk);
+        const fEff = _ctsDcEff[fDcName] || _ctsDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if (!(fEff?.specialAbilityIds || []).includes('call_the_shots_hera')) continue;
+        if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3)) {
+          _ctsHeraFk = fk;
+          break;
+        }
+      }
+    }
+    if (_ctsHeraFk && !game.roundFigureAbilityUsed?.[`${_ctsHeraFk}_call_the_shots`]) {
+      combat.pendingCombatPassive = 'call_the_shots';
+      combat.callTheShotsFigKey = _ctsHeraFk;
+      const _ctsHeraDcName = dcNameFromFigureKey(_ctsHeraFk);
+      const btns = [
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_acc`).setLabel('+2 Accuracy').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_hit`).setLabel('+1 Damage').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      ];
+      await thread.send({
+        content: `**Call the Shots** (${_ctsHeraDcName}): Apply +2 Accuracy, +1 Damage, or +1 Surge to **${combat.attackerDcName}**'s attack?`,
+        components: [new ActionRowBuilder().addComponents(btns)],
+      });
+      saveGames?.();
+      return;
+    }
+    combat.callTheShotsResolved = true;
+  }
+
+  // Heavy Repeater (Paz Vizsla): during ranged attack, suffer 1 Strain for +1 Hit, Blast 2, or +3 Accuracy
+  if (!combat.heavyRepeaterResolved) {
+    const getDcEffHR = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const hrDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const hrEff = getDcEffHR[hrDcName] || getDcEffHR[hrDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((hrEff?.specialAbilityIds || []).includes('heavy_repeater_paz') && (hrEff?.attack?.type === 'range' || combat.attackType === 'Ranged')) {
+      combat.pendingCombatPassive = 'heavy_repeater';
+      const btns = [
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_hit`).setLabel('+1 Damage (1 Strain)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_blast`).setLabel('Blast 2 (1 Strain)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_acc`).setLabel('+3 Accuracy (1 Strain)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      ];
+      await thread.send({
+        content: `**Heavy Repeater** — **${hrDcName}** may suffer 1 Strain to apply a bonus:`,
+        components: [new ActionRowBuilder().addComponents(btns)],
+      });
+      saveGames?.();
+      return;
+    }
+    combat.heavyRepeaterResolved = true;
+  }
+
+  // Lasat Honor Guard (Zeb Orrelios): after rerolls, may turn 1 die showing only a single attack icon to any other side
+  if (!combat.lasatHonorGuardUsed && combat.attackDiceResults?.length > 0) {
+    const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const atkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const atkEff = getDcEff[atkDcName] || getDcEff[atkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((atkEff?.specialAbilityIds || []).includes('lasat_honor_guard')) {
+      const eligibleIdxs = combat.attackDiceResults
+        .map((d, i) => ({ d, i }))
+        .filter(({ d }) => (d.acc || 0) + (d.dmg || 0) + (d.surge || 0) === 1)
+        .map(({ i }) => i);
+      if (eligibleIdxs.length > 0) {
+        combat.lasatHonorGuardPhase = true;
+        combat.lasatHonorGuardUsed = true;
+        combat.lasatEligibleDiceIndices = eligibleIdxs;
+        await sendLasatDiePicker(thread, game.gameId, combat, eligibleIdxs, ctx);
+        saveGames?.();
+        return;
+      }
+    }
+  }
+
+  // ── CRR step 4: DEFENDER modifiers (after attacker modifiers per CRR p.10
+  //    + Destruct: "modifiers stage. Attacker modifiers first, then defender.") ──
 
   // Agile (Jet Trooper E/R): while defending, convert 1 Block to 1 Evade
   if (combat.target?.figureKey && !combat.agileJetTrooperApplied) {
@@ -4523,90 +4659,6 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       }
     }
     combat.getDownResolved = true;
-  }
-
-  // Call the Shots (Hera): while a friendly within 3 is attacking, apply +2 Acc, +1 Hit, or +1 Surge (once/round)
-  if (!combat.callTheShotsResolved && combat.attackerFigureKey) {
-    const _ctsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const atkPlayerNum = combat.attackerPlayerNum;
-    const friendlyFigs = game.figurePositions?.[atkPlayerNum] || {};
-    const atkCoord = friendlyFigs[combat.attackerFigureKey];
-    const mapSp = getMapData(game.selectedMap?.id);
-    let _ctsHeraFk = null;
-    if (atkCoord && mapSp) {
-      for (const [fk, pos] of Object.entries(friendlyFigs)) {
-        if (fk === combat.attackerFigureKey) continue; // "another friendly"
-        const fDcName = dcNameFromFigureKey(fk);
-        const fEff = _ctsDcEff[fDcName] || _ctsDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
-        if (!(fEff?.specialAbilityIds || []).includes('call_the_shots_hera')) continue;
-        if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3)) {
-          _ctsHeraFk = fk;
-          break;
-        }
-      }
-    }
-    if (_ctsHeraFk && !game.roundFigureAbilityUsed?.[`${_ctsHeraFk}_call_the_shots`]) {
-      combat.pendingCombatPassive = 'call_the_shots';
-      combat.callTheShotsFigKey = _ctsHeraFk;
-      const _ctsHeraDcName = dcNameFromFigureKey(_ctsHeraFk);
-      const btns = [
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_acc`).setLabel('+2 Accuracy').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_hit`).setLabel('+1 Damage').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      ];
-      await thread.send({
-        content: `**Call the Shots** (${_ctsHeraDcName}): Apply +2 Accuracy, +1 Damage, or +1 Surge to **${combat.attackerDcName}**'s attack?`,
-        components: [new ActionRowBuilder().addComponents(btns)],
-      });
-      saveGames?.();
-      return;
-    }
-    combat.callTheShotsResolved = true;
-  }
-
-  // Heavy Repeater (Paz Vizsla): during ranged attack, suffer 1 Strain for +1 Hit, Blast 2, or +3 Accuracy
-  if (!combat.heavyRepeaterResolved) {
-    const getDcEffHR = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const hrDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
-    const hrEff = getDcEffHR[hrDcName] || getDcEffHR[hrDcName?.replace(/\s*\[.*\]\s*$/, '')];
-    if ((hrEff?.specialAbilityIds || []).includes('heavy_repeater_paz') && (hrEff?.attack?.type === 'range' || combat.attackType === 'Ranged')) {
-      combat.pendingCombatPassive = 'heavy_repeater';
-      const btns = [
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_hit`).setLabel('+1 Damage (1 Strain)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_blast`).setLabel('Blast 2 (1 Strain)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_acc`).setLabel('+3 Accuracy (1 Strain)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      ];
-      await thread.send({
-        content: `**Heavy Repeater** — **${hrDcName}** may suffer 1 Strain to apply a bonus:`,
-        components: [new ActionRowBuilder().addComponents(btns)],
-      });
-      saveGames?.();
-      return;
-    }
-    combat.heavyRepeaterResolved = true;
-  }
-
-  // Lasat Honor Guard (Zeb Orrelios): after rerolls, may turn 1 die showing only a single attack icon to any other side
-  if (!combat.lasatHonorGuardUsed && combat.attackDiceResults?.length > 0) {
-    const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const atkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
-    const atkEff = getDcEff[atkDcName] || getDcEff[atkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-    if ((atkEff?.specialAbilityIds || []).includes('lasat_honor_guard')) {
-      const eligibleIdxs = combat.attackDiceResults
-        .map((d, i) => ({ d, i }))
-        .filter(({ d }) => (d.acc || 0) + (d.dmg || 0) + (d.surge || 0) === 1)
-        .map(({ i }) => i);
-      if (eligibleIdxs.length > 0) {
-        combat.lasatHonorGuardPhase = true;
-        combat.lasatHonorGuardUsed = true;
-        combat.lasatEligibleDiceIndices = eligibleIdxs;
-        await sendLasatDiePicker(thread, game.gameId, combat, eligibleIdxs, ctx);
-        saveGames?.();
-        return;
-      }
-    }
   }
 
   // Elusive (CC): while defending, defender chooses 1 attack die to nullify, then worst defense die also nullified
@@ -4818,49 +4870,8 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     combat.survivalResolved = true;
   }
 
-  // Pulse Cannon (Iden Versio): if attacker spent a Power Token, apply +4 Accuracy and +1 Hit
-  if (combat.attackerSpentPowerToken) {
-    const _pcDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _pcAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
-    const _pcAtkEff = _pcDcEff[_pcAtkDcName] || _pcDcEff[(_pcAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-    if ((_pcAtkEff?.specialAbilityIds || []).includes('pulse_cannon_iden')) {
-      combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
-      combat.bonusHits = (combat.bonusHits || 0) + 1;
-      await thread.send('**Pulse Cannon** — Iden Versio spent a Power Token: **+4 Accuracy, +1 Hit** applied.');
-    }
-  }
-
-  // Negotiate (Hondo): +2 Damage unless defender pays 2 VP
-  if (!combat.negotiateResolved) {
-    const _negDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _negAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
-    const _negAtkEff = _negDcEff[_negAtkDcName] || _negDcEff[(_negAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-    if ((_negAtkEff?.specialAbilityIds || []).includes('negotiate_hondo')) {
-      const _negDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-      const _negDefVpKey = _negDefPN === 1 ? 'player1VP' : 'player2VP';
-      const _negDefVpTotal = game[_negDefVpKey]?.total ?? 0;
-      if (_negDefVpTotal < 2) {
-        // Defender cannot afford to pay — auto-apply +2 Damage
-        combat.bonusHits = (combat.bonusHits || 0) + 2;
-        combat.negotiateResolved = true;
-        await thread.send('**Negotiate** — Defender has fewer than 2 VP; +2 Damage auto-applied.');
-      } else {
-        const _negDefId = getPlayerId(game, _negDefPN);
-        combat.pendingCombatPassive = 'negotiate';
-        const _negRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_pay`).setLabel('Pay 2 VP (avoid +2 Damage)').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_negotiate_accept`).setLabel('Accept +2 Damage').setStyle(ButtonStyle.Danger),
-        );
-        await thread.send(sanitizeMentions({
-          content: `<@${_negDefId}> **Negotiate** — Hondo demands tribute! Pay **2 VP** to avoid +2 Damage, or accept the +2 Damage:`,
-          allowedMentions: { users: [_negDefId] },
-          components: [_negRow],
-        })).catch(discordCatch);
-        saveGames?.();
-        return;
-      }
-    }
-  }
+  // Pulse Cannon and Negotiate moved to proceedAfterRerolls (CRR step-4 attacker
+  // modifiers; per Destruct's reading, attacker mods fire before defender mods).
 
   const { getAttackerSurgeAbilities, SURGE_LABELS } = ctx;
   const getAbility = ctx.getAbility || (() => null);
