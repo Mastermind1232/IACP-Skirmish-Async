@@ -455,7 +455,14 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
 
     case 'post_defender_reroll': {
       combat.rerollPhase = null;
-      await proceedAfterRerolls(thread, game, combat, ctx);
+      // Per Destruct: sequential per-player "Apply modifiers? Y/N" before
+      // advancing to surge (CRR step 4: Apply Modifiers, then step 5: Surge).
+      // Attacker prompts first, then defender. Skips for self-play.
+      if (game.selfPlay) {
+        await proceedAfterRerolls(thread, game, combat, ctx);
+        break;
+      }
+      await sendModsYn(thread, game, combat, 'attacker');
       break;
     }
 
@@ -4608,6 +4615,123 @@ export async function handleCombatPassive(interaction, ctx) {
 
   saveGames();
   await proceedAfterRerolls(thread, game, combat, ctx);
+}
+
+/**
+ * Sequential per-player "Apply modifiers? Y/N" prompt (CRR step 4).
+ * Attacker prompts first; after they respond, defender prompts; after
+ * defender responds, advance to surge via proceedAfterRerolls.
+ *
+ * Per Destruct's UX: each player gets explicit Y/N rather than a
+ * shared "Both ready" gate. Y means "I'm playing modifiers, give me
+ * a moment" (player applies CCs from their hand channel, then clicks
+ * Done). N means "no modifiers, advance".
+ */
+export async function sendModsYn(thread, game, combat, role) {
+  const gameId = game.gameId;
+  const isAtk = role === 'attacker';
+  const playerNum = isAtk
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
+    : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`combat_mods_yn_${gameId}_${isAtk ? 'atk' : 'def'}_yes`)
+      .setLabel('Yes — applying modifiers')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`combat_mods_yn_${gameId}_${isAtk ? 'atk' : 'def'}_no`)
+      .setLabel('No — skip')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  const label = isAtk ? 'Attacker' : 'Defender';
+  await thread.send({
+    content: `<@${ownerId}> — **${label}: Apply modifiers?** (CRR step 4) Play any CCs / abilities that modify this attack from your hand channel, then click below.`,
+    components: [row],
+    allowedMentions: { users: [ownerId] },
+  }).catch(discordCatch);
+}
+
+/**
+ * Handle the sequential "Apply modifiers? Y/N" buttons. Yes posts a
+ * follow-up "Done with modifiers?" Continue button so the player can
+ * take their time playing CCs. No skips immediately.
+ *
+ * Sequence:
+ *   atk_yes → "Continue" button → atk done → defender Y/N
+ *   atk_no  → defender Y/N immediately
+ *   def_yes → "Continue" button → def done → proceedAfterRerolls
+ *   def_no  → proceedAfterRerolls immediately
+ */
+export async function handleCombatModsYn(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const m = interaction.customId.match(/^combat_mods_yn_([^_]+)_(atk|def)_(yes|no|continue)$/);
+  if (!m) return;
+  const [, gameId, side, choice] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) return;
+
+  // Permission check: only the role's player can click their own button.
+  const isAtk = side === 'atk';
+  const expectedPn = isAtk
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
+    : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
+  const expectedId = expectedPn === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== expectedId) {
+    await interaction.followUp({
+      content: `Only the ${isAtk ? 'attacker' : 'defender'} can click that button.`,
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
+
+  // Color-toggle the clicked button green, disable the others.
+  try {
+    const clickedId = interaction.customId;
+    const newRows = (interaction.message?.components || []).map((row) => {
+      const newRow = new ActionRowBuilder();
+      for (const c of row.components) {
+        const btn = ButtonBuilder.from(c);
+        btn.setDisabled(true);
+        if (c.customId === clickedId) {
+          btn.setStyle(choice === 'no' ? ButtonStyle.Secondary : ButtonStyle.Success);
+        }
+        newRow.addComponents(btn);
+      }
+      return newRow;
+    });
+    if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
+  } catch (_e) { /* non-fatal */ }
+
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (!thread) return;
+
+  if (choice === 'yes') {
+    // Post a follow-up "Continue" button so the player can take their time.
+    const continueRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`combat_mods_yn_${gameId}_${side}_continue`)
+        .setLabel('Done with modifiers — continue')
+        .setStyle(ButtonStyle.Primary),
+    );
+    await thread.send({
+      content: `<@${expectedId}> — Apply your modifier CCs / abilities now. Click **Continue** when done.`,
+      components: [continueRow],
+      allowedMentions: { users: [expectedId] },
+    }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+  // 'no' or 'continue' — advance.
+  if (isAtk) {
+    await sendModsYn(thread, game, combat, 'defender');
+  } else {
+    await proceedAfterRerolls(thread, game, combat, ctx);
+  }
+  saveGames();
 }
 
 /**
