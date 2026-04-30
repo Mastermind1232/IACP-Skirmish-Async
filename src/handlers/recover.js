@@ -84,6 +84,17 @@ export async function handleResync(interaction, ctx) {
     return;
   }
 
+  // UX: clean up the botmenu popup that hosted the Resync button, post a
+  // "starting" note in general so the user knows it's in flight, then run.
+  // We post a "complete" message at the end (separate from the starting
+  // note so the user gets a notification when it actually finishes).
+  await interaction.message?.delete().catch(() => {});
+  let startingMsg = null;
+  try {
+    const ch = await fetchGameChannel(client, game.generalId);
+    startingMsg = await ch.send('🔄 Resync starting — this can take a few moments...').catch(() => null);
+  } catch {}
+
   const phases = [];
 
   // Phase 0: rebuild side-channel Maps (dcMessageMeta, dcExhaustedState,
@@ -139,10 +150,17 @@ export async function handleResync(interaction, ctx) {
   saveGames();
 
   const summary = [
-    `**Resync complete.** ${phases.join(' · ')}.`,
+    `✅ **Resync complete.** ${phases.join(' · ')}.`,
     recoveryResults.length > 0 ? `Recovered prompts:\n${recoveryResults.map(r => `- ${r}`).join('\n')}` : null,
   ].filter(Boolean).join('\n\n');
-  await interaction.editReply({ content: summary, components: [] }).catch(discordCatch);
+  // Post the "complete" message in general so the user gets a notification.
+  // (Edits don't ping; we want a fresh message.)
+  try {
+    const ch = await fetchGameChannel(client, game.generalId);
+    await ch.send(summary).catch(() => {});
+  } catch {}
+  // Best-effort cleanup of the "starting" placeholder.
+  if (startingMsg) await startingMsg.delete().catch(() => {});
 }
 
 /**
