@@ -36,9 +36,12 @@ const H_CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
 
 describe('PROBE-PD-PT-005: at most one power-token spend per figure per attack', () => {
   it('005a: source — advanceTokenPhase clears tokenPhase on entry and only promotes attacker → defender', () => {
+    // Per CRR p.50, the token phase now runs pre-roll. After both sides finish:
+    //   - pre-roll path → postRollDiceButton (post the Roll Combat Dice button)
+    //   - post-roll path (legacy / safety) → proceedAfterTokens (passives + surge)
     assert.match(H_CB_SRC,
-      /async function advanceTokenPhase\(thread, game, combat, completedRole, ctx\) \{\s*\n\s*combat\.tokenPhase = null;\s*\n\s*if \(completedRole === 'attacker'\) \{[\s\S]*?combat\.tokenPhase = 'defender';[\s\S]*?\}\s*\n\s*await proceedAfterTokens\(thread, game, combat, ctx\);\s*\n\}/,
-      'advanceTokenPhase must clear tokenPhase then optionally promote to defender and fall through — CRR-PT-005');
+      /async function advanceTokenPhase\(thread, game, combat, completedRole, ctx\) \{\s*\n\s*combat\.tokenPhase = null;\s*\n\s*if \(completedRole === 'attacker'\) \{[\s\S]*?combat\.tokenPhase = 'defender';[\s\S]*?\}\s*\n\s*if \(!combat\.attackRoll\) \{\s*\n\s*await postRollDiceButton\(thread, game, combat, ctx\);\s*\n\s*return;\s*\n\s*\}\s*\n\s*await proceedAfterTokens\(thread, game, combat, ctx\);\s*\n\}/,
+      'advanceTokenPhase must branch on attackRoll: pre-roll → postRollDiceButton, post-roll → proceedAfterTokens — CRR-PT-005');
   });
 
   it('005b: source — there is exactly one promotion to defender inside advanceTokenPhase (no loop-back to attacker)', () => {
@@ -66,18 +69,15 @@ describe('PROBE-PD-PT-005: at most one power-token spend per figure per attack',
   });
 
   it('005e: source — sendTokenWindow is opened at most once per attack per role; every opener first sets tokenPhase to match', () => {
-    // Every sendTokenWindow call is immediately preceded by `combat.tokenPhase = '<role>';`,
-    // so there is no path that opens a token window without first re-asserting the state machine.
-    // Count openers: attacker has exactly one (proceedAfterRerolls). Defender has TWO
-    // mutually exclusive openers (proceedAfterRerolls skip-path + advanceTokenPhase) —
-    // but at runtime only one fires per attack because they live on disjoint control-flow branches.
+    // After PT-on-declare refactor: attacker window is opened from proceedToTokenPhase
+    // (pre-roll). Defender window from proceedToTokenPhase (skip-path) and from
+    // advanceTokenPhase (after attacker spends). Two mutually exclusive defender sites.
     const attackerWindow = H_CB_SRC.match(/combat\.tokenPhase = 'attacker';\s*\n\s*await sendTokenWindow\(thread, game\.gameId, 'attacker',/g) || [];
     const defenderWindow = H_CB_SRC.match(/combat\.tokenPhase = 'defender';\s*\n\s*await sendTokenWindow\(thread, game\.gameId, 'defender',/g) || [];
     assert.equal(attackerWindow.length, 1,
       'attacker window must be opened from exactly one site — CRR-PT-005');
     assert.ok(defenderWindow.length >= 1 && defenderWindow.length <= 2,
       'defender window may be opened from ≤2 mutually exclusive sites — CRR-PT-005');
-    // sendTokenWindow is never invoked WITHOUT first setting combat.tokenPhase.
     const allSendWindow = H_CB_SRC.match(/await sendTokenWindow\(thread, game\.gameId, '(attacker|defender)',/g) || [];
     assert.equal(allSendWindow.length, attackerWindow.length + defenderWindow.length,
       'every sendTokenWindow call must be preceded by a tokenPhase assignment — CRR-PT-005');

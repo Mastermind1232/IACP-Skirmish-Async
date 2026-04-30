@@ -254,18 +254,22 @@ describe('B-E2E-002: Attacker reroll path — reroll → gates → resolution', 
 
 // ── B-E2E-003: Defender reroll + token path ────────────────────────────────
 
-describe('B-E2E-003: Defender reroll + token path — defender ordering + token integration', () => {
-  it('003: post_roll → defender reroll → post_defender_reroll → defender token → resolution', async () => {
+describe('B-E2E-003: Defender reroll path — post-roll pipeline (PT-on-declare moved tokens pre-roll)', () => {
+  it('003: post_roll → defender reroll → post_defender_reroll → pre_resolve → resolution', async () => {
+    // After CRR-COMBAT-PT-DECLARE refactor: tokens are spent pre-roll, NOT post-rerolls.
+    // This test exercises the post-roll pipeline only — token integration is covered by
+    // tests/domain/oracle/combat-pt-on-declare.test.js (structural) and the new pre-roll
+    // PT phase. The figurePowerTokens here are intentionally unspent — tokens that
+    // would have been offered have already been declined or spent before Step 1.
     const thread = mockThread();
     const client = mockClientWithThread(thread);
     const combat = makeCombat({
       defenderRerollsRemaining: 1,
       defenderRerolledIndices: [],
     });
-    // Defender (player2) has a Block token on target figure
     const game = makeGame({
       pendingCombat: combat,
-      figurePowerTokens: { 'Stormtrooper-2-0': ['Block'] },
+      figurePowerTokens: {},
     });
     const { ctx, calls } = buildE2eCtx(game, client);
 
@@ -284,61 +288,50 @@ describe('B-E2E-003: Defender reroll + token path — defender ordering + token 
     assert.strictEqual(combat.combatGate?.phase, 'post_defender_reroll',
       'Step 3: gate = post_defender_reroll after defender reroll done');
 
-    // Step 4: Both ready → proceedAfterRerolls
-    //   → no attacker tokens → defender has Block → tokenPhase='defender'
+    // Step 4: Both ready → proceedAfterRerolls (no token window — tokens were pre-roll)
+    //   → proceedAfterTokens → no surge → pre_resolve gate
     await advanceGate(game, client, ctx);
     assert.strictEqual(combat.rerollPhase, null,
       'Step 4: rerollPhase cleared');
-    assert.strictEqual(combat.tokenPhase, 'defender',
-      'Step 4: tokenPhase = defender — defender token window shown');
-
-    // Step 5: Defender spends Block token
-    const tokenInteraction = mockInteraction('combat_token_42_def_0', 'player2', client);
-    await handleCombatToken(tokenInteraction, ctx);
-
-    // Token effects verified
-    assert.strictEqual(combat.bonusBlock, 1,
-      'Step 5: bonusBlock += 1 from Block token');
-    assert.deepStrictEqual(game.figurePowerTokens['Stormtrooper-2-0'] ?? [],
-      [], 'Step 5: token removed from figurePowerTokens');
-    assert.strictEqual(combat.tokenPhase, null,
-      'Step 5: tokenPhase cleared after defender done');
-
-    // advanceTokenPhase → proceedAfterTokens → no surge → pre_resolve gate
+    assert.strictEqual(combat.tokenPhase ?? null, null,
+      'Step 4: tokenPhase NOT set post-rerolls — tokens are pre-roll now (CRR p.50)');
     assert.strictEqual(combat.combatGate?.phase, 'pre_resolve',
-      'Step 5: combatGate = pre_resolve — advanced through proceedAfterTokens');
+      'Step 4: combatGate = pre_resolve — proceeded through proceedAfterTokens');
 
-    // Step 6: Both ready → resolution
+    // Step 5: Both ready → resolution
     await advanceGate(game, client, ctx);
     assert.strictEqual(calls.resolveCombatAfterRolls.length, 1,
-      'Step 6: resolveCombatAfterRolls called — pipeline complete');
+      'Step 5: resolveCombatAfterRolls called — pipeline complete');
     assert.strictEqual(combat.combatGate, undefined,
-      'Step 6: no stale combatGate');
-    assert.strictEqual(combat.defenderRerolledOrModified, true,
-      'Step 6: defenderRerolledOrModified tracked for Quick Strike');
+      'Step 5: no stale combatGate');
   });
 });
 
 // ── B-E2E-004: Attacker token + surge path ─────────────────────────────────
 
-describe('B-E2E-004: Attacker token + surge path — token → surge → resolution', () => {
-  it('004: post_roll → no rerolls → attacker token → surge → pre_resolve → resolution', async () => {
+describe('B-E2E-004: Attacker surge path — post-roll pipeline (PT-on-declare moved tokens pre-roll)', () => {
+  it('004: post_roll → no rerolls → surge → pre_resolve → resolution', async () => {
+    // After CRR-COMBAT-PT-DECLARE refactor: tokens are spent pre-roll. This test
+    // exercises the post-roll surge → resolution pipeline. Pre-roll PT spending is
+    // simulated by setting `attackerSpentPowerToken` directly + applying the +1 hit
+    // via combat.bonusHits (matches what proceedToTokenPhase / handleCombatToken
+    // would have done before rolls).
     const thread = mockThread();
     const client = mockClientWithThread(thread);
     const combat = makeCombat({
-      // 2 surge on attack roll so surge window appears
       attackRoll: { acc: 2, dmg: 2, surge: 2 },
       attackDiceResults: [
         { color: 'blue', acc: 2, dmg: 1, surge: 1 },
         { color: 'green', acc: 0, dmg: 1, surge: 1 },
       ],
+      // Simulate pre-roll PT spend: +1 Damage already committed at declare.
+      bonusHits: 1,
+      attackerSpentPowerToken: true,
     });
-    // Attacker has a Damage token
     const game = makeGame({
       pendingCombat: combat,
-      figurePowerTokens: { 'Rebel Trooper-1-0': ['Damage'] },
+      figurePowerTokens: {},
     });
-    // Provide one surge ability so the surge window opens
     const { ctx, calls } = buildE2eCtx(game, client, {
       getAttackerSurgeAbilities: () => ['surge_dmg_1'],
       getSurgeAbilityLabel: () => '+1 Damage',
@@ -349,51 +342,33 @@ describe('B-E2E-004: Attacker token + surge path — token → surge → resolut
     await sendCombatGate(thread, game, combat, 'post_roll', ctx);
     assert.strictEqual(combat.combatGate?.phase, 'post_roll', 'Step 1: gate = post_roll');
 
-    // Step 2: Both ready → no rerolls → proceedAfterRerolls
-    //   → attacker has Damage token → tokenPhase='attacker'
+    // Step 2: Both ready → no rerolls → proceedAfterRerolls → proceedAfterTokens → surge
     await advanceGate(game, client, ctx);
     assert.strictEqual(combat.rerollPhase ?? null, null,
       'Step 2: no rerolls — rerollPhase stays null');
-    assert.strictEqual(combat.tokenPhase, 'attacker',
-      'Step 2: tokenPhase = attacker — attacker token window shown');
-
-    // Step 3: Attacker spends Damage token
-    const tokenInteraction = mockInteraction('combat_token_42_att_0', 'player1', client);
-    await handleCombatToken(tokenInteraction, ctx);
-
-    assert.strictEqual(combat.bonusHits, 1,
-      'Step 3: bonusHits += 1 from Damage token');
-    assert.deepStrictEqual(game.figurePowerTokens['Rebel Trooper-1-0'] ?? [],
-      [], 'Step 3: Damage token removed from figurePowerTokens');
-    assert.strictEqual(combat.tokenPhase, null,
-      'Step 3: tokenPhase cleared — no defender tokens');
-
-    // advanceTokenPhase → proceedAfterTokens → surge=2, 1 ability → surge window
+    assert.strictEqual(combat.tokenPhase ?? null, null,
+      'Step 2: tokenPhase NOT set post-rerolls — tokens are pre-roll now (CRR p.50)');
     assert.ok(combat.surgeRemaining > 0,
-      'Step 3: surgeRemaining > 0 — surge window opened');
-    assert.strictEqual(combat.surgeDamage, 0,
-      'Step 3: surgeDamage initialized to 0');
+      'Step 2: surgeRemaining > 0 — surge window opened');
 
-    // Step 4: Attacker clicks "done" on surge
+    // Step 3: Attacker clicks "done" on surge
     const surgeInteraction = mockInteraction('combat_surge_42_done', 'player1', client);
     await handleCombatSurge(surgeInteraction, ctx);
 
     assert.strictEqual(combat.surgeRemaining, 0,
-      'Step 4: surgeRemaining = 0 after done');
+      'Step 3: surgeRemaining = 0 after done');
     assert.strictEqual(combat.combatGate?.phase, 'pre_resolve',
-      'Step 4: combatGate = pre_resolve via sendReadyToResolveRolls');
+      'Step 3: combatGate = pre_resolve via sendReadyToResolveRolls');
 
-    // Step 5: Both ready → resolution
+    // Step 4: Both ready → resolution
     await advanceGate(game, client, ctx);
     assert.strictEqual(calls.resolveCombatAfterRolls.length, 1,
-      'Step 5: resolveCombatAfterRolls called — pipeline complete');
+      'Step 4: resolveCombatAfterRolls called — pipeline complete');
     assert.strictEqual(combat.combatGate, undefined,
-      'Step 5: no stale combatGate after resolution');
-
-    // Verify no stale windows remain
-    assert.strictEqual(combat.rerollPhase ?? null, null, 'no stale rerollPhase');
-    assert.strictEqual(combat.tokenPhase ?? null, null, 'no stale tokenPhase');
-    assert.strictEqual(combat.surgeRemaining, 0, 'surge fully consumed');
+      'Step 4: no stale combatGate after resolution');
+    // Pre-roll PT bonus survives through to resolution
+    assert.strictEqual(combat.bonusHits, 1,
+      'pre-roll PT +1 Hit preserved into resolution');
     assert.strictEqual(combat.attackerSpentPowerToken, true,
       'attackerSpentPowerToken tracked for Pulse Cannon');
   });

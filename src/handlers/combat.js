@@ -2638,28 +2638,16 @@ export async function handleCombatReady(interaction, ctx) {
     saveGames();
     return;
   }
-  const combatRound = game.currentRound ?? 1;
-  const combatEmbed = new EmbedBuilder()
-    .setTitle(`COMBAT: ROUND ${combatRound}`)
-    .setColor(COLORS.ORANGE)
-    .setDescription(`Attacker rolls offense, Defender rolls defense.`);
-  const rollRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`combat_roll_${gameId}`)
-      .setLabel('Roll Combat Dice')
-      .setStyle(ButtonStyle.Danger)
-  );
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   if (!thread) throw new Error(`handleCombatReady: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
-  const rollMsgSent = await thread.send({
-    embeds: [combatEmbed],
-    components: [rollRow],
-  });
-  combat.rollMessageId = rollMsgSent.id;
   try {
     const preMsg = await thread.messages.fetch(combat.combatPreMsgId);
     await preMsg.edit({ components: [] }).catch(discordCatch);
   } catch {}
+  // Per CRR p.50, power tokens are spent at declare — before dice are rolled.
+  // The token phase posts the Roll Combat Dice button itself when both players
+  // are done (see postRollDiceButton).
+  await proceedToTokenPhase(thread, game, combat, ctx);
   saveGames();
 }
 
@@ -4169,7 +4157,11 @@ function buildRogueOneSurgeButton(game, combat) {
   ];
 }
 
-/** Advance to next phase: attacker done → check defender; defender done → proceedAfterTokens */
+/**
+ * Advance to next phase: attacker done → check defender; both done → next phase.
+ * Pre-roll (no attackRoll yet) → post the Roll Combat Dice button.
+ * Post-roll (legacy callers) → continue to passive checks + surge spending.
+ */
 async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
   combat.tokenPhase = null;
   if (completedRole === 'attacker') {
@@ -4180,6 +4172,10 @@ async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
       await sendTokenWindow(thread, game.gameId, 'defender', defTokens, combat.target.label, combat);
       return;
     }
+  }
+  if (!combat.attackRoll) {
+    await postRollDiceButton(thread, game, combat, ctx);
+    return;
   }
   await proceedAfterTokens(thread, game, combat, ctx);
 }
@@ -4669,6 +4665,22 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     return;
   }
 
+  // Power-token phase already ran pre-roll (see proceedToTokenPhase); fall through.
+  await proceedAfterTokens(thread, game, combat, ctx);
+}
+
+/**
+ * Pre-roll power-token phase. Per CRR p.50: "When a figure with a power token
+ * declares an attack or is declared as the target of an attack, that figure may
+ * spend 1 of its power tokens." Spend decision happens at declare, BEFORE rolls.
+ *
+ * Order: attacker first, then defender. Self-play short-circuits straight to
+ * the roll button. When no tokens are eligible on either side, also short-
+ * circuits — there's no decision to make.
+ *
+ * Caller: handleCombatReady once both players hit Ready.
+ */
+export async function proceedToTokenPhase(thread, game, combat, ctx) {
   // Vague and Unconvincing (K-2S0): while defending, neither player can spend power tokens
   let _vagueBlockTokens = false;
   if (combat.target?.figureKey) {
@@ -4696,7 +4708,6 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
 
   const hasAtkCohesion = (combat.squadCohesionTokens?.attacker || []).length > 0;
   const hasDefCohesion = (combat.squadCohesionTokens?.defender || []).length > 0;
-  // Self-play: skip interactive token spending windows (AI doesn't have combat_token_ actions)
   if (!game.selfPlay) {
     if (!_vagueBlockTokens && (attackerTokens.length > 0 || hasAtkCohesion)) {
       combat.tokenPhase = 'attacker';
@@ -4709,7 +4720,25 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       return;
     }
   }
-  await proceedAfterTokens(thread, game, combat, ctx);
+  await postRollDiceButton(thread, game, combat, ctx);
+}
+
+/** Post the "Roll Combat Dice" button after the pre-roll token phase completes. */
+async function postRollDiceButton(thread, game, combat, ctx) {
+  const combatRound = game.currentRound ?? 1;
+  const combatEmbed = new EmbedBuilder()
+    .setTitle(`COMBAT: ROUND ${combatRound}`)
+    .setColor(COLORS.ORANGE)
+    .setDescription('Attacker rolls offense, Defender rolls defense.');
+  const rollRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`combat_roll_${game.gameId}`)
+      .setLabel('Roll Combat Dice')
+      .setStyle(ButtonStyle.Danger),
+  );
+  const rollMsgSent = await thread.send({ embeds: [combatEmbed], components: [rollRow] });
+  combat.rollMessageId = rollMsgSent.id;
+  if (ctx?.saveGames) ctx.saveGames();
 }
 
 /**
