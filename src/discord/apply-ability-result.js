@@ -2,29 +2,15 @@ import { getPlayAreaId, opponentPlayerNum } from '../game/player-helpers.js';
 import { enforceContentLimit } from './limits.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
 import { fetchGameChannel } from './channel-helpers.js';
+import { updateDcCardMessage } from '../engine/message-updaters.js';
 
 /**
- * Re-fetch the DC's play-area message and rewrite its embed + components
- * with the given exhausted state. Used after ready (exhausted=false) and
- * after refresh-DC-embed (exhausted from dcExhaustedState). Caller passes
- * the deps (renderDcEmbed, dcMessageMeta, getDcPlayAreaComponents) via ctx.
+ * Local alias to the canonical updater. Older call sites in this file
+ * use `refreshDcEmbedAndComponents` — the engine-layer helper has the
+ * same shape, so this is a thin pass-through. Future migrations should
+ * call `updateDcCardMessage` directly.
  */
-async function refreshDcEmbedAndComponents(client, game, msgId, ctx, exhausted, errorContext) {
-  const { dcMessageMeta, renderDcEmbed, getDcPlayAreaComponents } = ctx;
-  const meta = dcMessageMeta?.get(msgId);
-  if (!meta || !renderDcEmbed || !getDcPlayAreaComponents) return;
-  try {
-    const chId = getPlayAreaId(game, meta.playerNum);
-    const ch = await fetchGameChannel(client, chId);
-    if (!ch) return;
-    const msg = await ch.messages.fetch(msgId);
-    const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted });
-    const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
-    await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
-  } catch (err) {
-    console.error(errorContext, err);
-  }
-}
+const refreshDcEmbedAndComponents = updateDcCardMessage;
 
 /**
  * Unified handler for resolveAbility() result fields.

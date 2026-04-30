@@ -4,6 +4,44 @@
  */
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { isActivationActionInProgress } from '../game/activation-state.js';
+import { withDiscordRetry, discordCatch } from '../error-handling.js';
+import { getPlayAreaId } from '../game/player-helpers.js';
+
+/**
+ * Re-fetch a DC's Play Area message and rewrite its embed + components
+ * with the given exhausted state. Shared by ready/un-exhaust paths and
+ * the cross-flow refresh paths.
+ *
+ * Caller passes the deps (renderDcEmbed, dcMessageMeta,
+ * getDcPlayAreaComponents) via ctx — same shape as other engine-layer
+ * helpers in this file.
+ *
+ * Behavior is identical to the previous `refreshDcEmbedAndComponents`
+ * helper that lived inside src/discord/apply-ability-result.js. Promoted
+ * here so other call sites can adopt it incrementally without each
+ * re-implementing the fetch/render/edit dance.
+ *
+ * Stats-only refresh sites (combat-special-effects.js, etc.) that
+ * INTENTIONALLY omit `components` to preserve existing button rows
+ * should NOT use this helper — discord.js preserves omitted fields,
+ * so those sites are correct as-is.
+ */
+export async function updateDcCardMessage(client, game, msgId, ctx, exhausted, errorContext) {
+  const { dcMessageMeta, renderDcEmbed, getDcPlayAreaComponents } = ctx;
+  const meta = dcMessageMeta?.get(msgId);
+  if (!meta || !renderDcEmbed || !getDcPlayAreaComponents) return;
+  try {
+    const chId = getPlayAreaId(game, meta.playerNum);
+    const ch = await fetchGameChannel(client, chId);
+    if (!ch) return;
+    const msg = await ch.messages.fetch(msgId);
+    const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted });
+    const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
+    await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
+  } catch (err) {
+    console.error(errorContext || 'updateDcCardMessage failed:', err);
+  }
+}
 
 /**
  * Update the Play Area "Attachments" message for a DC (CC + DC Skirmish Upgrade attachments).
