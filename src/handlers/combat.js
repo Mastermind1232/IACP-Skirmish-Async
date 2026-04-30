@@ -487,7 +487,14 @@ export async function resumeSurgeChoiceOrResolve(game, gameId, combat, thread, c
   surgeRows.push(...buildRogueOneSurgeButton(game, combat));
   surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
   const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
-  await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
+  // @ the attacker so they get a notification when surge spending opens.
+  const atkPlayerNum = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+  const atkOwnerId = atkPlayerNum === 1 ? game.player1Id : game.player2Id;
+  await thread.send({
+    content: `<@${atkOwnerId}> — **Spend surge?** You have **${remaining}** surge left. Choose an ability or Done.`,
+    components: [surgeRow],
+    allowedMentions: { users: [atkOwnerId] },
+  }).catch(discordCatch);
 }
 
 /**
@@ -5064,6 +5071,25 @@ export async function handleCombatSurge(interaction, ctx) {
     await interaction.followUp({ content: 'No surge step or already resolved.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Visual feedback: highlight the clicked surge button green, disable
+  // others. Same Extra-Armor-style toggle pattern as power-token spend.
+  // (Wrapped in try/catch + early-return — IIFE scoped block.)
+  try {
+    const clickedId = interaction.customId;
+    const newRows = (interaction.message?.components || []).map((row) => {
+      const newRow = new ActionRowBuilder();
+      for (const c of row.components) {
+        const btn = ButtonBuilder.from(c);
+        btn.setDisabled(true);
+        if (c.customId === clickedId) {
+          btn.setStyle(choice === 'done' ? ButtonStyle.Secondary : ButtonStyle.Success);
+        }
+        newRow.addComponents(btn);
+      }
+      return newRow;
+    });
+    if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
+  } catch (_e) { /* non-fatal */ }
   const attackerPlayerNum = combat.attackerPlayerNum;
   const effectiveAttackerForSurge = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
   if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerForSurge, canActAsPlayer, 'Only the attacker may spend surge.')) return;
@@ -5925,7 +5951,14 @@ async function _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx) {
   surgeRows.push(...buildRogueOneSurgeButton(game, combat));
   surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
   const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
-  await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
+  // @ the attacker so they get a notification when surge spending opens.
+  const atkPlayerNum = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+  const atkOwnerId = atkPlayerNum === 1 ? game.player1Id : game.player2Id;
+  await thread.send({
+    content: `<@${atkOwnerId}> — **Spend surge?** You have **${remaining}** surge left. Choose an ability or Done.`,
+    components: [surgeRow],
+    allowedMentions: { users: [atkOwnerId] },
+  }).catch(discordCatch);
 }
 
 /**
