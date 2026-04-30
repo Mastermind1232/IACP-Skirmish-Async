@@ -4733,22 +4733,24 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       const _ztHand = game[_ztHandKey] || [];
       if (_ztHand.length > 0) {
         const _ztDefOwnerId = getPlayerId(game, _ztDefPN);
-        const _ztBtns = _ztHand.slice(0, 20).map((c, i) =>
-          new ButtonBuilder()
-            .setCustomId(`zillo_discard_${game.gameId}_${_ztDefPN}_${i}`)
-            .setLabel(String(c).slice(0, 80))
-            .setStyle(ButtonStyle.Danger),
-        );
-        _ztBtns.push(new ButtonBuilder().setCustomId(`zillo_discard_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        // Privacy: post a Yes/No prompt in the combat thread (no card names),
+        // then if Yes the defender gets a private card picker in their hand
+        // channel. Avoids leaking the defender's hand to the attacker.
         game.pendingZilloDiscard = { defenderPN: _ztDefPN, combatThreadId: thread.id };
-        const _ztRows = [];
-        for (let _ztR = 0; _ztR < _ztBtns.length; _ztR += 5) {
-          _ztRows.push(new ActionRowBuilder().addComponents(_ztBtns.slice(_ztR, _ztR + 5)));
-        }
+        const _ztYesNoRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`zillo_use_yes_${game.gameId}`)
+            .setLabel('Yes — discard 1 CC for +1 Block')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(`zillo_discard_skip_${game.gameId}`)
+            .setLabel('No — skip')
+            .setStyle(ButtonStyle.Secondary),
+        );
         await thread.send(sanitizeMentions({
           content: `<@${_ztDefOwnerId}> **Zillo Technique** — Discard 1 Command card for **+1 Block**? (once per attack)`,
           allowedMentions: { users: [_ztDefOwnerId] },
-          components: _ztRows.slice(0, 5),
+          components: [_ztYesNoRow],
         })).catch(discordCatch);
         saveGames?.();
         return;
@@ -6467,6 +6469,65 @@ export async function handleZilloPierceCancel(interaction, ctx) {
   }
   saveGames();
   if (thread) await sendReadyToResolveRolls(thread, gameId, game, ctx);
+}
+
+/**
+ * Zillo Technique — defender clicked "Yes". Hide the combat-thread prompt
+ * and post the actual CC picker in the defender's PRIVATE hand channel,
+ * so card names stay invisible to the attacker. Picking a card flows
+ * back through handleZilloDiscard which applies the discard + +1 Block.
+ */
+export async function handleZilloUseYes(interaction, ctx) {
+  const { getGame, saveGames, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const parts = splitCustomId(interaction.customId, 'zillo_use_yes_');
+  const gameId = parts[0];
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingZilloDiscard;
+  if (!pending) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    return;
+  }
+  const defPN = pending.defenderPN;
+  const defOwnerId = getPlayerId(game, defPN);
+  if (interaction.user.id !== defOwnerId) {
+    await interaction.followUp({ content: 'Only the defender can choose to use Zillo Technique.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const handChannelId = defPN === 1 ? game.p1HandId : game.p2HandId;
+  const handKey = ccHandKey(defPN);
+  const hand = game[handKey] || [];
+  if (hand.length === 0 || !handChannelId) {
+    await interaction.message.edit({ content: '**Zillo Technique** — No cards in hand to discard.', components: [] }).catch(discordCatch);
+    return;
+  }
+  // Replace combat-thread prompt with a "choosing..." note so the attacker
+  // knows what's happening without seeing card names.
+  await interaction.message.edit({
+    content: `**Zillo Technique** — Defender is choosing a card to discard...`,
+    components: [],
+  }).catch(discordCatch);
+  // Private picker in the defender's hand channel.
+  try {
+    const handCh = await fetchGameChannel(client, handChannelId);
+    const btns = hand.slice(0, 20).map((c, i) =>
+      new ButtonBuilder()
+        .setCustomId(`zillo_discard_${gameId}_${defPN}_${i}`)
+        .setLabel(String(c).slice(0, 80))
+        .setStyle(ButtonStyle.Danger),
+    );
+    btns.push(new ButtonBuilder().setCustomId(`zillo_discard_skip_${gameId}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary));
+    const rows = [];
+    for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+    await handCh.send({
+      content: `🛡️ **Zillo Technique** — pick a Command Card to discard for +1 Block:`,
+      components: rows.slice(0, 5),
+    }).catch(discordCatch);
+  } catch (err) {
+    console.error('Zillo Technique private picker failed:', err);
+  }
+  saveGames();
 }
 
 /**
