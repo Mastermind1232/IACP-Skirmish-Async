@@ -1338,16 +1338,9 @@ export async function handleAttackTarget(interaction, ctx) {
     name: `Combat — ${_threadAtk} → ${_threadDef}`,
     autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
   });
-  const readyRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`combat_ready_${game.gameId}`)
-      .setLabel('Ready to roll combat dice')
-      .setStyle(ButtonStyle.Secondary)
-  );
   const preCombatMsg = await withDiscordRetry(() => thread.send({
-    content: `<@${game.player1Id}> <@${game.player2Id}> — **Pre-combat window** — Both players: resolve any Command Cards, add/remove dice, apply/block damage, etc. When ready, click **Ready to roll combat dice** below.`,
+    content: `<@${game.player1Id}> <@${game.player2Id}> — **Combat opened.** Power tokens prompt next; the **Roll Combat Dice** button appears once both players have spent or skipped.`,
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
-    components: [readyRow],
   }));
   if (target.droidArmLOS) await thread.send(`**Droid Arm** — LOS drawn from adjacent space (1 Power Token discarded).`).catch(discordCatch);
   if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(discordCatch);
@@ -2564,6 +2557,11 @@ export async function handleAttackTarget(interaction, ctx) {
     console.error('Reaction prompt error:', err?.message ?? err);
   }
 
+  // Power tokens are spent BEFORE rolling per CRR. Skip the legacy
+  // pre-combat "ready" gate; go straight to the token phase. proceedToTokenPhase
+  // posts the Roll Combat Dice button itself once both players have spent or
+  // skipped (or immediately if neither has tokens).
+  await proceedToTokenPhase(thread, game, game.pendingCombat, ctx);
   saveGames();
 }
 
@@ -4168,9 +4166,16 @@ async function sendWildTypeWindow(thread, gameId, role) {
   });
 }
 
-/** Apply token bonus to combat state. isAttacker flag enables Unhinged Director +2. */
+/**
+ * Apply token bonus to combat state. Krennic's Unhinged Director only
+ * affects ATTACK results (Damage / Surge): when the controlling player
+ * spends a Damage or Surge power token, they get +2 instead of +1.
+ * Block / Evade tokens always grant +1, regardless of Unhinged Director.
+ */
 function applyTokenBonus(combat, type, isAttacker) {
-  const bonus = (isAttacker ? combat.attackerUnhingedBonus : combat.defenderUnhingedBonus) ? 2 : 1;
+  const isAttackResult = type === 'Damage' || type === 'Surge';
+  const unhingedActive = isAttacker ? combat.attackerUnhingedBonus : combat.defenderUnhingedBonus;
+  const bonus = (isAttackResult && unhingedActive) ? 2 : 1;
   if (type === 'Damage') combat.bonusHits  = (combat.bonusHits  || 0) + bonus;
   if (type === 'Surge') combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + bonus;
   if (type === 'Block') combat.bonusBlock = (combat.bonusBlock || 0) + bonus;
@@ -6122,16 +6127,9 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     name: `Combat (False Orders) — ${_foThreadCtl} → ${_foThreadDef}`,
     autoArchiveDuration: ThreadAutoArchiveDuration?.OneWeek ?? 10080,
   });
-  const readyRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`combat_ready_${gameId}`)
-      .setLabel('Ready to roll combat dice')
-      .setStyle(ButtonStyle.Secondary)
-  );
   const preCombatMsg = await thread.send({
-    content: `<@${game.player1Id}> <@${game.player2Id}> — **Pre-combat window** — Both players: resolve any Command Cards, etc. When ready, click **Ready to roll combat dice** below.`,
+    content: `<@${game.player1Id}> <@${game.player2Id}> — **Combat opened (False Orders).** Power tokens prompt next; the **Roll Combat Dice** button appears once both players have spent or skipped.`,
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
-    components: [readyRow],
   });
   const isRanged = attackInfo.type === 'range';
   game.pendingCombat = {
@@ -6172,6 +6170,8 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const abilityLabel = fo.isLure ? 'Lure of the Dark Side' : 'False Orders';
   await interaction.message.edit({ content: `**${abilityLabel} — Attack declared**. See thread in Game Log.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `⚔️ **${abilityLabel}** — **${controllerUserName}** controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  // Skip the legacy pre-combat ready gate; go straight to the token phase.
+  await proceedToTokenPhase(thread, game, game.pendingCombat, ctx);
   saveGames();
 }
 
