@@ -2646,7 +2646,14 @@ export async function handleCombatRoll(interaction, ctx) {
   if (!thread) throw new Error(`handleCombatRoll: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
   const effectiveAttackerPlayerNum = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
 
-  // C4: On the Lam — recheck LOS before rolling; if defender moved out of LOS, attack auto-misses
+  // C4: On the Lam — recheck target eligibility before rolling. Per CRR
+  // p.10 (lines 442-446): "if the attacker's line of sight to the target
+  // space changes or if the defender moves, the attacker must then re-
+  // declare a target space" + "If the target of a melee attack ends its
+  // movement such that it is no longer adjacent to the attacker (or within
+  // 2 spaces and in line of sight if the attack has Reach), the attack misses."
+  // Old code only re-checked LOS; this also re-checks adjacency/Reach for
+  // melee attacks.
   if (game.onTheLamActive && !combat.attackRoll) {
     delete game.onTheLamActive;
     const _otlMapId = game.selectedMap?.id;
@@ -2662,14 +2669,41 @@ export async function handleCombatRoll(interaction, ctx) {
         ctx.getFigureSize,
         { blocking: null },
       );
-      if (!_otlHasLOS) {
+      // Adjacency / Reach re-check for melee attacks (CRR 445-446)
+      let _otlAdjFail = false;
+      let _otlMissReason = null;
+      const _otlIsMelee = !combat.isRanged;
+      if (_otlIsMelee && _otlHasLOS) {
+        // Reach detection: keyword OR passive OR nextAttackReach flag
+        const _otlAtkEff = ctx.getDcEffects?.()?.[combat.attackerDcName] || {};
+        const _otlReachKws = (_otlAtkEff.keywords || []).map(k => String(k).toUpperCase());
+        const _otlReachPassives = (_otlAtkEff.passives || []).map(p => String(p).toUpperCase());
+        const _otlHasReach = _otlReachKws.includes('REACH')
+          || _otlReachPassives.includes('REACH')
+          || !!game.nextAttackReach?.[attackerPlayerNum];
+        const _otlMaxRange = _otlHasReach ? 2 : 1;
+        const _otlInRange = _isWithinSpaces(
+          _otlMapSpaces,
+          String(_otlAtkPos).toLowerCase(),
+          String(_otlDefPos).toLowerCase(),
+          _otlMaxRange,
+        );
+        if (!_otlInRange) {
+          _otlAdjFail = true;
+          _otlMissReason = _otlHasReach
+            ? 'Target moved out of Reach (>2 spaces from attacker).'
+            : 'Target moved out of melee adjacency.';
+        }
+      }
+      if (!_otlHasLOS || _otlAdjFail) {
         combat.forceMiss = true;
         combat.attackRoll = { acc: 0, dmg: 0, surge: 0 };
         combat.attackDiceResults = [];
         combat.defenseRoll = { block: 0, evade: 0, dodge: false };
         combat.defenseDiceResults = [];
         combat.defenseDiceCount = 0;
-        await thread.send('**On the Lam** — Target moved out of line of sight. The attack misses.');
+        const _otlMsg = _otlMissReason || 'Target moved out of line of sight.';
+        await thread.send(`**On the Lam** — ${_otlMsg} The attack misses.`);
         await sendReadyToResolveRolls(thread, game.gameId, game, ctx);
         saveGames();
         return;
