@@ -316,27 +316,43 @@ export function getMissionSelectionPickMenu(gameId, options, selectedValue) {
 
 /** F16/F11: Bot Stuff menu — Resync + Kill Game (shown via /botmenu in Game Log). */
 export function getBotmenuButtons(gameId, { showForfeit = false } = {}) {
-  const buttons = [
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`resync_${gameId}`)
       .setLabel('Resync (Rebuild UI buttons / recover current state)')
       .setStyle(ButtonStyle.Primary),
-  ];
+  );
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`cp_save_${gameId}`)
+      .setLabel('💾 Save Checkpoint')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`cp_load_ingame_${gameId}`)
+      .setLabel('📂 Load Checkpoint (this game)')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`cp_load_newlobby_${gameId}`)
+      .setLabel('🔀 Load into New Lobby')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  const dangerButtons = [];
   if (showForfeit) {
-    buttons.push(
+    dangerButtons.push(
       new ButtonBuilder()
         .setCustomId(`forfeit_${gameId}`)
         .setLabel('Forfeit')
         .setStyle(ButtonStyle.Danger)
     );
   }
-  buttons.push(
+  dangerButtons.push(
     new ButtonBuilder()
       .setCustomId(`botmenu_kill_${gameId}`)
       .setLabel('Kill Game')
       .setStyle(ButtonStyle.Danger)
   );
-  return new ActionRowBuilder().addComponents(buttons);
+  const row3 = new ActionRowBuilder().addComponents(...dangerButtons);
+  return [row1, row2, row3];
 }
 
 /** Confirm forfeit: requires confirmation before ending game. */

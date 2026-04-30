@@ -335,6 +335,26 @@ export async function initDb() {
         updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // Checkpoints — save full game state for cross-game restore (testing-from-same-point).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS checkpoints (
+        id            TEXT PRIMARY KEY,
+        name          TEXT NOT NULL,
+        origin_game_id TEXT,
+        created_by    TEXT NOT NULL,
+        created_at    BIGINT NOT NULL,
+        game_state    JSONB NOT NULL,
+        map_id        TEXT,
+        variant       TEXT,
+        round_at_save INT,
+        p1_username   TEXT,
+        p2_username   TEXT,
+        game_version  INT,
+        data_hash     TEXT
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_checkpoints_creator ON checkpoints (created_by, created_at DESC)').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_checkpoints_origin ON checkpoints (origin_game_id)').catch((err) => { console.error('[discord]', err?.message ?? err); });
 
     console.log('[DB] PostgreSQL connected, all tables ready.');
   } catch (err) {
@@ -1681,4 +1701,86 @@ export async function batchSetCoverageVerified(verifiedItems) {
 /** Get the pool for direct queries (exploration use). */
 export function getPool() {
   return pool;
+}
+
+// ── Checkpoints ────────────────────────────────────────────────────────────
+// Cross-game save/load for testing-from-same-point. Each checkpoint stores
+// a full game-state JSON blob plus metadata for the dropdown UI.
+
+export async function insertCheckpoint(cp) {
+  if (!pool) return;
+  const {
+    id, name, originGameId, createdBy, createdAt, gameState,
+    mapId, variant, roundAtSave, p1Username, p2Username, gameVersion, dataHash,
+  } = cp;
+  await pool.query(
+    `INSERT INTO checkpoints
+       (id, name, origin_game_id, created_by, created_at, game_state,
+        map_id, variant, round_at_save, p1_username, p2_username,
+        game_version, data_hash)
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13)`,
+    [id, name, originGameId, createdBy, createdAt, JSON.stringify(gameState),
+     mapId, variant, roundAtSave, p1Username, p2Username, gameVersion, dataHash],
+  );
+}
+
+/** List checkpoints visible to a user (creator OR co-player in origin game). */
+export async function listCheckpointsForUser(userId, { limit = 50 } = {}) {
+  if (!pool) return [];
+  const { rows } = await pool.query(
+    `SELECT id, name, origin_game_id, created_by, created_at,
+            map_id, variant, round_at_save, p1_username, p2_username,
+            game_version, data_hash
+     FROM checkpoints
+     WHERE created_by = $1
+        OR game_state->>'player1Id' = $1
+        OR game_state->>'player2Id' = $1
+     ORDER BY created_at DESC
+     LIMIT $2`,
+    [userId, limit],
+  );
+  return rows;
+}
+
+/** List checkpoints saved against a specific game. */
+export async function listCheckpointsForGame(originGameId) {
+  if (!pool) return [];
+  const { rows } = await pool.query(
+    `SELECT id, name, created_by, created_at, round_at_save
+     FROM checkpoints
+     WHERE origin_game_id = $1
+     ORDER BY created_at DESC`,
+    [originGameId],
+  );
+  return rows;
+}
+
+/** Fetch a single checkpoint with its full game_state. */
+export async function getCheckpointById(id) {
+  if (!pool) return null;
+  const { rows } = await pool.query(
+    `SELECT * FROM checkpoints WHERE id = $1`,
+    [id],
+  );
+  return rows[0] || null;
+}
+
+/** Delete a checkpoint by id. Returns true if a row was deleted. */
+export async function deleteCheckpoint(id) {
+  if (!pool) return false;
+  const { rowCount } = await pool.query(
+    `DELETE FROM checkpoints WHERE id = $1`,
+    [id],
+  );
+  return rowCount > 0;
+}
+
+/** Count checkpoints created by a user (for cap enforcement). */
+export async function countCheckpointsByUser(userId) {
+  if (!pool) return 0;
+  const { rows } = await pool.query(
+    `SELECT COUNT(*) AS n FROM checkpoints WHERE created_by = $1`,
+    [userId],
+  );
+  return parseInt(rows[0]?.n || '0', 10);
 }

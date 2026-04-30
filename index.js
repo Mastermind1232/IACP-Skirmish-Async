@@ -3521,7 +3521,7 @@ client.on('interactionCreate', async (interaction) => {
       const showForfeit = !gameByChannel.ended && (gameByChannel.player1Id === interaction.user.id || gameByChannel.player2Id === interaction.user.id);
       await interaction.reply({
         content: '**Bot Stuff** — Choose an action:',
-        components: [getBotmenuButtons(gameByChannel.gameId, { showForfeit })],
+        components: getBotmenuButtons(gameByChannel.gameId, { showForfeit }),
         ephemeral: false,
       }).catch(discordCatch);
       return;

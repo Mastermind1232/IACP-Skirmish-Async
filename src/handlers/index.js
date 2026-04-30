@@ -132,6 +132,13 @@ import {
   handleForfeitYes,
   handleForfeitNo,
 } from './botmenu.js';
+import {
+  handleCheckpointSavePrompt,
+  handleCheckpointSaveModal,
+  handleCheckpointLoadIngamePrompt,
+  handleCheckpointLoadIngamePick,
+  handleCheckpointLoadNewLobbyPrompt,
+} from './checkpoint.js';
 import { handleBotmenuRecover, handleResync } from './recover.js';
 import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
@@ -410,6 +417,11 @@ register('phase_gate_unready_', handlePhaseGateUnready, 'phaseGate');
 // --- Botmenu ---
 register('botmenu_recover_', handleBotmenuRecover, 'recover');
 register('resync_', handleResync, 'recover');
+register('cp_save_modal_', handleCheckpointSaveModal, 'checkpoint');
+register('cp_save_', handleCheckpointSavePrompt, 'checkpoint');
+register('cp_load_ingame_pick_', handleCheckpointLoadIngamePick, 'checkpoint');
+register('cp_load_ingame_', handleCheckpointLoadIngamePrompt, 'checkpoint');
+register('cp_load_newlobby_', handleCheckpointLoadNewLobbyPrompt, 'checkpoint');
 register('botmenu_kill_', handleBotmenuKill, 'botmenu');
 register('botmenu_kill_yes_', handleBotmenuKillYes, 'botmenu');
 register('botmenu_kill_no_', handleBotmenuKillNo, 'botmenu');

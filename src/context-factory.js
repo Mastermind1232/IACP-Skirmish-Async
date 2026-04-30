@@ -302,6 +302,13 @@ const CONTEXT_GROUPS = {
     'repopulateDcMapsForGame',
   ],
 
+  checkpoint: [
+    'getGame', 'saveGames', 'client', 'logGameAction',
+    'refreshAllGameComponents', 'recomputeActivationCounts',
+    'repopulateDcMapsForGame',
+    'dcMessageMeta', 'dcExhaustedState',
+  ],
+
   phaseGate: [
     'getGame', 'saveGames', 'client', 'logGameAction',
     'finishSetupAttachments', 'runStartOfRoundDcEffects', 'runStartOfRoundContinuation', 'sendRoundActivationPhaseMessage',
