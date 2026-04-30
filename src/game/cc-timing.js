@@ -129,8 +129,12 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'afterattackdice':
       return ctx.duringAttack;
     case 'afteryouresolveattackthatdidnotmissduetoaccuracy':
-      // Reduce to Rubble: playable only when attack hit (did not miss due to accuracy)
-      return ctx.duringAttack && ctx.isAttacker && ctx.combatHit !== false;
+      // Reduce to Rubble: playable ONLY when the attack has resolved AND
+      // did not miss. combatHit can be null (attack not yet resolved),
+      // false (missed), or true (hit). Only the explicit-true case
+      // qualifies — was previously `!== false` which incorrectly allowed
+      // play before the attack resolved (combatHit still null).
+      return ctx.duringAttack && ctx.isAttacker && ctx.combatHit === true;
     case 'afterattacktargetingyouresolved':
       return ctx.duringAttack && ctx.isDefender;
     case 'whenyouhavesuffereddamageequaltoyourhealth':
