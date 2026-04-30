@@ -72,8 +72,10 @@ describe('PROBE-PD-PT-005: at most one power-token spend per figure per attack',
     // After PT-on-declare refactor: attacker window is opened from proceedToTokenPhase
     // (pre-roll). Defender window from proceedToTokenPhase (skip-path) and from
     // advanceTokenPhase (after attacker spends). Two mutually exclusive defender sites.
-    const attackerWindow = H_CB_SRC.match(/combat\.tokenPhase = 'attacker';\s*\n\s*await sendTokenWindow\(thread, game\.gameId, 'attacker',/g) || [];
-    const defenderWindow = H_CB_SRC.match(/combat\.tokenPhase = 'defender';\s*\n\s*await sendTokenWindow\(thread, game\.gameId, 'defender',/g) || [];
+    // Allow up to ~3 intervening lines (e.g. resolving the recipient's user id for @-ping)
+    // between tokenPhase assignment and the sendTokenWindow call.
+    const attackerWindow = H_CB_SRC.match(/combat\.tokenPhase = 'attacker';[\s\S]{0,200}?await sendTokenWindow\(thread, game\.gameId, 'attacker',/g) || [];
+    const defenderWindow = H_CB_SRC.match(/combat\.tokenPhase = 'defender';[\s\S]{0,200}?await sendTokenWindow\(thread, game\.gameId, 'defender',/g) || [];
     assert.equal(attackerWindow.length, 1,
       'attacker window must be opened from exactly one site — CRR-PT-005');
     assert.ok(defenderWindow.length >= 1 && defenderWindow.length <= 2,

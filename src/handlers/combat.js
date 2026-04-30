@@ -4109,29 +4109,50 @@ function getSquadCohesionTokens(game, combat, role) {
   return cohesionTokens.length > 0 ? { cohesionTokens } : null;
 }
 
-/** Sends the spending window with up to 4 token buttons + Skip, plus optional Squad Cohesion tokens */
-async function sendTokenWindow(thread, gameId, role, tokens, displayName, combat) {
+/**
+ * Sends the spending window with one button per UNIQUE token type
+ * (not per token instance — only 1 token can be spent per attack roll
+ * per CRR, so duplicates are useless). Buttons match the Extra Armor
+ * visual style; clicking a token button highlights it green, disables
+ * others, then advances. Skip stays grey.
+ */
+async function sendTokenWindow(thread, gameId, role, tokens, displayName, combat, ownerId) {
   const prefix = role === 'attacker' ? 'att' : 'def';
-  const btns = tokens.slice(0, 4).map(({ type, index }) =>
+
+  // Dedupe by type; keep the first index per type for the spend lookup.
+  const seen = new Map();
+  for (const { type, index } of tokens) {
+    if (!seen.has(type)) seen.set(type, { type, index, count: 1 });
+    else seen.get(type).count += 1;
+  }
+  const uniqueTokens = [...seen.values()];
+
+  const btns = uniqueTokens.slice(0, 4).map(({ type, index, count }) =>
     new ButtonBuilder()
       .setCustomId(`combat_token_${gameId}_${prefix}_${index}`)
-      .setLabel(type === 'Wild' ? 'Wild (choose type)' : `Spend ${type} (+1 ${type})`)
+      .setLabel(type === 'Wild'
+        ? `Wild${count > 1 ? ` (${count})` : ''}`
+        : `Spend ${type}${count > 1 ? ` (have ${count})` : ''}`)
       .setStyle(ButtonStyle.Secondary)
   );
 
-  // Squad Cohesion: add buttons for tokens from nearby friendly REBEL figures
+  // Squad Cohesion: tokens borrowed from nearby friendly REBEL figures.
+  // Keep these per-figure (different ownership), but dedupe by (type+ownerName).
   const scTokens = combat?.squadCohesionTokens?.[role] || [];
   if (scTokens.length > 0) {
-    // Store the mapping on combat so handleCombatToken can look up which figure to deduct from
     if (!combat.squadCohesionTokenMap) combat.squadCohesionTokenMap = {};
-    scTokens.slice(0, 4).forEach((sc, scIdx) => {
+    const scSeen = new Map();
+    scTokens.forEach((sc, scIdx) => {
+      const k = `${sc.type}__${sc.ownerName}`;
+      if (scSeen.has(k)) return;
+      scSeen.set(k, true);
       const scKey = `${prefix}_sc${scIdx}`;
       combat.squadCohesionTokenMap[scKey] = { figureKey: sc.figureKey, tokenIndex: sc.index, type: sc.type, ownerName: sc.ownerName };
       btns.push(
         new ButtonBuilder()
           .setCustomId(`combat_token_${gameId}_${prefix}_sc${scIdx}`)
           .setLabel(sc.type === 'Wild' ? `Wild from ${sc.ownerName}` : `${sc.type} from ${sc.ownerName}`)
-          .setStyle(ButtonStyle.Success)
+          .setStyle(ButtonStyle.Secondary)
       );
     });
   }
@@ -4143,11 +4164,13 @@ async function sendTokenWindow(thread, gameId, role, tokens, displayName, combat
       .setStyle(ButtonStyle.Primary)
   );
   const rows = chunkButtonsToRows(btns);
-  let content = `**Power Token — ${role === 'attacker' ? 'Attacker' : 'Defender'}** (${displayName}): spend a token or skip.`;
+  const mention = ownerId ? `<@${ownerId}> — ` : '';
+  let content = `${mention}**Power Token — ${role === 'attacker' ? 'Attacker' : 'Defender'}** (${displayName}): spend one token (max 1 per attack) or skip.`;
   if (scTokens.length > 0) content += '\n*Squad Cohesion (Ko-Tun Feralo): tokens from nearby friendly Rebel figures are also available.*';
   await thread.send({
     content,
     components: rows,
+    allowedMentions: ownerId ? { users: [ownerId] } : undefined,
   });
 }
 
@@ -4258,7 +4281,9 @@ async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
     const hasDefCohesion = (combat.squadCohesionTokens?.defender || []).length > 0;
     if (defTokens.length > 0 || hasDefCohesion) {
       combat.tokenPhase = 'defender';
-      await sendTokenWindow(thread, game.gameId, 'defender', defTokens, combat.target.label, combat);
+      const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
+      const defOwnerId = getPlayerId(game, defenderPlayerNum);
+      await sendTokenWindow(thread, game.gameId, 'defender', defTokens, combat.target.label, combat, defOwnerId);
       return;
     }
   }
@@ -4853,12 +4878,14 @@ export async function proceedToTokenPhase(thread, game, combat, ctx) {
   if (!game.selfPlay) {
     if (!_vagueBlockTokens && (attackerTokens.length > 0 || hasAtkCohesion)) {
       combat.tokenPhase = 'attacker';
-      await sendTokenWindow(thread, game.gameId, 'attacker', attackerTokens, combat.attackerDisplayName, combat);
+      const atkOwnerId = getPlayerId(game, combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum);
+      await sendTokenWindow(thread, game.gameId, 'attacker', attackerTokens, combat.attackerDisplayName, combat, atkOwnerId);
       return;
     }
     if (!_vagueBlockTokens && (defenderTokens.length > 0 || hasDefCohesion)) {
       combat.tokenPhase = 'defender';
-      await sendTokenWindow(thread, game.gameId, 'defender', defenderTokens, combat.target.label, combat);
+      const defOwnerId = getPlayerId(game, opponentPlayerNum(combat.attackerPlayerNum));
+      await sendTokenWindow(thread, game.gameId, 'defender', defenderTokens, combat.target.label, combat, defOwnerId);
       return;
     }
   }
@@ -5369,6 +5396,24 @@ export async function handleCombatToken(interaction, ctx) {
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  // Visual feedback: highlight the clicked button green, disable all others.
+  // Matches the Extra Armor color-toggle pattern.
+  try {
+    const clickedId = interaction.customId;
+    const newRows = (interaction.message?.components || []).map((row) => {
+      const newRow = new ActionRowBuilder();
+      for (const c of row.components) {
+        const btn = ButtonBuilder.from(c);
+        btn.setDisabled(true);
+        if (c.customId === clickedId) {
+          btn.setStyle(choice === 'skip' ? ButtonStyle.Secondary : ButtonStyle.Success);
+        }
+        newRow.addComponents(btn);
+      }
+      return newRow;
+    });
+    if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
+  } catch (_e) { /* non-fatal */ }
 
   // Wild type resolution: combat_token_{gameId}_wild_{hit|surge|block|evade}
   if (role === 'wild') {
