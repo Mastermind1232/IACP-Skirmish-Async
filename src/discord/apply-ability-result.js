@@ -4,6 +4,29 @@ import { withDiscordRetry, discordCatch } from '../error-handling.js';
 import { fetchGameChannel } from './channel-helpers.js';
 
 /**
+ * Re-fetch the DC's play-area message and rewrite its embed + components
+ * with the given exhausted state. Used after ready (exhausted=false) and
+ * after refresh-DC-embed (exhausted from dcExhaustedState). Caller passes
+ * the deps (renderDcEmbed, dcMessageMeta, getDcPlayAreaComponents) via ctx.
+ */
+async function refreshDcEmbedAndComponents(client, game, msgId, ctx, exhausted, errorContext) {
+  const { dcMessageMeta, renderDcEmbed, getDcPlayAreaComponents } = ctx;
+  const meta = dcMessageMeta?.get(msgId);
+  if (!meta || !renderDcEmbed || !getDcPlayAreaComponents) return;
+  try {
+    const chId = getPlayAreaId(game, meta.playerNum);
+    const ch = await fetchGameChannel(client, chId);
+    if (!ch) return;
+    const msg = await ch.messages.fetch(msgId);
+    const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted });
+    const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
+    await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
+  } catch (err) {
+    console.error(errorContext, err);
+  }
+}
+
+/**
  * Unified handler for resolveAbility() result fields.
  * Ensures ALL CC play paths (hand, DC thread, negation, space-pick, choice) handle
  * every result field identically — no more "field handled in one path but not another" bugs.
@@ -50,20 +73,7 @@ export async function applyAbilityResult(result, opts) {
   if (result.applied && result.readyDcMsgIds?.length && dcExhaustedState) {
     for (const id of result.readyDcMsgIds) {
       dcExhaustedState.set(id, false);
-      const meta = dcMessageMeta?.get(id);
-      if (meta && renderDcEmbed && getDcPlayAreaComponents) {
-        try {
-          const chId = getPlayAreaId(game, meta.playerNum);
-          const ch = await fetchGameChannel(client, chId);
-          if (!ch) continue;
-          const msg = await ch.messages.fetch(id);
-          const { embed, files } = await renderDcEmbed(game, id, ctx, { exhausted: false });
-          const components = getDcPlayAreaComponents(id, false, game, meta.dcName);
-          await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
-        } catch (err) {
-          console.error('Failed to update DC embed after ready:', err);
-        }
-      }
+      await refreshDcEmbedAndComponents(client, game, id, ctx, false, 'Failed to update DC embed after ready:');
     }
   }
 
@@ -123,20 +133,8 @@ export async function applyAbilityResult(result, opts) {
     const readySet = new Set(result.readyDcMsgIds || []);
     for (const id of idsToRefresh) {
       if (readySet.has(id)) continue; // already handled by readyDcMsgIds section above
-      const meta = dcMessageMeta?.get(id);
-      if (!meta || !renderDcEmbed || !getDcPlayAreaComponents) continue;
-      try {
-        const chId = getPlayAreaId(game, meta.playerNum);
-        const ch = await fetchGameChannel(client, chId);
-        if (!ch) continue;
-        const msg = await ch.messages.fetch(id);
-        const exhausted = dcExhaustedState?.get(id) || false;
-        const { embed, files } = await renderDcEmbed(game, id, ctx);
-        const components = getDcPlayAreaComponents(id, exhausted, game, meta.dcName);
-        await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
-      } catch (err) {
-        console.error('Failed to refresh DC play area embed:', err);
-      }
+      const exhausted = dcExhaustedState?.get(id) || false;
+      await refreshDcEmbedAndComponents(client, game, id, ctx, exhausted, 'Failed to refresh DC play area embed:');
     }
   }
 
