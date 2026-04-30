@@ -32,16 +32,19 @@ const H_CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
 const H_IDX_SRC = readFileSync(resolve(ROOT, 'src/handlers/index.js'), 'utf8');
 
 describe('CRR-COMBAT-ZILLO-PIERCE: exhaust window fires post-surge, not at declare', () => {
-  it('attack-declare path no longer auto-exhausts Zillo Technique', () => {
-    // The auto-exhaust block used to live near "// --- Zillo Technique" at the
-    // attack-declare site and would set defenderReducePierce += 2 unconditionally.
-    // It must be gone — defender choice is now offered after surge spending.
-    const declareBlock = H_CB_SRC.match(/--- Zillo Technique[\s\S]*?Discard 1 Command card/);
-    assert.ok(declareBlock, 'declare-site Zillo block must still exist (for the discard-CC prompt)');
-    assert.doesNotMatch(declareBlock[0], /defenderReducePierce\s*=\s*\(.*\|\| 0\)\s*\+\s*2/,
+  it('attack-declare path neither auto-exhausts Zillo nor opens the discard-CC prompt', () => {
+    // After slices 3 + 6, the declare-time Zillo block is comments only:
+    //   - exhaust-to-cancel-pierce moved post-surge (slice 3)
+    //   - discard-CC for +1 Block moved to step-4 DEF modifiers (slice 6)
+    // Neither effect should be present at declare any more.
+    const declareCommentBlock = H_CB_SRC.match(/Zillo Technique \(I51-I52\)[\s\S]*?Z-6 Trooper Rotary Cannon/);
+    assert.ok(declareCommentBlock, 'declare-site Zillo placeholder/comments must still exist');
+    assert.doesNotMatch(declareCommentBlock[0], /defenderReducePierce\s*=\s*\(.*\|\| 0\)\s*\+\s*2/,
       'declare-time auto-exhaust must be removed — Zillo exhaust is now post-surge per CRR step-4 timing');
-    assert.doesNotMatch(declareBlock[0], /Exhausted: Pierce reduced by 2 for this attack/,
+    assert.doesNotMatch(declareCommentBlock[0], /Exhausted: Pierce reduced by 2 for this attack/,
       'auto-exhaust message must not fire at declare time');
+    assert.doesNotMatch(declareCommentBlock[0], /Discard 1 Command card for \*\*\+1 Block\*\*/,
+      'declare-time discard-CC prompt must be removed — that prompt is now in step-4 DEF block (slice 6)');
   });
 
   it('maybePromptZilloPierceCancel exists and gates on real Pierce > 0', () => {

@@ -1625,49 +1625,13 @@ export async function handleAttackTarget(interaction, ctx) {
         await thread.send('**Feeding Frenzy** — Exhausted: target has suffered damage, +1 Hit applied.').catch(discordCatch);
       }
     }
-    // --- Zillo Technique (I51-I52): defender's team SU ---
-    // The exhaust-to-cancel-2-Pierce effect is now offered after the attacker
-    // resolves surge spending (see sendReadyToResolveRolls), per CRR step-4
-    // modifier timing + Destruct: "exhaust for Zillo has a special timing
-    // window here, to cancel 2 pierce, after attacker decides whether or not
-    // to surge for pierce". Auto-exhaust at declare was wrong — it removed
-    // the defender's choice and burned the card even when no pierce existed.
-    //
-    // The discard-CC for +1 Block prompt stays at declare for now — that's a
-    // step-4 result-modifier and not part of Destruct's CRR-pierce concern.
-    if (!target.isNpc) {
-      const _ztDefPN = game.pendingCombat.defenderPlayerNum;
-      const _ztDcList = getDcList(game, _ztDefPN) || [];
-      const _ztDcMsgIds = getDcMessageIds(game, _ztDefPN) || [];
-      let _ztMsgId = null;
-      for (let _ztI = 0; _ztI < _ztDcList.length; _ztI++) {
-        if (_ztDcList[_ztI]?.dcName === '[Zillo Technique]') { _ztMsgId = _ztDcMsgIds[_ztI] || null; break; }
-      }
-      if (_ztMsgId) {
-        const _ztHandKey = ccHandKey(_ztDefPN);
-        const _ztHand = game[_ztHandKey] || [];
-        if (_ztHand.length > 0) {
-          const _ztDefOwnerId = getPlayerId(game, _ztDefPN);
-          const _ztBtns = _ztHand.slice(0, 20).map((c, i) =>
-            new ButtonBuilder()
-              .setCustomId(`zillo_discard_${game.gameId}_${_ztDefPN}_${i}`)
-              .setLabel(String(c).slice(0, 80))
-              .setStyle(ButtonStyle.Danger)
-          );
-          _ztBtns.push(new ButtonBuilder().setCustomId(`zillo_discard_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-          game.pendingZilloDiscard = { defenderPN: _ztDefPN, combatThreadId: thread.id };
-          const _ztRows = [];
-          for (let _ztR = 0; _ztR < _ztBtns.length; _ztR += 5) {
-            _ztRows.push(new ActionRowBuilder().addComponents(_ztBtns.slice(_ztR, _ztR + 5)));
-          }
-          await thread.send(sanitizeMentions({
-            content: `<@${_ztDefOwnerId}> **Zillo Technique** — Discard 1 Command card for **+1 Block**? (once per attack)`,
-            allowedMentions: { users: [_ztDefOwnerId] },
-            components: _ztRows.slice(0, 5),
-          })).catch(discordCatch);
-        }
-      }
-    }
+    // Zillo Technique (I51-I52) defender's team SU: both effects moved out of
+    // declare-time per CRR step-4 modifier timing + Destruct.
+    //   - Exhaust to cancel 2 Pierce: post-surge prompt (slice 3,
+    //     maybePromptZilloPierceCancel inside sendReadyToResolveRolls).
+    //   - Discard 1 CC for +1 Block: step-4 defender-modifier prompt
+    //     (slice 6, maybePromptZilloDiscardForBlock inside proceedAfterRerolls'
+    //     DEF block).
   }
   // Z-6 Trooper Rotary Cannon: before attacking, become Focused
   if (cardNameIncludes(_atkUpgrades, 'Z-6 Trooper')) {
@@ -4664,6 +4628,46 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     combat.getDownResolved = true;
   }
 
+  // Zillo Technique (I51-I52) — discard 1 CC for +1 Block. CRR step 4 result
+  // modifier ("Apply Modifiers" stage; defender modifiers fire after attacker
+  // modifiers per Destruct). Once-per-attack via combat.zilloDiscardResolved.
+  if (!combat.zilloDiscardResolved && combat.target?.figureKey && !combat.target.isNpc) {
+    const _ztDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const _ztDcList = getDcList(game, _ztDefPN) || [];
+    const _ztDcMsgIds = getDcMessageIds(game, _ztDefPN) || [];
+    let _ztMsgId = null;
+    for (let _ztI = 0; _ztI < _ztDcList.length; _ztI++) {
+      if (_ztDcList[_ztI]?.dcName === '[Zillo Technique]') { _ztMsgId = _ztDcMsgIds[_ztI] || null; break; }
+    }
+    if (_ztMsgId) {
+      const _ztHandKey = ccHandKey(_ztDefPN);
+      const _ztHand = game[_ztHandKey] || [];
+      if (_ztHand.length > 0) {
+        const _ztDefOwnerId = getPlayerId(game, _ztDefPN);
+        const _ztBtns = _ztHand.slice(0, 20).map((c, i) =>
+          new ButtonBuilder()
+            .setCustomId(`zillo_discard_${game.gameId}_${_ztDefPN}_${i}`)
+            .setLabel(String(c).slice(0, 80))
+            .setStyle(ButtonStyle.Danger),
+        );
+        _ztBtns.push(new ButtonBuilder().setCustomId(`zillo_discard_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        game.pendingZilloDiscard = { defenderPN: _ztDefPN, combatThreadId: thread.id };
+        const _ztRows = [];
+        for (let _ztR = 0; _ztR < _ztBtns.length; _ztR += 5) {
+          _ztRows.push(new ActionRowBuilder().addComponents(_ztBtns.slice(_ztR, _ztR + 5)));
+        }
+        await thread.send(sanitizeMentions({
+          content: `<@${_ztDefOwnerId}> **Zillo Technique** — Discard 1 Command card for **+1 Block**? (once per attack)`,
+          allowedMentions: { users: [_ztDefOwnerId] },
+          components: _ztRows.slice(0, 5),
+        })).catch(discordCatch);
+        saveGames?.();
+        return;
+      }
+    }
+    combat.zilloDiscardResolved = true;
+  }
+
   // Elusive (CC): while defending, defender chooses 1 attack die to nullify, then worst defense die also nullified
   if (combat.elusiveActive && !combat.elusiveResolved && combat.attackDiceResults?.length > 0) {
     combat.pendingCombatPassive = 'elusive';
@@ -6372,7 +6376,11 @@ export async function handleZilloDiscard(interaction, ctx) {
       if (thread) await thread.send(`**Zillo Technique** — Defender discarded **${cardName}** for **+1 Block**.`).catch(discordCatch);
     }
   }
+  // Mark resolved (Skip or use): per-attack once-per-attack limit. Re-enter the
+  // step-4 modifier sequence so subsequent DEF / surge / resolve steps continue.
+  combat.zilloDiscardResolved = true;
   saveGames();
+  if (thread) await proceedAfterRerolls(thread, game, combat, ctx);
 }
 
 // ─── Power Token Overflow (G73) ─────────────────────────────────────────────
