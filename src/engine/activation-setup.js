@@ -1355,7 +1355,10 @@ export async function finalizeActivation({
     game.pendingStillFaster = { gameId, activatingMsgId: msgId, activatingPlayerNum: playerNum, sftPlayerNum };
   }
 
-  // E7. Hostile activation reaction card prompts
+  // E7. Hostile activation reaction card prompts.
+  // Posted privately to the opponent's hand channel — the activation thread is
+  // shared (both players have ViewChannel on each play area), so a count of
+  // playable reaction cards there leaks hand-state info to the active player.
   try {
     const oppNum = opponentPlayerNum(playerNum);
     const reactCards = getPlayableReactionCardsForTiming(game, oppNum, [
@@ -1363,10 +1366,18 @@ export async function finalizeActivation({
     ]);
     if (reactCards.length) {
       const oppId = getPlayerId(game, oppNum);
-      await thread.send({
-        content: `<@${oppId}> — Hostile activated! You have ${reactCards.length} reaction card(s) playable now. Check your Hand channel.`,
-        allowedMentions: { users: [oppId] },
-      }).catch(discordCatch);
+      const oppHandId = oppNum === 1 ? game.p1HandId : game.p2HandId;
+      if (oppHandId) {
+        try {
+          const oppHandCh = await fetchGameChannel(client, oppHandId);
+          await oppHandCh.send({
+            content: `<@${oppId}> — Hostile activated! You have **${reactCards.length}** reaction card(s) playable now. Check your hand below.`,
+            allowedMentions: { users: [oppId] },
+          }).catch(discordCatch);
+        } catch (_handChErr) {
+          console.error('Activation reaction prompt: hand channel unreachable', _handChErr?.message ?? _handChErr);
+        }
+      }
     }
   } catch (_actReactErr) {
     console.error('Activation reaction prompt error:', _actReactErr?.message ?? _actReactErr);

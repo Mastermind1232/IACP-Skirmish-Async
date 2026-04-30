@@ -7,6 +7,30 @@ import { processFigureDefeat } from './defeat-handler.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
+import { getHandChannelId, getPlayerId as _getPlayerIdHelper } from '../game/player-helpers.js';
+import { discordCatch as _discordCatchH } from '../error-handling.js';
+
+/**
+ * Send a "you have N reaction card(s) playable now" notice to the player's
+ * private Hand channel. Mirrors src/handlers/combat.js — combat thread is
+ * shared, hand channel is private; opponent must not see card availability.
+ */
+async function _sendPrivateReactionPrompt(client, game, playerNum, count, contextLabel) {
+  if (!count || count <= 0) return;
+  const handId = getHandChannelId(game, playerNum);
+  if (!handId) return;
+  try {
+    const handCh = await fetchGameChannel(client, handId);
+    const ownerId = _getPlayerIdHelper(game, playerNum);
+    const ctx = contextLabel ? ` (${contextLabel})` : '';
+    await handCh.send(sanitizeMentions({
+      content: `<@${ownerId}> — You have **${count}** reaction card(s) playable now${ctx}. Check your hand below.`,
+      allowedMentions: { users: [ownerId] },
+    })).catch(_discordCatchH);
+  } catch (err) {
+    console.error('_sendPrivateReactionPrompt: hand channel unreachable', err?.message ?? err);
+  }
+}
 import { countGameSpaces } from '../game/board-helpers.js';
 
 /**
@@ -1278,14 +1302,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           const atkHand = getCcHand(game, attackerPlayerNum) || [];
           const atkDefeatCards = [...new Set(atkHand)].filter(c => ccCards[c]?.timing && _defeatTimings.has(ccCards[c].timing));
           if (atkDefeatCards.length) {
-            await thread.send(sanitizeMentions({ content: `<@${ownerId}> — Hostile defeated! You have ${atkDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [ownerId] } })).catch(discordCatch);
+            await _sendPrivateReactionPrompt(client, game, attackerPlayerNum, atkDefeatCards.length, 'hostile defeated');
           }
           // Notify defender about own-figure-defeat reactions in hand
           const defId = getPlayerId(game, defenderPlayerNum);
           const defHand = getCcHand(game, defenderPlayerNum) || [];
           const defDefeatCards = [...new Set(defHand)].filter(c => ccCards[c]?.timing && _ownDefeatTimings.has(ccCards[c].timing));
           if (defDefeatCards.length) {
-            await thread.send(sanitizeMentions({ content: `<@${defId}> — Your figure was defeated! You have ${defDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defId] } })).catch(discordCatch);
+            await _sendPrivateReactionPrompt(client, game, defenderPlayerNum, defDefeatCards.length, 'your figure was defeated');
           }
         } catch (_defeatPromptErr) {
           console.error('Defeat reaction prompt error:', _defeatPromptErr?.message ?? _defeatPromptErr);
@@ -2662,7 +2686,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _defPostHand = getCcHand(game, _defPostPn) || [];
     const _defPostCards = [...new Set(_defPostHand)].filter(c => _ccCardsAll[c]?.timing && _postAtkTimings.has(_ccCardsAll[c].timing));
     if (_defPostCards.length) {
-      await thread.send(sanitizeMentions({ content: `<@${_defPostId}> — Attack resolved! You have ${_defPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_defPostId] } })).catch(discordCatch);
+      await _sendPrivateReactionPrompt(client, game, _defPostPn, _defPostCards.length, 'attack on you resolved');
     }
     // Attacker: cards triggered by resolving an attack (includes Opportunistic — hostile suffered damage)
     const _atkPostTimings = new Set(['afterAttack', 'afterYouResolveAttackTargetingFigure', 'afterYouResolveAttackThatDidNotMissDueToAccuracy', 'afterHostileFigureSuffersDamage']);
@@ -2670,7 +2694,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const _atkPostHand = getCcHand(game, combat.attackerPlayerNum) || [];
     const _atkPostCards = [...new Set(_atkPostHand)].filter(c => _ccCardsAll[c]?.timing && _atkPostTimings.has(_ccCardsAll[c].timing));
     if (_atkPostCards.length) {
-      await thread.send(sanitizeMentions({ content: `<@${_atkPostId}> — Attack resolved! You have ${_atkPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_atkPostId] } })).catch(discordCatch);
+      await _sendPrivateReactionPrompt(client, game, combat.attackerPlayerNum, _atkPostCards.length, 'attack resolved');
     }
   } catch (_postAtkErr) {
     console.error('Post-attack reaction prompt error:', _postAtkErr?.message ?? _postAtkErr);

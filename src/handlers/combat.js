@@ -209,7 +209,7 @@ import {
   recomputeActivationCounts,
   ccDiscardKey, ccHandKey, ccDeckKey, ccAttachmentsKey, vpKey,
   opponentPlayerNum, getInitiativePlayerNum,
-  removeFigurePosition,
+  removeFigurePosition, getHandChannelId,
 } from '../game/player-helpers.js';
 import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
@@ -2582,7 +2582,7 @@ export async function handleAttackTarget(interaction, ctx) {
     ]);
     const defOwnerId = getPlayerId(game, defenderPlayerNum);
     if (defReactions.length) {
-      await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> — You have ${defReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defOwnerId] } })).catch(discordCatch);
+      await sendPrivateReactionPrompt(client, game, defenderPlayerNum, defReactions.length, 'attack declared on you');
     }
     // Auto-prompt attacker for whenYouDeclareAttack cards
     const atkReactions = getPlayableReactionCardsForTiming(game, attackerPlayerNum, [
@@ -2594,7 +2594,7 @@ export async function handleAttackTarget(interaction, ctx) {
     ]);
     const atkOwnerId = getPlayerId(game, attackerPlayerNum);
     if (atkReactions.length) {
-      await thread.send(sanitizeMentions({ content: `<@${atkOwnerId}> — You have ${atkReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [atkOwnerId] } })).catch(discordCatch);
+      await sendPrivateReactionPrompt(client, game, attackerPlayerNum, atkReactions.length, 'attack declared');
     }
   } catch (err) {
     console.error('Reaction prompt error:', err?.message ?? err);
@@ -3201,6 +3201,32 @@ export async function handleCombatRoll(interaction, ctx) {
 /** Chunk buttons into ActionRows of up to 5 (Discord limit). Max 5 rows = 25 buttons. */
 function buildActionRows(buttons) {
   return chunkButtonsToRows(buttons);
+}
+
+/**
+ * Send a "you have N reaction card(s) playable now" notice to the player's
+ * private Hand channel. Posting this in the combat thread leaks information —
+ * the opponent can infer card availability and adjust play. Hand channels are
+ * permission-restricted to the owner so the prompt stays private.
+ *
+ * Falls back silently if the hand channel is unreachable; the player can
+ * still see playable cards in the Hand channel UI itself.
+ */
+async function sendPrivateReactionPrompt(client, game, playerNum, count, contextLabel) {
+  if (!count || count <= 0) return;
+  const handId = getHandChannelId(game, playerNum);
+  if (!handId) return;
+  try {
+    const handCh = await fetchGameChannel(client, handId);
+    const ownerId = getPlayerId(game, playerNum);
+    const ctx = contextLabel ? ` (${contextLabel})` : '';
+    await handCh.send(sanitizeMentions({
+      content: `<@${ownerId}> — You have **${count}** reaction card(s) playable now${ctx}. Check your hand below.`,
+      allowedMentions: { users: [ownerId] },
+    })).catch(discordCatch);
+  } catch (err) {
+    console.error('sendPrivateReactionPrompt: hand channel unreachable', err?.message ?? err);
+  }
 }
 
 /**
