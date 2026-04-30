@@ -202,22 +202,20 @@ describe('B-C-SURGE: Surge spending and tracking', () => {
     assert.strictEqual(combat.surgeSpentCount[0] || 0, 0, 'index 0 not tracked');
   });
 
-  it('B-C-SURGE-006: surge done path sends resolve-rolls message', async () => {
+  it('B-C-SURGE-006: surge done path proceeds straight to combat resolution', async () => {
     const combat = makeCombat({ surgeRemaining: 1 });
     const game = { gameId: 'g1', player1Id: 'player1', player2Id: 'player2', pendingCombat: combat };
     const sharedThread = mockThread();
-    const { ctx } = buildCtx(game, {
+    const { ctx, calls } = buildCtx(game, {
       getAttackerSurgeAbilities: () => ['damage 1'],
     });
 
     await handleCombatSurge(mockInteraction('combat_surge_g1_done', 'player1', sharedThread), ctx);
 
     assert.strictEqual(combat.surgeRemaining, 0, 'surgeRemaining set to 0');
-    // Should have sent a "ready to resolve" gate message
-    assert.ok(sharedThread._sent.some(m => {
-      const content = typeof m === 'string' ? m : m?.content || '';
-      return content.includes('resolve') || content.includes('Ready') || content.includes('Resolve');
-    }), 'resolve message sent');
+    // Damage now applies automatically (no pre-resolve ready gate). Verify
+    // resolveCombatAfterRolls fires directly when surge is done.
+    assert.ok(calls.resolveCombatAfterRolls.length > 0, 'resolveCombatAfterRolls was called');
   });
 
   it('B-C-SURGE-007: multi-effect surge (damage + pierce + conditions) applies all modifiers', async () => {

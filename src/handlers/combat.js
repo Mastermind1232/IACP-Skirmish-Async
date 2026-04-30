@@ -256,8 +256,16 @@ const COMBAT_GATE_LABELS = {
   post_attacker_reroll:   '🔄 Attacker rerolls complete. Next: defender rerolls (if any).',
   post_forced_reroll:     '🔄 Forced rerolls complete. Next: defender rerolls (if any).',
   post_defender_reroll:   '🔄 All rerolls complete. Next: power tokens, then surge spending.',
-  pre_resolve:            '⚔️ Ready to apply damage and resolve after-attack effects?',
+  pre_resolve:            '⚔️ Resolving attack...',
 };
+
+/**
+ * Sub-phases that auto-advance without posting a "Both players ready"
+ * button — used by sendCombatGate to bypass the gate UI for steps where
+ * Destruct's UX feedback says the bot should just proceed (e.g. damage
+ * applies automatically per CRR step 7).
+ */
+const AUTO_ADVANCE_SUB_PHASES = new Set(['pre_resolve']);
 
 /**
  * Send a combat sub-phase gate to the combat thread.
@@ -267,6 +275,14 @@ const COMBAT_GATE_LABELS = {
 export async function sendCombatGate(thread, game, combat, subPhase, ctx) {
   // Self-play: skip gates entirely
   if (game.selfPlay) {
+    await dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx);
+    return;
+  }
+  // Auto-advance sub-phases (e.g. pre_resolve): skip the "Both ready" UI
+  // and dispatch the advance immediately. Per Destruct's UX: damage
+  // applies without a ready check; the result text already shows the math.
+  if (AUTO_ADVANCE_SUB_PHASES.has(subPhase)) {
+    delete combat.combatGate;
     await dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx);
     return;
   }

@@ -614,19 +614,19 @@ describe('B-C-COMBINED: Token spend + surge interaction', () => {
     }), 'surge UI shown because tokenSurgeBonus contributes to totalSurge');
   });
 
-  it('B-C-COMBINED-002: resumeSurgeChoiceOrResolve sends resolve when surgeRemaining is 0', async () => {
+  it('B-C-COMBINED-002: resumeSurgeChoiceOrResolve auto-advances when surgeRemaining is 0', async () => {
     const combat = makeCombat({ surgeRemaining: 0 });
     const game = makeGame({ pendingCombat: combat });
     const thread = mockThread();
-    const { ctx } = buildCtx(game);
+    const { ctx, calls } = buildCtx(game);
 
     await resumeSurgeChoiceOrResolve(game, 'g1', combat, thread, ctx);
 
     assert.strictEqual(combat.surgeRemaining, 0, 'surgeRemaining stays 0');
-    assert.ok(thread._sent.some(m => {
-      const content = typeof m === 'string' ? m : m?.content || '';
-      return content.includes('resolve') || content.includes('Resolve') || content.includes('Ready');
-    }), 'resolve message sent when 0 surge');
+    // pre_resolve is now AUTO_ADVANCE — damage applies automatically rather
+    // than posting a Ready gate. resolveCombatAfterRolls fires directly.
+    assert.ok(calls.resolveCombatAfterRolls.length > 0,
+      'resolveCombatAfterRolls fired automatically (no Ready gate)');
   });
 
   it('B-C-COMBINED-003: resumeSurgeChoiceOrResolve shows surge UI when surgeRemaining > 0', async () => {

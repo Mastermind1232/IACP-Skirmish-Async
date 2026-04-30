@@ -116,6 +116,7 @@ function buildCombatCtx(game, overrides = {}) {
     logGameAction: [],
     rollSingleAttackDie: [],
     recalcAttackTotals: [],
+    resolveCombatAfterRolls: [],
   };
 
   return {
@@ -151,7 +152,7 @@ function buildCombatCtx(game, overrides = {}) {
       getSurgeAbilityLabel: (id) => id,
       resolveSurgeAbility: () => ({}),
       parseSurgeEffect: () => ({}),
-      resolveCombatAfterRolls: async () => {},
+      resolveCombatAfterRolls: async (...args) => { calls.resolveCombatAfterRolls.push(args); },
       getDcEffects: () => ({}),
       client: { channels: { fetch: async () => ({ send: async () => ({ id: 'thread-msg' }) }) } },
       ...overrides,
@@ -344,8 +345,8 @@ describe('B-CTIME2-007: handleCombatSurge guard — wrong player', () => {
 
 // ── B-CTIME2-008: handleCombatSurge — "done" → combatGate pre_resolve ─────
 
-describe('B-CTIME2-008: handleCombatSurge — "done" triggers pre_resolve gate', () => {
-  it('008: surge "done" → surgeRemaining=0, combatGate set to pre_resolve', async () => {
+describe('B-CTIME2-008: handleCombatSurge — "done" auto-advances through pre_resolve', () => {
+  it('008: surge "done" → surgeRemaining=0, pre_resolve auto-advances → resolveCombatAfterRolls fires', async () => {
     const game = makeGame({
       pendingCombat: makeCombat({
         surgeRemaining: 2,
@@ -360,11 +361,13 @@ describe('B-CTIME2-008: handleCombatSurge — "done" triggers pre_resolve gate',
     const combat = game.pendingCombat;
     assert.strictEqual(combat.surgeRemaining, 0,
       'surgeRemaining set to 0 on "done"');
-    assert.ok(combat.combatGate, 'combatGate created via sendReadyToResolveRolls');
-    assert.strictEqual(combat.combatGate.phase, 'pre_resolve',
-      'combatGate.phase = pre_resolve');
-    assert.strictEqual(combat.combatGate.p1Ready, false, 'p1Ready initialized false');
-    assert.strictEqual(combat.combatGate.p2Ready, false, 'p2Ready initialized false');
+    // pre_resolve is now an AUTO_ADVANCE sub-phase — no Ready gate posted,
+    // damage applies immediately. Verify resolveCombatAfterRolls fired
+    // and the gate was cleared after dispatch.
+    assert.strictEqual(combat.combatGate, undefined,
+      'combatGate cleared after auto-advance through pre_resolve');
+    assert.ok(calls.resolveCombatAfterRolls.length > 0,
+      'resolveCombatAfterRolls fired automatically after surge done');
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
   });
 });
@@ -452,15 +455,15 @@ describe('B-CTIME2-011: Phase sequencing invariant across reroll → surge → t
     delete combat.combatGate;
     combat.rerollPhase = null; // rerolls done
 
-    // Step 3: Surge done → pre_resolve gate
+    // Step 3: Surge done → pre_resolve auto-advances → no gate left behind
     const { ctx: ctx2 } = buildCombatCtx(game, { client });
     await handleCombatSurge(
       mockInteraction('combat_surge_42_done', 'player1', { client }), ctx2);
 
     assert.strictEqual(combat.surgeRemaining, 0,
       'Step 3: surgeRemaining = 0 after surge done');
-    assert.strictEqual(combat.combatGate?.phase, 'pre_resolve',
-      'Step 3: combatGate = pre_resolve after surge done');
+    assert.strictEqual(combat.combatGate, undefined,
+      'Step 3: pre_resolve auto-advanced — no gate left behind');
 
     // Step 4: Token phase guard — wrong phase returns silently
     delete combat.combatGate;

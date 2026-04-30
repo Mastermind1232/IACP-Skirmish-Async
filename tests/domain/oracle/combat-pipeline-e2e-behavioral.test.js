@@ -204,7 +204,7 @@ describe('B-E2E-001: selfPlay baseline — full pipeline auto-runs to resolution
 // ── B-E2E-002: Attacker reroll path ────────────────────────────────────────
 
 describe('B-E2E-002: Attacker reroll path — reroll → gates → resolution', () => {
-  it('002: post_roll gate → attacker reroll → post_attacker_reroll gate → pre_resolve gate → resolution', async () => {
+  it('002: post_roll gate → attacker reroll → post_attacker_reroll gate → automatic resolution (no pre_resolve gate)', async () => {
     const thread = mockThread();
     const client = mockClientWithThread(thread);
     const combat = makeCombat({
@@ -235,20 +235,15 @@ describe('B-E2E-002: Attacker reroll path — reroll → gates → resolution', 
 
     // Step 4: Both players ready → dispatchCombatGateAdvance('post_attacker_reroll')
     //   → no forced, no defender rerolls → proceedAfterRerolls
-    //   → no tokens, no surge → sendReadyToResolveRolls → sendCombatGate('pre_resolve')
-    await advanceGate(game, client, ctx);
-    assert.strictEqual(combat.combatGate?.phase, 'pre_resolve',
-      'Step 4: combatGate = pre_resolve — pipeline advanced through proceedAfterRerolls');
-    assert.strictEqual(combat.rerollPhase, null,
-      'Step 4: rerollPhase cleared to null');
-
-    // Step 5: Both players ready → dispatchCombatGateAdvance('pre_resolve')
-    //   → resolveCombatAfterRolls
+    //   → no tokens, no surge → sendReadyToResolveRolls
+    //   → resolveCombatAfterRolls fires DIRECTLY (no pre_resolve gate)
     await advanceGate(game, client, ctx);
     assert.strictEqual(calls.resolveCombatAfterRolls.length, 1,
-      'Step 5: resolveCombatAfterRolls called — pipeline complete');
+      'Step 4: resolveCombatAfterRolls called — damage applies automatically');
+    assert.strictEqual(combat.rerollPhase, null,
+      'Step 4: rerollPhase cleared to null');
     assert.strictEqual(combat.combatGate, undefined,
-      'Step 5: no stale combatGate after resolution');
+      'Step 4: no stale combatGate after resolution');
   });
 });
 
@@ -289,21 +284,18 @@ describe('B-E2E-003: Defender reroll path — post-roll pipeline (PT-on-declare 
       'Step 3: gate = post_defender_reroll after defender reroll done');
 
     // Step 4: Both ready → proceedAfterRerolls (no token window — tokens were pre-roll)
-    //   → proceedAfterTokens → no surge → pre_resolve gate
+    //   → proceedAfterTokens → no surge → pre_resolve gate auto-advances →
+    //   resolveCombatAfterRolls fires automatically (damage applies without
+    //   a ready-check gate, per Destruct's UX request).
     await advanceGate(game, client, ctx);
     assert.strictEqual(combat.rerollPhase, null,
       'Step 4: rerollPhase cleared');
     assert.strictEqual(combat.tokenPhase ?? null, null,
       'Step 4: tokenPhase NOT set post-rerolls — tokens are pre-roll now (CRR p.50)');
-    assert.strictEqual(combat.combatGate?.phase, 'pre_resolve',
-      'Step 4: combatGate = pre_resolve — proceeded through proceedAfterTokens');
-
-    // Step 5: Both ready → resolution
-    await advanceGate(game, client, ctx);
     assert.strictEqual(calls.resolveCombatAfterRolls.length, 1,
-      'Step 5: resolveCombatAfterRolls called — pipeline complete');
+      'Step 4: resolveCombatAfterRolls called — damage applies automatically');
     assert.strictEqual(combat.combatGate, undefined,
-      'Step 5: no stale combatGate');
+      'Step 4: no stale combatGate after auto-advance resolution');
   });
 });
 
@@ -357,13 +349,11 @@ describe('B-E2E-004: Attacker surge path — post-roll pipeline (PT-on-declare m
 
     assert.strictEqual(combat.surgeRemaining, 0,
       'Step 3: surgeRemaining = 0 after done');
-    assert.strictEqual(combat.combatGate?.phase, 'pre_resolve',
-      'Step 3: combatGate = pre_resolve via sendReadyToResolveRolls');
-
-    // Step 4: Both ready → resolution
-    await advanceGate(game, client, ctx);
+    // Damage now applies automatically via the pre_resolve auto-advance —
+    // no explicit ready gate. resolveCombatAfterRolls fires synchronously
+    // in handleCombatSurge → sendReadyToResolveRolls.
     assert.strictEqual(calls.resolveCombatAfterRolls.length, 1,
-      'Step 4: resolveCombatAfterRolls called — pipeline complete');
+      'Step 3: resolveCombatAfterRolls called automatically after surge done');
     assert.strictEqual(combat.combatGate, undefined,
       'Step 4: no stale combatGate after resolution');
     // Pre-roll PT bonus survives through to resolution
