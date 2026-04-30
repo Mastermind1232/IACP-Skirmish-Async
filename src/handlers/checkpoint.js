@@ -83,6 +83,28 @@ async function loadCheckpointOrFollowUp(interaction, cpId) {
 }
 
 /**
+ * Restore a saved game state onto an existing game object IN PLACE. Used by
+ * checkpoint loads (in-game and cross-lobby) and the universal undo restore.
+ *
+ *   1. Wipe every key on `game` except `undoStack` (which has its own
+ *      lifecycle and is preserved in place).
+ *   2. Object.assign `savedState` (the snapshot blob) onto `game`.
+ *   3. Object.assign `identityOverlay` (channel/player IDs to keep from the
+ *      live game) on top — this beats anything in `savedState`.
+ *
+ * Callers still handle their own undoStack semantics around this call
+ * (push undo entry before; reassign savedStack after) since those rules
+ * differ by caller.
+ */
+export function restoreGameStateInPlace(game, savedState, identityOverlay = {}) {
+  for (const key of Object.keys(game)) {
+    if (key !== 'undoStack') delete game[key];
+  }
+  Object.assign(game, savedState);
+  Object.assign(game, identityOverlay);
+}
+
+/**
  * Strip non-serializable / runtime-only fields from a game object before save.
  * - undoStack: separately managed; not part of the immutable state we want to restore
  * - any function values: silently dropped by JSON.stringify but be explicit
@@ -339,15 +361,8 @@ export async function handleCheckpointLoadIngamePick(interaction, ctx) {
     player2Id: game.player2Id,
     gameId: game.gameId,
   };
-  for (const key of Object.keys(game)) {
-    if (key !== 'undoStack') delete game[key];
-  }
-  Object.assign(game, cp.game_state);
+  restoreGameStateInPlace(game, cp.game_state, savedChannelIds);
   game.undoStack = savedStack;
-  // Preserve current lobby's channel/player IDs over the saved state's
-  // (identical for in-game but defensive — and required if the same checkpoint
-  // is later loaded into a different lobby via in-game flow).
-  Object.assign(game, savedChannelIds);
   clearPendingAndPerMsgIdState(game);
   // Side-channel Map rebuild
   try { repopulateDcMapsForGame(gameId); } catch (err) {
@@ -496,13 +511,8 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
     p2PlayAreaId: newGame.p2PlayAreaId,
     achievementsChannelId: newGame.achievementsChannelId,
   };
-  // 2. Wipe newGame fields and apply checkpoint state.
-  for (const key of Object.keys(newGame)) {
-    if (key !== 'undoStack') delete newGame[key];
-  }
-  Object.assign(newGame, checkpoint.game_state);
-  // 3. Override lobby identity (channels + players from the new lobby).
-  Object.assign(newGame, lobbyIdentity);
+  // 2. Wipe newGame fields, apply checkpoint state, overlay lobby identity.
+  restoreGameStateInPlace(newGame, checkpoint.game_state, lobbyIdentity);
   // 4. Capture the OLD msgIds for later remap.
   const oldP1DcIds = [...(newGame.p1DcMessageIds || [])];
   const oldP2DcIds = [...(newGame.p2DcMessageIds || [])];

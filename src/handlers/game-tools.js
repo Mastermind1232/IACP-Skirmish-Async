@@ -12,6 +12,7 @@ import { PHASES } from '../game/phase.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { captureManualKillDiagnostic } from '../ai/self-play.js';
+import { restoreGameStateInPlace } from './checkpoint.js';
 import { repopulateDcMapsForGame } from '../game-state.js';
 
 /** Build a short description of the current game state after an undo, so players know what to do next. */
@@ -200,10 +201,7 @@ export async function handleUndo(interaction, ctx) {
   // Restore entire game state from snapshot. Discord UI refresh is handled per-type below.
   if (last.snapshot) {
     const savedStack = game.undoStack; // already has `last` popped off
-    for (const key of Object.keys(game)) {
-      if (key !== 'undoStack') delete game[key];
-    }
-    Object.assign(game, last.snapshot);
+    restoreGameStateInPlace(game, last.snapshot);
     game.undoStack = savedStack;
 
     // Side-channel Maps (dcMessageMeta, dcExhaustedState, dcHealthState) are

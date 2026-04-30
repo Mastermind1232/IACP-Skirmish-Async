@@ -44,10 +44,11 @@ describe('UNDO-SIDE-CHANNEL-MAPS-REBUILD: handleUndo rebuilds module-scoped Maps
     assert.ok(fn, 'handleUndo body must be locatable');
     const body = fn[0];
     // The call must appear inside the snapshot-restore branch — same scope
-    // where Object.assign(game, last.snapshot) happens.
-    const restoreBlock = body.match(/if \(last\.snapshot\) \{[\s\S]*?Object\.assign\(game, last\.snapshot\);[\s\S]*?repopulateDcMapsForGame\(gameId\);/);
+    // where the snapshot is applied to the game (via restoreGameStateInPlace
+    // helper, or any equivalent).
+    const restoreBlock = body.match(/if \(last\.snapshot\) \{[\s\S]*?(?:Object\.assign\(game, last\.snapshot\)|restoreGameStateInPlace\(game, last\.snapshot[^)]*\))[\s\S]*?repopulateDcMapsForGame\(gameId\);/);
     assert.ok(restoreBlock,
-      'repopulateDcMapsForGame(gameId) must be called inside the snapshot-restore branch, after Object.assign — otherwise the Maps stay at post-action values');
+      'repopulateDcMapsForGame(gameId) must be called inside the snapshot-restore branch, after the snapshot is applied — otherwise the Maps stay at post-action values');
   });
 
   it('repopulate call is wrapped in try/catch (failure during rebuild should not blow up the undo flow)', () => {
