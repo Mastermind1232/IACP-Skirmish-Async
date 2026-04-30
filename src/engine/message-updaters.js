@@ -176,6 +176,75 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
   }
 }
 
+/**
+ * Single source of truth for the round-activation message in general
+ * channel. Handles BOTH variants:
+ *
+ *  - "Activation phase" — current turn-player + optional Pass button
+ *  - "End-Phase" — both players done; "End R<n> Activation Phase" button
+ *
+ * Auto-clears the sticky `roundActivationButtonShown` flag if the
+ * End-Phase variant no longer applies (counts changed).
+ *
+ * Called from every site that mutates turn state or activation balance:
+ * pass, LiA placement, end-turn, end-activation, refresh-all.
+ *
+ * Idempotent. Safe to call from any handler.
+ */
+export async function updateRoundActivationMessage(game, gameId, client, deps) {
+  // Sticky-flag rebalance: if the End-Phase variant was shown but no
+  // longer fits (counts changed since), clear so we re-render the
+  // Activation variant.
+  if (game.roundActivationButtonShown
+      && deps.shouldShowEndActivationPhaseButton
+      && !deps.shouldShowEndActivationPhaseButton(game, gameId)) {
+    game.roundActivationButtonShown = false;
+  }
+  if (!game.roundActivationMessageId || !game.generalId) return;
+
+  // If the End-Phase variant should be shown and isn't yet, route through
+  // maybeShowEndActivationPhaseButton (it owns posting the End-Phase body
+  // + setting roundActivationButtonShown=true).
+  if (deps.shouldShowEndActivationPhaseButton
+      && deps.shouldShowEndActivationPhaseButton(game, gameId)
+      && !game.roundActivationButtonShown) {
+    await maybeShowEndActivationPhaseButton(game, client, deps);
+    return;
+  }
+  // If End-Phase is currently shown, leave it alone.
+  if (game.roundActivationButtonShown) return;
+
+  // Activation variant: edit message with current turn-player + pass button.
+  try {
+    const ch = await fetchGameChannel(client, game.generalId);
+    const msg = await ch.messages.fetch(game.roundActivationMessageId);
+    const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+    const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
+    const otherNum = turnPlayerNum === 1 ? 2 : 1;
+    const myRem = (turnPlayerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining) ?? 0;
+    const otherRem = (otherNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining) ?? 0;
+    const round = game.currentRound || 1;
+    const passRows = [];
+    if (otherRem > myRem && myRem > 0) {
+      passRows.push(new deps.ActionRowBuilder().addComponents(
+        new deps.ButtonBuilder()
+          .setCustomId(`pass_activation_turn_${gameId}`)
+          .setLabel(`Pass (opponent has ${otherRem - myRem} more activation${otherRem - myRem !== 1 ? 's' : ''} than you)`)
+          .setStyle(deps.ButtonStyle.Secondary)
+      ));
+    }
+    const turnZone = turnPlayerId === game.player1Id ? 'red' : 'blue';
+    const passHint = passRows.length ? ' You may pass (opponent has more activations).' : '';
+    await msg.edit({
+      content: `<@${turnPlayerId}> (${turnZone === 'red' ? '🔴 ' : '🔵 '}**Player ${turnPlayerNum}**) **Round ${round}** — Your turn to activate!${passHint}`,
+      components: passRows,
+      allowedMentions: { users: [turnPlayerId] },
+    }).catch(deps.discordCatch);
+  } catch (err) {
+    console.error('updateRoundActivationMessage: edit failed', err);
+  }
+}
+
 /** Edit the round message to add the End Activation Phase button when conditions are met. */
 export async function maybeShowEndActivationPhaseButton(game, client, deps) {
   const gameId = game.gameId;

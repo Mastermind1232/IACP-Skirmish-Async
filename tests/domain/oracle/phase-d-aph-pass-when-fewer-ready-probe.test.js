@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ACT_SRC = readFileSync(resolve(__dirname, '../../../src/handlers/activation.js'), 'utf8');
+const MSG_UPDATER_SRC = readFileSync(resolve(__dirname, '../../../src/engine/message-updaters.js'), 'utf8');
 
 describe('PROBE-PD-APH-006: pass is legal only when opponent has more activations remaining', () => {
   it('006a: source — handlePassActivationTurn is the canonical pass entry', () => {
@@ -52,10 +53,16 @@ describe('PROBE-PD-APH-006: pass is legal only when opponent has more activation
   });
 
   it('006e: source — UI surfaces the pass button only when the pass would be legal', () => {
-    // Round-message update after a pass: render the pass button only if justPassedRem > newCurrentRem.
+    // Round-message update is now centralized in updateRoundActivationMessage in
+    // src/engine/message-updaters.js. The handler delegates to it after a pass,
+    // and the helper renders the pass button only when otherRem > myRem (i.e.
+    // opponent — the player who just passed — has strictly more remaining).
     assert.match(ACT_SRC,
-      /if \(justPassedRem > newCurrentRem && newCurrentRem > 0\) \{/,
-      'pass button must render only when current player is strictly behind — CRR-APH-006');
+      /updateRoundActivationMessage\??\.?\(game,\s*gameId,\s*client\)/,
+      'handlePassActivationTurn must delegate UI refresh to updateRoundActivationMessage — CRR-APH-006');
+    assert.match(MSG_UPDATER_SRC,
+      /if \(otherRem > myRem && myRem > 0\) \{/,
+      'updateRoundActivationMessage must render the pass button only when current turn-player is strictly behind — CRR-APH-006');
   });
 
   it('006f: behavior — the gate predicate matches CRR semantics on numeric inputs', () => {

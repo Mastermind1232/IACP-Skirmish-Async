@@ -241,6 +241,7 @@ import {
   clearMoveGridMessages as _clearMoveGridMessagesPure,
   editDistanceMessage as _editDistanceMessagePure,
   maybeShowEndActivationPhaseButton as _maybeShowEndActivationPhaseButtonPure,
+  updateRoundActivationMessage as _updateRoundActivationMessagePure,
   refreshAllGameComponents as _refreshAllGameComponentsPure,
 } from './src/engine/message-updaters.js';
 import { getCommandCardImagePath, getDcImagePath, getConditionCardPath, getFigureImagePath, resolveAssetPath, resolveDcImagePath, resolveMissionCardImagePath, UPGRADE_IMAGE_OVERRIDES } from './src/asset-paths.js';
@@ -1581,6 +1582,19 @@ async function sendRoundActivationPhaseMessage(game, client) {
 /** Edit the round message to add the End Activation Phase button when conditions are met. */
 async function maybeShowEndActivationPhaseButton(game, client) {
   return _maybeShowEndActivationPhaseButtonPure(game, client, {
+    shouldShowEndActivationPhaseButton, EmbedBuilder, ActionRowBuilder, ButtonBuilder,
+    ButtonStyle, GAME_PHASES, PHASE_COLOR, getInitiativePlayerNum,
+    getInitiativePlayerZoneLabel, discordCatch, saveGames,
+  });
+}
+
+/**
+ * Centralized round-activation message updater. Single source of truth
+ * for re-rendering the message that holds the turn indicator + Pass +
+ * End-Phase button. Replaces 4 ad-hoc inline edit blocks.
+ */
+async function updateRoundActivationMessage(game, gameId, client) {
+  return _updateRoundActivationMessagePure(game, gameId, client, {
     shouldShowEndActivationPhaseButton, EmbedBuilder, ActionRowBuilder, ButtonBuilder,
     ButtonStyle, GAME_PHASES, PHASE_COLOR, getInitiativePlayerNum,
     getInitiativePlayerZoneLabel, discordCatch, saveGames,
@@ -3411,7 +3425,7 @@ function buildAllDeps() {
     getCommandCardImagePath, findDcMessageIdForFigure, isGroupDefeated,
     checkWinConditions, applyDamageAndFinishCombat, finishCombatResolution,
     checkPostCombatSurges, resolveCombatAfterRolls, hasActionsRemainingInGame,
-    getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton,
+    getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton, updateRoundActivationMessage,
     countTerminalsControlledByPlayer, isFigureInDeploymentZone,
     getFiguresOnOrAdjacentToSpace, getFiguresAdjacentToCoord, applyNpcDamageToFigure,
     getEffectiveMapSpaces, isWithinN, computeCleaveEligibleTargets, getCleaveTargetButtons,

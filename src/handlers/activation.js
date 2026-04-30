@@ -204,7 +204,7 @@ export async function handleStatusPhase(interaction, ctx) {
  * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames
  */
 export async function handlePassActivationTurn(interaction, ctx) {
-  const { getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames } = ctx;
+  const { getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames, updateRoundActivationMessage } = ctx;
   const gameId = parseCustomId(interaction.customId, 'pass_activation_turn_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
@@ -246,32 +246,7 @@ export async function handlePassActivationTurn(interaction, ctx) {
     roundContentBefore,
     gameId,
   });
-  if (game.roundActivationMessageId && game.generalId) {
-    try {
-      const ch = await fetchGameChannel(client, game.generalId);
-      const msg = await ch.messages.fetch(game.roundActivationMessageId);
-      const initNum = otherPlayerNum;
-      const newCurrentRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
-      const justPassedRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
-      const passRows = [];
-      if (justPassedRem > newCurrentRem && newCurrentRem > 0) {
-        passRows.push(new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`pass_activation_turn_${gameId}`)
-            .setLabel(`Pass (opponent has ${justPassedRem - newCurrentRem} more activation${justPassedRem - newCurrentRem !== 1 ? 's' : ''} than you)`)
-            .setStyle(ButtonStyle.Secondary)
-        ));
-      }
-      const otherZone = getPlayerZoneLabel(game, otherPlayerId);
-      await msg.edit({
-        content: `<@${otherPlayerId}> (${otherZone}**Player ${initNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back if the other player has more activations.' : ''}`,
-        components: passRows,
-        allowedMentions: { users: [otherPlayerId] },
-      }).catch(discordCatch);
-    } catch (err) {
-      console.error('Failed to update round message for pass:', err);
-    }
-  }
+  await updateRoundActivationMessage?.(game, gameId, client);
   saveGames();
 }
 
@@ -373,7 +348,7 @@ async function checkLieInAmbushTrigger(game, activatingPlayerNum, ctx) {
  * Handle lia_deploy_zone_ button: deploy the set-aside group to chosen zone.
  */
 export async function handleLiaDeployZone(interaction, ctx) {
-  const { getGame, logGameAction, client, saveGames, updateActivationsMessage } = ctx;
+  const { getGame, logGameAction, client, saveGames, updateActivationsMessage, updateRoundActivationMessage } = ctx;
   // customId: lia_deploy_zone_<gameId>_<playerNum>_<zone>
   const parts = splitCustomId(interaction.customId, 'lia_deploy_zone_');
   const zone = parts[parts.length - 1]; // red or blue
@@ -501,38 +476,8 @@ export async function handleLiaDeployZone(interaction, ctx) {
   saveGames();
   await updateActivationsMessage?.(game, playerNum, client);
 
-  // Refresh round activation message buttons — LiA deployment changes the activation balance
-  if (placed > 0 && game.roundActivationMessageId && game.generalId) {
-    try {
-      const ch = await fetchGameChannel(client, game.generalId);
-      const msg = await ch.messages.fetch(game.roundActivationMessageId);
-      const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
-      const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
-      const otherNum = opponentPlayerNum(turnPlayerNum);
-      const myRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
-      const otherRem = getActivationsRemaining(game, otherNum) ?? 0;
-      const round = game.currentRound || 1;
-      const passRows = [];
-      if (otherRem > myRem && myRem > 0) {
-        passRows.push(new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`pass_activation_turn_${gameId}`)
-            .setLabel(`Pass (opponent has ${otherRem - myRem} more activation${otherRem - myRem !== 1 ? 's' : ''} than you)`)
-            .setStyle(ButtonStyle.Secondary)
-        ));
-      }
-      const turnZone = turnPlayerId === game.player1Id ? 'red' : 'blue';
-      const playAreaId = getPlayAreaId(game, turnPlayerNum);
-      const passHint = passRows.length ? ' You may pass (opponent has more activations).' : '';
-      await msg.edit({
-        content: `<@${turnPlayerId}> **Round ${round}** — Your turn! Activate DCs in <#${playAreaId}>.${passHint}`,
-        components: passRows,
-        allowedMentions: { users: [turnPlayerId] },
-      }).catch(discordCatch);
-    } catch (err) {
-      console.error('Failed to refresh round message after LiA deployment:', err);
-    }
-  }
+  // Refresh round activation message — LiA deployment changes the activation balance
+  if (placed > 0) await updateRoundActivationMessage?.(game, gameId, client);
 
   await interaction.followUp({ content: `Deployed **${dcName}** (${placed} figure(s)) to the **${zone}** zone.`, ephemeral: true }).catch(discordCatch);
 }
@@ -551,6 +496,7 @@ export async function handleEndTurn(interaction, ctx) {
     getDcPlayAreaComponents,
     logGameAction,
     maybeShowEndActivationPhaseButton,
+    updateRoundActivationMessage,
     client,
     saveGames,
   } = ctx;
@@ -682,32 +628,9 @@ export async function handleEndTurn(interaction, ctx) {
     phase: 'ROUND',
     icon: 'activate',
   });
-  if (game.roundActivationMessageId && game.generalId && !game.roundActivationButtonShown) {
-    try {
-      const ch = await fetchGameChannel(client, game.generalId);
-      const msg = await ch.messages.fetch(game.roundActivationMessageId);
-      const round = game.currentRound || 1;
-      const newCurrentRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
-      const justActedRem = getActivationsRemaining(game, meta.playerNum) ?? 0;
-      const passRows = [];
-      if (justActedRem > newCurrentRem && newCurrentRem > 0) {
-        passRows.push(new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`pass_activation_turn_${gameId}`)
-            .setLabel(`Pass (opponent has ${justActedRem - newCurrentRem} more activation${justActedRem - newCurrentRem !== 1 ? 's' : ''} than you)`)
-            .setStyle(ButtonStyle.Secondary)
-        ));
-      }
-      await msg.edit({
-        content: `<@${otherPlayerId}> (**Player ${otherPlayerNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back (opponent has more activations).' : ''}`,
-        components: passRows,
-        allowedMentions: { users: [otherPlayerId] },
-      }).catch(discordCatch);
-    } catch (err) {
-      console.error('Failed to update round message after end turn:', err);
-    }
-  }
-  await maybeShowEndActivationPhaseButton(game, client);
+  // Single source of truth — handles activation variant, sticky-flag
+  // rebalance, and routes to End-Phase variant when both players done.
+  await updateRoundActivationMessage?.(game, gameId, client);
   // Field Tactics (Death Trooper): after activation, choose a friendly TROOPER/LEADER within 2 to perform a free attack
   await maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, client, ctx.findDcMessageIdForFigure);
   // Lie in Ambush: after opponent activates, check if trigger fires

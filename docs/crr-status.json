@@ -54,7 +54,7 @@
     "baselineTypeMismatchCount": 21
   },
   "depBagParity": {
-    "totalRequiredDepKeys": 229,
+    "totalRequiredDepKeys": 230,
     "allowedOmissionsCount": 9,
     "allowedOmissions": [
       "buildSquadConfirmText",
