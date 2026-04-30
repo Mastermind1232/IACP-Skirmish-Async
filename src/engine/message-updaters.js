@@ -3,6 +3,7 @@
  * Each function takes an explicit `deps` parameter for closed-over dependencies.
  */
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
+import { isActivationActionInProgress } from '../game/activation-state.js';
 
 /**
  * Update the Play Area "Attachments" message for a DC (CC + DC Skirmish Upgrade attachments).
@@ -150,8 +151,11 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
     }
   }
 
-  // Defer End Activation prompt while combat is resolving — it will re-trigger after finishCombatResolution
-  if (data?.remaining === 0 && meta && !game.pendingCombat) {
+  // Defer End Activation prompt while any action (combat / move grid / space pick) is mid-resolution.
+  // The action cost is decremented at button-press time, so remaining can be 0 before the action
+  // actually finishes. Re-firing happens automatically when the resolution path calls
+  // updateDcActionsMessage again (after combat resolution / move pick / space pick clear).
+  if (data?.remaining === 0 && meta && !isActivationActionInProgress(game, msgId)) {
     game.dcFinishedPinged = game.dcFinishedPinged || {};
     if (!game.dcFinishedPinged[msgId] && !game.pendingEndTurn?.[msgId]) {
       const ownerId = deps.getPlayerId(game, meta.playerNum);

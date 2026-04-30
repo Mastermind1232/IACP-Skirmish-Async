@@ -150,6 +150,41 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
 }
 
 /**
+ * True iff a click-time-decremented action is still mid-resolution for this DC.
+ * Action costs are committed when the button is pressed (Move/Special/etc.),
+ * but the resolution can take multiple Discord interactions (move grid, target
+ * pick, combat). During that window the "all actions completed" prompt and the
+ * End Activation handler must be suppressed — otherwise the user can end the
+ * activation with cost paid but effect unresolved (figure stays put, etc.).
+ *
+ * Checks the three universal in-flight surfaces:
+ *   - game.pendingCombat        single-stream global; any pending combat blocks
+ *   - game.moveInProgress[k]    compound key `${msgId}_${figureIndex}`
+ *   - game.pendingSpacePick[k]  context key contains msgId
+ *
+ * Ability-specific pending flags (50+) aren't enumerated here — they resolve
+ * inside the activation thread via prompts and don't tempt the user toward
+ * the End Activation button the way an open move grid does. Avoiding the
+ * enumerate-and-drift pattern is intentional.
+ */
+export function isActivationActionInProgress(game, msgId) {
+  if (!msgId) return false;
+  if (game.pendingCombat) return true;
+  if (game.moveInProgress) {
+    const prefix = `${msgId}_`;
+    for (const k of Object.keys(game.moveInProgress)) {
+      if (k.startsWith(prefix)) return true;
+    }
+  }
+  if (game.pendingSpacePick) {
+    for (const k of Object.keys(game.pendingSpacePick)) {
+      if (k.includes(msgId)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * All round-scoped flags reset at start of new round.
  * Object flags are reset to {}; null flags to null; array flags to [].
  */

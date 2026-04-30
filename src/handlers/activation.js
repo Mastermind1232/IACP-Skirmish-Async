@@ -9,7 +9,7 @@ import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
-import { cleanupActivation } from '../game/activation-state.js';
+import { cleanupActivation, isActivationActionInProgress } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels } from '../game/index.js';
 import { getValidPushDestinations } from '../game/movement.js';
 import { getAllFigureCoords } from '../game/spatial.js';
@@ -769,6 +769,13 @@ export async function handleDcEndActivation(interaction, ctx) {
   const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner can end this activation.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (isActivationActionInProgress(game, msgId)) {
+    await interaction.followUp({
+      content: '⏳ An action is still resolving (move grid open, target pick pending, or combat in progress). Finish or cancel it before ending the activation.',
+      ephemeral: true,
+    }).catch(discordCatch);
     return;
   }
   const otherPlayerNum = opponentPlayerNum(meta.playerNum);
