@@ -4424,8 +4424,11 @@ client.on('interactionCreate', async (interaction) => {
       const _modalHandler = getHandler(modalKey);
       if (_modalHandler) {
         const _group = getHandlerGroup(modalKey);
+        if (!_group) console.warn('[modal-dispatch] handler', modalKey, 'has no context group; passing empty ctx');
         const _ctx = _group ? buildContext(_group, buildAllDeps()) : {};
         await _modalHandler(interaction, _ctx);
+      } else {
+        console.warn('[modal-dispatch] No handler registered for modal customId:', interaction.customId);
       }
     }
     }); // end withAtomicGameLock (modal)

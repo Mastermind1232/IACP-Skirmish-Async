@@ -20,7 +20,12 @@ function getButtonPrefixes() {
   return _buttonPrefixes;
 }
 
-/** Modal submit prefixes (inline handlers in index.js, not in the registry). */
+/**
+ * Modal submit prefixes — sorted longest-first so a prefix that's a stem
+ * of another (e.g. cp_save_modal_v2_ added later vs cp_save_modal_) won't
+ * accidentally short-circuit. Today no two share a stem, but the sort
+ * costs nothing and immunizes future additions.
+ */
 const MODAL_PREFIXES = [
   'squad_modal_',
   'deploy_modal_',
@@ -31,7 +36,7 @@ const MODAL_PREFIXES = [
   'fav_rename_modal_',
   'fav_list_rename_modal_',
   'cp_save_modal_',
-];
+].sort((a, b) => b.length - a.length);
 
 /**
  * Select prefixes: auto-derived from handler registry (covers all registered
