@@ -1958,6 +1958,14 @@ client.once('ready', async () => {
             const tag = (thread.parent?.availableTags || []).find((t) => t.id === tagId);
             return /skirbo/i.test(tag?.name || '');
           });
+          // Re-detect the "Load Checkpoint" tag so the flag survives bot
+          // restarts. Without this, redeploying between lobby-create and
+          // lobby-start drops the flag and the lobby falls into the
+          // standard map/squad flow instead of the checkpoint-pick flow.
+          const isLoadCheckpointLobby = (thread.appliedTags || []).some((tagId) => {
+            const tag = (thread.parent?.availableTags || []).find((t) => t.id === tagId);
+            return /load\s*checkpoint/i.test(tag?.name || '');
+          });
           let joinedId;
           if (playerIds.length >= 2) joinedId = playerIds[1];
           else if (isSkirboLobby) joinedId = `${AI_USER_PREFIX}2`;
@@ -1966,7 +1974,9 @@ client.once('ready', async () => {
           let status = 'LFG';
           if (thread.name.startsWith('[Launched]')) continue; // game already created, skip
           if (thread.name.startsWith('[Full]') || joinedId) status = 'Full';
-          setLobby(threadId, { creatorId, joinedId, status });
+          const reconstructed_lobby = { creatorId, joinedId, status };
+          if (isLoadCheckpointLobby) reconstructed_lobby.loadCheckpoint = true;
+          setLobby(threadId, reconstructed_lobby);
           markLobbyEmbedSent(threadId);
           reconstructed++;
         } catch (err) {
