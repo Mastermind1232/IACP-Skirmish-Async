@@ -78,7 +78,6 @@ export const PREFIX_TO_COMMAND = {
   'deployment_orient_': COMMAND_TYPES.DeployFigure,
   'deployment_done_': COMMAND_TYPES.FinishDeployment,
   'auto_deploy_': COMMAND_TYPES.DeployFigure,
-  'squad_select_': COMMAND_TYPES.SubmitSquad,
   'squad_confirm_': COMMAND_TYPES.SubmitSquad,
   'squad_cancel_': COMMAND_TYPES.SubmitSquad,
   'form_pick_': COMMAND_TYPES.DeployFigure,
@@ -221,7 +220,6 @@ export function parsePayloadFromCustomId(customId, prefix) {
     case 'deployment_done_':
       return { gameId: parts[0], playerNum: parseInt(parts[1], 10) };
 
-    case 'squad_select_':
     case 'squad_confirm_':
     case 'squad_cancel_':
       return { gameId: parts[0], affiliation: parts.slice(1).join('_') };

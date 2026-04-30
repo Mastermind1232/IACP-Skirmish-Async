@@ -114,7 +114,6 @@ import {
   handleCcDiscard,
   handleCcChoice,
   handleCcSpacePick,
-  handleSquadSelect,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
   handleNegationPlay,
@@ -390,7 +389,6 @@ register('cc_close_discard_', handleCcCloseDiscard, 'ccHand');
 register('cc_discard_', handleCcDiscard, 'ccHand');
 register('cc_choice_', handleCcChoice, 'ccHand');
 register('cc_space_', handleCcSpacePick, 'ccHand');
-register('squad_select_', handleSquadSelect, 'ccHand');
 register('illegal_cc_ignore_', handleIllegalCcIgnore, 'ccHand');
 register('illegal_cc_unplay_', handleIllegalCcUnplay, 'ccHand');
 register('negation_play_', handleNegationPlay, 'ccHand');
@@ -698,7 +696,6 @@ export {
   handleCcCloseDiscard,
   handleCcDiscard,
   handleCcChoice,
-  handleSquadSelect,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
   handleNegationPlay,

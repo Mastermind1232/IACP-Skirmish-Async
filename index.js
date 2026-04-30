@@ -4671,7 +4671,6 @@ client.on('interactionCreate', async (interaction) => {
       'deployment_orient_',
       'deployment_done_',
       'auto_deploy_',
-      'squad_select_',
       'squad_confirm_',
       'squad_cancel_',
       'form_pick_',

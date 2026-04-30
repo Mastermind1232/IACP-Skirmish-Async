@@ -1,7 +1,7 @@
 /**
  * CC-hand + modals: squad_modal_, deploy_modal_, cc_attach_to_, cc_play_select_, cc_discard_select_,
  * deck_illegal_play_, deck_illegal_redo_, cc_shuffle_draw_, cc_play_, cc_draw_, cc_search_discard_,
- * cc_close_discard_, cc_discard_, squad_select_
+ * cc_close_discard_, cc_discard_
  */
 import {
   ActionRowBuilder,
@@ -1673,49 +1673,3 @@ export async function handleCcDiscard(interaction, ctx) {
   });
 }
 
-/** @param {import('discord.js').ButtonInteraction} interaction */
-export async function handleSquadSelect(interaction, ctx) {
-  const { getGame } = ctx;
-  const parts = splitCustomId(interaction.customId, 'squad_select_');
-  const gameId = parts[0];
-  const playerNum = parts[1];
-  const game = await requireGame(interaction, getGame, gameId, { useReply: true });
-  if (!game) return;
-  if (!game.mapSelected) {
-    await interaction.followUp({ content: 'Map selection must be completed before you can select your squad.', ephemeral: true });
-    return;
-  }
-  const isP1 = playerNum === '1';
-  const pn = isP1 ? 1 : 2;
-  if (!await requirePlayer(interaction, game, interaction.user.id, pn, canActAsPlayer, 'Only the owner of this hand can select a squad.')) return;
-  const modal = new ModalBuilder()
-    .setCustomId(`squad_modal_${gameId}_${playerNum}`)
-    .setTitle('Submit Squad');
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('squad_name')
-        .setLabel('Squad name')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("e.g. Vader's Fist")
-        .setRequired(false)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('squad_dc')
-        .setLabel('Deployment Cards (one per line, max 40 pts)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Darth Vader\nStormtrooper\nStormtrooper\n...')
-        .setRequired(true)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('squad_cc')
-        .setLabel('Command Cards (one per line, exactly 15)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Force Lightning\nBurst Fire\n...')
-        .setRequired(true)
-    )
-  );
-  await interaction.showModal(modal);
-}
