@@ -1187,6 +1187,12 @@ export function getValidPushDestinations(game, pushedFigureKey, pushedPlayerNum,
   if (targetSpecials.includes('spiked_boots_snowtrooper') && !opts.pusherIsMassive) {
     return [];
   }
+  // Take Position (CC): the figure is push-immune until end of round except
+  // when the pusher is MASSIVE. Round-scoped flag set in abilities.js when
+  // the card resolves; reset by ROUND_OBJECT_FLAGS at start-of-round.
+  if (game.roundPushImmuneUnlessMassive?.[pushedFigureKey] && !opts.pusherIsMassive) {
+    return [];
+  }
 
   // Figure ignores blocking if it has MOBILE or MASSIVE keyword.
   const keywords = (getDcKeywords(game)?.[dcName] || []).map((k) => String(k).toUpperCase());

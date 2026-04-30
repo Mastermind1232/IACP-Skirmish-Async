@@ -194,6 +194,7 @@ const ROUND_OBJECT_FLAGS = [
   'roundDefenseAccuracyPenalty',
   'roundMobileDefenseBonusBlock',
   'roundDefenderBonusBlockPerEvade',
+  'roundPushImmuneUnlessMassive',
   'roundTrooperAttackHitBonus',
   'roundVehicleSpeedBonus',
   'deflectionPending',

@@ -605,7 +605,8 @@
       "type": "ccEffect",
       "label": "Adjacent hostile becomes Weakened (or 2 Strain if already Weakened)",
       "chooseAdjacentHostileThen": {
-        "strain": 2
+        "strain": 2,
+        "weakenIfNotAlreadyWeakened": true
       },
       "wiredStatus": "wired"
     },
@@ -4897,8 +4898,9 @@
     },
     "Take Position": {
       "type": "ccEffect",
-      "label": "Until end of round, +1 Block when defending; push immunity per standard rules",
+      "label": "Until end of round: +1 Block when defending; cannot be pushed except by MASSIVE figures",
       "roundDefenseBonusBlock": 1,
+      "applyPushImmuneUnlessMassiveThisRound": true,
       "wiredStatus": "wired"
     },
     "take_cover_jawa_elite": {

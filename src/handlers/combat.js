@@ -1478,7 +1478,11 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.bloodFeudApplied = true;
   }
 
-  // Forward Mounted Blasters (74-Z Speeder Bike): if target in same row as both attacker spaces → reroll 1 atk die; else → -1 Hit
+  // Forward Mounted Blasters (74-Z Speeder Bike): per card text, "While
+  // attacking, if the target space occupies the same row as both of your
+  // spaces, apply +1 Hit to the attack results." No effect when target is
+  // in a different row. Old code applied a reroll instead of +1 Hit and
+  // an undocumented -1 Hit penalty when not same-row — both fixed.
   if ((getDcStats(meta.dcName).passives || []).includes('Forward Mounted Blasters')) {
     const _fmbSize = game.figureOrientations?.[attackerFigureKey] || getFigureSize(meta.dcName);
     const _fmbPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
@@ -1488,11 +1492,8 @@ export async function handleAttackTarget(interaction, ctx) {
       const _fmbTargetRow = parseCoord(_fmbTargetPos).row;
       const _fmbAllSameRow = _fmbCells.every(c => parseCoord(c).row === _fmbTargetRow);
       if (_fmbAllSameRow) {
-        game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
-        await thread.send('🎯 **Forward Mounted Blasters** — Target in same row: may reroll 1 attack die.').catch(discordCatch);
-      } else {
-        game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
-        await thread.send('⚠️ **Forward Mounted Blasters** — Target not in same row: -1 Hit applied.').catch(discordCatch);
+        game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+        await thread.send('🎯 **Forward Mounted Blasters** — Target in same row: +1 Hit applied to attack results.').catch(discordCatch);
       }
     }
   }

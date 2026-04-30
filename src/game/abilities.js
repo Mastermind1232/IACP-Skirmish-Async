@@ -4985,6 +4985,20 @@ export function resolveAbility(abilityId, context) {
         game.deflectionUnconditional[playerNum] = true;
       }
     }
+    // Take Position: push-immune-unless-MASSIVE applied to the active figure this round.
+    // Reset at end of round via ROUND_OBJECT_FLAGS (roundPushImmuneUnlessMassive).
+    if (entry.applyPushImmuneUnlessMassiveThisRound && context.dcMessageMeta) {
+      const _ppMsgId = findActiveActivationMsgId(game, playerNum, context.dcMessageMeta);
+      if (_ppMsgId) {
+        const _ppMeta = context.dcMessageMeta.get(_ppMsgId);
+        const _ppKeys = _ppMeta ? getFigureKeysForDcMsg(game, playerNum, _ppMeta) : [];
+        game.roundPushImmuneUnlessMassive = game.roundPushImmuneUnlessMassive || {};
+        for (const _ppFk of _ppKeys) {
+          game.roundPushImmuneUnlessMassive[_ppFk] = true;
+        }
+        if (_ppKeys.length) parts.push('cannot be pushed except by MASSIVE');
+      }
+    }
     return {
       applied: true,
       logMessage: `Until end of round, apply ${parts.join(' and ')} when defending.`,
@@ -5553,9 +5567,11 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     const cah = entry.chooseAdjacentHostileThen;
     const { damage = 0, selfStrain = 0, scaleStrainToRound = false } = cah;
-    const strain = scaleStrainToRound ? (game.currentRound || 1) : (cah.strain || 0);
-    const totalDamage = damage + strain;
-    const targetConditions = [
+    // Capture the Weary: target becomes Weakened. If already Weakened, suffers
+    // strain instead. Per-target check happens in applyToFigureKey below.
+    const useWeakenIfNotAlreadyWeakened = !!cah.weakenIfNotAlreadyWeakened;
+    const strainBase = scaleStrainToRound ? (game.currentRound || 1) : (cah.strain || 0);
+    const baseTargetConditions = [
       ...(cah.weaken ? ['Weaken'] : []),
       ...(cah.stun ? ['Stun'] : []),
       ...(cah.bleed ? ['Bleed'] : []),
@@ -5572,6 +5588,14 @@ export function resolveAbility(abilityId, context) {
       const targetKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
       const targetIdx = targetKeys.indexOf(targetFk);
       if (targetIdx < 0) return { applied: false, manualMessage: 'Resolve manually: could not find target figure index.' };
+      // Capture the Weary: per-target branching — if not already Weakened, apply
+      // Weaken (and skip strain). If already Weakened, fall through to strain.
+      const targetAlreadyWeakened = (game.figureConditions?.[targetFk] || []).includes('Weaken');
+      const targetConditions = useWeakenIfNotAlreadyWeakened && !targetAlreadyWeakened
+        ? [...baseTargetConditions, 'Weaken']
+        : baseTargetConditions;
+      const strain = useWeakenIfNotAlreadyWeakened && !targetAlreadyWeakened ? 0 : strainBase;
+      const totalDamage = damage + strain;
       const healthState = dcHealthState.get(targetMsgId) || [];
       const hs = healthState[targetIdx];
       if (!Array.isArray(hs) || hs.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };

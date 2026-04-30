@@ -1078,6 +1078,11 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
         const pusherEff = rushEffects?.[meta.dcName];
         if (!(pusherEff?.keywords || []).some(k => String(k).toUpperCase() === 'MASSIVE')) continue;
       }
+      // Take Position (CC): same per-round push-immunity rule, except by MASSIVE
+      if (game.roundPushImmuneUnlessMassive?.[fk]) {
+        const pusherEff = rushEffects?.[meta.dcName];
+        if (!(pusherEff?.keywords || []).some(k => String(k).toUpperCase() === 'MASSIVE')) continue;
+      }
       rushTargets.push({ figureKey: fk, dcName: rDcName });
     }
     if (rushTargets.length > 0) {
