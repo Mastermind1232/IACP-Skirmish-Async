@@ -10,7 +10,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { COLORS } from './discord/colors.js';
 import { isAiUserId } from './discord/channel-helpers.js';
-import { getDisplayNameFromId } from './discord/user-helpers.js';
+import { getDisplayNameFromId, ensurePlayersCached } from './discord/user-helpers.js';
 import { renderMap } from './map-renderer.js';
 import { getCommandCardImagePath, getDcImagePath, getFigureImagePath, resolveAssetPath, UPGRADE_IMAGE_OVERRIDES } from './asset-paths.js';
 import {
@@ -461,6 +461,7 @@ export async function getDeploymentMapAttachment(game, zone, opts = {}) {
  * @param {object} deps - { getMissionVpBonus, getHandWindowButtonRow } local helpers from index.js
  */
 export async function buildBoardMapPayload(gameId, map, game, client, { getMissionVpBonus } = {}) {
+  await ensurePlayersCached(client, game);
   const components = getBoardButtons(gameId, { game });
   const embeds = game && getMissionVpBonus ? [buildScorecardEmbed(game, getMissionVpBonus(game), client)] : (game ? [buildScorecardEmbed(game, 0, client)] : []);
   const figures = game ? getFiguresForRender(game) : [];

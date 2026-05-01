@@ -3,6 +3,7 @@
  * Handles VP checks, tiebreakers, game-over posting, and defeat-related bookkeeping.
  */
 import { fetchGameChannel, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
+import { ensurePlayersCached } from '../discord/user-helpers.js';
 import { cleanupAllSpacePicks } from '../discord/components.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 
@@ -137,6 +138,7 @@ export async function postGameOver(game, client, winnerId, reason, deps) {
   deps.pendingIllegalSquad.delete(`${game.gameId}_2`);
   deps.pendingSquadConfirm.delete(`${game.gameId}_1`);
   deps.pendingSquadConfirm.delete(`${game.gameId}_2`);
+  await ensurePlayersCached(client, game);
   const embed = deps.buildScorecardEmbed(game, deps.getMissionVpBonus(game), client);
   const content = winnerId
     ? `\uD83C\uDFC1 **GAME OVER** — <@${winnerId}> wins by ${reason}!`

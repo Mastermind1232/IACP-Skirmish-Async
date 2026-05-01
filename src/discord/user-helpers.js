@@ -27,3 +27,23 @@ export function getPlayerDisplayName(game, playerNum, client) {
   const id = playerNum === 1 ? game?.player1Id : game?.player2Id;
   return getDisplayNameFromId(client, id, `Player ${playerNum}`);
 }
+
+/**
+ * Pre-fetch both players into client.users.cache so subsequent sync
+ * getDisplayNameFromId calls resolve to real names instead of falling
+ * back to "Player 1" / "Player 2". Call from async render entry points
+ * before building scorecard / map payloads.
+ *
+ * Silently skips AI sentinel IDs and any IDs already cached. Network
+ * errors are swallowed — caller will get the fallback name on render,
+ * same as before this helper existed.
+ */
+export async function ensurePlayersCached(client, game) {
+  if (!client?.users?.fetch) return;
+  const ids = [game?.player1Id, game?.player2Id].filter(Boolean);
+  for (const id of ids) {
+    if (isAiUserId(id)) continue;
+    if (client.users.cache?.has(id)) continue;
+    try { await client.users.fetch(id); } catch { /* offline / unknown user */ }
+  }
+}
