@@ -24,8 +24,9 @@ import { ThreadAutoArchiveDuration, ChannelType } from 'discord.js';
 import { fetchGameChannel, isDiscordSnowflake } from '../discord/channel-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { getHandVisualEmbed } from '../discord/embeds.js';
-import { getCcHand, getCcDeck } from '../game/player-helpers.js';
+import { getCcHand, getCcDeck, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { buildHandDisplayPayload } from '../rendering.js';
+import { getCompanionForDc } from './activation-setup.js';
 
 /**
  * Ensure player `playerNum`'s "Your Hand" private thread exists inside their
@@ -261,4 +262,63 @@ export async function renderRoundActivationMessage(game, client, ctx = {}) {
   // Re-using it keeps the bot's invariants consistent without duplication.
   await ctx.sendRoundActivationPhaseMessage(game, client);
   return { posted: true, edited: false, msgId: game.roundActivationMessageId ?? null };
+}
+
+/**
+ * Ensure the companion DC embed for one DC slot exists when the DC has a
+ * companion (either built-in or attached via CC). Closes audit gap 6 —
+ * cross-lobby loads were missing companion play-area messages because
+ * companion creation lives in post-deploy and never runs on load.
+ *
+ * Branches:
+ *   - DC has no companion → no-op
+ *   - companionMsgId valid + Discord has it → no-op
+ *   - companionMsgId missing OR 404 → post via ctx.createCompanionDcEmbed
+ *
+ * Mutates: game[`p${playerNum}DcCompanionMessageIds`][dcIndex] via the
+ * canonical creator.
+ *
+ * @param {object} ctx - { createCompanionDcEmbed, ...embedDeps } required
+ *   for the post branch. embedDeps = { buildDcEmbedAndFiles, dcMessageMeta,
+ *   dcExhaustedState, dcHealthState, getDcPlayAreaComponents,
+ *   getNicknamesForDcMessage }
+ */
+export async function renderDcCompanion(game, playerNum, dcIndex, client, ctx = {}) {
+  const dcList = getDcList(game, playerNum) || [];
+  const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+  const companionMsgIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+
+  const dc = dcList[dcIndex];
+  const hostMsgId = dcMsgIds[dcIndex];
+  if (!dc || !hostMsgId) return { posted: false, msgId: null };
+
+  // CC attachments determine companions for some DCs (e.g. attachable
+  // companion cards). DC attachments + the DC's own data also count.
+  const ccAttachments = (game[playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments'] || {})[hostMsgId] || [];
+  const dcAttachments = (game[playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments'] || {})[hostMsgId] || [];
+  const allAttachments = [...ccAttachments, ...dcAttachments];
+  const companionInfo = getCompanionForDc(dc.dcName, allAttachments);
+  if (!companionInfo) return { posted: false, msgId: null };
+
+  const existingId = companionMsgIds?.[dcIndex];
+  if (existingId) {
+    const channel = await fetchGameChannel(client, playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId).catch(() => null);
+    if (channel) {
+      try {
+        await channel.messages.fetch(existingId);
+        return { posted: false, msgId: existingId };
+      } catch {
+        // 404 — fall through to post
+      }
+    }
+  }
+
+  if (typeof ctx.createCompanionDcEmbed !== 'function') {
+    console.warn(`[renderer] renderDcCompanion: ctx.createCompanionDcEmbed missing; cannot post for ${dc.dcName}`);
+    return { posted: false, msgId: null };
+  }
+  // Canonical creator handles dcMessageMeta registration, p_DcCompanionMessageIds
+  // assignment, exhausted/health state — same shape as the post-deploy path.
+  await ctx.createCompanionDcEmbed(game, companionInfo.companionName, playerNum, hostMsgId, client, ctx);
+  return { posted: true, msgId: companionMsgIds?.[dcIndex] ?? null };
 }

@@ -342,6 +342,11 @@ async function resolveAutoAbility(game, ability, client, logGameAction) {
 /**
  * Create a DC embed for a companion figure in the player's Play Area.
  * Mirrors the pattern from populatePlayAreas in setup-bridge.js.
+ *
+ * Exported as `createCompanionDcEmbed` (no underscore) so the checkpoint
+ * loader can call it during a post-load companion recreation pass.
+ * Internal name preserved as `_createCompanionDcEmbed` for the existing
+ * post-deploy callers.
  */
 async function _createCompanionDcEmbed(game, companionName, playerNum, hostMsgId, client, deps) {
   const {
@@ -381,6 +386,16 @@ async function _createCompanionDcEmbed(game, companionName, playerNum, hostMsgId
   if (hostIdx >= 0 && companionMsgIds) {
     companionMsgIds[hostIdx] = msg.id;
   }
+}
+
+/**
+ * Public wrapper around the internal companion-embed creator. Used by the
+ * checkpoint loader to recreate companion play-area messages for DCs that
+ * had companion attachments at save time but lost their companion msg
+ * during the cross-lobby restore.
+ */
+export async function createCompanionDcEmbed(game, companionName, playerNum, hostMsgId, client, deps) {
+  return _createCompanionDcEmbed(game, companionName, playerNum, hostMsgId, client, deps);
 }
 
 // ── Movement prompt for post-deploy figures ─────────────────────────────────

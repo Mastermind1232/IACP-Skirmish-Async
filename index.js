@@ -278,7 +278,7 @@ import {
   proceedAfterRerolls,
   sendReadyToResolveRolls,
   sendPowerTokenOverflowUI,
-  cleanupCompanionEmbedDeps,
+  cleanupCompanionEmbedDeps, createCompanionDcEmbed,
   startDeploymentAfterAttachments as _startDeploymentAfterAttachments,
 } from './src/handlers/index.js';
 import {
@@ -3447,6 +3447,7 @@ function buildAllDeps() {
     getDeploymentMapAttachment, filterValidTopLeftSpaces,
     updateDeployPromptMessages, finishSetupAttachments, reorderPlayAreaAfterAttachments,
     createPlayAreaChannels, createBoardChannel, createHandThreads,
+    createCompanionDcEmbed,
     refreshAllGameComponents, recomputeActivationCounts, repopulateDcMapsForGame, applyDirectDamageToFigure,
     getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert, sendSquadConfirmation, buildSquadConfirmText,
     runDraftRandom, getRange, hasLineOfSight, hasLineOfSightByCoord,

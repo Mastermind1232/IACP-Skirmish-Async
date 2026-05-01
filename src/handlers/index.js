@@ -16,7 +16,7 @@ import { handleInteractCancel, handleInteractChoice } from './interact.js';
 import { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, resolveStartOfRoundEffect } from './round.js';
 import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
-  cleanupCompanionEmbedDeps,
+  cleanupCompanionEmbedDeps, createCompanionDcEmbed,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamOrderPick, handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
@@ -598,7 +598,7 @@ export { handleInteractCancel, handleInteractChoice } from './interact.js';
 export { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, resolveStartOfRoundEffect } from './round.js';
 export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
-  cleanupCompanionEmbedDeps,
+  cleanupCompanionEmbedDeps, createCompanionDcEmbed,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamOrderPick, handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,

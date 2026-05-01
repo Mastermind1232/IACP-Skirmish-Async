@@ -316,8 +316,12 @@ const CONTEXT_GROUPS = {
     // the players stuck — no Shuffle/Draw button, no progression.
     'refreshAllGameComponents',
     // Loader rebuilds DC attachment + companion messages post-load (audit
-    // gap 5/6) using these on-demand helpers.
+    // gap 5/6) using these on-demand helpers + the embed deps that
+    // createCompanionDcEmbed needs internally.
     'updateAttachmentMessageForDc',
+    'createCompanionDcEmbed',
+    'buildDcEmbedAndFiles', 'dcHealthState', 'getDcPlayAreaComponents',
+    'getNicknamesForDcMessage',
   ],
 
   phaseGate: [

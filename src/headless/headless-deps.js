@@ -281,6 +281,7 @@ export function buildHeadlessDeps(options = {}) {
   const createPlayAreaChannels = noopAsync;
   const createBoardChannel = noopAsync;
   const createHandThreads = noopAsync;
+  const createCompanionDcEmbed = noopAsync;
   const createGameChannels = noopAsync;
   const applySquadSubmission = noopAsync;
   const finishSetupAttachments = noopAsync;
@@ -619,6 +620,7 @@ export function buildHeadlessDeps(options = {}) {
 
     // Setup/creation stubs
     createPlayAreaChannels, createBoardChannel, createHandThreads,
+    createCompanionDcEmbed,
     createGameChannels, applySquadSubmission, finishSetupAttachments,
     runDraftRandom, clearPreGameSetup,
     postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState,

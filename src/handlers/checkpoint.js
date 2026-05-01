@@ -35,7 +35,7 @@ import {
   countCheckpointsByUser,
 } from '../db.js';
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
-import { renderHandThread, renderHandVisual, renderHandPayload, renderRoundActivationMessage } from '../engine/renderer.js';
+import { renderHandThread, renderHandVisual, renderHandPayload, renderRoundActivationMessage, renderDcCompanion } from '../engine/renderer.js';
 
 const MAX_CHECKPOINTS_PER_USER = 50;
 const CHECKPOINT_NAME_MAX_LEN = 80;
@@ -361,6 +361,9 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
     createBoardChannel, createPlayAreaChannels, populatePlayAreas,
     buildBoardMapPayload, sendRoundActivationPhaseMessage,
     refreshAllGameComponents, updateAttachmentMessageForDc,
+    createCompanionDcEmbed, buildDcEmbedAndFiles,
+    dcMessageMeta, dcExhaustedState, dcHealthState,
+    getDcPlayAreaComponents, getNicknamesForDcMessage,
   } = ctx;
   const gameId = parseCustomId(interaction.customId, 'cp_newgame_pick_');
   const cpId = interaction.values?.[0];
@@ -405,6 +408,10 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
     await applyCheckpointToNewLobby(game, cp, client, {
       populatePlayAreas, buildBoardMapPayload, sendRoundActivationPhaseMessage, saveGames,
       refreshAllGameComponents, updateAttachmentMessageForDc,
+      // Companion-recreation deps for renderDcCompanion (gap 6).
+      createCompanionDcEmbed, buildDcEmbedAndFiles,
+      dcMessageMeta, dcExhaustedState, dcHealthState,
+      getDcPlayAreaComponents, getNicknamesForDcMessage,
     });
 
     if (settingUpMsg) settingUpMsg.delete().catch(() => {});
@@ -503,6 +510,20 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
         if (dcMsgId) {
           await deps.updateAttachmentMessageForDc(newGame, playerNum, dcMsgId, client).catch(() => {});
         }
+      }
+    }
+  }
+  // 7d. Re-create DC companion messages (audit gap 6). Iterate every DC
+  //     and let renderDcCompanion decide — no-ops for DCs without
+  //     companions, posts new companion embeds for DCs that have them
+  //     but lost their companion msg id during cross-lobby restore.
+  for (const playerNum of [1, 2]) {
+    const dcList = playerNum === 1 ? (newGame.p1DcList || []) : (newGame.p2DcList || []);
+    for (let i = 0; i < dcList.length; i++) {
+      try {
+        await renderDcCompanion(newGame, playerNum, i, client, deps);
+      } catch (err) {
+        console.error(`[loader] renderDcCompanion failed for player ${playerNum} index ${i}:`, err.message);
       }
     }
   }
