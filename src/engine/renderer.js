@@ -23,6 +23,8 @@
 import { ThreadAutoArchiveDuration, ChannelType } from 'discord.js';
 import { fetchGameChannel, isDiscordSnowflake } from '../discord/channel-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { getHandVisualEmbed } from '../discord/embeds.js';
+import { getCcHand } from '../game/player-helpers.js';
 
 /**
  * Ensure player `playerNum`'s "Your Hand" private thread exists inside their
@@ -90,4 +92,54 @@ export async function renderHandThread(game, playerNum, client, _ctx) {
 
   game[handIdField] = thread.id;
   return { created: true, threadId: thread.id };
+}
+
+/**
+ * Ensure player `playerNum`'s hand-visual message in the play area shows the
+ * current hand size. Embed-only (no components, no files) so edit-vs-post is
+ * cheap.
+ *
+ * Branches:
+ *   - msgId valid + Discord has it → edit embed to current count
+ *   - msgId missing OR 404 → post fresh, store new id
+ *
+ * Mutates: game[`p${playerNum}HandVisualMessageId`] on creation.
+ *
+ * @param {object} game
+ * @param {1|2} playerNum
+ * @param {import('discord.js').Client} client
+ * @param {object} [_ctx] - reserved
+ * @returns {Promise<{ posted: boolean, edited: boolean, msgId: string | null }>}
+ */
+export async function renderHandVisual(game, playerNum, client, _ctx) {
+  const msgIdField = playerNum === 1 ? 'p1HandVisualMessageId' : 'p2HandVisualMessageId';
+  const playAreaIdField = playerNum === 1 ? 'p1PlayAreaId' : 'p2PlayAreaId';
+
+  const playAreaId = game[playAreaIdField];
+  if (!playAreaId) {
+    console.warn(`[renderer] renderHandVisual: game ${game.gameId} missing ${playAreaIdField}; skipping player ${playerNum}`);
+    return { posted: false, edited: false, msgId: null };
+  }
+  const channel = await fetchGameChannel(client, playAreaId).catch(() => null);
+  if (!channel) {
+    console.warn(`[renderer] renderHandVisual: play area ${playAreaId} not found; skipping player ${playerNum}`);
+    return { posted: false, edited: false, msgId: null };
+  }
+
+  const handLength = (getCcHand(game, playerNum) || []).length;
+  const embed = getHandVisualEmbed(handLength);
+
+  const existingId = game[msgIdField];
+  if (existingId) {
+    try {
+      const msg = await channel.messages.fetch(existingId);
+      await msg.edit({ embeds: [embed] }).catch(discordCatch);
+      return { posted: false, edited: true, msgId: existingId };
+    } catch {
+      // 404 — fall through to post
+    }
+  }
+  const newMsg = await channel.send({ embeds: [embed] });
+  game[msgIdField] = newMsg.id;
+  return { posted: true, edited: false, msgId: newMsg.id };
 }

@@ -35,7 +35,7 @@ import {
   countCheckpointsByUser,
 } from '../db.js';
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
-import { renderHandThread } from '../engine/renderer.js';
+import { renderHandThread, renderHandVisual } from '../engine/renderer.js';
 
 const MAX_CHECKPOINTS_PER_USER = 50;
 const CHECKPOINT_NAME_MAX_LEN = 80;
@@ -464,6 +464,16 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
   if (deps.populatePlayAreas) {
     await deps.populatePlayAreas(newGame, client, { loadFromState: true });
   }
+  // 7b. Renderer "ensure correctness" pass — each surface migrated to the
+  //     renderer (see project_renderer_consolidation_plan.md) gets verified
+  //     here. populatePlayAreas already posted these in the common case;
+  //     the renderer is idempotent for the existing-and-correct case and
+  //     plugs the gap when populatePlayAreas missed (e.g. cross-lobby load
+  //     where a surface's setup path didn't run).
+  await renderHandThread(newGame, 1, client);
+  await renderHandThread(newGame, 2, client);
+  await renderHandVisual(newGame, 1, client);
+  await renderHandVisual(newGame, 2, client);
   // 8. Remap all msgId-keyed game-state fields from old → new.
   remapMsgIdKeyedFields(newGame, oldP1DcIds, oldP2DcIds);
   // 9. Repopulate side-channel Maps from the freshly-rendered DC messages.
