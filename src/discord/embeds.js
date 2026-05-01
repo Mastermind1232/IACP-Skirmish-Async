@@ -3,6 +3,7 @@ import { getPlayerId, getCcDeck, getDcList, getSquad, getInitiativePlayerNum } f
 import { enforceContentLimit, DISCORD_EMBED_FIELD_LIMIT } from './limits.js';
 import { COLORS } from './colors.js';
 import { isAiUserId } from './channel-helpers.js';
+import { getDisplayNameFromId } from './user-helpers.js';
 
 /**
  * Initiative zone label for scorecard (e.g. "[RED] P1 has the initiative!").
@@ -23,8 +24,9 @@ export function getInitiativePlayerZoneLabel(game) {
  * Build Scorecard embed with VP breakdown per player. Initiative shown via bullet row (no token image).
  * @param {object} game
  * @param {{ p1: number, p2: number }} [missionBonus] - Optional mission-specific VP bonus (crate deployment, patron tokens, etc.)
+ * @param {object} [client] - Discord client; used to resolve player names. Falls back to "Player N" when omitted.
  */
-export function buildScorecardEmbed(game, missionBonus) {
+export function buildScorecardEmbed(game, missionBonus, client) {
   const vp1 = game.player1VP || { total: 0, kills: 0, objectives: 0 };
   const vp2 = game.player2VP || { total: 0, kills: 0, objectives: 0 };
   const bonus1 = missionBonus?.p1 || 0;
@@ -32,6 +34,8 @@ export function buildScorecardEmbed(game, missionBonus) {
   const total1 = vp1.total + bonus1;
   const total2 = vp2.total + bonus2;
   const p1HasInitiative = game.initiativeDetermined && getInitiativePlayerNum(game) === 1;
+  const p1Name = getDisplayNameFromId(client, game.player1Id, 'Player 1');
+  const p2Name = getDisplayNameFromId(client, game.player2Id, 'Player 2');
 
   // Single-line-per-stat layout: works on both desktop and mobile (no inline columns)
   const totalLabel = (bonus1 || bonus2)
@@ -39,7 +43,7 @@ export function buildScorecardEmbed(game, missionBonus) {
     : `**P1:** ${total1} \u2003 **P2:** ${total2}`;
   const roundLabel = game.currentRound ? `Round ${game.currentRound}` : '';
   const fields = [
-    { name: 'Players', value: `**P1:** <@${game.player1Id}>\n**P2:** <@${game.player2Id}>`, inline: false },
+    { name: 'Players', value: `**P1:** ${p1Name}\n**P2:** ${p2Name}`, inline: false },
     { name: 'Total VP', value: totalLabel, inline: false },
     { name: 'Kill VP', value: `**P1:** ${vp1.kills} \u2003 **P2:** ${vp2.kills}`, inline: false },
     { name: 'Objective VP', value: `**P1:** ${vp1.objectives} \u2003 **P2:** ${vp2.objectives}`, inline: false },
@@ -48,8 +52,8 @@ export function buildScorecardEmbed(game, missionBonus) {
   if (game.initiativeDetermined) {
     const zoneLabel = getInitiativePlayerZoneLabel(game);
     const initiativeValue = p1HasInitiative
-      ? `● ${zoneLabel}P1 <@${game.player1Id}> has the initiative!`
-      : `● ${zoneLabel}P2 <@${game.player2Id}> has the initiative!`;
+      ? `● ${zoneLabel}P1 ${p1Name} has the initiative!`
+      : `● ${zoneLabel}P2 ${p2Name} has the initiative!`;
     fields.push({ name: 'Initiative', value: initiativeValue, inline: false });
   }
 

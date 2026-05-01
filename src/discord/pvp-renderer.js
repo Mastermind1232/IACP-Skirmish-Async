@@ -58,7 +58,7 @@ export async function renderBoardState(game, opts = {}) {
 
   // Scorecard embed
   const missionBonus = getMissionVpBonus ? getMissionVpBonus(game) : null;
-  const scorecardEmbed = game ? buildScorecardEmbed(game, missionBonus || 0) : null;
+  const scorecardEmbed = game ? buildScorecardEmbed(game, missionBonus || 0, client) : null;
   const embeds = scorecardEmbed ? [scorecardEmbed] : [];
 
   // Army summary embed (both players' DCs with health)

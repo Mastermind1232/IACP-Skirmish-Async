@@ -3168,7 +3168,7 @@ client.on('messageCreate', async (message) => {
           const messages = await boardChannel.messages.fetch({ limit: 15 });
           const withScorecard = messages.find((m) => m.embeds?.[0]?.title === 'Scorecard');
           if (withScorecard) {
-            const embed = buildScorecardEmbed(game, getMissionVpBonus(game));
+            const embed = buildScorecardEmbed(game, getMissionVpBonus(game), message.client);
             await withScorecard.edit({ embeds: [embed] }).catch(discordCatch);
           }
         } catch (err) {

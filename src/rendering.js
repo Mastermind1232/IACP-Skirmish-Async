@@ -462,7 +462,7 @@ export async function getDeploymentMapAttachment(game, zone, opts = {}) {
  */
 export async function buildBoardMapPayload(gameId, map, game, client, { getMissionVpBonus } = {}) {
   const components = getBoardButtons(gameId, { game });
-  const embeds = game && getMissionVpBonus ? [buildScorecardEmbed(game, getMissionVpBonus(game))] : (game ? [buildScorecardEmbed(game, 0)] : []);
+  const embeds = game && getMissionVpBonus ? [buildScorecardEmbed(game, getMissionVpBonus(game), client)] : (game ? [buildScorecardEmbed(game, 0, client)] : []);
   const figures = game ? getFiguresForRender(game) : [];
   const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token', game?.signalMarkerStrain, game?.fluctuationPositions, buildLabelCountsFromGame(game));
   const hasFigures = figures.length > 0;
