@@ -15,7 +15,7 @@ import { requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
-import { clearPendingBoltslinger, clearPendingHeavyFire, clearPendingWantonDestruction } from '../game/interrupts.js';
+import { clearPendingBoltslinger, clearPendingHeavyFire, clearPendingWantonDestruction, clearPendingHavocShot, clearPendingFightingKnife, clearPendingSpreadThePain, clearPendingDeflect, clearPendingDurasteelFistPush } from '../game/interrupts.js';
 
 // ── Internal helpers ─────────────────────────────
 
@@ -89,7 +89,7 @@ async function advanceSpreadThePain(game, pending, ctx) {
   const thread = await fetchCombatThread(client, pending.combatThreadId);
   if (!thread) { await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client); saveGames(); return; }
   if (pending.conditionIdx >= pending.conditions.length) {
-    delete game.pendingSpreadThePain;
+    clearPendingSpreadThePain(game);
     await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
     saveGames();
     return;
@@ -111,7 +111,7 @@ async function advanceSpreadThePain(game, pending, ctx) {
     }
   }
   if (figuresAtSpaces.length === 0) {
-    delete game.pendingSpreadThePain;
+    clearPendingSpreadThePain(game);
     await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
     saveGames();
     return;
@@ -392,7 +392,7 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   if (!target) return;
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  delete game.pendingFightingKnife;
+  clearPendingFightingKnife(game);
   // Roll 1 red die
   const die = rollSingleAttackDie('red');
   const hits = die.dmg || 0;
@@ -445,7 +445,7 @@ export async function handleFightingKnifeSkip(interaction, ctx) {
   const pending = game.pendingFightingKnife;
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  delete game.pendingFightingKnife;
+  clearPendingFightingKnife(game);
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames();
@@ -494,7 +494,7 @@ export async function handleDurasteelPush(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const { prevPos, newPos } = pushFigure(game, pending.targetPlayerNum, pending.targetFigureKey, space) || {};
   await logGameAction(game, client, `**Durasteel Fist** — Pushed **${pending.targetDcName}** from ${String(prevPos).toUpperCase()} to **${String(newPos).toUpperCase()}**.`, { phase: 'ACTIVATION', icon: 'activate' });
-  delete game.pendingDurasteelFistPush;
+  clearPendingDurasteelFistPush(game);
   saveGames();
 }
 
@@ -908,7 +908,7 @@ export async function handleHavocShotSkip(interaction, ctx) {
   const m = interaction.customId.match(/^havoc_shot_skip_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
-  if (game) delete game.pendingHavocShot;
+  if (game) clearPendingHavocShot(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
@@ -950,7 +950,7 @@ export async function handleHavocShotPick(interaction, ctx) {
     const rows2 = chunkButtonsToRows(btns2);
     await interaction.message.edit({ content: `**Havoc Shot** — ${remaining} pick(s) remaining:`, components: rows2 }).catch(discordCatch);
   } else {
-    delete game.pendingHavocShot;
+    clearPendingHavocShot(game);
     await interaction.message.edit({ content: `**Havoc Shot** — Complete.`, components: [] }).catch(discordCatch);
   }
   saveGames();
@@ -962,7 +962,7 @@ export async function handleHavocShotDone(interaction, ctx) {
   const m = interaction.customId.match(/^havoc_shot_done_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
-  if (game) delete game.pendingHavocShot;
+  if (game) clearPendingHavocShot(game);
   await interaction.message.edit({ content: `**Havoc Shot** — Complete.`, components: [] }).catch(discordCatch);
   saveGames();
 }
@@ -991,7 +991,7 @@ export async function handleDeflectPick(interaction, ctx) {
   if (dfThread) await dfThread.send(`**Deflect** — **${df.deflectorDcName}**: **${target.label}** suffers 1 Damage.`).catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Deflect** — **${df.deflectorDcName}** redirects 1 Damage to **${target.label}**.`, { phase: 'ROUND', icon: 'attack' });
-  delete game.pendingDeflect;
+  clearPendingDeflect(game);
   saveGames();
 }
 
@@ -1001,7 +1001,7 @@ export async function handleDeflectSkip(interaction, ctx) {
   const m = interaction.customId.match(/^deflect_skip_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
-  if (game) delete game.pendingDeflect;
+  if (game) clearPendingDeflect(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }

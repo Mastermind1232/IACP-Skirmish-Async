@@ -13,7 +13,7 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { resolveStartOfRoundEffect } from './round.js';
-import { clearPendingLastResort } from '../game/interrupts.js';
+import { clearPendingLastResort, clearPendingPunishingStrike } from '../game/interrupts.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
@@ -921,7 +921,7 @@ export async function handlePunishingStrike(interaction, ctx) {
   }
 
   if (choice === 'skip') {
-    delete game.pendingPunishingStrike;
+    clearPendingPunishingStrike(game);
     await interaction.message.edit({ content: `**Punishing Strike** — Skipped. **${originalCondition}** remains on **${dcNameFromFigureKey(targetFigureKey)}**.`, components: [] }).catch(discordCatch);
     saveGames();
     return;
@@ -937,7 +937,7 @@ export async function handlePunishingStrike(interaction, ctx) {
   applyCondition(game, targetFigureKey, choice);
 
   const targetName = dcNameFromFigureKey(targetFigureKey);
-  delete game.pendingPunishingStrike;
+  clearPendingPunishingStrike(game);
   await interaction.message.edit({ content: `**Punishing Strike** — Exhausted: replaced **${originalCondition}** with **${choice}** on **${targetName}**.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**[Punishing Strike]** — Replaced **${originalCondition}** with **${choice}** on **${targetName}**.`, { phase: 'ROUND', icon: 'card' });
   saveGames();

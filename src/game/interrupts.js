@@ -74,6 +74,24 @@ export const INTERRUPT_TYPES = Object.freeze({
   WANTON_DESTRUCTION:    'wanton-destruction',
   TOKEN_DISTRIBUTION:    'token-distribution',
   ILLEGAL_CC_PLAY:       'illegal-cc-play',
+  MASSIVE_PUSH:          'massive-push',
+  IT_WILL_BE_ALRIGHT:    'it-will-be-alright',
+  HAVOC_SHOT:            'havoc-shot',
+  GENERALS_ORDERS:       'generals-orders',
+  COORDINATED_RAID:      'coordinated-raid',
+  EXECUTIVE_ORDER:       'executive-order',
+  FIGHTING_KNIFE:        'fighting-knife',
+  FIELD_TACTICS:         'field-tactics',
+  THERE_IS_NO_TRY:       'there-is-no-try',
+  SPREAD_THE_PAIN:       'spread-the-pain',
+  PUNISHING_STRIKE:      'punishing-strike',
+  POWER_CONVERTER:       'power-converter',
+  DEFLECT:               'deflect',
+  CONSPIRE:              'conspire',
+  DIO_FOLLOW:            'dio-follow',
+  EXTRA_PROTECTION:      'extra-protection',
+  DURASTEEL_FIST_PUSH:   'durasteel-fist-push',
+  ZILLO_DISCARD:         'zillo-discard',
 
   // Post-deploy abilities
   POST_DEPLOY_QUEUE:     'post-deploy-queue',
@@ -338,6 +356,60 @@ export function clearPendingTokenDistribution(game) { _clearDual(game, 'pendingT
 
 export function setPendingIllegalCcPlay(game, payload) { _setDual(game, 'pendingIllegalCcPlay', INTERRUPT_TYPES.ILLEGAL_CC_PLAY, payload); }
 export function clearPendingIllegalCcPlay(game) { _clearDual(game, 'pendingIllegalCcPlay', INTERRUPT_TYPES.ILLEGAL_CC_PLAY); }
+
+export function setPendingMassivePush(game, payload) { _setDual(game, 'pendingMassivePush', INTERRUPT_TYPES.MASSIVE_PUSH, payload); }
+export function clearPendingMassivePush(game) { _clearDual(game, 'pendingMassivePush', INTERRUPT_TYPES.MASSIVE_PUSH); }
+
+export function setPendingItWillBeAlright(game, payload) { _setDual(game, 'pendingItWillBeAlright', INTERRUPT_TYPES.IT_WILL_BE_ALRIGHT, payload); }
+export function clearPendingItWillBeAlright(game) { _clearDual(game, 'pendingItWillBeAlright', INTERRUPT_TYPES.IT_WILL_BE_ALRIGHT); }
+
+export function setPendingHavocShot(game, payload) { _setDual(game, 'pendingHavocShot', INTERRUPT_TYPES.HAVOC_SHOT, payload); }
+export function clearPendingHavocShot(game) { _clearDual(game, 'pendingHavocShot', INTERRUPT_TYPES.HAVOC_SHOT); }
+
+export function setPendingGeneralsOrders(game, payload) { _setDual(game, 'pendingGeneralsOrders', INTERRUPT_TYPES.GENERALS_ORDERS, payload); }
+export function clearPendingGeneralsOrders(game) { _clearDual(game, 'pendingGeneralsOrders', INTERRUPT_TYPES.GENERALS_ORDERS); }
+
+export function setPendingCoordinatedRaid(game, payload) { _setDual(game, 'pendingCoordinatedRaid', INTERRUPT_TYPES.COORDINATED_RAID, payload); }
+export function clearPendingCoordinatedRaid(game) { _clearDual(game, 'pendingCoordinatedRaid', INTERRUPT_TYPES.COORDINATED_RAID); }
+
+export function setPendingExecutiveOrder(game, payload) { _setDual(game, 'pendingExecutiveOrder', INTERRUPT_TYPES.EXECUTIVE_ORDER, payload); }
+export function clearPendingExecutiveOrder(game) { _clearDual(game, 'pendingExecutiveOrder', INTERRUPT_TYPES.EXECUTIVE_ORDER); }
+
+export function setPendingFightingKnife(game, payload) { _setDual(game, 'pendingFightingKnife', INTERRUPT_TYPES.FIGHTING_KNIFE, payload); }
+export function clearPendingFightingKnife(game) { _clearDual(game, 'pendingFightingKnife', INTERRUPT_TYPES.FIGHTING_KNIFE); }
+
+export function setPendingFieldTactics(game, payload) { _setDual(game, 'pendingFieldTactics', INTERRUPT_TYPES.FIELD_TACTICS, payload); }
+export function clearPendingFieldTactics(game) { _clearDual(game, 'pendingFieldTactics', INTERRUPT_TYPES.FIELD_TACTICS); }
+
+export function setPendingThereIsNoTry(game, payload) { _setDual(game, 'pendingThereIsNoTry', INTERRUPT_TYPES.THERE_IS_NO_TRY, payload); }
+export function clearPendingThereIsNoTry(game) { _clearDual(game, 'pendingThereIsNoTry', INTERRUPT_TYPES.THERE_IS_NO_TRY); }
+
+export function setPendingSpreadThePain(game, payload) { _setDual(game, 'pendingSpreadThePain', INTERRUPT_TYPES.SPREAD_THE_PAIN, payload); }
+export function clearPendingSpreadThePain(game) { _clearDual(game, 'pendingSpreadThePain', INTERRUPT_TYPES.SPREAD_THE_PAIN); }
+
+export function setPendingPunishingStrike(game, payload) { _setDual(game, 'pendingPunishingStrike', INTERRUPT_TYPES.PUNISHING_STRIKE, payload); }
+export function clearPendingPunishingStrike(game) { _clearDual(game, 'pendingPunishingStrike', INTERRUPT_TYPES.PUNISHING_STRIKE); }
+
+export function setPendingPowerConverter(game, payload) { _setDual(game, 'pendingPowerConverter', INTERRUPT_TYPES.POWER_CONVERTER, payload); }
+export function clearPendingPowerConverter(game) { _clearDual(game, 'pendingPowerConverter', INTERRUPT_TYPES.POWER_CONVERTER); }
+
+export function setPendingDeflect(game, payload) { _setDual(game, 'pendingDeflect', INTERRUPT_TYPES.DEFLECT, payload); }
+export function clearPendingDeflect(game) { _clearDual(game, 'pendingDeflect', INTERRUPT_TYPES.DEFLECT); }
+
+export function setPendingConspire(game, payload) { _setDual(game, 'pendingConspire', INTERRUPT_TYPES.CONSPIRE, payload); }
+export function clearPendingConspire(game) { _clearDual(game, 'pendingConspire', INTERRUPT_TYPES.CONSPIRE); }
+
+export function setPendingDioFollow(game, payload) { _setDual(game, 'pendingDioFollow', INTERRUPT_TYPES.DIO_FOLLOW, payload); }
+export function clearPendingDioFollow(game) { _clearDual(game, 'pendingDioFollow', INTERRUPT_TYPES.DIO_FOLLOW); }
+
+export function setPendingExtraProtection(game, payload) { _setDual(game, 'pendingExtraProtection', INTERRUPT_TYPES.EXTRA_PROTECTION, payload); }
+export function clearPendingExtraProtection(game) { _clearDual(game, 'pendingExtraProtection', INTERRUPT_TYPES.EXTRA_PROTECTION); }
+
+export function setPendingDurasteelFistPush(game, payload) { _setDual(game, 'pendingDurasteelFistPush', INTERRUPT_TYPES.DURASTEEL_FIST_PUSH, payload); }
+export function clearPendingDurasteelFistPush(game) { _clearDual(game, 'pendingDurasteelFistPush', INTERRUPT_TYPES.DURASTEEL_FIST_PUSH); }
+
+export function setPendingZilloDiscard(game, payload) { _setDual(game, 'pendingZilloDiscard', INTERRUPT_TYPES.ZILLO_DISCARD, payload); }
+export function clearPendingZilloDiscard(game) { _clearDual(game, 'pendingZilloDiscard', INTERRUPT_TYPES.ZILLO_DISCARD); }
 
 /**
  * MISSION_SOR_REVEAL — boolean flag, not a payload. Set/clear toggle.

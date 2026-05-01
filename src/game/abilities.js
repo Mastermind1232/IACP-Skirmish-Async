@@ -7,7 +7,7 @@ import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { reduceHp, healHp } from './damage-helpers.js';
-import { setPendingFalseOrders } from './interrupts.js';
+import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 
@@ -942,7 +942,7 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
-        game.pendingExecutiveOrder = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+        setPendingExecutiveOrder(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Executive Order** — **${chosenName}** may interrupt to perform a free move or attack (no action cost). Use their **Move** or **Attack** button.` };
@@ -1190,7 +1190,7 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
-        game.pendingCoordinatedRaid = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+        setPendingCoordinatedRaid(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
@@ -1227,7 +1227,7 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
-        game.pendingCoordinatedRaid = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+        setPendingCoordinatedRaid(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
@@ -1240,7 +1240,7 @@ export function resolveAbility(abilityId, context) {
     if (otherGroupFigures.length === 1) {
       // Auto-select the only other figure
       const onlyFk = otherGroupFigures[0];
-      game.pendingCoordinatedRaid = { forMsgId: msgId, chosenFigureKey: onlyFk, triggeredByMsgId: msgId };
+      setPendingCoordinatedRaid(game, { forMsgId: msgId, chosenFigureKey: onlyFk, triggeredByMsgId: msgId });
       const chosenName = dcNameFromFigureKey(onlyFk);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
     }

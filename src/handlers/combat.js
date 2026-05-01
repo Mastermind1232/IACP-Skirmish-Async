@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid } from '../game/interrupts.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
@@ -1186,16 +1186,16 @@ export async function handleAttackTarget(interaction, ctx) {
     } else if (isEmperorFreeAttack) {
       delete game.pendingEmperorInterrupt;
     } else if (isExecOrderFreeAttack) {
-      delete game.pendingExecutiveOrder;
+      clearPendingExecutiveOrder(game);
     } else if (isBombardmentFreeAttack) {
       delete game.pendingBombardmentSorin;
     } else if (isFiringSquadFreeAttack) {
       game.pendingFiringSquad = (game.pendingFiringSquad || []).filter(p => p.forMsgId !== msgId);
       if (game.pendingFiringSquad.length === 0) delete game.pendingFiringSquad;
     } else if (isCoordinatedRaidFreeAttack) {
-      delete game.pendingCoordinatedRaid;
+      clearPendingCoordinatedRaid(game);
     } else if (isFieldTacticsFreeAttack) {
-      delete game.pendingFieldTactics;
+      clearPendingFieldTactics(game);
     } else {
       actionsData.remaining = Math.max(0, actionsData.remaining - 1);
       await updateDcActionsMessage(game, msgId, interaction.client);
@@ -2853,7 +2853,7 @@ export async function handleCombatRoll(interaction, ctx) {
       const _tintStats = ctx.getDcStats?.(_tintDefDcName) || {};
       const _tintAllKws = [...(_tintStats.keywords || []), ...(_tintStats.traits || [])].map((k) => String(k).toUpperCase());
       if (_tintAllKws.includes('REBEL') && _tintAllKws.includes('FORCE USER')) {
-        game.pendingThereIsNoTry = { defenderPlayerNum };
+        setPendingThereIsNoTry(game, { defenderPlayerNum });
         const _tintDice = combat.defenseDiceResults || [];
         const _tintBtns = _tintDice.map((d, i) =>
           new ButtonBuilder()
@@ -3188,7 +3188,7 @@ export async function handleCombatRoll(interaction, ctx) {
         combat.pcPendingAtkRerolls = atkRerolls;
         combat.pcPendingDefRerolls = defRerolls;
         combat.powerConverterChecked = true;
-        game.pendingPowerConverter = { gameId };
+        setPendingPowerConverter(game, { gameId });
         // Send prompt to attacker's hand channel
         const _pcHandId = attackerPlayerNum === 1 ? game.p1HandId : game.p2HandId;
         if (_pcHandId) {
@@ -5005,7 +5005,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         // Privacy: post a Yes/No prompt in the combat thread (no card names),
         // then if Yes the defender gets a private card picker in their hand
         // channel. Avoids leaking the defender's hand to the attacker.
-        game.pendingZilloDiscard = { defenderPN: _ztDefPN, combatThreadId: thread.id };
+        setPendingZilloDiscard(game, { defenderPN: _ztDefPN, combatThreadId: thread.id });
         const _ztYesNoRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`zillo_use_yes_${game.gameId}`)
@@ -6818,7 +6818,7 @@ export async function handleZilloDiscard(interaction, ctx) {
   }
   const thread = await fetchCombatThread(client, combat.combatThreadId);
   if (isSkip) {
-    delete game.pendingZilloDiscard;
+    clearPendingZilloDiscard(game);
     await interaction.message.edit({ content: '**Zillo Technique** — Skipped (+1 Block).', components: [] }).catch(discordCatch);
   } else {
     const defPN = pending.defenderPN;
@@ -6832,7 +6832,7 @@ export async function handleZilloDiscard(interaction, ctx) {
       game[discKey] = game[discKey] || [];
       game[discKey].push(cardName);
       combat.bonusBlock = (combat.bonusBlock || 0) + 1;
-      delete game.pendingZilloDiscard;
+      clearPendingZilloDiscard(game);
       await interaction.message.edit({ content: `**Zillo Technique** — Discarded **${cardName}**: +1 Block applied to defense.`, components: [] }).catch(discordCatch);
       if (thread) await thread.send(`**Zillo Technique** — Defender discarded **${cardName}** for **+1 Block**.`).catch(discordCatch);
     }

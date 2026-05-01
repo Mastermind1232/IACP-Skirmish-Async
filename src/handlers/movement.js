@@ -13,7 +13,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
 import { detectAttachedTrigger, applyDioFollow } from '../game/attached-dio-helpers.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
-import { setPendingRushPush, setPendingShoulderRush } from '../game/interrupts.js';
+import { setPendingRushPush, setPendingShoulderRush, setPendingMassivePush, clearPendingMassivePush, setPendingDioFollow, clearPendingDioFollow } from '../game/interrupts.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -33,7 +33,7 @@ function _cleanupMoveState(game, moveKey, msgId) {
  */
 async function _showMassivePushPicker(game, choice, interaction, client, logGameAction, buildBoardMapPayload, saveGames) {
   const pending = game.pendingMassivePush;
-  if (!pending || !choice) { delete game.pendingMassivePush; return; }
+  if (!pending || !choice) { clearPendingMassivePush(game); return; }
   const { validSpaces, controllerPlayerNum } = choice;
   pending._currentControllerPlayerNum = controllerPlayerNum;
   pending._currentValidSpaces = validSpaces;
@@ -51,7 +51,7 @@ async function _showMassivePushPicker(game, choice, interaction, client, logGame
  */
 async function _showMassivePushFigurePicker(game, figurePick, interaction, client, saveGames) {
   const pending = game.pendingMassivePush;
-  if (!pending || !figurePick) { delete game.pendingMassivePush; return; }
+  if (!pending || !figurePick) { clearPendingMassivePush(game); return; }
   const { pickable, controllerPlayerNum } = figurePick;
   pending._currentControllerPlayerNum = controllerPlayerNum;
   pending._currentPickable = pickable.map((e) => ({
@@ -146,7 +146,7 @@ async function _dispatchNextMassivePush(game, result, interaction, ctx) {
   const { client, logGameAction, buildBoardMapPayload, saveGames } = ctx;
   if (result.done) {
     const gameId = game.pendingMassivePush?.gameId || game.gameId;
-    delete game.pendingMassivePush;
+    clearPendingMassivePush(game);
     if (game.boardId && game.selectedMap && buildBoardMapPayload) {
       try {
         const boardChannel = await fetchGameChannel(client, game.boardId);
@@ -963,7 +963,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       await logGameAction(game, client, `Massive figure displaced ${pending.totalDisplaced} figure(s). Movement locked for this phase.`, { icon: 'move', phase: 'ROUND' });
       if (!result.done) {
         // Store pending state for interactive resolution
-        game.pendingMassivePush = { ...pending, gameId: game.gameId };
+        setPendingMassivePush(game, { ...pending, gameId: game.gameId });
         await _dispatchNextMassivePush(game, result, interaction, ctx);
       }
     }
@@ -1229,12 +1229,12 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     const _attachedTrigger = detectAttachedTrigger(game, playerNum, meta.dcName, startCoord, newTopLeft, path);
     if (_attachedTrigger) {
       const { dioFigureKey: _dioFk, dioPos: _dioPos, adjacencies: _dioAdj, defaultFollowSpace: _dioDefaultSpace } = _attachedTrigger;
-      game.pendingDioFollow = {
+      setPendingDioFollow(game, {
         dioFigureKey: _dioFk,
         dioPlayerNum: playerNum,
         currentSpace: _dioPos,
         followSpace: _dioDefaultSpace,
-      };
+      });
       const _dioOwnerId = getPlayerId(game, playerNum);
       const _dioSpaceBtns = _dioAdj.slice(0, 19).map(s =>
         new ButtonBuilder()
@@ -1441,7 +1441,7 @@ export async function handleDioFollowPick(interaction, ctx) {
   // Move Dio to the chosen space
   const { dioFigureKey, dioPlayerNum, currentSpace } = pending;
   applyDioFollow(game, dioFigureKey, dioPlayerNum, space);
-  delete game.pendingDioFollow;
+  clearPendingDioFollow(game);
 
   await interaction.message.edit({ content: `**Attached** — **Dio** moved from **${currentSpace.toUpperCase()}** to **${space.toUpperCase()}** (following Iden Versio).`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Attached** — **Dio** moved to **${space.toUpperCase()}** (following Iden Versio).`, { phase: 'ROUND', icon: 'move' });
@@ -1461,7 +1461,7 @@ export async function handleDioStay(interaction, ctx) {
 
   try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
 
-  delete game.pendingDioFollow;
+  clearPendingDioFollow(game);
   await interaction.message.edit({ content: `**Attached** — **Dio** stays put.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Attached** — Dio chose to stay (did not follow Iden).`, { phase: 'ROUND', icon: 'skip' });
   saveGames();

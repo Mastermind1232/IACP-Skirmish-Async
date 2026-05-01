@@ -6,7 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
 import { finalizeActivation, getCompanionForDc, formatCompanionStats } from '../engine/activation-setup.js';
 import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
-import { clearPendingTokenDistribution } from '../game/interrupts.js';
+import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, setPendingFieldTactics, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush } from '../game/interrupts.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
@@ -84,7 +84,7 @@ async function maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, clien
     const chosenFk = validTargets[0];
     const chosenMsgId = findDcMsgIdForFigure ? findDcMsgIdForFigure(gameId, meta.playerNum, chosenFk) : null;
     if (chosenMsgId) {
-      game.pendingFieldTactics = { forMsgId: chosenMsgId, chosenFigureKey: chosenFk, triggeredByMsgId: dcMsgId };
+      setPendingFieldTactics(game, { forMsgId: chosenMsgId, chosenFigureKey: chosenFk, triggeredByMsgId: dcMsgId });
     }
     game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
     game.roundFigureAbilityUsed[ftRoundKey] = true;
@@ -1375,7 +1375,7 @@ export async function handleActPassive(interaction, ctx) {
     if (!pending) return;
     if (choice === 'done') {
       await interaction.message.edit({ content: `🎖️ **General's Orders** — Done (${pending.chosen.length} figure${pending.chosen.length !== 1 ? 's' : ''} granted MP).`, components: [] }).catch(discordCatch);
-      delete game.pendingGeneralsOrders;
+      clearPendingGeneralsOrders(game);
     } else {
       const targetFk = choice;
       const targetDcName = dcNameFromFigureKey(targetFk);
@@ -1393,7 +1393,7 @@ export async function handleActPassive(interaction, ctx) {
       await logGameAction?.(game, client, `**General's Orders** — ${targetDcName} gained 2 MP.`, { phase: 'ACTIVATION', icon: 'activate' });
       if (pending.remaining <= 0) {
         await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. All picks used.`, components: [] }).catch(discordCatch);
-        delete game.pendingGeneralsOrders;
+        clearPendingGeneralsOrders(game);
       } else {
         // Show remaining figure choices (exclude already chosen)
         const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
@@ -1411,7 +1411,7 @@ export async function handleActPassive(interaction, ctx) {
           await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. Pick figure ${2 - pending.remaining + 1} of 2:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
         } else {
           await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. No more eligible figures.`, components: [] }).catch(discordCatch);
-          delete game.pendingGeneralsOrders;
+          clearPendingGeneralsOrders(game);
         }
       }
     }
@@ -1593,14 +1593,14 @@ export async function handleActPassive(interaction, ctx) {
               resultParts.push(`Surge — pushed **${targetDcName}** ${prevPos?.toUpperCase()} → ${String(newPos).toUpperCase()}`);
             } else {
               // 2+ options — set up pending state + button picker.
-              game.pendingDurasteelFistPush = {
+              setPendingDurasteelFistPush(game, {
                 gameId, msgId,
                 attackerPlayerNum: meta.playerNum,
                 targetPlayerNum,
                 targetFigureKey: targetFk,
                 targetDcName,
                 legalSpaces: legal,
-              };
+              });
               const btns = legal.slice(0, 5).map((sp) =>
                 new ButtonBuilder()
                   .setCustomId(`durasteel_push_${gameId}_${sp}`)
@@ -1858,7 +1858,7 @@ export async function handleActPassive(interaction, ctx) {
   // --- Conspire (Senator form): distribute Focus tokens to friendlies within 1 space ---
   } else if (ability === 'conspire') {
     if (choice === 'skip') {
-      delete game.pendingConspire;
+      clearPendingConspire(game);
       await interaction.message.edit({ content: `🗣️ **Conspire** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       const targetFk = choice;
@@ -1892,7 +1892,7 @@ export async function handleActPassive(interaction, ctx) {
             }
           }
         }
-        delete game.pendingConspire;
+        clearPendingConspire(game);
       }
     }
   // --- Shields Up (Soldier form): place energy shield in adjacent space ---
@@ -1969,7 +1969,7 @@ export async function handleFieldTacticsPick(interaction, ctx) {
   const findDcMsgIdForFigure = ctx.findDcMessageIdForFigure;
   const chosenMsgId = findDcMsgIdForFigure ? findDcMsgIdForFigure(gameId, triggerMeta.playerNum, figureKey) : null;
   if (chosenMsgId) {
-    game.pendingFieldTactics = { forMsgId: chosenMsgId, chosenFigureKey: figureKey, triggeredByMsgId: triggerMsgId };
+    setPendingFieldTactics(game, { forMsgId: chosenMsgId, chosenFigureKey: figureKey, triggeredByMsgId: triggerMsgId });
   }
   const ftRoundKey = `fieldTactics_${triggerMsgId}`;
   game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
@@ -2244,11 +2244,11 @@ export async function handleItWillBeAlrightUse(interaction, ctx) {
   }
 
   // Store pending state
-  game.pendingItWillBeAlright = {
+  setPendingItWillBeAlright(game, {
     cassianMsgId: msgId,
     playerNum: meta.playerNum,
     targets: targets.map(t => ({ figureKey: t.figureKey, dcName: t.dcName, msgId: t.msgId, figIdx: t.figIdx })),
-  };
+  });
 
   const btns = targets.slice(0, 20).map(t =>
     new ButtonBuilder()
@@ -2278,7 +2278,7 @@ export async function handleItWillBeAlrightSkip(interaction, ctx) {
   const game = getGame(gameId);
   await interaction.message.edit({ content: '**It Will Be Alright** — Skipped.', components: [] }).catch(discordCatch);
   if (game) {
-    delete game.pendingItWillBeAlright;
+    clearPendingItWillBeAlright(game);
     saveGames();
   }
 }
@@ -2336,7 +2336,7 @@ export async function handleItWillBeAlrightPick(interaction, ctx) {
   const cassianMeta = dcMessageMeta?.get(cassianMsgId);
   const cassianDisplay = cassianMeta?.displayName || 'Cassian Andor';
 
-  game.pendingItWillBeAlright = { ...pending, phase: 'action', sacrificed: targetDcName };
+  setPendingItWillBeAlright(game, { ...pending, phase: 'action', sacrificed: targetDcName });
 
   const actionRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`iwba_action_${gameId}_${cassianMsgId}_move`).setLabel('Free Move').setStyle(ButtonStyle.Primary),
@@ -2387,6 +2387,6 @@ export async function handleItWillBeAlrightAction(interaction, ctx) {
     await logGameAction(game, client, `**It Will Be Alright** — **${cassianDisplay}** gains a free attack (after sacrifice).`, { phase: 'ACTIVATION', icon: 'attack' });
   }
 
-  delete game.pendingItWillBeAlright;
+  clearPendingItWillBeAlright(game);
   saveGames();
 }

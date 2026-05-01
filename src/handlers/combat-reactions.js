@@ -8,7 +8,7 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
-import { clearPendingIllicitArms } from '../game/interrupts.js';
+import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter } from '../game/interrupts.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -142,11 +142,11 @@ export async function handleThereIsNoTry(interaction, ctx) {
       combat.defenseRoll = { block: newTotal.block, evade: newTotal.evade, dodge: newTotal.dodge };
       if (thread) await thread.send(`**There Is No Try** — Die set to ${block}B/${evade}E${dodgeFlag ? ' (Dodge→+2B+1E)' : ''}. New defense totals: ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade.`).catch(discordCatch);
     }
-    game.pendingThereIsNoTry = null;
+    clearPendingThereIsNoTry(game);
     combat.tintResolved = true;
   } else {
     // Skip
-    game.pendingThereIsNoTry = null;
+    clearPendingThereIsNoTry(game);
     combat.tintResolved = true;
     if (thread) await thread.send('**There Is No Try** — Skipped.').catch(discordCatch);
   }
@@ -579,7 +579,7 @@ export async function handlePowerConverter(interaction, ctx) {
   };
 
   if (isSkip) {
-    game.pendingPowerConverter = null;
+    clearPendingPowerConverter(game);
     if (thread) await thread.send('**Power Converter** — Skipped.').catch(discordCatch);
     await _resumeRerollFlow();
     saveGames();
@@ -587,7 +587,7 @@ export async function handlePowerConverter(interaction, ctx) {
   }
 
   if (isApprove) {
-    game.pendingPowerConverter = null;
+    clearPendingPowerConverter(game);
     // Show die picker in combat thread
     const dice = combat.attackDiceResults || [];
     if (!dice.length || !thread) {

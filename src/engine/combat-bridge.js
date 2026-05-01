@@ -32,7 +32,7 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
   }
 }
 import { countGameSpaces } from '../game/board-helpers.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -566,7 +566,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             );
             _psBtns.push(new ButtonBuilder().setCustomId(`ps_replace_${game.gameId}_${combat.target.figureKey}_${_psCond}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
             const _psRow = new ActionRowBuilder().addComponents(_psBtns);
-            game.pendingPunishingStrike = { attackerPlayerNum, targetFigureKey: combat.target.figureKey, originalCondition: _psCond };
+            setPendingPunishingStrike(game, { attackerPlayerNum, targetFigureKey: combat.target.figureKey, originalCondition: _psCond });
             await thread.send({ content: `**Punishing Strike** — **${combat.target.label}** was applied **${_psCond}**. Exhaust Punishing Strike to replace it with a different harmful condition?`, components: [_psRow] }).catch(discordCatch);
           }
         }
@@ -654,13 +654,13 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
               if (!_epOnarMsgId) continue;
               // All conditions met — prompt the player
               game.extraProtectionTriggeredThisCombat = true;
-              game.pendingExtraProtection = {
+              setPendingExtraProtection(game, {
                 targetFigKey: combat.target.figureKey, targetMsgId, targetFigIndex,
                 damage, playerNum: defenderPlayerNum,
                 onarFigKey: _epFk, onarMsgId: _epOnarMsgId, onarDcName: _epDcName,
                 // Store combat flow state for re-entry
                 hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId,
-              };
+              });
               const _epOwnerId = game[`player${defenderPlayerNum}Id`];
               const _epDamagedLabel = combat.target.label || dcNameFromFigureKey(combat.target.figureKey);
               const _epRow = new ActionRowBuilder().addComponents(
@@ -2100,7 +2100,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         const { msgId: mid, label } = getFigureLabel(game, c.playerNum, c.figureKey);
         return { figureKey: c.figureKey, playerNum: c.playerNum, label, msgId: mid };
       });
-      game.pendingFightingKnife = {
+      setPendingFightingKnife(game, {
         gameId: game.gameId,
         combatThreadId: combat.combatThreadId,
         attackerPlayerNum: combat.attackerPlayerNum,
@@ -2109,7 +2109,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         resultText,
         combat,
         initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-      };
+      });
       const rows = getFightingKnifeTargetButtons(game.gameId, targetsWithLabels);
       await thread.send(sanitizeMentions({
         content: `<@${ownerId}> **Fighting Knife** — Choose an adjacent hostile figure to roll 1 red die:`,
@@ -2179,7 +2179,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       }
       if (figuresAtSpaces.length > 0) {
         const firstCond = conditions[0];
-        game.pendingSpreadThePain = {
+        setPendingSpreadThePain(game, {
           gameId: game.gameId,
           combatThreadId: combat.combatThreadId,
           attackerPlayerNum: combat.attackerPlayerNum,
@@ -2190,7 +2190,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
           resultText,
           combat,
           initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-        };
+        });
         const btns = figuresAtSpaces.slice(0, 4).map((f) =>
           new ButtonBuilder()
             .setCustomId(`spread_pain_fig_${game.gameId}_${f.figureKey}`)
@@ -2577,7 +2577,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         }
       }
       if (_hsEligible.length > 0) {
-        game.pendingHavocShot = {
+        setPendingHavocShot(game, {
           gameId: game.gameId,
           attackerPlayerNum: combat.attackerPlayerNum,
           attackerMsgId: combat.attackerMsgId,
@@ -2587,7 +2587,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           targets: _hsEligible,
           chosen: [],
           maxPicks: 2,
-        };
+        });
         const _hsBtns = [
           new ButtonBuilder().setCustomId(`havoc_shot_use_${game.gameId}`).setLabel('Use Havoc Shot (1 Strain)').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId(`havoc_shot_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
@@ -2650,14 +2650,14 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         await logGameAction(game, client, `**Deflect** — **${_dflCand.dcName}** redirects 1 Damage to **${_dflTgt.label}**.`, { phase: 'ROUND', icon: 'attack' });
       } else {
         // Multiple hostiles — show picker
-        game.pendingDeflect = {
+        setPendingDeflect(game, {
           gameId: game.gameId,
           deflectorPlayerNum: _dflDefPN,
           deflectorFigureKey: _dflCand.figureKey,
           deflectorDcName: _dflCand.dcName,
           combatThreadId: combat.combatThreadId,
           hostiles: _dflHostiles,
-        };
+        });
         const _dflBtns = _dflHostiles.slice(0, 4).map((t, i) =>
           new ButtonBuilder().setCustomId(`deflect_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
         );

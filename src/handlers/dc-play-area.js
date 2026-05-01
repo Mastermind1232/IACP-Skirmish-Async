@@ -14,7 +14,7 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
-import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
@@ -1412,7 +1412,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         const actData = game.dcActionsData?.[msgId];
         const isExecOrderFreeMove = game.pendingExecutiveOrder?.forMsgId === msgId;
         if (isExecOrderFreeMove) {
-          delete game.pendingExecutiveOrder;
+          clearPendingExecutiveOrder(game);
         } else if (actData) {
           actData.remaining = Math.max(0, actData.remaining - 1);
           await updateDcActionsMessage(game, msgId, client);

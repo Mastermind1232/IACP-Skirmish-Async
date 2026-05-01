@@ -302,7 +302,7 @@ describe('B-CR-TINT: There Is No Try face replacement', () => {
     // Total: die0 {1B, 1E} + die1 {1B, 1E} = 2B, 2E
     assert.strictEqual(combat.defenseRoll.block, 2, 'total block recalculated');
     assert.strictEqual(combat.defenseRoll.evade, 2, 'total evade recalculated');
-    assert.strictEqual(game.pendingThereIsNoTry, null, 'pendingThereIsNoTry cleared');
+    assert.ok(game.pendingThereIsNoTry == null, 'pendingThereIsNoTry cleared');
     assert.strictEqual(combat.tintResolved, true, 'tintResolved set');
   });
 
@@ -342,7 +342,7 @@ describe('B-CR-TINT: There Is No Try face replacement', () => {
     await handleThereIsNoTry(mockInteraction('there_is_no_try_skip_g1', 'player2'), ctx);
 
     assert.deepStrictEqual(combat.defenseDiceResults, origDef, 'defense dice unchanged');
-    assert.strictEqual(game.pendingThereIsNoTry, null, 'cleared');
+    assert.ok(game.pendingThereIsNoTry == null, 'cleared');
     assert.strictEqual(combat.tintResolved, true, 'tintResolved set on skip');
   });
 
@@ -859,7 +859,7 @@ describe('B-CR-PC: Power Converter multi-step reroll', () => {
     await handlePowerConverter(mockInteraction('power_converter_skip_g1', 'player1'), ctx);
 
     assert.deepStrictEqual(combat.attackDiceResults, origDice, 'dice unchanged');
-    assert.strictEqual(game.pendingPowerConverter, null, 'pendingPowerConverter cleared');
+    assert.ok(game.pendingPowerConverter == null, 'pendingPowerConverter cleared');
     assert.strictEqual(calls.sendRerollUI.length, 1, 'reroll flow resumed');
     assert.strictEqual(calls.sendRerollUI[0].phase, 'attacker');
   });

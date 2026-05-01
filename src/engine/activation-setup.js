@@ -29,7 +29,7 @@ import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from '../handlers/combat.js';
 import { applyStartOfActivationEffects } from './activation-effects.js';
-import { setPendingTokenDistribution } from '../game/interrupts.js';
+import { setPendingTokenDistribution, setPendingGeneralsOrders, setPendingConspire } from '../game/interrupts.js';
 import { join } from 'path';
 
 // ─── Companion helpers (used by activation.js too) ───────────────────────────
@@ -602,7 +602,7 @@ export async function finalizeActivation({
     const friendlyFigs = Object.entries(game.figurePositions?.[playerNum] || {})
       .filter(([fk, fp]) => fk !== _goSelfFk && fp);
     if (friendlyFigs.length > 0) {
-      game.pendingGeneralsOrders = { gameId, msgId, playerNum, remaining: 2, chosen: [] };
+      setPendingGeneralsOrders(game, { gameId, msgId, playerNum, remaining: 2, chosen: [] });
       const _goSlice = friendlyFigs.slice(0, 4);
       const _goLabels = figureChoiceLabels(_goSlice.map(([fk]) => fk));
       const btns = _goSlice.map(([fk], i) =>
@@ -836,7 +836,7 @@ export async function finalizeActivation({
               new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_${fk2}`).setLabel(dcNameFromFigureKey(fk2)).setStyle(ButtonStyle.Primary)
             );
             btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-            game.pendingConspire = { tokensRemaining: _conDiceCount, senderFk: _conFk };
+            setPendingConspire(game, { tokensRemaining: _conDiceCount, senderFk: _conFk });
             await thread.send({ content: `🗣️ **Conspire** (Special Action) — Distribute **${_conDiceCount} Focus token(s)** to friendly figures within 1 space. Choose a figure:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
           } else {
             await thread.send({ content: `🗣️ **Conspire** — No friendly figures within 1 space (or no dice in attack pool). Use manually if needed.` }).catch(discordCatch);
