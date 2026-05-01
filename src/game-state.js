@@ -421,27 +421,7 @@ async function _shadowValidateAll() {
 
 /** Repopulate dcMessageMeta, dcExhaustedState, dcHealthState from loaded games (after loadGames). */
 function repopulateDcMapsFromGames() {
-  for (const [gameId, game] of games) {
-    for (const playerNum of [1, 2]) {
-      const dcList = getDcList(game, playerNum) || [];
-      const dcMessageIds = getDcMessageIds(game, playerNum) || [];
-      const activatedIndices = new Set(getActivatedDcIndices(game, playerNum) || []);
-      for (let i = 0; i < dcMessageIds.length && i < dcList.length; i++) {
-        const msgId = dcMessageIds[i];
-        const dc = dcList[i];
-        if (!msgId || !dc) continue;
-        dcMessageMeta.set(msgId, {
-          gameId,
-          playerNum,
-          dcName: dc.dcName,
-          displayName: dc.displayName || dc.dcName,
-        });
-        const abilityExhausted = (game.abilityExhaustedMsgIds || []).includes(msgId);
-        dcExhaustedState.set(msgId, activatedIndices.has(i) || abilityExhausted);
-        dcHealthState.set(msgId, dc.healthState || [[null, null]]);
-      }
-    }
-  }
+  for (const gameId of games.keys()) repopulateDcMapsForGame(gameId);
 }
 
 /** For db.js deleteGameFromDb and any code that needs to iterate or pass the Map. */
