@@ -397,8 +397,81 @@ class DerivedDcExhaustedState {
 
 /** Derived view: boolean exhausted state per msgId, with write-through .set */
 const dcExhaustedState = new DerivedDcExhaustedState(games, dcMessageMeta);
-/** messageId -> healthState array — still authoritative; Slice 4c will migrate */
-const dcHealthState = new Map();
+
+/**
+ * Map-shaped derived view of DC health state.
+ * .get(msgId) returns game.dcList[dcIndex].healthState directly (no copy)
+ * so callers that mutate the returned array — e.g. healthState[i][0] -= dmg
+ * — are mutating canonical state. That's how the existing Map-backed code
+ * always behaved (the Map held references, not copies), so this preserves
+ * the contract.
+ *
+ * .set(msgId, healthArr) writes through to game.dcList[dcIndex].healthState.
+ *
+ * Once this lands, syncHealthStateToGames + the per-save sync code can
+ * be deleted (the derived view IS the game state — they're the same array).
+ */
+class DerivedDcHealthState {
+  constructor(gamesMap, metaView) {
+    this._games = gamesMap;
+    this._meta = metaView;
+  }
+
+  _resolve(msgId) {
+    const meta = this._meta.get(msgId);
+    if (!meta) return null;
+    const game = this._games.get(meta.gameId);
+    if (!game) return null;
+    const dcMsgIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcIndex = (dcMsgIds || []).indexOf(msgId);
+    if (dcIndex < 0) return null;
+    const dcList = meta.playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const dc = (dcList || [])[dcIndex];
+    if (!dc) return null;
+    return { game, dc, dcList, dcIndex };
+  }
+
+  get(msgId) {
+    if (!msgId) return undefined;
+    const r = this._resolve(msgId);
+    if (!r) return undefined;
+    return r.dc.healthState;
+  }
+
+  has(msgId) { return this.get(msgId) !== undefined; }
+
+  set(msgId, healthArr) {
+    const r = this._resolve(msgId);
+    if (!r) return this;
+    r.dc.healthState = healthArr;
+    return this;
+  }
+
+  delete(_msgId) { return false; }   // no-op: no separate storage
+  clear()       { /* no-op */ }
+
+  *[Symbol.iterator]() {
+    for (const [msgId] of this._meta) {
+      const v = this.get(msgId);
+      if (v !== undefined) yield [msgId, v];
+    }
+  }
+
+  *keys()    { for (const [k] of this) yield k; }
+  *values()  { for (const [, v] of this) yield v; }
+  *entries() { yield* this[Symbol.iterator](); }
+  forEach(fn) { for (const [k, v] of this) fn(v, k, this); }
+
+  get size() {
+    let n = 0;
+    // eslint-disable-next-line no-unused-vars
+    for (const _ of this) n++;
+    return n;
+  }
+}
+
+/** Derived view: healthState array per msgId, write-through to dcList[i].healthState */
+const dcHealthState = new DerivedDcHealthState(games, dcMessageMeta);
 /** key = `${gameId}_${playerNum}`, value = { squad, timestamp } */
 const pendingIllegalSquad = new Map();
 /** key = `${gameId}_${playerNum}`, value = { squad, validation, timestamp } */

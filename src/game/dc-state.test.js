@@ -149,21 +149,52 @@ describe('dc-state accessors (post Slice 4a: dcMessageMeta derived)', () => {
     });
   });
 
-  describe('getDcHealth', () => {
-    it('returns the stored array', () => {
-      dcHealthState.set('msg1', [[3, 5], [4, 5]]);
-      assert.deepEqual(getDcHealth({}, 'msg1'), [[3, 5], [4, 5]]);
+  describe('getDcHealth (derived from game.dcList[i].healthState)', () => {
+    function seed() {
+      games.set('g1', {
+        gameId: 'g1',
+        p1DcMessageIds: ['msg1'],
+        p1DcList: [{ dcName: 'X', displayName: 'X', healthState: [[3, 5], [4, 5]] }],
+        p2DcMessageIds: [], p2DcList: [],
+      });
+    }
+
+    it('returns the dcList entry healthState directly (live reference, not copy)', () => {
+      seed();
+      const result = getDcHealth({}, 'msg1');
+      assert.deepEqual(result, [[3, 5], [4, 5]]);
+      // Mutating the returned array should mutate canonical state — same
+      // contract as the Map-backed behavior.
+      result[0][0] = 1;
+      assert.equal(games.get('g1').p1DcList[0].healthState[0][0], 1);
     });
 
-    it('returns undefined when msgId is unknown (matches Map.get)', () => {
+    it('returns undefined when msgId is unknown', () => {
       assert.equal(getDcHealth({}, 'unknown'), undefined);
     });
   });
 
-  describe('setDcHealth', () => {
-    it('writes to the Map', () => {
+  describe('setDcHealth (write-through to dcList[i].healthState)', () => {
+    function seed() {
+      games.set('g1', {
+        gameId: 'g1',
+        p1DcMessageIds: ['msg1'],
+        p1DcList: [{ dcName: 'X', displayName: 'X', healthState: [[5, 5]] }],
+        p2DcMessageIds: [], p2DcList: [],
+      });
+    }
+
+    it('writes through to dcList', () => {
+      seed();
       setDcHealth({}, 'msg1', [[2, 5]]);
-      assert.deepEqual(dcHealthState.get('msg1'), [[2, 5]]);
+      assert.deepEqual(games.get('g1').p1DcList[0].healthState, [[2, 5]]);
+      assert.deepEqual(getDcHealth({}, 'msg1'), [[2, 5]]);
+    });
+
+    it('silently drops .set for unknown msgId', () => {
+      seed();
+      setDcHealth({}, 'unknown', [[9, 9]]);
+      assert.deepEqual(games.get('g1').p1DcList[0].healthState, [[5, 5]]);
     });
   });
 });
