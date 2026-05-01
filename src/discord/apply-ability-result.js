@@ -59,7 +59,7 @@ export async function applyAbilityResult(result, opts) {
   if (result.applied && result.readyDcMsgIds?.length && dcExhaustedState) {
     for (const id of result.readyDcMsgIds) {
       dcExhaustedState.set(id, false);
-      await refreshDcEmbedAndComponents(client, game, id, ctx, false, 'Failed to update DC embed after ready:');
+      await refreshDcEmbedAndComponents(client, game, id, ctx, { exhausted: false, errorContext: 'Failed to update DC embed after ready:' });
     }
   }
 
@@ -120,7 +120,7 @@ export async function applyAbilityResult(result, opts) {
     for (const id of idsToRefresh) {
       if (readySet.has(id)) continue; // already handled by readyDcMsgIds section above
       const exhausted = dcExhaustedState?.get(id) || false;
-      await refreshDcEmbedAndComponents(client, game, id, ctx, exhausted, 'Failed to refresh DC play area embed:');
+      await refreshDcEmbedAndComponents(client, game, id, ctx, { exhausted, errorContext: 'Failed to refresh DC play area embed:' });
     }
   }
 

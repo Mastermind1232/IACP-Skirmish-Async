@@ -21,6 +21,7 @@ import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
+import { updateDcCardMessage } from '../engine/message-updaters.js';
 import {
   getPlayerId,
   getDcList,
@@ -586,20 +587,7 @@ export async function handleEndTurn(interaction, ctx) {
     if (game.nextAttackBonusPierce?.[meta.playerNum]) delete game.nextAttackBonusPierce[meta.playerNum];
     if (game.movementBank?.[dcMsgId]) delete game.movementBank[dcMsgId];
   }
-  try {
-    const playAreaId = getPlayAreaId(game, meta.playerNum);
-    const playChannel = await fetchGameChannel(client, playAreaId);
-    const dcMsg = await playChannel.messages.fetch(dcMsgId);
-    const { embed, files } = await renderDcEmbed(game, dcMsgId, ctx, { exhausted: true });
-    const components = getDcPlayAreaComponents(dcMsgId, true, game, meta.dcName);
-    await dcMsg.edit({
-      embeds: [embed],
-      files,
-      components,
-    }).catch(discordCatch);
-  } catch (err) {
-    console.error('Failed to update DC card after End Turn:', err);
-  }
+  await updateDcCardMessage(client, game, dcMsgId, ctx, { exhausted: true, errorContext: 'Failed to update DC card after End Turn:' });
 
   // --- Companion activation at end of turn ---
   {
@@ -743,15 +731,7 @@ export async function handleDcEndActivation(interaction, ctx) {
   }
 
   // Update DC card (stays exhausted)
-  try {
-    const playAreaId = getPlayAreaId(game, meta.playerNum);
-    const playChannel = await fetchGameChannel(client, playAreaId);
-    const dcMsg = await playChannel.messages.fetch(msgId);
-    const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted: true });
-    await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) }).catch(discordCatch);
-  } catch (err) {
-    console.error('Failed to update DC card after End Activation:', err);
-  }
+  await updateDcCardMessage(client, game, msgId, ctx, { exhausted: true, errorContext: 'Failed to update DC card after End Activation:' });
 
   // --- Companion activation at end of activation ---
   // If companion was marked 'pending-after' or was never addressed (player ignored buttons), activate now
@@ -1833,22 +1813,11 @@ export async function handleActPassive(interaction, ctx) {
         await interaction.message.edit({ content: `**Imperial Citadel** — **${displayName}** gained 1 **${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token** from the Citadel.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Imperial Citadel** — **${displayName}** gained 1 ${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token from the Citadel.`, { phase: 'ACTIVATION', icon: 'card' });
         // Refresh Citadel play area embed to show updated token counts
-        try {
-          const _icDcListRefresh = getDcList(game, meta.playerNum) || [];
-          const _icMsgIdsRefresh = getDcMessageIds(game, meta.playerNum) || [];
-          const _icIdx = _icDcListRefresh.findIndex(dc => dc?.dcName === '[Imperial Citadel]');
-          if (_icIdx >= 0 && _icMsgIdsRefresh[_icIdx]) {
-            const _icMsgId = _icMsgIdsRefresh[_icIdx];
-            const _icChId = getPlayAreaId(game, meta.playerNum);
-            const _icCh = await fetchGameChannel(client, _icChId);
-            const _icMsg = await _icCh.messages.fetch(_icMsgId);
-            const _icExh = dcExhaustedState?.get(_icMsgId) || false;
-            const { embed: _icEmb, files: _icFiles } = await renderDcEmbed(game, _icMsgId, ctx);
-            const _icComps = getDcPlayAreaComponents(_icMsgId, _icExh, game, '[Imperial Citadel]');
-            await _icMsg.edit({ embeds: [_icEmb], files: _icFiles?.length ? _icFiles : [], components: _icComps }).catch(discordCatch);
-          }
-        } catch (_icErr) {
-          console.error('Failed to refresh Imperial Citadel embed:', _icErr);
+        const _icDcListRefresh = getDcList(game, meta.playerNum) || [];
+        const _icMsgIdsRefresh = getDcMessageIds(game, meta.playerNum) || [];
+        const _icIdx = _icDcListRefresh.findIndex(dc => dc?.dcName === '[Imperial Citadel]');
+        if (_icIdx >= 0 && _icMsgIdsRefresh[_icIdx]) {
+          await updateDcCardMessage(client, game, _icMsgIdsRefresh[_icIdx], ctx, { errorContext: 'Failed to refresh Imperial Citadel embed:' });
         }
         if (game.pendingPowerTokenOverflow?.length > 0) {
           await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);

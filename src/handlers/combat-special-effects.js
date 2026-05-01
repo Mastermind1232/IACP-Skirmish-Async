@@ -72,15 +72,7 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
       const splashVP = defeatResult?.vp ?? 0;
       lines.push(`  → **${t.label} defeated!** +${splashVP} VP`);
     }
-    try {
-      const tMeta = dcMessageMeta.get(mid);
-      if (tMeta) {
-        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
-        const msg = await ch.messages.fetch(mid);
-        const { embed, files } = await renderDcEmbed(game, mid, ctx);
-        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
-      }
-    } catch {}
+    await updateDcCardMessage(client, game, mid, ctx);
   }
   const msg = `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`;
   await thread.send(msg).catch(discordCatch);
@@ -209,18 +201,7 @@ export async function handleBleedResolve(interaction, ctx) {
           }
         }
         // Refresh DC embed
-        try {
-          const meta = dcMessageMeta.get(msgId);
-          if (meta) {
-            const channelId = getPlayAreaId(game, playerNum);
-            const ch = await fetchGameChannel(interaction.client, channelId);
-            const dcMsg = await ch.messages.fetch(msgId);
-            const { embed, files } = await renderDcEmbed(game, msgId, ctx);
-            await dcMsg.edit({ embeds: [embed], files }).catch(discordCatch);
-          }
-        } catch (err) {
-          console.error('Failed to update DC embed after Bleeding:', err);
-        }
+        await updateDcCardMessage(interaction.client, game, msgId, ctx, { errorContext: 'Failed to update DC embed after Bleeding:' });
       }
     }
   } else {
@@ -291,12 +272,7 @@ export async function handleSidewinderApply(interaction, ctx) {
   await interaction.message.channel.send('**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.');
   await logGameAction(game, client, `**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.`, { phase: 'ROUND', icon: 'card' });
   await ensureMovementBankMessage(game, attackerMsgId, client);
-  try {
-    const ch = await fetchGameChannel(client, getPlayAreaId(game, meta.playerNum));
-    const msg = await ch.messages.fetch(attackerMsgId);
-    const { embed, files } = await renderDcEmbed(game, attackerMsgId, ctx);
-    await msg.edit({ embeds: [embed], files }).catch(discordCatch);
-  } catch (e) { console.error('Failed to refresh Sidewinder DC embed:', e); }
+  await updateDcCardMessage(client, game, attackerMsgId, ctx, { errorContext: 'Failed to refresh Sidewinder DC embed:' });
   saveGames();
 }
 
@@ -328,15 +304,7 @@ export async function handleBoltslingerTarget(interaction, ctx) {
   if (targetMsgId) {
     const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
     const { newHp: bsNewHp, wasDefeated: bsDied } = reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
-    try {
-      const tMeta = dcMessageMeta.get(targetMsgId);
-      if (tMeta) {
-        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
-        const msg = await ch.messages.fetch(targetMsgId);
-        const { embed, files } = await renderDcEmbed(game, targetMsgId, ctx);
-        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
-      }
-    } catch (e) { console.error('Failed to refresh Boltslinger target embed:', e); }
+    await updateDcCardMessage(client, game, targetMsgId, ctx, { errorContext: 'Failed to refresh Boltslinger target embed:' });
     if (bsDied && processFigureDefeat) {
       const _bsDcIds = getDcMessageIds(game, target.playerNum) || [];
       const _bsIdx = _bsDcIds.indexOf(targetMsgId);
@@ -729,15 +697,7 @@ async function startHeavyFireConditions(game, pending, ctx) {
       defeatedTargets.push(t);
     }
     // Refresh DC embed
-    try {
-      const tMeta = dcMessageMeta.get(mid);
-      if (tMeta) {
-        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
-        const msg = await ch.messages.fetch(mid);
-        const { embed, files } = await renderDcEmbed(game, mid, ctx);
-        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
-      }
-    } catch {}
+    await updateDcCardMessage(client, game, mid, ctx);
   }
   const dmgMsg = `**Heavy Fire** — Splash damage:\n${lines.join('\n')}`;
   await thread.send(dmgMsg).catch(discordCatch);
@@ -815,7 +775,7 @@ export async function handleHeavyFireUse(interaction, ctx) {
     // stale buttons (Heavy Fire is figureless; the toggle row depends on
     // `bothDrawn` and `exhausted`). Fixed by routing through
     // updateDcCardMessage which always rebuilds components from current state.
-    await updateDcCardMessage(client, game, pending.hfMsgId, ctx, true, 'Heavy Fire DC refresh failed:');
+    await updateDcCardMessage(client, game, pending.hfMsgId, ctx, { exhausted: true, errorContext: 'Heavy Fire DC refresh failed:' });
   }
   await logGameAction(game, client, `**Heavy Fire** — Exhausted by P${pending.attackerPlayerNum} after **${pending.attackerDcName}** resolved an attack.`, { phase: 'ROUND', icon: 'card' });
 
@@ -925,15 +885,7 @@ export async function handleHavocShotUse(interaction, ctx) {
   if (atkMsgId) {
     reduceHp(dcHealthState, game, atkMsgId, hs.attackerFigureIndex, 1, hs.attackerPlayerNum);
     // Refresh attacker embed
-    try {
-      const atkMeta = dcMessageMeta.get(atkMsgId);
-      if (atkMeta) {
-        const ch = await fetchGameChannel(client, getPlayAreaId(game, atkMeta.playerNum));
-        const msg = await ch.messages.fetch(atkMsgId);
-        const { embed, files } = await renderDcEmbed(game, atkMsgId, ctx);
-        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
-      }
-    } catch {}
+    await updateDcCardMessage(client, game, atkMsgId, ctx);
   }
   // Show figure picker
   const btns = hs.targets.slice(0, 4).map((t, i) =>
@@ -978,15 +930,7 @@ export async function handleHavocShotPick(interaction, ctx) {
   if (targetMsgId) {
     const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
     reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
-    try {
-      const tMeta = dcMessageMeta.get(targetMsgId);
-      if (tMeta) {
-        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
-        const msg = await ch.messages.fetch(targetMsgId);
-        const { embed, files } = await renderDcEmbed(game, targetMsgId, ctx);
-        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
-      }
-    } catch {}
+    await updateDcCardMessage(client, game, targetMsgId, ctx);
   }
   hs.chosen.push(target.figureKey);
   const thread = await fetchCombatThread(client, hs.combatThreadId);
@@ -1040,15 +984,7 @@ export async function handleDeflectPick(interaction, ctx) {
   if (targetMsgId) {
     const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
     reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
-    try {
-      const tMeta = dcMessageMeta.get(targetMsgId);
-      if (tMeta) {
-        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
-        const msg = await ch.messages.fetch(targetMsgId);
-        const { embed, files } = await renderDcEmbed(game, targetMsgId, ctx);
-        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
-      }
-    } catch {}
+    await updateDcCardMessage(client, game, targetMsgId, ctx);
   }
   const dfThread = await fetchCombatThread(client, df.combatThreadId);
   if (dfThread) await dfThread.send(`**Deflect** — **${df.deflectorDcName}**: **${target.label}** suffers 1 Damage.`).catch(discordCatch);
@@ -1157,15 +1093,7 @@ export async function handleWantonPick(interaction, ctx) {
   if (targetMsgId) {
     const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
     reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
-    try {
-      const tMeta = dcMessageMeta.get(targetMsgId);
-      if (tMeta) {
-        const ch = await fetchGameChannel(client, getPlayAreaId(game, tMeta.playerNum));
-        const msg = await ch.messages.fetch(targetMsgId);
-        const { embed, files } = await renderDcEmbed(game, targetMsgId, ctx);
-        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
-      }
-    } catch {}
+    await updateDcCardMessage(client, game, targetMsgId, ctx);
   }
   wd.chosen.push(target.figureKey);
   const thread = await fetchCombatThread(client, wd.combatThreadId);

@@ -13,6 +13,7 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { resolveStartOfRoundEffect } from './round.js';
+import { updateDcCardMessage } from '../engine/message-updaters.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
 export async function handleStillFaster(interaction, ctx) {
@@ -175,12 +176,7 @@ export async function handleOverdrive(interaction, ctx) {
     });
   }
   await updateDcActionsMessage(_odGame, _odMsgId, client);
-  const { embed: _odEmbed, files: _odFiles } = await renderDcEmbed(_odGame, _odMsgId, ctx, { exhausted: true });
-  try {
-    const _odCh = await fetchGameChannel(client, _odMeta.playerNum === 1 ? _odGame.p1PlayAreaId : _odGame.p2PlayAreaId);
-    const _odMsg = await _odCh.messages.fetch(_odMsgId);
-    await _odMsg.edit({ embeds: [_odEmbed], files: _odFiles, components: getDcPlayAreaComponents(_odMsgId, true, _odGame, _odMeta.dcName) });
-  } catch (err) { console.error('Overdrive embed refresh failed:', err); }
+  await updateDcCardMessage(client, _odGame, _odMsgId, ctx, { exhausted: true, errorContext: 'Overdrive embed refresh failed:' });
   saveGames(); return;
 }
 

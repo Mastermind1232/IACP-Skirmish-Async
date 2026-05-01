@@ -8,38 +8,39 @@ import { withDiscordRetry, discordCatch } from '../error-handling.js';
 import { getPlayAreaId } from '../game/player-helpers.js';
 
 /**
- * Re-fetch a DC's Play Area message and rewrite its embed + components
- * with the given exhausted state. Shared by ready/un-exhaust paths and
- * the cross-flow refresh paths.
+ * Re-fetch a DC's Play Area message and rewrite its embed + components.
  *
- * Caller passes the deps (renderDcEmbed, dcMessageMeta,
- * getDcPlayAreaComponents) via ctx — same shape as other engine-layer
- * helpers in this file.
+ * Single source of truth for "DC card refresh after side-effect" — shared
+ * by ready/un-exhaust paths, end-of-turn exhaust, ability triggers, and
+ * health/condition stat refreshes.
  *
- * Behavior is identical to the previous `refreshDcEmbedAndComponents`
- * helper that lived inside src/discord/apply-ability-result.js. Promoted
- * here so other call sites can adopt it incrementally without each
- * re-implementing the fetch/render/edit dance.
- *
- * Stats-only refresh sites (combat-special-effects.js, etc.) that
- * INTENTIONALLY omit `components` to preserve existing button rows
- * should NOT use this helper — discord.js preserves omitted fields,
- * so those sites are correct as-is.
+ * @param {object} opts
+ * @param {boolean} [opts.exhausted] - Override exhausted state. When omitted,
+ *   reads current state from `ctx.dcExhaustedState`. Pass explicitly only
+ *   when transitioning state (e.g. exhausting a DC that's still readied).
+ * @param {string} [opts.dcName] - Override dcName for component rendering.
+ *   Used for synthetic DCs like Imperial Citadel where meta.dcName ≠ the
+ *   label `getDcPlayAreaComponents` expects.
+ * @param {string} [opts.errorContext] - Custom error message prefix on failure.
  */
-export async function updateDcCardMessage(client, game, msgId, ctx, exhausted, errorContext) {
-  const { dcMessageMeta, renderDcEmbed, getDcPlayAreaComponents } = ctx;
+export async function updateDcCardMessage(client, game, msgId, ctx, opts = {}) {
+  const { dcMessageMeta, dcExhaustedState, renderDcEmbed, getDcPlayAreaComponents } = ctx;
   const meta = dcMessageMeta?.get(msgId);
   if (!meta || !renderDcEmbed || !getDcPlayAreaComponents) return;
+  const exhausted = opts.exhausted !== undefined
+    ? opts.exhausted
+    : (dcExhaustedState?.get(msgId) ?? false);
+  const dcName = opts.dcName ?? meta.dcName;
   try {
     const chId = getPlayAreaId(game, meta.playerNum);
     const ch = await fetchGameChannel(client, chId);
     if (!ch) return;
     const msg = await ch.messages.fetch(msgId);
     const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted });
-    const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
+    const components = getDcPlayAreaComponents(msgId, exhausted, game, dcName);
     await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
   } catch (err) {
-    console.error(errorContext || 'updateDcCardMessage failed:', err);
+    console.error(opts.errorContext || 'updateDcCardMessage failed:', err);
   }
 }
 

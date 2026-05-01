@@ -8,6 +8,7 @@ import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, grantMovementBank, buildFigureButtonLabel, getMaxPowerTokens } from '../game/index.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
+import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { countSpaces } from '../game/spatial.js';
 import { edgeKey } from '../game/coords.js';
 import { cardNameIncludes } from '../game/card-names.js';
@@ -203,16 +204,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
     if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
     if (game.exhaustedSkirmishUpgrades?.[msgId]) delete game.exhaustedSkirmishUpgrades[msgId];
-    try {
-      const chId = getPlayAreaId(game, meta.playerNum);
-      const ch = await fetchGameChannel(client, chId);
-      const msg = await ch.messages.fetch(msgId);
-      const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted: false });
-      const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
-      await msg.edit({ embeds: [embed], files, components }).catch(discordCatch);
-    } catch (err) {
-      console.error('Failed to ready DC embed:', err);
-    }
+    await updateDcCardMessage(client, game, msgId, ctx, { exhausted: false, errorContext: 'Failed to ready DC embed:' });
   }
   // Regenerate the board map so condition icons and updated health are reflected
   if (buildBoardMapPayload && game.boardId && game.selectedMap) {
@@ -2006,22 +1998,11 @@ export async function handleImpCitadel(interaction, ctx) {
   await logGameAction(game, client, `🏰 **Imperial Citadel** — placed **1 ${label}** token (now: ${total.damage} Damage, ${total.block} Block).`);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   // Refresh Imperial Citadel embed in play area to show updated token counts
-  try {
-    const dcList = getDcList(game, playerNum) || [];
-    const msgIds = getDcMessageIds(game, playerNum) || [];
-    const idx = dcList.findIndex(dc => dc?.dcName === '[Imperial Citadel]');
-    if (idx >= 0 && msgIds[idx]) {
-      const icMsgId = msgIds[idx];
-      const chId = getPlayAreaId(game, playerNum);
-      const ch = await fetchGameChannel(client, chId);
-      const msg = await ch.messages.fetch(icMsgId);
-      const exhausted = ctx.dcExhaustedState?.get(icMsgId) || false;
-      const { embed, files } = await ctx.renderDcEmbed(game, icMsgId, ctx);
-      const comps = ctx.getDcPlayAreaComponents(icMsgId, exhausted, game, '[Imperial Citadel]');
-      await msg.edit({ embeds: [embed], files: files?.length ? files : [], components: comps }).catch(discordCatch);
-    }
-  } catch (err) {
-    console.error('Failed to refresh Imperial Citadel embed:', err);
+  const dcList = getDcList(game, playerNum) || [];
+  const msgIds = getDcMessageIds(game, playerNum) || [];
+  const idx = dcList.findIndex(dc => dc?.dcName === '[Imperial Citadel]');
+  if (idx >= 0 && msgIds[idx]) {
+    await updateDcCardMessage(client, game, msgIds[idx], ctx, { errorContext: 'Failed to refresh Imperial Citadel embed:' });
   }
   await resolveStartOfRoundEffect(game, ctx);
   saveGames();

@@ -10,6 +10,7 @@ import { requireGame } from '../utils/guards.js';
 import { getInitiativePlayerNum, getPlayAreaId, getPlayerId } from '../game/player-helpers.js';
 import { PHASES } from '../game/phase.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { captureManualKillDiagnostic } from '../ai/self-play.js';
 import { restoreGameStateInPlace } from './checkpoint.js';
@@ -283,22 +284,9 @@ export async function handleUndo(interaction, ctx) {
       } catch { /* thread already gone or inaccessible */ }
     }
     // Un-exhaust the DC and refresh its play area embed
-    if (last.msgId && dcExhaustedState && dcMessageMeta) {
+    if (last.msgId && dcExhaustedState) {
       dcExhaustedState.set(last.msgId, false);
-      const meta = dcMessageMeta.get(last.msgId);
-      if (meta && renderDcEmbed && getDcPlayAreaComponents) {
-        try {
-          const playAreaId = getPlayAreaId(game, last.playerNum);
-          const playChannel = await fetchGameChannel(client, playAreaId);
-          const dcMsg = await playChannel.messages.fetch(last.msgId).catch(() => null);
-          if (dcMsg) {
-            const { embed, files } = await renderDcEmbed(game, last.msgId, ctx, { exhausted: false });
-            await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(last.msgId, false, game, meta.dcName) });
-          }
-        } catch (err) {
-          console.error('Failed to refresh DC embed after activation undo:', err);
-        }
-      }
+      await updateDcCardMessage(client, game, last.msgId, ctx, { exhausted: false, errorContext: 'Failed to refresh DC embed after activation undo:' });
     }
     // Refresh activations message
     if (updateActivationsMessage) {
