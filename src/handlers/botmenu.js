@@ -174,26 +174,39 @@ export async function handleBotmenuKill(interaction, ctx) {
 
 /** Kill Game Yes: delete channels and game. */
 export async function handleBotmenuKillYes(interaction, ctx) {
+  // Diagnostic instrumentation for the recurring silent-fail (project_killgame_silent_fail.md).
+  // Killgame has intermittently no-op'd 3× with no observable error. Logging every
+  // branch here means next failure leaves a Railway-log trail showing whether the
+  // handler fired at all, which gate it tripped, or where the deletion stalled.
+  const _diagGameId = parseCustomId(interaction.customId, 'botmenu_kill_yes_');
+  const _diagUserId = interaction.user?.id ?? 'unknown';
+  console.log(`[killgame-diag] Yes clicked: game=${_diagGameId} user=${_diagUserId}`);
   const { getGame, logGameErrorToBotLogs } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'botmenu_kill_yes_');
+  const gameId = _diagGameId;
   const game = getGame(gameId);
   if (!game) {
+    console.log(`[killgame-diag] Game not found in memory: ${gameId} — bailing`);
     await interaction.editReply({ content: 'Game not found.', components: [] }).catch(discordCatch);
     return;
   }
   if (!canKillGame(interaction, game)) {
+    console.log(`[killgame-diag] Permission denied for user ${_diagUserId} on game ${gameId} — bailing`);
     await interaction.editReply({ content: 'You are not allowed to kill this game.', components: [] }).catch(discordCatch);
     return;
   }
+  console.log(`[killgame-diag] Passed checks for game ${gameId} — about to editReply Deleting...`);
   // Update message before deletion (channel will be deleted along with it)
   await interaction.editReply({
     content: `⏳ Deleting **IA Game #${gameId}**...`,
     components: [],
   }).catch(discordCatch);
+  console.log(`[killgame-diag] editReply done for game ${gameId} — calling deleteGameChannelsAndGame`);
   try {
     await deleteGameChannelsAndGame(game, gameId, ctx);
+    console.log(`[killgame-diag] deleteGameChannelsAndGame returned cleanly for game ${gameId}`);
   } catch (err) {
     console.error('[botmenu] Kill game error:', err);
+    console.log(`[killgame-diag] deleteGameChannelsAndGame THREW for game ${gameId}: ${err?.message ?? err}`);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'botmenu_kill');
   }
 }
