@@ -3,38 +3,69 @@ import assert from 'node:assert/strict';
 import {
   getDcInfo, getDcExhausted, setDcExhausted, getDcHealth, setDcHealth,
 } from './dc-state.js';
-import { dcMessageMeta, dcExhaustedState, dcHealthState } from '../game-state.js';
+import { dcExhaustedState, dcHealthState, getGamesMap } from '../game-state.js';
 
-describe('dc-state accessors (Slice 1: Map-backed)', () => {
+describe('dc-state accessors (post Slice 4a: dcMessageMeta derived)', () => {
   // Capture pre-test Map state so tests don't leak side-effects into other
-  // suites (game-state Maps are module-level singletons).
-  const savedMeta = new Map();
+  // suites (the still-authoritative Maps + games are module-level singletons).
   const savedExh = new Map();
   const savedHp = new Map();
+  const savedGames = new Map();
+  const games = getGamesMap();
 
   beforeEach(() => {
-    savedMeta.clear(); savedExh.clear(); savedHp.clear();
-    for (const [k, v] of dcMessageMeta) savedMeta.set(k, v);
+    savedExh.clear(); savedHp.clear(); savedGames.clear();
     for (const [k, v] of dcExhaustedState) savedExh.set(k, v);
     for (const [k, v] of dcHealthState) savedHp.set(k, v);
-    dcMessageMeta.clear(); dcExhaustedState.clear(); dcHealthState.clear();
+    for (const [k, v] of games) savedGames.set(k, v);
+    dcExhaustedState.clear(); dcHealthState.clear();
+    games.clear();
   });
 
   after(() => {
-    dcMessageMeta.clear(); dcExhaustedState.clear(); dcHealthState.clear();
-    for (const [k, v] of savedMeta) dcMessageMeta.set(k, v);
+    dcExhaustedState.clear(); dcHealthState.clear();
+    games.clear();
     for (const [k, v] of savedExh) dcExhaustedState.set(k, v);
     for (const [k, v] of savedHp) dcHealthState.set(k, v);
+    for (const [k, v] of savedGames) games.set(k, v);
   });
 
-  describe('getDcInfo', () => {
-    it('returns the meta object when msgId is known', () => {
-      dcMessageMeta.set('msg1', { gameId: 'g1', playerNum: 1, dcName: 'Trooper', displayName: 'Trooper' });
-      assert.deepEqual(getDcInfo({}, 'msg1'), { gameId: 'g1', playerNum: 1, dcName: 'Trooper', displayName: 'Trooper' });
+  describe('getDcInfo (derived from game.dcList + dcMessageIds)', () => {
+    it('returns the meta object when the msgId is canonically tracked on a game', () => {
+      games.set('g1', {
+        gameId: 'g1',
+        p1DcMessageIds: ['msg1'],
+        p1DcList: [{ dcName: 'Trooper', displayName: 'Trooper [Group 1]' }],
+        p2DcMessageIds: [],
+        p2DcList: [],
+      });
+      assert.deepEqual(getDcInfo({}, 'msg1'), {
+        gameId: 'g1', playerNum: 1, dcName: 'Trooper', displayName: 'Trooper [Group 1]',
+      });
     });
 
-    it('returns undefined when msgId is unknown (matches Map.get)', () => {
+    it('returns undefined when msgId is not in any game', () => {
       assert.equal(getDcInfo({}, 'unknown'), undefined);
+    });
+
+    it('falls back to dcName when displayName is missing on the dcList entry', () => {
+      games.set('g1', {
+        gameId: 'g1',
+        p1DcMessageIds: ['msg1'],
+        p1DcList: [{ dcName: 'Vader' }],
+        p2DcMessageIds: [], p2DcList: [],
+      });
+      assert.equal(getDcInfo({}, 'msg1').displayName, 'Vader');
+    });
+
+    it('finds player 2 entries too', () => {
+      games.set('g1', {
+        gameId: 'g1',
+        p1DcMessageIds: [], p1DcList: [],
+        p2DcMessageIds: ['p2m'],
+        p2DcList: [{ dcName: 'Rebel', displayName: 'Rebel [Group 1]' }],
+      });
+      assert.equal(getDcInfo({}, 'p2m').playerNum, 2);
     });
   });
 

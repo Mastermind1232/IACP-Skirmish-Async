@@ -209,38 +209,103 @@ function ensureGameShape(game) {
 }
 
 /**
- * Side-channel Maps for DC state, keyed by Discord message ID.
+ * Side-channel state for DC messages, keyed by Discord message ID.
  *
- * MIGRATION-IN-PROGRESS (see project_dc_state_consolidation_plan.md):
- * these Maps are scheduled for deletion. New code should use the accessors
- * in src/game/dc-state.js instead of touching the Maps directly.
+ * dcMessageMeta is now a DERIVED VIEW (Phase 4 of the renderer plan): it
+ * walks `games` on every read instead of holding authoritative storage.
+ * Existing readers see the same Map-shaped API; writers (.set/.delete/
+ * .clear) silently no-op because game state itself is canonical and
+ * already mutated by the caller alongside the Map write.
  *
- * INVARIANT (canonical source of truth — these Maps are derived):
- *   - dcExhaustedState[msgId] === activatedDcIndices.has(dcIndex)
- *                                || abilityExhaustedMsgIds.includes(msgId)
- *   - dcHealthState[msgId]    === game.dcList[dcIndex].healthState
- *   - dcMessageMeta[msgId]    === { gameId, playerNum, dcName, displayName }
- *                                derivable from game.p1DcList / game.p2DcList
- *                                + game.p1DcMessageIds / game.p2DcMessageIds
- *
- * `repopulateDcMapsForGame` rebuilds all three from canonical game state.
- * If your call site directly mutates a Map, also update the canonical source
- * — otherwise the next save/restart will regenerate the Map and your write
- * will silently disappear. (See abilities.js:8710-8711 and combat-special-
- * effects.js:770-771 for the right pattern.)
- *
- * KNOWN LATENT GAPS (slated for fix in Slice 4 of the consolidation plan):
- * a few un-exhaust paths set the Map to false without removing from
- * abilityExhaustedMsgIds — works in the current session but a save/restart
- * would re-derive exhausted=true from abilityExhaustedMsgIds. Sites:
- * dc-play-area.js:286 + 488 (un-activate), apply-ability-result.js:61
- * (CC ready effect), game-tools.js:279 (undo activation).
+ * dcExhaustedState and dcHealthState are still real Maps for now —
+ * Slices 4b and 4c migrate them in turn.
  */
-/** messageId -> { gameId, playerNum, dcName, displayName } */
-const dcMessageMeta = new Map();
-/** messageId -> boolean (exhausted) */
+
+/**
+ * Map-shaped derived view of DC message meta.
+ * .get(msgId) walks all games' p1DcMessageIds/p2DcMessageIds, finds
+ * the one containing msgId, and returns the meta object derived from
+ * the corresponding dcList[i].
+ *
+ * Writers (.set/.delete/.clear) are intentional no-ops — the underlying
+ * game state is canonical. If a caller .set's a value that doesn't
+ * appear in any game's dcMessageIds, it silently doesn't exist; the
+ * next .get returns undefined. This is correct: such a write was
+ * always a logical bug (storing meta for a msgId that game state
+ * doesn't acknowledge).
+ */
+class DerivedDcMessageMeta {
+  constructor(gamesMap) { this._games = gamesMap; }
+
+  get(msgId) {
+    if (!msgId) return undefined;
+    for (const [gameId, game] of this._games) {
+      for (const playerNum of [1, 2]) {
+        const ids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const idx = (ids || []).indexOf(msgId);
+        if (idx >= 0) {
+          const dc = (playerNum === 1 ? game.p1DcList : game.p2DcList)?.[idx];
+          if (dc) {
+            return {
+              gameId,
+              playerNum,
+              dcName: dc.dcName,
+              displayName: dc.displayName || dc.dcName,
+            };
+          }
+        }
+      }
+    }
+    return undefined;
+  }
+
+  has(msgId) { return this.get(msgId) !== undefined; }
+
+  set(_msgId, _value) { return this; }       // derived: no-op
+  delete(_msgId)      { return false; }     // derived: no-op
+  clear()             { /* derived: no-op */ }
+
+  *[Symbol.iterator]() {
+    for (const [gameId, game] of this._games) {
+      for (const playerNum of [1, 2]) {
+        const ids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const list = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idsArr = ids || [];
+        const listArr = list || [];
+        for (let i = 0; i < idsArr.length; i++) {
+          const msgId = idsArr[i];
+          const dc = listArr[i];
+          if (msgId && dc) {
+            yield [msgId, {
+              gameId,
+              playerNum,
+              dcName: dc.dcName,
+              displayName: dc.displayName || dc.dcName,
+            }];
+          }
+        }
+      }
+    }
+  }
+
+  *keys()    { for (const [k] of this) yield k; }
+  *values()  { for (const [, v] of this) yield v; }
+  *entries() { yield* this[Symbol.iterator](); }
+  forEach(fn) { for (const [k, v] of this) fn(v, k, this); }
+
+  get size() {
+    let n = 0;
+    // eslint-disable-next-line no-unused-vars
+    for (const _ of this) n++;
+    return n;
+  }
+}
+
+/** Derived view: { gameId, playerNum, dcName, displayName } per msgId */
+const dcMessageMeta = new DerivedDcMessageMeta(games);
+/** messageId -> boolean (exhausted) — still authoritative; Slice 4b will migrate */
 const dcExhaustedState = new Map();
-/** messageId -> healthState array */
+/** messageId -> healthState array — still authoritative; Slice 4c will migrate */
 const dcHealthState = new Map();
 /** key = `${gameId}_${playerNum}`, value = { squad, timestamp } */
 const pendingIllegalSquad = new Map();
