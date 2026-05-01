@@ -13,6 +13,7 @@ import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
+import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
@@ -715,8 +716,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       components: handPayload.components || [],
     }).catch(discordCatch);
   }
-  await updateHandVisualMessage(game, meta.playerNum, interaction.client);
-  await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
+  await refreshHandAndDiscard(game, meta.playerNum, interaction.client, ctx);
   // Special Action CCs cost 1 action; Double Action CCs cost both actions.
   if (timingLabel === 'Special Action') {
     const data = game.dcActionsData?.[msgId];

@@ -29,3 +29,29 @@ export async function requirePlayer(interaction, game, userId, playerNum, canAct
   }
   return true;
 }
+
+/**
+ * Reject the interaction if the user isn't player1 or player2 of the game.
+ * Returns true to continue, false (and replies) to bail.
+ *
+ * @param {import('discord.js').Interaction} interaction
+ * @param {object} game
+ * @param {string} action - present-tense verb phrase, e.g. "save checkpoints",
+ *   "select the map", "use Undo". Inserted into "Only players in this {scope}
+ *   can {action}."
+ * @param {object} [opts]
+ * @param {boolean} [opts.useReply] - use reply() instead of followUp()
+ * @param {'game'|'lobby'} [opts.scope] - defaults to 'game'
+ * @returns {Promise<boolean>}
+ */
+export async function requireParticipant(interaction, game, action, opts = {}) {
+  const userId = interaction.user.id;
+  if (userId === game.player1Id || userId === game.player2Id) return true;
+  const scope = opts.scope || 'game';
+  const respond = opts.useReply ? interaction.reply.bind(interaction) : interaction.followUp.bind(interaction);
+  await respond({
+    content: `Only players in this ${scope} can ${action}.`,
+    ephemeral: true,
+  }).catch(discordCatch);
+  return false;
+}

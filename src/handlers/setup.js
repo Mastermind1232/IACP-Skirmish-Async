@@ -22,7 +22,7 @@ import {
 import { dcNameFromFigureKey, isFigurelessDc } from '../game/index.js';
 import { stripBrackets, cardNameEquals } from '../game/card-names.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requireParticipant } from '../utils/guards.js';
 import { resolveStartOfRoundEffect } from './round.js';
 import { fetchGameChannel, snowflakeUsers } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows, buildRowPickerButtons } from '../discord/components.js';
@@ -371,10 +371,7 @@ export async function handleMapSelection(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'map_selection_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can select the map.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'select the map')) return;
   if (game.mapSelected) {
     await interaction.followUp({ content: `Map already selected: **${game.selectedMap?.name ?? 'Unknown'}**.`, ephemeral: true }).catch(discordCatch);
     return;
@@ -788,10 +785,7 @@ export async function handleDraftRandom(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'draft_random_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can use Draft Random.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'use Draft Random')) return;
   if (game.draftRandomUsed || game.currentRound || game.initiativeDetermined || game.deploymentZoneChosen) {
     await interaction.followUp({ content: 'Draft Random is only available at game setup.', ephemeral: true }).catch(discordCatch);
     return;
@@ -826,10 +820,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'determine_initiative_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can determine initiative.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'determine initiative')) return;
   if (game.initiativeDetermined) {
     await interaction.followUp({ content: 'Initiative was already determined.', ephemeral: true }).catch(discordCatch);
     return;
@@ -1904,10 +1895,7 @@ export async function handleDeploymentDone(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'deployment_done_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can use this.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'use this')) return;
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;

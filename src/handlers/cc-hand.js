@@ -35,6 +35,7 @@ import {
 } from '../game/player-helpers.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
+import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 
@@ -239,8 +240,7 @@ export async function handleCcAttachTo(interaction, ctx) {
     }).catch(discordCatch);
   }
   await interaction.message.delete().catch(discordCatch);
-  await updateHandVisualMessage(game, playerNum, interaction.client);
-  await updateDiscardPileMessage(game, playerNum, interaction.client);
+  await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> played **${card}** as an attachment.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   saveGames();
 }
@@ -474,8 +474,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(discordCatch);
       }
       await interaction.message.delete().catch(discordCatch);
-      await updateHandVisualMessage(game, playerNum, interaction.client);
-      await updateDiscardPileMessage(game, playerNum, interaction.client);
+      await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
       const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
@@ -516,8 +515,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(discordCatch);
       }
       await interaction.message.delete().catch(discordCatch);
-      await updateHandVisualMessage(game, playerNum, interaction.client);
-      await updateDiscardPileMessage(game, playerNum, interaction.client);
+      await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
       const effectDesc2 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc2}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
@@ -561,8 +559,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(discordCatch);
       }
       await interaction.message.delete().catch(discordCatch);
-      await updateHandVisualMessage(game, playerNum, interaction.client);
-      await updateDiscardPileMessage(game, playerNum, interaction.client);
+      await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
       const effectDesc3 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc3}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       await applyAbilityResult(result, { game, playerNum, client: interaction.client, ctx });
@@ -662,8 +659,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     }).catch(discordCatch);
   }
   await interaction.message.delete().catch(discordCatch);
-  await updateHandVisualMessage(game, playerNum, interaction.client);
-  await updateDiscardPileMessage(game, playerNum, interaction.client);
+  await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
   const effectDesc4 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc4}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (cost === 0 && ctx.getNegationResponseButtons) {
@@ -763,8 +759,7 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
   // Also discard the played card from the opponent's discard (cancel its effects)
   // The card is already in the opponent's discard — we note the cancellation
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  await updateHandVisualMessage(game, targetPlayerNum, interaction.client);
-  await updateDiscardPileMessage(game, targetPlayerNum, interaction.client);
+  await refreshHandAndDiscard(game, targetPlayerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `**Comm Disruption** — <@${interaction.user.id}> cancelled **${playedCard}**! Discard that card and cancel its effects.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   saveGames();
 }
@@ -816,8 +811,7 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
       components: handPayload.components,
     }).catch(discordCatch);
   }
-  await updateHandVisualMessage(game, playerNum, client);
-  await updateDiscardPileMessage(game, playerNum, client);
+  await refreshHandAndDiscard(game, playerNum, client, ctx);
   const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
   await logGameAction(game, client, `Played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card' });
   if (resolveAbility) {
@@ -1045,8 +1039,7 @@ export async function handleNegationPlay(interaction, ctx) {
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push('Negation');
   delete game.pendingNegation;
-  await updateHandVisualMessage(game, oppNum, client);
-  await updateDiscardPileMessage(game, oppNum, client);
+  await refreshHandAndDiscard(game, oppNum, client, ctx);
   await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch(discordCatch);
   const negPlayerId = getPlayerId(game, oppNum);
   await logGameAction(game, client, `<@${negPlayerId}> played **Negation** — cancelled **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [negPlayerId] } });
@@ -1133,8 +1126,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
   game[discardKey].push('Celebration');
   awardObjectiveVp(game, attackerPlayerNum, 4);
   delete game.pendingCelebration;
-  await updateHandVisualMessage(game, attackerPlayerNum, client);
-  await updateDiscardPileMessage(game, attackerPlayerNum, client);
+  await refreshHandAndDiscard(game, attackerPlayerNum, client, ctx);
   await interaction.message.edit({ content: `**Celebration** — +4 VP.`, components: [] }).catch(discordCatch);
   const celPlayerId = getPlayerId(game, attackerPlayerNum);
   await logGameAction(game, client, `<@${celPlayerId}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [celPlayerId] } });
@@ -1222,8 +1214,7 @@ export async function handleCcDiscardSelect(interaction, ctx) {
     }).catch(discordCatch);
   }
   await interaction.message.delete().catch(discordCatch);
-  await updateHandVisualMessage(game, playerNum, interaction.client);
-  await updateDiscardPileMessage(game, playerNum, interaction.client);
+  await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> discarded **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
   saveGames();
 }

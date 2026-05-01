@@ -27,7 +27,7 @@ import {
   TextInputStyle, StringSelectMenuBuilder, EmbedBuilder,
 } from 'discord.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requireParticipant } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import {
@@ -209,10 +209,7 @@ export async function handleCheckpointSavePrompt(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'cp_save_');
   const game = await requireGame(interaction, getGameDep, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can save checkpoints.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'save checkpoints')) return;
   const modal = new ModalBuilder()
     .setCustomId(`cp_save_modal_${gameId}`)
     .setTitle('Save Checkpoint');
@@ -312,10 +309,7 @@ export async function handleCheckpointNewGameOpen(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'cp_newgame_open_');
   const game = await requireGame(interaction, getGameDep, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this lobby can pick a checkpoint.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'pick a checkpoint', { scope: 'lobby' })) return;
   const checkpoints = await listAllCheckpoints({ limit: 25 });
   if (!checkpoints.length) {
     await interaction.followUp({ content: 'No checkpoints saved yet. Save one from any active game using **/botmenu → 💾 Save Checkpoint**.', ephemeral: true }).catch(discordCatch);
@@ -358,10 +352,7 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const game = await requireGame(interaction, getGameDep, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this lobby can pick.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'pick', { scope: 'lobby' })) return;
   const cp = await loadCheckpointOrFollowUp(interaction, cpId);
   if (!cp) return;
 

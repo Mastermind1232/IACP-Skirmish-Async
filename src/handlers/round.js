@@ -26,7 +26,7 @@ import {
 import { checkStartOfRoundPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { FIGURE_LETTERS, chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requireParticipant } from '../utils/guards.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
@@ -1034,10 +1034,7 @@ export async function handleSorMissionReveal(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'sor_mission_reveal_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can press this.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'press this')) return;
   if (!game.pendingMissionSorReveal) {
     await interaction.followUp({ content: 'Mission token reveal already completed.', ephemeral: true }).catch(discordCatch);
     return;

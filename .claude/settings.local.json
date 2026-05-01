@@ -22,7 +22,25 @@
       "mcp__discord-mcp__get_bot_info",
       "mcp__discord-mcp__send_message",
       "mcp__discord-mcp__delete_channel",
-      "Bash(railway logs:*)"
+      "Bash(railway logs:*)",
+      "Bash(git push *)",
+      "mcp__discord-mcp__list_forum_tags",
+      "mcp__plugin_discord_discord__reply",
+      "Bash(git -C /Users/adammeehan/Public/IACP-Skirmish-Async status --short)",
+      "Bash(git -C /Users/adammeehan/Public/IACP-Skirmish-Async log --oneline origin/main..HEAD)",
+      "Bash(git -C /Users/adammeehan/Public/IACP-Skirmish-Async log --oneline -3)",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "mcp__plugin_discord_discord__fetch_messages",
+      "Skill(update-config)",
+      "mcp__plugin_woz_code__Search",
+      "mcp__plugin_woz_code__Sql",
+      "mcp__discord-mcp__get_audit_log",
+      "mcp__discord-mcp__get_role_permissions",
+      "mcp__discord-mcp__check_permissions",
+      "mcp__plugin_woz_code__Edit",
+      "Bash(rm -rf ~/.claude/plugins/cache/wozcode-marketplace)",
+      "Read(//Users/adammeehan/.claude/plugins/cache/**)",
+      "Bash(npm test *)"
     ]
   }
 }

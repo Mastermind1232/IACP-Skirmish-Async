@@ -18,6 +18,7 @@ import { parseCustomId } from '../discord/custom-id.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 /**
@@ -461,8 +462,7 @@ export async function handleDefenderCcPlay(interaction, ctx) {
   }
 
   await logGameAction(game, client, `🛡️ <@${getPlayerId(game, playerNum)}> played defender CC **${card}**.`, { icon: 'card' });
-  await updateHandVisualMessage(game, playerNum, client);
-  await updateDiscardPileMessage(game, playerNum, client);
+  await refreshHandAndDiscard(game, playerNum, client, ctx);
 
   saveGames();
 }

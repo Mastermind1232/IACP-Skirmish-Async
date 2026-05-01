@@ -354,6 +354,20 @@ export async function updateHandChannelMessages(game, client, deps) {
   }
 }
 
+/**
+ * Refresh the hand visual + discard pile for a player as a pair. The two
+ * messages live next to each other in the play area and are nearly always
+ * updated together (CC played, drawn, discarded — any change to one almost
+ * always changes the other). One call replaces the duo at ~12 sites.
+ *
+ * Takes the wrapped updaters via ctx (closed-over deps) so callers don't
+ * have to thread `deps` separately.
+ */
+export async function refreshHandAndDiscard(game, playerNum, client, ctx) {
+  await ctx.updateHandVisualMessage(game, playerNum, client);
+  await ctx.updateDiscardPileMessage(game, playerNum, client);
+}
+
 /** Call after changing player1CcHand/player2CcHand to refresh the Play Area hand visual. */
 export async function updateHandVisualMessage(game, playerNum, client, deps) {
   const msgId = playerNum === 1 ? game.p1HandVisualMessageId : game.p2HandVisualMessageId;

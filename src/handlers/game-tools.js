@@ -6,7 +6,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } fro
 import { deleteGameChannelsAndGame } from './botmenu.js';
 import { discordCatch } from '../error-handling.js';
 import { logGameAction } from '../discord/messages.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requireParticipant } from '../utils/guards.js';
 import { getInitiativePlayerNum, getPlayAreaId, getPlayerId } from '../game/player-helpers.js';
 import { PHASES } from '../game/phase.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
@@ -93,10 +93,7 @@ export async function handleRefreshMap(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'refresh_map_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can refresh the map.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'refresh the map')) return;
   if (!game.selectedMap) {
     await interaction.followUp({ content: 'No map selected yet.', ephemeral: true }).catch(discordCatch);
     return;
@@ -122,10 +119,7 @@ export async function handleRefreshAll(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'refresh_all_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can refresh.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'refresh')) return;
   try {
     await refreshAllGameComponents(game, client);
     saveGames();
@@ -168,10 +162,7 @@ export async function handleUndo(interaction, ctx) {
     await interaction.followUp({ content: 'Undo is disabled once the game has ended.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can use Undo.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requireParticipant(interaction, game, 'use Undo')) return;
   const last = game.undoStack?.pop();
   if (!last) {
     await interaction.followUp({ content: 'Nothing to undo yet.', ephemeral: true }).catch(discordCatch);
