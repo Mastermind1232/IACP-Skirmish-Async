@@ -351,6 +351,7 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
     getGame: getGameDep, saveGames, client,
     createBoardChannel, createPlayAreaChannels, populatePlayAreas,
     buildBoardMapPayload, sendRoundActivationPhaseMessage,
+    refreshAllGameComponents,
   } = ctx;
   const gameId = parseCustomId(interaction.customId, 'cp_newgame_pick_');
   const cpId = interaction.values?.[0];
@@ -390,6 +391,7 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
     // Apply checkpoint state on top of the now-prepared lobby.
     await applyCheckpointToNewLobby(game, cp, client, {
       populatePlayAreas, buildBoardMapPayload, sendRoundActivationPhaseMessage, saveGames,
+      refreshAllGameComponents,
     });
 
     if (settingUpMsg) settingUpMsg.delete().catch(() => {});
@@ -475,6 +477,15 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
   }
   if (deps.sendRoundActivationPhaseMessage && newGame.currentRound > 0) {
     try { await deps.sendRoundActivationPhaseMessage(newGame, client); } catch {}
+  }
+  // Phase-specific UI safety nets — refreshAllGameComponents posts the
+  // CC shuffle/draw prompts (cc_draw phase), the activation message
+  // (round_active stuck-state recovery), and other phase-stuck rescues.
+  // Without this, loading a checkpoint into mid-cc_draw leaves players
+  // with no Shuffle/Draw button to click and the game stalls.
+  if (deps.refreshAllGameComponents) {
+    try { await deps.refreshAllGameComponents(newGame, client); }
+    catch (err) { console.error('refreshAllGameComponents (cross-game load) failed:', err); }
   }
   if (deps.saveGames) deps.saveGames(newGame.gameId);
 }

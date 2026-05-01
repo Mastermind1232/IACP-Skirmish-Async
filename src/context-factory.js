@@ -310,6 +310,11 @@ const CONTEXT_GROUPS = {
     // New-lobby load needs to spin up channels + render board.
     'createBoardChannel', 'createPlayAreaChannels', 'populatePlayAreas',
     'buildBoardMapPayload', 'sendRoundActivationPhaseMessage',
+    // Phase-specific UI safety nets (CC-draw prompts, Draft-Random
+    // activation message, etc.) live inside refreshAllGameComponents.
+    // Without it, a checkpoint load into a phase like cc_draw leaves
+    // the players stuck — no Shuffle/Draw button, no progression.
+    'refreshAllGameComponents',
   ],
 
   phaseGate: [
