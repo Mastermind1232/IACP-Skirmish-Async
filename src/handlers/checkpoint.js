@@ -146,6 +146,14 @@ function clearPendingAndPerMsgIdState(game) {
   game.moveInProgress = {};
   game.moveGridMessageIds = {};
   game.movementBank = {};
+  // Idempotency flags for "did I post X in this session?" — these survive
+  // the JSON snapshot but their semantics don't carry across a load. The
+  // new lobby has different msgIds and a fresh UI surface; if these stay
+  // true, the safety nets in refreshAllGameComponents silently skip
+  // reposting (audit confirmed-bug 3 + gap 8). Clearing on load forces
+  // the renderer / safety nets to repost from scratch.
+  game.ccShuffleDrawPromptsPosted = false;
+  game.activationPhaseMessagePosted = false;
   // pendingCombat is covered by the pending* sweep but be explicit.
   delete game.pendingCombat;
   // Combat thread / pre-combat / roll messages live on dead channels.
