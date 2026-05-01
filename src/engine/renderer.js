@@ -208,3 +208,57 @@ export async function renderHandPayload(game, playerNum, client, _ctx) {
   game[msgIdField] = newMsg.id;
   return { posted: true, edited: false, msgId: newMsg.id };
 }
+
+/**
+ * Ensure the round-activation message ("Round N — your turn!") exists in the
+ * general channel when (and only when) the game is actively in round_active
+ * phase.
+ *
+ * Phase gate is the audit's confirmed-bug 2 fix: the previous loader logic
+ * gated on `currentRound > 0`, which fires during deployment too because
+ * setup-bridge bumps currentRound to 1 before deployment finishes. The
+ * correct gate is `phase === 'round_active'`.
+ *
+ * Branches:
+ *   - phase !== round_active → no-op (returns posted/edited false)
+ *   - msgId valid + Discord has it → no-op (existing message stays)
+ *   - msgId missing OR 404 → post via ctx.sendRoundActivationPhaseMessage,
+ *     which sets game.roundActivationMessageId and game.activationPhaseMessagePosted
+ *
+ * Mutates: game.roundActivationMessageId via the canonical poster.
+ *
+ * @param {object} ctx - { sendRoundActivationPhaseMessage } required for the post branch
+ * @returns {Promise<{ posted: boolean, edited: boolean, msgId: string | null }>}
+ */
+export async function renderRoundActivationMessage(game, client, ctx = {}) {
+  if (game.phase !== 'round_active') {
+    return { posted: false, edited: false, msgId: null };
+  }
+  if (!game.generalId) {
+    console.warn(`[renderer] renderRoundActivationMessage: game ${game.gameId} missing generalId`);
+    return { posted: false, edited: false, msgId: null };
+  }
+
+  const existingId = game.roundActivationMessageId;
+  if (existingId) {
+    const channel = await fetchGameChannel(client, game.generalId).catch(() => null);
+    if (channel) {
+      try {
+        await channel.messages.fetch(existingId);
+        return { posted: false, edited: false, msgId: existingId };
+      } catch {
+        // 404 — fall through to post
+      }
+    }
+  }
+
+  if (typeof ctx.sendRoundActivationPhaseMessage !== 'function') {
+    console.warn(`[renderer] renderRoundActivationMessage: ctx.sendRoundActivationPhaseMessage missing; cannot post for game ${game.gameId}`);
+    return { posted: false, edited: false, msgId: null };
+  }
+  // The canonical poster sets game.roundActivationMessageId +
+  // game.activationPhaseMessagePosted = true and calls updateHandChannelMessages.
+  // Re-using it keeps the bot's invariants consistent without duplication.
+  await ctx.sendRoundActivationPhaseMessage(game, client);
+  return { posted: true, edited: false, msgId: game.roundActivationMessageId ?? null };
+}

@@ -35,7 +35,7 @@ import {
   countCheckpointsByUser,
 } from '../db.js';
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
-import { renderHandThread, renderHandVisual, renderHandPayload } from '../engine/renderer.js';
+import { renderHandThread, renderHandVisual, renderHandPayload, renderRoundActivationMessage } from '../engine/renderer.js';
 
 const MAX_CHECKPOINTS_PER_USER = 50;
 const CHECKPOINT_NAME_MAX_LEN = 80;
@@ -479,6 +479,7 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
   // came up with empty hand threads (audit bug 1).
   await renderHandPayload(newGame, 1, client);
   await renderHandPayload(newGame, 2, client);
+  await renderRoundActivationMessage(newGame, client, deps);
   // 8. Remap all msgId-keyed game-state fields from old → new.
   remapMsgIdKeyedFields(newGame, oldP1DcIds, oldP2DcIds);
   // 9. Repopulate side-channel Maps from the freshly-rendered DC messages.
@@ -495,9 +496,9 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
       console.error('Board render (cross-game load) failed:', err);
     }
   }
-  if (deps.sendRoundActivationPhaseMessage && newGame.currentRound > 0) {
-    try { await deps.sendRoundActivationPhaseMessage(newGame, client); } catch {}
-  }
+  // (Round-activation message handled in the renderer pass above —
+  // renderRoundActivationMessage gates on phase === 'round_active', closing
+  // audit bug 2 where the old `currentRound > 0` gate fired during deployment.)
   // Phase-specific UI safety nets — refreshAllGameComponents posts the
   // CC shuffle/draw prompts (cc_draw phase), the activation message
   // (round_active stuck-state recovery), and other phase-stuck rescues.

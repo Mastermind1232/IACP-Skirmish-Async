@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderHandThread, renderHandVisual, renderHandPayload } from './renderer.js';
+import { renderHandThread, renderHandVisual, renderHandPayload, renderRoundActivationMessage } from './renderer.js';
 
 /**
  * Mock Discord client. Tracks created threads + members. Supports forced-404
@@ -385,5 +385,117 @@ describe('renderer.renderHandPayload', () => {
     const result = await renderHandPayload(game, 1, client);
     assert.equal(result.posted, false);
     assert.equal(result.edited, false);
+  });
+});
+
+describe('renderer.renderRoundActivationMessage', () => {
+  function makeGeneralChannel({ msgFound = true } = {}) {
+    const fetched = new Map();
+    const channel = {
+      messages: {
+        fetch: async (id) => {
+          if (msgFound && fetched.get(id)) return fetched.get(id);
+          throw new Error('Discord 404');
+        },
+      },
+    };
+    return { channel, fetched };
+  }
+
+  let game;
+  let general;
+  let client;
+  let sendCalls;
+  let ctx;
+
+  beforeEach(() => {
+    general = makeGeneralChannel();
+    client = {
+      channels: {
+        fetch: async (id) => (id === 'GENERAL_1' ? general.channel : null),
+      },
+    };
+    sendCalls = [];
+    ctx = {
+      sendRoundActivationPhaseMessage: async (g) => {
+        sendCalls.push({ gameId: g.gameId });
+        g.roundActivationMessageId = `round_msg_${sendCalls.length}`;
+        g.activationPhaseMessagePosted = true;
+      },
+    };
+    game = {
+      gameId: '00001',
+      generalId: 'GENERAL_1',
+      phase: 'round_active',
+      currentRound: 1,
+      roundActivationMessageId: null,
+    };
+  });
+
+  it('no-ops when phase is not round_active', async () => {
+    game.phase = 'deployment';
+    game.currentRound = 1; // would have triggered the old buggy currentRound > 0 gate
+    const result = await renderRoundActivationMessage(game, client, ctx);
+    assert.equal(result.posted, false);
+    assert.equal(result.edited, false);
+    assert.equal(sendCalls.length, 0);
+  });
+
+  it('no-ops when phase is cc_draw', async () => {
+    game.phase = 'cc_draw';
+    const result = await renderRoundActivationMessage(game, client, ctx);
+    assert.equal(result.posted, false);
+    assert.equal(sendCalls.length, 0);
+  });
+
+  it('posts via canonical sender when in round_active and no msgId', async () => {
+    const result = await renderRoundActivationMessage(game, client, ctx);
+    assert.equal(result.posted, true);
+    assert.equal(sendCalls.length, 1);
+    assert.ok(game.roundActivationMessageId);
+    assert.equal(result.msgId, game.roundActivationMessageId);
+  });
+
+  it('no-ops when msgId is valid and Discord has the message', async () => {
+    game.roundActivationMessageId = 'EXISTING_ROUND';
+    general.fetched.set('EXISTING_ROUND', { id: 'EXISTING_ROUND' });
+    const result = await renderRoundActivationMessage(game, client, ctx);
+    assert.equal(result.posted, false);
+    assert.equal(result.edited, false);
+    assert.equal(result.msgId, 'EXISTING_ROUND');
+    assert.equal(sendCalls.length, 0);
+  });
+
+  it('falls through to post when stored msgId 404s', async () => {
+    game.roundActivationMessageId = 'STALE_ROUND';
+    // makeGeneralChannel default has msgFound=true but fetched is empty → throws
+    const result = await renderRoundActivationMessage(game, client, ctx);
+    assert.equal(result.posted, true);
+    assert.equal(sendCalls.length, 1);
+    assert.notEqual(result.msgId, 'STALE_ROUND');
+  });
+
+  it('returns gracefully when generalId is missing', async () => {
+    game.generalId = null;
+    const result = await renderRoundActivationMessage(game, client, ctx);
+    assert.equal(result.posted, false);
+    assert.equal(sendCalls.length, 0);
+  });
+
+  it('returns gracefully when ctx.sendRoundActivationPhaseMessage is missing', async () => {
+    const result = await renderRoundActivationMessage(game, client, {});
+    assert.equal(result.posted, false);
+    assert.equal(result.msgId, null);
+  });
+
+  it('audit bug 2 regression: deployment-phase load with currentRound=1 does not post', async () => {
+    // Pre-fix loader gated on currentRound > 0 — this scenario triggered a
+    // stale "Round 1 your turn!" message during deployment because
+    // setup-bridge bumps currentRound to 1 before deployment finishes.
+    game.phase = 'deployment';
+    game.currentRound = 1;
+    const result = await renderRoundActivationMessage(game, client, ctx);
+    assert.equal(result.posted, false);
+    assert.equal(sendCalls.length, 0);
   });
 });
