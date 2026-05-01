@@ -558,17 +558,16 @@ export async function populatePlayAreas(game, client, deps, opts = {}) {
     game.p2DcList = p2Dcs;
     game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || [];
     game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || [];
-    // Derive activation counts from board state (handles LiA set-aside automatically)
+  }
+  // Derive activation counts from board state (handles LiA set-aside
+  // automatically). Both branches need this — fresh setup AND loadFromState.
+  // Pre-fix the loadFromState branch was skipping it (audit gap 9), causing
+  // saved p1ActivationsRemaining to be used directly even when the figures
+  // actually on the board didn't match. Pulled out of the if/else so neither
+  // branch can forget.
+  if (deps.recomputeActivationCounts) {
     deps.recomputeActivationCounts(game, 1);
     deps.recomputeActivationCounts(game, 2);
-  } else {
-    // loadFromState path also needs activation counts derived from current
-    // board state — saved p1ActivationsRemaining can be stale relative to
-    // the figures actually deployed (audit gap 9).
-    if (deps.recomputeActivationCounts) {
-      deps.recomputeActivationCounts(game, 1);
-      deps.recomputeActivationCounts(game, 2);
-    }
   }
 
   game.p1DcMessageIds = [];
