@@ -35,7 +35,7 @@ import {
   countCheckpointsByUser,
 } from '../db.js';
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
-import { renderHandThread, renderHandVisual } from '../engine/renderer.js';
+import { renderHandThread, renderHandVisual, renderHandPayload } from '../engine/renderer.js';
 
 const MAX_CHECKPOINTS_PER_USER = 50;
 const CHECKPOINT_NAME_MAX_LEN = 80;
@@ -474,6 +474,11 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
   await renderHandThread(newGame, 2, client);
   await renderHandVisual(newGame, 1, client);
   await renderHandVisual(newGame, 2, client);
+  // renderHandPayload depends on the hand thread existing — that's why it
+  // runs after renderHandThread above. Without this, cross-lobby loads
+  // came up with empty hand threads (audit bug 1).
+  await renderHandPayload(newGame, 1, client);
+  await renderHandPayload(newGame, 2, client);
   // 8. Remap all msgId-keyed game-state fields from old → new.
   remapMsgIdKeyedFields(newGame, oldP1DcIds, oldP2DcIds);
   // 9. Repopulate side-channel Maps from the freshly-rendered DC messages.

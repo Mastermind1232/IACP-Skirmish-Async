@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderHandThread, renderHandVisual } from './renderer.js';
+import { renderHandThread, renderHandVisual, renderHandPayload } from './renderer.js';
 
 /**
  * Mock Discord client. Tracks created threads + members. Supports forced-404
@@ -295,5 +295,95 @@ describe('renderer.renderHandVisual', () => {
     delete game.player1CcHand;
     const result = await renderHandVisual(game, 1, client);
     assert.equal(result.posted, true);
+  });
+});
+
+describe('renderer.renderHandPayload', () => {
+  function makeThreadChannel() {
+    const sent = [];
+    const edited = [];
+    const fetched = new Map();
+    const channel = {
+      send: async (payload) => {
+        const id = `payload_msg${sent.length + 1}`;
+        const msg = { id, edit: async (p) => { edited.push({ id, payload: p }); } };
+        fetched.set(id, msg);
+        sent.push({ id, payload });
+        return msg;
+      },
+      messages: {
+        fetch: async (id) => {
+          if (!fetched.has(id)) throw new Error('Discord 404');
+          return fetched.get(id);
+        },
+      },
+    };
+    return { channel, sent, edited, fetched };
+  }
+
+  let game;
+  let thread;
+  let client;
+
+  beforeEach(() => {
+    thread = makeThreadChannel();
+    client = {
+      channels: {
+        fetch: async (id) => (id === 'HAND_THREAD_1' ? thread.channel : null),
+      },
+    };
+    game = {
+      gameId: '00001',
+      p1HandId: 'HAND_THREAD_1',
+      p2HandId: 'HAND_THREAD_2',
+      p1HandMessageId: null,
+      p2HandMessageId: null,
+      player1CcHand: ['Card A', 'Card B'],
+      player2CcHand: [],
+      player1CcDeck: ['Deck 1', 'Deck 2'],
+      player2CcDeck: [],
+    };
+  });
+
+  it('posts payload into the hand thread when msgId is null, stores new id', async () => {
+    const result = await renderHandPayload(game, 1, client);
+    assert.equal(result.posted, true);
+    assert.equal(result.edited, false);
+    assert.ok(result.msgId);
+    assert.equal(game.p1HandMessageId, result.msgId);
+    assert.equal(thread.sent.length, 1);
+  });
+
+  it('edits existing payload when msgId is valid', async () => {
+    const first = await renderHandPayload(game, 1, client);
+    thread.sent.length = 0;
+    thread.edited.length = 0;
+    game.player1CcHand = ['Card C'];
+    const second = await renderHandPayload(game, 1, client);
+    assert.equal(second.posted, false);
+    assert.equal(second.edited, true);
+    assert.equal(second.msgId, first.msgId);
+    assert.equal(thread.edited.length, 1);
+  });
+
+  it('falls through to post when stored msgId 404s', async () => {
+    game.p1HandMessageId = 'STALE_PAYLOAD';
+    const result = await renderHandPayload(game, 1, client);
+    assert.equal(result.posted, true);
+    assert.notEqual(result.msgId, 'STALE_PAYLOAD');
+  });
+
+  it('returns gracefully when hand thread is missing on game', async () => {
+    game.p1HandId = null;
+    const result = await renderHandPayload(game, 1, client);
+    assert.equal(result.posted, false);
+    assert.equal(result.edited, false);
+  });
+
+  it('returns gracefully when hand thread 404s on Discord', async () => {
+    client.channels.fetch = async () => null;
+    const result = await renderHandPayload(game, 1, client);
+    assert.equal(result.posted, false);
+    assert.equal(result.edited, false);
   });
 });

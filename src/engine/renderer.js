@@ -24,7 +24,8 @@ import { ThreadAutoArchiveDuration, ChannelType } from 'discord.js';
 import { fetchGameChannel, isDiscordSnowflake } from '../discord/channel-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { getHandVisualEmbed } from '../discord/embeds.js';
-import { getCcHand } from '../game/player-helpers.js';
+import { getCcHand, getCcDeck } from '../game/player-helpers.js';
+import { buildHandDisplayPayload } from '../rendering.js';
 
 /**
  * Ensure player `playerNum`'s "Your Hand" private thread exists inside their
@@ -140,6 +141,70 @@ export async function renderHandVisual(game, playerNum, client, _ctx) {
     }
   }
   const newMsg = await channel.send({ embeds: [embed] });
+  game[msgIdField] = newMsg.id;
+  return { posted: true, edited: false, msgId: newMsg.id };
+}
+
+/**
+ * Ensure player `playerNum`'s hand-payload message — the actual "Command
+ * Cards in Hand" embed list inside the private hand thread — exists and
+ * reflects the current hand.
+ *
+ * Distinct from `renderHandVisual`: that one is the card-count summary in
+ * the public play area; this one is the full card list inside the private
+ * thread. The two surfaces have different msgIds.
+ *
+ * Branches:
+ *   - msgId valid + Discord has it → edit to current hand contents
+ *   - msgId missing OR 404 → post into the hand thread, store new id
+ *
+ * Requires the hand thread to exist (caller should run `renderHandThread`
+ * first). Returns gracefully if it doesn't.
+ *
+ * Mutates: game[`p${playerNum}HandMessageId`] on creation.
+ *
+ * @returns {Promise<{ posted: boolean, edited: boolean, msgId: string | null }>}
+ */
+export async function renderHandPayload(game, playerNum, client, _ctx) {
+  const msgIdField = playerNum === 1 ? 'p1HandMessageId' : 'p2HandMessageId';
+  const handIdField = playerNum === 1 ? 'p1HandId' : 'p2HandId';
+
+  const handThreadId = game[handIdField];
+  if (!handThreadId) {
+    console.warn(`[renderer] renderHandPayload: game ${game.gameId} missing ${handIdField}; run renderHandThread first`);
+    return { posted: false, edited: false, msgId: null };
+  }
+  const handChannel = await fetchGameChannel(client, handThreadId).catch(() => null);
+  if (!handChannel) {
+    console.warn(`[renderer] renderHandPayload: hand thread ${handThreadId} not found on Discord; skipping player ${playerNum}`);
+    return { posted: false, edited: false, msgId: null };
+  }
+
+  const hand = getCcHand(game, playerNum) || [];
+  const deck = getCcDeck(game, playerNum) || [];
+  const payload = buildHandDisplayPayload(hand, deck, game.gameId, game, playerNum);
+
+  const existingId = game[msgIdField];
+  if (existingId) {
+    try {
+      const msg = await handChannel.messages.fetch(existingId);
+      await msg.edit({
+        content: payload.content,
+        embeds: payload.embeds,
+        files: payload.files || [],
+        components: payload.components || [],
+      }).catch(discordCatch);
+      return { posted: false, edited: true, msgId: existingId };
+    } catch {
+      // 404 — fall through to post
+    }
+  }
+  const newMsg = await handChannel.send({
+    content: payload.content,
+    embeds: payload.embeds,
+    files: payload.files || [],
+    components: payload.components || [],
+  });
   game[msgIdField] = newMsg.id;
   return { posted: true, edited: false, msgId: newMsg.id };
 }
