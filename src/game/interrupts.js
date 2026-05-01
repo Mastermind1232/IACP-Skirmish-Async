@@ -92,6 +92,15 @@ export const INTERRUPT_TYPES = Object.freeze({
   EXTRA_PROTECTION:      'extra-protection',
   DURASTEEL_FIST_PUSH:   'durasteel-fist-push',
   ZILLO_DISCARD:         'zillo-discard',
+  SURGE_OVERFLOW:        'surge-overflow',
+  ORDERED_MOVE:          'ordered-move',
+  WOOK_SLAM_PUSH:        'wook-slam-push',
+  TOUGH_LUCK:            'tough-luck',
+  ROGUE_ONE_TOKEN_PICK:  'rogue-one-token-pick',
+  REACTION:              'reaction',
+  COMM_DISRUPTION_PROMPT:'comm-disruption-prompt',
+  INDISCRIMINATE_FIRE:   'indiscriminate-fire',
+  CONCUSSIVE_BOLT:       'concussive-bolt',
 
   // Post-deploy abilities
   POST_DEPLOY_QUEUE:     'post-deploy-queue',
@@ -410,6 +419,33 @@ export function clearPendingDurasteelFistPush(game) { _clearDual(game, 'pendingD
 
 export function setPendingZilloDiscard(game, payload) { _setDual(game, 'pendingZilloDiscard', INTERRUPT_TYPES.ZILLO_DISCARD, payload); }
 export function clearPendingZilloDiscard(game) { _clearDual(game, 'pendingZilloDiscard', INTERRUPT_TYPES.ZILLO_DISCARD); }
+
+export function setPendingSurgeOverflow(game, payload) { _setDual(game, 'pendingSurgeOverflow', INTERRUPT_TYPES.SURGE_OVERFLOW, payload); }
+export function clearPendingSurgeOverflow(game) { _clearDual(game, 'pendingSurgeOverflow', INTERRUPT_TYPES.SURGE_OVERFLOW); }
+
+export function setPendingOrderedMove(game, payload) { _setDual(game, 'pendingOrderedMove', INTERRUPT_TYPES.ORDERED_MOVE, payload); }
+export function clearPendingOrderedMove(game) { _clearDual(game, 'pendingOrderedMove', INTERRUPT_TYPES.ORDERED_MOVE); }
+
+export function setPendingWookSlamPush(game, payload) { _setDual(game, 'pendingWookSlamPush', INTERRUPT_TYPES.WOOK_SLAM_PUSH, payload); }
+export function clearPendingWookSlamPush(game) { _clearDual(game, 'pendingWookSlamPush', INTERRUPT_TYPES.WOOK_SLAM_PUSH); }
+
+export function setPendingToughLuck(game, payload) { _setDual(game, 'pendingToughLuck', INTERRUPT_TYPES.TOUGH_LUCK, payload); }
+export function clearPendingToughLuck(game) { _clearDual(game, 'pendingToughLuck', INTERRUPT_TYPES.TOUGH_LUCK); }
+
+export function setPendingRogueOneTokenPick(game, payload) { _setDual(game, 'pendingRogueOneTokenPick', INTERRUPT_TYPES.ROGUE_ONE_TOKEN_PICK, payload); }
+export function clearPendingRogueOneTokenPick(game) { _clearDual(game, 'pendingRogueOneTokenPick', INTERRUPT_TYPES.ROGUE_ONE_TOKEN_PICK); }
+
+export function setPendingReaction(game, payload) { _setDual(game, 'pendingReaction', INTERRUPT_TYPES.REACTION, payload); }
+export function clearPendingReaction(game) { _clearDual(game, 'pendingReaction', INTERRUPT_TYPES.REACTION); }
+
+export function setPendingCommDisruptionPrompt(game, payload) { _setDual(game, 'pendingCommDisruptionPrompt', INTERRUPT_TYPES.COMM_DISRUPTION_PROMPT, payload); }
+export function clearPendingCommDisruptionPrompt(game) { _clearDual(game, 'pendingCommDisruptionPrompt', INTERRUPT_TYPES.COMM_DISRUPTION_PROMPT); }
+
+export function setPendingIndiscriminateFire(game, payload) { _setDual(game, 'pendingIndiscriminateFire', INTERRUPT_TYPES.INDISCRIMINATE_FIRE, payload); }
+export function clearPendingIndiscriminateFire(game) { _clearDual(game, 'pendingIndiscriminateFire', INTERRUPT_TYPES.INDISCRIMINATE_FIRE); }
+
+export function setPendingConcussiveBolt(game, payload) { _setDual(game, 'pendingConcussiveBolt', INTERRUPT_TYPES.CONCUSSIVE_BOLT, payload); }
+export function clearPendingConcussiveBolt(game) { _clearDual(game, 'pendingConcussiveBolt', INTERRUPT_TYPES.CONCUSSIVE_BOLT); }
 
 /**
  * MISSION_SOR_REVEAL — boolean flag, not a payload. Set/clear toggle.

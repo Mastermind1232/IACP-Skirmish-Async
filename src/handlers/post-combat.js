@@ -13,6 +13,7 @@ import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, grantMovementBank } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+import { clearPendingReaction } from '../game/interrupts.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
@@ -31,7 +32,7 @@ export async function handleReactionSkip(interaction, ctx) {
   if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can skip.', ephemeral: true }).catch(discordCatch); return; }
   await interaction.deferUpdate().catch(discordCatch);
   const pending = game.pendingReaction;
-  delete game.pendingReaction;
+  clearPendingReaction(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   // Restore the card to hand (it was tentatively removed when prompting)
   const handKey = ccHandKey(pending.defenderPlayerNum);
@@ -64,7 +65,7 @@ export async function handleReactionUse(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const pending = game.pendingReaction;
-  delete game.pendingReaction;
+  clearPendingReaction(game);
   // Card was already removed from hand when prompting; discard it (add to discard pile)
   const discardKey = ccDiscardKey(defenderPlayerNum);
   game[discardKey] = game[discardKey] || [];

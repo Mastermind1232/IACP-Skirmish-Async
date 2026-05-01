@@ -6,7 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
 import { finalizeActivation, getCompanionForDc, formatCompanionStats } from '../engine/activation-setup.js';
 import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
-import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, setPendingFieldTactics, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush } from '../game/interrupts.js';
+import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, setPendingFieldTactics, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush, setPendingWookSlamPush, clearPendingWookSlamPush } from '../game/interrupts.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
@@ -1492,7 +1492,7 @@ export async function handleActPassive(interaction, ctx) {
             });
             if (validPushSpaces.length > 0) {
               // Store pending push state
-              game.pendingWookSlamPush = { targetFk, targetPlayerNum, gameId, msgId };
+              setPendingWookSlamPush(game, { targetFk, targetPlayerNum, gameId, msgId });
               const spaceBtns = validPushSpaces.slice(0, 4).map(s =>
                 new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslamspace_${String(s).toLowerCase()}`).setLabel(String(s).toUpperCase()).setStyle(ButtonStyle.Primary)
               );
@@ -1514,14 +1514,14 @@ export async function handleActPassive(interaction, ctx) {
     if (!pending) {
       await interaction.message.edit({ content: `**Wookiee Avenger Slam** — No pending push.`, components: [] }).catch(discordCatch);
     } else if (choice === 'skip') {
-      delete game.pendingWookSlamPush;
+      clearPendingWookSlamPush(game);
       await interaction.message.edit({ content: `**Wookiee Avenger Slam** — Push skipped.`, components: [] }).catch(discordCatch);
     } else {
       const { targetFk, targetPlayerNum } = pending;
       const targetDcName = dcNameFromFigureKey(targetFk);
       const chosenSpace = String(choice).toLowerCase();
       pushFigure(game, targetPlayerNum, targetFk, chosenSpace);
-      delete game.pendingWookSlamPush;
+      clearPendingWookSlamPush(game);
       await interaction.message.edit({ content: `**Wookiee Avenger Slam** — Pushed **${targetDcName}** to **${chosenSpace.toUpperCase()}**.`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `**Wookiee Avenger Slam** — Pushed **${targetDcName}** to **${chosenSpace.toUpperCase()}**.`, { phase: 'ACTIVATION', icon: 'move' });
     }

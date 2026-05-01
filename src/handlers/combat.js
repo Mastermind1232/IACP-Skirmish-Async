@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick } from '../game/interrupts.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
@@ -3817,7 +3817,7 @@ export async function handleCombatReroll(interaction, ctx) {
         }
         // Tough Luck: if defender set TL, they may remove this rerolled die
         if (game.toughLuckPlayerNum === defenderPlayerNum) {
-          game.pendingToughLuck = { side: 'atk', idx };
+          setPendingToughLuck(game, { side: 'atk', idx });
           const _tlOwner = game[`player${defenderPlayerNum}Id`] ?? '';
           const _tlRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
@@ -3861,7 +3861,7 @@ export async function handleCombatReroll(interaction, ctx) {
         }
         // Tough Luck: if attacker set TL, they may remove this rerolled defense die
         if (game.toughLuckPlayerNum === attackerPlayerNum) {
-          game.pendingToughLuck = { side: 'def', idx };
+          setPendingToughLuck(game, { side: 'def', idx });
           const _tlOwner = game[`player${attackerPlayerNum}Id`] ?? '';
           const _tlRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
@@ -5376,7 +5376,7 @@ export async function handleCombatSurge(interaction, ctx) {
     if (donors.length === 0) {
       await thread.send('**Rogue One** — No friendly figures with power tokens available.').catch(discordCatch);
     } else {
-      game.pendingRogueOneTokenPick = { gameId, combatThreadId: combat.combatThreadId, attackerPlayerNum: combat.attackerPlayerNum };
+      setPendingRogueOneTokenPick(game, { gameId, combatThreadId: combat.combatThreadId, attackerPlayerNum: combat.attackerPlayerNum });
       const btns = [];
       // Group by figure and show one button per token
       for (let d = 0; d < donors.length && d < 20; d++) {
@@ -5616,7 +5616,7 @@ export async function handleCombatSurge(interaction, ctx) {
   }
   // Check for power token overflow before showing next surge choices
   if (game.pendingPowerTokenOverflow?.length > 0) {
-    game.pendingSurgeOverflow = { combatThreadId: combat.combatThreadId, attackerPlayerNum: combat.attackerPlayerNum };
+    setPendingSurgeOverflow(game, { combatThreadId: combat.combatThreadId, attackerPlayerNum: combat.attackerPlayerNum });
     await sendPowerTokenOverflowUI(game, gameId, thread, combat.attackerPlayerNum, saveGames);
     return; // pause surge — overflow handler will resume
   }
@@ -6056,7 +6056,7 @@ export async function handlePowerTokenChoice(interaction, ctx) {
       if (game.pendingPowerTokenOverflow?.length > 0) {
         const _ptCombat = game.pendingCombat;
         if (_ptCombat && (_ptCombat.surgeRemaining || 0) > 0) {
-          game.pendingSurgeOverflow = { combatThreadId: channelId, attackerPlayerNum: playerNum };
+          setPendingSurgeOverflow(game, { combatThreadId: channelId, attackerPlayerNum: playerNum });
         }
         await sendPowerTokenOverflowUI(game, gameId, ch, playerNum, saveGames);
         return; // wait for overflow resolution before continuing
@@ -6106,7 +6106,7 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
 
   // Check for power token overflow before resuming surge
   if (game.pendingPowerTokenOverflow?.length > 0) {
-    game.pendingSurgeOverflow = { combatThreadId, attackerPlayerNum };
+    setPendingSurgeOverflow(game, { combatThreadId, attackerPlayerNum });
     await sendPowerTokenOverflowUI(game, gameId, thread, attackerPlayerNum, saveGames);
     return;
   }
@@ -6129,7 +6129,7 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
     const [, gameId] = skipMatch;
     const game = await requireGame(interaction, getGame, gameId, { silent: true });
     if (!game) return;
-    delete game.pendingRogueOneTokenPick;
+    clearPendingRogueOneTokenPick(game);
     const combat = game.pendingCombat;
     if (!combat) return;
     const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
@@ -6163,7 +6163,7 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
   }
   const { attackerPlayerNum } = game.pendingRogueOneTokenPick;
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Not your choice.')) return;
-  delete game.pendingRogueOneTokenPick;
+  clearPendingRogueOneTokenPick(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const combat = game.pendingCombat;
@@ -7058,7 +7058,7 @@ export async function handlePowerTokenOverflowDiscard(interaction, ctx) {
     // Resume surge flow if overflow originated from surge resolution
     if (game.pendingSurgeOverflow) {
       const { combatThreadId, attackerPlayerNum: atkNum } = game.pendingSurgeOverflow;
-      game.pendingSurgeOverflow = null;
+      clearPendingSurgeOverflow(game);
       const combat = game.pendingCombat;
       if (combat && combatThreadId) {
         const surgeThread = await fetchCombatThread(interaction.client, combatThreadId);

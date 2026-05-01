@@ -121,7 +121,7 @@ describe('B-CR-TL: Tough Luck die splice', () => {
     assert.strictEqual(combat.attackDiceResults[0].color, 'red', 'red preserved at index 0');
     assert.strictEqual(combat.attackDiceResults[1].color, 'green', 'green shifted to index 1');
     assert.deepStrictEqual(combat.attackRoll, { acc: 1, dmg: 5, surge: 1 }, 'totals recalculated');
-    assert.strictEqual(game.pendingToughLuck, null, 'pendingToughLuck cleared');
+    assert.ok(game.pendingToughLuck == null, 'pendingToughLuck cleared');
   });
 
   it('B-CR-TL-002: removes defense die and recalculates defense totals', async () => {
@@ -154,7 +154,7 @@ describe('B-CR-TL: Tough Luck die splice', () => {
     const { ctx } = buildCtx(game);
     await handleToughLuck(mockInteraction('tough_luck_skip_g1', 'player1'), ctx);
 
-    assert.strictEqual(game.pendingToughLuck, null, 'pendingToughLuck cleared');
+    assert.ok(game.pendingToughLuck == null, 'pendingToughLuck cleared');
     assert.strictEqual(combat.attackDiceResults.length, 3, 'dice unchanged');
     assert.deepStrictEqual(combat.attackDiceResults, originalDice, 'dice array unchanged');
   });
@@ -692,7 +692,7 @@ describe('B-CR-CLEANUP: State cleanup after handlers', () => {
     };
     const { ctx: ctx1 } = buildCtx(game1);
     await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx1);
-    assert.strictEqual(game1.pendingToughLuck, null);
+    assert.ok(game1.pendingToughLuck == null);
 
     // Skip path
     const combat2 = makeCombat();
@@ -703,7 +703,7 @@ describe('B-CR-CLEANUP: State cleanup after handlers', () => {
     };
     const { ctx: ctx2 } = buildCtx(game2);
     await handleToughLuck(mockInteraction('tough_luck_skip_g1', 'player1'), ctx2);
-    assert.strictEqual(game2.pendingToughLuck, null);
+    assert.ok(game2.pendingToughLuck == null);
   });
 
   it('B-CR-CLEANUP-002: TINT sets tintResolved on both face pick and skip', async () => {

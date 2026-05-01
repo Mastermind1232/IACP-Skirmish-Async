@@ -391,7 +391,7 @@ describe('B-C-OVERFLOW: Power-token overflow detection and resolution', () => {
     // Overflow should be resolved
     assert.strictEqual(game.pendingPowerTokenOverflow, null, 'overflow cleared');
     // pendingSurgeOverflow should be cleared (resume happened)
-    assert.strictEqual(game.pendingSurgeOverflow, null, 'pendingSurgeOverflow cleared');
+    assert.ok(game.pendingSurgeOverflow == null, 'pendingSurgeOverflow cleared');
     // Should have sent surge UI (or ready-to-resolve)
     assert.ok(sharedThread._sent.some(m => {
       const content = typeof m === 'string' ? m : m?.content || '';
@@ -541,7 +541,7 @@ describe('B-C-PEND2: Pending-state lifecycle for token/overflow flows', () => {
       ctx,
     );
 
-    assert.strictEqual(game.pendingSurgeOverflow, null, 'pendingSurgeOverflow cleared');
+    assert.ok(game.pendingSurgeOverflow == null, 'pendingSurgeOverflow cleared');
     assert.strictEqual(game.pendingPowerTokenOverflow, null, 'overflow cleared');
   });
 

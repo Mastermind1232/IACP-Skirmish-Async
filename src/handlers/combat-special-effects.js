@@ -15,7 +15,7 @@ import { requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
-import { clearPendingBoltslinger, clearPendingHeavyFire, clearPendingWantonDestruction, clearPendingHavocShot, clearPendingFightingKnife, clearPendingSpreadThePain, clearPendingDeflect, clearPendingDurasteelFistPush } from '../game/interrupts.js';
+import { clearPendingBoltslinger, clearPendingHeavyFire, clearPendingWantonDestruction, clearPendingHavocShot, clearPendingFightingKnife, clearPendingSpreadThePain, clearPendingDeflect, clearPendingDurasteelFistPush, clearPendingIndiscriminateFire, clearPendingConcussiveBolt } from '../game/interrupts.js';
 
 // ── Internal helpers ─────────────────────────────
 
@@ -354,7 +354,7 @@ export async function handleIndiscriminateFireDie(interaction, ctx) {
   const die = availableDice[parseInt(idxStr, 10)];
   if (!die) return;
   await interaction.deferUpdate().catch(discordCatch);
-  delete game.pendingIndiscriminateFire;
+  clearPendingIndiscriminateFire(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const thread = await fetchCombatThread(client, combatThreadId);
   if (thread) await applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThreadId, die, targets, thread, ctx);
@@ -368,7 +368,7 @@ export async function handleIndiscriminateFireSkip(interaction, ctx) {
   if (!m) return;
   const game = getGame(m[1]);
   await interaction.deferUpdate().catch(discordCatch);
-  if (game) delete game.pendingIndiscriminateFire;
+  if (game) clearPendingIndiscriminateFire(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
@@ -467,7 +467,7 @@ export async function handleConcussiveBoltPush(interaction, ctx) {
     return;
   }
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  delete game.pendingConcussiveBolt;
+  clearPendingConcussiveBolt(game);
   // Move the figure to the chosen space
   pushFigure(game, pending.defenderPlayerNum, pending.figureKey, space);
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
@@ -508,7 +508,7 @@ export async function handleConcussiveBoltSkip(interaction, ctx) {
   if (!game?.pendingConcussiveBolt) return;
   const pending = game.pendingConcussiveBolt;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  delete game.pendingConcussiveBolt;
+  clearPendingConcussiveBolt(game);
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames();

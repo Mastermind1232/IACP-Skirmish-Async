@@ -32,7 +32,7 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
   }
 }
 import { countGameSpaces } from '../game/board-helpers.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -2133,7 +2133,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       const adjSpaces = getValidPushDestinations(game, combat.target.figureKey, defenderPlayerNum, { pusherIsMassive: _pusherKws.includes('MASSIVE') });
       if (adjSpaces.length > 0) {
         const { msgId: targetMsgId, label: targetLabel } = getFigureLabel(game, defenderPlayerNum, combat.target.figureKey, targetDcName);
-        game.pendingConcussiveBolt = {
+        setPendingConcussiveBolt(game, {
           gameId: game.gameId,
           combatThreadId: combat.combatThreadId,
           attackerPlayerNum: combat.attackerPlayerNum,
@@ -2146,7 +2146,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
           resultText,
           combat,
           initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-        };
+        });
         const btns = adjSpaces.slice(0, 4).map((sp) =>
           new ButtonBuilder().setCustomId(`concussive_bolt_push_${game.gameId}_${sp}`).setLabel(sp.toUpperCase()).setStyle(ButtonStyle.Danger)
         );
@@ -2227,7 +2227,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     const handKey = ccHandKey(defenderPlayerNum);
     const cardIdx = (game[handKey] || []).indexOf(name);
     if (cardIdx >= 0) game[handKey].splice(cardIdx, 1);
-    game.pendingReaction = {
+    setPendingReaction(game, {
       gameId: game.gameId,
       combatThreadId: combat.combatThreadId,
       attackerPlayerNum: combat.attackerPlayerNum,
@@ -2241,7 +2241,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       resultText,
       combat,
       initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-    };
+    });
     const btnUse = new ButtonBuilder()
       .setCustomId(`reaction_use_${game.gameId}`)
       .setLabel(`React: ${name}`)
@@ -2480,7 +2480,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       if (nonRedDice.length === 1) {
         await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, deps);
       } else {
-        game.pendingIndiscriminateFire = { attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: splashTargets, availableDice: nonRedDice };
+        setPendingIndiscriminateFire(game, { attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: splashTargets, availableDice: nonRedDice });
         const ifBtns = nonRedDice.slice(0, 5).map((d, i) =>
           new ButtonBuilder().setCustomId(`indiscriminate_die_${game.gameId}_${i}`).setLabel(`${String(d.color).slice(0, 1).toUpperCase()}${String(d.color).slice(1)} (${d.dmg}dmg/${d.surge}\u21AF)`).setStyle(ButtonStyle.Secondary)
         );

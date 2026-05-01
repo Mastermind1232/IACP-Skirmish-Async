@@ -14,7 +14,7 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
-import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrderedMove, clearPendingOrderedMove } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
@@ -2398,13 +2398,13 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   // Order / Tactical Maneuver: present "Move (Figure)" button for the ordered figure
   if (resolveResult.applied && resolveResult.orderMovePrompt) {
     const omp = resolveResult.orderMovePrompt;
-    game.pendingOrderedMove = {
+    setPendingOrderedMove(game, {
       figureKey: omp.figureKey,
       targetMsgId: omp.msgId,
       playerNum,
       mp: omp.mp,
       label: omp.label || 'Order',
-    };
+    });
     // Deduct action
     const actionsData = game.dcActionsData?.[msgId];
     if (actionsData) {
@@ -3021,7 +3021,7 @@ export async function handleOrderMove(interaction, ctx) {
   if (!pos) {
     const dcName = dcNameFromFigureKey(figureKey);
     await interaction.followUp({ content: `**${dcName}** has no position on the board.`, ephemeral: false }).catch(discordCatch);
-    delete game.pendingOrderedMove;
+    clearPendingOrderedMove(game);
     saveGames();
     return;
   }
@@ -3037,7 +3037,7 @@ export async function handleOrderMove(interaction, ctx) {
   const reachableSpaces = [...cache.cells.keys()];
   if (reachableSpaces.length === 0) {
     await interaction.followUp({ content: `**${dcName}** cannot move (no valid spaces within ${mp} MP).`, ephemeral: false }).catch(discordCatch);
-    delete game.pendingOrderedMove;
+    clearPendingOrderedMove(game);
     saveGames();
     return;
   }
@@ -3096,7 +3096,7 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
   if (targetMsgId && game.movementBank?.[targetMsgId]) {
     game.movementBank[targetMsgId].remaining = 0;
   }
-  delete game.pendingOrderedMove;
+  clearPendingOrderedMove(game);
 
   if (logGameAction) await logGameAction(game, client, `🎯 **${label}** — **${dcName}** moved to **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'move' }).catch(discordCatch);
 

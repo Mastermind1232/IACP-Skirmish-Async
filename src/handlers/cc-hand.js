@@ -19,7 +19,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
-import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment, setPendingIllegalCcPlay, clearPendingIllegalCcPlay } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment, setPendingIllegalCcPlay, clearPendingIllegalCcPlay, setPendingCommDisruptionPrompt, clearPendingCommDisruptionPrompt } from '../game/interrupts.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -77,7 +77,7 @@ async function promptCommDisruption(game, gameId, playerNum, card, client, logGa
   try {
     const oppHandChannel = await fetchGameChannel(client, oppHandId);
     const oppId = getPlayerId(game, oppNum);
-    game.pendingCommDisruptionPrompt = { targetPlayerNum: oppNum, playedCard: card, playedBy: playerNum, gameId };
+    setPendingCommDisruptionPrompt(game, { targetPlayerNum: oppNum, playedCard: card, playedBy: playerNum, gameId });
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`comm_disruption_play_${gameId}`).setLabel('Play Comm Disruption').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`comm_disruption_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
@@ -741,7 +741,7 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
   }
   const { targetPlayerNum, playedCard, playedBy } = pending;
   if (!await requirePlayer(interaction, game, interaction.user.id, targetPlayerNum, canActAsPlayer, 'Only the prompted player can respond.')) return;
-  delete game.pendingCommDisruptionPrompt;
+  clearPendingCommDisruptionPrompt(game);
 
   // Remove Comm Disruption from hand and add to discard
   const handKey = ccHandKey(targetPlayerNum);
@@ -773,7 +773,7 @@ export async function handleCommDisruptionSkip(interaction, ctx) {
   const gameId = parseCustomId(interaction.customId, 'comm_disruption_skip_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  delete game.pendingCommDisruptionPrompt;
+  clearPendingCommDisruptionPrompt(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }

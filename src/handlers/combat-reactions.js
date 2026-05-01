@@ -8,7 +8,7 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
-import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter } from '../game/interrupts.js';
+import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck } from '../game/interrupts.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -60,7 +60,7 @@ export async function handleToughLuck(interaction, ctx) {
   } else {
     await logGameAction(game, client, '**Tough Luck** — Skipped.', { phase: 'ROUND', icon: 'card' });
   }
-  game.pendingToughLuck = null;
+  clearPendingToughLuck(game);
   // Continue reroll flow
   const thread = await fetchCombatThread(client, combat?.combatThreadId);
   if (thread && combat) {
