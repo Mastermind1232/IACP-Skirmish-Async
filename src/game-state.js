@@ -498,21 +498,8 @@ export function persistGame(gameId, game) {
   saveGames(gameId);
 }
 
-/** Sync live dcHealthState Map back into game objects so persisted health is always current. */
-function syncHealthStateToGames() {
-  for (const [msgId, healthState] of dcHealthState) {
-    const meta = dcMessageMeta.get(msgId);
-    if (!meta) continue;
-    const game = games.get(meta.gameId);
-    if (!game || game.ended) continue;
-    const dcMessageIds = getDcMessageIds(game, meta.playerNum) || [];
-    const dcList = getDcList(game, meta.playerNum) || [];
-    const idx = dcMessageIds.indexOf(msgId);
-    if (idx >= 0 && dcList[idx] && Array.isArray(healthState)) {
-      dcList[idx].healthState = [...healthState];
-    }
-  }
-}
+// (syncHealthStateToGames was deleted — dcHealthState is derived from
+// dcList[i].healthState via Slice 4c, so the per-save copy was redundant.)
 
 /** Persist games to DB or file. Pass gameId to save only that game; omit to save all. */
 export async function saveGames(gameId) {
@@ -524,7 +511,6 @@ export async function saveGames(gameId) {
   if (EVENT_SOURCE_READ === 'exclusive') {
     return;
   }
-  syncHealthStateToGames();
   if (isDbConfigured()) {
     if (gameId) {
       markGameDirty(gameId);
@@ -743,7 +729,6 @@ export {
 async function gracefulShutdown(signal) {
   console.log(`[Games] ${signal} received — flushing pending saves...`);
   try {
-    syncHealthStateToGames();
     if (isDbConfigured() && gamesLoadedOk) {
       await saveGamesToDb(games);
       await savePromise;
