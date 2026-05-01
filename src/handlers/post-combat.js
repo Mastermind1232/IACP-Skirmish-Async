@@ -13,7 +13,7 @@ import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, grantMovementBank } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
-import { clearPendingReaction, setPendingRightBackAtYa, clearPendingRightBackAtYa } from '../game/interrupts.js';
+import { clearPendingReaction, setPendingRightBackAtYa, clearPendingRightBackAtYa, clearPendingMastery, clearPendingInterrogate } from '../game/interrupts.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
@@ -206,7 +206,7 @@ export async function handleMasteryPick(interaction, ctx) {
   if (interaction.user.id !== mastOwnerId) { await interaction.followUp({ content: 'Only the attacker can resolve Mastery.', ephemeral: true }).catch(discordCatch); return; }
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  delete mastGame.pendingMastery;
+  clearPendingMastery(mastGame);
   if (!isMasterySkip) {
     // Rest in Peace: block discard-pile retrieval
     if (mastGame.restInPeaceActive) {
@@ -265,7 +265,7 @@ export async function handleInterrogatePick(interaction, ctx) {
     // Step 1: attacker chose a card from opponent's hand. Show own hand to optionally discard.
     const intPickIdx = parseInt(splitCustomId(interaction.customId, 'interrogate_pick_')[1], 10);
     const intChosenCard = intOHS[intPickIdx];
-    if (!intChosenCard) { delete intGame.pendingInterrogate; saveGames(); return; }
+    if (!intChosenCard) { clearPendingInterrogate(intGame); saveGames(); return; }
     intGame.pendingInterrogate.chosenCardName = intChosenCard;
     const intChosenCost = getCcEffect(intChosenCard)?.cost ?? 0;
     const intHandKey = ccHandKey(intAPN);
@@ -274,7 +274,7 @@ export async function handleInterrogatePick(interaction, ctx) {
     if (intEligible.length === 0) {
       // Can't afford to discard — just log and finish
       if (intThread) await intThread.send(`**Interrogate** — You chose **${intChosenCard}** (cost ${intChosenCost}). No cards in your hand with equal or greater cost to force the discard.`).catch(discordCatch);
-      delete intGame.pendingInterrogate;
+      clearPendingInterrogate(intGame);
       const triggered = intThread ? await checkPostCombatSurges(intGame, intCombat, intRT, new Set(intEmbed), intThread, intOwnerId, intDPN) : false;
       if (triggered) { saveGames(); return; }
       await finishCombatResolution(intGame, intCombat, intRT, new Set(intEmbed), client);
@@ -296,7 +296,7 @@ export async function handleInterrogatePick(interaction, ctx) {
   }
 
   // Step 2: interrogate_discard_ or interrogate_skip_
-  if (!intChosen) { delete intGame.pendingInterrogate; saveGames(); return; }
+  if (!intChosen) { clearPendingInterrogate(intGame); saveGames(); return; }
   if (buttonKey === 'interrogate_discard_') {
     const intDisIdx = parseInt(splitCustomId(interaction.customId, 'interrogate_discard_')[1], 10);
     const intOwnCard = (intOES || [])[intDisIdx];
@@ -324,7 +324,7 @@ export async function handleInterrogatePick(interaction, ctx) {
     // Skip — just log
     if (intThread) await intThread.send(`**Interrogate** — Chose to see **${intChosen}** from opponent's hand; no discard.`).catch(discordCatch);
   }
-  delete intGame.pendingInterrogate;
+  clearPendingInterrogate(intGame);
   const intTriggered = intThread ? await checkPostCombatSurges(intGame, intCombat, intRT, new Set(intEmbed), intThread, intOwnerId, intDPN) : false;
   if (intTriggered) { saveGames(); return; }
   await finishCombatResolution(intGame, intCombat, intRT, new Set(intEmbed), client);

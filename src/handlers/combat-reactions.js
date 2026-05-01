@@ -8,7 +8,7 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
-import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion } from '../game/interrupts.js';
+import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion, clearPendingHunterProtocol } from '../game/interrupts.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -262,7 +262,7 @@ export async function handleHunterProtocol(interaction, ctx) {
   if (!await requirePlayer(interaction, _hpGame, interaction.user.id, _hpAtk, canActAsPlayer, 'Only the attacker may respond to Hunter Protocol.')) return;
   const _hpThread = await fetchCombatThread(client, _hpCombat.combatThreadId);
   const { key: _hpKey, cost: _hpCost } = _hpGame.pendingHunterProtocol;
-  _hpGame.pendingHunterProtocol = null;
+  clearPendingHunterProtocol(_hpGame);
   if (buttonKey === 'hunter_protocol_trigger_' && _hpKey) {
     const _hpResolveSurge = resolveSurgeAbility || parseSurgeEffect;
     const _hpMod = _hpResolveSurge ? _hpResolveSurge(_hpKey) : {};

@@ -29,7 +29,7 @@ import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from '../handlers/combat.js';
 import { applyStartOfActivationEffects } from './activation-effects.js';
-import { setPendingTokenDistribution, setPendingGeneralsOrders, setPendingConspire } from '../game/interrupts.js';
+import { setPendingTokenDistribution, setPendingGeneralsOrders, setPendingConspire, setPendingStillFaster } from '../game/interrupts.js';
 import { join } from 'path';
 
 // ─── Companion helpers (used by activation.js too) ───────────────────────────
@@ -1353,7 +1353,7 @@ export async function finalizeActivation({
       components: [sftRow],
       allowedMentions: { users: [sftOwnerId] },
     }).catch(discordCatch);
-    game.pendingStillFaster = { gameId, activatingMsgId: msgId, activatingPlayerNum: playerNum, sftPlayerNum };
+    setPendingStillFaster(game, { gameId, activatingMsgId: msgId, activatingPlayerNum: playerNum, sftPlayerNum });
   }
 
   // E7. Hostile activation reaction card prompts.

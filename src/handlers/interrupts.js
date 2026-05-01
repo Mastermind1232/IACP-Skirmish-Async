@@ -13,7 +13,7 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { resolveStartOfRoundEffect } from './round.js';
-import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW, clearPendingSuppressiveFireMp, clearPendingAssassinsBlade } from '../game/interrupts.js';
+import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW, clearPendingSuppressiveFireMp, clearPendingAssassinsBlade, clearPendingStillFaster, clearPendingSelfDestruct, clearPendingExecutorInterrupt, clearPendingBELReorder } from '../game/interrupts.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
@@ -46,7 +46,7 @@ export async function handleStillFaster(interaction, ctx) {
   if (buttonKey === 'still_faster_skip_') {
     const sftPlayerNum = sftGame.pendingStillFaster?.sftPlayerNum;
     if (!await requirePlayer(interaction, sftGame, interaction.user.id, sftPlayerNum, canActAsPlayer, 'Only the Still Faster Than You player may respond.')) return;
-    delete sftGame.pendingStillFaster;
+    clearPendingStillFaster(sftGame);
     sftGame.stillFasterPlayerNum = null;
     await interaction.deferUpdate().catch(discordCatch);
     await interaction.followUp({ content: '**Still Faster Than You** — Skipped.', ephemeral: false }).catch(discordCatch);
@@ -75,7 +75,7 @@ export async function handleStillFaster(interaction, ctx) {
         .setStyle(ButtonStyle.Primary));
     }
     if (sftButtons.length === 0) {
-      delete sftGame.pendingStillFaster;
+      clearPendingStillFaster(sftGame);
       sftGame.stillFasterPlayerNum = null;
       await interaction.deferUpdate().catch(discordCatch);
       await interaction.followUp({ content: '**Still Faster Than You** — No eligible figures to interrupt with.', ephemeral: false }).catch(discordCatch);
@@ -107,7 +107,7 @@ export async function handleStillFaster(interaction, ctx) {
     sftGame.stillFasterExcludeMsgId = sftActivatingMsgId;
     // Clear the flag (once-per-round CC; clear so it can't be used again)
     sftGame.stillFasterPlayerNum = null;
-    delete sftGame.pendingStillFaster;
+    clearPendingStillFaster(sftGame);
     const sftMeta = dcMessageMeta.get(sftPickedMsgId);
     const sftLabel = sftMeta?.displayName || sftMeta?.dcName || sftPickedMsgId;
     await interaction.deferUpdate().catch(discordCatch);
@@ -273,7 +273,7 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
   }
   const _sdcpPending = _sdcpGame.pendingSelfDestruct;
   if (!await requirePlayer(interaction, _sdcpGame, interaction.user.id, _sdcpPending.defenderPlayerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
-  delete _sdcpGame.pendingSelfDestruct;
+  clearPendingSelfDestruct(_sdcpGame);
   const _sdcpCombat = _sdcpGame.pendingCombat;
   if (buttonKey === 'self_destruct_protocol_use_') {
     // Roll 1 red die, apply Hit results as Damage to adjacent hostile figures
@@ -579,7 +579,7 @@ export async function handleBelReorder(interaction, ctx) {
   const _belNewOrder = [_belData.cards[_belFirst], _belData.cards[_belSecond], _belData.cards[_belThird]];
   const _belDeck = _belGame[_belData.deckKey] || [];
   _belGame[_belData.deckKey] = [..._belNewOrder, ..._belDeck.slice(_belData.cards.length)];
-  _belGame.pendingBELReorder = null;
+  clearPendingBELReorder(_belGame);
   await logGameAction(_belGame, client, `**Behind Enemy Lines** — Opponent's deck top 3 reordered to: ${_belNewOrder.map(c => `**${c}**`).join(', ')}.`, { phase: 'ROUND', icon: 'card' });
   saveGames(); return;
 }
@@ -963,7 +963,7 @@ export async function handleExecutor(interaction, ctx) {
   }
   const _exPending = _exGame.pendingExecutorInterrupt;
   if (!await requirePlayer(interaction, _exGame, interaction.user.id, _exPending.rgcPlayerNum, canActAsPlayer, 'Only the RGC owner may respond.')) return;
-  delete _exGame.pendingExecutorInterrupt;
+  clearPendingExecutorInterrupt(_exGame);
   const _exCombat = _exGame.pendingCombat;
 
   if (buttonKey === 'executor_use_') {

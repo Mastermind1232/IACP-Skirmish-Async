@@ -19,7 +19,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
-import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment, setPendingIllegalCcPlay, clearPendingIllegalCcPlay, setPendingCommDisruptionPrompt, clearPendingCommDisruptionPrompt, setPendingIKnowEverything, clearPendingIKnowEverything } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment, setPendingIllegalCcPlay, clearPendingIllegalCcPlay, setPendingCommDisruptionPrompt, clearPendingCommDisruptionPrompt, setPendingIKnowEverything, clearPendingIKnowEverything, setPendingBELReorder } from '../game/interrupts.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -591,7 +591,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       if (result.requiresReorder?.cards?.length > 1) {
         const _belCards = result.requiresReorder.cards;
         const _belDeckKey = result.requiresReorder.deckKey;
-        game.pendingBELReorder = { deckKey: _belDeckKey, cards: _belCards, picked: [], playerNum, gameId };
+        setPendingBELReorder(game, { deckKey: _belDeckKey, cards: _belCards, picked: [], playerNum, gameId });
         const _belBtns = _belCards.map((c, i) =>
           new ButtonBuilder()
             .setCustomId(`bel_reorder_1_${gameId}_${i}`)

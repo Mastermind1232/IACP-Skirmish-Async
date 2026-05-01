@@ -32,7 +32,7 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
   }
 }
 import { countGameSpaces } from '../game/board-helpers.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -948,7 +948,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         if ((_sdpEff2?.specialAbilityIds || []).includes('self_destruct_protocol')) {
           game.selfDestructProtocolTriggered = game.selfDestructProtocolTriggered || {};
           game.selfDestructProtocolTriggered[targetMsgId] = true;
-          game.pendingSelfDestruct = { targetMsgId, defenderPlayerNum, attackerPlayerNum, damage, hit, resultText, totalBlast, ownerId, targetFigIndex };
+          setPendingSelfDestruct(game, { targetMsgId, defenderPlayerNum, attackerPlayerNum, damage, hit, resultText, totalBlast, ownerId, targetFigIndex });
           const _sdpOwnerId2 = game[`player${defenderPlayerNum}Id`];
           const _sdpRow2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`self_destruct_protocol_use_${game.gameId}_${targetMsgId}`).setLabel('Use Self-Destruct').setStyle(ButtonStyle.Danger),
@@ -1011,12 +1011,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             // Trigger the interrupt
             game.executorTriggered = game.executorTriggered || {};
             game.executorTriggered[targetMsgId] = true;
-            game.pendingExecutorInterrupt = {
+            setPendingExecutorInterrupt(game, {
               rgcFigKey: _exFk, rgcMsgId: _exRgcMsgId, rgcPlayerNum: defenderPlayerNum,
               rgcDcName: _exDcName, defeatedLabel: combat.target.label,
               targetMsgId, defenderPlayerNum, attackerPlayerNum,
               damage, hit, resultText, totalBlast, ownerId, targetFigIndex,
-            };
+            });
             const _exOwnerId = game[`player${defenderPlayerNum}Id`];
             const _exRow = new ActionRowBuilder().addComponents(
               new ButtonBuilder().setCustomId(`executor_use_${game.gameId}_${_exRgcMsgId}`).setLabel('Use Executor').setStyle(ButtonStyle.Primary),
@@ -2301,7 +2301,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         if (mastEligible.length === 0) {
           await thread.send(`**Mastery** — No eligible FORCE USER Command cards (cost \u2264 1) in your discard pile.`).catch(discordCatch);
         } else {
-          game.pendingMastery = { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum };
+          setPendingMastery(game, { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum });
           const mastOwnerId = getPlayerId(game, mastPlayerNum);
           const mastBtns = mastEligible.slice(0, 4).map((cardName, i) =>
             new ButtonBuilder().setCustomId(`mastery_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)
@@ -2326,7 +2326,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     if (intOpponentHand.length === 0) {
       await thread.send(`**Interrogate** — Opponent's hand is empty; no card to choose.`).catch(discordCatch);
     } else {
-      game.pendingInterrogate = { gameId: game.gameId, attackerPlayerNum: intAttackerPlayerNum, opponentPlayerNum: intOpponentPlayerNum, opponentHandSnapshot: [...intOpponentHand], chosenCardName: null, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum };
+      setPendingInterrogate(game, { gameId: game.gameId, attackerPlayerNum: intAttackerPlayerNum, opponentPlayerNum: intOpponentPlayerNum, opponentHandSnapshot: [...intOpponentHand], chosenCardName: null, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum });
       const intOwnerId = getPlayerId(game, intAttackerPlayerNum);
       const intBtns = intOpponentHand.slice(0, 4).map((cardName, i) =>
         new ButtonBuilder().setCustomId(`interrogate_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Danger)

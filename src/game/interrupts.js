@@ -121,6 +121,13 @@ export const INTERRUPT_TYPES = Object.freeze({
   BOMBARDMENT_SORIN:     'bombardment-sorin',
   BATTLEFIELD_LEADERSHIP:'battlefield-leadership',
   ASSASSINS_BLADE:       'assassins-blade',
+  STILL_FASTER:          'still-faster',
+  SELF_DESTRUCT:         'self-destruct',
+  MASTERY:               'mastery',
+  INTERROGATE:           'interrogate',
+  HUNTER_PROTOCOL:       'hunter-protocol',
+  EXECUTOR_INTERRUPT:    'executor-interrupt',
+  BEL_REORDER:           'bel-reorder',
 
   // Post-deploy abilities
   POST_DEPLOY_QUEUE:     'post-deploy-queue',
@@ -526,6 +533,27 @@ export function clearPendingBattlefieldLeadership(game) { _clearDual(game, 'pend
 
 export function setPendingAssassinsBlade(game, payload) { _setDual(game, 'pendingAssassinsBlade', INTERRUPT_TYPES.ASSASSINS_BLADE, payload); }
 export function clearPendingAssassinsBlade(game) { _clearDual(game, 'pendingAssassinsBlade', INTERRUPT_TYPES.ASSASSINS_BLADE); }
+
+export function setPendingStillFaster(game, payload) { _setDual(game, 'pendingStillFaster', INTERRUPT_TYPES.STILL_FASTER, payload); }
+export function clearPendingStillFaster(game) { _clearDual(game, 'pendingStillFaster', INTERRUPT_TYPES.STILL_FASTER); }
+
+export function setPendingSelfDestruct(game, payload) { _setDual(game, 'pendingSelfDestruct', INTERRUPT_TYPES.SELF_DESTRUCT, payload); }
+export function clearPendingSelfDestruct(game) { _clearDual(game, 'pendingSelfDestruct', INTERRUPT_TYPES.SELF_DESTRUCT); }
+
+export function setPendingMastery(game, payload) { _setDual(game, 'pendingMastery', INTERRUPT_TYPES.MASTERY, payload); }
+export function clearPendingMastery(game) { _clearDual(game, 'pendingMastery', INTERRUPT_TYPES.MASTERY); }
+
+export function setPendingInterrogate(game, payload) { _setDual(game, 'pendingInterrogate', INTERRUPT_TYPES.INTERROGATE, payload); }
+export function clearPendingInterrogate(game) { _clearDual(game, 'pendingInterrogate', INTERRUPT_TYPES.INTERROGATE); }
+
+export function setPendingHunterProtocol(game, payload) { _setDual(game, 'pendingHunterProtocol', INTERRUPT_TYPES.HUNTER_PROTOCOL, payload); }
+export function clearPendingHunterProtocol(game) { _clearDual(game, 'pendingHunterProtocol', INTERRUPT_TYPES.HUNTER_PROTOCOL); }
+
+export function setPendingExecutorInterrupt(game, payload) { _setDual(game, 'pendingExecutorInterrupt', INTERRUPT_TYPES.EXECUTOR_INTERRUPT, payload); }
+export function clearPendingExecutorInterrupt(game) { _clearDual(game, 'pendingExecutorInterrupt', INTERRUPT_TYPES.EXECUTOR_INTERRUPT); }
+
+export function setPendingBELReorder(game, payload) { _setDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER, payload); }
+export function clearPendingBELReorder(game) { _clearDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER); }
 
 /**
  * MISSION_SOR_REVEAL — boolean flag, not a payload. Set/clear toggle.

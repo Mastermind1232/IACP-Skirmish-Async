@@ -54,6 +54,9 @@ export const RF_BASELINE_DUPLICATES = [];
 export const RF_BASELINE_UNUSED = [
   'deviceRerollGranted',
   'drivenByHatredForceChoke',
+  // pendingBELReorder is read/written via _belGame alias (handlers/interrupts.js);
+  // scanner regex requires `game.X`. Real usage exists.
+  'pendingBELReorder',
 ];
 export const RF_BASELINE_TYPE_MISMATCH = [
   'overdriveUsedThisActivation',
@@ -150,6 +153,13 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingBombardmentSorin',
   'pendingBattlefieldLeadership',
   'pendingAssassinsBlade',
+  'pendingStillFaster',
+  'pendingSelfDestruct',
+  'pendingMastery',
+  'pendingInterrogate',
+  'pendingHunterProtocol',
+  'pendingExecutorInterrupt',
+  'pendingBELReorder',
 ];
 
 // ── Dep-bag parity allowlist ────────────────────────────────────────────────

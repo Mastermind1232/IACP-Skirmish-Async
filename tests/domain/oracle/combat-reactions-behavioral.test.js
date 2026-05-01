@@ -1183,7 +1183,7 @@ describe('B-CR-HP: Hunter Protocol surge re-trigger', () => {
     assert.strictEqual(combat.surgeDamage, 4, 'damage doubled: 2+2=4');
     assert.strictEqual(combat.surgePierce, 1, 'pierce added');
     assert.strictEqual(combat.surgeRemaining, 1, '2-1=1 surge remaining');
-    assert.strictEqual(game.pendingHunterProtocol, null, 'pending cleared');
+    assert.ok(game.pendingHunterProtocol == null, 'pending cleared');
   });
 
   it('B-CR-HP-002: trigger tracks surgeSpentCount for Overload compatibility', async () => {
@@ -1222,7 +1222,7 @@ describe('B-CR-HP: Hunter Protocol surge re-trigger', () => {
 
     assert.strictEqual(combat.surgeDamage, 2, 'damage unchanged');
     assert.strictEqual(combat.surgeRemaining, 2, 'surge remaining unchanged');
-    assert.strictEqual(game.pendingHunterProtocol, null, 'pending cleared on skip too');
+    assert.ok(game.pendingHunterProtocol == null, 'pending cleared on skip too');
   });
 
   it('B-CR-HP-004: proceeds to ready-to-resolve when surgeRemaining reaches 0', async () => {
