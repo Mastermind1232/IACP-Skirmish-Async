@@ -60,7 +60,7 @@ describe('PROBE-PD-CC-006: CC restriction box enforced via isCcPlayLegalByRestri
       /const restriction = isCcPlayLegalByRestriction\(game, playerNum, card\);\s*\n\s*if \(!restriction\.legal\) \{/,
       'cc-hand must consult the restriction check before resolving the card — CRR-CC-006');
     assert.match(CCHAND_SRC,
-      /game\.pendingIllegalCcPlay = \{ playerNum, card, reason: restriction\.reason \};/,
+      /setPendingIllegalCcPlay\(game, \{ playerNum, card, reason: restriction\.reason \}\);/,
       'Illegal play must be parked in pendingIllegalCcPlay (not silently resolved) — CRR-CC-006');
   });
 

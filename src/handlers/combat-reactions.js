@@ -8,6 +8,7 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
+import { clearPendingIllicitArms } from '../game/interrupts.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -706,7 +707,7 @@ export async function handleIllicitArms(interaction, ctx) {
 
   if (isSkip) {
     if (thread) await thread.send('**Illicit Arms** — Declined.').catch(discordCatch);
-    game.pendingIllicitArms = null;
+    clearPendingIllicitArms(game);
     saveGames();
     return;
   }
@@ -716,7 +717,7 @@ export async function handleIllicitArms(interaction, ctx) {
     const hand = getCcHand(game, ia.playerNum) || [];
     if (hand.length === 0) {
       if (thread) await thread.send('**Illicit Arms** — No Command cards in hand to discard.').catch(discordCatch);
-      game.pendingIllicitArms = null;
+      clearPendingIllicitArms(game);
       saveGames();
       return;
     }
@@ -749,7 +750,7 @@ export async function handleIllicitArms(interaction, ctx) {
     const ccIndex = hand.findIndex(c => String(c) === cardName);
     if (!cardName || ccIndex < 0) {
       if (thread) await thread.send('**Illicit Arms** — Card no longer in hand.').catch(discordCatch);
-      game.pendingIllicitArms = null;
+      clearPendingIllicitArms(game);
       saveGames();
       return;
     }
@@ -767,7 +768,7 @@ export async function handleIllicitArms(interaction, ctx) {
     if (thread) await thread.send(`**Illicit Arms** (${ia.bibDcName}) — Discarded **${discarded}** for **+1 Hit**.`).catch(discordCatch);
     if (logGameAction) await logGameAction(game, client, `**Illicit Arms** (${ia.bibDcName}) — Discarded **${discarded}** for +1 Hit.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
-    game.pendingIllicitArms = null;
+    clearPendingIllicitArms(game);
     saveGames();
     return;
   }

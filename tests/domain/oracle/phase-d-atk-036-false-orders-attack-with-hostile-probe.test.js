@@ -41,7 +41,7 @@ const COMBAT_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8')
 describe('PROBE-PD-ATK-036: False Orders performs an attack with a hostile figure under the resolver\'s control', () => {
   it('036a: source — `false_orders` builds pendingFalseOrders with three-field controller/controlled scope', () => {
     assert.match(ABIL_SRC,
-      /game\.pendingFalseOrders\s*=\s*\{\s*\n\s*controlledFigureKey:\s*targetFigureKey,\s*\n\s*controlledPlayerNum:\s*enemyNum,\s*\n\s*controllerPlayerNum:\s*playerNum,/,
+      /setPendingFalseOrders\(game,\s*\{\s*\n\s*controlledFigureKey:\s*targetFigureKey,\s*\n\s*controlledPlayerNum:\s*enemyNum,\s*\n\s*controllerPlayerNum:\s*playerNum,/,
       'pendingFalseOrders must record controlledFigureKey, controlledPlayerNum, and controllerPlayerNum separately — CRR-ATK-036');
   });
 

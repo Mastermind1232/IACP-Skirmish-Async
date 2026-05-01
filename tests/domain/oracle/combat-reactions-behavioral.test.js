@@ -1510,7 +1510,7 @@ describe('B-CR-IA: Illicit Arms CC discard for +1 Hit', () => {
     assert.deepStrictEqual(game.player1CcHand, ['Take Initiative', 'Element of Surprise'],
       'Negation removed from hand');
     assert.ok(game.player1CcDiscard.includes('Negation'), 'Negation in discard pile');
-    assert.strictEqual(game.pendingIllicitArms, null, 'pending cleared');
+    assert.ok(game.pendingIllicitArms == null, 'pending cleared');
   });
 
   it('B-CR-IA-002: card not in hand sends error and clears pending', async () => {
@@ -1533,7 +1533,7 @@ describe('B-CR-IA: Illicit Arms CC discard for +1 Hit', () => {
 
     assert.strictEqual(combat.bonusHits, 0, 'no bonus applied');
     assert.deepStrictEqual(game.player1CcHand, ['Take Initiative'], 'hand unchanged');
-    assert.strictEqual(game.pendingIllicitArms, null, 'pending still cleared');
+    assert.ok(game.pendingIllicitArms == null, 'pending still cleared');
     // Thread should have received the error message
     assert.ok(thread._sent.some(m => (typeof m === 'string' ? m : m?.content || '').includes('Card no longer in hand')),
       'error message sent to thread');
@@ -1559,7 +1559,7 @@ describe('B-CR-IA: Illicit Arms CC discard for +1 Hit', () => {
 
     assert.strictEqual(combat.bonusHits, 0, 'no bonus');
     assert.strictEqual(game.player1CcHand.length, 2, 'hand unchanged');
-    assert.strictEqual(game.pendingIllicitArms, null, 'pending cleared');
+    assert.ok(game.pendingIllicitArms == null, 'pending cleared');
   });
 
   it('B-CR-IA-004: stacks with existing bonusHits', async () => {
@@ -1873,8 +1873,8 @@ describe('B-CR-INVARIANT: Pending-state and reroll invariants', () => {
         getAttackerSurgeAbilities: () => ['s1'],
       });
       await check.accept(gameA, ctxA);
-      assert.strictEqual(gameA[check.field], null,
-        `${check.name} accept: ${check.field} should be null`);
+      assert.ok(gameA[check.field] == null,
+        `${check.name} accept: ${check.field} should be cleared (got ${JSON.stringify(gameA[check.field])})`);
 
       // Skip path
       const gameS = { gameId: 'g1', player1Id: 'player1', player2Id: 'player2' };
@@ -1887,8 +1887,8 @@ describe('B-CR-INVARIANT: Pending-state and reroll invariants', () => {
         getAttackerSurgeAbilities: () => [],
       });
       await check.skip(gameS, ctxS);
-      assert.strictEqual(gameS[check.field], null,
-        `${check.name} skip: ${check.field} should be null`);
+      assert.ok(gameS[check.field] == null,
+        `${check.name} skip: ${check.field} should be cleared (got ${JSON.stringify(gameS[check.field])})`);
     }
   });
 

@@ -6,6 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
 import { finalizeActivation, getCompanionForDc, formatCompanionStats } from '../engine/activation-setup.js';
 import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
+import { clearPendingTokenDistribution } from '../game/interrupts.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
@@ -1321,7 +1322,7 @@ export async function handleActPassive(interaction, ctx) {
     if (choice === 'done') {
       const abilityLabel = pending.ability === 'longlaid' ? 'Long-Laid Plans' : 'Arms Distribution';
       await interaction.message.edit({ content: `${pending.ability === 'longlaid' ? '🧠' : '🎯'} **${abilityLabel}** — Done (distributed ${(pending.originalRemaining || pending.remaining) - pending.remaining} token${((pending.originalRemaining || pending.remaining) - pending.remaining) !== 1 ? 's' : ''}).`, components: [] }).catch(discordCatch);
-      delete game.pendingTokenDistribution;
+      clearPendingTokenDistribution(game);
     } else {
       // choice is figureKey — show token type picker
       pending.pendingTargetFk = choice;
@@ -1349,7 +1350,7 @@ export async function handleActPassive(interaction, ctx) {
     }
     if (pending.remaining <= 0) {
       await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Distribution complete.`, components: [] }).catch(discordCatch);
-      delete game.pendingTokenDistribution;
+      clearPendingTokenDistribution(game);
     } else {
       // Show figure picker again for next token
       const _tdDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -1365,7 +1366,7 @@ export async function handleActPassive(interaction, ctx) {
         await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Pick next figure (${pending.remaining} remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
       } else {
         await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. No more eligible figures.`, components: [] }).catch(discordCatch);
-        delete game.pendingTokenDistribution;
+        clearPendingTokenDistribution(game);
       }
     }
   // --- General's Orders: each chosen figure gains 2 MP ---

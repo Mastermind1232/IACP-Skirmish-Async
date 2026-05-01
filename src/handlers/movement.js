@@ -13,6 +13,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
 import { detectAttachedTrigger, applyDioFollow } from '../game/attached-dio-helpers.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { setPendingRushPush, setPendingShoulderRush } from '../game/interrupts.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -1086,11 +1087,11 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       rushTargets.push({ figureKey: fk, dcName: rDcName });
     }
     if (rushTargets.length > 0) {
-      game.pendingRushPush = {
+      setPendingRushPush(game, {
         msgId, playerNum, activatorFigureKey: figureKey,
         activatorPos: newTopLeft,
         targets: rushTargets.map(t => t.figureKey),
-      };
+      });
       await _renderRushPushPrompt(interaction, game.gameId, msgId, rushTargets);
     }
   }
@@ -1111,11 +1112,11 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       srTargets.push({ figureKey: fk, dcName: srDcName });
     }
     if (srTargets.length > 0) {
-      game.pendingShoulderRush = {
+      setPendingShoulderRush(game, {
         msgId, playerNum, activatorFigureKey: figureKey,
         activatorPos: newTopLeft,
         targets: srTargets.map(t => t.figureKey),
-      };
+      });
       await _renderShoulderRushPrompt(interaction, game.gameId, msgId, srTargets);
     }
   }

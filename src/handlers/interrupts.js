@@ -13,6 +13,7 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { resolveStartOfRoundEffect } from './round.js';
+import { clearPendingLastResort } from '../game/interrupts.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
@@ -415,7 +416,7 @@ export async function handleLastResort(interaction, ctx) {
   }
   const _lrPending = _lrGame.pendingLastResort;
   if (!await requirePlayer(interaction, _lrGame, interaction.user.id, _lrPending.defenderPlayerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
-  delete _lrGame.pendingLastResort;
+  clearPendingLastResort(_lrGame);
   const _lrCombat = _lrGame.pendingCombat;
   if (buttonKey === 'last_resort_use_') {
     // Deplete: remove Last Resort from attachments

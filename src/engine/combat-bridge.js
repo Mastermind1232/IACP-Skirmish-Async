@@ -32,7 +32,7 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
   }
 }
 import { countGameSpaces } from '../game/board-helpers.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -978,7 +978,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         if (cardNameIncludes(_lrUpgrades, 'Last Resort')) {
           game.lastResortTriggered = game.lastResortTriggered || {};
           game.lastResortTriggered[targetMsgId] = true;
-          game.pendingLastResort = { targetMsgId, defenderPlayerNum, attackerPlayerNum, damage, hit, resultText, totalBlast, ownerId, targetFigIndex };
+          setPendingLastResort(game, { targetMsgId, defenderPlayerNum, attackerPlayerNum, damage, hit, resultText, totalBlast, ownerId, targetFigIndex });
           const _lrOwnerId = game[`player${defenderPlayerNum}Id`];
           const _lrRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`last_resort_use_${game.gameId}_${targetMsgId}`).setLabel('Use Last Resort').setStyle(ButtonStyle.Danger),
@@ -2532,7 +2532,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
                   new ButtonBuilder().setCustomId(`heavy_fire_use_${game.gameId}`).setLabel(`Use Heavy Fire (${_hfDiceCount} target${_hfDiceCount !== 1 ? 's' : ''})`).setStyle(ButtonStyle.Danger),
                   new ButtonBuilder().setCustomId(`heavy_fire_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
                 ];
-                game.pendingHeavyFire = {
+                setPendingHeavyFire(game, {
                   attackerPlayerNum: _hfPlayerNum,
                   attackerFigureKey: combat.attackerFigureKey,
                   attackerDcName: combat.attackerDcName,
@@ -2543,7 +2543,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
                   hostiles: _hfHostiles,
                   chosenTargets: [],
                   conditionsOwed: 0,
-                };
+                });
                 await thread.send(sanitizeMentions({
                   content: `<@${_hfOwnerId}> **Heavy Fire** — Your **${combat.attackerDcName}** resolved an attack (printed pool: ${_hfDiceCount} dice). Exhaust Heavy Fire to deal 1 Damage to up to ${_hfDiceCount} hostile figure${_hfDiceCount !== 1 ? 's' : ''} within 2 spaces of the target?`,
                   allowedMentions: { users: [_hfOwnerId] },
@@ -2824,14 +2824,14 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       }
       if (_wdEligible.length === 0) continue;
       const _wdOwnerId = getPlayerId(game, _wdAtkPN);
-      game.pendingWantonDestruction = {
+      setPendingWantonDestruction(game, {
         gameId: game.gameId,
         ownerPlayerNum: _wdAtkPN,
         combatThreadId: combat.combatThreadId,
         targets: _wdEligible,
         chosen: [],
         maxPicks: 2,
-      };
+      });
       const _wdBtns = [
         new ButtonBuilder().setCustomId(`wanton_use_${game.gameId}`).setLabel('Use (discard 1 CC)').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`wanton_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),

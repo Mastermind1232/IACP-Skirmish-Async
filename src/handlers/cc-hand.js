@@ -19,7 +19,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
-import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment, setPendingIllegalCcPlay, clearPendingIllegalCcPlay } from '../game/interrupts.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -353,7 +353,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   const restriction = isCcPlayLegalByRestriction(game, playerNum, card);
   if (!restriction.legal) {
-    game.pendingIllegalCcPlay = { playerNum, card, reason: restriction.reason };
+    setPendingIllegalCcPlay(game, { playerNum, card, reason: restriction.reason });
     const handId = getHandChannelId(game, playerNum);
     const handChannel = await fetchGameChannel(client, handId);
     const msg = await withDiscordRetry(() => handChannel.send({
@@ -368,7 +368,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   // Assassinate / mutual-exclude CC lock: block further CCs during this attack
   const _cbt = game.combat || game.pendingCombat;
   if (_cbt?.ccLockedOut) {
-    game.pendingIllegalCcPlay = { playerNum, card, reason: 'A card with "no other Command cards this attack" (e.g. Assassinate) was already played.' };
+    setPendingIllegalCcPlay(game, { playerNum, card, reason: 'A card with "no other Command cards this attack" (e.g. Assassinate) was already played.' });
     const handId = getHandChannelId(game, playerNum);
     const handChannel = await fetchGameChannel(client, handId);
     const msg = await withDiscordRetry(() => handChannel.send({
@@ -620,7 +620,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     }
     if (!result.applied && result.manualMessage) {
       // Timing/context mismatch: don't move the card; ping in hand with Play anyway / Unplay (same as illegal-CC flow).
-      game.pendingIllegalCcPlay = { playerNum, card, reason: result.manualMessage, fromContext: true };
+      setPendingIllegalCcPlay(game, { playerNum, card, reason: result.manualMessage, fromContext: true });
       const handId = getHandChannelId(game, playerNum);
       const handChannel = await fetchGameChannel(client, handId);
       const msg = await withDiscordRetry(() => handChannel.send({
@@ -1005,7 +1005,7 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
   const { playerNum, card, messageId } = game.pendingIllegalCcPlay;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the player who played the card can choose.')) return;
   await resolveCcPlay(game, playerNum, card, ctx);
-  delete game.pendingIllegalCcPlay;
+  clearPendingIllegalCcPlay(game);
   if (messageId && interaction.channel?.id) {
     try {
       const msg = await interaction.channel.messages.fetch(messageId);
@@ -1162,7 +1162,7 @@ export async function handleIllegalCcUnplay(interaction, ctx) {
   }
   const { playerNum, messageId } = game.pendingIllegalCcPlay;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the player who played the card can choose.')) return;
-  delete game.pendingIllegalCcPlay;
+  clearPendingIllegalCcPlay(game);
   if (messageId && interaction.channel?.id) {
     try {
       const msg = await interaction.channel.messages.fetch(messageId);

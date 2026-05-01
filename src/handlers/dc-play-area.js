@@ -14,7 +14,7 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
-import { setPendingNegation, updatePendingNegation, setPendingCcChoice } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
@@ -2316,14 +2316,14 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       return;
     }
     // Convert pendingLure to pendingFalseOrders format for combat reuse
-    game.pendingFalseOrders = {
+    setPendingFalseOrders(game, {
       controlledFigureKey: lure.controlledFigureKey,
       controlledPlayerNum: lure.controlledPlayerNum,
       controllerPlayerNum: lure.controllerPlayerNum,
       maxRange: lure.maxRange || 4,
       postAttackStrain: lure.postAttackStrain || 2,
       isLure: true,
-    };
+    });
     delete game.pendingLure;
     // Auto-trigger attack flow (skip move/attack choice — Lure is attack-only)
     const controlledName = dcNameFromFigureKey(lure.controlledFigureKey);
@@ -2791,7 +2791,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     } else {
       await interaction.followUp({ content: `Skipped.`, ephemeral: false }).catch(discordCatch);
     }
-    delete game.pendingFalseOrders;
+    clearPendingFalseOrders(game);
     saveGames();
     return;
   }
@@ -2972,7 +2972,7 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   game.figurePositions[controlledPlayerNum][controlledFigureKey] = chosenSpace;
   game.figureMoved = game.figureMoved || {};
   game.figureMoved[controlledFigureKey] = true;
-  delete game.pendingFalseOrders;
+  clearPendingFalseOrders(game);
   if (logGameAction) await logGameAction(game, client, `🎯 **False Orders** — P${controllerPlayerNum} moved **${controlledName}** to **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'move' }).catch(discordCatch);
   const doneRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -3167,7 +3167,7 @@ export async function handleRushPushFig(interaction, ctx) {
   const oppNum = opponentPlayerNum(pending.playerNum);
   const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
   if (!targetPos) {
-    delete game.pendingRushPush;
+    clearPendingRushPush(game);
     await interaction.message.edit({ content: '**Rush** — Target no longer on board.', components: [] }).catch(discordCatch);
     saveGames();
     return;
@@ -3198,7 +3198,7 @@ export async function handleRushPushFig(interaction, ctx) {
       await processFigureDefeat(game, { defeatedPlayerNum: pending.playerNum, figureKey: pending.activatorFigureKey, attackerPlayerNum: oppNum, source: 'Rush' });
     }
     await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
-    delete game.pendingRushPush;
+    clearPendingRushPush(game);
     await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
     saveGames();
     return;
@@ -3277,7 +3277,7 @@ export async function handleRushPushSpace(interaction, ctx) {
     } catch { /* ignore */ }
   }
   await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
-  delete game.pendingRushPush;
+  clearPendingRushPush(game);
   await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
   saveGames();
 }
@@ -3293,7 +3293,7 @@ export async function handleRushPushSkip(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   cleanupSpacePick(game, `${gameId}_${msgId}`);
-  delete game.pendingRushPush;
+  clearPendingRushPush(game);
   await interaction.message.edit({ content: '**Rush** — Push skipped.', components: [] }).catch(discordCatch);
   saveGames();
 }
@@ -3322,7 +3322,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
   const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
   const targetName = dcNameFromFigureKey(targetFk);
   if (!targetPos) {
-    delete game.pendingShoulderRush;
+    clearPendingShoulderRush(game);
     await interaction.message.edit({ content: '**Shoulder Rush** — Target no longer on board.', components: [] }).catch(discordCatch);
     saveGames();
     return;
@@ -3342,7 +3342,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
     const logMsg = `**Shoulder Rush** — Targeting **${targetName}** (not SMALL, no push). Attack that figure (free action).`;
     if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
     await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
-    delete game.pendingShoulderRush;
+    clearPendingShoulderRush(game);
     await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
     saveGames();
     return;
@@ -3368,7 +3368,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
     const logMsg = `**Shoulder Rush** — **${targetName}** is SMALL but no room to push. Attack that figure (free action).`;
     if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
     await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
-    delete game.pendingShoulderRush;
+    clearPendingShoulderRush(game);
     await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
     saveGames();
     return;
@@ -3442,7 +3442,7 @@ export async function handleShoulderRushSpace(interaction, ctx) {
     } catch { /* ignore */ }
   }
   await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
-  delete game.pendingShoulderRush;
+  clearPendingShoulderRush(game);
   await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
   saveGames();
 }
@@ -3458,7 +3458,7 @@ export async function handleShoulderRushSkip(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   cleanupSpacePick(game, `${gameId}_${msgId}`);
-  delete game.pendingShoulderRush;
+  clearPendingShoulderRush(game);
   await interaction.message.edit({ content: '**Shoulder Rush** — No target chosen.', components: [] }).catch(discordCatch);
   saveGames();
 }

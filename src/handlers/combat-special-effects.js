@@ -15,7 +15,7 @@ import { requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
-import { clearPendingBoltslinger } from '../game/interrupts.js';
+import { clearPendingBoltslinger, clearPendingHeavyFire, clearPendingWantonDestruction } from '../game/interrupts.js';
 
 // ── Internal helpers ─────────────────────────────
 
@@ -670,7 +670,7 @@ async function startHeavyFireConditions(game, pending, ctx) {
 
   if (pending.chosenTargets.length === 0) {
     await thread.send('**Heavy Fire** — No targets chosen. Effect skipped.').catch(discordCatch);
-    delete game.pendingHeavyFire;
+    clearPendingHeavyFire(game);
     saveGames();
     return;
   }
@@ -711,7 +711,7 @@ async function startHeavyFireConditions(game, pending, ctx) {
 
   if (pending.conditionsOwed <= 0) {
     await thread.send('**Heavy Fire** — No conditions owed (all targeted figures were defeated).').catch(discordCatch);
-    delete game.pendingHeavyFire;
+    clearPendingHeavyFire(game);
     saveGames();
     return;
   }
@@ -729,7 +729,7 @@ async function advanceHeavyFireConditionPick(game, pending, ctx) {
 
   if (pending.conditionsApplied >= pending.conditionsOwed) {
     await thread.send(`**Heavy Fire** — All ${pending.conditionsOwed} harmful condition${pending.conditionsOwed !== 1 ? 's' : ''} applied to **${pending.attackerDcName}**.`).catch(discordCatch);
-    delete game.pendingHeavyFire;
+    clearPendingHeavyFire(game);
     saveGames();
     return;
   }
@@ -791,7 +791,7 @@ export async function handleHeavyFireSkip(interaction, ctx) {
   if (!m) return;
   const game = getGame(m[1]);
   await interaction.deferUpdate().catch(discordCatch);
-  if (game) delete game.pendingHeavyFire;
+  if (game) clearPendingHeavyFire(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
@@ -1021,7 +1021,7 @@ export async function handleWantonUse(interaction, ctx) {
   const hand = game[hKey] || [];
   if (hand.length === 0) {
     await interaction.followUp({ content: 'No Command cards in hand to discard.', ephemeral: true }).catch(discordCatch);
-    delete game.pendingWantonDestruction;
+    clearPendingWantonDestruction(game);
     await interaction.message.edit({ components: [] }).catch(discordCatch);
     saveGames(); return;
   }
@@ -1112,7 +1112,7 @@ export async function handleWantonPick(interaction, ctx) {
     const rows2 = chunkButtonsToRows(btns2);
     await interaction.message.edit({ content: `**Wanton Destruction** — ${remaining} pick(s) remaining:`, components: rows2 }).catch(discordCatch);
   } else {
-    delete game.pendingWantonDestruction;
+    clearPendingWantonDestruction(game);
     await interaction.message.edit({ content: `**Wanton Destruction** — Complete.`, components: [] }).catch(discordCatch);
   }
   saveGames();
@@ -1124,7 +1124,7 @@ export async function handleWantonDone(interaction, ctx) {
   const m = interaction.customId.match(/^wanton_done_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
-  if (game) delete game.pendingWantonDestruction;
+  if (game) clearPendingWantonDestruction(game);
   await interaction.message.edit({ content: `**Wanton Destruction** — Complete.`, components: [] }).catch(discordCatch);
   saveGames();
 }
@@ -1135,7 +1135,7 @@ export async function handleWantonSkip(interaction, ctx) {
   const m = interaction.customId.match(/^wanton_skip_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
-  if (game) delete game.pendingWantonDestruction;
+  if (game) clearPendingWantonDestruction(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }

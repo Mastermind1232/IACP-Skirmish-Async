@@ -62,6 +62,18 @@ export const INTERRUPT_TYPES = Object.freeze({
   DEPLOY_ORIENTATION:    'deploy-orientation',
   BOMB_DROP:             'bomb-drop',
   CLEAVE:                'cleave',
+  SHOULDER_RUSH:         'shoulder-rush',
+  RUSH_PUSH:             'rush-push',
+
+  // Combat reactions
+  HEAVY_FIRE:            'heavy-fire',
+  LAST_RESORT:           'last-resort',
+  FALSE_ORDERS:          'false-orders',
+  STRAIN_CHOICE:         'strain-choice',
+  ILLICIT_ARMS:          'illicit-arms',
+  WANTON_DESTRUCTION:    'wanton-destruction',
+  TOKEN_DISTRIBUTION:    'token-distribution',
+  ILLEGAL_CC_PLAY:       'illegal-cc-play',
 
   // Post-deploy abilities
   POST_DEPLOY_QUEUE:     'post-deploy-queue',
@@ -296,6 +308,36 @@ export function clearPendingCoverFire(game) { _clearDual(game, 'pendingCoverFire
 
 export function setPendingBoltslinger(game, payload) { _setDual(game, 'pendingBoltslinger', INTERRUPT_TYPES.BOLTSLINGER, payload); }
 export function clearPendingBoltslinger(game) { _clearDual(game, 'pendingBoltslinger', INTERRUPT_TYPES.BOLTSLINGER); }
+
+export function setPendingShoulderRush(game, payload) { _setDual(game, 'pendingShoulderRush', INTERRUPT_TYPES.SHOULDER_RUSH, payload); }
+export function clearPendingShoulderRush(game) { _clearDual(game, 'pendingShoulderRush', INTERRUPT_TYPES.SHOULDER_RUSH); }
+
+export function setPendingRushPush(game, payload) { _setDual(game, 'pendingRushPush', INTERRUPT_TYPES.RUSH_PUSH, payload); }
+export function clearPendingRushPush(game) { _clearDual(game, 'pendingRushPush', INTERRUPT_TYPES.RUSH_PUSH); }
+
+export function setPendingHeavyFire(game, payload) { _setDual(game, 'pendingHeavyFire', INTERRUPT_TYPES.HEAVY_FIRE, payload); }
+export function clearPendingHeavyFire(game) { _clearDual(game, 'pendingHeavyFire', INTERRUPT_TYPES.HEAVY_FIRE); }
+
+export function setPendingLastResort(game, payload) { _setDual(game, 'pendingLastResort', INTERRUPT_TYPES.LAST_RESORT, payload); }
+export function clearPendingLastResort(game) { _clearDual(game, 'pendingLastResort', INTERRUPT_TYPES.LAST_RESORT); }
+
+export function setPendingFalseOrders(game, payload) { _setDual(game, 'pendingFalseOrders', INTERRUPT_TYPES.FALSE_ORDERS, payload); }
+export function clearPendingFalseOrders(game) { _clearDual(game, 'pendingFalseOrders', INTERRUPT_TYPES.FALSE_ORDERS); }
+
+export function setPendingStrainChoice(game, payload) { _setDual(game, 'pendingStrainChoice', INTERRUPT_TYPES.STRAIN_CHOICE, payload); }
+export function clearPendingStrainChoice(game) { _clearDual(game, 'pendingStrainChoice', INTERRUPT_TYPES.STRAIN_CHOICE); }
+
+export function setPendingIllicitArms(game, payload) { _setDual(game, 'pendingIllicitArms', INTERRUPT_TYPES.ILLICIT_ARMS, payload); }
+export function clearPendingIllicitArms(game) { _clearDual(game, 'pendingIllicitArms', INTERRUPT_TYPES.ILLICIT_ARMS); }
+
+export function setPendingWantonDestruction(game, payload) { _setDual(game, 'pendingWantonDestruction', INTERRUPT_TYPES.WANTON_DESTRUCTION, payload); }
+export function clearPendingWantonDestruction(game) { _clearDual(game, 'pendingWantonDestruction', INTERRUPT_TYPES.WANTON_DESTRUCTION); }
+
+export function setPendingTokenDistribution(game, payload) { _setDual(game, 'pendingTokenDistribution', INTERRUPT_TYPES.TOKEN_DISTRIBUTION, payload); }
+export function clearPendingTokenDistribution(game) { _clearDual(game, 'pendingTokenDistribution', INTERRUPT_TYPES.TOKEN_DISTRIBUTION); }
+
+export function setPendingIllegalCcPlay(game, payload) { _setDual(game, 'pendingIllegalCcPlay', INTERRUPT_TYPES.ILLEGAL_CC_PLAY, payload); }
+export function clearPendingIllegalCcPlay(game) { _clearDual(game, 'pendingIllegalCcPlay', INTERRUPT_TYPES.ILLEGAL_CC_PLAY); }
 
 /**
  * MISSION_SOR_REVEAL — boolean flag, not a payload. Set/clear toggle.

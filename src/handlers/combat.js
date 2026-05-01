@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms } from '../game/interrupts.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
@@ -629,13 +629,13 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     // Player has CCs — offer the choice
     const ownerId = getPlayerId(game, playerNum);
     // Save pending state so the button handler can finish resolution
-    game.pendingStrainChoice = {
+    setPendingStrainChoice(game, {
       figureKey, playerNum, amount, headhunterDmg,
       abilityLabel, sourceLabel, dcName, msgId, figureIndex,
       threadId: thread.id, discardedCount: 0,
       underDuressActive: _udActive,
       ccCostPerStrain,
-    };
+    });
     // Apply headhunter direct damage immediately (it's not strain — no choice)
     if (headhunterDmg > 0) {
       reduceHp(dcHealthState, game, msgId, figureIndex, headhunterDmg, playerNum);
@@ -832,14 +832,14 @@ export async function handleStrainChoice(interaction, ctx) {
 
   const thread = await fetchCombatThread(client, pending.threadId);
   if (!thread) {
-    delete game.pendingStrainChoice;
+    clearPendingStrainChoice(game);
     saveGames();
     return;
   }
 
   if (isAllDmg || discardCount === 0) {
     // All strain as HP damage (headhunterDmg already applied when pending was created)
-    delete game.pendingStrainChoice;
+    clearPendingStrainChoice(game);
     await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
     saveGames();
     return;
@@ -855,7 +855,7 @@ export async function handleStrainChoice(interaction, ctx) {
 
   if (actualDiscard === 0) {
     // No deck cards available — fall back to all damage
-    delete game.pendingStrainChoice;
+    clearPendingStrainChoice(game);
     await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
     saveGames();
     return;
@@ -892,7 +892,7 @@ export async function handleStrainChoice(interaction, ctx) {
   // Apply remaining strain as HP damage
   const hpDmg = pending.amount - actualStrainPrevented;
   const pendingCopy = { ...pending };
-  delete game.pendingStrainChoice;
+  clearPendingStrainChoice(game);
   if (hpDmg > 0) {
     await resolveStrainDamage(game, hpDmg, pendingCopy, ctx, thread);
   } else {
@@ -931,7 +931,7 @@ export async function handleUnderDuress(interaction, ctx) {
 
   const thread = await fetchCombatThread(client, pending.threadId);
   if (!thread) {
-    delete game.pendingStrainChoice;
+    clearPendingStrainChoice(game);
     saveGames();
     return;
   }
@@ -963,7 +963,7 @@ export async function handleUnderDuress(interaction, ctx) {
 
     if (maxDiscards <= 0) {
       // No CC discards possible — all damage
-      delete game.pendingStrainChoice;
+      clearPendingStrainChoice(game);
       await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
       saveGames();
       return;
@@ -1006,7 +1006,7 @@ export async function handleUnderDuress(interaction, ctx) {
 
     if (maxDiscards <= 0) {
       // No CC discards possible — all damage
-      delete game.pendingStrainChoice;
+      clearPendingStrainChoice(game);
       await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
       saveGames();
       return;
@@ -2510,13 +2510,13 @@ export async function handleAttackTarget(interaction, ctx) {
         break;
       }
       const atkOwnerId = getPlayerId(game, attackerPlayerNum);
-      game.pendingIllicitArms = {
+      setPendingIllicitArms(game, {
         gameId: game.gameId,
         playerNum: attackerPlayerNum,
         bibFigureKey: fk,
         bibDcName: fkDcName,
         combatThreadId: thread.id,
-      };
+      });
       const iaRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`illicit_arms_use_${game.gameId}`).setLabel('Use Illicit Arms (+1 Hit)').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`illicit_arms_skip_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
@@ -6454,7 +6454,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     return;
   }
   delete game.falseOrdersAttackTargets?.[msgId];
-  delete game.pendingFalseOrders;
+  clearPendingFalseOrders(game);
   const controlledName = dcNameFromFigureKey(controlledFigureKey);
   const controlledStats = getDcStats(controlledName);
   const attackInfo = controlledStats?.attack || { dice: ['red'], range: [1, 3] };

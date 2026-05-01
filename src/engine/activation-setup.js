@@ -29,6 +29,7 @@ import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from '../handlers/combat.js';
 import { applyStartOfActivationEffects } from './activation-effects.js';
+import { setPendingTokenDistribution } from '../game/interrupts.js';
 import { join } from 'path';
 
 // ─── Companion helpers (used by activation.js too) ───────────────────────────
@@ -623,7 +624,7 @@ export async function finalizeActivation({
     const _llpFriendlies = _llpSelfPos ? Object.entries(game.figurePositions?.[playerNum] || {})
       .filter(([fk, fp]) => fp && countGameSpaces(game, _llpSelfPos, fp) <= 3) : [];
     if (_llpFriendlies.length > 0 && roundNum > 0) {
-      game.pendingTokenDistribution = { gameId, msgId, playerNum, remaining: roundNum, ability: 'longlaid', tokenTypes: ['Damage', 'Block', 'Surge', 'Evade'] };
+      setPendingTokenDistribution(game, { gameId, msgId, playerNum, remaining: roundNum, ability: 'longlaid', tokenTypes: ['Damage', 'Block', 'Surge', 'Evade'] });
       const _llpLabels = figureChoiceLabels(_llpFriendlies.map(([fk]) => fk));
       const btns = _llpFriendlies.map(([fk], i) =>
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_${fk}`).setLabel(_llpLabels[i]).setStyle(ButtonStyle.Primary)
@@ -730,7 +731,7 @@ export async function finalizeActivation({
     const _adFriendlies = _adSelfPos ? Object.entries(game.figurePositions?.[playerNum] || {})
       .filter(([fk, fp]) => fp && countGameSpaces(game, _adSelfPos, fp) <= 3) : [];
     if (_adFriendlies.length > 0) {
-      game.pendingTokenDistribution = { gameId, msgId, playerNum, remaining: 2, ability: 'armsdist', tokenTypes: ['Damage', 'Block'] };
+      setPendingTokenDistribution(game, { gameId, msgId, playerNum, remaining: 2, ability: 'armsdist', tokenTypes: ['Damage', 'Block'] });
       const _adSlice = _adFriendlies.slice(0, 4);
       const _adLabels = figureChoiceLabels(_adSlice.map(([fk]) => fk));
       const btns = _adSlice.map(([fk], i) =>

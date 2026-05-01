@@ -7,6 +7,7 @@ import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { reduceHp, healHp } from './damage-helpers.js';
+import { setPendingFalseOrders } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 
@@ -1482,12 +1483,12 @@ export function resolveAbility(abilityId, context) {
     const enemyNum = opponentPlayerNum(playerNum);
     // Phase 2: figure chosen — set pending state and return marker for Move/Attack choice
     if (choiceIndex != null && targetFigureKey) {
-      game.pendingFalseOrders = {
+      setPendingFalseOrders(game, {
         controlledFigureKey: targetFigureKey,
         controlledPlayerNum: enemyNum,
         controllerPlayerNum: playerNum,
         murneRinMsgId: msgId,
-      };
+      });
       const controlledName = dcNameFromFigureKey(targetFigureKey);
       return { applied: false, falseOrdersActionPick: true, logMessage: `**False Orders** — Choose Move or Attack with **${controlledName}**.` };
     }

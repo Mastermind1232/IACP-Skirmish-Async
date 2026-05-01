@@ -93,6 +93,16 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingCoverFire',
   'pendingBoltslinger',
   'pendingMissionSorReveal',
+  'pendingShoulderRush',
+  'pendingRushPush',
+  'pendingHeavyFire',
+  'pendingLastResort',
+  'pendingFalseOrders',
+  'pendingStrainChoice',
+  'pendingIllicitArms',
+  'pendingWantonDestruction',
+  'pendingTokenDistribution',
+  'pendingIllegalCcPlay',
 ];
 
 // ── Dep-bag parity allowlist ────────────────────────────────────────────────
