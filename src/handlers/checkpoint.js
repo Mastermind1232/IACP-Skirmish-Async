@@ -439,11 +439,20 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
  */
 export async function applyCheckpointToNewLobby(newGame, checkpoint, client, deps) {
   // 1. Snapshot current channel/player/game IDs (the "new lobby" identity).
+  //    EVERY field that holds a Discord ID for THIS lobby has to be in here —
+  //    anything missing gets stomped by the saved checkpoint's value, which
+  //    points at the ORIGINAL lobby's resources (which probably no longer
+  //    exist). gameCategoryId being missing here was the root cause of the
+  //    killgame silent-fail in checkpoint-loaded games — kill walks the
+  //    stale category and finds nothing.
   const lobbyIdentity = {
     gameId: newGame.gameId,
+    guildId: newGame.guildId,
     player1Id: newGame.player1Id,
     player2Id: newGame.player2Id,
+    gameCategoryId: newGame.gameCategoryId,
     generalId: newGame.generalId,
+    chatId: newGame.chatId,
     boardId: newGame.boardId,
     p1HandId: newGame.p1HandId,
     p2HandId: newGame.p2HandId,

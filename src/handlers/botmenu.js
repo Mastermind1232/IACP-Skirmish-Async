@@ -109,14 +109,28 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
   } = ctx;
   // Mark this game so the channelDelete listener ignores bot-initiated deletions
   if (channelDeleteGuard) channelDeleteGuard.add(gameId);
+
+  // Resolve category ID with a self-healing fallback. Historically `game.gameCategoryId`
+  // could be stale on checkpoint-loaded games (it pointed at the SAVED game's
+  // category, not the new lobby's). The fix in applyCheckpointToNewLobby preserves
+  // the new lobby's gameCategoryId, but we keep this defensive fallback so any
+  // future drift self-heals: if the stored category fetch fails OR the category
+  // has zero children matching this lobby's known channels, fall back to the
+  // generalId's actual parent.
   let categoryId = game.gameCategoryId;
-  if (!categoryId) {
-    const generalCh = await fetchGameChannel(client, game.generalId);
-    categoryId = generalCh?.parentId;
+  let categoryChannel = categoryId ? await fetchGameChannel(client, categoryId).catch(() => null) : null;
+  if (!categoryChannel) {
+    const generalCh = game.generalId ? await fetchGameChannel(client, game.generalId).catch(() => null) : null;
+    if (generalCh?.parentId && generalCh.parentId !== categoryId) {
+      console.warn(`[killgame] gameCategoryId=${categoryId} did not resolve; falling back to generalId.parentId=${generalCh.parentId} for game ${gameId}`);
+      categoryId = generalCh.parentId;
+      categoryChannel = await fetchGameChannel(client, categoryId).catch(() => null);
+    }
   }
-  if (categoryId) {
+
+  if (categoryId && categoryChannel) {
     try {
-      const guild = (await fetchGameChannel(client, categoryId))?.guild;
+      const guild = categoryChannel.guild;
       if (guild) {
         const children = guild.channels.cache.filter((c) => c.parentId === categoryId);
         for (const ch of children.values()) await ch.delete().catch(discordCatch);
