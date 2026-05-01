@@ -6,7 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
 import { finalizeActivation, getCompanionForDc, formatCompanionStats } from '../engine/activation-setup.js';
 import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
-import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, setPendingFieldTactics, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush, setPendingWookSlamPush, clearPendingWookSlamPush } from '../game/interrupts.js';
+import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, setPendingFieldTactics, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush, setPendingWookSlamPush, clearPendingWookSlamPush, setPendingTrustedAlly, clearPendingTrustedAlly, setPendingMotivation, clearPendingMotivation, setPendingLieInAmbush, clearPendingLieInAmbush, clearPendingScavengedWeaponryTransfer } from '../game/interrupts.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
@@ -313,7 +313,7 @@ async function checkLieInAmbushTrigger(game, activatingPlayerNum, ctx) {
 
   // Trigger fires — show zone selection in owner's hand channel
   const dcName = dcNameFromFigureKey(setAsideKeys[0]);
-  game.pendingLieInAmbush = { playerNum: liaOwnerNum, dcName };
+  setPendingLieInAmbush(game, { playerNum: liaOwnerNum, dcName });
 
   const gameId = game.gameId;
   const liaOwnerId = getPlayerId(game, liaOwnerNum);
@@ -437,7 +437,7 @@ export async function handleLiaDeployZone(interaction, ctx) {
 
   // Clean up set-aside state
   delete game.lieInAmbushSetAside[playerNum];
-  delete game.pendingLieInAmbush;
+  clearPendingLieInAmbush(game);
 
   // Recompute activation counts — LiA set-aside was cleared, figures now on board
   if (placed > 0) {
@@ -1633,7 +1633,7 @@ export async function handleActPassive(interaction, ctx) {
         game.exhaustedSkirmishUpgrades[msgId].push('Motivation');
       }
       // Store pending and show heal vs discard choice
-      game.pendingMotivation = { targetFk, gameId, msgId, playerNum: meta.playerNum };
+      setPendingMotivation(game, { targetFk, gameId, msgId, playerNum: meta.playerNum });
       // Disarm permanent Weakened: exclude locked Weaken from discardable choices
       const conds = (game.figureConditions?.[targetFk] || []).filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[targetFk]));
       const btns = [
@@ -1676,7 +1676,7 @@ export async function handleActPassive(interaction, ctx) {
       grantMovementBank(game, targetMsgId, 1);
       resultParts.push('gained 1 MP');
     }
-    delete game.pendingMotivation;
+    clearPendingMotivation(game);
     await interaction.message.edit({ content: `**Motivation** — **${targetDcName}**: ${resultParts.join(', ')}.`, components: [] }).catch(discordCatch);
     await logGameAction?.(game, client, `**Motivation** — ${targetDcName}: ${resultParts.join(', ')}.`, { phase: 'ACTIVATION', icon: 'activate' });
   // --- Trusted Ally: chosen figure recovers 1 or discards harmful ---
@@ -1693,7 +1693,7 @@ export async function handleActPassive(interaction, ctx) {
         game.exhaustedSkirmishUpgrades[msgId].push('Trusted Ally');
       }
       // Show heal vs discard choice
-      game.pendingTrustedAlly = { targetFk, gameId, msgId, playerNum: meta.playerNum };
+      setPendingTrustedAlly(game, { targetFk, gameId, msgId, playerNum: meta.playerNum });
       // Disarm permanent Weakened: exclude locked Weaken from discardable choices
       const conds = (game.figureConditions?.[targetFk] || []).filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[targetFk]));
       const btns = [
@@ -1728,7 +1728,7 @@ export async function handleActPassive(interaction, ctx) {
       filterCondition(game, targetFk, choice);
       await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}** discarded **${choice}**.`, components: [] }).catch(discordCatch);
     }
-    delete game.pendingTrustedAlly;
+    clearPendingTrustedAlly(game);
     await logGameAction?.(game, client, `**Trusted Ally** — ${targetDcName}: ${choice === 'heal' ? 'recovered 1 Damage' : 'discarded ' + choice}.`, { phase: 'ACTIVATION', icon: 'activate' });
   // --- Imperial Retrofitting (I48): exhaust for multi-attack/move, deplete for Focus ---
   } else if (ability === 'impretro') {
@@ -2080,7 +2080,7 @@ export async function handleScavWeaponTransfer(interaction, ctx) {
   }
   const attKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
   game[attKey][target.msgId] = [...(game[attKey][target.msgId] || []), 'Scavenged Weaponry'];
-  delete game.pendingScavengedWeaponryTransfer;
+  clearPendingScavengedWeaponryTransfer(game);
   await interaction.message.edit({
     content: `**Scavenged Weaponry** — Transferred to **${target.displayName}**.`,
     components: [],

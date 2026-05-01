@@ -8,7 +8,7 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
-import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck } from '../game/interrupts.js';
+import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion } from '../game/interrupts.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -398,7 +398,7 @@ export async function handleStrikeMeDown(interaction, ctx) {
     if (thread) await thread.send('**Strike Me Down** — Declined. Attack continues normally.').catch(discordCatch);
   }
 
-  game.pendingStrikeMeDown = null;
+  clearPendingStrikeMeDown(game);
   saveGames();
 }
 
@@ -459,7 +459,7 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
     if (thread) await thread.send('**Slow on the Draw** — Declined. Attack continues normally.').catch(discordCatch);
   }
 
-  game.pendingSlowOnTheDraw = null;
+  clearPendingSlowOnTheDraw(game);
   saveGames();
 }
 
@@ -839,7 +839,7 @@ export async function handleForceExhaustion(interaction, ctx) {
     if (thread) await thread.send('**Force Exhaustion** — Declined.').catch(discordCatch);
   }
 
-  delete game.pendingForceExhaustion;
+  clearPendingForceExhaustion(game);
   saveGames();
 }
 

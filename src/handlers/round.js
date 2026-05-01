@@ -13,7 +13,7 @@ import { countSpaces } from '../game/spatial.js';
 import { edgeKey } from '../game/coords.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getDeploymentZones, getCcEffect, hasMissionFlag } from '../data-loader.js';
-import { setPendingMissionSorReveal, clearPendingMissionSorReveal } from '../game/interrupts.js';
+import { setPendingMissionSorReveal, clearPendingMissionSorReveal, setPendingChannelTheForceStrain, clearPendingChannelTheForceStrain } from '../game/interrupts.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
@@ -1903,7 +1903,7 @@ export async function handleCtfPick(interaction, ctx) {
         { phase: 'ROUND', icon: 'condition' });
     } else if (fuFigures.length > 1) {
       // Multiple FORCE USER figures — show picker
-      game.pendingChannelTheForceStrain = { playerNum, cost, figures: fuFigures };
+      setPendingChannelTheForceStrain(game, { playerNum, cost, figures: fuFigures });
       const handChId = getHandChannelId(game, playerNum);
       if (handChId) {
         try {
@@ -1962,7 +1962,7 @@ export async function handleCtfStrain(interaction, ctx) {
     const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
     reduceHp(dcHealthState, game, _ctsFigMsgId, figIdx, pending.cost, playerNum);
   }
-  delete game.pendingChannelTheForceStrain;
+  clearPendingChannelTheForceStrain(game);
   await interaction.message.edit({
     content: `**Channel the Force** — **${fig.dcName}** suffered **${pending.cost} Strain**.`,
     components: [],

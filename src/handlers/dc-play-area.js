@@ -14,7 +14,7 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
-import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrderedMove, clearPendingOrderedMove } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrderedMove, clearPendingOrderedMove, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
@@ -2324,7 +2324,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       postAttackStrain: lure.postAttackStrain || 2,
       isLure: true,
     });
-    delete game.pendingLure;
+    clearPendingLure(game);
     // Auto-trigger attack flow (skip move/attack choice — Lure is attack-only)
     const controlledName = dcNameFromFigureKey(lure.controlledFigureKey);
     const atkBtn = new ButtonBuilder()
@@ -3505,7 +3505,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   }
   delete game.orbitalBombardmentTokens[msgId];
   // Set up multi-space selection
-  game.pendingOrbitalBombardment = { msgId, playerNum, spacesRemaining: tokenCount, spacesChosen: [], gameId };
+  setPendingOrbitalBombardment(game, { msgId, playerNum, spacesRemaining: tokenCount, spacesChosen: [], gameId });
   // Show space picker (all occupied spaces)
   const mapId = game.selectedMap?.id;
   const ms = getMapData?.(mapId);
@@ -3628,7 +3628,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
     }
   }
   cleanupSpacePick(game, `${gameId}_${msgId}`);
-  delete game.pendingOrbitalBombardment;
+  clearPendingOrbitalBombardment(game);
   saveGames();
 }
 

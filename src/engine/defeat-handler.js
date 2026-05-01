@@ -1,5 +1,6 @@
 import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { setPendingScavengedWeaponryTransfer } from '../game/interrupts.js';
 
 /**
  * Universal figure defeat handler.
@@ -285,7 +286,7 @@ export async function processFigureDefeat(game, opts, deps) {
               { phase: 'ROUND', icon: 'card' });
           } else {
             // Multiple options — send picker buttons to hand channel
-            game.pendingScavengedWeaponryTransfer = { playerNum: defeatedPlayerNum, eligible };
+            setPendingScavengedWeaponryTransfer(game, { playerNum: defeatedPlayerNum, eligible });
             const handChId = getHandChannelId(game, defeatedPlayerNum);
             if (handChId && client) {
               try {

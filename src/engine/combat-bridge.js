@@ -32,7 +32,7 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
   }
 }
 import { countGameSpaces } from '../game/board-helpers.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -252,13 +252,13 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
     if (fhResult) {
       const fhOwnerId = getPlayerId(game, defenderPlayerNum);
       const fhThread = await fetchCombatThread(client, combat.combatThreadId);
-      game.pendingFigurehead = {
+      setPendingFigurehead(game, {
         damage, hit, resultText, totalBlast,
         defenderPlayerNum, attackerPlayerNum, ownerId,
         targetMsgId, targetFigIndex,
         fhFigKey: fhResult.figureKey, fhMsgId: fhResult.msgId, fhFigIndex: fhResult.figIndex,
         fhLabel: fhResult.label,
-      };
+      });
       await fhThread.send(sanitizeMentions({
         content: `<@${fhOwnerId}> — **Figurehead**: **${combat.target.label}** is about to suffer **${damage} damage**. Murne Rin suffers **${Math.max(0, damage - 1)} damage** instead (prevents 1)?`,
         components: [new ActionRowBuilder().addComponents(
@@ -1660,7 +1660,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             await logGameAction(game, client, `\u{1F5E1}\uFE0F **Assassin's Blade** — **${_abDcName}** suffers **${_abHits} Damage**.`, { phase: 'ROUND', icon: 'attack' });
           } else if (_abHits > 0) {
             // Multiple adjacent hostiles — show picker buttons
-            game.pendingAssassinsBlade = { hits: _abHits, rollStr: _abRollStr, defenderPlayerNum, attackerPlayerNum };
+            setPendingAssassinsBlade(game, { hits: _abHits, rollStr: _abRollStr, defenderPlayerNum, attackerPlayerNum });
             const _abBtns = _abAdjacentHostiles.map(({ fk }) => {
               const name = dcNameFromFigureKey(fk);
               return new ButtonBuilder()
@@ -1715,7 +1715,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened; **${_sfF.dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
     } else if (_sfSmallFriendlies.length > 1) {
       // Show picker buttons
-      game.pendingSuppressiveFireMp = { attackerPlayerNum };
+      setPendingSuppressiveFireMp(game, { attackerPlayerNum });
       const _sfBtns = _sfSmallFriendlies.map(({ fk, dcName }) =>
         new ButtonBuilder().setCustomId(`sf_mp_pick_${game.gameId}_${fk}`).setLabel(dcName).setStyle(ButtonStyle.Primary)
       );

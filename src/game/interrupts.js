@@ -101,6 +101,26 @@ export const INTERRUPT_TYPES = Object.freeze({
   COMM_DISRUPTION_PROMPT:'comm-disruption-prompt',
   INDISCRIMINATE_FIRE:   'indiscriminate-fire',
   CONCUSSIVE_BOLT:       'concussive-bolt',
+  YHSIW:                 'yhsiw',
+  TRUSTED_ALLY:          'trusted-ally',
+  SUPPRESSIVE_FIRE_MP:   'suppressive-fire-mp',
+  STRIKE_ME_DOWN:        'strike-me-down',
+  SLOW_ON_THE_DRAW:      'slow-on-the-draw',
+  SCAVENGED_WEAPONRY_TRANSFER: 'scavenged-weaponry-transfer',
+  RIGHT_BACK_AT_YA:      'right-back-at-ya',
+  ORBITAL_BOMBARDMENT:   'orbital-bombardment',
+  MOTIVATION:            'motivation',
+  LURE:                  'lure',
+  LOADOUT_SELECTION:     'loadout-selection',
+  LIE_IN_AMBUSH:         'lie-in-ambush',
+  I_KNOW_EVERYTHING:     'i-know-everything',
+  FORCE_EXHAUSTION:      'force-exhaustion',
+  FIGUREHEAD:            'figurehead',
+  EMPEROR_INTERRUPT:     'emperor-interrupt',
+  CHANNEL_THE_FORCE_STRAIN: 'channel-the-force-strain',
+  BOMBARDMENT_SORIN:     'bombardment-sorin',
+  BATTLEFIELD_LEADERSHIP:'battlefield-leadership',
+  ASSASSINS_BLADE:       'assassins-blade',
 
   // Post-deploy abilities
   POST_DEPLOY_QUEUE:     'post-deploy-queue',
@@ -446,6 +466,66 @@ export function clearPendingIndiscriminateFire(game) { _clearDual(game, 'pending
 
 export function setPendingConcussiveBolt(game, payload) { _setDual(game, 'pendingConcussiveBolt', INTERRUPT_TYPES.CONCUSSIVE_BOLT, payload); }
 export function clearPendingConcussiveBolt(game) { _clearDual(game, 'pendingConcussiveBolt', INTERRUPT_TYPES.CONCUSSIVE_BOLT); }
+
+export function setPendingYHSIW(game, payload) { _setDual(game, 'pendingYHSIW', INTERRUPT_TYPES.YHSIW, payload); }
+export function clearPendingYHSIW(game) { _clearDual(game, 'pendingYHSIW', INTERRUPT_TYPES.YHSIW); }
+
+export function setPendingTrustedAlly(game, payload) { _setDual(game, 'pendingTrustedAlly', INTERRUPT_TYPES.TRUSTED_ALLY, payload); }
+export function clearPendingTrustedAlly(game) { _clearDual(game, 'pendingTrustedAlly', INTERRUPT_TYPES.TRUSTED_ALLY); }
+
+export function setPendingSuppressiveFireMp(game, payload) { _setDual(game, 'pendingSuppressiveFireMp', INTERRUPT_TYPES.SUPPRESSIVE_FIRE_MP, payload); }
+export function clearPendingSuppressiveFireMp(game) { _clearDual(game, 'pendingSuppressiveFireMp', INTERRUPT_TYPES.SUPPRESSIVE_FIRE_MP); }
+
+export function setPendingStrikeMeDown(game, payload) { _setDual(game, 'pendingStrikeMeDown', INTERRUPT_TYPES.STRIKE_ME_DOWN, payload); }
+export function clearPendingStrikeMeDown(game) { _clearDual(game, 'pendingStrikeMeDown', INTERRUPT_TYPES.STRIKE_ME_DOWN); }
+
+export function setPendingSlowOnTheDraw(game, payload) { _setDual(game, 'pendingSlowOnTheDraw', INTERRUPT_TYPES.SLOW_ON_THE_DRAW, payload); }
+export function clearPendingSlowOnTheDraw(game) { _clearDual(game, 'pendingSlowOnTheDraw', INTERRUPT_TYPES.SLOW_ON_THE_DRAW); }
+
+export function setPendingScavengedWeaponryTransfer(game, payload) { _setDual(game, 'pendingScavengedWeaponryTransfer', INTERRUPT_TYPES.SCAVENGED_WEAPONRY_TRANSFER, payload); }
+export function clearPendingScavengedWeaponryTransfer(game) { _clearDual(game, 'pendingScavengedWeaponryTransfer', INTERRUPT_TYPES.SCAVENGED_WEAPONRY_TRANSFER); }
+
+export function setPendingRightBackAtYa(game, payload) { _setDual(game, 'pendingRightBackAtYa', INTERRUPT_TYPES.RIGHT_BACK_AT_YA, payload); }
+export function clearPendingRightBackAtYa(game) { _clearDual(game, 'pendingRightBackAtYa', INTERRUPT_TYPES.RIGHT_BACK_AT_YA); }
+
+export function setPendingOrbitalBombardment(game, payload) { _setDual(game, 'pendingOrbitalBombardment', INTERRUPT_TYPES.ORBITAL_BOMBARDMENT, payload); }
+export function clearPendingOrbitalBombardment(game) { _clearDual(game, 'pendingOrbitalBombardment', INTERRUPT_TYPES.ORBITAL_BOMBARDMENT); }
+
+export function setPendingMotivation(game, payload) { _setDual(game, 'pendingMotivation', INTERRUPT_TYPES.MOTIVATION, payload); }
+export function clearPendingMotivation(game) { _clearDual(game, 'pendingMotivation', INTERRUPT_TYPES.MOTIVATION); }
+
+export function setPendingLure(game, payload) { _setDual(game, 'pendingLure', INTERRUPT_TYPES.LURE, payload); }
+export function clearPendingLure(game) { _clearDual(game, 'pendingLure', INTERRUPT_TYPES.LURE); }
+
+export function setPendingLoadoutSelection(game, payload) { _setDual(game, 'pendingLoadoutSelection', INTERRUPT_TYPES.LOADOUT_SELECTION, payload); }
+export function clearPendingLoadoutSelection(game) { _clearDual(game, 'pendingLoadoutSelection', INTERRUPT_TYPES.LOADOUT_SELECTION); }
+
+export function setPendingLieInAmbush(game, payload) { _setDual(game, 'pendingLieInAmbush', INTERRUPT_TYPES.LIE_IN_AMBUSH, payload); }
+export function clearPendingLieInAmbush(game) { _clearDual(game, 'pendingLieInAmbush', INTERRUPT_TYPES.LIE_IN_AMBUSH); }
+
+export function setPendingIKnowEverything(game, payload) { _setDual(game, 'pendingIKnowEverything', INTERRUPT_TYPES.I_KNOW_EVERYTHING, payload); }
+export function clearPendingIKnowEverything(game) { _clearDual(game, 'pendingIKnowEverything', INTERRUPT_TYPES.I_KNOW_EVERYTHING); }
+
+export function setPendingForceExhaustion(game, payload) { _setDual(game, 'pendingForceExhaustion', INTERRUPT_TYPES.FORCE_EXHAUSTION, payload); }
+export function clearPendingForceExhaustion(game) { _clearDual(game, 'pendingForceExhaustion', INTERRUPT_TYPES.FORCE_EXHAUSTION); }
+
+export function setPendingFigurehead(game, payload) { _setDual(game, 'pendingFigurehead', INTERRUPT_TYPES.FIGUREHEAD, payload); }
+export function clearPendingFigurehead(game) { _clearDual(game, 'pendingFigurehead', INTERRUPT_TYPES.FIGUREHEAD); }
+
+export function setPendingEmperorInterrupt(game, payload) { _setDual(game, 'pendingEmperorInterrupt', INTERRUPT_TYPES.EMPEROR_INTERRUPT, payload); }
+export function clearPendingEmperorInterrupt(game) { _clearDual(game, 'pendingEmperorInterrupt', INTERRUPT_TYPES.EMPEROR_INTERRUPT); }
+
+export function setPendingChannelTheForceStrain(game, payload) { _setDual(game, 'pendingChannelTheForceStrain', INTERRUPT_TYPES.CHANNEL_THE_FORCE_STRAIN, payload); }
+export function clearPendingChannelTheForceStrain(game) { _clearDual(game, 'pendingChannelTheForceStrain', INTERRUPT_TYPES.CHANNEL_THE_FORCE_STRAIN); }
+
+export function setPendingBombardmentSorin(game, payload) { _setDual(game, 'pendingBombardmentSorin', INTERRUPT_TYPES.BOMBARDMENT_SORIN, payload); }
+export function clearPendingBombardmentSorin(game) { _clearDual(game, 'pendingBombardmentSorin', INTERRUPT_TYPES.BOMBARDMENT_SORIN); }
+
+export function setPendingBattlefieldLeadership(game, payload) { _setDual(game, 'pendingBattlefieldLeadership', INTERRUPT_TYPES.BATTLEFIELD_LEADERSHIP, payload); }
+export function clearPendingBattlefieldLeadership(game) { _clearDual(game, 'pendingBattlefieldLeadership', INTERRUPT_TYPES.BATTLEFIELD_LEADERSHIP); }
+
+export function setPendingAssassinsBlade(game, payload) { _setDual(game, 'pendingAssassinsBlade', INTERRUPT_TYPES.ASSASSINS_BLADE, payload); }
+export function clearPendingAssassinsBlade(game) { _clearDual(game, 'pendingAssassinsBlade', INTERRUPT_TYPES.ASSASSINS_BLADE); }
 
 /**
  * MISSION_SOR_REVEAL — boolean flag, not a payload. Set/clear toggle.

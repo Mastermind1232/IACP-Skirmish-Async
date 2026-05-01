@@ -13,7 +13,7 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { resolveStartOfRoundEffect } from './round.js';
-import { clearPendingLastResort, clearPendingPunishingStrike } from '../game/interrupts.js';
+import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW, clearPendingSuppressiveFireMp, clearPendingAssassinsBlade } from '../game/interrupts.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
@@ -349,7 +349,7 @@ export async function handleYHSIW(interaction, ctx) {
   }
   const pending = game.pendingYHSIW;
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.oppPlayerNum, canActAsPlayer, 'Only the targeted player may respond.')) return;
-  delete game.pendingYHSIW;
+  clearPendingYHSIW(game);
 
   if (isTransfer) {
     // Transfer the token from target to Moff Gideon
@@ -603,7 +603,7 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
     await interaction.followUp({ content: 'Only the attacker can pick the target.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  delete game.pendingAssassinsBlade;
+  clearPendingAssassinsBlade(game);
   const dcName = dcNameFromFigureKey(figureKey);
   // Find the DC message for this figure and apply damage
   let _abNewHp = null;
@@ -643,7 +643,7 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
   const pending = game.pendingSuppressiveFireMp;
   if (!pending) { await interaction.followUp({ content: 'No pending Suppressive Fire MP.', ephemeral: true }).catch(discordCatch); return; }
   const { attackerPlayerNum } = pending;
-  delete game.pendingSuppressiveFireMp;
+  clearPendingSuppressiveFireMp(game);
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the attacker may choose.')) return;
   const dcName = dcNameFromFigureKey(figureKey);
   // Find the msgId for this figure

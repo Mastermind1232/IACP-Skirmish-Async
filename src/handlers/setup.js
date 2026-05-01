@@ -29,6 +29,7 @@ import { chunkButtonsToRows, buildRowPickerButtons } from '../discord/components
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { _matchesKeywordPhrase, findEligibilityExtender } from '../game/validation.js';
 import { isBlitzMission, initBlitzDeployment, sendBlitzTurnPrompt, checkBlitzGroupComplete } from './blitz-deploy.js';
+import { setPendingLoadoutSelection, clearPendingLoadoutSelection } from '../game/interrupts.js';
 
 /** Get blocking terrain info for deployment filtering.
  * When ignoreBlocking is true (Massive/Mobile), blocking cells are merged into
@@ -1620,7 +1621,7 @@ export async function handleDeployPick(interaction, ctx) {
     const loadoutCards = getLoadoutCards();
     const names = Object.keys(loadoutCards);
     if (names.length > 0) {
-      game.pendingLoadoutSelection = { figureKey, playerNum };
+      setPendingLoadoutSelection(game, { figureKey, playerNum });
       saveGames();
       const defaultName = names[0];
       const selectionRow = _getLoadoutSelectionRow(game.gameId, figureKey, names, defaultName);
@@ -1778,7 +1779,7 @@ export async function handleLoadoutConfirm(interaction, ctx) {
 
   // Clear the deployment gate
   const wasPending = game.pendingLoadoutSelection?.playerNum;
-  delete game.pendingLoadoutSelection;
+  clearPendingLoadoutSelection(game);
   saveGames();
 
   // Remove the loadout picker from the hand channel

@@ -1272,7 +1272,7 @@ describe('B-CR-SOTD: Slow on the Draw combat suspend/restore', () => {
     assert.strictEqual(game.slowOnTheDrawInterrupt.suspendedCombat, combat,
       'original combat stored by reference');
     assert.strictEqual(game.slowOnTheDrawInterrupt.attackerFigureKey, 'Greedo-1-0');
-    assert.strictEqual(game.pendingSlowOnTheDraw, null, 'pendingSlowOnTheDraw cleared');
+    assert.ok(game.pendingSlowOnTheDraw == null, 'pendingSlowOnTheDraw cleared');
   });
 
   it('B-CR-SOTD-002: no path preserves pendingCombat', async () => {
@@ -1294,7 +1294,7 @@ describe('B-CR-SOTD: Slow on the Draw combat suspend/restore', () => {
 
     assert.strictEqual(game.pendingCombat, combat, 'pendingCombat preserved');
     assert.strictEqual(game.slowOnTheDrawInterrupt, undefined, 'no interrupt state');
-    assert.strictEqual(game.pendingSlowOnTheDraw, null, 'pendingSlowOnTheDraw cleared');
+    assert.ok(game.pendingSlowOnTheDraw == null, 'pendingSlowOnTheDraw cleared');
   });
 
   it('B-CR-SOTD-003: resume restores suspended combat state', async () => {
@@ -1399,7 +1399,7 @@ describe('B-CR-SMD: Strike Me Down VP reduction and combat cancellation', () => 
     assert.strictEqual(defeatOpts.figureKey, 'Obi-Wan Kenobi-1-0');
     assert.strictEqual(defeatOpts.source, 'Strike Me Down');
     // Pending cleared
-    assert.strictEqual(game.pendingStrikeMeDown, null);
+    assert.ok(game.pendingStrikeMeDown == null);
   });
 
   it('B-CR-SMD-002: VP reduction floors at 0 for cheap units', async () => {
@@ -1454,7 +1454,7 @@ describe('B-CR-SMD: Strike Me Down VP reduction and combat cancellation', () => 
 
     assert.strictEqual(game.pendingCombat, combat, 'combat preserved');
     assert.strictEqual(game.player1VP, undefined, 'no VP awarded');
-    assert.strictEqual(game.pendingStrikeMeDown, null, 'pending cleared');
+    assert.ok(game.pendingStrikeMeDown == null, 'pending cleared');
   });
 
   it('B-CR-SMD-004: HP reduced to 0 via dcHealthState', async () => {

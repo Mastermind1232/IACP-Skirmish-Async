@@ -7,7 +7,7 @@ import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { reduceHp, healHp } from './damage-helpers.js';
-import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder } from './interrupts.js';
+import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 
@@ -706,7 +706,7 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
-        game.pendingBattlefieldLeadership = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+        setPendingBattlefieldLeadership(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Battlefield Leadership** — **${chosenName}** may interrupt to move up to 1 space and perform a free attack (no action cost). Use their **Attack** button.` };
@@ -738,7 +738,7 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
-        game.pendingEmperorInterrupt = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+        setPendingEmperorInterrupt(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Emperor** — **${chosenName}** may interrupt to perform a free attack (no action cost). Use their **Attack** button.` };
@@ -782,10 +782,10 @@ export function resolveAbility(abilityId, context) {
       const gideonFk = `${meta.dcName}-${dgIndex}-${selectedFig}`;
 
       // Store pending YHSIW for opponent to respond
-      game.pendingYHSIW = {
+      setPendingYHSIW(game, {
         targetFk, token, gideonFk, gideonPlayerNum: playerNum, oppPlayerNum: oppNum,
         msgId, gameId: game.gameId,
-      };
+      });
       delete game.yhsiwOptions;
 
       return {
@@ -1009,7 +1009,7 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
-        game.pendingBombardmentSorin = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+        setPendingBombardmentSorin(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
         // Grant Blast 1 + Accuracy 1 bonus for the next attack
         game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
         game.nextAttacksBonusHits[playerNum] = { count: 1, bonus: 0, blast: 1, accuracy: 1 };
@@ -5187,13 +5187,13 @@ export function resolveAbility(abilityId, context) {
       // Grant +2 Hit power tokens to the hostile figure
       grantPowerTokens(game, chosenFigureKey, 'Damage', 2);
       // Set up Lure attack (analogous to False Orders)
-      game.pendingLure = {
+      setPendingLure(game, {
         controllerPlayerNum: playerNum,        // force user's player
         controlledFigureKey: chosenFigureKey,   // hostile being controlled
         controlledPlayerNum: oppNum,            // hostile's owner
         maxRange: 4,                            // target must be within 4 spaces
         postAttackStrain: 2,                    // hostile suffers 2 strain after attack
-      };
+      });
       return {
         applied: true,
         lureActionPick: true,

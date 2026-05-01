@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership } from '../game/interrupts.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
@@ -1178,17 +1178,17 @@ export async function handleAttackTarget(interaction, ctx) {
     const isCoordinatedRaidFreeAttack = game.pendingCoordinatedRaid?.forMsgId === msgId;
     const isFieldTacticsFreeAttack = game.pendingFieldTactics?.forMsgId === msgId;
     if (isBLFreeAttack) {
-      delete game.pendingBattlefieldLeadership;
+      clearPendingBattlefieldLeadership(game);
     } else if (isFellSwoopFreeAttack) {
       delete game.fellSwoopFreeAttack[msgId];
       // Clear SFTY exclude once the free attack fires
       if (game.stillFasterExcludeMsgId) game.stillFasterExcludeMsgId = null;
     } else if (isEmperorFreeAttack) {
-      delete game.pendingEmperorInterrupt;
+      clearPendingEmperorInterrupt(game);
     } else if (isExecOrderFreeAttack) {
       clearPendingExecutiveOrder(game);
     } else if (isBombardmentFreeAttack) {
-      delete game.pendingBombardmentSorin;
+      clearPendingBombardmentSorin(game);
     } else if (isFiringSquadFreeAttack) {
       game.pendingFiringSquad = (game.pendingFiringSquad || []).filter(p => p.forMsgId !== msgId);
       if (game.pendingFiringSquad.length === 0) delete game.pendingFiringSquad;
@@ -2456,14 +2456,14 @@ export async function handleAttackTarget(interaction, ctx) {
   // Strike Me Down (Obi-Wan): when attack targeting Obi-Wan is declared, may reduce VP cost by 3 and be defeated (ending the attack)
   if (defSpecialIds.includes('strike_me_down_obiwan')) {
     const defOwnerId = getPlayerId(game, defenderPlayerNum);
-    game.pendingStrikeMeDown = {
+    setPendingStrikeMeDown(game, {
       gameId: game.gameId,
       defenderPlayerNum,
       attackerPlayerNum,
       defenderFigureKey: target.figureKey,
       defenderLabel: target.label,
       combatThreadId: thread.id,
-    };
+    });
     const smdRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`strike_me_down_yes_${game.gameId}`).setLabel('Use Strike Me Down').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`strike_me_down_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
@@ -2474,7 +2474,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Slow on the Draw (Greedo): when Greedo declares an attack, defender may interrupt to attack Greedo first
   if (hasSlowOnTheDrawAbility(atkSpecialIds)) {
     const defOwnerId = getPlayerId(game, defenderPlayerNum);
-    game.pendingSlowOnTheDraw = {
+    setPendingSlowOnTheDraw(game, {
       gameId: game.gameId,
       defenderPlayerNum,
       attackerPlayerNum,
@@ -2482,7 +2482,7 @@ export async function handleAttackTarget(interaction, ctx) {
       attackerMsgId: msgId,
       attackerLabel: attackerDisplayName,
       combatThreadId: thread.id,
-    };
+    });
     const sotdRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`slow_on_draw_yes_${game.gameId}`).setLabel('Interrupt: Attack Greedo first').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`slow_on_draw_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
@@ -2534,14 +2534,14 @@ export async function handleAttackTarget(interaction, ctx) {
     const _feDecision = canOfferForceExhaustion(game, defenderPlayerNum, targetDcName, _feDefUpgrades);
     if (_feDecision.eligible) {
       const defOwnerId = getPlayerId(game, defenderPlayerNum);
-      game.pendingForceExhaustion = {
+      setPendingForceExhaustion(game, {
         gameId: game.gameId,
         defenderPlayerNum,
         attackerPlayerNum,
         attackerFigureKey,
         childFigureKey: _feDecision.childFigureKey,
         combatThreadId: thread.id,
-      };
+      });
       const feRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`force_exhaustion_yes_${game.gameId}`).setLabel('Use Force Exhaustion (Incapacitate The Child)').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`force_exhaustion_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
@@ -6249,7 +6249,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
     await interaction.followUp({ content: 'No pending Figurehead decision.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  delete game.pendingFigurehead;
+  clearPendingFigurehead(game);
   const combat = game.pendingCombat;
   if (!combat) {
     await interaction.followUp({ content: 'Combat data missing.', ephemeral: true }).catch(discordCatch);

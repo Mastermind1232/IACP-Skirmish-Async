@@ -19,7 +19,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
-import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment, setPendingIllegalCcPlay, clearPendingIllegalCcPlay, setPendingCommDisruptionPrompt, clearPendingCommDisruptionPrompt } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment, setPendingIllegalCcPlay, clearPendingIllegalCcPlay, setPendingCommDisruptionPrompt, clearPendingCommDisruptionPrompt, setPendingIKnowEverything, clearPendingIKnowEverything } from '../game/interrupts.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -1344,7 +1344,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
       const shuffledCopy = [...availableCards];
       shuffleArray(shuffledCopy);
       const revealed = [shuffledCopy[0], shuffledCopy[1]];
-      game.pendingIKnowEverything = { targetPlayerNum: playerNum, gideonPlayerNum: oppNum, cards: revealed, gameId };
+      setPendingIKnowEverything(game, { targetPlayerNum: playerNum, gideonPlayerNum: oppNum, cards: revealed, gameId });
       const oppPlayerId = getPlayerId(game, oppNum);
       const cardLabels = revealed.map((c, i) => `**${i + 1}.** ${c}`).join('\n');
       const keepRow = new ActionRowBuilder().addComponents(
@@ -1427,7 +1427,7 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
     if (rmIdx >= 0) squad.ccList.splice(rmIdx, 1);
   }
 
-  delete game.pendingIKnowEverything;
+  clearPendingIKnowEverything(game);
   game.iKnowEverythingResolved = true;
 
   await logGameAction(game, client, `🕵️ **I Know Everything** — Kept **${keptCard}**. **${removedCard}** removed from the game.`, { phase: 'DEPLOYMENT', icon: 'card' });

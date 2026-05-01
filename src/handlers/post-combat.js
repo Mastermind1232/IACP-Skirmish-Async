@@ -13,7 +13,7 @@ import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, grantMovementBank } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
-import { clearPendingReaction } from '../game/interrupts.js';
+import { clearPendingReaction, setPendingRightBackAtYa, clearPendingRightBackAtYa } from '../game/interrupts.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
@@ -107,7 +107,7 @@ export async function handleReactionUse(interaction, ctx) {
     const hasBlock = defTokens.includes('Block');
     if (hasBlock) {
       // Prompt for block token choice
-      game.pendingRightBackAtYa = {
+      setPendingRightBackAtYa(game, {
         gameId: game.gameId,
         combatThreadId: pending.combatThreadId,
         attackerPlayerNum,
@@ -119,7 +119,7 @@ export async function handleReactionUse(interaction, ctx) {
         resultText: pending.resultText,
         combat: pending.combat,
         initialEmbedRefreshMsgIds: pending.initialEmbedRefreshMsgIds,
-      };
+      });
       const btn3 = new ButtonBuilder().setCustomId(`right_back_block_${gameId}`).setLabel('Spend Block Token — 3 Damage').setStyle(ButtonStyle.Danger);
       const btn1 = new ButtonBuilder().setCustomId(`right_back_nodmg_${gameId}`).setLabel('1 Damage (no token)').setStyle(ButtonStyle.Secondary);
       if (thread) await thread.send({
@@ -163,7 +163,7 @@ export async function handleRightBack(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const rbPending = game.pendingRightBackAtYa;
-  delete game.pendingRightBackAtYa;
+  clearPendingRightBackAtYa(game);
   const thread = await fetchCombatThread(client, rbPending.combatThreadId);
   let dmg = 1;
   if (isBlockVariant) {
