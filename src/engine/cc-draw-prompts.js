@@ -22,7 +22,10 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
 export async function sendCcShuffleDrawPrompts(game, client, deps) {
   if (game.ccShuffleDrawPromptsPosted) return false;
   if (game.player1CcDrawn && game.player2CcDrawn) return false;
-  if (!game.p1HandId || !game.p2HandId || !game.generalId) return false;
+  if (!game.p1HandId || !game.p2HandId || !game.generalId) {
+    console.warn(`[cc-draw-prompts] Skipping for game ${game.gameId}: missing IDs (p1Hand=${!!game.p1HandId}, p2Hand=${!!game.p2HandId}, general=${!!game.generalId}). Likely cause: setup path skipped createHandThreads.`);
+    return false;
+  }
 
   const { getCcShuffleDrawButton, getInitiativePlayerZoneLabel, saveGames } = deps;
   const gameId = game.gameId;

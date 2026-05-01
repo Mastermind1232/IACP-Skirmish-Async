@@ -349,7 +349,7 @@ export async function handleCheckpointNewGameOpen(interaction, ctx) {
 export async function handleCheckpointNewGamePick(interaction, ctx) {
   const {
     getGame: getGameDep, saveGames, client,
-    createBoardChannel, createPlayAreaChannels, populatePlayAreas,
+    createBoardChannel, createPlayAreaChannels, createHandThreads, populatePlayAreas,
     buildBoardMapPayload, sendRoundActivationPhaseMessage,
     refreshAllGameComponents,
   } = ctx;
@@ -386,6 +386,14 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
         guild, gameCategory, prefix, game.player1Id, game.player2Id,
       );
       game.boardId = boardChannel.id;
+    }
+    // Hand threads live INSIDE play-area channels and are required by
+    // sendCcShuffleDrawPrompts (it early-returns if hand IDs are null).
+    // Normal new-game setup creates them via createHandThreads; the
+    // checkpoint cross-lobby path forgot, so loading any cc_draw-phase
+    // checkpoint produced a stuck game with no hands and no draw prompts.
+    if (!game.p1HandId || !game.p2HandId) {
+      await createHandThreads(client, game);
     }
 
     // Apply checkpoint state on top of the now-prepared lobby.
