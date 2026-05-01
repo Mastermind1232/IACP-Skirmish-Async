@@ -91,11 +91,11 @@ async function loadCheckpointOrFollowUp(interaction, cpId) {
  *   2. Object.assign `savedState` (the snapshot blob) onto `game`.
  *   3. Object.assign `identityOverlay` (channel/player IDs to keep from the
  *      live game) on top — this beats anything in `savedState`.
- *   4. Rebuild side-channel Maps (dcMessageMeta/Exhausted/Health) from
- *      the freshly-restored game state. Folded in here so callers can't
- *      forget to call repopulateDcMapsForGame after a restore — that
- *      forgetting was the root cause of the historical undo and cross-game
- *      checkpoint Map-drift bugs (commits 469a547 and 7ace13b).
+ *   4. (Defensive) Run repopulateDcMapsForGame to set [[null, null]] defaults
+ *      for any dcList[i] that's missing a healthState field. Post-Phase-4
+ *      the side-channel Maps are derived views, so there's nothing to
+ *      "rebuild" — but the defensive default-init protects against legacy
+ *      save formats with sparse healthState fields.
  *
  * Callers still handle their own undoStack semantics around this call
  * (push undo entry before; reassign savedStack after) since those rules

@@ -196,11 +196,12 @@ export async function handleUndo(interaction, ctx) {
     restoreGameStateInPlace(game, last.snapshot);
     game.undoStack = savedStack;
 
-    // Side-channel Maps (dcMessageMeta, dcExhaustedState, dcHealthState) are
-    // module-scoped — JSON.stringify(game) doesn't capture them, so without
-    // this rebuild the Maps would still hold POST-action HP / exhaust state
-    // after the snapshot restore. Resync had the same gap; using the same
-    // repopulator keeps undo and Resync structurally aligned.
+    // Post-Phase-4: dcMessageMeta / dcExhaustedState / dcHealthState are now
+    // derived views over canonical game state, so the snapshot restore above
+    // already makes them correct. Repopulate is kept as defensive
+    // initialization (sets [[null, null]] default for any dcList[i] missing
+    // a healthState — possible on legacy save formats) but the heavy work
+    // it used to do is no longer necessary.
     try {
       repopulateDcMapsForGame(gameId);
     } catch (err) {
