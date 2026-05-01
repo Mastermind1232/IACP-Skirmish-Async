@@ -49,18 +49,76 @@ function makeCheckpointId() {
  * Returns a human-readable reason if the game is mid-action, else ''.
  * Used by the save handler to refuse non-boundary saves.
  *
- * Boundary = no combat in flight, no open move grid, no open space-pick,
- * no started-but-unfinished activation actions. At those moments,
- * cleanupActivation has already wiped activation-scope state and (if we're
- * between rounds) cleanupRoundStart has wiped round-scope state, so the
- * saved snapshot has no transient msgId-keyed orphans to worry about.
+ * The bar isn't "is the game running" — it's "would loading this snapshot
+ * land the players in a coherent, playable state." Some transitional
+ * moments (e.g. between deployment finishing and CC-draw prompts posting,
+ * or mid-CC-interrupt) capture state the loader can't reconstruct without
+ * UI context that's already gone.
+ *
+ * Categories of refusal:
+ *   1. Combat / movement / space-pick / activation actively in progress
+ *   2. Post-deploy ability queue active (Smooth Landing, Walker, etc.)
+ *   3. Deployment phase where post-deploy effects haven't fired yet
+ *      (the "post-deployment, pre-cc-draw" stuck-load bug)
+ *   4. Any non-empty `pending*` field — these track mid-flow user prompts
+ *      whose state we'd lose on load (clearPendingAndPerMsgIdState wipes
+ *      them, leaving no UI to advance the game)
+ *   5. Round-phase transitions in progress (start-of-round / end-of-round
+ *      effects mid-resolution)
  */
 export function whyMidAction(game) {
   if (!game) return '';
+  // Category 1 — explicit checks (kept first for clearer reject messages).
   if (game.pendingCombat) return 'combat is in progress';
   if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) return 'a move is in progress';
   if (game.pendingSpacePick && Object.keys(game.pendingSpacePick).length > 0) return 'a space pick is open';
   if (game.dcActionsData && Object.keys(game.dcActionsData).length > 0) return 'an activation is in progress (use End Activation first)';
+  // Category 2 — post-deploy queue active (the "post-deployment, pre-cc-draw"
+  // stuck-load bug class). If abilities or activeAbility are set, the
+  // user is mid-Smooth-Landing / Walker / Strike Team / etc. Loading
+  // would leave them with no UI to advance.
+  if (game.postDeployQueue) {
+    const q = game.postDeployQueue;
+    const hasPending = (Array.isArray(q.abilities) && q.abilities.length > 0)
+      || (Array.isArray(q.nextPlayerAbilities) && q.nextPlayerAbilities.length > 0)
+      || q.activeAbility
+      || q.awaitingOrder;
+    if (hasPending) return 'a post-deploy ability prompt is active (finish it before saving)';
+  }
+  // Category 3 — deployment finished but post-deploy callbacks haven't run.
+  // Specifically: phase is still 'deployment' but both squads are submitted
+  // and ready, OR phase is past deployment but postDeployEffectsFired is
+  // still false (transitional window). This is the bug we just hit.
+  if (game.phase === 'deployment' && game.player1Squad && game.player2Squad
+      && game.initiativePlayerDeployed && game.nonInitiativePlayerDeployed
+      && !game.postDeployEffectsFired) {
+    return 'deployment is finishing (post-deploy effects pending) — wait for the shuffle/draw prompt';
+  }
+  if (game.phase === 'cc_draw' && !game.postDeployEffectsFired) {
+    return 'transitioning into CC draw — wait for the shuffle/draw prompt to appear';
+  }
+  // Category 4 — any non-empty pending* field. clearPendingAndPerMsgIdState
+  // wipes these on load, so saves during pending state lose user choices in
+  // flight (negation prompts, CC-effect choices, ability picker, etc.).
+  for (const key of Object.keys(game)) {
+    if (!key.startsWith('pending')) continue;
+    const v = game[key];
+    if (v == null || v === false) continue;
+    if (Array.isArray(v)) {
+      if (v.length > 0) return `${key.replace(/^pending/, '').replace(/([A-Z])/g, ' $1').trim().toLowerCase()} prompt is open`;
+    } else if (typeof v === 'object') {
+      if (Object.keys(v).length > 0) return `${key.replace(/^pending/, '').replace(/([A-Z])/g, ' $1').trim().toLowerCase()} prompt is open`;
+    } else if (v) {
+      return `${key.replace(/^pending/, '').replace(/([A-Z])/g, ' $1').trim().toLowerCase()} prompt is open`;
+    }
+  }
+  // Category 5 — round-phase transitions in progress.
+  if (game.roundPhase === 'start_of_round' && game.phase === 'round_active' && !game.activationPhaseMessagePosted) {
+    return 'start-of-round effects are still resolving — wait for the round-activation message';
+  }
+  if (game.roundPhase === 'end_of_round') {
+    return 'end-of-round effects are resolving — wait for the next round to start';
+  }
   return '';
 }
 

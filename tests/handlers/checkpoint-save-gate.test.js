@@ -51,4 +51,106 @@ describe('whyMidAction — save-time boundary gate', () => {
     };
     assert.equal(whyMidAction(game), '');
   });
+
+  // ── Hardened gate (post-2026-05-01): catches the transitional states
+  //    that produced unloadable checkpoints
+
+  it('refuses save when post-deploy queue has abilities pending', () => {
+    const game = {
+      postDeployQueue: { abilities: [{ msgId: 'm1', ability: 'smooth_landing' }] },
+    };
+    assert.match(whyMidAction(game), /post-deploy/i);
+  });
+
+  it('refuses save when post-deploy queue has activeAbility set', () => {
+    const game = {
+      postDeployQueue: { abilities: [], activeAbility: { msgId: 'x' } },
+    };
+    assert.match(whyMidAction(game), /post-deploy/i);
+  });
+
+  it('treats empty post-deploy queue as clean', () => {
+    const game = {
+      postDeployQueue: { abilities: [], nextPlayerAbilities: [], activeAbility: null, awaitingOrder: false },
+    };
+    assert.equal(whyMidAction(game), '');
+  });
+
+  it('refuses the "post-deployment, pre-cc-draw" trap (deploy done, post-deploy effects not fired)', () => {
+    const game = {
+      phase: 'deployment',
+      player1Squad: { dcList: [] },
+      player2Squad: { dcList: [] },
+      initiativePlayerDeployed: true,
+      nonInitiativePlayerDeployed: true,
+      postDeployEffectsFired: false,
+    };
+    assert.match(whyMidAction(game), /deployment is finishing|shuffle\/draw/i);
+  });
+
+  it('refuses cc_draw phase with postDeployEffectsFired still false', () => {
+    const game = {
+      phase: 'cc_draw',
+      postDeployEffectsFired: false,
+    };
+    assert.match(whyMidAction(game), /transitioning|shuffle\/draw/i);
+  });
+
+  it('allows cc_draw phase once postDeployEffectsFired is true', () => {
+    const game = {
+      phase: 'cc_draw',
+      postDeployEffectsFired: true,
+    };
+    assert.equal(whyMidAction(game), '');
+  });
+
+  it('refuses save when a generic pending* field has content (e.g. negation prompt)', () => {
+    const game = {
+      pendingNegation: { attackerMsgId: 'm1', cardName: 'Block' },
+    };
+    assert.match(whyMidAction(game), /negation/i);
+  });
+
+  it('refuses save when pendingCcChoice is open', () => {
+    const game = {
+      pendingCcChoice: { cardName: 'Take Initiative', options: ['a', 'b'] },
+    };
+    assert.match(whyMidAction(game), /cc choice/i);
+  });
+
+  it('treats null/false/empty pending* fields as clean', () => {
+    const game = {
+      pendingNegation: null,
+      pendingCcChoice: false,
+      pendingDcAbilityChoice: {},
+      pendingDeflect: [],
+    };
+    assert.equal(whyMidAction(game), '');
+  });
+
+  it('refuses save during start_of_round before activation message posts', () => {
+    const game = {
+      phase: 'round_active',
+      roundPhase: 'start_of_round',
+      activationPhaseMessagePosted: false,
+    };
+    assert.match(whyMidAction(game), /start-of-round/i);
+  });
+
+  it('refuses save during end_of_round phase', () => {
+    const game = {
+      roundPhase: 'end_of_round',
+    };
+    assert.match(whyMidAction(game), /end-of-round/i);
+  });
+
+  it('allows save during round_active + activation roundPhase with clean state', () => {
+    const game = {
+      phase: 'round_active',
+      roundPhase: 'activation',
+      activationPhaseMessagePosted: true,
+      postDeployEffectsFired: true,
+    };
+    assert.equal(whyMidAction(game), '');
+  });
 });
