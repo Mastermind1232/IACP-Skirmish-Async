@@ -11,6 +11,7 @@ import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum, getCcHand, getD
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
 import { hasLineOfSight, countSpaces } from '../game/spatial.js';
 import { edgeKey, getFootprintCells } from '../game/coords.js';
+import { clearPendingCelebration } from '../game/interrupts.js';
 import { getBrokenWallEdges } from '../game/movement.js';
 import { dcNameFromFigureKey, isCompanionHostDefeated } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
@@ -1543,7 +1544,7 @@ function getCelebrationActions(game, playerNum) {
 
   // If the player doesn't have Celebration, auto-pass (clear pending state)
   if (!hasCelebration) {
-    delete game.pendingCelebration;
+    clearPendingCelebration(game);
     return [];
   }
 

@@ -19,7 +19,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
-import { setPendingNegation, updatePendingNegation, clearPendingNegation } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration } from '../game/interrupts.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -479,7 +479,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
-      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum, card, ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}) };
+      setPendingCcChoice(game, { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum, card, ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}) });
       const btns = result.choiceOptions.map((opt) => {
         const label = String(opt).slice(0, 80);
         return new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${opt}`).setLabel(label).setStyle(ButtonStyle.Secondary);
@@ -925,7 +925,7 @@ export async function handleCcChoice(interaction, ctx) {
     chosenFigureKey: pending.choiceValues?.[choiceIndex] ?? null,
     combat: game.combat || game.pendingCombat,
   });
-  delete game.pendingCcChoice;
+  clearPendingCcChoice(game);
   const aarResult = await applyAbilityResult(result, { game, playerNum, client, ctx });
   if (!aarResult.handled && aarResult.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
     if (!getBoardStateForMovement || !getMapAttachmentForSpaces) {
@@ -1126,7 +1126,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push('Celebration');
   awardObjectiveVp(game, attackerPlayerNum, 4);
-  delete game.pendingCelebration;
+  clearPendingCelebration(game);
   await refreshHandAndDiscard(game, attackerPlayerNum, client, ctx);
   await interaction.message.edit({ content: `**Celebration** — +4 VP.`, components: [] }).catch(discordCatch);
   const celPlayerId = getPlayerId(game, attackerPlayerNum);
@@ -1146,7 +1146,7 @@ export async function handleCelebrationPass(interaction, ctx) {
   }
   const { attackerPlayerNum } = game.pendingCelebration;
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the player who defeated the figure can pass.')) return;
-  delete game.pendingCelebration;
+  clearPendingCelebration(game);
   await interaction.message.edit({ content: 'Passed on Celebration.', components: [] }).catch(discordCatch);
   saveGames();
 }

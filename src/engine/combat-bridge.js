@@ -32,6 +32,7 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
   }
 }
 import { countGameSpaces } from '../game/board-helpers.js';
+import { setPendingCelebration } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -1300,7 +1301,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         // Celebration: after unique hostile defeated, offer attacker a chance to play it
         const defeatedDcName = idx >= 0 ? dcList[idx]?.dcName : null;
         if (isDcUnique(defeatedDcName)) {
-          game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
+          setPendingCelebration(game, { attackerPlayerNum, combatThreadId: combat.combatThreadId });
           await thread.send(sanitizeMentions({
             content: `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`,
             components: [getCelebrationButtons(game.gameId)],
@@ -1405,7 +1406,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
           // Celebration: prompt if unique figure defeated via Blast
           if (!game.pendingCelebration && isDcUnique(blastDcName)) {
-            game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
+            setPendingCelebration(game, { attackerPlayerNum, combatThreadId: combat.combatThreadId });
             await thread.send(sanitizeMentions({
               content: `<@${ownerId}> — You defeated a unique figure (Blast). Play **Celebration** to gain 4 VP?`,
               components: [getCelebrationButtons(game.gameId)],

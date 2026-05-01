@@ -3,6 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
+import { setPendingCelebration } from '../game/interrupts.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
@@ -6282,7 +6283,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
           // Post-defeat: Celebration (unique figure defeated → offer Celebration CC play)
           const fhAtkerOwnerId = getPlayerId(game, attackerPlayerNum);
           if (!game.pendingCelebration && isDcUnique?.(fhDcName)) {
-            game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
+            setPendingCelebration(game, { attackerPlayerNum, combatThreadId: combat.combatThreadId });
             await thread.send(sanitizeMentions({
               content: `<@${fhAtkerOwnerId}> — You defeated a unique figure (Figurehead). Play **Celebration** to gain 4 VP?`,
               components: [getCelebrationButtons(game.gameId)],

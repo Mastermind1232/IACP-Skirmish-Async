@@ -221,3 +221,35 @@ export function clearPendingNegation(game) {
     game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.CC_NEGATION);
   }
 }
+
+/** CC_CHOICE — dual-write helpers. */
+export function setPendingCcChoice(game, payload) {
+  if (!game) return;
+  game.pendingCcChoice = payload;
+  if (!Array.isArray(game.interrupts)) game.interrupts = [];
+  game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.CC_CHOICE);
+  pushInterrupt(game, INTERRUPT_TYPES.CC_CHOICE, payload);
+}
+export function clearPendingCcChoice(game) {
+  if (!game) return;
+  delete game.pendingCcChoice;
+  if (Array.isArray(game.interrupts)) {
+    game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.CC_CHOICE);
+  }
+}
+
+/** CELEBRATION — dual-write helpers. */
+export function setPendingCelebration(game, payload) {
+  if (!game) return;
+  game.pendingCelebration = payload;
+  if (!Array.isArray(game.interrupts)) game.interrupts = [];
+  game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.CELEBRATION);
+  pushInterrupt(game, INTERRUPT_TYPES.CELEBRATION, payload);
+}
+export function clearPendingCelebration(game) {
+  if (!game) return;
+  delete game.pendingCelebration;
+  if (Array.isArray(game.interrupts)) {
+    game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.CELEBRATION);
+  }
+}

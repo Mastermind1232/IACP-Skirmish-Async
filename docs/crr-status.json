@@ -51,7 +51,7 @@
       "deviceRerollGranted",
       "drivenByHatredForceChoke"
     ],
-    "baselineTypeMismatchCount": 22
+    "baselineTypeMismatchCount": 24
   },
   "depBagParity": {
     "totalRequiredDepKeys": 231,

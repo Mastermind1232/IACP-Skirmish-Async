@@ -77,13 +77,15 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'restInPeaceActive',
   'extraProtectionTriggeredThisCombat',
   'pendingMissionSorReveal',
-  // Phase 1 of pending* consolidation — pendingNegation now goes through
-  // setPendingNegation/clearPendingNegation in src/game/interrupts.js.
-  // Direct game.pendingNegation = X writes only exist inside the helper
-  // functions; the test scanner doesn't follow into helpers, so add to
-  // the baseline. Remove once the legacy pendingNegation field is
-  // dropped entirely (Phase 3 cutover of the consolidation plan).
+  // Pending* consolidation (project_pending_consolidation_plan.md) —
+  // these fields now go through setPending* / clearPending* helpers in
+  // src/game/interrupts.js. Direct game.pendingX = Y writes only exist
+  // inside the helper functions; the test scanner doesn't follow into
+  // helpers, so add migrated fields to the baseline. Remove once the
+  // legacy fields are dropped entirely (Phase 3 cutover).
   'pendingNegation',
+  'pendingCcChoice',
+  'pendingCelebration',
 ];
 
 // ── Dep-bag parity allowlist ────────────────────────────────────────────────
