@@ -561,6 +561,14 @@ export async function populatePlayAreas(game, client, deps, opts = {}) {
     // Derive activation counts from board state (handles LiA set-aside automatically)
     deps.recomputeActivationCounts(game, 1);
     deps.recomputeActivationCounts(game, 2);
+  } else {
+    // loadFromState path also needs activation counts derived from current
+    // board state — saved p1ActivationsRemaining can be stale relative to
+    // the figures actually deployed (audit gap 9).
+    if (deps.recomputeActivationCounts) {
+      deps.recomputeActivationCounts(game, 1);
+      deps.recomputeActivationCounts(game, 2);
+    }
   }
 
   game.p1DcMessageIds = [];
