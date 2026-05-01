@@ -28,7 +28,7 @@ import { dcMessageMeta, dcExhaustedState, dcHealthState } from '../game-state.js
  * @returns {{ gameId: string, playerNum: number, dcName: string, displayName: string } | null}
  */
 export function getDcInfo(_game, msgId) {
-  return dcMessageMeta.get(msgId) ?? null;
+  return dcMessageMeta.get(msgId);
 }
 
 /**
@@ -40,7 +40,7 @@ export function getDcInfo(_game, msgId) {
  * @returns {boolean}
  */
 export function getDcExhausted(_game, msgId) {
-  return dcExhaustedState.get(msgId) ?? false;
+  return dcExhaustedState.get(msgId);
 }
 
 /**
@@ -63,7 +63,7 @@ export function setDcExhausted(_game, msgId, value) {
  * @returns {Array<[number|null, number|null]>}
  */
 export function getDcHealth(_game, msgId) {
-  return dcHealthState.get(msgId) ?? [[null, null]];
+  return dcHealthState.get(msgId);
 }
 
 /**

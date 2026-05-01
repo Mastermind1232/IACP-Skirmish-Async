@@ -33,8 +33,8 @@ describe('dc-state accessors (Slice 1: Map-backed)', () => {
       assert.deepEqual(getDcInfo({}, 'msg1'), { gameId: 'g1', playerNum: 1, dcName: 'Trooper', displayName: 'Trooper' });
     });
 
-    it('returns null when msgId is unknown', () => {
-      assert.equal(getDcInfo({}, 'unknown'), null);
+    it('returns undefined when msgId is unknown (matches Map.get)', () => {
+      assert.equal(getDcInfo({}, 'unknown'), undefined);
     });
   });
 
@@ -44,8 +44,8 @@ describe('dc-state accessors (Slice 1: Map-backed)', () => {
       assert.equal(getDcExhausted({}, 'msg1'), true);
     });
 
-    it('returns false (not undefined) when msgId is unknown', () => {
-      assert.equal(getDcExhausted({}, 'unknown'), false);
+    it('returns undefined when msgId is unknown (matches Map.get)', () => {
+      assert.equal(getDcExhausted({}, 'unknown'), undefined);
     });
 
     it('returns false when explicitly set to false', () => {
@@ -73,8 +73,8 @@ describe('dc-state accessors (Slice 1: Map-backed)', () => {
       assert.deepEqual(getDcHealth({}, 'msg1'), [[3, 5], [4, 5]]);
     });
 
-    it('returns [[null, null]] (not undefined) when msgId is unknown', () => {
-      assert.deepEqual(getDcHealth({}, 'unknown'), [[null, null]]);
+    it('returns undefined when msgId is unknown (matches Map.get)', () => {
+      assert.equal(getDcHealth({}, 'unknown'), undefined);
     });
   });
 

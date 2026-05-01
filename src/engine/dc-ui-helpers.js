@@ -2,6 +2,7 @@
  * DC UI helper functions extracted from index.js.
  * Build Discord embed data for deployment cards.
  */
+import { getDcInfo, getDcExhausted, getDcHealth } from '../game/dc-state.js';
 
 export function getDcUpgradeAttachments(game, msgId) {
   if (!game || !msgId) return [];
@@ -66,13 +67,13 @@ export function getNicknamesForDcMessage(game, meta, deps) {
  * deps must include: dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats.
  */
 export function buildDcDisplayState(game, msgId, deps) {
-  const meta = deps.dcMessageMeta.get(msgId);
+  const meta = getDcInfo(game, msgId);
   if (!meta) return null;
   return {
     dcName:             meta.dcName,
-    exhausted:          deps.dcExhaustedState?.get(msgId) ?? false,
+    exhausted:          getDcExhausted(game, msgId) ?? false,
     displayName:        meta.displayName,
-    healthState:        deps.dcHealthState?.get(msgId) ?? [[null, null]],
+    healthState:        getDcHealth(game, msgId) ?? [[null, null]],
     conditionsByFigure: getConditionsForDcMessage(game, meta, deps),
     dcAttachments:      getDcUpgradeAttachments(game, msgId),
     tokensByFigure:     getTokensForDcMessage(game, meta, deps),
