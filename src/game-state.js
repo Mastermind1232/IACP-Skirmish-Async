@@ -303,8 +303,100 @@ class DerivedDcMessageMeta {
 
 /** Derived view: { gameId, playerNum, dcName, displayName } per msgId */
 const dcMessageMeta = new DerivedDcMessageMeta(games);
-/** messageId -> boolean (exhausted) — still authoritative; Slice 4b will migrate */
-const dcExhaustedState = new Map();
+
+/**
+ * Map-shaped derived view of DC exhausted state.
+ * .get(msgId) computes:
+ *   activatedDcIndices.has(dcIndex) || abilityExhaustedMsgIds.includes(msgId)
+ * which matches what repopulateDcMapsForGame used to compute and store.
+ *
+ * .set(msgId, value) WRITES THROUGH to canonical state — this closes the
+ * documented latent gap where un-exhaust paths set the Map to false but
+ * forgot to remove from abilityExhaustedMsgIds. Setting false now also
+ * removes from activatedDcIndices for the corresponding dcIndex AND
+ * removes msgId from abilityExhaustedMsgIds. Setting true adds to
+ * abilityExhaustedMsgIds (round-exhaust via activatedDcIndices is
+ * separate; callers that "activate" a DC should use the activation flow,
+ * not .set).
+ */
+class DerivedDcExhaustedState {
+  constructor(gamesMap, metaView) {
+    this._games = gamesMap;
+    this._meta = metaView;
+  }
+
+  _resolve(msgId) {
+    const meta = this._meta.get(msgId);
+    if (!meta) return null;
+    const game = this._games.get(meta.gameId);
+    if (!game) return null;
+    const dcMsgIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcIndex = (dcMsgIds || []).indexOf(msgId);
+    if (dcIndex < 0) return null;
+    return { game, meta, dcIndex };
+  }
+
+  get(msgId) {
+    if (!msgId) return undefined;
+    const r = this._resolve(msgId);
+    if (!r) return undefined;
+    const { game, meta, dcIndex } = r;
+    const activatedKey = meta.playerNum === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices';
+    if ((game[activatedKey] || []).includes(dcIndex)) return true;
+    if ((game.abilityExhaustedMsgIds || []).includes(msgId)) return true;
+    return false;
+  }
+
+  has(msgId) { return this.get(msgId) !== undefined; }
+
+  set(msgId, value) {
+    const r = this._resolve(msgId);
+    if (!r) return this; // unknown msgId: silently drop (matches DerivedDcMessageMeta semantics)
+    const { game, meta, dcIndex } = r;
+    if (value) {
+      game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
+      if (!game.abilityExhaustedMsgIds.includes(msgId)) {
+        game.abilityExhaustedMsgIds.push(msgId);
+      }
+    } else {
+      // Un-exhaust: remove from BOTH abilityExhaustedMsgIds AND activatedDcIndices.
+      // This is what the latent-gap call sites failed to do (dc-play-area.js:286
+      // un-activate, apply-ability-result.js:61 CC ready, game-tools.js:279 undo).
+      if (game.abilityExhaustedMsgIds) {
+        game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds.filter((id) => id !== msgId);
+      }
+      const activatedKey = meta.playerNum === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices';
+      if (game[activatedKey]) {
+        game[activatedKey] = game[activatedKey].filter((i) => i !== dcIndex);
+      }
+    }
+    return this;
+  }
+
+  delete(_msgId) { return false; }   // no-op: no separate storage
+  clear()       { /* no-op */ }
+
+  *[Symbol.iterator]() {
+    for (const [msgId] of this._meta) {
+      yield [msgId, this.get(msgId)];
+    }
+  }
+
+  *keys()    { for (const [k] of this) yield k; }
+  *values()  { for (const [, v] of this) yield v; }
+  *entries() { yield* this[Symbol.iterator](); }
+  forEach(fn) { for (const [k, v] of this) fn(v, k, this); }
+
+  get size() {
+    let n = 0;
+    // eslint-disable-next-line no-unused-vars
+    for (const _ of this) n++;
+    return n;
+  }
+}
+
+/** Derived view: boolean exhausted state per msgId, with write-through .set */
+const dcExhaustedState = new DerivedDcExhaustedState(games, dcMessageMeta);
 /** messageId -> healthState array — still authoritative; Slice 4c will migrate */
 const dcHealthState = new Map();
 /** key = `${gameId}_${playerNum}`, value = { squad, timestamp } */
@@ -527,33 +619,29 @@ export function getGamesMap() {
  * Call after restoring a game snapshot to keep side-channel Maps consistent.
  */
 export function repopulateDcMapsForGame(gameId) {
-  // Clear existing entries for this game
+  // Slice 4a + 4b: dcMessageMeta and dcExhaustedState are derived views.
+  // Repopulating them would either no-op (meta) or actively corrupt
+  // canonical state (dcExhaustedState's write-through .set would push
+  // activated-only msgIds into abilityExhaustedMsgIds incorrectly).
+  // So those are skipped — the views stay correct because they read
+  // game state directly. Only dcHealthState (still a real Map) is
+  // rebuilt here. Slice 4c will collapse this further.
+  const game = games.get(gameId);
+  if (!game) return;
+  // Clear existing dcHealthState entries for this game so stale msgIds
+  // (from cross-lobby restore where msgIds change) don't linger.
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta?.gameId === gameId) {
-      dcMessageMeta.delete(msgId);
-      dcExhaustedState.delete(msgId);
       dcHealthState.delete(msgId);
     }
   }
-  // Rebuild from current game state
-  const game = games.get(gameId);
-  if (!game) return;
   for (const playerNum of [1, 2]) {
     const dcList = getDcList(game, playerNum) || [];
     const dcMessageIds = getDcMessageIds(game, playerNum) || [];
-    const activatedIndices = new Set(getActivatedDcIndices(game, playerNum) || []);
     for (let i = 0; i < dcMessageIds.length && i < dcList.length; i++) {
       const msgId = dcMessageIds[i];
       const dc = dcList[i];
       if (!msgId || !dc) continue;
-      dcMessageMeta.set(msgId, {
-        gameId,
-        playerNum,
-        dcName: dc.dcName,
-        displayName: dc.displayName || dc.dcName,
-      });
-      const abilityExhausted = (game.abilityExhaustedMsgIds || []).includes(msgId);
-      dcExhaustedState.set(msgId, activatedIndices.has(i) || abilityExhausted);
       dcHealthState.set(msgId, dc.healthState || [[null, null]]);
     }
   }

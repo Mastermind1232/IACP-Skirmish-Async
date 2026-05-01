@@ -69,32 +69,83 @@ describe('dc-state accessors (post Slice 4a: dcMessageMeta derived)', () => {
     });
   });
 
-  describe('getDcExhausted', () => {
-    it('returns the stored boolean', () => {
-      dcExhaustedState.set('msg1', true);
+  describe('getDcExhausted (derived from activatedDcIndices + abilityExhaustedMsgIds)', () => {
+    function seed() {
+      games.set('g1', {
+        gameId: 'g1',
+        p1DcMessageIds: ['msg1'],
+        p1DcList: [{ dcName: 'X', displayName: 'X' }],
+        p2DcMessageIds: [], p2DcList: [],
+        p1ActivatedDcIndices: [],
+        p2ActivatedDcIndices: [],
+        abilityExhaustedMsgIds: [],
+      });
+    }
+
+    it('returns true when DC is in activatedDcIndices', () => {
+      seed();
+      games.get('g1').p1ActivatedDcIndices = [0];
       assert.equal(getDcExhausted({}, 'msg1'), true);
     });
 
-    it('returns undefined when msgId is unknown (matches Map.get)', () => {
-      assert.equal(getDcExhausted({}, 'unknown'), undefined);
+    it('returns true when msgId is in abilityExhaustedMsgIds', () => {
+      seed();
+      games.get('g1').abilityExhaustedMsgIds = ['msg1'];
+      assert.equal(getDcExhausted({}, 'msg1'), true);
     });
 
-    it('returns false when explicitly set to false', () => {
-      dcExhaustedState.set('msg1', false);
+    it('returns false when neither flag is set', () => {
+      seed();
       assert.equal(getDcExhausted({}, 'msg1'), false);
+    });
+
+    it('returns undefined when msgId is unknown to game state', () => {
+      assert.equal(getDcExhausted({}, 'unknown'), undefined);
     });
   });
 
-  describe('setDcExhausted', () => {
-    it('writes to the Map', () => {
+  describe('setDcExhausted (write-through to canonical state)', () => {
+    function seed() {
+      games.set('g1', {
+        gameId: 'g1',
+        p1DcMessageIds: ['msg1'],
+        p1DcList: [{ dcName: 'X', displayName: 'X' }],
+        p2DcMessageIds: [], p2DcList: [],
+        p1ActivatedDcIndices: [],
+        p2ActivatedDcIndices: [],
+        abilityExhaustedMsgIds: [],
+      });
+    }
+
+    it('setting true adds to abilityExhaustedMsgIds', () => {
+      seed();
       setDcExhausted({}, 'msg1', true);
-      assert.equal(dcExhaustedState.get('msg1'), true);
+      assert.deepEqual(games.get('g1').abilityExhaustedMsgIds, ['msg1']);
+      assert.equal(getDcExhausted({}, 'msg1'), true);
     });
 
-    it('overwrites existing values', () => {
-      dcExhaustedState.set('msg1', true);
+    it('setting true is idempotent (no duplicates)', () => {
+      seed();
+      setDcExhausted({}, 'msg1', true);
+      setDcExhausted({}, 'msg1', true);
+      assert.deepEqual(games.get('g1').abilityExhaustedMsgIds, ['msg1']);
+    });
+
+    it('setting false removes from abilityExhaustedMsgIds AND activatedDcIndices (closes latent gap)', () => {
+      seed();
+      const g = games.get('g1');
+      g.abilityExhaustedMsgIds = ['msg1'];
+      g.p1ActivatedDcIndices = [0];
       setDcExhausted({}, 'msg1', false);
-      assert.equal(dcExhaustedState.get('msg1'), false);
+      assert.deepEqual(g.abilityExhaustedMsgIds, []);
+      assert.deepEqual(g.p1ActivatedDcIndices, []);
+      assert.equal(getDcExhausted({}, 'msg1'), false);
+    });
+
+    it('silently drops .set for unknown msgId (no game state to update)', () => {
+      seed();
+      setDcExhausted({}, 'unknown', true);
+      assert.deepEqual(games.get('g1').abilityExhaustedMsgIds, []);
     });
   });
 

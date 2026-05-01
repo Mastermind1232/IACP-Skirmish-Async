@@ -141,9 +141,12 @@ describe('DC state invariant: Maps are derived from canonical game state', () =>
     assert.deepEqual([...dcExhaustedState], [...snap1]);
   });
 
-  it('repopulate scoped to one game does not affect other games (distinct msgIds)', () => {
+  it('multi-game derivation: each game derives independently from its own state', () => {
+    // Post-Slice-4b: dcExhaustedState is a derived view. There is no per-game
+    // "repopulate scope" anymore — get(msgId) always reflects current game
+    // state. This test verifies cross-game isolation holds via msgId
+    // uniqueness (Discord guarantees this) and derivation correctness.
     const g1 = makeGame('g1');
-    // Override g2 with distinct msgIds so we can test scope cleanly
     const g2 = {
       gameId: 'g2',
       p1DcList: [{ dcName: 'X', displayName: 'X', healthState: [[1, 1]] }],
@@ -157,11 +160,11 @@ describe('DC state invariant: Maps are derived from canonical game state', () =>
     games.set('g2', g2);
     g1.p1ActivatedDcIndices = [0];
     g2.p1ActivatedDcIndices = [0];
-    repopulateDcMapsForGame('g1');
-    // g2's Map entries don't exist yet (haven't repopulated)
-    assert.equal(dcExhaustedState.get('g2p1m1'), undefined);
-    repopulateDcMapsForGame('g2');
+    // No repopulate calls needed — derivation is on-demand.
     assert.equal(dcExhaustedState.get('p1m1'), true);    // g1
     assert.equal(dcExhaustedState.get('g2p1m1'), true);  // g2
+    // dcHealthState (still a real Map until Slice 4c) DOES need repopulate
+    // to seed entries — that part of the test still applies.
+    repopulateDcMapsForGame('g2');
   });
 });
