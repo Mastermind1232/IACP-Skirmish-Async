@@ -315,6 +315,9 @@ const CONTEXT_GROUPS = {
     // Without it, a checkpoint load into a phase like cc_draw leaves
     // the players stuck — no Shuffle/Draw button, no progression.
     'refreshAllGameComponents',
+    // Loader rebuilds DC attachment + companion messages post-load (audit
+    // gap 5/6) using these on-demand helpers.
+    'updateAttachmentMessageForDc',
   ],
 
   phaseGate: [
