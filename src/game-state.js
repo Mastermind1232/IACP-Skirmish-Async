@@ -208,6 +208,34 @@ function ensureGameShape(game) {
   }
 }
 
+/**
+ * Side-channel Maps for DC state, keyed by Discord message ID.
+ *
+ * MIGRATION-IN-PROGRESS (see project_dc_state_consolidation_plan.md):
+ * these Maps are scheduled for deletion. New code should use the accessors
+ * in src/game/dc-state.js instead of touching the Maps directly.
+ *
+ * INVARIANT (canonical source of truth — these Maps are derived):
+ *   - dcExhaustedState[msgId] === activatedDcIndices.has(dcIndex)
+ *                                || abilityExhaustedMsgIds.includes(msgId)
+ *   - dcHealthState[msgId]    === game.dcList[dcIndex].healthState
+ *   - dcMessageMeta[msgId]    === { gameId, playerNum, dcName, displayName }
+ *                                derivable from game.p1DcList / game.p2DcList
+ *                                + game.p1DcMessageIds / game.p2DcMessageIds
+ *
+ * `repopulateDcMapsForGame` rebuilds all three from canonical game state.
+ * If your call site directly mutates a Map, also update the canonical source
+ * — otherwise the next save/restart will regenerate the Map and your write
+ * will silently disappear. (See abilities.js:8710-8711 and combat-special-
+ * effects.js:770-771 for the right pattern.)
+ *
+ * KNOWN LATENT GAPS (slated for fix in Slice 4 of the consolidation plan):
+ * a few un-exhaust paths set the Map to false without removing from
+ * abilityExhaustedMsgIds — works in the current session but a save/restart
+ * would re-derive exhausted=true from abilityExhaustedMsgIds. Sites:
+ * dc-play-area.js:286 + 488 (un-activate), apply-ability-result.js:61
+ * (CC ready effect), game-tools.js:279 (undo activation).
+ */
 /** messageId -> { gameId, playerNum, dcName, displayName } */
 const dcMessageMeta = new Map();
 /** messageId -> boolean (exhausted) */
