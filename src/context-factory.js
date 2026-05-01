@@ -308,7 +308,7 @@ const CONTEXT_GROUPS = {
     'repopulateDcMapsForGame',
     'dcMessageMeta', 'dcExhaustedState',
     // New-lobby load needs to spin up channels + render board.
-    'createBoardChannel', 'createPlayAreaChannels', 'createHandThreads', 'populatePlayAreas',
+    'createBoardChannel', 'createPlayAreaChannels', 'populatePlayAreas',
     'buildBoardMapPayload', 'sendRoundActivationPhaseMessage',
     // Phase-specific UI safety nets (CC-draw prompts, Draft-Random
     // activation message, etc.) live inside refreshAllGameComponents.

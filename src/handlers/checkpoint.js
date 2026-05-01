@@ -35,6 +35,7 @@ import {
   countCheckpointsByUser,
 } from '../db.js';
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
+import { renderHandThread } from '../engine/renderer.js';
 
 const MAX_CHECKPOINTS_PER_USER = 50;
 const CHECKPOINT_NAME_MAX_LEN = 80;
@@ -349,7 +350,7 @@ export async function handleCheckpointNewGameOpen(interaction, ctx) {
 export async function handleCheckpointNewGamePick(interaction, ctx) {
   const {
     getGame: getGameDep, saveGames, client,
-    createBoardChannel, createPlayAreaChannels, createHandThreads, populatePlayAreas,
+    createBoardChannel, createPlayAreaChannels, populatePlayAreas,
     buildBoardMapPayload, sendRoundActivationPhaseMessage,
     refreshAllGameComponents,
   } = ctx;
@@ -386,12 +387,11 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
     }
     // Hand threads live INSIDE play-area channels and are required by
     // sendCcShuffleDrawPrompts (it early-returns if hand IDs are null).
-    // Normal new-game setup creates them via createHandThreads; the
-    // checkpoint cross-lobby path forgot, so loading any cc_draw-phase
-    // checkpoint produced a stuck game with no hands and no draw prompts.
-    if (!game.p1HandId || !game.p2HandId) {
-      await createHandThreads(client, game);
-    }
+    // First surface migrated to the renderer (see project_renderer_
+    // consolidation_plan.md). Idempotent post-if-missing — verifies the
+    // tracked id still resolves on Discord and recreates if it 404s.
+    await renderHandThread(game, 1, client, ctx);
+    await renderHandThread(game, 2, client, ctx);
 
     // Apply checkpoint state on top of the now-prepared lobby.
     await applyCheckpointToNewLobby(game, cp, client, {
