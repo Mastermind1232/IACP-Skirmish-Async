@@ -13,6 +13,7 @@ import { countSpaces } from '../game/spatial.js';
 import { edgeKey } from '../game/coords.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getDeploymentZones, getCcEffect, hasMissionFlag } from '../data-loader.js';
+import { setPendingMissionSorReveal, clearPendingMissionSorReveal } from '../game/interrupts.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
@@ -872,7 +873,7 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
       content: `⚡ **Round ${game.currentRound} — ${missionName}** — Each player randomly reveals 1 set-aside mission token. Either player: press to reveal.`,
       components: [row],
     });
-    game.pendingMissionSorReveal = true;
+    setPendingMissionSorReveal(game);
     if (interaction?.message) {
       await interaction.message.edit({ components: [] }).catch(discordCatch);
     }
@@ -1039,7 +1040,7 @@ export async function handleSorMissionReveal(interaction, ctx) {
     await interaction.followUp({ content: 'Mission token reveal already completed.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  game.pendingMissionSorReveal = false;
+  clearPendingMissionSorReveal(game);
   const mapId = game.selectedMap?.id;
   const variant = game.selectedMission?.variant;
   const missionRules = getMissionRules?.(mapId, variant) ?? {};

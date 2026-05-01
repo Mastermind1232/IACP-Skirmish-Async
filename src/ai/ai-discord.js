@@ -15,7 +15,7 @@ import { buildContext } from '../context-factory.js';
 import { createFakeInteraction } from '../headless/fake-interaction.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
-import { clearPendingNegation } from '../game/interrupts.js';
+import { clearPendingNegation, setPendingCcConfirmation } from '../game/interrupts.js';
 
 /** Sentinel user ID prefix for AI players. */
 export const AI_USER_PREFIX = 'ai_player_';
@@ -249,11 +249,11 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
     // Bypass the dropdown by pre-setting pendingCcConfirmation and routing
     // directly to the confirm handler, which does the actual play.
     if (chosen.type === 'play_cc' && chosen.params?.cardName) {
-      currentGame.pendingCcConfirmation = {
+      setPendingCcConfirmation(currentGame, {
         playerNum: aiPlayerNum,
         card: chosen.params.cardName,
         ts: Date.now(),
-      };
+      });
       chosen.customId = `cc_confirm_play_${currentGame.gameId}`;
     }
 

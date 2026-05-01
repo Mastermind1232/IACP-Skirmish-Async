@@ -13,6 +13,7 @@ import {
 import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from '../game/phase.js';
 import { recomputeActivationCounts } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { setPendingMissionSorReveal } from '../game/interrupts.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { getDcEffects } from '../data-loader.js';
@@ -303,7 +304,7 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
           content: `⚡ **Round ${game.currentRound || 1} — ${missionName}** — Each player randomly reveals 1 set-aside mission token. Either player: press to reveal.`,
           components: [row],
         });
-        game.pendingMissionSorReveal = true;
+        setPendingMissionSorReveal(game);
         saveGames();
         return;
       }

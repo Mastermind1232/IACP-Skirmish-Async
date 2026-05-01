@@ -86,6 +86,13 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingNegation',
   'pendingCcChoice',
   'pendingCelebration',
+  'pendingCcConfirmation',
+  'pendingCcSpaceChoice',
+  'pendingCcAttachment',
+  'pendingCleave',
+  'pendingCoverFire',
+  'pendingBoltslinger',
+  'pendingMissionSorReveal',
 ];
 
 // ── Dep-bag parity allowlist ────────────────────────────────────────────────

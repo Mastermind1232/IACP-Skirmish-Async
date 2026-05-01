@@ -69,6 +69,10 @@ export const INTERRUPT_TYPES = Object.freeze({
   // Round effects
   BLEEDING:              'bleeding',
   ROUND_EFFECT_RESOLVING: 'round-effect-resolving',
+  MISSION_SOR_REVEAL:    'mission-sor-reveal',
+
+  // Special-effect prompts
+  BOLTSLINGER:           'boltslinger',
 
   // Meta
   ILLEGAL_SQUAD:         'illegal-squad',
@@ -251,5 +255,63 @@ export function clearPendingCelebration(game) {
   delete game.pendingCelebration;
   if (Array.isArray(game.interrupts)) {
     game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.CELEBRATION);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Bulk dual-write helpers — same pattern as the three above, just generated.
+// Each entry produces setPendingX(game, payload) + clearPendingX(game).
+// Add to this list when migrating another single-payload pendingFooBar field.
+// ──────────────────────────────────────────────────────────────────────────
+
+function _setDual(game, fieldName, type, payload) {
+  if (!game) return;
+  game[fieldName] = payload;
+  if (!Array.isArray(game.interrupts)) game.interrupts = [];
+  game.interrupts = game.interrupts.filter((i) => i.type !== type);
+  pushInterrupt(game, type, payload);
+}
+function _clearDual(game, fieldName, type) {
+  if (!game) return;
+  delete game[fieldName];
+  if (Array.isArray(game.interrupts)) {
+    game.interrupts = game.interrupts.filter((i) => i.type !== type);
+  }
+}
+
+export function setPendingCcConfirmation(game, payload) { _setDual(game, 'pendingCcConfirmation', INTERRUPT_TYPES.CC_CONFIRMATION, payload); }
+export function clearPendingCcConfirmation(game) { _clearDual(game, 'pendingCcConfirmation', INTERRUPT_TYPES.CC_CONFIRMATION); }
+
+export function setPendingCcSpaceChoice(game, payload) { _setDual(game, 'pendingCcSpaceChoice', INTERRUPT_TYPES.CC_SPACE_CHOICE, payload); }
+export function clearPendingCcSpaceChoice(game) { _clearDual(game, 'pendingCcSpaceChoice', INTERRUPT_TYPES.CC_SPACE_CHOICE); }
+
+export function setPendingCcAttachment(game, payload) { _setDual(game, 'pendingCcAttachment', INTERRUPT_TYPES.CC_ATTACHMENT, payload); }
+export function clearPendingCcAttachment(game) { _clearDual(game, 'pendingCcAttachment', INTERRUPT_TYPES.CC_ATTACHMENT); }
+
+export function setPendingCleave(game, payload) { _setDual(game, 'pendingCleave', INTERRUPT_TYPES.CLEAVE, payload); }
+export function clearPendingCleave(game) { _clearDual(game, 'pendingCleave', INTERRUPT_TYPES.CLEAVE); }
+
+export function setPendingCoverFire(game, payload) { _setDual(game, 'pendingCoverFire', INTERRUPT_TYPES.COVER_FIRE, payload); }
+export function clearPendingCoverFire(game) { _clearDual(game, 'pendingCoverFire', INTERRUPT_TYPES.COVER_FIRE); }
+
+export function setPendingBoltslinger(game, payload) { _setDual(game, 'pendingBoltslinger', INTERRUPT_TYPES.BOLTSLINGER, payload); }
+export function clearPendingBoltslinger(game) { _clearDual(game, 'pendingBoltslinger', INTERRUPT_TYPES.BOLTSLINGER); }
+
+/**
+ * MISSION_SOR_REVEAL — boolean flag, not a payload. Set/clear toggle.
+ * Stack entry has empty payload; legacy field is true/false.
+ */
+export function setPendingMissionSorReveal(game) {
+  if (!game) return;
+  game.pendingMissionSorReveal = true;
+  if (!Array.isArray(game.interrupts)) game.interrupts = [];
+  game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.MISSION_SOR_REVEAL);
+  pushInterrupt(game, INTERRUPT_TYPES.MISSION_SOR_REVEAL, {}, { blocksSave: false });
+}
+export function clearPendingMissionSorReveal(game) {
+  if (!game) return;
+  game.pendingMissionSorReveal = false;
+  if (Array.isArray(game.interrupts)) {
+    game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.MISSION_SOR_REVEAL);
   }
 }

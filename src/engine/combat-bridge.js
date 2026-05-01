@@ -32,7 +32,7 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
   }
 }
 import { countGameSpaces } from '../game/board-helpers.js';
-import { setPendingCelebration } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -2002,7 +2002,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             .setStyle(ButtonStyle.Primary);
         });
         const _cfRows = chunkButtonsToRows(_cfBtns);
-        game.pendingCoverFire = { gameId: game.gameId, attackerPlayerNum, attackerMsgId: combat.attackerMsgId, hit: !!(hit && damage > 0), targetFigureKey: combat.target?.figureKey, targetMsgId, targetFigIndex, defenderPlayerNum, combat: { combatThreadId: combat.combatThreadId, resultText }, embedRefreshMsgIds: [...embedRefreshMsgIds] };
+        setPendingCoverFire(game, { gameId: game.gameId, attackerPlayerNum, attackerMsgId: combat.attackerMsgId, hit: !!(hit && damage > 0), targetFigureKey: combat.target?.figureKey, targetMsgId, targetFigIndex, defenderPlayerNum, combat: { combatThreadId: combat.combatThreadId, resultText }, embedRefreshMsgIds: [...embedRefreshMsgIds] });
         await thread.send(sanitizeMentions({ content: `\u{1F6E1}\uFE0F **Cover Fire** — <@${ownerId}> Choose a friendly figure within 3 spaces to receive 1 Block Token:`, allowedMentions: { users: [ownerId] }, components: _cfRows }));
         // Don't return — the Block token choice is async but we continue combat resolution
       }
@@ -2044,7 +2044,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     });
     if (cleaveTargets.length > 0) {
       const firstSource = cleaveQueue.shift();
-      game.pendingCleave = {
+      setPendingCleave(game, {
         gameId: game.gameId,
         combatThreadId: combat.combatThreadId,
         surgeCleave: firstSource.value,
@@ -2057,7 +2057,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         resultText,
         combat,
         initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-      };
+      });
       const cleaveRows = getCleaveTargetButtons(game.gameId, cleaveTargets);
       await thread.send(sanitizeMentions({
         content: `**${firstSource.label}:** <@${ownerId}> \u2014 Choose one eligible target to apply cleave damage:`,
@@ -2447,7 +2447,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       boltslingerTargets.push({ figureKey: fk, playerNum: blDefPlayerNum, label: blLabel });
     }
     if (boltslingerTargets.length > 0) {
-      game.pendingBoltslinger = { gameId: game.gameId, attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: boltslingerTargets };
+      setPendingBoltslinger(game, { gameId: game.gameId, attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: boltslingerTargets });
       const btns = boltslingerTargets.slice(0, 4).map((t, i) =>
         new ButtonBuilder().setCustomId(`boltslinger_target_${game.gameId}_${i}`).setLabel(t.label).setStyle(ButtonStyle.Danger)
       );
@@ -2846,7 +2846,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   }
 
   delete game.pendingCombat;
-  delete game.pendingCleave;
+  clearPendingCleave(game);
   if (combat.rollMessageId) {
     try {
       const rollMsg = await thread.messages.fetch(combat.rollMessageId);

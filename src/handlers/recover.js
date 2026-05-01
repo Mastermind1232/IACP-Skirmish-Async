@@ -17,6 +17,7 @@ import { parseCustomId } from '../discord/custom-id.js';
 import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
 import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { getRecoveryPrompts, needsRecovery } from '../engine/recovery.js';
+import { clearPendingCcConfirmation } from '../game/interrupts.js';
 
 /**
  * Main recovery handler — called from botmenu Recover button.
@@ -775,7 +776,7 @@ async function recoverPendingCcConfirmation(game, gameId, ctx) {
   // Check 10-minute TTL — if expired, clear state instead of re-sending stale buttons
   const CONFIRM_TTL_MS = 10 * 60 * 1000;
   if (ts && Date.now() - ts > CONFIRM_TTL_MS) {
-    delete game.pendingCcConfirmation;
+    clearPendingCcConfirmation(game);
     console.log(`[recover] Cleared expired pendingCcConfirmation (card=${card}, age=${Math.round((Date.now() - ts) / 60000)}m)`);
     return 'Cleared expired CC confirmation (TTL exceeded)';
   }

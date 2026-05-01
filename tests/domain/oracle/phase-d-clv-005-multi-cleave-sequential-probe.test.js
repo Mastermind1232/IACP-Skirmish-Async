@@ -69,7 +69,7 @@ describe('PROBE-PD-CLV-005: multiple Cleave abilities resolve one at a time with
 
   it('005f: source — initial prompt pops first source off cleaveQueue and persists the remainder on pending.cleaveQueue', () => {
     assert.match(CB_SRC,
-      /const firstSource = cleaveQueue\.shift\(\);\s*\n\s*game\.pendingCleave = \{[\s\S]*?surgeCleave: firstSource\.value,[\s\S]*?sourceLabel: firstSource\.label,[\s\S]*?cleaveQueue,/,
+      /const firstSource = cleaveQueue\.shift\(\);\s*\n\s*setPendingCleave\(game, \{[\s\S]*?surgeCleave: firstSource\.value,[\s\S]*?sourceLabel: firstSource\.label,[\s\S]*?cleaveQueue,/,
       'initial Cleave prompt must pop first source and persist remaining queue on pending — CRR-CLV-005');
   });
 

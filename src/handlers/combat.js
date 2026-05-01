@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire } from '../game/interrupts.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
@@ -5990,14 +5990,14 @@ export async function handleCleaveTarget(interaction, ctx) {
       if (nextTargets.length > 0) {
         const nextSource = cleaveQueue.shift();
         const cThread = await fetchCombatThread(client, pending.combat.combatThreadId);
-        game.pendingCleave = {
+        setPendingCleave(game, {
           ...pending,
           surgeCleave: nextSource.value,
           sourceLabel: nextSource.label,
           cleaveQueue,
           targets: nextTargets,
           initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-        };
+        });
         if (cThread) {
           const nextRows = ctxGetCleaveTargetButtons(game.gameId, nextTargets);
           await cThread.send(sanitizeMentions({
@@ -6011,7 +6011,7 @@ export async function handleCleaveTarget(interaction, ctx) {
       }
     }
   }
-  delete game.pendingCleave;
+  clearPendingCleave(game);
   const { checkPostCombatSurges } = ctx;
   if (checkPostCombatSurges) {
     const defPN = opponentPlayerNum(pending.attackerPlayerNum);
@@ -6539,7 +6539,7 @@ export async function handleCoverFireBlock(interaction, ctx) {
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the attacker can choose.')) return;
   grantPowerTokens(game, figureKey, 'Block', 1);
-  game.pendingCoverFire = null;
+  clearPendingCoverFire(game);
   const dcName = dcNameFromFigureKey(figureKey);
   await interaction.message.edit({ content: `🛡️ **Cover Fire** — **${dcName}** received 1 Block Token.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `🛡️ **Cover Fire** — **${dcName}** gained 1 Block Token.`, { phase: 'ROUND', icon: 'card' });
@@ -6564,7 +6564,7 @@ export async function handleCoverFireDiscard(interaction, ctx) {
   if (interaction.customId.startsWith('cover_fire_discard_skip_')) {
     const skipGameId = parseCustomId(interaction.customId, 'cover_fire_discard_skip_');
     const skipGame = await requireGame(interaction, getGame, skipGameId, { silent: true });
-    if (skipGame) skipGame.pendingCoverFire = null;
+    if (skipGame) clearPendingCoverFire(skipGame);
     await interaction.message.edit({ content: '🛡️ **Cover Fire** — Skipped condition/token removal.', components: [] }).catch(discordCatch);
     if (skipGame) saveGames();
     return;
@@ -6575,7 +6575,7 @@ export async function handleCoverFireDiscard(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   const dcName = dcNameFromFigureKey(figureKey);
-  game.pendingCoverFire = null;
+  clearPendingCoverFire(game);
   if (type === 'condition') {
     const conds = game.figureConditions?.[figureKey] || [];
     const idx = parseInt(indexStr, 10);

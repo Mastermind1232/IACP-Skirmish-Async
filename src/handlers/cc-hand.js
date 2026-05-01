@@ -19,7 +19,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
-import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment } from '../game/interrupts.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -191,7 +191,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   const { getGame, getCcEffect, buildHandDisplayPayload, updateAttachmentMessageForDc, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
   const gameId = parseCustomId(interaction.customId, 'cc_attach_to_');
   const game = getGame(gameId);
-  const pending = game?.pendingCcAttachment;
+  const pending = game ? game.pendingCcAttachment : null;
   if (!game || !pending) {
     await interaction.reply({ content: 'No attachment pending or game not found.', ephemeral: true }).catch(discordCatch);
     return;
@@ -210,7 +210,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   const hand = game[handKey] || [];
   const idx = hand.indexOf(card);
   if (idx < 0) {
-    delete game.pendingCcAttachment;
+    clearPendingCcAttachment(game);
     await interaction.reply({ content: "That card is no longer in your hand.", ephemeral: true }).catch(discordCatch);
     saveGames();
     return;
@@ -222,7 +222,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   game[attachKey] = game[attachKey] || {};
   if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
   game[attachKey][dcMsgId].push(card);
-  delete game.pendingCcAttachment;
+  clearPendingCcAttachment(game);
   await updateAttachmentMessageForDc(game, playerNum, dcMsgId, interaction.client);
   const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
@@ -265,7 +265,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
     await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch(discordCatch);
     return;
   }
-  game.pendingCcConfirmation = { playerNum, card, ts: Date.now() };
+  setPendingCcConfirmation(game, { playerNum, card, ts: Date.now() });
   saveGames();
   const { existsSync } = await import('fs');
   const { AttachmentBuilder } = await import('discord.js');
@@ -303,7 +303,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   const CONFIRM_TTL_MS = 10 * 60 * 1000;
   if (Date.now() - (game.pendingCcConfirmation.ts || 0) > CONFIRM_TTL_MS) {
-    delete game.pendingCcConfirmation;
+    clearPendingCcConfirmation(game);
     saveGames();
     await interaction.followUp({ content: 'Card selection expired — please re-select from your hand.', ephemeral: true }).catch(discordCatch);
     return;
@@ -311,7 +311,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const { playerNum, card } = game.pendingCcConfirmation;
   // 5H: Verify the interacting user is the player who initiated this CC play
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Not your card to confirm.')) return;
-  delete game.pendingCcConfirmation;
+  clearPendingCcConfirmation(game);
 
   // Signal Jammer intercept: cancel this CC and discard both it and Signal Jammer
   if (game.signalJammerActive && card !== 'Signal Jammer') {
@@ -402,7 +402,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       await interaction.followUp({ content: 'No Deployment cards to attach to.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    game.pendingCcAttachment = { playerNum, card };
+    setPendingCcAttachment(game, { playerNum, card });
     // Filter DCs by playableBy restriction
     const ccEffect = getCcEffect(card);
     const playableBy = (ccEffect?.playableBy || '').trim();
@@ -520,7 +520,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const effectDesc2 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc2}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
-      game.pendingCcSpaceChoice = { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces, chosenFigureKey: result.chosenFigureKey ?? null };
+      setPendingCcSpaceChoice(game, { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces, chosenFigureKey: result.chosenFigureKey ?? null });
       const boardState = getBoardStateForMovement(game, null);
       const ccMapSpaces = boardState?.mapSpaces || { spaces: result.validSpaces };
       const ccHeader = `**Pick a space** (for **${card}**)`;
@@ -720,7 +720,7 @@ export async function handleCcCancelPlay(interaction, ctx) {
   if (game.pendingCcConfirmation?.playerNum) {
     if (!await requirePlayer(interaction, game, interaction.user.id, game.pendingCcConfirmation.playerNum, canActAsPlayer, 'Not your card to cancel.')) return;
   }
-  delete game.pendingCcConfirmation;
+  clearPendingCcConfirmation(game);
   await interaction.message.delete().catch(discordCatch);
   saveGames();
 }
@@ -857,7 +857,7 @@ export async function handleCcSpacePick(interaction, ctx) {
     chosenFigureKey: pending.chosenFigureKey ?? null,
     combat: game.combat || game.pendingCombat,
   });
-  delete game.pendingCcSpaceChoice;
+  clearPendingCcSpaceChoice(game);
   await applyAbilityResult(result, { game, playerNum, client, ctx });
   // Power token type-choice prompt (e.g. Looking for a Fight push phase)
   if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
@@ -933,14 +933,14 @@ export async function handleCcChoice(interaction, ctx) {
       saveGames();
       return;
     }
-    game.pendingCcSpaceChoice = {
+    setPendingCcSpaceChoice(game, {
       abilityId: pending.abilityId,
       gameId,
       playerNum,
       card: pending.card,
       validSpaces: result.validSpaces,
       chosenFigureKey: result.chosenFigureKey ?? pending.choiceValues?.[choiceIndex] ?? null,
-    };
+    });
     const handChannelId = getHandChannelId(game, playerNum);
     const handCh = await fetchGameChannel(client, handChannelId);
     if (handCh) {

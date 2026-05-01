@@ -15,6 +15,7 @@ import { requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
+import { clearPendingBoltslinger } from '../game/interrupts.js';
 
 // ── Internal helpers ─────────────────────────────
 
@@ -325,7 +326,7 @@ export async function handleBoltslingerTarget(interaction, ctx) {
   if (blThread) await blThread.send(`**Boltslinger** — **${target.label}** suffers 1 Damage.`);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Boltslinger** — **${target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
-  delete game.pendingBoltslinger;
+  clearPendingBoltslinger(game);
   saveGames();
 }
 
@@ -335,7 +336,7 @@ export async function handleBoltslingerSkip(interaction, ctx) {
   const m = interaction.customId.match(/^boltslinger_skip_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
-  if (game) delete game.pendingBoltslinger;
+  if (game) clearPendingBoltslinger(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
