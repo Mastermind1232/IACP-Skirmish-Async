@@ -14,6 +14,7 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
+import { setPendingNegation, updatePendingNegation } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
@@ -746,7 +747,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     }
   }
   if (enteringNegation) {
-    game.pendingNegation = { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card), handChannelId };
+    setPendingNegation(game, { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card), handChannelId });
     const oppNum = opponentPlayerNum(meta.playerNum);
     const oppHandId = getHandChannelId(game, oppNum);
     const oppHandChannel = await fetchGameChannel(interaction.client, oppHandId);
@@ -762,7 +763,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     const waitingMsg = await handChannel.send({
       content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
     }).catch(() => null);
-    if (waitingMsg) game.pendingNegation.waitingMsgId = waitingMsg.id;
+    if (waitingMsg) updatePendingNegation(game, (p) => { p.waitingMsgId = waitingMsg.id; });
     if (ctx.pushUndo) {
       ctx.pushUndo(game, {
         type: 'cc_play_dc',

@@ -15,6 +15,7 @@ import { buildContext } from '../context-factory.js';
 import { createFakeInteraction } from '../headless/fake-interaction.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
+import { clearPendingNegation } from '../game/interrupts.js';
 
 /** Sentinel user ID prefix for AI players. */
 export const AI_USER_PREFIX = 'ai_player_';
@@ -341,10 +342,10 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
             }
             console.log(`[AI] Negation auto-resolved: let "${currentGame.pendingNegation?.card || '?'}" resolve`);
           } else {
-            delete currentGame.pendingNegation;
+            clearPendingNegation(currentGame);
           }
         } catch (err) {
-          delete currentGame.pendingNegation;
+          clearPendingNegation(currentGame);
           console.warn(`[AI] Negation auto-resolve error: ${err.message}`);
         }
       }

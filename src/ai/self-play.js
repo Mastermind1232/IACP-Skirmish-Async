@@ -16,6 +16,7 @@ import { buildContext } from '../context-factory.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
 import { getRecoveryReason } from '../engine/recovery.js';
+import { clearPendingNegation } from '../game/interrupts.js';
 import { insertSelfPlayRun, batchIncrementCoverageDiscord, batchSetCoverageVerified } from '../db.js';
 import { computeTransitionKey } from '../exploration/transition-key.js';
 import { setPhase, PHASES, enableStrictPhaseTransitions } from '../game/phase.js';
@@ -1348,11 +1349,11 @@ export async function runSelfPlayLoop(game, client, opts) {
             console.log(`[self-play] Negation auto-resolved: let "${negCard}" resolve (P${negOppNum} passed)`);
           } else {
             // Fallback: just clear the pending state
-            delete g.pendingNegation;
+            clearPendingNegation(g);
             console.warn(`[self-play] Negation cleared (no handler for ${negCustomId})`);
           }
         } catch (err) {
-          delete g.pendingNegation;
+          clearPendingNegation(g);
           console.warn(`[self-play] Negation auto-resolve error: ${err.message}`);
         }
       }

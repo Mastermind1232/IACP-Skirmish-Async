@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { whyMidAction, advanceTransitionalStateBeforeSnapshot } from '../../src/handlers/checkpoint.js';
+import { setPendingNegation } from '../../src/game/interrupts.js';
 
 describe('whyMidAction — save-time boundary gate', () => {
   it('returns empty string for a clean game (no in-flight action)', () => {
@@ -76,10 +77,16 @@ describe('whyMidAction — save-time boundary gate', () => {
     assert.equal(whyMidAction(game), '');
   });
 
-  it('refuses save when pendingNegation is open', () => {
-    const game = {
-      pendingNegation: { attackerMsgId: 'm1', cardName: 'Block' },
-    };
+  it('refuses save when pendingNegation is open (via stack interrupt)', () => {
+    const game = {};
+    setPendingNegation(game, { attackerMsgId: 'm1', cardName: 'Block' });
+    assert.match(whyMidAction(game), /negation/i);
+  });
+
+  it('refuses save when pendingNegation legacy field is set directly (back-compat path)', () => {
+    // Simulates code that hasn't migrated through setPendingNegation yet —
+    // gate should still catch it via the legacy-field fallback.
+    const game = { pendingNegation: { attackerMsgId: 'm1', cardName: 'Block' } };
     assert.match(whyMidAction(game), /negation/i);
   });
 

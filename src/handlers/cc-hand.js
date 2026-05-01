@@ -19,6 +19,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
+import { setPendingNegation, updatePendingNegation, clearPendingNegation } from '../game/interrupts.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -663,7 +664,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const effectDesc4 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc4}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (cost === 0 && ctx.getNegationResponseButtons) {
-    game.pendingNegation = { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel.id };
+    setPendingNegation(game, { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel.id });
     const oppNum = opponentPlayerNum(playerNum);
     const oppHandId = getHandChannelId(game, oppNum);
     const oppHandChannel = await fetchGameChannel(interaction.client, oppHandId);
@@ -679,7 +680,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     const waitingMsg = await withDiscordRetry(() => handChannel.send({
       content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
     })).catch(() => null);
-    if (waitingMsg) game.pendingNegation.waitingMsgId = waitingMsg.id;
+    if (waitingMsg) updatePendingNegation(game, (p) => { p.waitingMsgId = waitingMsg.id; });
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
     // C14: Comm Disruption — prompt opponent if they have it in hand
     await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
@@ -1038,7 +1039,7 @@ export async function handleNegationPlay(interaction, ctx) {
   game[handKey] = hand;
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push('Negation');
-  delete game.pendingNegation;
+  clearPendingNegation(game);
   await refreshHandAndDiscard(game, oppNum, client, ctx);
   await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch(discordCatch);
   const negPlayerId = getPlayerId(game, oppNum);
@@ -1067,7 +1068,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
   const { playedBy, card, fromDc, msgId, wasAttachment, waitingMsgId, handChannelId } = game.pendingNegation;
   const oppNum = opponentPlayerNum(playedBy);
   if (!await requirePlayer(interaction, game, interaction.user.id, oppNum, canActAsPlayer, 'Only the opponent can choose to let it resolve.')) return;
-  delete game.pendingNegation;
+  clearPendingNegation(game);
   await interaction.message.edit({ content: `**${card}** resolves.`, components: [] }).catch(discordCatch);
   if (fromDc && msgId && wasAttachment && updateAttachmentMessageForDc && isCcAttachment?.(card)) {
     const attachKey = ccAttachmentsKey(playedBy);

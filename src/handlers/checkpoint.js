@@ -36,6 +36,7 @@ import {
 } from '../db.js';
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
 import { renderHandThread, renderHandVisual, renderHandPayload, renderRoundActivationMessage, renderDcCompanion } from '../engine/renderer.js';
+import { getBlockingInterrupts, INTERRUPT_TYPES, clearAllInterrupts } from '../game/interrupts.js';
 
 const MAX_CHECKPOINTS_PER_USER = 50;
 const CHECKPOINT_NAME_MAX_LEN = 80;
@@ -80,6 +81,18 @@ export function whyMidAction(game) {
   // Specific user-input prompts that aren't covered above. These are the
   // pending* fields where loss-on-load would silently drop a player's
   // mid-flow decision (different from incidental pending* tracking).
+  // Migration in progress (project_pending_consolidation_plan.md): some
+  // of these have been migrated to the game.interrupts stack via
+  // setPendingFoo wrappers — the stack check below catches those. Direct
+  // legacy-field checks remain for fields not yet migrated.
+  const blockingFromStack = getBlockingInterrupts(game);
+  if (blockingFromStack.length > 0) {
+    const first = blockingFromStack[0];
+    if (first.type === INTERRUPT_TYPES.CC_NEGATION) return 'a negation prompt is open';
+    return `${first.type.replace(/-/g, ' ')} prompt is open`;
+  }
+  // Legacy-field checks for fields not yet migrated to the stack
+  // (and back-compat for any direct-field write paths during migration):
   if (game.pendingNegation && Object.keys(game.pendingNegation).length > 0) return 'a negation prompt is open';
   if (game.pendingCcChoice && Object.keys(game.pendingCcChoice).length > 0) return 'a CC-effect choice is open';
   if (game.pendingCelebration && Object.keys(game.pendingCelebration).length > 0) return 'a Celebration prompt is open';
@@ -250,6 +263,10 @@ function clearPendingAndPerMsgIdState(game) {
   // the renderer / safety nets to repost from scratch.
   game.ccShuffleDrawPromptsPosted = false;
   game.activationPhaseMessagePosted = false;
+  // Clear the interrupt stack — on load, no prompts are "active" because
+  // the new lobby has fresh UI. The pending* sweep above handles legacy
+  // field clears; this handles the new stack-based ones.
+  clearAllInterrupts(game);
   // pendingCombat is covered by the pending* sweep but be explicit.
   delete game.pendingCombat;
   // Combat thread / pre-combat / roll messages live on dead channels.

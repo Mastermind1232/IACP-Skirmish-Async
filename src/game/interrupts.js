@@ -166,3 +166,58 @@ export function clearAllInterrupts(game) {
 export function hasInterrupt(game, type) {
   return peekInterrupt(game, type) !== null;
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Per-feature dual-write wrappers (Phase 1.5 of the migration plan)
+//
+// Writers go through these helpers; they update BOTH the legacy
+// `game.pendingFooBar` field (so existing 49+ readers keep working) AND
+// the new `game.interrupts` stack. Once all readers migrate to the stack,
+// the legacy field gets dropped and the dual-write becomes single-write.
+//
+// Each helper has the shape:
+//   setPendingFoo(game, payload) — write
+//   clearPendingFoo(game)        — clear
+//
+// Adding a new pending-style feature: add to INTERRUPT_TYPES + add a
+// dual-write helper here. Don't write `game.pendingFoo = X` directly.
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Replace any existing CC_NEGATION interrupt with the given payload.
+ * Sets BOTH `game.pendingNegation` (legacy) and the stack entry.
+ */
+export function setPendingNegation(game, payload) {
+  if (!game) return;
+  game.pendingNegation = payload;
+  if (!Array.isArray(game.interrupts)) game.interrupts = [];
+  game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.CC_NEGATION);
+  pushInterrupt(game, INTERRUPT_TYPES.CC_NEGATION, payload);
+}
+
+/**
+ * Mutate the existing pendingNegation in place (e.g. after waitingMsgId is
+ * known). Keeps the stack entry's payload reference in sync.
+ */
+export function updatePendingNegation(game, mutator) {
+  if (!game?.pendingNegation) return;
+  mutator(game.pendingNegation);
+  // Stack entry's payload IS game.pendingNegation by reference (set above),
+  // so the mutation propagates. But if someone constructed an entry with a
+  // different object, refresh it explicitly.
+  const entry = peekInterrupt(game, INTERRUPT_TYPES.CC_NEGATION);
+  if (entry && entry.payload !== game.pendingNegation) {
+    entry.payload = game.pendingNegation;
+  }
+}
+
+/**
+ * Clear the CC_NEGATION interrupt from BOTH the legacy field and the stack.
+ */
+export function clearPendingNegation(game) {
+  if (!game) return;
+  delete game.pendingNegation;
+  if (Array.isArray(game.interrupts)) {
+    game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.CC_NEGATION);
+  }
+}

@@ -14,6 +14,7 @@ import {
   getDcList, getDcMessageIds, dcMatchesPlayableBy,
 } from '../game/player-helpers.js';
 import { getRange } from '../game/spatial.js';
+import { setPendingNegation } from '../game/interrupts.js';
 
 /**
  * Play a command card headlessly. All pre-selection checks (timing, legality,
@@ -180,12 +181,12 @@ async function handleCostZero(game, playerNum, cardName, abilityId, idx, hand,
 
   if (hasNegation) {
     // Set pendingNegation — game loop picks up negation_play/negation_let_resolve
-    game.pendingNegation = {
+    setPendingNegation(game, {
       playedBy: playerNum,
       card: cardName,
       fromDc: false,
       handChannelId: null,
-    };
+    });
     return { played: true, pendingNegation: true };
   }
 
