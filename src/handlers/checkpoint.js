@@ -49,34 +49,26 @@ function makeCheckpointId() {
  * Returns a human-readable reason if the game is mid-action, else ''.
  * Used by the save handler to refuse non-boundary saves.
  *
- * The bar isn't "is the game running" — it's "would loading this snapshot
- * land the players in a coherent, playable state." Some transitional
- * moments (e.g. between deployment finishing and CC-draw prompts posting,
- * or mid-CC-interrupt) capture state the loader can't reconstruct without
- * UI context that's already gone.
- *
- * Categories of refusal:
- *   1. Combat / movement / space-pick / activation actively in progress
- *   2. Post-deploy ability queue active (Smooth Landing, Walker, etc.)
- *   3. Deployment phase where post-deploy effects haven't fired yet
- *      (the "post-deployment, pre-cc-draw" stuck-load bug)
- *   4. Any non-empty `pending*` field — these track mid-flow user prompts
- *      whose state we'd lose on load (clearPendingAndPerMsgIdState wipes
- *      them, leaving no UI to advance the game)
- *   5. Round-phase transitions in progress (start-of-round / end-of-round
- *      effects mid-resolution)
+ * The save gate ONLY blocks states that need a real player decision —
+ * combat, movement, space-pick, active activation, post-deploy ability
+ * prompt, mid-CC-interrupt, mid-round-effects-resolving. Anywhere the
+ * bot is just doing internal bookkeeping (e.g. deployment-just-finished
+ * but the phase string hasn't flipped to cc_draw yet), the SAVE handler
+ * runs that bookkeeping itself before snapshotting (see
+ * `advanceTransitionalStateBeforeSnapshot`). This way the saver handles
+ * more cases by *advancing* rather than *rejecting* — the bot never
+ * makes a game decision on the user's behalf, but it doesn't refuse
+ * a save just because a millisecond of internal plumbing is pending.
  */
 export function whyMidAction(game) {
   if (!game) return '';
-  // Category 1 — explicit checks (kept first for clearer reject messages).
+  // User-mid-action — actual decision-pending states.
   if (game.pendingCombat) return 'combat is in progress';
   if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) return 'a move is in progress';
   if (game.pendingSpacePick && Object.keys(game.pendingSpacePick).length > 0) return 'a space pick is open';
   if (game.dcActionsData && Object.keys(game.dcActionsData).length > 0) return 'an activation is in progress (use End Activation first)';
-  // Category 2 — post-deploy queue active (the "post-deployment, pre-cc-draw"
-  // stuck-load bug class). If abilities or activeAbility are set, the
-  // user is mid-Smooth-Landing / Walker / Strike Team / etc. Loading
-  // would leave them with no UI to advance.
+  // Post-deploy ability prompt active (Smooth Landing / Walker / Strike
+  // Team / etc.) — user has to make a placement or movement choice.
   if (game.postDeployQueue) {
     const q = game.postDeployQueue;
     const hasPending = (Array.isArray(q.abilities) && q.abilities.length > 0)
@@ -85,41 +77,87 @@ export function whyMidAction(game) {
       || q.awaitingOrder;
     if (hasPending) return 'a post-deploy ability prompt is active (finish it before saving)';
   }
-  // Category 3 — deployment finished but post-deploy callbacks haven't run.
-  // Specifically: phase is still 'deployment' but both squads are submitted
-  // and ready, OR phase is past deployment but postDeployEffectsFired is
-  // still false (transitional window). This is the bug we just hit.
-  if (game.phase === 'deployment' && game.player1Squad && game.player2Squad
-      && game.initiativePlayerDeployed && game.nonInitiativePlayerDeployed
-      && !game.postDeployEffectsFired) {
-    return 'deployment is finishing (post-deploy effects pending) — wait for the shuffle/draw prompt';
-  }
-  if (game.phase === 'cc_draw' && !game.postDeployEffectsFired) {
-    return 'transitioning into CC draw — wait for the shuffle/draw prompt to appear';
-  }
-  // Category 4 — any non-empty pending* field. clearPendingAndPerMsgIdState
-  // wipes these on load, so saves during pending state lose user choices in
-  // flight (negation prompts, CC-effect choices, ability picker, etc.).
-  for (const key of Object.keys(game)) {
-    if (!key.startsWith('pending')) continue;
-    const v = game[key];
-    if (v == null || v === false) continue;
-    if (Array.isArray(v)) {
-      if (v.length > 0) return `${key.replace(/^pending/, '').replace(/([A-Z])/g, ' $1').trim().toLowerCase()} prompt is open`;
-    } else if (typeof v === 'object') {
-      if (Object.keys(v).length > 0) return `${key.replace(/^pending/, '').replace(/([A-Z])/g, ' $1').trim().toLowerCase()} prompt is open`;
-    } else if (v) {
-      return `${key.replace(/^pending/, '').replace(/([A-Z])/g, ' $1').trim().toLowerCase()} prompt is open`;
-    }
-  }
-  // Category 5 — round-phase transitions in progress.
-  if (game.roundPhase === 'start_of_round' && game.phase === 'round_active' && !game.activationPhaseMessagePosted) {
-    return 'start-of-round effects are still resolving — wait for the round-activation message';
-  }
+  // Specific user-input prompts that aren't covered above. These are the
+  // pending* fields where loss-on-load would silently drop a player's
+  // mid-flow decision (different from incidental pending* tracking).
+  if (game.pendingNegation && Object.keys(game.pendingNegation).length > 0) return 'a negation prompt is open';
+  if (game.pendingCcChoice && Object.keys(game.pendingCcChoice).length > 0) return 'a CC-effect choice is open';
+  if (game.pendingCelebration && Object.keys(game.pendingCelebration).length > 0) return 'a Celebration prompt is open';
+  if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) return 'a DC ability choice is open';
+  // Round-phase transitions involve actual gameplay effects (damage from
+  // Bleeding, VP awards, etc.) — not pure plumbing. Block; the user can
+  // wait for the next round-activation message before saving.
   if (game.roundPhase === 'end_of_round') {
     return 'end-of-round effects are resolving — wait for the next round to start';
   }
   return '';
+}
+
+/**
+ * Run any pure-bookkeeping transitions the bot was about to do anyway,
+ * then return — leaves the game in a snapshot-clean state.
+ *
+ * This is NOT a place for resolving rules or mutating gameplay state.
+ * It only flips the internal flags + phase strings that have no game-
+ * decision content and would have been set by the bot in the next tick
+ * regardless. Letting the saver run them inline keeps users from getting
+ * stuck saves in the millisecond-windows between deployment finishing
+ * and the cc_draw phase actually flipping over (the bug we just hit).
+ *
+ * Strict invariant: this function NEVER calls handlers, NEVER posts to
+ * Discord, NEVER applies rules effects. Pure flag/phase manipulation.
+ *
+ * Returns true if any advancement happened (caller can log it), false
+ * otherwise.
+ */
+export function advanceTransitionalStateBeforeSnapshot(game) {
+  if (!game) return false;
+  let advanced = false;
+  // Deploy → cc_draw plumbing. If both squads are deployed, post-deploy
+  // queue is empty (no ability prompts active — those would be blocked
+  // by whyMidAction), but `postDeployEffectsFired` is still false and
+  // `phase` is still 'deployment', the bot was about to flip these any
+  // moment now. Do it ourselves so the snapshot captures cc_draw.
+  const queueEmpty = !game.postDeployQueue
+    || (
+      (!game.postDeployQueue.abilities || game.postDeployQueue.abilities.length === 0)
+      && (!game.postDeployQueue.nextPlayerAbilities || game.postDeployQueue.nextPlayerAbilities.length === 0)
+      && !game.postDeployQueue.activeAbility
+      && !game.postDeployQueue.awaitingOrder
+    );
+  if (
+    game.phase === 'deployment'
+    && game.player1Squad && game.player2Squad
+    && game.initiativePlayerDeployed
+    && game.nonInitiativePlayerDeployed
+    && !game.postDeployEffectsFired
+    && queueEmpty
+  ) {
+    game.postDeployEffectsFired = true;
+    game.phase = 'cc_draw';
+    delete game.postDeployQueue;
+    advanced = true;
+  }
+  // Already at cc_draw but the flag's still false — same plumbing fix,
+  // just a different starting point.
+  if (game.phase === 'cc_draw' && !game.postDeployEffectsFired) {
+    game.postDeployEffectsFired = true;
+    advanced = true;
+  }
+  // Round_active + start_of_round + activation message not posted →
+  // the bot was about to flip roundPhase to ACTIVATION. Pure plumbing
+  // (no rules effects fire here — those run BEFORE this transition).
+  // The activation message itself gets posted by the loader's safety
+  // net, so we just flip the state.
+  if (
+    game.phase === 'round_active'
+    && game.roundPhase === 'start_of_round'
+    && !game.activationPhaseMessagePosted
+  ) {
+    game.roundPhase = 'activation';
+    advanced = true;
+  }
+  return advanced;
 }
 
 /**
@@ -317,13 +355,21 @@ export async function handleCheckpointSaveModal(interaction, ctx) {
     await interaction.editReply({ content: 'Checkpoint name cannot be empty.' }).catch(discordCatch);
     return;
   }
-  // Boundary gate: refuse mid-action saves. At a clean boundary the engine's
-  // own cleanupActivation/cleanupRoundStart has wiped transient msgId-keyed
-  // state, so the saved snapshot is restorable without per-field translation
-  // gymnastics. Loaded state remains coherent because nothing was in flight.
+  // Run any pure-bookkeeping transitions the bot was about to do anyway
+  // (deploy → cc_draw plumbing, start_of_round → activation, etc.). This
+  // eliminates the millisecond-windows where a snapshot would otherwise
+  // capture a transitional half-state the loader can't recover from.
+  // Strict invariant: this is flag/phase manipulation only — never a
+  // gameplay decision on the user's behalf.
+  advanceTransitionalStateBeforeSnapshot(game);
+  // Boundary gate: refuse genuinely mid-action saves (combat / movement /
+  // space-pick / activation / post-deploy ability prompt / mid-CC-interrupt
+  // / end-of-round effects resolving). The advancement above already
+  // unstuck pure plumbing transitions, so anything left is real player
+  // input pending.
   const reason = whyMidAction(game);
   if (reason) {
-    await interaction.editReply({ content: `❌ Can't save mid-action — ${reason}. Finish your current action (or end the activation) and try again.` }).catch(discordCatch);
+    await interaction.editReply({ content: `❌ Can't save right now — ${reason}. Finish that action and try again.` }).catch(discordCatch);
     return;
   }
   // Cap per user
@@ -334,8 +380,8 @@ export async function handleCheckpointSaveModal(interaction, ctx) {
       return;
     }
   } catch {}
-  // Sync side-channel Maps into game.dcList[*].healthState before snapshot
-  // (saveGames calls syncHealthStateToGames internally; explicit safety).
+  // Persist before snapshot (saveGames is post-Phase-4 a no-op for sync
+  // but kept for any future hooks).
   try { saveGames?.(gameId); } catch {}
   const state = snapshotGameState(game);
   const cpId = makeCheckpointId();
