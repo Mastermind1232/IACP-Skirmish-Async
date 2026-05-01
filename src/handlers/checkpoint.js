@@ -41,6 +41,89 @@ import { getBlockingInterrupts, INTERRUPT_TYPES, clearAllInterrupts } from '../g
 const MAX_CHECKPOINTS_PER_USER = 50;
 const CHECKPOINT_NAME_MAX_LEN = 80;
 
+/**
+ * Human-readable gate messages, keyed by INTERRUPT_TYPES.* value.
+ * Used by whyMidAction so users see "a negation prompt is open" rather
+ * than the raw stack-type string. Anything not in this map falls back to
+ * a generic "<type> prompt is open" message — adding a friendly message
+ * is optional, never required.
+ */
+const INTERRUPT_GATE_MESSAGES = {
+  [INTERRUPT_TYPES.CC_NEGATION]: 'a negation prompt is open',
+  [INTERRUPT_TYPES.CC_CHOICE]: 'a CC-effect choice is open',
+  [INTERRUPT_TYPES.CC_CONFIRMATION]: 'a CC confirmation is open',
+  [INTERRUPT_TYPES.CC_SPACE_CHOICE]: 'a CC space pick is open',
+  [INTERRUPT_TYPES.CC_ATTACHMENT]: 'a CC attachment prompt is open',
+  [INTERRUPT_TYPES.CELEBRATION]: 'a Celebration prompt is open',
+  [INTERRUPT_TYPES.CLEAVE]: 'a Cleave target prompt is open',
+  [INTERRUPT_TYPES.COVER_FIRE]: 'a Cover Fire prompt is open',
+  [INTERRUPT_TYPES.HEAVY_FIRE]: 'a Heavy Fire prompt is open',
+  [INTERRUPT_TYPES.LAST_RESORT]: 'a Last Resort prompt is open',
+  [INTERRUPT_TYPES.FALSE_ORDERS]: 'a False Orders prompt is open',
+  [INTERRUPT_TYPES.STRAIN_CHOICE]: 'a Strain choice is open',
+  [INTERRUPT_TYPES.ILLICIT_ARMS]: 'an Illicit Arms prompt is open',
+  [INTERRUPT_TYPES.WANTON_DESTRUCTION]: 'a Wanton Destruction prompt is open',
+  [INTERRUPT_TYPES.TOKEN_DISTRIBUTION]: 'a token distribution prompt is open',
+  [INTERRUPT_TYPES.ILLEGAL_CC_PLAY]: 'an illegal CC play prompt is open',
+  [INTERRUPT_TYPES.SHOULDER_RUSH]: 'a Shoulder Rush prompt is open',
+  [INTERRUPT_TYPES.RUSH_PUSH]: 'a Rush Push prompt is open',
+  [INTERRUPT_TYPES.BOLTSLINGER]: 'a Boltslinger prompt is open',
+  [INTERRUPT_TYPES.MASSIVE_PUSH]: 'a Massive Push prompt is open',
+  [INTERRUPT_TYPES.IT_WILL_BE_ALRIGHT]: "an It Will Be Alright prompt is open",
+  [INTERRUPT_TYPES.HAVOC_SHOT]: 'a Havoc Shot prompt is open',
+  [INTERRUPT_TYPES.GENERALS_ORDERS]: "a General's Orders prompt is open",
+  [INTERRUPT_TYPES.COORDINATED_RAID]: 'a Coordinated Raid prompt is open',
+  [INTERRUPT_TYPES.EXECUTIVE_ORDER]: 'an Executive Order prompt is open',
+  [INTERRUPT_TYPES.FIGHTING_KNIFE]: 'a Fighting Knife prompt is open',
+  [INTERRUPT_TYPES.FIELD_TACTICS]: 'a Field Tactics prompt is open',
+  [INTERRUPT_TYPES.THERE_IS_NO_TRY]: 'a There Is No Try prompt is open',
+  [INTERRUPT_TYPES.SPREAD_THE_PAIN]: 'a Spread the Pain prompt is open',
+  [INTERRUPT_TYPES.PUNISHING_STRIKE]: 'a Punishing Strike prompt is open',
+  [INTERRUPT_TYPES.POWER_CONVERTER]: 'a Power Converter prompt is open',
+  [INTERRUPT_TYPES.DEFLECT]: 'a Deflect prompt is open',
+  [INTERRUPT_TYPES.CONSPIRE]: 'a Conspire prompt is open',
+  [INTERRUPT_TYPES.DIO_FOLLOW]: 'a Dio follow prompt is open',
+  [INTERRUPT_TYPES.EXTRA_PROTECTION]: 'an Extra Protection prompt is open',
+  [INTERRUPT_TYPES.DURASTEEL_FIST_PUSH]: 'a Durasteel Fist push prompt is open',
+  [INTERRUPT_TYPES.ZILLO_DISCARD]: 'a Zillo discard prompt is open',
+  [INTERRUPT_TYPES.SURGE_OVERFLOW]: 'a surge overflow prompt is open',
+  [INTERRUPT_TYPES.ORDERED_MOVE]: 'an ordered-move prompt is open',
+  [INTERRUPT_TYPES.WOOK_SLAM_PUSH]: 'a Wookiee slam push prompt is open',
+  [INTERRUPT_TYPES.TOUGH_LUCK]: 'a Tough Luck prompt is open',
+  [INTERRUPT_TYPES.ROGUE_ONE_TOKEN_PICK]: 'a Rogue One token pick is open',
+  [INTERRUPT_TYPES.REACTION]: 'a reaction prompt is open',
+  [INTERRUPT_TYPES.COMM_DISRUPTION_PROMPT]: 'a Comm Disruption prompt is open',
+  [INTERRUPT_TYPES.INDISCRIMINATE_FIRE]: 'an Indiscriminate Fire prompt is open',
+  [INTERRUPT_TYPES.CONCUSSIVE_BOLT]: 'a Concussive Bolt prompt is open',
+  [INTERRUPT_TYPES.YHSIW]: 'a You Have Seen It Work prompt is open',
+  [INTERRUPT_TYPES.TRUSTED_ALLY]: 'a Trusted Ally prompt is open',
+  [INTERRUPT_TYPES.SUPPRESSIVE_FIRE_MP]: 'a Suppressive Fire MP prompt is open',
+  [INTERRUPT_TYPES.STRIKE_ME_DOWN]: 'a Strike Me Down prompt is open',
+  [INTERRUPT_TYPES.SLOW_ON_THE_DRAW]: 'a Slow on the Draw prompt is open',
+  [INTERRUPT_TYPES.SCAVENGED_WEAPONRY_TRANSFER]: 'a Scavenged Weaponry transfer prompt is open',
+  [INTERRUPT_TYPES.RIGHT_BACK_AT_YA]: "a Right Back At Ya prompt is open",
+  [INTERRUPT_TYPES.ORBITAL_BOMBARDMENT]: 'an Orbital Bombardment prompt is open',
+  [INTERRUPT_TYPES.MOTIVATION]: 'a Motivation prompt is open',
+  [INTERRUPT_TYPES.LURE]: 'a Lure prompt is open',
+  [INTERRUPT_TYPES.LOADOUT_SELECTION]: 'a loadout selection is open',
+  [INTERRUPT_TYPES.LIE_IN_AMBUSH]: 'a Lie In Ambush prompt is open',
+  [INTERRUPT_TYPES.I_KNOW_EVERYTHING]: 'an I Know Everything prompt is open',
+  [INTERRUPT_TYPES.FORCE_EXHAUSTION]: 'a Force Exhaustion prompt is open',
+  [INTERRUPT_TYPES.FIGUREHEAD]: 'a Figurehead prompt is open',
+  [INTERRUPT_TYPES.EMPEROR_INTERRUPT]: 'an Emperor interrupt is open',
+  [INTERRUPT_TYPES.CHANNEL_THE_FORCE_STRAIN]: 'a Channel the Force strain prompt is open',
+  [INTERRUPT_TYPES.BOMBARDMENT_SORIN]: 'a Bombardment prompt is open',
+  [INTERRUPT_TYPES.BATTLEFIELD_LEADERSHIP]: 'a Battlefield Leadership prompt is open',
+  [INTERRUPT_TYPES.ASSASSINS_BLADE]: "an Assassin's Blade prompt is open",
+  [INTERRUPT_TYPES.STILL_FASTER]: 'a Still Faster prompt is open',
+  [INTERRUPT_TYPES.SELF_DESTRUCT]: 'a Self Destruct prompt is open',
+  [INTERRUPT_TYPES.MASTERY]: 'a Mastery prompt is open',
+  [INTERRUPT_TYPES.INTERROGATE]: 'an Interrogate prompt is open',
+  [INTERRUPT_TYPES.HUNTER_PROTOCOL]: 'a Hunter Protocol prompt is open',
+  [INTERRUPT_TYPES.EXECUTOR_INTERRUPT]: 'an Executor interrupt is open',
+  [INTERRUPT_TYPES.BEL_REORDER]: 'a Battlefield Engineer reorder is open',
+};
+
 /** Generate a unique checkpoint ID. */
 function makeCheckpointId() {
   return `cp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -81,21 +164,17 @@ export function whyMidAction(game) {
   // Specific user-input prompts that aren't covered above. These are the
   // pending* fields where loss-on-load would silently drop a player's
   // mid-flow decision (different from incidental pending* tracking).
-  // Migration in progress (project_pending_consolidation_plan.md): some
-  // of these have been migrated to the game.interrupts stack via
-  // setPendingFoo wrappers — the stack check below catches those. Direct
-  // legacy-field checks remain for fields not yet migrated.
+  //
+  // Source of truth (Phase 3 cutover, 2026-05-01): the interrupts stack
+  // holds 74 single-payload prompt types — adding a new one is just a
+  // setPendingX helper call, no changes here required.
   const blockingFromStack = getBlockingInterrupts(game);
   if (blockingFromStack.length > 0) {
     const first = blockingFromStack[0];
-    if (first.type === INTERRUPT_TYPES.CC_NEGATION) return 'a negation prompt is open';
-    return `${first.type.replace(/-/g, ' ')} prompt is open`;
+    return INTERRUPT_GATE_MESSAGES[first.type] || `${first.type.replace(/-/g, ' ')} prompt is open`;
   }
-  // Legacy-field checks for fields not yet migrated to the stack
-  // (and back-compat for any direct-field write paths during migration):
-  if (game.pendingNegation && Object.keys(game.pendingNegation).length > 0) return 'a negation prompt is open';
-  if (game.pendingCcChoice && Object.keys(game.pendingCcChoice).length > 0) return 'a CC-effect choice is open';
-  if (game.pendingCelebration && Object.keys(game.pendingCelebration).length > 0) return 'a Celebration prompt is open';
+  // Collection-shaped pending fields that aren't on the stack (queues,
+  // msgId-keyed maps). Each represents a player decision still owed.
   if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) return 'a DC ability choice is open';
   // Round-phase transitions involve actual gameplay effects (damage from
   // Bleeding, VP awards, etc.) — not pure plumbing. Block; the user can

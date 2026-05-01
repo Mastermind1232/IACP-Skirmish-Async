@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { whyMidAction, advanceTransitionalStateBeforeSnapshot } from '../../src/handlers/checkpoint.js';
-import { setPendingNegation } from '../../src/game/interrupts.js';
+import { setPendingNegation, setPendingCcChoice } from '../../src/game/interrupts.js';
 
 describe('whyMidAction — save-time boundary gate', () => {
   it('returns empty string for a clean game (no in-flight action)', () => {
@@ -83,17 +83,9 @@ describe('whyMidAction — save-time boundary gate', () => {
     assert.match(whyMidAction(game), /negation/i);
   });
 
-  it('refuses save when pendingNegation legacy field is set directly (back-compat path)', () => {
-    // Simulates code that hasn't migrated through setPendingNegation yet —
-    // gate should still catch it via the legacy-field fallback.
-    const game = { pendingNegation: { attackerMsgId: 'm1', cardName: 'Block' } };
-    assert.match(whyMidAction(game), /negation/i);
-  });
-
-  it('refuses save when pendingCcChoice is open', () => {
-    const game = {
-      pendingCcChoice: { cardName: 'Take Initiative', options: ['a', 'b'] },
-    };
+  it('refuses save when pendingCcChoice is open (via stack interrupt)', () => {
+    const game = {};
+    setPendingCcChoice(game, { cardName: 'Take Initiative', options: ['a', 'b'] });
     assert.match(whyMidAction(game), /CC-effect choice/i);
   });
 
