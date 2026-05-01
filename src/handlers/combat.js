@@ -4,6 +4,8 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
 import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol } from '../game/interrupts.js';
+import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
+export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
@@ -6923,60 +6925,8 @@ export async function handleDemoralizingMonologueReveal(interaction, ctx) {
 
 // ─── Power Token Overflow (G73) ─────────────────────────────────────────────
 
-/** Token-type emoji map for display. */
-const TOKEN_EMOJI = { Damage: '🔴', Hit: '🔴', Surge: '⚡', Block: '🛡️', Evade: '🟢' };
-
-/**
- * Check whether game.pendingPowerTokenOverflow has any entries and, if so,
- * send discard-choice buttons for the first figure that is over its cap.
- * Should be called after any grantPowerTokens() call from the Discord layer.
- *
- * @param {object} game
- * @param {string} gameId
- * @param {object} channel - Discord TextChannel / ThreadChannel to send the prompt in
- * @param {number} playerNum - player who owns the figure (for access control)
- * @param {Function} saveGames
- * @returns {Promise<boolean>} true if an overflow prompt was sent
- */
-export async function sendPowerTokenOverflowUI(game, gameId, channel, playerNum, saveGames) {
-  const overflowArr = game.pendingPowerTokenOverflow;
-  if (!overflowArr?.length) return false;
-  const entry = overflowArr[0];
-  const { figureKey, discardCount } = entry;
-  const tokens = game.figurePowerTokens?.[figureKey] || [];
-  const max = getMaxPowerTokens(figureKey);
-  const figName = dcNameFromFigureKey(figureKey);
-
-  // Build one button per token the figure currently holds
-  const btns = [];
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
-    const emoji = TOKEN_EMOJI[t] || '';
-    btns.push(
-      new ButtonBuilder()
-        .setCustomId(`pt_overflow_${gameId}_${playerNum}_${figureKey}_${i}`)
-        .setLabel(`${emoji} ${t}`.trim())
-        .setStyle(ButtonStyle.Secondary)
-    );
-  }
-  const rows = chunkButtonsToRows(btns);
-
-  // Store the playerNum so the handler can enforce access
-  entry.playerNum = playerNum;
-  entry.channelId = channel.id;
-
-  const tokenList = tokens.map(t => `${TOKEN_EMOJI[t] || ''} ${t}`).join(', ');
-  await channel.send({
-    content: `⚠️ **Power Token Overflow** — **${figName}** has **${tokens.length}** tokens (max ${max}). ` +
-      `Discard **${discardCount}** token${discardCount > 1 ? 's' : ''}.\n` +
-      `Current tokens: ${tokenList}\n` +
-      `Choose which token to discard:`,
-    components: rows,
-  }).catch(discordCatch);
-
-  if (saveGames) saveGames();
-  return true;
-}
+// sendPowerTokenOverflowUI + TOKEN_EMOJI live in src/discord/power-token-prompts.js
+// (re-exported below for back-compat with handlers that import from here).
 
 /**
  * Handle overflow discard button: pt_overflow_{gameId}_{playerNum}_{figureKey}_{tokenIndex}

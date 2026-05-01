@@ -27,7 +27,7 @@ import { getConfig } from '../game/figure-config.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
-import { sendPowerTokenOverflowUI } from '../handlers/combat.js';
+import { sendPowerTokenOverflowUI } from '../discord/power-token-prompts.js';
 import { applyStartOfActivationEffects } from './activation-effects.js';
 import { setPendingTokenDistribution, setPendingGeneralsOrders, setPendingConspire, setPendingStillFaster } from '../game/interrupts.js';
 import { join } from 'path';

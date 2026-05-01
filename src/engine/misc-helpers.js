@@ -14,7 +14,7 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
 import { chunkButtonsToRows } from '../discord/components.js';
 import { computeDeckHash } from '../game/deck-hash.js';
 import { getFavoriteDeckByHash, isFavoritesAvailable } from '../db.js';
-import { buildFavoriteConfirmButtons, buildFavoriteConfirmContent } from '../handlers/favorites.js';
+import { buildFavoriteConfirmButtons, buildFavoriteConfirmContent } from '../discord/favorite-prompts.js';
 import { getLoadoutCards, getRootDir } from '../data-loader.js';
 
 /**
