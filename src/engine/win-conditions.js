@@ -131,6 +131,7 @@ export async function postGameOver(game, client, winnerId, reason, deps) {
   cleanupAllSpacePicks(game);
   if (deps.clearBuffer) deps.clearBuffer(game.gameId);
   if (deps.clearEventLogSeqCounter) deps.clearEventLogSeqCounter(game.gameId);
+  if (deps.clearDomainSeqCounter) deps.clearDomainSeqCounter(game.gameId);
   if (deps.clearGameErrorThread) await deps.clearGameErrorThread(game.gameId, client);
   if (deps.cleanupCompanionEmbedDeps) deps.cleanupCompanionEmbedDeps(game.gameId);
   deps.pendingIllegalSquad.delete(`${game.gameId}_1`);

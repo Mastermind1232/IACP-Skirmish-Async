@@ -11,6 +11,7 @@ import {
 import { cleanupGameLock } from '../game/action-queue.js';
 import { discordCatch } from '../error-handling.js';
 import { clearBuffer, clearSeqCounter as clearEventLogSeqCounter } from '../event-log.js';
+import { clearSeqCounter as clearDomainSeqCounter } from '../domain/events.js';
 import { clearGameErrorThread } from '../discord/messages.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { cleanupCompanionEmbedDeps } from './post-deploy.js';
@@ -144,6 +145,7 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
   cleanupGameLock(gameId);
   clearBuffer(gameId);
   clearEventLogSeqCounter(gameId);
+  clearDomainSeqCounter(gameId);
   await clearGameErrorThread(gameId, client);
   await cleanupIncidentMirrors(gameId, client);
   cleanupCompanionEmbedDeps(gameId);

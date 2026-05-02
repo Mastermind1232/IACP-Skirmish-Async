@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { activationReducerHandlers } from '../../../src/domain/reducer/activation-reducer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
@@ -59,7 +60,13 @@ describe('PROBE-PD-ACT-004: special action icon cost semantics (1♦ vs 2♦)', 
       'deduction must subtract the declared cost in one step (treated as one ability) — CRR-ACT-004');
   });
 
-  // 004f removed 2026-05-01: tested the deleted CQRS reducer
-  // (activationReducerHandlers.DcActionPerformed). Source-level cost
-  // semantics are still asserted by 004c-004e against dc-play-area.js.
+  it('004f: reducer DcActionPerformed subtracts payload.actionCost (default 1)', () => {
+    const state = { dcActionsData: { 'mid-1': { remaining: 2, total: 2 } } };
+    const after1 = activationReducerHandlers.DcActionPerformed(state, { msgId: 'mid-1' });
+    assert.equal(after1.dcActionsData['mid-1'].remaining, 1,
+      'default actionCost = 1 deducts exactly 1 — CRR-ACT-004');
+    const after2 = activationReducerHandlers.DcActionPerformed(state, { msgId: 'mid-1', actionCost: 2 });
+    assert.equal(after2.dcActionsData['mid-1'].remaining, 0,
+      'actionCost: 2 deducts both actions in one event — CRR-ACT-004 (two-icon = two-action but one ability)');
+  });
 });
