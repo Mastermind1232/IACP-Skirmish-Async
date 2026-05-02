@@ -43,7 +43,10 @@ const heatMap = JSON.parse(readFileSync(heatMapPath, 'utf8'));
 // logs every item; the build fails only if these counts GROW. Lower them (with
 // a commit-message note) as legacy drift is cleaned up.
 const BASELINE = {
-  unresolvedPatterns: 8,       // heat-map entries whose evidence refers to *.test.js that no longer exists
+  // Bumped 2026-05-01: CQRS/domain scaffold purged (tests/domain/ deleted).
+  // Heat-map entries that referenced domain tests are now unresolved. Lower
+  // again as legacy drift is cleaned up or as heat-map evidence is updated.
+  unresolvedPatterns: 37,
   unparseableEvidence: 0,      // heat-map entries with zero parseable file pattern or test id
 };
 

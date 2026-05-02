@@ -78,33 +78,6 @@ export async function initDb() {
         UNIQUE(user_id, achievement_id)
       )
     `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS domain_events (
-        id SERIAL PRIMARY KEY,
-        game_id TEXT NOT NULL,
-        seq INT NOT NULL,
-        type TEXT NOT NULL,
-        correlation_id TEXT,
-        player_id TEXT,
-        aggregate_version INT NOT NULL,
-        timestamp TIMESTAMPTZ DEFAULT NOW(),
-        payload JSONB NOT NULL,
-        UNIQUE(game_id, seq)
-      )
-    `);
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_domain_events_game_seq ON domain_events (game_id, seq)').catch(() => {});
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_domain_events_game_type ON domain_events (game_id, type)').catch(() => {});
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS game_snapshots (
-        id SERIAL PRIMARY KEY,
-        game_id TEXT NOT NULL,
-        version INT NOT NULL,
-        state JSONB NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(game_id, version)
-      )
-    `);
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_game_snapshots_game ON game_snapshots (game_id, version DESC)').catch(() => {});
     // Coverage tables
     await pool.query(`
       CREATE TABLE IF NOT EXISTS coverage_regions (
@@ -525,10 +498,9 @@ export async function saveGamesToDb(gamesMap) {
 
 /** Remove a game from the active-games registry (when game is killed).
  *
- * Note: domain_events and game_snapshots are intentionally preserved as a
- * historical record. Discord channels are deleted separately by the caller;
- * the on-disk action log stays so an AI rules-judge can replay completed
- * games and flag rules bugs after the fact.
+ * Discord channels are deleted separately by the caller; the on-disk
+ * action log stays so an AI rules-judge can replay completed games and
+ * flag rules bugs after the fact.
  */
 export async function deleteGameFromDb(gameId) {
   if (!pool) return;
@@ -922,113 +894,6 @@ export async function checkAndGrantAchievements(userId, trigger, statCount) {
   } catch (err) {
     console.error('[DB] checkAndGrantAchievements failed:', err.message);
     return [];
-  }
-}
-
-// ── Event Log ─────────────────────────────────────────────────────────────
-
-// ── Domain Events (Phase 4) ──
-
-export async function insertDomainEvent(gameId, event, { bumpEventSeq } = {}) {
-  if (!pool) return;
-  const MAX_RETRIES = 3;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      await pool.query(
-        `INSERT INTO domain_events (game_id, seq, type, correlation_id, player_id, aggregate_version, timestamp, payload)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [gameId, event.seq, event.type, event.correlationId || null, event.playerId || null, event.aggregateVersion, event.timestamp, JSON.stringify(event.payload)]
-      );
-      return; // success
-    } catch (err) {
-      // 23505 = unique_violation (duplicate seq for this game)
-      if (err.code === '23505' && bumpEventSeq && attempt < MAX_RETRIES) {
-        console.warn(`[DB] insertDomainEvent duplicate seq ${event.seq} for ${gameId}, bumping (attempt ${attempt}/${MAX_RETRIES})`);
-        bumpEventSeq(event);
-        continue;
-      }
-      console.error('[DB] insertDomainEvent failed:', err.message);
-      return;
-    }
-  }
-}
-
-export async function getDomainEvents(gameId, afterSeq = 0, limit = 1000) {
-  if (!pool) return [];
-  try {
-    const res = await pool.query(
-      `SELECT * FROM domain_events WHERE game_id = $1 AND seq > $2 ORDER BY seq ASC LIMIT $3`,
-      [gameId, afterSeq, limit]
-    );
-    return res.rows;
-  } catch (err) {
-    console.error('[DB] getDomainEvents failed:', err.message);
-    return [];
-  }
-}
-
-export async function getLatestDomainSeq(gameId) {
-  if (!pool) return 0;
-  try {
-    const res = await pool.query(
-      `SELECT MAX(seq) AS max_seq FROM domain_events WHERE game_id = $1`,
-      [gameId]
-    );
-    return res.rows[0]?.max_seq ?? 0;
-  } catch (err) {
-    console.error('[DB] getLatestDomainSeq failed:', err.message);
-    return 0;
-  }
-}
-
-// ── Game Snapshots (Phase 4) ──
-
-export async function insertSnapshot(gameId, version, state) {
-  if (!pool) return;
-  try {
-    await pool.query(
-      `INSERT INTO game_snapshots (game_id, version, state) VALUES ($1, $2, $3)`,
-      [gameId, version, JSON.stringify(state)]
-    );
-  } catch (err) {
-    console.error('[DB] insertSnapshot failed:', err.message);
-  }
-}
-
-export async function getLatestSnapshot(gameId) {
-  if (!pool) return null;
-  try {
-    const res = await pool.query(
-      `SELECT version, state FROM game_snapshots WHERE game_id = $1 ORDER BY version DESC LIMIT 1`,
-      [gameId]
-    );
-    if (res.rows.length === 0) return null;
-    return { version: res.rows[0].version, state: res.rows[0].state };
-  } catch (err) {
-    console.error('[DB] getLatestSnapshot failed:', err.message);
-    return null;
-  }
-}
-
-export async function getActiveGameIdsFromEvents() {
-  if (!pool) return [];
-  try {
-    const res = await pool.query(
-      `SELECT DISTINCT game_id FROM domain_events ORDER BY game_id`
-    );
-    return res.rows.map(r => r.game_id);
-  } catch (err) {
-    console.error('[DB] getActiveGameIdsFromEvents failed:', err.message);
-    return [];
-  }
-}
-
-export async function deleteSnapshots(gameId) {
-  if (!pool) return;
-  try {
-    await pool.query(`DELETE FROM game_snapshots WHERE game_id = $1`, [gameId]);
-  } catch (err) {
-    console.error('[DB] deleteSnapshots failed:', err.message);
   }
 }
 

@@ -20,7 +20,6 @@ import { buildHeadlessDeps } from './headless-deps.js';
 import { createFakeInteraction } from './fake-interaction.js';
 import { createFakeClient } from './fake-client.js';
 import { captureSnapshot, computeDiff } from '../event-log.js';
-import { translateDiffToEvents } from '../domain/diff-translator.js';
 import { getDcList, getDcMessageIds, getActivationsRemaining, setActivationsRemaining, getActivatedDcIndices } from '../game/player-helpers.js';
 import { DC_ACTIONS_PER_ACTIVATION } from '../discord/messages.js';
 import { isCompanionHostDefeated } from '../game/dc-helpers.js';
@@ -202,15 +201,10 @@ export function createHarness(initialGame, options = {}) {
 
   const allMessages = [];
 
-  function _translateEvents(gameId, handlerKey, playerId, beforeSnap, gamesMap) {
-    if (!beforeSnap || !gameId) return [];
-    const afterSnap = captureSnapshot(gamesMap.get(gameId));
-    const diff = computeDiff(beforeSnap, afterSnap);
-    if (!diff) return [];
-    return translateDiffToEvents(handlerKey, diff, {
-      gameId, playerId, before: beforeSnap, after: afterSnap,
-    });
-  }
+  // Domain event translation removed (CQRS scaffold purged 2026-05-01).
+  // Returns empty array for backward compat with callers expecting the
+  // shape — none read the array contents in production tests.
+  function _translateEvents() { return []; }
 
   return {
     /**

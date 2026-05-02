@@ -5,8 +5,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb, savePromise, getActiveGameIdsFromEvents, markGameDirty } from './db.js';
-import { initSeqCounters, replayToState } from './domain/event-store.js';
+import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb, savePromise, markGameDirty } from './db.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices } from './game/player-helpers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,18 +14,6 @@ const GAMES_STATE_PATH = join(rootDir, 'data', 'games-state.json');
 
 /** Current game state schema version (DB4). Bump when adding migrations. */
 export const CURRENT_GAME_VERSION = 2;
-
-/** When true, state blob AND domain events are persisted. When false, only events. */
-export const DUAL_WRITE_MODE = true;
-
-/**
- * Event-source read mode (env EVENT_SOURCE_READ).
- * - 'off' (default): load state from blob DB (current behavior)
- * - 'shadow': load from blob, then replay events and log mismatches (safe validation)
- * - 'primary': load state from event replay, blob as fallback only
- * - 'exclusive': load state from event replay only, no blob fallback
- */
-const EVENT_SOURCE_READ = process.env.EVENT_SOURCE_READ || 'off';
 
 /** gameId -> game object */
 const games = new Map();
@@ -507,10 +494,6 @@ export async function saveGames(gameId) {
     console.warn('[Games] saveGames() called before load completed — skipping to protect DB.');
     return;
   }
-  // In exclusive event-source mode, skip blob writes entirely
-  if (EVENT_SOURCE_READ === 'exclusive') {
-    return;
-  }
   if (isDbConfigured()) {
     if (gameId) {
       markGameDirty(gameId);
@@ -538,36 +521,9 @@ export async function loadGames() {
   if (isDbConfigured()) {
     try {
       await initDb();
-
-      if (EVENT_SOURCE_READ === 'exclusive') {
-        // Load entirely from event replay — no blob
-        await _loadFromEventReplay();
-      } else if (EVENT_SOURCE_READ === 'primary') {
-        // Try event replay first, fall back to blob
-        const replayOk = await _loadFromEventReplay();
-        if (!replayOk) {
-          console.warn('[Games] Event replay failed, falling back to blob.');
-          await _loadFromBlob();
-        }
-      } else {
-        // 'off' or 'shadow': load from blob (default)
-        await _loadFromBlob();
-
-        if (EVENT_SOURCE_READ === 'shadow') {
-          // Shadow mode: replay events and compare with blob, log mismatches
-          await _shadowValidateAll();
-        }
-      }
-
+      await _loadFromBlob();
       gamesLoadedOk = true;
-      console.log(`[Games] Loaded ${games.size} game(s) from PostgreSQL (mode: ${EVENT_SOURCE_READ}).`);
-
-      // Initialize domain event seq counters from DB
-      try {
-        await initSeqCounters([...games.keys()]);
-      } catch (seqErr) {
-        console.warn('[Games] Seq counter init failed (non-fatal):', seqErr.message);
-      }
+      console.log(`[Games] Loaded ${games.size} game(s) from PostgreSQL.`);
     } catch (err) {
       console.error('Failed to load games from DB:', err);
     }
@@ -606,60 +562,6 @@ async function _loadFromBlob() {
       migrateGame(g);
     }
     games.set(id, g);
-  }
-}
-
-/** Load games by replaying domain events. Returns true on success. */
-async function _loadFromEventReplay() {
-  try {
-    const gameIds = await getActiveGameIdsFromEvents();
-    if (gameIds.length === 0) {
-      console.warn('[Games] No games found in domain_events table.');
-      return false;
-    }
-    let loaded = 0;
-    let failed = 0;
-    for (const gameId of gameIds) {
-      try {
-        const state = await replayToState(gameId);
-        if (state && Object.keys(state).length > 0) {
-          games.set(gameId, state);
-          loaded++;
-        }
-      } catch (e) {
-        console.error(`[Games] Event replay failed for ${gameId}:`, e.message);
-        failed++;
-      }
-    }
-    console.log(`[Games] Event replay: ${loaded} loaded, ${failed} failed out of ${gameIds.length} games.`);
-    return failed === 0;
-  } catch (e) {
-    console.error('[Games] Event replay failed:', e.message);
-    return false;
-  }
-}
-
-/** Shadow validation: replay events for each loaded game, log mismatches. */
-async function _shadowValidateAll() {
-  try {
-    const { shadowCompare } = await import('./domain/event-verifier.js');
-    let checked = 0;
-    let mismatched = 0;
-    for (const [gameId, blobState] of games) {
-      try {
-        const result = await shadowCompare(gameId, blobState);
-        checked++;
-        if (!result.match) {
-          mismatched++;
-          console.warn(`[shadow] Game ${gameId}: ${result.mismatches.join(', ')} (${result.eventCount} events)`);
-        }
-      } catch (e) {
-        console.warn(`[shadow] Game ${gameId} check failed:`, e.message);
-      }
-    }
-    console.log(`[shadow] Startup validation: ${checked} checked, ${mismatched} mismatches.`);
-  } catch (e) {
-    console.warn('[shadow] Validation failed:', e.message);
   }
 }
 
