@@ -1201,6 +1201,12 @@ async function refreshAllGameComponents(game, client) {
     buildAttachmentEmbedsAndFiles, getTokensForDcMessage,
     getDcList, getActivatedDcIndices,
     recomputeActivationCounts, updateActivationsMessage,
+    // Discord component builders for the round-activation refresh block
+    // (pass-button rebuild). Missing these caused
+    // "deps.ActionRowBuilder is not a constructor" on every auto-refresh
+    // and the round message stayed in whatever state it was in. 2026-05-03.
+    ActionRowBuilder, ButtonBuilder, ButtonStyle,
+    shouldShowEndActivationPhaseButton,
     // Prompt reconciler deps: render helpers for walker/post-deploy prompts
     // need logGameAction to post; saveGames persists newly-recorded msgIds.
     logGameAction, saveGames,
