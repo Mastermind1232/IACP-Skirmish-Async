@@ -202,13 +202,18 @@ const CONTEXT_GROUPS = {
 
   undo: [
     'getGame', 'saveGames', 'updateMovementBankMessage', 'buildBoardMapPayload',
-    'logGameAction', 'updateDeployPromptMessages', 'updateDcActionsMessage',
-    'updateHandVisualMessage', 'updateDiscardPileMessage',
-    'updateAttachmentMessageForDc', 'getDeploymentZoneButtons', 'client',
+    'logGameAction', 'updateDeployPromptMessages',
+    'getDeploymentZoneButtons', 'client',
     'sendPhaseGateMessages',
+    // Phase-3 renderer wiring: undo routes UI refresh through
+    // refreshAllGameComponents (the canonical reconciler) instead of
+    // each undo-type updating its own UI surfaces inline. Strip-on-sight
+    // any updateX deps that refreshAllGameComponents already handles.
+    'refreshAllGameComponents', 'repopulateDcMapsForGame',
     'dcExhaustedState', 'dcMessageMeta', 'dcHealthState',
-    'buildDcEmbedAndFiles', 'renderDcEmbed', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',
-    'getDcPlayAreaComponents', 'getDcStats', 'updateActivationsMessage',
+    // Kept for the activation undo's `dcExhaustedState.set(msgId, false)`
+    // pre-refresh — explicitly resets the exhausted flag so the refreshed
+    // DC card shows the correct "ready" state.
   ],
 
   botmenu: [

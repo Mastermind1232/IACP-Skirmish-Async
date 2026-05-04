@@ -2,7 +2,7 @@
  * Game tools handlers: refresh_map_, refresh_all_, undo_, kill_game_, default_deck_.
  * Participants-only; require getGame and various helpers via context.
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } from 'discord.js';
+import { PermissionFlagsBits } from 'discord.js';
 import { deleteGameChannelsAndGame } from './botmenu.js';
 import { discordCatch } from '../error-handling.js';
 import { logGameAction } from '../discord/messages.js';
@@ -10,7 +10,6 @@ import { requireGame, requireParticipant } from '../utils/guards.js';
 import { getInitiativePlayerNum, getPlayAreaId, getPlayerId } from '../game/player-helpers.js';
 import { PHASES } from '../game/phase.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
-import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { captureManualKillDiagnostic } from '../ai/self-play.js';
 import { restoreGameStateInPlace } from './checkpoint.js';
@@ -134,7 +133,7 @@ export async function handleRefreshAll(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, saveGames, updateMovementBankMessage, buildBoardMapPayload, updateDeployPromptMessages, updateDcActionsMessage, updateHandVisualMessage, updateDiscardPileMessage, updateAttachmentMessageForDc, client
+ * @param {object} ctx - getGame, saveGames, updateMovementBankMessage, buildBoardMapPayload, updateDeployPromptMessages, refreshAllGameComponents, sendPhaseGateMessages, getDeploymentZoneButtons, dcExhaustedState, client
  */
 export async function handleUndo(interaction, ctx) {
   const {
@@ -143,16 +142,9 @@ export async function handleUndo(interaction, ctx) {
     updateMovementBankMessage,
     buildBoardMapPayload,
     updateDeployPromptMessages,
-    updateDcActionsMessage,
-    updateHandVisualMessage,
-    updateDiscardPileMessage,
-    updateAttachmentMessageForDc,
     getDeploymentZoneButtons,
+    refreshAllGameComponents,
     dcExhaustedState,
-    dcMessageMeta,
-    renderDcEmbed,
-    getDcPlayAreaComponents,
-    updateActivationsMessage,
     client,
   } = ctx;
   const gameId = parseCustomId(interaction.customId, 'undo_');
@@ -190,7 +182,11 @@ export async function handleUndo(interaction, ctx) {
   }
 
   // === UNIVERSAL SNAPSHOT RESTORE ===
-  // Restore entire game state from snapshot. Discord UI refresh is handled per-type below.
+  // Restore entire game state from snapshot. Discord UI refresh routes
+  // through refreshAllGameComponents below (Phase-3 renderer wiring) —
+  // per-type hooks now only handle surfaces that refreshAll doesn't own
+  // (combat/activation thread archives, movement bank, deployment zone
+  // post-or-repost, deploy prompts).
   if (last.snapshot) {
     const savedStack = game.undoStack; // already has `last` popped off
     restoreGameStateInPlace(game, last.snapshot);
@@ -200,8 +196,7 @@ export async function handleUndo(interaction, ctx) {
     // derived views over canonical game state, so the snapshot restore above
     // already makes them correct. Repopulate is kept as defensive
     // initialization (sets [[null, null]] default for any dcList[i] missing
-    // a healthState — possible on legacy save formats) but the heavy work
-    // it used to do is no longer necessary.
+    // a healthState — possible on legacy save formats).
     try {
       repopulateDcMapsForGame(gameId);
     } catch (err) {
@@ -209,7 +204,7 @@ export async function handleUndo(interaction, ctx) {
     }
 
     // If restored snapshot has an active phase gate, re-send gate messages
-    // (old Discord messages are stale after undo)
+    // (old Discord messages are stale after undo).
     if (game.phaseGate) {
       const { sendPhaseGateMessages } = ctx;
       if (sendPhaseGateMessages) {
@@ -232,100 +227,47 @@ export async function handleUndo(interaction, ctx) {
     : `**${undoUser}** undid: ${undoLabel}`;
   logGameAction(game, client, undoLogMsg).catch(discordCatch);
 
-  // Per-type Discord UI sync (game state is already restored above)
-  if (last.type === 'pass_turn') {
-    if (last.roundMessageId && last.roundContentBefore != null && game.generalId) {
-      try {
-        const ch = await fetchGameChannel(client, game.generalId);
-        const msg = await ch.messages.fetch(last.roundMessageId).catch(() => null);
-        if (msg) {
-          const _undoMyRem = game.p1ActivationsRemaining ?? 0;
-          const _undoOppRem = game.p2ActivationsRemaining ?? 0;
-          const prevPlayerNum = last.previousTurnPlayerId === game.player1Id ? 1 : 2;
-          const _myAct = prevPlayerNum === 1 ? _undoMyRem : _undoOppRem;
-          const _theirAct = prevPlayerNum === 1 ? _undoOppRem : _undoMyRem;
-          const passRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId(`pass_activation_turn_${last.gameId || gameId}`)
-              .setLabel(`Pass (opponent has ${_theirAct - _myAct} more activation${_theirAct - _myAct !== 1 ? 's' : ''} than you)`)
-              .setStyle(ButtonStyle.Secondary)
-          );
-          await msg.edit({
-            content: last.roundContentBefore,
-            components: [passRow],
-            allowedMentions: { users: [last.previousTurnPlayerId] },
-          }).catch(discordCatch);
-        }
-      } catch {
-        // ignore
+  // Per-type cleanup that the renderer doesn't own:
+  //   - thread archives (combat / activation threads)
+  //   - movement bank embed (per-DC, not in refreshAll)
+  //   - deploy prompts in initiative player's hand (one-shot UI)
+  //   - deployment zone picker (delete-and-repost at bottom; surface
+  //     not in refreshAll's set)
+  // Everything else (DC cards, hand visuals, discard piles, activation
+  // counters, round activation message, board map, attachments, DC
+  // companions, dcActionsData threads) is rebuilt by refreshAllGameComponents.
+  let undoLabel2 = last.label || last.type?.replace(/_/g, ' ') || 'action';
+  if (last.type === 'activation' && last.activationThreadId) {
+    try {
+      const activationThread = await fetchGameChannel(client, last.activationThreadId);
+      if (activationThread) {
+        await activationThread.send('Activation cancelled (undo).').catch(discordCatch);
+        await activationThread.setArchived(true).catch(discordCatch);
       }
-    }
-    saveGames();
-    await interaction.followUp({ content: 'Pass turn undone.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (last.type === 'activation') {
-    // Archive the activation thread
-    if (last.activationThreadId) {
-      try {
-        const activationThread = await fetchGameChannel(client, last.activationThreadId);
-        if (activationThread) {
-          await activationThread.send('Activation cancelled (undo).').catch(discordCatch);
-          await activationThread.setArchived(true).catch(discordCatch);
-        }
-      } catch { /* thread already gone or inaccessible */ }
-    }
-    // Un-exhaust the DC and refresh its play area embed
-    if (last.msgId && dcExhaustedState) {
-      dcExhaustedState.set(last.msgId, false);
-      await updateDcCardMessage(client, game, last.msgId, ctx, { exhausted: false, errorContext: 'Failed to refresh DC embed after activation undo:' });
-    }
-    // Refresh activations message
-    if (updateActivationsMessage) {
-      try { await updateActivationsMessage(game, last.playerNum, client); } catch { /* ignore */ }
-    }
-    saveGames();
-    await interaction.followUp({ content: 'Activation undone.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (last.type === 'move') {
+    } catch { /* thread gone */ }
+    // Pre-refresh: explicitly mark the DC un-exhausted so the refresh
+    // re-renders the Activate button. dcExhaustedState is derived view
+    // post-Phase-4, but the snapshot may not perfectly mirror it for
+    // legacy save formats — be defensive.
+    if (last.msgId && dcExhaustedState) dcExhaustedState.set(last.msgId, false);
+  } else if (last.type === 'attack' && last.snapshot?.pendingCombat?.combatThreadId) {
+    try {
+      const combatThread = await fetchGameChannel(client, last.snapshot.pendingCombat.combatThreadId);
+      if (combatThread) {
+        await combatThread.send('Combat cancelled (undo).').catch(discordCatch);
+        await combatThread.setArchived(true).catch(discordCatch);
+      }
+    } catch { /* thread gone */ }
+  } else if (last.type === 'move') {
     if (game.movementBank?.[last.msgId] != null) {
       try { await updateMovementBankMessage(game, last.msgId, client); } catch { /* ignore */ }
     }
-    if (game.boardId && game.selectedMap) {
-      try {
-        const boardChannel = await fetchGameChannel(client, game.boardId);
-        if (boardChannel) {
-          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-          await boardChannel.send(payload);
-        }
-      } catch (err) {
-        console.error('Failed to update map after undo move:', err);
-      }
+  } else if (last.type === 'deploy_pick') {
+    if (updateDeployPromptMessages) {
+      await updateDeployPromptMessages(game, last.playerNum, client).catch(() => {});
     }
-    saveGames();
-    await interaction.followUp({ content: 'Movement undone.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (last.type === 'deploy_pick') {
-    await updateDeployPromptMessages(game, last.playerNum, client);
-    if (game.boardId && game.selectedMap) {
-      try {
-        const boardChannel = await fetchGameChannel(client, game.boardId);
-        if (boardChannel) {
-          const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
-          await boardChannel.send(payload);
-        }
-      } catch (err) {
-        console.error('Failed to update map after undo:', err);
-      }
-    }
-    saveGames();
-    await interaction.followUp({ content: 'Last deployment undone.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (last.type === 'deployment_zone') {
-    // Delete the deploy prompt messages that were sent to initiative player's hand
+  } else if (last.type === 'deployment_zone') {
+    // Delete the deploy-prompt messages that were sent to initiative player's hand
     if (last.deployMessageIds?.length && last.deployHandChannelId) {
       try {
         const handCh = await fetchGameChannel(client, last.deployHandChannelId);
@@ -335,7 +277,7 @@ export async function handleUndo(interaction, ctx) {
         }
       } catch { /* ignore */ }
     }
-    // Delete old zone picker message and send a new one at the bottom of chat
+    // Delete old zone picker, repost fresh at the bottom of chat
     if (game.generalId && getDeploymentZoneButtons) {
       try {
         const generalChannel = await fetchGameChannel(client, game.generalId);
@@ -352,48 +294,22 @@ export async function handleUndo(interaction, ctx) {
         game.deploymentZoneMessageId = newMsg.id;
       } catch { /* ignore */ }
     }
-    saveGames();
-    await interaction.followUp({ content: 'Deployment zone selection undone.', ephemeral: true }).catch(discordCatch);
-    return;
   }
-  if (last.type === 'interact') {
-    if (updateDcActionsMessage && last.msgId) await updateDcActionsMessage(game, last.msgId, client).catch(discordCatch);
-    saveGames();
-    await interaction.followUp({ content: 'Interact undone.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (last.type === 'cc_play') {
-    if (updateHandVisualMessage) await updateHandVisualMessage(game, last.playerNum, client).catch(discordCatch);
-    if (updateDiscardPileMessage) await updateDiscardPileMessage(game, last.playerNum, client).catch(discordCatch);
-    saveGames();
-    await interaction.followUp({ content: 'Command card play undone.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (last.type === 'cc_play_dc') {
-    if (last.previousAttachments != null && last.msgId != null) {
-      if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, last.playerNum, last.msgId, client).catch(discordCatch);
+
+  // Renderer pass — rebuild every owned UI surface from current (post-restore)
+  // game state. Replaces ~8 inline updateX calls that the per-type branches
+  // used to maintain by hand. Skipped for deploy_pick + deployment_zone
+  // because those run pre-game (no DC/hand/round-activation surfaces yet).
+  if (refreshAllGameComponents
+      && last.type !== 'deploy_pick'
+      && last.type !== 'deployment_zone') {
+    try {
+      await refreshAllGameComponents(game, client);
+    } catch (err) {
+      console.error('handleUndo: refreshAllGameComponents failed', err);
     }
-    if (updateHandVisualMessage) await updateHandVisualMessage(game, last.playerNum, client).catch(discordCatch);
-    if (updateDiscardPileMessage) await updateDiscardPileMessage(game, last.playerNum, client).catch(discordCatch);
-    if (updateDcActionsMessage && last.msgId) await updateDcActionsMessage(game, last.msgId, client).catch(discordCatch);
-    saveGames();
-    await interaction.followUp({ content: 'Command card (Special) play undone.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (last.type === 'attack' || last.type === 'dc_special' || last.type === 'end_activation') {
-    // Refresh DC action counter if we have the msgId
-    if (last.msgId && updateDcActionsMessage) await updateDcActionsMessage(game, last.msgId, client).catch(discordCatch);
-    // Step 15: Attack undo — clean up the combat thread
-    if (last.type === 'attack' && last.snapshot?.pendingCombat?.combatThreadId) {
-      try {
-        const combatThread = await fetchGameChannel(client, last.snapshot.pendingCombat.combatThreadId);
-        if (combatThread) {
-          await combatThread.send('Combat cancelled (undo).').catch(discordCatch);
-          await combatThread.setArchived(true).catch(discordCatch);
-        }
-      } catch { /* thread already gone or inaccessible */ }
-    }
-    // Step 16: Always refresh board for attack, dc_special, and end_activation undos
+  } else if (last.type === 'deploy_pick' || last.type === 'deployment_zone') {
+    // Pre-game undos still need a board map render.
     if (game.boardId && game.selectedMap && buildBoardMapPayload) {
       try {
         const boardChannel = await fetchGameChannel(client, game.boardId);
@@ -403,18 +319,10 @@ export async function handleUndo(interaction, ctx) {
         }
       } catch { /* ignore */ }
     }
-    const label = last.label || last.type.replace('_', ' ');
-    saveGames();
-    await interaction.followUp({ content: `${label} undone.`, ephemeral: true }).catch(discordCatch);
-    return;
   }
-  // Unknown type but snapshot was restored — still valid, just no specific Discord cleanup
-  if (last.snapshot) {
-    saveGames();
-    await interaction.followUp({ content: `${last.label || 'Action'} undone.`, ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  await interaction.followUp({ content: 'That action cannot be undone yet.', ephemeral: true }).catch(discordCatch);
+
+  saveGames();
+  await interaction.followUp({ content: `${undoLabel2} undone.`, ephemeral: true }).catch(discordCatch);
 }
 
 /**
