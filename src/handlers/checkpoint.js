@@ -606,6 +606,12 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
     await renderHandThread(game, 1, client, ctx);
     await renderHandThread(game, 2, client, ctx);
 
+    // Capture the lobby's "🔀 Load Checkpoint" prompt id so we can clean
+    // it up after the load — restoreGameStateInPlace wipes state and the
+    // lobbyIdentity overlay doesn't preserve generalSetupMessageId, so
+    // we'd otherwise lose the handle.
+    const oldSetupPromptId = game.generalSetupMessageId;
+
     // Apply checkpoint state on top of the now-prepared lobby.
     await applyCheckpointToNewLobby(game, cp, client, {
       populatePlayAreas, buildBoardMapPayload, sendRoundActivationPhaseMessage, saveGames,
@@ -615,6 +621,12 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
       dcMessageMeta, dcExhaustedState, dcHealthState,
       getDcPlayAreaComponents, getNicknamesForDcMessage,
     });
+
+    // Delete the lobby's "🔀 Load Checkpoint - pick a checkpoint" prompt
+    // now that the game is loaded — it's stale and just clutters #general.
+    if (oldSetupPromptId) {
+      await _bestEffortDeleteMsg(client, game.generalId, oldSetupPromptId);
+    }
 
     if (settingUpMsg) settingUpMsg.delete().catch(() => {});
     await general.send({
