@@ -1740,45 +1740,59 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('**Spectre Cell** — +1 Hit (passive).').catch(discordCatch);
   }
 
-  // Unhinged Director (Krennic): TROOPER/GUARDIAN within 2 (3 with ACS) get +2 from power tokens instead of +1
+  // Unhinged Director (Krennic): TROOPER/GUARDIAN within 2 (3 with ACS) get +2 from power tokens instead of +1.
+  // We compute the FULL set of eligible spender figure keys on the attacker's
+  // side (not just the attacker), so Squad Cohesion + Wild-cohesion spends
+  // from a friendly nearby figure can also fire the +1/+2 prompt.
   {
-    const _udCheckSide = (pn, figKey) => {
+    const _udEligibleFigureKeys = (pn) => {
+      const out = new Set();
       const dcList = getDcList(game, pn) || [];
       const dcMsgIds = getDcMessageIds(game, pn) || [];
+      // Find every Krennic on this side and its range (ACS = 3, else 2).
+      const krennicSources = [];
       for (let i = 0; i < dcList.length; i++) {
         const dc = dcList[i];
         const dn = dc?.dcName || dc;
         const eff = getDcEffectsGlobal()[dn];
         if (!(eff?.specialAbilityIds || []).includes('unhinged_director_krennic')) continue;
-        // Find Krennic's position
         const dgIdx = (dc?.displayName || dn).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
         const kFk = `${dn}-${dgIdx}-0`;
         const kPos = game.figurePositions?.[pn]?.[kFk];
         if (!kPos) continue;
-        const figPos = game.figurePositions?.[pn]?.[figKey];
-        if (!figPos) continue;
-        // Check ACS on Krennic
         const kMsgId = dcMsgIds[i];
         const kAtts = kMsgId ? (game.p1DcAttachments?.[kMsgId] || game.p2DcAttachments?.[kMsgId] || []) : [];
         const hasACS = cardNameIncludes(kAtts, 'Advanced Com Systems');
-        const maxRange = hasACS ? 3 : 2;
-        if (countSpaces(_csRawMs, kPos, figPos, _csClosedDoorEdges) > maxRange) continue;
-        // Check if figure is TROOPER or GUARDIAN
-        const figDcName = dcNameFromFigureKey(figKey);
-        const figKws = (getDcKeywordsGlobal(game)[figDcName] || []).map(k => String(k).toUpperCase());
-        if (figKws.includes('TROOPER') || figKws.includes('GUARDIAN')) return true;
+        krennicSources.push({ pos: kPos, maxRange: hasACS ? 3 : 2 });
       }
-      return false;
+      if (krennicSources.length === 0) return out;
+      // Walk every friendly figure on this side; include if TROOPER/GUARDIAN
+      // and within range of any Krennic source.
+      const kwMap = getDcKeywordsGlobal(game);
+      const positions = game.figurePositions?.[pn] || {};
+      for (const figKey of Object.keys(positions)) {
+        const figPos = positions[figKey];
+        if (!figPos) continue;
+        const figDcName = dcNameFromFigureKey(figKey);
+        const figKws = (kwMap[figDcName] || []).map(k => String(k).toUpperCase());
+        if (!figKws.includes('TROOPER') && !figKws.includes('GUARDIAN')) continue;
+        for (const k of krennicSources) {
+          if (countSpaces(_csRawMs, k.pos, figPos, _csClosedDoorEdges) <= k.maxRange) {
+            out.add(figKey);
+            break;
+          }
+        }
+      }
+      return out;
     };
-    if (_udCheckSide(attackerPlayerNum, attackerFigureKey)) {
+    const eligibleSet = _udEligibleFigureKeys(attackerPlayerNum);
+    game.pendingCombat.unhingedEligibleSpenders = Array.from(eligibleSet);
+    if (eligibleSet.has(attackerFigureKey)) {
       game.pendingCombat.attackerUnhingedBonus = true;
     }
     // Defender-side check intentionally absent — the card text reads
-    // "while declaring an attack," so only the attacker can trigger it.
-    // The defender never spends Hit/Surge tokens during an attack
-    // (those aren't defender-side power tokens anyway), and a stale
-    // defenderUnhingedBonus flag would mislead the spend-message
-    // ("+2 Block (Unhinged Director)" when math actually applied +1).
+    // "while declaring an attack," so only the attacker side can trigger
+    // it. Defender never spends Hit/Surge tokens during an attack.
   }
 
   // Fury of Kashyyyk: elite WOOKIEE attacking within 2 + another friendly WOOKIEE within 2 of defender → Pierce 1
@@ -4473,6 +4487,62 @@ async function sendWildTypeWindow(thread, gameId, role) {
 }
 
 /**
+ * If the given spend qualifies for Krennic's Unhinged Director +1/+2 prompt,
+ * set the pending interrupt + send the prompt + return true. Otherwise
+ * return false (caller proceeds with normal applyTokenBonus + token spend).
+ *
+ * Card text: "When a friendly TROOPER or GUARDIAN within 2 spaces spends a
+ * Hit Token or Surge Token while declaring an attack, it MAY suffer 1
+ * Strain to apply +2 of the chosen symbol instead of +1."
+ *
+ * Eligibility uses combat.unhingedEligibleSpenders (computed at combat
+ * start) so it works for ANY spending figure on the attacker's side, not
+ * just the attacker — covering Squad Cohesion and Wild-from-cohesion
+ * paths. The strain target = the spending figure.
+ */
+async function _maybePromptUnhinged(thread, game, gameId, combat, opts) {
+  const { tokenType, spenderFigureKey, tokenIndex, atkPlayerNum, isAttacker } = opts;
+  if (!isAttacker) return false;
+  if (tokenType !== 'Damage' && tokenType !== 'Surge') return false;
+  // Eligibility: prefer the precomputed set; fall back to the legacy
+  // attackerUnhingedBonus bool for in-flight combats from before the
+  // upgrade and for unit-test fixtures that don't seed the set.
+  let eligible;
+  if (combat.unhingedEligibleSpenders) {
+    eligible = combat.unhingedEligibleSpenders.includes(spenderFigureKey);
+  } else {
+    eligible = !!combat.attackerUnhingedBonus && spenderFigureKey === combat.attackerFigureKey;
+  }
+  if (!eligible) return false;
+  setPendingUnhingedDirector(game, {
+    gameId,
+    tokenType,
+    figureKey: spenderFigureKey,
+    tokenIndex,
+    atkPlayerNum,
+    sourceLabel: opts.sourceLabel || null,
+  });
+  const _udOwnerId = getPlayerId(game, atkPlayerNum);
+  const _udRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`unhinged_director_${gameId}_plus1`)
+      .setLabel(`+1 ${tokenType} (free)`)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`unhinged_director_${gameId}_plus2`)
+      .setLabel(`+2 ${tokenType} (suffer 1 Strain)`)
+      .setStyle(ButtonStyle.Danger),
+  );
+  const _srcLbl = opts.sourceLabel ? ` (${opts.sourceLabel})` : '';
+  await thread.send({
+    content: `<@${_udOwnerId}> — **Unhinged Director**${_srcLbl} — Spend the **${tokenType}** token: +1 free, or +2 if **${dcNameFromFigureKey(spenderFigureKey)}** suffers 1 Strain?`,
+    components: [_udRow],
+    allowedMentions: { users: [_udOwnerId].filter(Boolean) },
+  }).catch(discordCatch);
+  return true;
+}
+
+/**
  * Apply token bonus to combat state. Krennic's Unhinged Director triggers
  * "while declaring an attack" (per card text) on Hit or Surge tokens —
  * attacker-side, attack-result only. The +2 effect requires the figure
@@ -5986,12 +6056,32 @@ export async function handleCombatToken(interaction, ctx) {
     const typeMap = { damage: 'Damage', surge: 'Surge', block: 'Block', evade: 'Evade' };
     const resolvedType = typeMap[choice];
     if (!resolvedType) return;
-    applyTokenBonus(combat, resolvedType, combat.pendingWildRole === 'attacker');
     // Squad Cohesion: if the Wild token came from a cohesion source, use that figure key
     const figKey = combat.pendingWildCohesionFigureKey
       || (combat.pendingWildRole === 'attacker' ? combat.attackerFigureKey : combat.target.figureKey);
     const isCohesion = !!combat.pendingWildCohesionFigureKey;
     const cohesionOwner = combat.pendingWildCohesionOwnerName || '';
+    const wildIsAttacker = combat.pendingWildRole === 'attacker';
+    // Krennic's Unhinged Director — Wild attacker spend (main or cohesion).
+    // Spender = the figure that owned the Wild token.
+    const wildAtkPN = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+    if (wildIsAttacker && await _maybePromptUnhinged(thread, game, gameId, combat, {
+      tokenType: resolvedType,
+      spenderFigureKey: figKey,
+      tokenIndex: combat.pendingWildTokenIndex,
+      atkPlayerNum: wildAtkPN,
+      isAttacker: true,
+      sourceLabel: isCohesion ? `Wild · Squad Cohesion · ${cohesionOwner}` : 'Wild',
+    })) {
+      // Clear wild state; the unhinged-choice handler completes the spend.
+      combat.pendingWildRole = null;
+      combat.pendingWildTokenIndex = null;
+      combat.pendingWildCohesionFigureKey = null;
+      combat.pendingWildCohesionOwnerName = null;
+      saveGames();
+      return;
+    }
+    applyTokenBonus(combat, resolvedType, wildIsAttacker);
     removeSpentToken(game, figKey, combat.pendingWildTokenIndex);
     if (isCohesion) {
       await thread.send(`**Power Token spent (Squad Cohesion):** Wild → +1 ${resolvedType} (from ${cohesionOwner})`);
@@ -6058,6 +6148,19 @@ export async function handleCombatToken(interaction, ctx) {
       saveGames();
       return;
     }
+    // Krennic's Unhinged Director — Squad Cohesion attacker spend.
+    // Spender = cohesion source figure (must be in eligibility set).
+    if (await _maybePromptUnhinged(thread, game, gameId, combat, {
+      tokenType: scTokenType,
+      spenderFigureKey: scEntry.figureKey,
+      tokenIndex: scEntry.tokenIndex,
+      atkPlayerNum,
+      isAttacker,
+      sourceLabel: `Squad Cohesion · ${scEntry.ownerName}`,
+    })) {
+      saveGames();
+      return;
+    }
     applyTokenBonus(combat, scTokenType, isAttacker);
     removeSpentToken(game, scEntry.figureKey, scEntry.tokenIndex);
     await thread.send(`**Power Token spent (Squad Cohesion):** +1 ${scTokenType} (from ${scEntry.ownerName})`);
@@ -6095,35 +6198,14 @@ export async function handleCombatToken(interaction, ctx) {
     return;
   }
 
-  // Krennic's Unhinged Director: "When a friendly TROOPER or GUARDIAN
-  // within 2 spaces spends a Hit Token or Surge Token while declaring
-  // an attack, it MAY suffer 1 Strain to apply +2 of the chosen symbol
-  // to the results instead of +1." Player choice — prompt for it.
-  const _isAttackResultDisp = tokenType === 'Damage' || tokenType === 'Surge';
-  if (isAttacker && combat.attackerUnhingedBonus && _isAttackResultDisp) {
-    setPendingUnhingedDirector(game, {
-      gameId,
-      tokenType,
-      figureKey,
-      tokenIndex,
-      atkPlayerNum: atkPlayerNum,
-    });
-    const _udOwnerId = getPlayerId(game, atkPlayerNum);
-    const _udRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`unhinged_director_${gameId}_plus1`)
-        .setLabel(`+1 ${tokenType} (free)`)
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`unhinged_director_${gameId}_plus2`)
-        .setLabel(`+2 ${tokenType} (suffer 1 Strain)`)
-        .setStyle(ButtonStyle.Danger),
-    );
-    await thread.send({
-      content: `<@${_udOwnerId}> — **Unhinged Director** — Spend the **${tokenType}** token: +1 free, or +2 if **${dcNameFromFigureKey(figureKey)}** suffers 1 Strain?`,
-      components: [_udRow],
-      allowedMentions: { users: [_udOwnerId].filter(Boolean) },
-    }).catch(discordCatch);
+  // Krennic's Unhinged Director — main attacker-spend path.
+  if (await _maybePromptUnhinged(thread, game, gameId, combat, {
+    tokenType,
+    spenderFigureKey: figureKey,
+    tokenIndex,
+    atkPlayerNum,
+    isAttacker,
+  })) {
     saveGames();
     return;
   }
@@ -6168,7 +6250,7 @@ export async function handleCombatToken(interaction, ctx) {
  * reduce by 1) is not offered for this prompt. Tracked as follow-up.
  */
 export async function handleUnhingedDirectorChoice(interaction, ctx) {
-  const { getGame, replyIfGameEnded, saveGames, logGameAction, dcHealthState } = ctx;
+  const { getGame, replyIfGameEnded, saveGames, logGameAction, dcHealthState, findDcMessageIdForFigure } = ctx;
   const m = interaction.customId.match(/^unhinged_director_(.+?)_(plus1|plus2)$/);
   if (!m) return;
   const [, gameId, choice] = m;
@@ -6202,9 +6284,10 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
   } catch (_e) { /* non-fatal */ }
 
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-  const { tokenType, figureKey, tokenIndex } = pending;
+  const { tokenType, figureKey, tokenIndex, sourceLabel } = pending;
   const isPlus2 = choice === 'plus2';
   const bonusAmt = isPlus2 ? 2 : 1;
+  const _srcSuffix = sourceLabel ? ` · ${sourceLabel}` : '';
 
   // Apply bonus directly. Bypass applyTokenBonus's unhinged check —
   // the player's choice here is the sole source of +1 vs +2.
@@ -6212,8 +6295,8 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
   if (tokenType === 'Surge')  combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + bonusAmt;
   removeSpentToken(game, figureKey, tokenIndex);
 
-  await thread.send(`**Power Token spent:** +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director)' : ''}`).catch(discordCatch);
-  logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — Attacker: +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director)' : ''}`, { phase: 'ROUND', icon: 'attack' });
+  await thread.send(`**Power Token spent:** +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director)' : ''}${_srcSuffix}`).catch(discordCatch);
+  logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — Attacker: +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director)' : ''}${_srcSuffix}`, { phase: 'ROUND', icon: 'attack' });
 
   // Track attacker Power Token spending for Pulse Cannon (Iden Versio).
   combat.attackerSpentPowerToken = true;
@@ -6225,20 +6308,24 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
     return;
   }
 
-  // +2 path — figure suffers 1 Strain. Per IACP, Strain may be paid by
-  // discarding the TOP card of the player's CC deck (1 CC = 1 Strain) or
-  // by taking 1 Damage. Player chooses each time. If the deck is empty,
-  // they have no choice — auto-applies 1 Damage.
+  // +2 path — the SPENDING figure (not necessarily the attacker, e.g.
+  // Squad Cohesion / Wild-from-cohesion) suffers 1 Strain. Per IACP,
+  // Strain may be paid by discarding the TOP card of the player's CC
+  // deck (1 CC = 1 Strain) or by taking 1 Damage. Player chooses;
+  // empty deck → auto 1 Damage.
   const deckKey = ccDeckKey(atkPN);
   const deck = game[deckKey] || [];
   const strainDcName = dcNameFromFigureKey(figureKey);
+  // Resolve the spender's DC msg + figure index from the figureKey.
+  const strainMsgId = findDcMessageIdForFigure
+    ? findDcMessageIdForFigure(gameId, atkPN, figureKey)
+    : combat.attackerMsgId; // fallback for safety
+  const _figMatch = figureKey.match(/-(\d+)-(\d+)$/);
+  const strainFigIdx = _figMatch ? parseInt(_figMatch[2], 10) : 0;
 
   if (deck.length === 0) {
-    // No CCs to discard — must take 1 HP damage.
-    const msgId = combat.attackerMsgId;
-    const figIdx = combat.attackerFigureIndex ?? 0;
-    if (msgId && dcHealthState) {
-      reduceHp(dcHealthState, game, msgId, figIdx, 1, atkPN);
+    if (strainMsgId && dcHealthState) {
+      reduceHp(dcHealthState, game, strainMsgId, strainFigIdx, 1, atkPN);
     }
     await thread.send(`**Unhinged Director Strain** — **${strainDcName}** suffers 1 Damage (no CCs in deck to absorb).`).catch(discordCatch);
     await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
@@ -6251,8 +6338,8 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
     gameId,
     atkPlayerNum: atkPN,
     figureKey,
-    attackerMsgId: combat.attackerMsgId,
-    attackerFigureIndex: combat.attackerFigureIndex ?? 0,
+    attackerMsgId: strainMsgId,
+    attackerFigureIndex: strainFigIdx,
   });
   const _udsRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
