@@ -804,7 +804,9 @@ export async function handleCheckpointInGameConfirm(interaction, ctx) {
     }
 
     if (settingUpMsg) settingUpMsg.delete().catch(() => {});
-    await interaction.editReply({ content: `📂 Loaded checkpoint **"${cp.name}"** (round ${cp.round_at_save ?? 0}).`, components: [] }).catch(discordCatch);
+    // Dismiss the confirm-prompt ephemeral entirely (cleaner than leaving
+    // a "loaded" stub hanging around in the modal slot).
+    await interaction.deleteReply().catch(discordCatch);
     if (general) {
       await general.send({
         content: `<@${game.player1Id}> <@${game.player2Id}> — 📂 Loaded checkpoint **"${cp.name}"** (round ${cp.round_at_save ?? 0}). Lobby state restored.`,
