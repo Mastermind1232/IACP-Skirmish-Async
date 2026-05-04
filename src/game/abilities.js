@@ -4259,8 +4259,10 @@ export function resolveAbility(abilityId, context) {
     }
     const adjacent = [...adjacentSet];
     if (adjacent.length === 0) return { applied: true, logMessage: `**${label}** — No adjacent friendly figure to heal.` };
-    if (adjacent.length === 1) return applyHealTo(adjacent[0]);
-    // Multiple adjacents: let player choose
+    // Per card text ("choose an adjacent friendly figure"), always prompt
+    // the player even with 1 valid target — the explicit confirm-the-target
+    // moment is part of the action's UX. Auto-applying with 1 target hid
+    // the result and confused players who expected the dropdown.
     const choiceOptions = adjacent.map((fk) => fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk);
     return { applied: false, requiresChoice: true, choiceOptions, targetFigureKeys: adjacent };
   }
@@ -4377,8 +4379,11 @@ export function resolveAbility(abilityId, context) {
     }
     const adjacent = [...adjacentSet];
     if (adjacent.length === 0) return { applied: true, logMessage: `**${label}** — No adjacent friendly figure to apply Focused to.` };
-    if (adjacent.length <= entry.focusFriendlyAdjacent) return applyFocus(adjacent.slice(0, entry.focusFriendlyAdjacent));
-    // Multiple options: let player choose
+    // Per card text ("Choose an adjacent friendly figure"), always prompt
+    // the player even when there's only 1 valid target — the explicit
+    // confirm-the-target moment is part of the action's UX. Auto-applying
+    // when adjacent.length === 1 hid the focus result and confused players
+    // who expected the dropdown.
     const choiceOptions = adjacent.map((fk) => fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk);
     return { applied: false, requiresChoice: true, choiceOptions, targetFigureKeys: adjacent };
   }
