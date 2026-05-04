@@ -991,20 +991,28 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
   await renderHandPayload(newGame, 1, client);
   await renderHandPayload(newGame, 2, client);
   await renderRoundActivationMessage(newGame, client, deps);
+  // 7b'. Remap msgId-keyed game-state fields from old→new BEFORE any
+  //      recreation loops below read them. Attachment + companion loops
+  //      look up game.p1/p2DcAttachments and game.p1/p2CcAttachments by
+  //      the NEW DC msgId; if remap hasn't run yet, those objects are
+  //      still keyed by the OLD checkpoint-saved msgIds and the lookups
+  //      return empty → silent no-op → no embeds posted. (Was the bug
+  //      that left cross-lobby-loaded games with all attachments and
+  //      attachment-derived companions like Baze's Child invisible.)
+  remapMsgIdKeyedFields(newGame, oldP1DcIds, oldP2DcIds);
   // 7c. Re-create DC attachment messages (audit gap 5). populatePlayAreas
   //     posts the DC card itself but doesn't recreate attachment embeds —
   //     those are created on-demand during normal play. Iterate every DC
   //     and let updateAttachmentMessageForDc decide (it's already a
   //     post-or-edit-or-delete reconciler internally — no-ops when the
-  //     DC has no attachments). Same logic should eventually run for
-  //     companions (audit gap 6); deferred because companion creation
-  //     needs companionEmbedDeps which only post-deploy sets up.
+  //     DC has no attachments).
   if (deps.updateAttachmentMessageForDc) {
     for (const playerNum of [1, 2]) {
       const dcMsgIds = playerNum === 1 ? newGame.p1DcMessageIds : newGame.p2DcMessageIds;
       for (const dcMsgId of dcMsgIds || []) {
         if (dcMsgId) {
-          await deps.updateAttachmentMessageForDc(newGame, playerNum, dcMsgId, client).catch(() => {});
+          await deps.updateAttachmentMessageForDc(newGame, playerNum, dcMsgId, client)
+            .catch(err => console.error(`[loader] updateAttachmentMessageForDc failed for ${dcMsgId}:`, err));
         }
       }
     }
@@ -1023,8 +1031,6 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
       }
     }
   }
-  // 8. Remap all msgId-keyed game-state fields from old → new.
-  remapMsgIdKeyedFields(newGame, oldP1DcIds, oldP2DcIds);
   // 9. Repopulate side-channel Maps from the freshly-rendered DC messages.
   try { repopulateDcMapsForGame(newGame.gameId); } catch (err) {
     console.error('repopulateDcMapsForGame (cross-game load) failed:', err);
