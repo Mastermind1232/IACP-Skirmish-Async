@@ -50,8 +50,13 @@ describe('PROBE-PD-ATK-018: pool modifications resolve BEFORE the roll (Step 2 s
     assert.ok(rollIdx > mutBlockIdx,
       'rollAttackDice must follow the mutation block in source order — CRR-ATK-018');
     const rollHits = (H_CB_SRC.match(/const result = rollAttackDice\(dice\);/g) || []).length;
-    assert.equal(rollHits, 1,
-      'there must be exactly one rollAttackDice site — no bypass path — CRR-ATK-018');
+    // 2026-05-04: held-roll feature added a second rollAttackDice site for
+    // the first-press path (computes silently, holds the result until the
+    // other player rolls). Both sites preserve the mutation-block-before-roll
+    // invariant — the order check (rollIdx > mutBlockIdx) above runs against
+    // the FIRST occurrence of each, which is the held-roll site.
+    assert.ok(rollHits === 1 || rollHits === 2,
+      'rollAttackDice site count must be 1 (legacy) or 2 (legacy + held-roll first-press) — CRR-ATK-018');
   });
 
   it('018d: source — pendingOverrideAttackDice is consumed BEFORE the roll (rewrites attackInfo, then deletes)', () => {

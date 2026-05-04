@@ -51,14 +51,22 @@ describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
       'proceedToTokenPhase must end with postRollDiceButton when no tokens to spend');
   });
 
-  it('postRollDiceButton exists and posts the Roll Combat Dice button', () => {
+  it('postRollDiceButton exists and posts attack + defense roll buttons', () => {
     const fnMatch = H_CB_SRC.match(/async function postRollDiceButton\(thread, game, combat, ctx\) \{[\s\S]*?^}/m);
     assert.ok(fnMatch, 'postRollDiceButton must exist');
     const body = fnMatch[0];
-    assert.match(body, /setLabel\('Roll Combat Dice'\)/,
-      'postRollDiceButton must post the Roll Combat Dice button');
-    assert.match(body, /combat_roll_/,
-      'postRollDiceButton must wire the combat_roll_ custom id');
+    // 2026-05-04: split into two role-specific buttons (held-roll feature).
+    // Attacker presses "Roll Attack Dice"; defender presses "Roll Defense Dice".
+    // Each player's roll is held until the other has rolled — neither sees
+    // the other's dice before committing.
+    assert.match(body, /setLabel\('⚔️ Roll Attack Dice'\)/,
+      'postRollDiceButton must post the Roll Attack Dice button (sword emoji)');
+    assert.match(body, /setLabel\('🛡️ Roll Defense Dice'\)/,
+      'postRollDiceButton must post the Roll Defense Dice button (shield emoji)');
+    assert.match(body, /combat_roll_atk_/,
+      'postRollDiceButton must wire combat_roll_atk_ custom id');
+    assert.match(body, /combat_roll_def_/,
+      'postRollDiceButton must wire combat_roll_def_ custom id');
   });
 
   it('proceedAfterRerolls no longer opens token windows (tokens already resolved pre-roll)', () => {

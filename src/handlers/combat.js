@@ -2666,7 +2666,13 @@ export async function handleCombatRoll(interaction, ctx) {
     saveGames,
   } = ctx;
   const getInnateRerolls = ctx.getInnateRerolls || (() => ({ attackReroll: 0, defenseReroll: 0 }));
-  const gameId = parseCustomId(interaction.customId, 'combat_roll_');
+  // New format: combat_roll_<role>_<gameId> where role is 'atk' or 'def'.
+  // Legacy format: combat_roll_<gameId> (single button, sequential rolls).
+  // Held semantics only fire for the new format; legacy IDs fall through
+  // unchanged for any in-flight combat that posted the old button.
+  const _roleMatch = interaction.customId.match(/^combat_roll_(atk|def)_(.+)$/);
+  const role = _roleMatch?.[1] ?? null;
+  const gameId = _roleMatch?.[2] ?? parseCustomId(interaction.customId, 'combat_roll_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -2681,6 +2687,81 @@ export async function handleCombatRoll(interaction, ctx) {
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   if (!thread) throw new Error(`handleCombatRoll: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
   const effectiveAttackerPlayerNum = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
+
+  // Held-roll early gates: when role is specified (new buttons), reject
+  // if that side already rolled. Old single-button path skips this.
+  if (role === 'atk' && combat.attackRoll) {
+    await interaction.followUp({ content: 'Attack dice already rolled.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (role === 'def' && combat.defenseRoll) {
+    await interaction.followUp({ content: 'Defense dice already rolled.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Held-roll mode is signaled by the new-format button's role suffix.
+  // First press of either button: compute that side's roll, store it,
+  // edit the prompt to show readiness, and return without revealing the
+  // dice. Second press: enter the existing roll branch, which posts its
+  // own image, then we inject the held side's image at the right spot.
+  // Known limitation: if Veteran Instincts / Guidance Systems / Doubt
+  // fire after the second press, their handlers expect the user to
+  // re-click the (now spent) Roll button. Held-flow combats with those
+  // abilities active will get stuck — fix follow-up.
+  const _heldRollFlow = role !== null;
+
+  if (_heldRollFlow && role === 'atk' && !combat.attackRoll && !combat.defenseRoll) {
+    if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerPlayerNum, canActAsPlayer, `Only the attacker (**${getPlayerDisplayName(game, effectiveAttackerPlayerNum, interaction.client)}**) may roll attack dice.`)) return;
+    const baseDice = combat.attackInfo?.dice || [];
+    const bonusDice = combat.attackBonusDice || 0;
+    const bonusColors = combat.attackBonusDiceColors || [];
+    const primaryColor = baseDice[0] || 'red';
+    let dice = [...baseDice];
+    for (let i = 0; i < bonusDice; i++) dice.push(bonusColors[i] ?? primaryColor);
+    const removeMax = combat.attackPoolRemoveMax || 0;
+    if (removeMax > 0) dice = dice.slice(0, Math.max(0, dice.length - removeMax));
+    const keepMax = combat.attackPoolKeepMax;
+    if (typeof keepMax === 'number' && keepMax > 0 && dice.length > keepMax) dice = dice.slice(0, keepMax);
+    const addYellowUntil = combat.attackPoolAddYellowUntilTotal;
+    if (typeof addYellowUntil === 'number' && addYellowUntil > 0 && dice.length < addYellowUntil) {
+      const toAdd = addYellowUntil - dice.length;
+      for (let i = 0; i < toAdd; i++) dice.push('yellow');
+      if (combat.superchargeStrainAfterAttack) combat.superchargeStrainAfterAttackCount = toAdd;
+    }
+    const result = rollAttackDice(dice);
+    combat.attackRoll = { acc: result.acc, dmg: result.dmg, surge: result.surge };
+    combat.attackDiceResults = result.dice;
+    await _updateRollPromptStatus(thread, game, combat, interaction.client);
+    saveGames();
+    return;
+  }
+
+  if (_heldRollFlow && role === 'def' && !combat.defenseRoll && !combat.attackRoll) {
+    if (!await requirePlayer(interaction, game, interaction.user.id, defenderPlayerNum, canActAsPlayer, `Only the defender (**${getPlayerDisplayName(game, defenderPlayerNum, interaction.client)}**) may roll defense dice.`)) return;
+    const baseDef = combat.targetStats?.defense || 'white';
+    const baseDice = Array.isArray(baseDef) ? baseDef : [baseDef];
+    const bonusDice = combat.defenseBonusDice || [];
+    const pool = [...baseDice, ...bonusDice];
+    if (combat.autofireAttack) pool.push('white');
+    if (combat.barrageAttack) pool.push('white');
+    const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
+    const removeCount = Math.min(removeMax, pool.length);
+    const diceToRoll = pool.slice(0, pool.length - removeCount);
+    const defDiceResults = [];
+    let block = 0, evade = 0, dodge = false;
+    for (const color of diceToRoll) {
+      const r = rollDefenseDice(color);
+      defDiceResults.push(r);
+      block += r.block;
+      evade += r.evade;
+      if (r.dodge) dodge = true;
+    }
+    combat.defenseRoll = { block, evade, dodge };
+    combat.defenseDiceResults = defDiceResults;
+    combat.defenseDiceCount = diceToRoll.length;
+    await _updateRollPromptStatus(thread, game, combat, interaction.client);
+    saveGames();
+    return;
+  }
 
   // C4: On the Lam — recheck target eligibility before rolling. Per CRR
   // p.10 (lines 442-446): "if the attacker's line of sight to the target
@@ -2777,6 +2858,19 @@ export async function handleCombatRoll(interaction, ctx) {
       const diceDetail = result.dice.map((d) => `${d.color}(${d.acc}a/${d.dmg}d/${d.surge}s)`).join(', ');
       await thread.send(`${_atkRollContent}  [${diceDetail}]`).catch(discordCatch);
     }
+    // Held-roll second-press (case B: def held → atk pressed): defender's
+    // dice were computed but not posted on first press. Post them now,
+    // immediately after the atk image, then clear the held-roll prompt buttons.
+    if (_heldRollFlow && combat.defenseRoll) {
+      await _postDefenseRollImage(thread, combat, game, interaction.client);
+      if (combat.rollMessageId) {
+        try {
+          const msg = await thread.messages.fetch(combat.rollMessageId);
+          await _updateRollPromptStatus(thread, game, combat, interaction.client);
+          await msg.edit({ components: [] }).catch(discordCatch);
+        } catch {}
+      }
+    }
     // Veteran Instincts: attacker may add +1 Hit or +1 Surge to this roll
     if (game.vetInstinctsActiveThisActivation?.[attackerPlayerNum] && !combat.vetInstinctsAttackApplied) {
       const _viRow = new ActionRowBuilder().addComponents(
@@ -2805,6 +2899,18 @@ export async function handleCombatRoll(interaction, ctx) {
 
   if (!combat.defenseRoll) {
     if (!await requirePlayer(interaction, game, interaction.user.id, defenderPlayerNum, canActAsPlayer, `Only the defender (**${getPlayerDisplayName(game, defenderPlayerNum, interaction.client)}**) may roll defense dice.`)) return;
+    // Held-roll second-press (case A: atk held → def pressed): attacker's
+    // dice were computed but not posted on first press. Post atk image
+    // FIRST so the thread reads atk → def in chronological order.
+    if (_heldRollFlow && combat.attackRoll) {
+      await _postAttackRollImage(thread, combat, game, interaction.client);
+      if (combat.rollMessageId) {
+        try {
+          const msg = await thread.messages.fetch(combat.rollMessageId);
+          await msg.edit({ components: [] }).catch(discordCatch);
+        } catch {}
+      }
+    }
     const baseDef = combat.targetStats.defense || 'white';
     const baseDice = Array.isArray(baseDef) ? baseDef : [baseDef];
     const bonusDice = combat.defenseBonusDice || [];
@@ -5172,22 +5278,101 @@ export async function proceedToTokenPhase(thread, game, combat, ctx) {
   await postRollDiceButton(thread, game, combat, ctx);
 }
 
-/** Post the "Roll Combat Dice" button after the pre-roll token phase completes. */
+/** Post the "Roll Combat Dice" buttons after the pre-roll token phase completes.
+ *
+ * Two buttons — one per role. Each player's roll is HELD (computed but not
+ * revealed) until both have pressed. When the second press lands, both
+ * dice images post together. This prevents the second player from seeing
+ * the first player's roll before deciding their own commit.
+ */
 async function postRollDiceButton(thread, game, combat, ctx) {
   const combatRound = game.currentRound ?? 1;
+  const atkPN = combat.attackerPlayerNum;
+  const defPN = opponentPlayerNum(atkPN);
+  const atkId = getPlayerId(game, atkPN);
+  const defId = getPlayerId(game, defPN);
+  const atkName = getPlayerDisplayName(game, atkPN, ctx?.client);
+  const defName = getPlayerDisplayName(game, defPN, ctx?.client);
   const combatEmbed = new EmbedBuilder()
     .setTitle(`COMBAT: ROUND ${combatRound}`)
     .setColor(COLORS.ORANGE)
-    .setDescription('Attacker rolls offense, Defender rolls defense.');
+    .setDescription("Both players roll. Each side's dice are held until the other has rolled — neither player sees the other's result before committing.");
+  const status = `<@${atkId}> **${atkName}** (ATK) ⏳ | <@${defId}> **${defName}** (DEF) ⏳`;
   const rollRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`combat_roll_${game.gameId}`)
-      .setLabel('Roll Combat Dice')
+      .setCustomId(`combat_roll_atk_${game.gameId}`)
+      .setLabel('⚔️ Roll Attack Dice')
       .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`combat_roll_def_${game.gameId}`)
+      .setLabel('🛡️ Roll Defense Dice')
+      .setStyle(ButtonStyle.Primary),
   );
-  const rollMsgSent = await thread.send({ embeds: [combatEmbed], components: [rollRow] });
+  const rollMsgSent = await thread.send({
+    content: status,
+    embeds: [combatEmbed],
+    components: [rollRow],
+    allowedMentions: { users: [atkId, defId].filter(Boolean) },
+  });
   combat.rollMessageId = rollMsgSent.id;
   if (ctx?.saveGames) ctx.saveGames();
+}
+
+/** Edit the roll prompt to reflect which sides have rolled (held). Called
+ * after the first press; on the second press, the roll-image flow takes
+ * over and the prompt's components are cleared. */
+async function _updateRollPromptStatus(thread, game, combat, client) {
+  if (!combat.rollMessageId) return;
+  try {
+    const msg = await thread.messages.fetch(combat.rollMessageId);
+    const atkPN = combat.attackerPlayerNum;
+    const defPN = opponentPlayerNum(atkPN);
+    const atkId = getPlayerId(game, atkPN);
+    const defId = getPlayerId(game, defPN);
+    const atkName = getPlayerDisplayName(game, atkPN, client);
+    const defName = getPlayerDisplayName(game, defPN, client);
+    const atkMark = combat.attackRoll ? '✅' : '⏳';
+    const defMark = combat.defenseRoll ? '✅' : '⏳';
+    const status = `<@${atkId}> **${atkName}** (ATK) ${atkMark} | <@${defId}> **${defName}** (DEF) ${defMark}`;
+    await msg.edit({ content: status }).catch(discordCatch);
+  } catch (err) {
+    console.error('updateRollPromptStatus: edit failed', err);
+  }
+}
+
+/** Render and post the attack roll image. Used by held-roll second-press
+ * reveal to surface a roll that was computed but not posted on first press. */
+async function _postAttackRollImage(thread, combat, game, client) {
+  if (!combat.attackRoll || !Array.isArray(combat.attackDiceResults)) return;
+  const r = combat.attackRoll;
+  const dice = combat.attackDiceResults;
+  const rollerName = getPlayerDisplayName(game, combat.attackerPlayerNum, client);
+  const content = `🎲 **${rollerName}** rolled attack — **${r.acc}** accuracy, **${r.dmg}** damage, **${r.surge}** surge`;
+  const img = await renderAttackDiceImage(dice).catch(() => null);
+  if (img) {
+    await thread.send({ content, files: [new AttachmentBuilder(img, { name: 'attack-roll.png' })] }).catch(discordCatch);
+  } else {
+    const detail = dice.map((d) => `${d.color}(${d.acc}a/${d.dmg}d/${d.surge}s)`).join(', ');
+    await thread.send(`${content}  [${detail}]`).catch(discordCatch);
+  }
+}
+
+/** Render and post the defense roll image. Used by held-roll second-press
+ * reveal to surface a roll that was computed but not posted on first press. */
+async function _postDefenseRollImage(thread, combat, game, client) {
+  if (!combat.defenseRoll || !Array.isArray(combat.defenseDiceResults)) return;
+  const dr = combat.defenseRoll;
+  const dice = combat.defenseDiceResults;
+  const dodgeText = dr.dodge ? ' **DODGE!**' : '';
+  const rollerName = getPlayerDisplayName(game, opponentPlayerNum(combat.attackerPlayerNum), client);
+  const content = `🛡️ **${rollerName}** rolled defense — **${dr.block}** block, **${dr.evade}** evade${dodgeText}`;
+  const img = await renderDefenseDiceImage(dice).catch(() => null);
+  if (img) {
+    await thread.send({ content, files: [new AttachmentBuilder(img, { name: 'defense-roll.png' })] }).catch(discordCatch);
+  } else {
+    const detail = dice.map((d) => `${d.color}(${d.block}b/${d.evade}e${d.dodge ? '/dodge' : ''})`).join(', ');
+    await thread.send(`${content}  [${detail}]`).catch(discordCatch);
+  }
 }
 
 /**
