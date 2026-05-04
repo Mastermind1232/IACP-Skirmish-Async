@@ -28,6 +28,22 @@ export async function initDb() {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
+      // Pool sizing — Railway Postgres allows ~100 connections; cap at 20
+      // (~20% of budget) to leave room for other services and Railway's
+      // own internal connections. Bump if observed exhaustion under load.
+      max: 20,
+      // Fail-fast on pool exhaustion: if no connection is available within
+      // 5s, error out instead of waiting forever (node-pg default = 0,
+      // unbounded wait → silent stalls). Errors surface as
+      // `Error: timeout exceeded when trying to connect`.
+      connectionTimeoutMillis: 5000,
+      // Close idle connections after 30s instead of holding them
+      // indefinitely. Reduces idle-connection pressure on Railway.
+      idleTimeoutMillis: 30000,
+      // Server-side query timeout: kill any single query that exceeds 10s.
+      // Our queries are simple JSON inserts / selects on indexed columns;
+      // 10s is generous and protects against runaway queries from drift.
+      statement_timeout: 10000,
     });
     await pool.query(`
       CREATE TABLE IF NOT EXISTS games (
