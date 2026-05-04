@@ -255,6 +255,11 @@ export async function sendReadyToResolveRolls(thread, gameId, game, ctx) {
 // (e.g. "I'd only Zillo if you Bib").
 
 const COMBAT_GATE_LABELS = {
+  // Combat just declared: window for on-declare effects (CCs, DC abilities
+  // like Cara Dune's Shock and Awe, etc.). Both players play anything
+  // on-declare from their hand, then click Ready to advance to power
+  // tokens. Self-play auto-advances.
+  on_declare:             '⚔️ **Combat declared** — play any on-declare CCs / abilities / tokens, then click Ready. Next: power tokens.',
   post_roll:              '🎲 **Dice rolled** (CRR step 2). Next: rerolls (step 3).',
   post_attacker_reroll:   '🔄 **Attacker rerolls done**. Next: defender rerolls (if any).',
   post_forced_reroll:     '🔄 **Forced rerolls done**. Next: defender rerolls (if any).',
@@ -403,6 +408,14 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
   const saveGames = ctx.saveGames;
 
   switch (subPhase) {
+    case 'on_declare': {
+      // Both players Ready'd after combat declaration — proceed to the
+      // power-token phase (which posts the Roll Combat Dice buttons when
+      // both have spent or skipped tokens).
+      await proceedToTokenPhase(thread, game, combat, ctx);
+      break;
+    }
+
     case 'post_roll': {
       // Proceed to reroll phases
       const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
@@ -2594,11 +2607,11 @@ export async function handleAttackTarget(interaction, ctx) {
     console.error('Reaction prompt error:', err?.message ?? err);
   }
 
-  // Power tokens are spent BEFORE rolling per CRR. Skip the legacy
-  // pre-combat "ready" gate; go straight to the token phase. proceedToTokenPhase
-  // posts the Roll Combat Dice button itself once both players have spent or
-  // skipped (or immediately if neither has tokens).
-  await proceedToTokenPhase(thread, game, game.pendingCombat, ctx);
+  // On-declare ready gate: both players get a window to play CCs /
+  // abilities / tokens that trigger when combat is declared (Shock and
+  // Awe on Cara, on-declare CCs, etc.). Click Ready to advance to the
+  // power-token phase. Self-play auto-advances. Per Destruct's spec.
+  await sendCombatGate(thread, game, game.pendingCombat, 'on_declare', ctx);
   saveGames();
 }
 
