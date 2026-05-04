@@ -5468,9 +5468,13 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     const surgeDisplay = (ccSurge > 0 || roundSurge > 0 || hiddenSurgeBonus > 0 || furyBonus > 0)
       ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''}${hiddenSurgeBonus ? ` + 1 (Hidden)` : ''}${furyBonus ? ` + ${furyBonus} (Fury)` : ''} = **${totalSurge}**`
       : `**${totalSurge}**`;
+    // @ the attacker so they get a notification when surge spending opens.
+    const _surgeAtkPN = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
+    const _surgeAtkOwnerId = getPlayerId(game, _surgeAtkPN);
     await thread.send({
-      content: `**Spend surge?** You have ${surgeDisplay} surge. Choose an ability or Done.`,
+      content: `<@${_surgeAtkOwnerId}> — **Spend surge?** You have ${surgeDisplay} surge. Choose an ability or Done.`,
       components: [surgeRow],
+      allowedMentions: { users: [_surgeAtkOwnerId].filter(Boolean) },
     });
     return;
   }
@@ -5529,6 +5533,13 @@ export async function handleCombatSurge(interaction, ctx) {
     await interaction.followUp({ content: 'No surge step or already resolved.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Player check FIRST. Defender clicks must reject without mutating the
+  // message's button state — earlier this ran AFTER the visual toggle, so
+  // a wrong-player click visibly highlighted/disabled buttons even though
+  // their click was rejected.
+  const attackerPlayerNum = combat.attackerPlayerNum;
+  const effectiveAttackerForSurge = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerForSurge, canActAsPlayer, 'Only the attacker may spend surge.')) return;
   // Visual feedback: highlight the clicked surge button green, disable
   // others. Same Extra-Armor-style toggle pattern as power-token spend.
   // (Wrapped in try/catch + early-return — IIFE scoped block.)
@@ -5548,9 +5559,6 @@ export async function handleCombatSurge(interaction, ctx) {
     });
     if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
   } catch (_e) { /* non-fatal */ }
-  const attackerPlayerNum = combat.attackerPlayerNum;
-  const effectiveAttackerForSurge = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
-  if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerForSurge, canActAsPlayer, 'Only the attacker may spend surge.')) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   if (!thread) throw new Error(`handleCombatSurge: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
   // Overload (Rebel Saboteur): may trigger the same surge ability up to twice per attack
