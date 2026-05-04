@@ -179,6 +179,7 @@ export const DEP_BAG_ALLOWED_OMISSIONS = {
   postKryknaPlaceButtons:           'Discord button post for Krykna NPC placement prompts; headless resolves Krykna via auto-queue (self-play.js)',
   renderDcEmbed:                    'Discord embed renderer for DC cards; Discord-side callers guard with optional chaining',
   reorderPlayAreaAfterAttachments:  'Reorders Discord channels after setup-attachments phase; headless has no channels to reorder',
+  reorderPlayAreaAfterCheckpointLoad: 'Cosmetic Discord-channel reorder after checkpoint load; headless has no channels',
 };
 
 // ── Handler-vs-engine parity scenarios ──────────────────────────────────────

@@ -328,6 +328,10 @@ const CONTEXT_GROUPS = {
     'createCompanionDcEmbed',
     'buildDcEmbedAndFiles', 'dcHealthState', 'getDcPlayAreaComponents',
     'getNicknamesForDcMessage',
+    // Cosmetic post-pass: deletes + reposts DC/attachment/companion
+    // messages in interleaved order so they don't end up in three batches
+    // at the bottom of the play area.
+    'reorderPlayAreaAfterCheckpointLoad',
   ],
 
   phaseGate: [

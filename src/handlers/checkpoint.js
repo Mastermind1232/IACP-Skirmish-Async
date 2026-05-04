@@ -632,6 +632,7 @@ export async function handleCheckpointNewGameConfirm(interaction, ctx) {
     createCompanionDcEmbed, buildDcEmbedAndFiles,
     dcMessageMeta, dcExhaustedState, dcHealthState,
     getDcPlayAreaComponents, getNicknamesForDcMessage,
+    reorderPlayAreaAfterCheckpointLoad,
   } = ctx;
   // customId format: cp_newgame_confirm_<gameId>_<cpId>
   // Split on the FIRST underscore: gameId is always a numeric 5-digit
@@ -684,6 +685,7 @@ export async function handleCheckpointNewGameConfirm(interaction, ctx) {
       createCompanionDcEmbed, buildDcEmbedAndFiles,
       dcMessageMeta, dcExhaustedState, dcHealthState,
       getDcPlayAreaComponents, getNicknamesForDcMessage,
+      reorderPlayAreaAfterCheckpointLoad,
     });
 
     if (oldSetupPromptId) {
@@ -868,6 +870,7 @@ export async function handleCheckpointInGameConfirm(interaction, ctx) {
     createCompanionDcEmbed, buildDcEmbedAndFiles,
     dcMessageMeta, dcExhaustedState, dcHealthState,
     getDcPlayAreaComponents, getNicknamesForDcMessage,
+    reorderPlayAreaAfterCheckpointLoad,
   } = ctx;
   // customId format: cp_load_ingame_confirm_<gameId>_<cpId>
   // Split on FIRST underscore: gameId has none, cpId has two
@@ -896,6 +899,7 @@ export async function handleCheckpointInGameConfirm(interaction, ctx) {
       createCompanionDcEmbed, buildDcEmbedAndFiles,
       dcMessageMeta, dcExhaustedState, dcHealthState,
       getDcPlayAreaComponents, getNicknamesForDcMessage,
+      reorderPlayAreaAfterCheckpointLoad,
     });
 
     // Delete old UI messages now that fresh ones are posted.
@@ -1035,6 +1039,23 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
       } catch (err) {
         console.error(`[loader] renderDcCompanion failed for player ${playerNum} index ${i}:`, err.message);
       }
+    }
+  }
+  // 7e. Cosmetic post-pass: the three render phases above each post a
+  //     batch at the bottom of the channel ([all DCs] [all attachments]
+  //     [all companions]) because Discord can't insert at arbitrary
+  //     positions. Delete + repost interleaved so each DC sits next to
+  //     its own attachment + companion. Best-effort; failure leaves the
+  //     ugly-but-functional original ordering. Re-posting changes DC
+  //     msgIds again, so the helper calls remapMsgIdKeyedFields itself.
+  if (deps.reorderPlayAreaAfterCheckpointLoad) {
+    try {
+      await deps.reorderPlayAreaAfterCheckpointLoad(newGame, client, {
+        ...deps,
+        remapMsgIdKeyedFields,
+      });
+    } catch (err) {
+      console.error('reorderPlayAreaAfterCheckpointLoad failed:', err);
     }
   }
   // 9. Repopulate side-channel Maps from the freshly-rendered DC messages.

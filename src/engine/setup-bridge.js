@@ -7,6 +7,7 @@ import { getDcStats } from '../data-loader.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { cardNameEquals } from '../game/card-names.js';
 import { sumSquadDcCost } from '../game/player-helpers.js';
+import { renderDcCompanion } from './renderer.js';
 
 /**
  * Parity with setup.js applySetupAttachment's Lie in Ambush branch.
@@ -154,6 +155,172 @@ export async function reorderPlayAreaAfterAttachments(game, playerNum, client, d
     }
     game[key] = newObj;
   }
+}
+
+/**
+ * Cosmetic post-pass for cross-lobby (and same-lobby) checkpoint loads.
+ *
+ * The load pipeline (applyCheckpointToNewLobby) posts:
+ *   1. All DC cards (populatePlayAreas)
+ *   2. All DC attachment embeds (updateAttachmentMessageForDc loop)
+ *   3. All DC companion embeds (renderDcCompanion loop)
+ *
+ * Discord only appends, so the channel ends up grouped:
+ *   [DC1 DC2 DC3] [Att1 Att2] [Comp1 Comp2 Comp3]
+ *
+ * This helper deletes those messages and re-posts them interleaved:
+ *   DC1 → Att1 → Comp1 → DC2 → Att2 → Comp2 → ...
+ *
+ * Runs AFTER the load pipeline finishes (correct game-state already
+ * established + msgIds remapped) so it inherits a known-good world. If it
+ * fails partway, the original messages are gone but the new ones are
+ * partially in place — the caller should treat it as best-effort cosmetic.
+ *
+ * Re-posting changes DC msgIds AGAIN, so the function captures pre-reorder
+ * msgIds for both players and calls deps.remapMsgIdKeyedFields(...) at the
+ * end to translate any other msgId-keyed game fields.
+ */
+export async function reorderPlayAreaAfterCheckpointLoad(game, client, deps) {
+  const oldP1DcIds = [...(game.p1DcMessageIds || [])];
+  const oldP2DcIds = [...(game.p2DcMessageIds || [])];
+  let reorderedAny = false;
+  for (const playerNum of [1, 2]) {
+    try {
+      const did = await reorderOnePlayerForLoad(game, playerNum, client, deps);
+      reorderedAny = reorderedAny || did;
+    } catch (err) {
+      console.error(`[checkpoint reorder] player ${playerNum} failed:`, err);
+    }
+  }
+  if (reorderedAny && typeof deps.remapMsgIdKeyedFields === 'function') {
+    try { deps.remapMsgIdKeyedFields(game, oldP1DcIds, oldP2DcIds); }
+    catch (err) { console.error('[checkpoint reorder] remap pass failed:', err); }
+  }
+}
+
+/**
+ * Reorder one player's play area. Returns true if it actually deleted +
+ * re-posted, false if it skipped (no attachments + no companions to interleave).
+ */
+async function reorderOnePlayerForLoad(game, playerNum, client, deps) {
+  const dcList = playerNum === 1
+    ? (game.player1Squad?.dcList || [])
+    : (game.player2Squad?.dcList || []);
+  const dcMsgIdsKey = playerNum === 1 ? 'p1DcMessageIds' : 'p2DcMessageIds';
+  const attIdsKey   = playerNum === 1 ? 'p1DcAttachmentMessageIds' : 'p2DcAttachmentMessageIds';
+  const compIdsKey  = playerNum === 1 ? 'p1DcCompanionMessageIds'  : 'p2DcCompanionMessageIds';
+  const ccKey       = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const dcAttKey    = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+  const playAreaId  = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+  if (!playAreaId) return false;
+
+  const oldDcIds   = [...(game[dcMsgIdsKey] || [])];
+  const oldAttIds  = [...(game[attIdsKey] || [])];
+  const oldCompIds = [...(game[compIdsKey] || [])];
+
+  // Skip if there's nothing to interleave — DC-only play areas are already
+  // in correct visual order out of populatePlayAreas.
+  const hasContent = oldAttIds.some((id) => id != null) || oldCompIds.some((id) => id != null);
+  if (!hasContent) return false;
+
+  // Snapshot per-DC state by index BEFORE we mutate Maps + arrays.
+  const snapshots = oldDcIds.map((id, i) => {
+    const dc = dcList[i] || null;
+    const exhausted = id ? !!(deps.dcExhaustedState && deps.dcExhaustedState.get(id)) : false;
+    const stateHealth = id && deps.dcHealthState ? deps.dcHealthState.get(id) : null;
+    const healthState = stateHealth || (dc && dc.healthState) || [];
+    const cc = id ? ((game[ccKey] || {})[id] || []) : [];
+    const dca = id ? ((game[dcAttKey] || {})[id] || []) : [];
+    return { oldDcId: id, dc, exhausted, healthState, cc, dca };
+  });
+
+  const channel = await fetchGameChannel(client, playAreaId);
+
+  // 1. Delete all DC + attachment + companion messages.
+  const allOldIds = [...oldDcIds, ...oldAttIds, ...oldCompIds].filter(Boolean);
+  for (const id of allOldIds) {
+    try {
+      const msg = await channel.messages.fetch(id);
+      await msg.delete();
+    } catch (err) {
+      // 10008 = Unknown Message; tolerate (already gone).
+      if (err && err.code !== 10008) {
+        console.error('[checkpoint reorder] delete failed:', err.message);
+      }
+    }
+  }
+
+  // 2. Clean up Maps for the now-dead DC msgIds.
+  for (const id of oldDcIds) {
+    if (!id) continue;
+    deps.dcMessageMeta?.delete(id);
+    deps.dcExhaustedState?.delete(id);
+    deps.dcHealthState?.delete(id);
+  }
+
+  // 3. Reset arrays + per-DC attachment objects. These get rebuilt under
+  //    the new msgIds during the repost loop below.
+  game[dcMsgIdsKey] = [];
+  game[attIdsKey]   = [];
+  game[compIdsKey]  = [];
+  game[ccKey]       = {};
+  game[dcAttKey]    = {};
+
+  // 4. Re-post interleaved: DC card → its attachment (if any) → its companion (if any).
+  for (let i = 0; i < snapshots.length; i++) {
+    const s = snapshots[i];
+    if (!s.dc || !s.dc.dcName) {
+      // Keep arrays index-aligned with dcList even on holes.
+      game[dcMsgIdsKey].push(null);
+      game[attIdsKey].push(null);
+      game[compIdsKey].push(null);
+      continue;
+    }
+
+    // 4a. DC card with preserved exhausted + health state.
+    const { embed, files } = await deps.buildDcEmbedAndFiles(
+      s.dc.dcName, s.exhausted, s.dc.displayName, s.healthState,
+      undefined, [], null, null,
+      deps.getNicknamesForDcMessage(game, s.dc),
+    );
+    const dcMsg = await channel.send({ embeds: [embed], files });
+    const newDcId = dcMsg.id;
+    game[dcMsgIdsKey].push(newDcId);
+
+    deps.dcMessageMeta.set(newDcId, {
+      gameId: game.gameId, playerNum,
+      dcName: s.dc.dcName, displayName: s.dc.displayName,
+    });
+    deps.dcExhaustedState.set(newDcId, s.exhausted);
+    deps.dcHealthState.set(newDcId, s.healthState);
+
+    const components = deps.getDcPlayAreaComponents(newDcId, s.exhausted, game, s.dc.dcName);
+    await dcMsg.edit({ components });
+
+    // 4b. Re-key attachment objects under the new DC id, then let
+    //     updateAttachmentMessageForDc post the embed (it's a no-op when
+    //     the DC has no attachments — same shape as the load loop).
+    if (s.cc.length > 0) game[ccKey][newDcId] = s.cc;
+    if (s.dca.length > 0) game[dcAttKey][newDcId] = s.dca;
+    game[attIdsKey].push(null);
+    if (deps.updateAttachmentMessageForDc) {
+      try {
+        await deps.updateAttachmentMessageForDc(game, playerNum, newDcId, client);
+      } catch (err) {
+        console.error('[checkpoint reorder] updateAttachmentMessageForDc failed:', err.message);
+      }
+    }
+
+    // 4c. Companion (no-op for DCs without one).
+    game[compIdsKey].push(null);
+    try {
+      await renderDcCompanion(game, playerNum, i, client, deps);
+    } catch (err) {
+      console.error('[checkpoint reorder] renderDcCompanion failed:', err.message);
+    }
+  }
+
+  return true;
 }
 
 /**

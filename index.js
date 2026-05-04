@@ -195,6 +195,7 @@ import {
 } from './src/engine/win-conditions.js';
 import {
   reorderPlayAreaAfterAttachments as _reorderPlayAreaAfterAttachmentsPure,
+  reorderPlayAreaAfterCheckpointLoad as _reorderPlayAreaAfterCheckpointLoadPure,
   finishSetupAttachments as _finishSetupAttachmentsPure,
   runDraftRandom as _runDraftRandomPure,
   populatePlayAreas as _populatePlayAreasPure,
@@ -1246,6 +1247,23 @@ async function reorderPlayAreaAfterAttachments(game, playerNum, client) {
     getDcList, getDcMessageIds, dcAttachmentMessageIdsKey, ccAttachmentsKey, dcAttachmentsKey,
     getPlayAreaId, buildDcEmbedAndFiles, getNicknamesForDcMessage, dcMessageMeta, dcExhaustedState,
     dcHealthState, getDcPlayAreaComponents, buildAttachmentEmbedsAndFiles,
+  });
+}
+
+/**
+ * Cosmetic post-pass after a checkpoint load: deletes + re-posts each
+ * player's DC / attachment / companion messages in interleaved order.
+ * Caller (applyCheckpointToNewLobby) layers `remapMsgIdKeyedFields` onto
+ * the deps bag because reposting changes DC msgIds again.
+ */
+async function reorderPlayAreaAfterCheckpointLoad(game, client, deps) {
+  return _reorderPlayAreaAfterCheckpointLoadPure(game, client, {
+    buildDcEmbedAndFiles, getNicknamesForDcMessage,
+    dcMessageMeta, dcExhaustedState, dcHealthState,
+    getDcPlayAreaComponents,
+    updateAttachmentMessageForDc,
+    createCompanionDcEmbed,
+    ...(deps || {}),
   });
 }
 
@@ -3469,6 +3487,7 @@ function buildAllDeps() {
     clearPreGameSetup, getDeployFigureLabels, getDeployButtonRows,
     getDeploymentMapAttachment, filterValidTopLeftSpaces,
     updateDeployPromptMessages, finishSetupAttachments, reorderPlayAreaAfterAttachments,
+    reorderPlayAreaAfterCheckpointLoad,
     createPlayAreaChannels, createBoardChannel, createHandThreads,
     createCompanionDcEmbed,
     refreshAllGameComponents, recomputeActivationCounts, repopulateDcMapsForGame, applyDirectDamageToFigure,
