@@ -634,10 +634,14 @@ export async function handleCheckpointNewGameConfirm(interaction, ctx) {
     getDcPlayAreaComponents, getNicknamesForDcMessage,
   } = ctx;
   // customId format: cp_newgame_confirm_<gameId>_<cpId>
+  // Split on the FIRST underscore: gameId is always a numeric 5-digit
+  // string (no underscores); cpId is `cp_<ms>_<rand>` (DOES contain
+  // underscores). Using lastIndexOf would split inside the cpId and
+  // leave gameId mangled → "Game not found".
   const rest = interaction.customId.slice('cp_newgame_confirm_'.length);
-  const lastUnderscore = rest.lastIndexOf('_');
-  const gameId = rest.slice(0, lastUnderscore);
-  const cpId = rest.slice(lastUnderscore + 1);
+  const firstUnderscore = rest.indexOf('_');
+  const gameId = rest.slice(0, firstUnderscore);
+  const cpId = rest.slice(firstUnderscore + 1);
   const game = await requireGame(interaction, getGameDep, gameId);
   if (!game) return;
   if (!await requireParticipant(interaction, game, 'load', { scope: 'lobby' })) return;
@@ -866,10 +870,12 @@ export async function handleCheckpointInGameConfirm(interaction, ctx) {
     getDcPlayAreaComponents, getNicknamesForDcMessage,
   } = ctx;
   // customId format: cp_load_ingame_confirm_<gameId>_<cpId>
+  // Split on FIRST underscore: gameId has none, cpId has two
+  // (`cp_<ms>_<rand>`). lastIndexOf would split inside cpId.
   const rest = interaction.customId.slice('cp_load_ingame_confirm_'.length);
-  const lastUnderscore = rest.lastIndexOf('_');
-  const gameId = rest.slice(0, lastUnderscore);
-  const cpId = rest.slice(lastUnderscore + 1);
+  const firstUnderscore = rest.indexOf('_');
+  const gameId = rest.slice(0, firstUnderscore);
+  const cpId = rest.slice(firstUnderscore + 1);
   await interaction.deferUpdate().catch(discordCatch);
   const game = await requireGame(interaction, getGameDep, gameId);
   if (!game) return;
