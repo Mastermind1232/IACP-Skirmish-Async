@@ -558,6 +558,72 @@ export async function handleCheckpointNewGameOpen(interaction, ctx) {
  * applyCheckpointToNewLobby to post DCs with their saved state.
  */
 export async function handleCheckpointNewGamePick(interaction, ctx) {
+  const { getGame: getGameDep } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'cp_newgame_pick_');
+  const cpId = interaction.values?.[0];
+  await interaction.deferUpdate().catch(discordCatch);
+  const game = await requireGame(interaction, getGameDep, gameId);
+  if (!game) return;
+  if (!await requireParticipant(interaction, game, 'pick', { scope: 'lobby' })) return;
+  const cp = await loadCheckpointOrFollowUp(interaction, cpId);
+  if (!cp) return;
+  const ts = new Date(parseInt(cp.created_at, 10)).toLocaleString();
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`cp_newgame_confirm_${gameId}_${cpId}`)
+      .setLabel('Load checkpoint')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`cp_newgame_back_${gameId}`)
+      .setLabel('Choose different checkpoint')
+      .setStyle(ButtonStyle.Danger),
+  );
+  await interaction.editReply({
+    content: `📂 Load **"${cp.name}"** (round ${cp.round_at_save ?? 0}, saved ${ts}) into this lobby?`,
+    components: [row],
+  }).catch(discordCatch);
+}
+
+/**
+ * Button handler: cp_newgame_back_<gameId>
+ * Re-shows the checkpoint picker so the user can choose a different one.
+ */
+export async function handleCheckpointNewGameBack(interaction, ctx) {
+  const { getGame: getGameDep } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'cp_newgame_back_');
+  const game = await requireGame(interaction, getGameDep, gameId);
+  if (!game) return;
+  if (!await requireParticipant(interaction, game, 'pick a checkpoint', { scope: 'lobby' })) return;
+  const checkpoints = await listAllCheckpoints({ limit: 25 });
+  if (!checkpoints.length) {
+    await interaction.editReply({ content: 'No checkpoints saved yet.', components: [] }).catch(discordCatch);
+    return;
+  }
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`cp_newgame_pick_${gameId}`)
+    .setPlaceholder('Choose a checkpoint to load...')
+    .addOptions(checkpoints.map((cp) => {
+      const ts = new Date(parseInt(cp.created_at, 10)).toLocaleString();
+      const players = [cp.p1_username, cp.p2_username].filter(Boolean).join(' vs ') || cp.origin_game_id || 'unknown';
+      return {
+        label: cp.name.slice(0, 100),
+        description: `${players} · round ${cp.round_at_save ?? 0} · ${ts}`.slice(0, 100),
+        value: cp.id,
+      };
+    }));
+  await interaction.editReply({
+    content: '🔀 **Pick a checkpoint** — the saved state will be loaded into this lobby.',
+    components: [new ActionRowBuilder().addComponents(select)],
+  }).catch(discordCatch);
+}
+
+/**
+ * Button handler: cp_newgame_confirm_<gameId>_<cpId>
+ * Executes the cross-lobby load. Creates board + play-area channels using
+ * the saved map/squads, then runs applyCheckpointToNewLobby to post DCs
+ * with their saved state.
+ */
+export async function handleCheckpointNewGameConfirm(interaction, ctx) {
   const {
     getGame: getGameDep, saveGames, client,
     createBoardChannel, createPlayAreaChannels, populatePlayAreas,
@@ -567,12 +633,14 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
     dcMessageMeta, dcExhaustedState, dcHealthState,
     getDcPlayAreaComponents, getNicknamesForDcMessage,
   } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'cp_newgame_pick_');
-  const cpId = interaction.values?.[0];
-  await interaction.deferUpdate().catch(discordCatch);
+  // customId format: cp_newgame_confirm_<gameId>_<cpId>
+  const rest = interaction.customId.slice('cp_newgame_confirm_'.length);
+  const lastUnderscore = rest.lastIndexOf('_');
+  const gameId = rest.slice(0, lastUnderscore);
+  const cpId = rest.slice(lastUnderscore + 1);
   const game = await requireGame(interaction, getGameDep, gameId);
   if (!game) return;
-  if (!await requireParticipant(interaction, game, 'pick', { scope: 'lobby' })) return;
+  if (!await requireParticipant(interaction, game, 'load', { scope: 'lobby' })) return;
   const cp = await loadCheckpointOrFollowUp(interaction, cpId);
   if (!cp) return;
 
@@ -598,40 +666,30 @@ export async function handleCheckpointNewGamePick(interaction, ctx) {
       );
       game.boardId = boardChannel.id;
     }
-    // Hand threads live INSIDE play-area channels and are required by
-    // sendCcShuffleDrawPrompts (it early-returns if hand IDs are null).
-    // First surface migrated to the renderer (see project_renderer_
-    // consolidation_plan.md). Idempotent post-if-missing — verifies the
-    // tracked id still resolves on Discord and recreates if it 404s.
     await renderHandThread(game, 1, client, ctx);
     await renderHandThread(game, 2, client, ctx);
 
     // Capture the lobby's "🔀 Load Checkpoint" prompt id so we can clean
     // it up after the load — restoreGameStateInPlace wipes state and the
-    // lobbyIdentity overlay doesn't preserve generalSetupMessageId, so
-    // we'd otherwise lose the handle.
+    // lobbyIdentity overlay doesn't preserve generalSetupMessageId.
     const oldSetupPromptId = game.generalSetupMessageId;
 
-    // Apply checkpoint state on top of the now-prepared lobby.
     await applyCheckpointToNewLobby(game, cp, client, {
       populatePlayAreas, buildBoardMapPayload, sendRoundActivationPhaseMessage, saveGames,
       refreshAllGameComponents, updateAttachmentMessageForDc,
-      // Companion-recreation deps for renderDcCompanion (gap 6).
       createCompanionDcEmbed, buildDcEmbedAndFiles,
       dcMessageMeta, dcExhaustedState, dcHealthState,
       getDcPlayAreaComponents, getNicknamesForDcMessage,
     });
 
-    // Delete the lobby's "🔀 Load Checkpoint - pick a checkpoint" prompt
-    // now that the game is loaded — it's stale and just clutters #general.
     if (oldSetupPromptId) {
       await _bestEffortDeleteMsg(client, game.generalId, oldSetupPromptId);
     }
 
     if (settingUpMsg) settingUpMsg.delete().catch(() => {});
-    await general.send({
-      content: `<@${game.player1Id}> <@${game.player2Id}> — 📂 Loaded checkpoint **"${cp.name}"** (round ${cp.round_at_save ?? 0}). Resume play in <#${game.p1PlayAreaId}> / <#${game.p2PlayAreaId}>.`,
-    }).catch(discordCatch);
+    // Dismiss the confirm-prompt ephemeral. No #general announcement —
+    // the new round header + activation message make the load visible.
+    await interaction.deleteReply().catch(discordCatch);
     saveGames?.(game.gameId);
   } catch (err) {
     console.error('checkpoint new-lobby load failed:', err);
@@ -742,12 +800,12 @@ export async function handleCheckpointInGamePick(interaction, ctx) {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`cp_load_ingame_confirm_${gameId}_${cpId}`)
-      .setLabel('Yes, load it')
-      .setStyle(ButtonStyle.Danger),
+      .setLabel('Load checkpoint')
+      .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`cp_load_ingame_cancel_${gameId}`)
-      .setLabel('Cancel')
-      .setStyle(ButtonStyle.Secondary),
+      .setCustomId(`cp_load_ingame_back_${gameId}`)
+      .setLabel('Choose different checkpoint')
+      .setStyle(ButtonStyle.Danger),
   );
   await interaction.editReply({
     content: `⚠️ Replace this lobby's game state with **"${cp.name}"** (round ${cp.round_at_save ?? 0}, saved ${ts})?\n\n**Any progress made since this checkpoint will be lost.** Old DC cards, hand visuals, and the round message in this lobby will be deleted and re-posted from the saved state.`,
@@ -756,12 +814,36 @@ export async function handleCheckpointInGamePick(interaction, ctx) {
 }
 
 /**
- * Button handler: cp_load_ingame_cancel_<gameId>
- * Dismisses the confirm prompt without doing anything.
+ * Button handler: cp_load_ingame_back_<gameId>
+ * Re-shows the checkpoint picker so the user can choose a different one.
  */
-export async function handleCheckpointInGameCancel(interaction, ctx) {
-  // Dispatcher already called deferUpdate → use editReply, not update.
-  await interaction.editReply({ content: 'Cancelled.', components: [] }).catch(discordCatch);
+export async function handleCheckpointInGameBack(interaction, ctx) {
+  const { getGame: getGameDep } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'cp_load_ingame_back_');
+  const game = await requireGame(interaction, getGameDep, gameId);
+  if (!game) return;
+  if (!await requireParticipant(interaction, game, 'load a checkpoint')) return;
+  const checkpoints = await listAllCheckpoints({ limit: 25 });
+  if (!checkpoints.length) {
+    await interaction.editReply({ content: 'No checkpoints saved yet.', components: [] }).catch(discordCatch);
+    return;
+  }
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`cp_load_ingame_pick_${gameId}`)
+    .setPlaceholder('Choose a checkpoint to load into this lobby...')
+    .addOptions(checkpoints.map((cp) => {
+      const ts = new Date(parseInt(cp.created_at, 10)).toLocaleString();
+      const players = [cp.p1_username, cp.p2_username].filter(Boolean).join(' vs ') || cp.origin_game_id || 'unknown';
+      return {
+        label: cp.name.slice(0, 100),
+        description: `${players} · round ${cp.round_at_save ?? 0} · ${ts}`.slice(0, 100),
+        value: cp.id,
+      };
+    }));
+  await interaction.editReply({
+    content: '🔀 **Pick a checkpoint** — it will replace this lobby\'s current game state.',
+    components: [new ActionRowBuilder().addComponents(select)],
+  }).catch(discordCatch);
 }
 
 /**
@@ -816,14 +898,10 @@ export async function handleCheckpointInGameConfirm(interaction, ctx) {
     }
 
     if (settingUpMsg) settingUpMsg.delete().catch(() => {});
-    // Dismiss the confirm-prompt ephemeral entirely (cleaner than leaving
-    // a "loaded" stub hanging around in the modal slot).
+    // Dismiss the confirm-prompt ephemeral entirely. No #general
+    // announcement — the new round header + activation message make
+    // the load visible.
     await interaction.deleteReply().catch(discordCatch);
-    if (general) {
-      await general.send({
-        content: `<@${game.player1Id}> <@${game.player2Id}> — 📂 Loaded checkpoint **"${cp.name}"** (round ${cp.round_at_save ?? 0}). Lobby state restored.`,
-      }).catch(discordCatch);
-    }
     saveGames?.(game.gameId);
   } catch (err) {
     console.error('checkpoint in-game load failed:', err);
