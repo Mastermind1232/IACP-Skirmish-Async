@@ -161,6 +161,7 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingExecutorInterrupt',
   'pendingBELReorder',
   'pendingUnhingedDirector',
+  'pendingUnhingedStrain',
 ];
 
 // ── Dep-bag parity allowlist ────────────────────────────────────────────────

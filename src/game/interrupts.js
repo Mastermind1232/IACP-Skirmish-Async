@@ -129,6 +129,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   EXECUTOR_INTERRUPT:    'executor-interrupt',
   BEL_REORDER:           'bel-reorder',
   UNHINGED_DIRECTOR:     'unhinged-director',
+  UNHINGED_STRAIN:       'unhinged-strain',
 
   // Post-deploy abilities
   POST_DEPLOY_QUEUE:     'post-deploy-queue',
@@ -558,6 +559,9 @@ export function clearPendingBELReorder(game) { _clearDual(game, 'pendingBELReord
 
 export function setPendingUnhingedDirector(game, payload) { _setDual(game, 'pendingUnhingedDirector', INTERRUPT_TYPES.UNHINGED_DIRECTOR, payload); }
 export function clearPendingUnhingedDirector(game) { _clearDual(game, 'pendingUnhingedDirector', INTERRUPT_TYPES.UNHINGED_DIRECTOR); }
+
+export function setPendingUnhingedStrain(game, payload) { _setDual(game, 'pendingUnhingedStrain', INTERRUPT_TYPES.UNHINGED_STRAIN, payload); }
+export function clearPendingUnhingedStrain(game) { _clearDual(game, 'pendingUnhingedStrain', INTERRUPT_TYPES.UNHINGED_STRAIN); }
 
 /**
  * MISSION_SOR_REVEAL — boolean flag, not a payload. Set/clear toggle.

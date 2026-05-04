@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingUnhingedStrain, clearPendingUnhingedStrain } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -5301,12 +5301,46 @@ export async function proceedToTokenPhase(thread, game, combat, ctx) {
   await postRollDiceButton(thread, game, combat, ctx);
 }
 
+/** Decide whether held-roll (two buttons) is safe for this combat.
+ *
+ * Held-roll's reveal flow runs the post-roll abilities (Vet Attack,
+ * Guidance Systems, There Is No Try, Vet Defense, Doubt) AFTER both
+ * dice are revealed. Each of those handlers expects to chain via the
+ * legacy "click Roll again" pattern — which doesn't exist in held-roll
+ * because the buttons are spent after the second press. Until the
+ * handler chain is refactored to call a continuation directly, hold
+ * rolls only when none of those abilities is active. Otherwise fall
+ * back to the legacy single-button flow which chains via re-clicks.
+ */
+function _isHeldRollSafe(game, combat) {
+  const atkPN = combat.attackerPlayerNum;
+  const defPN = opponentPlayerNum(atkPN);
+  if (game.vetInstinctsActiveThisActivation?.[atkPN]) return false;
+  if (game.vetInstinctsActiveThisActivation?.[defPN]) return false;
+  if (combat.guidanceSystemsAvailable) return false;
+  // There Is No Try — defender side, only fires if a player set the flag.
+  if (game.thereIsNoTryPlayerNum === defPN) return false;
+  // Doubt SU on defender — find a non-depleted [Doubt] in defender's DC list.
+  const defDcList = (defPN === 1 ? game.p1DcList : game.p2DcList) || [];
+  const defMsgIds = (defPN === 1 ? game.p1DcMessageIds : game.p2DcMessageIds) || [];
+  const defDepletedIds = (defPN === 1 ? game.p1DepletedDcMessageIds : game.p2DepletedDcMessageIds) || [];
+  for (let i = 0; i < defDcList.length; i++) {
+    const dcName = defDcList[i]?.dcName || defDcList[i];
+    if (dcName === '[Doubt]' && !defDepletedIds.includes(defMsgIds[i])) return false;
+  }
+  return true;
+}
+
 /** Post the "Roll Combat Dice" buttons after the pre-roll token phase completes.
  *
- * Two buttons — one per role. Each player's roll is HELD (computed but not
- * revealed) until both have pressed. When the second press lands, both
- * dice images post together. This prevents the second player from seeing
- * the first player's roll before deciding their own commit.
+ * Default path: two buttons (atk + def), each player's roll held until
+ * both have pressed. When the second press lands, both dice images post
+ * together — neither player sees the other's result before committing.
+ *
+ * Fallback path: when an ability that needs the post-roll chain is
+ * active (Vet Instincts, Guidance Systems, There Is No Try, Doubt SU),
+ * post the single legacy button. The legacy flow chains via re-clicks
+ * which still work; held-roll's reveal would strand the user mid-chain.
  */
 async function postRollDiceButton(thread, game, combat, ctx) {
   const combatRound = game.currentRound ?? 1;
@@ -5320,6 +5354,22 @@ async function postRollDiceButton(thread, game, combat, ctx) {
     .setTitle(`COMBAT: ROUND ${combatRound}`)
     .setColor(COLORS.ORANGE)
     .setDescription("Both players roll. Each side's dice are held until the other has rolled — neither player sees the other's result before committing.");
+
+  if (!_isHeldRollSafe(game, combat)) {
+    // Legacy single-button flow for ability-active combats.
+    combatEmbed.setDescription('Attacker rolls offense, Defender rolls defense.');
+    const legacyRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`combat_roll_${game.gameId}`)
+        .setLabel('Roll Combat Dice')
+        .setStyle(ButtonStyle.Danger),
+    );
+    const legacyMsg = await thread.send({ embeds: [combatEmbed], components: [legacyRow] });
+    combat.rollMessageId = legacyMsg.id;
+    if (ctx?.saveGames) ctx.saveGames();
+    return;
+  }
+
   const status = `<@${atkId}> **${atkName}** (ATK) ⏳ | <@${defId}> **${defName}** (DEF) ⏳`;
   const rollRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -6162,27 +6212,137 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
   if (tokenType === 'Surge')  combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + bonusAmt;
   removeSpentToken(game, figureKey, tokenIndex);
 
-  // +2 path: figure suffers 1 Strain → 1 HP damage to that figure.
-  // (Full Strain semantics with optional CC-discard are deferred —
-  // tracked in project_session_followups_20260504.md.)
-  let strainNote = '';
-  if (isPlus2) {
-    const strainDcName = dcNameFromFigureKey(figureKey);
+  await thread.send(`**Power Token spent:** +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director)' : ''}`).catch(discordCatch);
+  logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — Attacker: +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director)' : ''}`, { phase: 'ROUND', icon: 'attack' });
+
+  // Track attacker Power Token spending for Pulse Cannon (Iden Versio).
+  combat.attackerSpentPowerToken = true;
+  clearPendingUnhingedDirector(game);
+
+  if (!isPlus2) {
+    await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
+    saveGames();
+    return;
+  }
+
+  // +2 path — figure suffers 1 Strain. Per IACP, Strain may be paid by
+  // discarding the TOP card of the player's CC deck (1 CC = 1 Strain) or
+  // by taking 1 Damage. Player chooses each time. If the deck is empty,
+  // they have no choice — auto-applies 1 Damage.
+  const deckKey = ccDeckKey(atkPN);
+  const deck = game[deckKey] || [];
+  const strainDcName = dcNameFromFigureKey(figureKey);
+
+  if (deck.length === 0) {
+    // No CCs to discard — must take 1 HP damage.
     const msgId = combat.attackerMsgId;
     const figIdx = combat.attackerFigureIndex ?? 0;
     if (msgId && dcHealthState) {
       reduceHp(dcHealthState, game, msgId, figIdx, 1, atkPN);
     }
-    strainNote = ` — **${strainDcName}** suffers 1 Strain (1 Damage).`;
+    await thread.send(`**Unhinged Director Strain** — **${strainDcName}** suffers 1 Damage (no CCs in deck to absorb).`).catch(discordCatch);
+    await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
+    saveGames();
+    return;
   }
 
-  await thread.send(`**Power Token spent:** +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director)' : ''}${strainNote}`).catch(discordCatch);
-  logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — Attacker: +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director, 1 Strain)' : ''}`, { phase: 'ROUND', icon: 'attack' });
+  // Has CCs — prompt: discard top CC, or take HP damage?
+  setPendingUnhingedStrain(game, {
+    gameId,
+    atkPlayerNum: atkPN,
+    figureKey,
+    attackerMsgId: combat.attackerMsgId,
+    attackerFigureIndex: combat.attackerFigureIndex ?? 0,
+  });
+  const _udsRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`unhinged_strain_${gameId}_cc`)
+      .setLabel(`Discard top CC (${deck.length} in deck)`)
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`unhinged_strain_${gameId}_hp`)
+      .setLabel(`Take 1 Damage`)
+      .setStyle(ButtonStyle.Danger),
+  );
+  const ownerId = getPlayerId(game, atkPN);
+  await thread.send({
+    content: `<@${ownerId}> — **Unhinged Director Strain** — **${strainDcName}** suffers 1 Strain. Discard the top card of your CC deck to absorb, or take 1 Damage?`,
+    components: [_udsRow],
+    allowedMentions: { users: [ownerId].filter(Boolean) },
+  }).catch(discordCatch);
+  saveGames();
+}
 
-  // Track attacker Power Token spending for Pulse Cannon (Iden Versio).
-  combat.attackerSpentPowerToken = true;
+/**
+ * Krennic / Unhinged Director Strain absorb — handle the CC-discard vs
+ * HP-damage choice after the player picks +2. Either outcome resolves
+ * the 1 Strain and resumes the token phase.
+ *
+ * customId shape: `unhinged_strain_<gameId>_<cc|hp>`
+ */
+export async function handleUnhingedStrainAbsorb(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames, logGameAction, dcHealthState } = ctx;
+  const m = interaction.customId.match(/^unhinged_strain_(.+?)_(cc|hp)$/);
+  if (!m) return;
+  const [, gameId, choice] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  const pending = game.pendingUnhingedStrain;
+  if (!combat || combat.gameId !== gameId || !pending) {
+    await interaction.followUp({ content: 'No pending Unhinged Director Strain choice.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const atkPN = pending.atkPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, atkPN, canActAsPlayer, 'Only the attacker may resolve the Strain choice.')) return;
 
-  clearPendingUnhingedDirector(game);
+  // Visual: disable both, highlight chosen.
+  try {
+    const newRows = (interaction.message?.components || []).map((row) => {
+      const newRow = new ActionRowBuilder();
+      for (const c of row.components) {
+        const btn = ButtonBuilder.from(c);
+        btn.setDisabled(true);
+        if (c.customId === interaction.customId) btn.setStyle(ButtonStyle.Success);
+        newRow.addComponents(btn);
+      }
+      return newRow;
+    });
+    if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
+  } catch (_e) { /* non-fatal */ }
+
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  const figKey = pending.figureKey;
+  const figName = dcNameFromFigureKey(figKey);
+
+  if (choice === 'cc') {
+    const deckKey = ccDeckKey(atkPN);
+    const discKey = ccDiscardKey(atkPN);
+    const deck = game[deckKey] || [];
+    if (deck.length === 0) {
+      // Race / state inconsistency — fall through to HP damage.
+      if (pending.attackerMsgId && dcHealthState) {
+        reduceHp(dcHealthState, game, pending.attackerMsgId, pending.attackerFigureIndex ?? 0, 1, atkPN);
+      }
+      await thread.send(`**Unhinged Director Strain** — Deck empty, **${figName}** takes 1 Damage instead.`).catch(discordCatch);
+    } else {
+      const top = deck.shift();
+      game[deckKey] = deck;
+      game[discKey] = (game[discKey] || []).concat([top]);
+      await thread.send(`**Unhinged Director Strain** — **${figName}** absorbed the Strain by discarding **${top}** from the top of the CC deck.`).catch(discordCatch);
+      logGameAction?.(game, interaction.client, `🎯 **Unhinged Director Strain** — Discarded **${top}** to absorb 1 Strain.`, { phase: 'ROUND', icon: 'card' });
+    }
+  } else {
+    // HP damage path
+    if (pending.attackerMsgId && dcHealthState) {
+      reduceHp(dcHealthState, game, pending.attackerMsgId, pending.attackerFigureIndex ?? 0, 1, atkPN);
+    }
+    await thread.send(`**Unhinged Director Strain** — **${figName}** suffers 1 Damage.`).catch(discordCatch);
+    logGameAction?.(game, interaction.client, `🎯 **Unhinged Director Strain** — **${figName}** suffered 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
+  }
+
+  clearPendingUnhingedStrain(game);
   await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
   saveGames();
 }
