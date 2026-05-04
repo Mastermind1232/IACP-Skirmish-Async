@@ -636,4 +636,27 @@ export async function refreshAllGameComponents(game, client, deps) {
   } catch (err) {
     console.error('Refresh All: activation-phase safety net failed', err);
   }
+
+  // Attachment-phase recovery (audit gap 7): a checkpoint saved during
+  // setup attachment phase carries the pending-card state, but the
+  // dropdown / done-prompt UI is not in the players' hand channels.
+  // Re-post for each player who still has work — pending cards get a
+  // dropdown for the next card, players with empty pending get the
+  // "all done" prompt. Players already confirmed are skipped.
+  try {
+    if (game.setupAttachmentPhase && game.setupAttachmentPending && deps.sendAttachmentDropdown && deps.sendAttachDonePrompt) {
+      const confirmedMap = game.setupAttachmentConfirmed || {};
+      for (const pn of [1, 2]) {
+        if (confirmedMap[pn]) continue;
+        const pending = game.setupAttachmentPending[pn] || [];
+        if (pending.length === 0) {
+          await deps.sendAttachDonePrompt(game, gameId, pn, client);
+        } else {
+          await deps.sendAttachmentDropdown(game, gameId, pn, pending[0], client);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Refresh All: attachment-phase safety net failed', err);
+  }
 }

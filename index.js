@@ -280,6 +280,8 @@ import {
   sendPowerTokenOverflowUI,
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
   startDeploymentAfterAttachments as _startDeploymentAfterAttachments,
+  _sendAttachmentDropdown,
+  _sendAttachDonePrompt,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -1216,6 +1218,10 @@ async function refreshAllGameComponents(game, client) {
     // Activation-phase safety net: re-posts round activation message if Draft
     // Random's post-deploy→activation callback was dropped by a restart.
     sendRoundActivationPhaseMessage, setRoundPhase, ROUND_PHASES,
+    // Attachment-phase safety net (audit gap 7): re-posts the attachment
+    // dropdown / done-prompt for any player with pending setup attachments.
+    sendAttachmentDropdown: _sendAttachmentDropdown,
+    sendAttachDonePrompt: _sendAttachDonePrompt,
   });
 }
 

@@ -53,6 +53,8 @@ import {
   handleAttachDoneConfirm,
   handleAttachDoneRedo,
   startDeploymentAfterAttachments,
+  _sendAttachmentDropdown,
+  _sendAttachDonePrompt,
 } from './setup.js';
 import {
   handleBlitzGroupSelect,
@@ -136,6 +138,10 @@ import {
   handleCheckpointSaveModal,
   handleCheckpointNewGameOpen,
   handleCheckpointNewGamePick,
+  handleCheckpointInGameOpen,
+  handleCheckpointInGamePick,
+  handleCheckpointInGameConfirm,
+  handleCheckpointInGameCancel,
 } from './checkpoint.js';
 import { handleBotmenuRecover, handleResync } from './recover.js';
 import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
@@ -423,6 +429,10 @@ register('cp_save_modal_', handleCheckpointSaveModal, 'checkpoint');
 register('cp_save_', handleCheckpointSavePrompt, 'checkpoint');
 register('cp_newgame_pick_', handleCheckpointNewGamePick, 'checkpoint');
 register('cp_newgame_open_', handleCheckpointNewGameOpen, 'checkpoint');
+register('cp_load_ingame_confirm_', handleCheckpointInGameConfirm, 'checkpoint');
+register('cp_load_ingame_cancel_', handleCheckpointInGameCancel, 'checkpoint');
+register('cp_load_ingame_pick_', handleCheckpointInGamePick, 'checkpoint');
+register('cp_load_ingame_open_', handleCheckpointInGameOpen, 'checkpoint');
 register('botmenu_kill_', handleBotmenuKill, 'botmenu');
 register('botmenu_kill_yes_', handleBotmenuKillYes, 'botmenu');
 register('botmenu_kill_no_', handleBotmenuKillNo, 'botmenu');
@@ -637,6 +647,8 @@ export {
   handleAttachDoneConfirm,
   handleAttachDoneRedo,
   startDeploymentAfterAttachments,
+  _sendAttachmentDropdown,
+  _sendAttachDonePrompt,
 } from './setup.js';
 export {
   handleBlitzGroupSelect,
