@@ -6241,13 +6241,13 @@ export async function handleCombatToken(interaction, ctx) {
  *
  * Per card text: "...it MAY suffer 1 Strain to apply +2 of the chosen
  * symbol to the results instead of +1." Player picks +1 (free) or +2
- * (figure suffers 1 Strain). Applies the chosen bonus, optionally
- * damages the attacker figure, finalises the token spend, and resumes
- * the token phase.
- *
- * Known limitation: 1 Strain is applied as 1 HP damage directly. The
- * full Strain semantics (player may discard a CC from deck top to
- * reduce by 1) is not offered for this prompt. Tracked as follow-up.
+ * (figure suffers 1 Strain). On +2, full IACP Strain semantics apply:
+ * if the spender's CC deck has cards, a follow-up prompt
+ * (handleUnhingedStrainAbsorb) lets them discard the top CC to absorb
+ * the Strain, otherwise take 1 HP damage; empty deck auto-applies HP.
+ * Strain target = the spending figure (resolved via pending.figureKey),
+ * which may be the attacker or a Squad Cohesion / Wild-from-cohesion
+ * source figure.
  */
 export async function handleUnhingedDirectorChoice(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames, logGameAction, dcHealthState, findDcMessageIdForFigure } = ctx;
