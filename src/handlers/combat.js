@@ -1773,9 +1773,12 @@ export async function handleAttackTarget(interaction, ctx) {
     if (_udCheckSide(attackerPlayerNum, attackerFigureKey)) {
       game.pendingCombat.attackerUnhingedBonus = true;
     }
-    if (!target.isNpc && _udCheckSide(game.pendingCombat.defenderPlayerNum, target.figureKey)) {
-      game.pendingCombat.defenderUnhingedBonus = true;
-    }
+    // Defender-side check intentionally absent — the card text reads
+    // "while declaring an attack," so only the attacker can trigger it.
+    // The defender never spends Hit/Surge tokens during an attack
+    // (those aren't defender-side power tokens anyway), and a stale
+    // defenderUnhingedBonus flag would mislead the spend-message
+    // ("+2 Block (Unhinged Director)" when math actually applied +1).
   }
 
   // Fury of Kashyyyk: elite WOOKIEE attacking within 2 + another friendly WOOKIEE within 2 of defender → Pierce 1
@@ -4471,13 +4474,13 @@ async function sendWildTypeWindow(thread, gameId, role) {
 
 /**
  * Apply token bonus to combat state. Krennic's Unhinged Director only
- * affects ATTACK results (Damage / Surge): when the controlling player
- * spends a Damage or Surge power token, they get +2 instead of +1.
- * Block / Evade tokens always grant +1, regardless of Unhinged Director.
+ * triggers "while declaring an attack" (per card text) and only on Hit
+ * or Surge tokens — so the +2 path is attacker-side, attack-result only.
+ * Block / Evade tokens always grant +1.
  */
 function applyTokenBonus(combat, type, isAttacker) {
   const isAttackResult = type === 'Damage' || type === 'Surge';
-  const unhingedActive = isAttacker ? combat.attackerUnhingedBonus : combat.defenderUnhingedBonus;
+  const unhingedActive = isAttacker && combat.attackerUnhingedBonus;
   const bonus = (isAttackResult && unhingedActive) ? 2 : 1;
   if (type === 'Damage') combat.bonusHits  = (combat.bonusHits  || 0) + bonus;
   if (type === 'Surge') combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + bonus;
@@ -6036,7 +6039,11 @@ export async function handleCombatToken(interaction, ctx) {
   }
 
   applyTokenBonus(combat, tokenType, isAttacker);
-  const _tokenBonusAmt = (isAttacker ? combat.attackerUnhingedBonus : combat.defenderUnhingedBonus) ? 2 : 1;
+  // Match the same predicate applyTokenBonus uses so the displayed amount
+  // never disagrees with what was actually applied. Krennic's +2 only
+  // fires for the attacker spending a Hit/Surge token (CRR + card text).
+  const _isAttackResultDisp = tokenType === 'Damage' || tokenType === 'Surge';
+  const _tokenBonusAmt = (isAttacker && combat.attackerUnhingedBonus && _isAttackResultDisp) ? 2 : 1;
   removeSpentToken(game, figureKey, tokenIndex);
   await thread.send(`**Power Token spent:** +${_tokenBonusAmt} ${tokenType}${_tokenBonusAmt > 1 ? ' (Unhinged Director)' : ''}`);
   logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
