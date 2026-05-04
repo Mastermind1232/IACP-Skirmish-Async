@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -4473,14 +4473,21 @@ async function sendWildTypeWindow(thread, gameId, role) {
 }
 
 /**
- * Apply token bonus to combat state. Krennic's Unhinged Director only
- * triggers "while declaring an attack" (per card text) and only on Hit
- * or Surge tokens — so the +2 path is attacker-side, attack-result only.
- * Block / Evade tokens always grant +1.
+ * Apply token bonus to combat state. Krennic's Unhinged Director triggers
+ * "while declaring an attack" (per card text) on Hit or Surge tokens —
+ * attacker-side, attack-result only. The +2 effect requires the figure
+ * to suffer 1 Strain (player choice).
+ *
+ * The main-spend path detects Unhinged eligibility before calling this
+ * helper and routes through a dedicated prompt + applyUnhingedTokenSpend
+ * instead. Wild and Squad-Cohesion paths still call applyTokenBonus
+ * directly; for those we default unhingedAllowed=false so the +2 path
+ * doesn't fire silently without the player choosing to pay Strain.
  */
-function applyTokenBonus(combat, type, isAttacker) {
+function applyTokenBonus(combat, type, isAttacker, opts = {}) {
+  const { unhingedAllowed = false } = opts;
   const isAttackResult = type === 'Damage' || type === 'Surge';
-  const unhingedActive = isAttacker && combat.attackerUnhingedBonus;
+  const unhingedActive = isAttacker && combat.attackerUnhingedBonus && unhingedAllowed;
   const bonus = (isAttackResult && unhingedActive) ? 2 : 1;
   if (type === 'Damage') combat.bonusHits  = (combat.bonusHits  || 0) + bonus;
   if (type === 'Surge') combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + bonus;
@@ -6038,14 +6045,42 @@ export async function handleCombatToken(interaction, ctx) {
     return;
   }
 
-  applyTokenBonus(combat, tokenType, isAttacker);
-  // Match the same predicate applyTokenBonus uses so the displayed amount
-  // never disagrees with what was actually applied. Krennic's +2 only
-  // fires for the attacker spending a Hit/Surge token (CRR + card text).
+  // Krennic's Unhinged Director: "When a friendly TROOPER or GUARDIAN
+  // within 2 spaces spends a Hit Token or Surge Token while declaring
+  // an attack, it MAY suffer 1 Strain to apply +2 of the chosen symbol
+  // to the results instead of +1." Player choice — prompt for it.
   const _isAttackResultDisp = tokenType === 'Damage' || tokenType === 'Surge';
-  const _tokenBonusAmt = (isAttacker && combat.attackerUnhingedBonus && _isAttackResultDisp) ? 2 : 1;
+  if (isAttacker && combat.attackerUnhingedBonus && _isAttackResultDisp) {
+    setPendingUnhingedDirector(game, {
+      gameId,
+      tokenType,
+      figureKey,
+      tokenIndex,
+      atkPlayerNum: atkPlayerNum,
+    });
+    const _udOwnerId = getPlayerId(game, atkPlayerNum);
+    const _udRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`unhinged_director_${gameId}_plus1`)
+        .setLabel(`+1 ${tokenType} (free)`)
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`unhinged_director_${gameId}_plus2`)
+        .setLabel(`+2 ${tokenType} (suffer 1 Strain)`)
+        .setStyle(ButtonStyle.Danger),
+    );
+    await thread.send({
+      content: `<@${_udOwnerId}> — **Unhinged Director** — Spend the **${tokenType}** token: +1 free, or +2 if **${dcNameFromFigureKey(figureKey)}** suffers 1 Strain?`,
+      components: [_udRow],
+      allowedMentions: { users: [_udOwnerId].filter(Boolean) },
+    }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+  applyTokenBonus(combat, tokenType, isAttacker);
+  const _tokenBonusAmt = 1;
   removeSpentToken(game, figureKey, tokenIndex);
-  await thread.send(`**Power Token spent:** +${_tokenBonusAmt} ${tokenType}${_tokenBonusAmt > 1 ? ' (Unhinged Director)' : ''}`);
+  await thread.send(`**Power Token spent:** +${_tokenBonusAmt} ${tokenType}`);
   logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
   // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
   if (isAttacker) combat.attackerSpentPowerToken = true;
@@ -6064,6 +6099,91 @@ export async function handleCombatToken(interaction, ctx) {
     }
   }
   await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
+  saveGames();
+}
+
+/**
+ * Krennic / Unhinged Director — handle the +1/+2 strain-tradeoff choice.
+ *
+ * customId shape: `unhinged_director_<gameId>_<plus1|plus2>`
+ *
+ * Per card text: "...it MAY suffer 1 Strain to apply +2 of the chosen
+ * symbol to the results instead of +1." Player picks +1 (free) or +2
+ * (figure suffers 1 Strain). Applies the chosen bonus, optionally
+ * damages the attacker figure, finalises the token spend, and resumes
+ * the token phase.
+ *
+ * Known limitation: 1 Strain is applied as 1 HP damage directly. The
+ * full Strain semantics (player may discard a CC from deck top to
+ * reduce by 1) is not offered for this prompt. Tracked as follow-up.
+ */
+export async function handleUnhingedDirectorChoice(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames, logGameAction, dcHealthState } = ctx;
+  const m = interaction.customId.match(/^unhinged_director_(.+?)_(plus1|plus2)$/);
+  if (!m) return;
+  const [, gameId, choice] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  const pending = game.pendingUnhingedDirector;
+  if (!combat || combat.gameId !== gameId || !pending) {
+    await interaction.followUp({ content: 'No pending Unhinged Director choice.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const atkPN = pending.atkPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, atkPN, canActAsPlayer, 'Only the attacker may resolve Unhinged Director.')) return;
+
+  // Visual: disable both buttons, highlight the chosen one.
+  try {
+    const newRows = (interaction.message?.components || []).map((row) => {
+      const newRow = new ActionRowBuilder();
+      for (const c of row.components) {
+        const btn = ButtonBuilder.from(c);
+        btn.setDisabled(true);
+        if (c.customId === interaction.customId) {
+          btn.setStyle(ButtonStyle.Success);
+        }
+        newRow.addComponents(btn);
+      }
+      return newRow;
+    });
+    if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
+  } catch (_e) { /* non-fatal */ }
+
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  const { tokenType, figureKey, tokenIndex } = pending;
+  const isPlus2 = choice === 'plus2';
+  const bonusAmt = isPlus2 ? 2 : 1;
+
+  // Apply bonus directly. Bypass applyTokenBonus's unhinged check —
+  // the player's choice here is the sole source of +1 vs +2.
+  if (tokenType === 'Damage') combat.bonusHits = (combat.bonusHits || 0) + bonusAmt;
+  if (tokenType === 'Surge')  combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + bonusAmt;
+  removeSpentToken(game, figureKey, tokenIndex);
+
+  // +2 path: figure suffers 1 Strain → 1 HP damage to that figure.
+  // (Full Strain semantics with optional CC-discard are deferred —
+  // tracked in project_session_followups_20260504.md.)
+  let strainNote = '';
+  if (isPlus2) {
+    const strainDcName = dcNameFromFigureKey(figureKey);
+    const msgId = combat.attackerMsgId;
+    const figIdx = combat.attackerFigureIndex ?? 0;
+    if (msgId && dcHealthState) {
+      reduceHp(dcHealthState, game, msgId, figIdx, 1, atkPN);
+    }
+    strainNote = ` — **${strainDcName}** suffers 1 Strain (1 Damage).`;
+  }
+
+  await thread.send(`**Power Token spent:** +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director)' : ''}${strainNote}`).catch(discordCatch);
+  logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — Attacker: +${bonusAmt} ${tokenType}${isPlus2 ? ' (Unhinged Director, 1 Strain)' : ''}`, { phase: 'ROUND', icon: 'attack' });
+
+  // Track attacker Power Token spending for Pulse Cannon (Iden Versio).
+  combat.attackerSpentPowerToken = true;
+
+  clearPendingUnhingedDirector(game);
+  await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
   saveGames();
 }
 

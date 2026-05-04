@@ -122,6 +122,7 @@ const INTERRUPT_GATE_MESSAGES = {
   [INTERRUPT_TYPES.HUNTER_PROTOCOL]: 'a Hunter Protocol prompt is open',
   [INTERRUPT_TYPES.EXECUTOR_INTERRUPT]: 'an Executor interrupt is open',
   [INTERRUPT_TYPES.BEL_REORDER]: 'a Battlefield Engineer reorder is open',
+  [INTERRUPT_TYPES.UNHINGED_DIRECTOR]: 'an Unhinged Director +1/+2 choice is open',
 };
 
 /** Generate a unique checkpoint ID. */

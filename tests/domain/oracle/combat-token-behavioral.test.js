@@ -249,7 +249,13 @@ describe('B-C-TOKEN: Power token spending during combat', () => {
     assert.strictEqual(game.figurePowerTokens['Stormtrooper-1-0'], undefined, 'Wild token removed');
   });
 
-  it('B-C-TOKEN-008: Unhinged Director doubles token bonus to +2', async () => {
+  it('B-C-TOKEN-008: Unhinged Director prompts attacker for +1/+2 strain choice instead of auto-+2', async () => {
+    // Updated 2026-05-04: per card text ("MAY suffer 1 Strain to apply +2
+    // instead of +1"), Unhinged Director is a player choice — not an
+    // automatic doubling. handleCombatToken now stages the pending choice
+    // and posts a prompt; bonusHits stays at 0 until the user resolves.
+    // Resolution flow is exercised end-to-end in the live integration
+    // path; this oracle just verifies the staging.
     const combat = makeCombat({
       tokenPhase: 'attacker',
       attackerUnhingedBonus: true,
@@ -262,7 +268,9 @@ describe('B-C-TOKEN: Power token spending during combat', () => {
 
     await handleCombatToken(mockInteraction('combat_token_g1_att_0', 'player1'), ctx);
 
-    assert.strictEqual(combat.bonusHits, 2, 'Unhinged Director gives +2 instead of +1');
+    assert.ok(!combat.bonusHits, 'no bonus applied yet — waiting for prompt resolution');
+    assert.ok(game.pendingUnhingedDirector, 'pendingUnhingedDirector is set so the +1/+2 choice can resume');
+    assert.strictEqual(game.pendingUnhingedDirector.tokenType, 'Damage');
   });
 
   it('B-C-TOKEN-009: wrong tokenPhase is silently rejected', async () => {

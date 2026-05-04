@@ -160,6 +160,7 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingHunterProtocol',
   'pendingExecutorInterrupt',
   'pendingBELReorder',
+  'pendingUnhingedDirector',
 ];
 
 // ── Dep-bag parity allowlist ────────────────────────────────────────────────
