@@ -295,9 +295,6 @@ export async function maybeShowEndActivationPhaseButton(game, client, deps) {
     const ch = await fetchGameChannel(client, game.generalId);
     const msg = await ch.messages.fetch(roundMsgId);
     const round = game.currentRound || 1;
-    const roundEmbed = new deps.EmbedBuilder()
-      .setTitle(`${deps.GAME_PHASES.ROUND.emoji}  ROUND ${round} - Activation Phase`)
-      .setColor(deps.PHASE_COLOR);
     const endBtn = new deps.ActionRowBuilder().addComponents(
       new deps.ButtonBuilder()
         .setCustomId(`status_phase_${gameId}`)
@@ -308,7 +305,7 @@ export async function maybeShowEndActivationPhaseButton(game, client, deps) {
     const initZone = deps.getInitiativePlayerZoneLabel(game);
     await msg.edit(sanitizeMentions({
       content: `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Both players have used all activations and actions. Both players: click **End R${round} Activation Phase** when done with any end-of-activation effects.`,
-      embeds: [roundEmbed],
+      embeds: [],
       components: [endBtn],
       allowedMentions: { users: [game.initiativePlayerId] },
     })).catch(deps.discordCatch);

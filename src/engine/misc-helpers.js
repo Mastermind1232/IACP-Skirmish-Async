@@ -552,9 +552,14 @@ export async function sendRoundActivationPhaseMessage(game, client, deps) {
   const gameId = game.gameId;
   const generalChannel = await fetchGameChannel(client, game.generalId);
   const round = game.currentRound || 1;
+  // Round header is its own standalone message so it sits ABOVE the
+  // activation prompt. Discord renders content above embeds within the
+  // same message, so bundling the embed with the prompt would push the
+  // header below the prompt — unwanted UX.
   const roundEmbed = new EmbedBuilder()
     .setTitle(`${deps.GAME_PHASES.ROUND.emoji}  ROUND ${round} - Start of Round`)
     .setColor(deps.PHASE_COLOR);
+  await generalChannel.send({ embeds: [roundEmbed] }).catch(() => {});
   const showBtn = deps.shouldShowEndActivationPhaseButton(game, gameId);
   const components = [];
   if (showBtn) {
@@ -583,7 +588,6 @@ export async function sendRoundActivationPhaseMessage(game, client, deps) {
     : `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Your turn! All deployment groups readied. Use all activations and actions. The **End R${round} Activation Phase** button will appear when both players have done so.${passHint}`;
   const sent = await generalChannel.send(sanitizeMentions({
     content,
-    embeds: [roundEmbed],
     components,
     allowedMentions: { users: [game.initiativePlayerId] },
   }));

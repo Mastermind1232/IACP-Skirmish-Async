@@ -171,10 +171,6 @@ export async function handleStatusPhase(interaction, ctx) {
       content: `${clickerIsP1 ? 'P1' : 'P2'} has ended activation. Waiting for **${waiting}** to click **End R${round} Activation Phase**.`,
       ephemeral: true,
     }).catch(discordCatch);
-    const generalChannel = await fetchGameChannel(client, game.generalId);
-    const roundEmbed = new EmbedBuilder()
-      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round} - Activation Phase`)
-      .setColor(PHASE_COLOR);
     const endBtn = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`status_phase_${gameId}`)
@@ -183,7 +179,7 @@ export async function handleStatusPhase(interaction, ctx) {
     );
     await interaction.message.edit({
       content: `**Round ${round}** — End Activation Phase: ${game.p1ActivationPhaseEnded ? 'P1 ✅' : 'P1 ⏳'} | ${game.p2ActivationPhaseEnded ? 'P2 ✅' : 'P2 ⏳'}\nBoth players must click the button when done with activations and any end-of-activation effects.`,
-      embeds: [roundEmbed],
+      embeds: [],
       components: [endBtn],
     }).catch(discordCatch);
     saveGames();

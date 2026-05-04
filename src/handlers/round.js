@@ -1422,9 +1422,11 @@ export async function handleEndStartOfRound(interaction, ctx) {
 
   // Fallback: no gate function, start activation directly
   const generalChannel = await fetchGameChannel(client, game.generalId);
+  // Round header lives in its own message so it stays above the prompt.
   const roundEmbed = new EmbedBuilder()
     .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound} - Start of Round`)
     .setColor(PHASE_COLOR);
+  await generalChannel.send({ embeds: [roundEmbed] }).catch(() => {});
   const showBtn = shouldShowEndActivationPhaseButton(game, gameId);
   const components = [];
   if (showBtn) {
@@ -1451,7 +1453,6 @@ export async function handleEndStartOfRound(interaction, ctx) {
   const content = `<@${game.initiativePlayerId}> **Round ${game.currentRound}** — Your turn! Activate DCs in <#${initPlayAreaId}>.${passHint}`;
   const sent = await withDiscordRetry(() => generalChannel.send({
     content,
-    embeds: [roundEmbed],
     components,
     allowedMentions: { users: [game.initiativePlayerId] },
   }));
