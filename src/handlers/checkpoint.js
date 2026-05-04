@@ -37,6 +37,7 @@ import {
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
 import { renderHandThread, renderHandVisual, renderHandPayload, renderRoundActivationMessage, renderDcCompanion } from '../engine/renderer.js';
 import { getBlockingInterrupts, INTERRUPT_TYPES, clearAllInterrupts } from '../game/interrupts.js';
+import { recoverPhaseGate } from './recover.js';
 
 const MAX_CHECKPOINTS_PER_USER = 50;
 const CHECKPOINT_NAME_MAX_LEN = 80;
@@ -381,6 +382,11 @@ function remapMsgIdKeyedFields(game, oldP1Ids, oldP2Ids) {
     'p1CcAttachments', 'p2CcAttachments',
     'exhaustedSkirmishUpgrades',
     'fellSwoopFreeAttack', 'pummelTwoAttacksThisActivation', 'pummelAttacksRemaining',
+    // dcFinishedPinged — msgId-keyed boolean tracking the end-of-activation
+    // ping for each DC. Save gate refuses mid-activation so this is usually
+    // empty at load, but a stale entry would otherwise survive cross-lobby
+    // remap as an orphan. Including it keeps the field clean.
+    'dcFinishedPinged',
     // overdriveUsedThisActivation removed: keyed by figureKey (in
     // ACTIVATION_FIGKEY_FLAGS), not msgId. Survives cross-lobby intact;
     // would never match this remap.
@@ -1083,6 +1089,20 @@ export async function applyCheckpointToNewLobby(newGame, checkpoint, client, dep
   if (deps.refreshAllGameComponents) {
     try { await deps.refreshAllGameComponents(newGame, client); }
     catch (err) { console.error('refreshAllGameComponents (cross-game load) failed:', err); }
+  }
+  // 11. Phase-gate recovery — if the saved game was mid phase-gate window
+  //     (start_of_round / pre_activation / pre_end_of_round / post_end_of_round),
+  //     game.phaseGate is restored from snapshot but its Ready buttons live in
+  //     the OLD lobby's hand channels (deleted). Without this, both players
+  //     are stuck — no buttons to click, can't advance the phase. /resync's
+  //     runRecovery handles this manually; here we run it as part of the
+  //     load so the gate is usable immediately.
+  try {
+    if (newGame.phaseGate) {
+      await recoverPhaseGate(newGame, newGame.gameId, { client });
+    }
+  } catch (err) {
+    console.error('phase-gate recovery (cross-game load) failed:', err);
   }
   if (deps.saveGames) deps.saveGames(newGame.gameId);
 }

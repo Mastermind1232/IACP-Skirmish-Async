@@ -722,7 +722,7 @@ async function recoverCcDrawPhase(game, gameId, ctx) {
 
 // ─── Step 1: Recover phaseGate ────────────────────────────────────────────────
 
-async function recoverPhaseGate(game, gameId, ctx) {
+export async function recoverPhaseGate(game, gameId, ctx) {
   if (!game.phaseGate) return null;
   const { client } = ctx;
   const gate = game.phaseGate;
