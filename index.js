@@ -242,6 +242,7 @@ import {
   editDistanceMessage as _editDistanceMessagePure,
   maybeShowEndActivationPhaseButton as _maybeShowEndActivationPhaseButtonPure,
   updateRoundActivationMessage as _updateRoundActivationMessagePure,
+  repostRoundActivationMessage as _repostRoundActivationMessagePure,
   refreshAllGameComponents as _refreshAllGameComponentsPure,
 } from './src/engine/message-updaters.js';
 import { getCommandCardImagePath, getDcImagePath, getConditionCardPath, getFigureImagePath, resolveAssetPath, resolveDcImagePath, resolveMissionCardImagePath, UPGRADE_IMAGE_OVERRIDES } from './src/asset-paths.js';
@@ -1610,6 +1611,16 @@ async function updateRoundActivationMessage(game, gameId, client) {
     shouldShowEndActivationPhaseButton, EmbedBuilder, ActionRowBuilder, ButtonBuilder,
     ButtonStyle, GAME_PHASES, PHASE_COLOR, getInitiativePlayerNum,
     getInitiativePlayerZoneLabel, discordCatch, saveGames,
+  });
+}
+
+/** Repost variant — used on TURN CHANGES so the activation prompt + pass
+ *  button surface back to the bottom of #general. Edit-in-place updates
+ *  (refresh, /resync, mid-turn state shifts) keep using updateRoundActivationMessage. */
+async function repostRoundActivationMessage(game, gameId, client) {
+  return _repostRoundActivationMessagePure(game, gameId, client, {
+    shouldShowEndActivationPhaseButton, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+    getInitiativePlayerNum, getInitiativePlayerZoneLabel, saveGames,
   });
 }
 
@@ -3447,7 +3458,7 @@ function buildAllDeps() {
     getCommandCardImagePath, findDcMessageIdForFigure, isGroupDefeated,
     checkWinConditions, applyDamageAndFinishCombat, finishCombatResolution,
     checkPostCombatSurges, resolveCombatAfterRolls, hasActionsRemainingInGame,
-    getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton, updateRoundActivationMessage,
+    getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton, updateRoundActivationMessage, repostRoundActivationMessage,
     countTerminalsControlledByPlayer, isFigureInDeploymentZone,
     getFiguresOnOrAdjacentToSpace, getFiguresAdjacentToCoord, applyNpcDamageToFigure,
     getEffectiveMapSpaces, isWithinN, computeCleaveEligibleTargets, getCleaveTargetButtons,

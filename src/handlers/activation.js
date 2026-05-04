@@ -202,7 +202,7 @@ export async function handleStatusPhase(interaction, ctx) {
  * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames
  */
 export async function handlePassActivationTurn(interaction, ctx) {
-  const { getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames, updateRoundActivationMessage } = ctx;
+  const { getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames, repostRoundActivationMessage } = ctx;
   const gameId = parseCustomId(interaction.customId, 'pass_activation_turn_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
@@ -244,7 +244,9 @@ export async function handlePassActivationTurn(interaction, ctx) {
     roundContentBefore,
     gameId,
   });
-  await updateRoundActivationMessage?.(game, gameId, client);
+  // Turn change → repost the activation prompt at the bottom so the new
+  // turn-player sees it without scrolling past their action logs.
+  await repostRoundActivationMessage?.(game, gameId, client);
   saveGames();
 }
 
@@ -495,6 +497,7 @@ export async function handleEndTurn(interaction, ctx) {
     logGameAction,
     maybeShowEndActivationPhaseButton,
     updateRoundActivationMessage,
+    repostRoundActivationMessage,
     client,
     saveGames,
   } = ctx;
@@ -613,9 +616,10 @@ export async function handleEndTurn(interaction, ctx) {
     phase: 'ROUND',
     icon: 'activate',
   });
-  // Single source of truth — handles activation variant, sticky-flag
-  // rebalance, and routes to End-Phase variant when both players done.
-  await updateRoundActivationMessage?.(game, gameId, client);
+  // Turn change → repost the activation prompt at the bottom so the new
+  // turn-player sees it without scrolling. Repost handles activation vs
+  // End-Phase variant routing internally.
+  await repostRoundActivationMessage?.(game, gameId, client);
   // Field Tactics (Death Trooper): after activation, choose a friendly TROOPER/LEADER within 2 to perform a free attack
   await maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, client, ctx.findDcMessageIdForFigure);
   // Lie in Ambush: after opponent activates, check if trigger fires

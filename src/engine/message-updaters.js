@@ -316,6 +316,84 @@ export async function maybeShowEndActivationPhaseButton(game, client, deps) {
   }
 }
 
+/**
+ * Delete the existing round activation message and post a fresh one at the
+ * bottom of #general. Used on REAL turn changes (DC activation completes,
+ * pass clicked, end-phase swap) so the activation prompt + pass button
+ * stay visible to the player whose turn it is, instead of being buried
+ * above accumulating action logs.
+ *
+ * Mid-turn state shifts (CC effects, pass-eligibility flips, refresh on
+ * restart) should keep using updateRoundActivationMessage / refresh paths
+ * which edit in place.
+ */
+export async function repostRoundActivationMessage(game, gameId, client, deps) {
+  if (!game.generalId) return;
+  const ch = await fetchGameChannel(client, game.generalId).catch(() => null);
+  if (!ch) return;
+
+  // Best-effort delete of the existing activation message.
+  if (game.roundActivationMessageId) {
+    try {
+      const oldMsg = await ch.messages.fetch(game.roundActivationMessageId).catch(() => null);
+      if (oldMsg) await oldMsg.delete().catch(() => {});
+    } catch {}
+  }
+
+  const round = game.currentRound || 1;
+  const useEndPhase = !!(deps.shouldShowEndActivationPhaseButton
+    && deps.shouldShowEndActivationPhaseButton(game, gameId));
+
+  let payload;
+  if (useEndPhase) {
+    const endBtn = new deps.ActionRowBuilder().addComponents(
+      new deps.ButtonBuilder()
+        .setCustomId(`status_phase_${gameId}`)
+        .setLabel(`End R${round} Activation Phase`)
+        .setStyle(deps.ButtonStyle.Secondary)
+    );
+    const initPlayerNum = deps.getInitiativePlayerNum(game);
+    const initZone = deps.getInitiativePlayerZoneLabel(game);
+    payload = sanitizeMentions({
+      content: `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Both players have used all activations and actions. Both players: click **End R${round} Activation Phase** when done with any end-of-activation effects.`,
+      components: [endBtn],
+      allowedMentions: { users: [game.initiativePlayerId] },
+    });
+    game.roundActivationButtonShown = true;
+  } else {
+    const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+    const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
+    const otherNum = turnPlayerNum === 1 ? 2 : 1;
+    const myRem = (turnPlayerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining) ?? 0;
+    const otherRem = (otherNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining) ?? 0;
+    const passRows = [];
+    if (otherRem > myRem && myRem > 0) {
+      passRows.push(new deps.ActionRowBuilder().addComponents(
+        new deps.ButtonBuilder()
+          .setCustomId(`pass_activation_turn_${gameId}`)
+          .setLabel(`Pass (opponent has ${otherRem - myRem} more activation${otherRem - myRem !== 1 ? 's' : ''} than you)`)
+          .setStyle(deps.ButtonStyle.Secondary)
+      ));
+    }
+    const turnZone = turnPlayerId === game.player1Id ? 'red' : 'blue';
+    const passHint = passRows.length ? ' You may pass (opponent has more activations).' : '';
+    payload = sanitizeMentions({
+      content: `<@${turnPlayerId}> (${turnZone === 'red' ? '🔴 ' : '🔵 '}**Player ${turnPlayerNum}**) **Round ${round}** — Your turn to activate!${passHint}`,
+      components: passRows,
+      allowedMentions: { users: [turnPlayerId] },
+    });
+    game.roundActivationButtonShown = false;
+  }
+
+  try {
+    const sent = await ch.send(payload);
+    game.roundActivationMessageId = sent.id;
+  } catch (err) {
+    console.error('repostRoundActivationMessage: send failed', err);
+  }
+  if (deps.saveGames) deps.saveGames();
+}
+
 /** Update both Hand channel messages (for window buttons). Call when entering/exiting Start or End of Round window. */
 export async function updateHandChannelMessages(game, client, deps) {
   for (const pn of [1, 2]) {

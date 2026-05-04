@@ -267,6 +267,7 @@ export function buildHeadlessDeps(options = {}) {
   const clearMoveGridMessages = noopAsync;
   const maybeShowEndActivationPhaseButton = noopAsync;
   const updateRoundActivationMessage = noopAsync;
+  const repostRoundActivationMessage = noopAsync;
   const refreshAllGameComponents = noopAsync;
   const sendRoundActivationPhaseMessage = noopAsync;
   const sendBleedingPrompt = noopAsync;
@@ -597,7 +598,7 @@ export function buildHeadlessDeps(options = {}) {
     ensureMovementBankMessage, updateDcActionsMessage,
     updateHandChannelMessages, updateHandVisualMessage,
     updateDiscardPileMessage, updatePlayAreaDcButtons,
-    clearMoveGridMessages, maybeShowEndActivationPhaseButton, updateRoundActivationMessage,
+    clearMoveGridMessages, maybeShowEndActivationPhaseButton, updateRoundActivationMessage, repostRoundActivationMessage,
     refreshAllGameComponents, recomputeActivationCounts, sendRoundActivationPhaseMessage,
     // Resync rebuilds DC side-channel Maps for in-Discord recovery; in
     // headless these maps are already managed externally — noop is safe.

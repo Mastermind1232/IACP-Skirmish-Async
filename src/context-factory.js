@@ -123,6 +123,7 @@ const CONTEXT_GROUPS = {
     'updateHandChannelMessages', 'saveGames', 'client', 'dcMessageMeta', 'sendPhaseGateMessages',
     'dcHealthState', 'buildDcEmbedAndFiles', 'renderDcEmbed', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',
     'getDcPlayAreaComponents', 'maybeShowEndActivationPhaseButton', 'updateRoundActivationMessage',
+    'repostRoundActivationMessage',
     'dcExhaustedState', 'updateActivationsMessage', 'getActionsCounterContent',
     'getDcActionButtons', 'getActivationMinimapAttachment', 'getActivateDcButtons',
     'DC_ACTIONS_PER_ACTIVATION', 'ThreadAutoArchiveDuration', 'ACTION_ICONS',
