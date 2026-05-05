@@ -273,6 +273,15 @@ export function getFiguresAdjacentToTarget(game, targetFigureKey, mapId) {
   const targetCells = getFootprintCells(targetCoord, targetSize).map((c) => normalizeCoord(c));
   const adjacentSet = new Set();
   for (const c of targetCells) {
+    // Per CRR figure-adjacency: "Two figures are adjacent if a space one
+    // occupies is adjacent to a space the other occupies, OR if both
+    // figures occupy the same space." Companions (e.g. The Child via Clan
+    // of Two) and other same-square cases must be returned as adjacent —
+    // mirrors getFiguresAdjacentToCoord above which already does this for
+    // blast/cleave. Live game 00001 (2026-05-04): C-3PO walked onto The
+    // Child's square; Inform's "adjacent friendly" list excluded The
+    // Child without this line.
+    adjacentSet.add(c);
     for (const n of adjacency[c] || []) adjacentSet.add(normalizeCoord(n));
   }
   const out = [];
