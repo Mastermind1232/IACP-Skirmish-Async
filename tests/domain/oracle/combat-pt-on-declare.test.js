@@ -51,30 +51,30 @@ describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
       'proceedToTokenPhase must end with postRollDiceButton when no tokens to spend');
   });
 
-  it('postRollDiceButton auto-rolls when held-safe + posts legacy button when held-unsafe', () => {
+  it('postRollDiceButton always auto-rolls (no roll button posted)', () => {
     const fnMatch = H_CB_SRC.match(/async function postRollDiceButton\(thread, game, combat, ctx\) \{[\s\S]*?^}/m);
     assert.ok(fnMatch, 'postRollDiceButton must exist');
     const body = fnMatch[0];
-    // 2026-05-04 (later): held-roll buttons removed per Destruct UX feedback
-    // ("the dice can auto roll, no need for prompt"). Held-safe combats now
-    // call autoRollDice directly (which simulates both clicks via synthetic
-    // interactions through handleCombatRoll). Held-UNSAFE combats keep the
-    // legacy single-button flow so mid-roll abilities (Vet Instincts,
-    // Guidance Systems, TINT, Doubt) can chain via re-clicks.
-    assert.match(body, /_isHeldRollSafe\(game, combat\)/,
-      'postRollDiceButton must branch on _isHeldRollSafe');
+    // 2026-05-04 final: held-roll buttons + held-unsafe predicate fully
+    // removed. VI atk + Guidance Systems migrated to sendModsYn (CRR step 4),
+    // VI def + TINT + Doubt fire from inside the def synth's defense block
+    // and re-enter via sendRerollUI / proceedAfterRerolls. Auto-roll is now
+    // safe for every combat.
     assert.match(body, /await autoRollDice\(thread, game, combat, ctx\);/,
-      'postRollDiceButton must call autoRollDice in the held-safe branch');
-    assert.match(body, /setLabel\('Roll Combat Dice'\)/,
-      'postRollDiceButton must keep the legacy single-button fallback for held-unsafe combats');
-    assert.match(body, /combat_roll_\$\{game\.gameId\}/,
-      'postRollDiceButton must wire the legacy combat_roll_<gameId> custom id (no role suffix)');
-    // Sanity: the held-roll buttons (atk/def) should NO LONGER be posted by
-    // this function — autoRollDice handles their logic via synthetic clicks.
+      'postRollDiceButton must call autoRollDice unconditionally');
+    assert.doesNotMatch(body, /_isHeldRollSafe/,
+      'postRollDiceButton must no longer branch on _isHeldRollSafe (predicate removed)');
+    assert.doesNotMatch(body, /setLabel\('Roll Combat Dice'\)/,
+      'postRollDiceButton must NOT post the legacy single-button fallback anymore');
     assert.doesNotMatch(body, /setLabel\('⚔️ Roll Attack Dice'\)/,
-      'postRollDiceButton must NOT post the held-roll attack button anymore');
+      'postRollDiceButton must NOT post the held-roll attack button');
     assert.doesNotMatch(body, /setLabel\('🛡️ Roll Defense Dice'\)/,
-      'postRollDiceButton must NOT post the held-roll defense button anymore');
+      'postRollDiceButton must NOT post the held-roll defense button');
+  });
+
+  it('_isHeldRollSafe predicate fully removed from combat.js', () => {
+    assert.doesNotMatch(H_CB_SRC, /function _isHeldRollSafe\b/,
+      '_isHeldRollSafe predicate must be deleted (auto-roll is universal)');
   });
 
   it('autoRollDice exists and synthesizes both roll-button clicks', () => {

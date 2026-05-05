@@ -2901,28 +2901,10 @@ export async function handleCombatRoll(interaction, ctx) {
         } catch {}
       }
     }
-    // Veteran Instincts: attacker may add +1 Hit or +1 Surge to this roll
-    if (game.vetInstinctsActiveThisActivation?.[attackerPlayerNum] && !combat.vetInstinctsAttackApplied) {
-      const _viRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_hit`).setLabel('+1 Damage').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${attackerPlayerNum}Id`] ?? ''}> add +1 Damage or +1 Surge to the attack roll?`, components: [_viRow] }).catch(discordCatch);
-      saveGames(game.gameId);
-      return;
-    }
-    // Guidance Systems (Mortar Trooper): optional -1 Hit, +2 Accuracy, repeatable
-    if (combat.guidanceSystemsAvailable && !combat.guidanceSystemsPrompted) {
-      combat.guidanceSystemsPrompted = true;
-      const _gsRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_use`).setLabel('Use (-1 Hit, +2 Acc)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send({ content: `**Guidance Systems** — <@${game[`player${effectiveAttackerPlayerNum}Id`] ?? ''}> Apply -1 Hit and +2 Accuracy? (May use multiple times.)`, components: [_gsRow] }).catch(discordCatch);
-      saveGames(game.gameId);
-      return;
-    }
+    // (Vet Instincts attacker + Guidance Systems prompts moved to the
+    // modifier step per CRR step 4 — see sendModsYn 2026-05-04 migration.
+    // Removing them from the attack-roll block lets auto-roll work for
+    // every combat without the held-unsafe predicate.)
     saveGames(game.gameId);
     return;
   }
@@ -4836,6 +4818,41 @@ export async function sendModsYn(thread, game, combat, role) {
     ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
     : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
   const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+
+  // 2026-05-04 migration: Vet Instincts (attacker) and Guidance Systems
+  // are CRR step-4 modifiers — fire them HERE, not in the attack-roll
+  // block. Their handlers re-enter sendModsYn after resolving so the
+  // remaining checks / final mods_yn YES/NO can fire next. Guards prevent
+  // re-prompting once each ability has been applied/skipped.
+  if (isAtk) {
+    if (game.vetInstinctsActiveThisActivation?.[playerNum] && !combat.vetInstinctsAttackApplied) {
+      const _viRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_hit`).setLabel('+1 Damage').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({
+        content: `**Veteran Instincts** — <@${ownerId}> add +1 Damage or +1 Surge to the attack roll?`,
+        components: [_viRow],
+        allowedMentions: { users: [ownerId] },
+      }).catch(discordCatch);
+      return;
+    }
+    if (combat.guidanceSystemsAvailable && !combat.guidanceSystemsCompleted) {
+      combat.guidanceSystemsPrompted = true;
+      const _gsRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_use`).setLabel('Use (-1 Hit, +2 Acc)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({
+        content: `**Guidance Systems** — <@${ownerId}> Apply -1 Hit and +2 Accuracy? (May use multiple times.)`,
+        components: [_gsRow],
+        allowedMentions: { users: [ownerId] },
+      }).catch(discordCatch);
+      return;
+    }
+  }
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`combat_mods_yn_${gameId}_${isAtk ? 'atk' : 'def'}_yes`)
@@ -5371,36 +5388,6 @@ export async function proceedToTokenPhase(thread, game, combat, ctx) {
   await postRollDiceButton(thread, game, combat, ctx);
 }
 
-/** Decide whether held-roll (two buttons) is safe for this combat.
- *
- * Held-roll's reveal flow runs the post-roll abilities (Vet Attack,
- * Guidance Systems, There Is No Try, Vet Defense, Doubt) AFTER both
- * dice are revealed. Each of those handlers expects to chain via the
- * legacy "click Roll again" pattern — which doesn't exist in held-roll
- * because the buttons are spent after the second press. Until the
- * handler chain is refactored to call a continuation directly, hold
- * rolls only when none of those abilities is active. Otherwise fall
- * back to the legacy single-button flow which chains via re-clicks.
- */
-function _isHeldRollSafe(game, combat) {
-  const atkPN = combat.attackerPlayerNum;
-  const defPN = opponentPlayerNum(atkPN);
-  if (game.vetInstinctsActiveThisActivation?.[atkPN]) return false;
-  if (game.vetInstinctsActiveThisActivation?.[defPN]) return false;
-  if (combat.guidanceSystemsAvailable) return false;
-  // There Is No Try — defender side, only fires if a player set the flag.
-  if (game.thereIsNoTryPlayerNum === defPN) return false;
-  // Doubt SU on defender — find a non-depleted [Doubt] in defender's DC list.
-  const defDcList = (defPN === 1 ? game.p1DcList : game.p2DcList) || [];
-  const defMsgIds = (defPN === 1 ? game.p1DcMessageIds : game.p2DcMessageIds) || [];
-  const defDepletedIds = (defPN === 1 ? game.p1DepletedDcMessageIds : game.p2DepletedDcMessageIds) || [];
-  for (let i = 0; i < defDcList.length; i++) {
-    const dcName = defDcList[i]?.dcName || defDcList[i];
-    if (dcName === '[Doubt]' && !defDepletedIds.includes(defMsgIds[i])) return false;
-  }
-  return true;
-}
-
 /** Auto-roll both sides' dice without a user click (per Destruct's UX
  * feedback 2026-05-04: "the dice can auto roll, no need for prompt in
  * future"). Reuses handleCombatRoll's existing logic by invoking it
@@ -5409,11 +5396,13 @@ function _isHeldRollSafe(game, combat) {
  *   - Second synth (role=def): computes defense, posts BOTH images
  *     (Case A flow), runs reroll-window setup, sendCombatGate('post_roll').
  *
- * Only safe when _isHeldRollSafe(game, combat) — combats with mid-roll
- * abilities (Vet Instincts, Guidance Systems, TINT, Doubt) need the
- * legacy single-button flow because those abilities chain via re-clicks
- * and there's no Roll button in auto-roll. postRollDiceButton checks
- * the predicate before calling.
+ * Safe for every combat now that the previously-blocking abilities have
+ * landing pads outside the roll button:
+ *   - Vet Instincts (atk) + Guidance Systems → migrated to sendModsYn
+ *     (CRR step 4). 2026-05-04 migration.
+ *   - Vet Instincts (def), There Is No Try, Doubt SU → fire from inside
+ *     the def synth's defense-roll block, and their handlers re-enter
+ *     via sendRerollUI / proceedAfterRerolls without needing a re-click.
  */
 async function autoRollDice(thread, game, combat, ctx) {
   const atkPN = combat.attackerPlayerNum;
@@ -5453,48 +5442,16 @@ async function autoRollDice(thread, game, combat, ctx) {
   }
 }
 
-/** Post the "Roll Combat Dice" buttons after the pre-roll token phase completes.
+/** Auto-roll both sides' dice once both players have readied + the
+ * pre-roll token phase has resolved. Per Destruct's UX feedback
+ * 2026-05-04 ("the dice can auto roll, no need for prompt in future"):
+ * no roll-button prompt — dice compute and images post immediately.
  *
- * Default path: ⚔️ Roll Attack + 🛡️ Roll Defense buttons (each player's
- * roll held until both press). HOWEVER: when held-roll-safe (no mid-roll
- * abilities active), this function instead AUTO-ROLLS — Destruct's UX
- * feedback was that the held-roll buttons are an extra click for no
- * gameplay reason once both players have completed the on-declare
- * ready check + token phase.
- *
- * Fallback path: when an ability that needs the post-roll chain is
- * active (Vet Instincts, Guidance Systems, There Is No Try, Doubt SU),
- * post the single legacy button. The legacy flow chains via re-clicks
- * which still work; held-roll's reveal would strand the user mid-chain.
+ * The legacy `combat_roll_<gameId>` button is still parsed by
+ * handleCombatRoll (recover.js re-posts it after a stuck combat), but
+ * the production path no longer offers it.
  */
 async function postRollDiceButton(thread, game, combat, ctx) {
-  if (!_isHeldRollSafe(game, combat)) {
-    // Legacy single-button flow for ability-active combats — needed
-    // because mid-roll abilities (Vet Instincts, Guidance Systems, TINT,
-    // Doubt) chain via re-clicks of the Roll button, and auto-roll has
-    // no Roll button to re-click.
-    const combatRound = game.currentRound ?? 1;
-    const combatEmbed = new EmbedBuilder()
-      .setTitle(`COMBAT: ROUND ${combatRound}`)
-      .setColor(COLORS.ORANGE)
-      .setDescription('Attacker rolls offense, Defender rolls defense.');
-    const legacyRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`combat_roll_${game.gameId}`)
-        .setLabel('Roll Combat Dice')
-        .setStyle(ButtonStyle.Danger),
-    );
-    const legacyMsg = await thread.send({ embeds: [combatEmbed], components: [legacyRow] });
-    combat.rollMessageId = legacyMsg.id;
-    if (ctx?.saveGames) ctx.saveGames(game.gameId);
-    return;
-  }
-
-  // Held-safe + no held-unsafe abilities active → auto-roll (Destruct UX
-  // feedback: "the dice can auto roll, no need for prompt in future"
-  // 2026-05-04). Skip the held-roll buttons entirely; dice compute and
-  // images post immediately. Reroll-window setup + post_roll gate fire
-  // via the second synthetic call inside autoRollDice.
   await autoRollDice(thread, game, combat, ctx);
 }
 
@@ -7247,12 +7204,17 @@ export async function handleGuidanceSystems(interaction, ctx) {
     }).catch(discordCatch);
     saveGames(game.gameId);
   } else {
-    // Done — continue to defense roll
+    // Done — mark complete and advance to next modifier check
+    // (post-2026-05-04 migration: Guidance Systems is a CRR step-4
+    // modifier; sendModsYn for attacker will fall through to the
+    // mods_yn YES/NO now that this ability is resolved).
+    combat.guidanceSystemsCompleted = true;
     const gsCount = combat.guidanceSystemsCount || 0;
     await interaction.message.edit({
       content: `**Guidance Systems** — Applied ${gsCount}x. Final attack: ${combat.attackRoll.acc} acc, ${combat.attackRoll.dmg} dmg, ${combat.attackRoll.surge} surge.`,
       components: [],
     }).catch(discordCatch);
+    if (thread) await sendModsYn(thread, game, combat, 'attacker');
     saveGames(game.gameId);
   }
 }

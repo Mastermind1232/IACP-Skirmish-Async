@@ -7,7 +7,7 @@ import { discordCatch } from '../error-handling.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
-import { sendPowerTokenOverflowUI } from './combat.js';
+import { sendPowerTokenOverflowUI, sendModsYn } from './combat.js';
 import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion, clearPendingHunterProtocol } from '../game/interrupts.js';
 
 export async function handleToughLuck(interaction, ctx) {
@@ -238,6 +238,11 @@ export async function handleVetInstincts(interaction, ctx) {
       combat.rerollPhase = null;
       await proceedAfterRerolls(thread, game, combat, ctx);
     }
+  } else if (thread && combat) {
+    // Attacker-side Vet Instincts resolved — re-enter the modifier step
+    // (per CRR step 4 migration 2026-05-04). sendModsYn will check for
+    // Guidance Systems next, then fall through to the mods_yn YES/NO.
+    await sendModsYn(thread, game, combat, 'attacker');
   }
   saveGames(game.gameId); return;
 }
