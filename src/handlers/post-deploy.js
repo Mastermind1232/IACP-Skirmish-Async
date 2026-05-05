@@ -422,7 +422,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
       // All figures done
       q.activeAbility = null;
       await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-      if (saveGames) saveGames();
+      if (saveGames) saveGames(game.gameId);
       return;
     }
     if (remaining.length === 1) {
@@ -447,7 +447,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
           allowedMentions: { users: [ownerId] },
         }).catch(() => null);
       }
-      if (saveGames) saveGames();
+      if (saveGames) saveGames(game.gameId);
       return;
     }
   }
@@ -462,7 +462,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
     if (idx >= active.moveFigures.length) {
       q.activeAbility = null;
       await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-      if (saveGames) saveGames();
+      if (saveGames) saveGames(game.gameId);
       return;
     }
     fig = active.moveFigures[idx];
@@ -471,7 +471,7 @@ async function _startNextMovement(game, gameId, client, ctx) {
   if (!fig) {
     q.activeAbility = null;
     await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-    if (saveGames) saveGames();
+    if (saveGames) saveGames(game.gameId);
     return;
   }
 
@@ -536,7 +536,7 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
       components: [new ActionRowBuilder().addComponents(stayBtn)],
       allowedMentions: { users: [ownerId] },
     }).catch(() => null);
-    if (saveGames) saveGames();
+    if (saveGames) saveGames(game.gameId);
     return;
   }
 
@@ -624,7 +624,7 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
   const gridMsg = await generalChannel.send(payload).catch(() => null);
   game.moveGridMessageIds[moveKey] = gridMsg?.id ? [gridMsg.id] : [];
 
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
@@ -643,7 +643,7 @@ async function _advanceAfterFigure(game, gameId, client, ctx, figureKey) {
   if (!active || !active.moveFigures) {
     if (active) q.activeAbility = null;
     await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-    if (saveGames) saveGames();
+    if (saveGames) saveGames(game.gameId);
     return;
   }
 
@@ -657,7 +657,7 @@ async function _advanceAfterFigure(game, gameId, client, ctx, figureKey) {
     if (remaining.length === 0) {
       q.activeAbility = null;
       await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-      if (saveGames) saveGames();
+      if (saveGames) saveGames(game.gameId);
       return;
     }
     await _startNextMovement(game, gameId, client, ctx);
@@ -1281,7 +1281,7 @@ export async function runPostDeployPhase(game, gameId, client, ctx, onComplete) 
         await sendPowerTokenOverflowUI(game, gameId, _ovCh, _ovPn, saveGames);
       }
     }
-    if (saveGames) saveGames();
+    if (saveGames) saveGames(game.gameId);
     return false;
   }
 
@@ -1300,7 +1300,7 @@ export async function runPostDeployPhase(game, gameId, client, ctx, onComplete) 
   if (onComplete) _postDeployCallbacks.set(gameId, onComplete);
 
   await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
   return true;
 }
 
@@ -1314,7 +1314,7 @@ export async function advancePostDeployQueue(game, gameId, client, ctx) {
 
   q.activeAbility = null;
   await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 // ── Button handlers ─────────────────────────────────────────────────────────
@@ -1366,7 +1366,7 @@ export async function handlePostDeployPick(interaction, ctx) {
   } else {
     await postInteractiveAbility(game, gameId, ability, client, ctx);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1398,7 +1398,7 @@ export async function handleSecurityDetailPick(interaction, ctx) {
     q.activeAbility = null;
     await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1443,7 +1443,7 @@ export async function handleStrikeTeamAdjPick(interaction, ctx) {
       allowedMentions: { users: [ownerId] },
     });
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1476,7 +1476,7 @@ export async function handleStrikeTeamOrderPick(interaction, ctx) {
     : [cassianMove, friendMove];
   active.currentFigureIdx = 0;
   await _startNextMovement(game, gameId, client, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1518,7 +1518,7 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
   } else {
     await _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1544,7 +1544,7 @@ export async function handleStrikeTeamTokenDone(interaction, ctx) {
     q.activeAbility = null;
     await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1589,10 +1589,10 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
   }
 
   const q = game.postDeployQueue;
-  if (!q) { saveGames(); return; }
+  if (!q) { saveGames(game.gameId); return; }
 
   await _advanceAfterFigure(game, gameId, client, ctx, skippedFigureKey);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1620,7 +1620,7 @@ export async function handleWalkerMove(interaction, ctx) {
 
   // Start the movement flow
   await _startNextMovement(game, gameId, client, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1648,7 +1648,7 @@ export async function handleWalkerSkip(interaction, ctx) {
     q.activeAbility = null;
     await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1676,7 +1676,7 @@ export async function handleSmoothLandingPick(interaction, ctx) {
   // Set the picked figure and start its movement
   active._pickedFigureKey = figureKey;
   await _startNextMovement(game, gameId, client, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1703,7 +1703,7 @@ export async function handlePostDeployMoveStay(interaction, ctx) {
   await logGameAction(game, client, `🛬 **${active?.abilityLabel || 'Post-Deploy'}** — **${dcName}** stays in place.`, { phase: 'ROUND', icon: 'deployed' });
 
   await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1720,11 +1720,11 @@ export async function onPostDeployMovementComplete(game, gameId, client, ctx, co
   const { saveGames } = ctx;
   if (game.pendingMassivePush) {
     game._postDeployMoveDeferred = { figureKey: completedFigureKey, at: Date.now() };
-    if (saveGames) saveGames();
+    if (saveGames) saveGames(game.gameId);
     return;
   }
   await _advanceAfterFigure(game, gameId, client, ctx, completedFigureKey);
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
@@ -1740,7 +1740,7 @@ export async function resumeDeferredPostDeployMove(game, gameId, client, ctx) {
   delete game._postDeployMoveDeferred;
   await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
   const saveGames = ctx?.saveGames;
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
@@ -1754,7 +1754,7 @@ export async function onExtraArmorComplete(game, gameId, client, ctx) {
 
   q.activeAbility = null;
   await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
@@ -1793,7 +1793,7 @@ export async function handleArmsDistFigPick(interaction, ctx) {
   await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — Choose a Power Token type for **${dcName}**:`, {
     components: [new ActionRowBuilder().addComponents(tokenBtns)],
   });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1829,7 +1829,7 @@ export async function handleArmsDistTokenPick(interaction, ctx) {
 
   game.postDeployQueue.activeAbility = null;
   await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1882,5 +1882,5 @@ export async function handleCompanionDeployPick(interaction, ctx) {
 
   game.postDeployQueue.activeAbility = null;
   await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
-  saveGames();
+  saveGames(game.gameId);
 }

@@ -121,7 +121,7 @@ export async function handleRefreshAll(interaction, ctx) {
   if (!await requireParticipant(interaction, game, 'refresh')) return;
   try {
     await refreshAllGameComponents(game, client);
-    saveGames();
+    saveGames(game.gameId);
     await interaction.message.delete().catch(discordCatch);
     await interaction.followUp({ content: '✓ Full refresh complete. Reloaded all JSON data, map renderer cache, map, DCs, hands, discard piles.', ephemeral: true }).catch(discordCatch);
   } catch (err) {
@@ -321,7 +321,7 @@ export async function handleUndo(interaction, ctx) {
     }
   }
 
-  saveGames();
+  saveGames(game.gameId);
   await interaction.followUp({ content: `${undoLabel2} undone.`, ephemeral: true }).catch(discordCatch);
 }
 

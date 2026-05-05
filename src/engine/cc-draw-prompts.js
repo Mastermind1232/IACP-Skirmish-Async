@@ -70,7 +70,7 @@ export async function sendCcShuffleDrawPrompts(game, client, deps) {
     }
 
     game.ccShuffleDrawPromptsPosted = true;
-    if (saveGames) saveGames();
+    if (saveGames) saveGames(game.gameId);
     return true;
   } catch (err) {
     console.error('sendCcShuffleDrawPrompts failed:', err);

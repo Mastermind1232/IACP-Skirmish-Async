@@ -79,7 +79,7 @@ export async function handleToughLuck(interaction, ctx) {
       await proceedAfterRerolls(thread, game, combat, ctx);
     }
   }
-  saveGames(); return;
+  saveGames(game.gameId); return;
 }
 
 export async function handleThereIsNoTry(interaction, ctx) {
@@ -121,7 +121,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
         .setStyle(ButtonStyle.Primary)
     );
     if (thread) await thread.send({ content: `**There Is No Try** — Choose any face for die #${dieIdx + 1} (${color}):`, components: [new ActionRowBuilder().addComponents(...faceBtns.slice(0, 5))] }).catch(discordCatch);
-    saveGames(); return;
+    saveGames(game.gameId); return;
   }
   if (type === 'face') {
     const dieIdx = parseInt(parts[1], 10);
@@ -162,7 +162,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
       await proceedAfterRerolls(thread, game, combat, ctx);
     }
   }
-  saveGames(); return;
+  saveGames(game.gameId); return;
 }
 
 export async function handleVetInstincts(interaction, ctx) {
@@ -239,7 +239,7 @@ export async function handleVetInstincts(interaction, ctx) {
       await proceedAfterRerolls(thread, game, combat, ctx);
     }
   }
-  saveGames(); return;
+  saveGames(game.gameId); return;
 }
 
 export async function handleHunterProtocol(interaction, ctx) {
@@ -316,7 +316,7 @@ export async function handleHunterProtocol(interaction, ctx) {
     _hpRows.push(new ButtonBuilder().setCustomId(`combat_surge_${_hpGameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
     if (_hpThread) await _hpThread.send({ content: `**Spend surge?** **${_hpRemaining}** surge left.`, components: [new ActionRowBuilder().addComponents(_hpRows.slice(0, 5))] }).catch(discordCatch);
   }
-  saveGames(); return;
+  saveGames(_hpGame.gameId); return;
 }
 
 /**
@@ -399,7 +399,7 @@ export async function handleStrikeMeDown(interaction, ctx) {
   }
 
   clearPendingStrikeMeDown(game);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -460,7 +460,7 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
   }
 
   clearPendingSlowOnTheDraw(game);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -498,7 +498,7 @@ export async function handleSlowOnTheDrawResume(interaction, ctx) {
   if (thread) await thread.send('**Slow on the Draw** — Interrupt complete. Greedo\'s attack resumes.').catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, '**Slow on the Draw** — Interrupt resolved. Original attack resumed.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -582,7 +582,7 @@ export async function handlePowerConverter(interaction, ctx) {
     clearPendingPowerConverter(game);
     if (thread) await thread.send('**Power Converter** — Skipped.').catch(discordCatch);
     await _resumeRerollFlow();
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -592,7 +592,7 @@ export async function handlePowerConverter(interaction, ctx) {
     const dice = combat.attackDiceResults || [];
     if (!dice.length || !thread) {
       await _resumeRerollFlow();
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     const buttons = [];
@@ -613,14 +613,14 @@ export async function handlePowerConverter(interaction, ctx) {
     );
     const rows = chunkButtonsToRows(buttons);
     await thread.send({ content: `⚡ **Power Converter** — <@${game[`player${atkPN}Id`] ?? ''}> Pick an attack die to reroll (you may swap its color first):`, components: rows }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
   if (isDie) {
     const dieIdx = parseInt(customId.split('_')[4], 10);
     combat.powerConverterDieIndex = dieIdx;
-    if (!thread) { await _resumeRerollFlow(); saveGames(); return; }
+    if (!thread) { await _resumeRerollFlow(); saveGames(game.gameId); return; }
     // Show color swap options
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`power_converter_color_${gameId}_red`).setLabel('Swap to Red').setStyle(ButtonStyle.Danger),
@@ -631,7 +631,7 @@ export async function handlePowerConverter(interaction, ctx) {
     );
     const d = (combat.attackDiceResults || [])[dieIdx];
     await thread.send({ content: `⚡ **Power Converter** — Replace **${d?.color || '?'} #${dieIdx + 1}** with a different color die, or keep current:`, components: [row] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -658,7 +658,7 @@ export async function handlePowerConverter(interaction, ctx) {
     }
     delete combat.powerConverterDieIndex;
     await _resumeRerollFlow();
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 }
@@ -708,7 +708,7 @@ export async function handleIllicitArms(interaction, ctx) {
   if (isSkip) {
     if (thread) await thread.send('**Illicit Arms** — Declined.').catch(discordCatch);
     clearPendingIllicitArms(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -718,7 +718,7 @@ export async function handleIllicitArms(interaction, ctx) {
     if (hand.length === 0) {
       if (thread) await thread.send('**Illicit Arms** — No Command cards in hand to discard.').catch(discordCatch);
       clearPendingIllicitArms(game);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Build buttons for each CC in hand — encode card name (not index) for staleness safety
@@ -738,7 +738,7 @@ export async function handleIllicitArms(interaction, ctx) {
         allowedMentions: { users: [ownerId] },
       }).catch(discordCatch);
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -751,7 +751,7 @@ export async function handleIllicitArms(interaction, ctx) {
     if (!cardName || ccIndex < 0) {
       if (thread) await thread.send('**Illicit Arms** — Card no longer in hand.').catch(discordCatch);
       clearPendingIllicitArms(game);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     const discarded = hand.splice(ccIndex, 1)[0];
@@ -769,7 +769,7 @@ export async function handleIllicitArms(interaction, ctx) {
     if (logGameAction) await logGameAction(game, client, `**Illicit Arms** (${ia.bibDcName}) — Discarded **${discarded}** for +1 Hit.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
     clearPendingIllicitArms(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 }
@@ -840,7 +840,7 @@ export async function handleForceExhaustion(interaction, ctx) {
   }
 
   clearPendingForceExhaustion(game);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -907,5 +907,5 @@ export async function handleDoubtReroll(interaction, ctx) {
     combat.rerollPhase = null;
     await proceedAfterRerolls(thread, game, combat, ctx);
   }
-  saveGames();
+  saveGames(game.gameId);
 }

@@ -87,7 +87,7 @@ async function promptCommDisruption(game, gameId, playerNum, card, client, logGa
       components: [row],
       allowedMentions: { users: [oppId] },
     })));
-    saveGames();
+    saveGames(game.gameId);
   } catch (err) {
     // Non-fatal: if we can't prompt, the game continues
     console.error('[Comm Disruption] Failed to prompt opponent:', err.message);
@@ -180,7 +180,7 @@ export async function handleDeployModal(interaction, ctx) {
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
   game.figurePositions[playerNum][figureKey] = space;
-  saveGames();
+  saveGames(game.gameId);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> deployed **${figLabel.replace(/^Deploy /, '')}** at **${space.toUpperCase()}**`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
   await updateDeployPromptMessages(game, playerNum, interaction.client);
   await interaction.reply({ content: `Deployed **${figLabel.replace(/^Deploy /, '')}** at **${space.toUpperCase()}**.`, ephemeral: true }).catch(discordCatch);
@@ -212,7 +212,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   if (idx < 0) {
     clearPendingCcAttachment(game);
     await interaction.reply({ content: "That card is no longer in your hand.", ephemeral: true }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   await interaction.deferUpdate();
@@ -243,7 +243,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   await interaction.message.delete().catch(discordCatch);
   await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> played **${card}** as an attachment.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** After dropdown selection: show card preview + PLAY CARD / DO SOMETHING ELSE confirmation. */
@@ -266,7 +266,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
     return;
   }
   setPendingCcConfirmation(game, { playerNum, card, ts: Date.now() });
-  saveGames();
+  saveGames(game.gameId);
   const { existsSync } = await import('fs');
   const { AttachmentBuilder } = await import('discord.js');
   const embed = new EmbedBuilder().setTitle(card).setDescription(`Play **${card}**?`).setColor(COLORS.DARK_EMBED);
@@ -304,7 +304,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const CONFIRM_TTL_MS = 10 * 60 * 1000;
   if (Date.now() - (game.pendingCcConfirmation.ts || 0) > CONFIRM_TTL_MS) {
     clearPendingCcConfirmation(game);
-    saveGames();
+    saveGames(game.gameId);
     await interaction.followUp({ content: 'Card selection expired — please re-select from your hand.', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -330,7 +330,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     game[jammerDiscardKey] = [...(game[jammerDiscardKey] || []), 'Signal Jammer'];
     await logGameAction(game, client, `**Signal Jammer** cancelled **${card}** — both cards discarded.`, { phase: 'ACTION', icon: 'card' });
     await interaction.message.delete().catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -342,13 +342,13 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   if (idx < 0) {
     await interaction.followUp({ content: "That card isn't in your hand anymore.", ephemeral: true }).catch(discordCatch);
     await interaction.message.delete().catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   if (!isCcPlayableNow(game, playerNum, card)) {
     await interaction.followUp({ content: "That card can't be played right now (wrong timing).", ephemeral: true }).catch(discordCatch);
     await interaction.message.delete().catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   const restriction = isCcPlayLegalByRestriction(game, playerNum, card);
@@ -362,7 +362,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     }));
     game.pendingIllegalCcPlay.messageId = msg.id;
     await interaction.message.delete().catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Assassinate / mutual-exclude CC lock: block further CCs during this attack
@@ -377,7 +377,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     }));
     game.pendingIllegalCcPlay.messageId = msg.id;
     await interaction.message.delete().catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Track how many CCs played during this attack (for "first CC" conditions like Assassinate)
@@ -488,7 +488,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(discordCatch);
       // C14: Comm Disruption — prompt opponent if they have it in hand
       await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     if (result.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
@@ -539,7 +539,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       await handChannel.send(payload).catch(discordCatch);
       // C14: Comm Disruption — prompt opponent if they have it in hand
       await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     if (result.applied) {
@@ -615,7 +615,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       }
       // C14: Comm Disruption — prompt opponent if they have it in hand
       await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     if (!result.applied && result.manualMessage) {
@@ -629,7 +629,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       }));
       game.pendingIllegalCcPlay.messageId = msg.id;
       await interaction.message.delete().catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
   }
@@ -684,7 +684,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
     // C14: Comm Disruption — prompt opponent if they have it in hand
     await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   if (ctx.resolveAbility) {
@@ -707,7 +707,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   // C14: Comm Disruption — prompt opponent if they have it in hand
   await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** DO SOMETHING ELSE — cancel the pending play. */
@@ -722,7 +722,7 @@ export async function handleCcCancelPlay(interaction, ctx) {
   }
   clearPendingCcConfirmation(game);
   await interaction.message.delete().catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -750,7 +750,7 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
   const cdIdx = hand.indexOf('Comm Disruption');
   if (cdIdx < 0) {
     await interaction.followUp({ content: 'Comm Disruption is no longer in your hand.', ephemeral: true }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   hand.splice(cdIdx, 1);
@@ -762,7 +762,7 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await refreshHandAndDiscard(game, targetPlayerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `**Comm Disruption** — <@${interaction.user.id}> cancelled **${playedCard}**! Discard that card and cancel its effects.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -775,7 +775,7 @@ export async function handleCommDisruptionSkip(interaction, ctx) {
   if (!game) return;
   clearPendingCommDisruptionPrompt(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -882,7 +882,7 @@ export async function handleCcSpacePick(interaction, ctx) {
   try {
     await interaction.message.edit({ content: 'Space chosen.', components: [] }).catch(discordCatch);
   } catch {}
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — choice button for choose-one CC (e.g. Retaliation). */
@@ -930,7 +930,7 @@ export async function handleCcChoice(interaction, ctx) {
   if (!aarResult.handled && aarResult.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
     if (!getBoardStateForMovement || !getMapAttachmentForSpaces) {
       await logGameAction(game, client, 'CC effect: Space choice not supported. Resolve manually.', { phase: 'ACTION', icon: 'card' });
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     setPendingCcSpaceChoice(game, {
@@ -964,7 +964,7 @@ export async function handleCcChoice(interaction, ctx) {
     try {
       await interaction.message.edit({ content: 'Figure chosen. Now pick a space.', components: [] }).catch(discordCatch);
     } catch {}
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Power token type-choice prompt (e.g. Looking for a Fight grants 1 token after Move/Push choice)
@@ -990,7 +990,7 @@ export async function handleCcChoice(interaction, ctx) {
   try {
     await interaction.message.edit({ content: 'Choice resolved.', components: [] }).catch(discordCatch);
   } catch {}
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Ignore and play" for pending illegal CC. */
@@ -1012,7 +1012,7 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
       await msg.edit({ content: 'Play resolved.', components: [] }).catch(discordCatch);
     } catch {}
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Play Negation" to cancel opponent's cost-0 CC. */
@@ -1053,7 +1053,7 @@ export async function handleNegationPlay(interaction, ctx) {
       if (waitingMsg) await waitingMsg.edit({ content: `❌ Your **${card}** was cancelled by your opponent's **Negation**. <@${playedById}>` }).catch(discordCatch);
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Let it resolve" for pending cost-0 CC. */
@@ -1099,7 +1099,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
       if (waitingMsg) await waitingMsg.edit({ content: `✅ **${card}** resolved! <@${playedById}>` }).catch(discordCatch);
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Play Celebration" to gain 4 VP. */
@@ -1132,7 +1132,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
   const celPlayerId = getPlayerId(game, attackerPlayerNum);
   await logGameAction(game, client, `<@${celPlayerId}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [celPlayerId] } });
   if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Pass" on Celebration. */
@@ -1148,7 +1148,7 @@ export async function handleCelebrationPass(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the player who defeated the figure can pass.')) return;
   clearPendingCelebration(game);
   await interaction.message.edit({ content: 'Passed on Celebration.', components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Unplay card" for pending illegal CC. */
@@ -1169,7 +1169,7 @@ export async function handleIllegalCcUnplay(interaction, ctx) {
       await msg.edit({ content: 'Cancelled — card not played.', components: [] }).catch(discordCatch);
     } catch {}
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').StringSelectMenuInteraction} interaction */
@@ -1217,7 +1217,7 @@ export async function handleCcDiscardSelect(interaction, ctx) {
   await interaction.message.delete().catch(discordCatch);
   await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> discarded **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
@@ -1305,7 +1305,7 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
       components: [],
     }).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
   await interaction.message.edit({ content: 'Squad cleared. Paste your list or upload a .vsav file below to resubmit.', components: [] }).catch(discordCatch);
   await interaction.followUp({ content: 'Your squad has been cleared. Paste your army list or upload a .vsav file in this thread to resubmit.', ephemeral: true }).catch(discordCatch);
 }
@@ -1352,7 +1352,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
         new ButtonBuilder().setCustomId(`ike_keep_${gameId}_1`).setLabel(`Keep: ${revealed[1].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
       );
       await logGameAction(game, client, `🕵️ **I Know Everything** — **Moff Gideon** reveals 2 cards from <@${getPlayerId(game, playerNum)}>'s Command deck:\n${cardLabels}\n\n<@${getPlayerId(game, playerNum)}> — Choose which card to **keep** (the other is removed from the game):`, { components: [keepRow], allowedMentions: { users: [getPlayerId(game, playerNum)] } });
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Not enough cards, skip I Know Everything
@@ -1394,7 +1394,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
     const { sendPhaseGateMessages } = ctx;
     await sendPhaseGateMessages(game, 'cc_drawn', ctx);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1464,7 +1464,7 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
     const { sendPhaseGateMessages } = ctx;
     await sendPhaseGateMessages(game, 'cc_drawn', ctx);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
@@ -1541,7 +1541,7 @@ export async function handleCcDraw(interaction, ctx) {
   }).catch(discordCatch);
   await updateHandVisualMessage(game, playerNum, client);
   await logGameAction(game, client, `<@${interaction.user.id}> drew **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
@@ -1605,7 +1605,7 @@ export async function handleCcSearchDiscard(interaction, ctx) {
     }
   }
   await updateDiscardPileMessage(game, playerNum, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
@@ -1632,7 +1632,7 @@ export async function handleCcCloseDiscard(interaction, ctx) {
   if (playerNum === 1) delete game.p1DiscardThreadId;
   else delete game.p2DiscardThreadId;
   await updateDiscardPileMessage(game, playerNum, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */

@@ -50,7 +50,7 @@ export async function handleStillFaster(interaction, ctx) {
     sftGame.stillFasterPlayerNum = null;
     await interaction.deferUpdate().catch(discordCatch);
     await interaction.followUp({ content: '**Still Faster Than You** — Skipped.', ephemeral: false }).catch(discordCatch);
-    saveGames();
+    saveGames(sftGame.gameId);
     return;
   }
 
@@ -79,13 +79,13 @@ export async function handleStillFaster(interaction, ctx) {
       sftGame.stillFasterPlayerNum = null;
       await interaction.deferUpdate().catch(discordCatch);
       await interaction.followUp({ content: '**Still Faster Than You** — No eligible figures to interrupt with.', ephemeral: false }).catch(discordCatch);
-      saveGames();
+      saveGames(sftGame.gameId);
       return;
     }
     const sftRows = chunkButtonsToRows(sftButtons);
     await interaction.deferUpdate().catch(discordCatch);
     await interaction.followUp({ content: '**Still Faster Than You** — Choose which figure interrupts (move 2 + attack):', components: sftRows, ephemeral: false }).catch(discordCatch);
-    saveGames();
+    saveGames(sftGame.gameId);
     return;
   }
 
@@ -112,7 +112,7 @@ export async function handleStillFaster(interaction, ctx) {
     const sftLabel = sftMeta?.displayName || sftMeta?.dcName || sftPickedMsgId;
     await interaction.deferUpdate().catch(discordCatch);
     await interaction.followUp({ content: `**Still Faster Than You** — **${sftLabel}** gains 2 MP and a free Attack. The attack must target a **different hostile** than the one that just activated.`, ephemeral: false }).catch(discordCatch);
-    saveGames();
+    saveGames(sftGame.gameId);
     return;
   }
   return;
@@ -140,7 +140,7 @@ export async function handleSquadSwarm(interaction, ctx) {
     delete _swGame.squadSwarmCumulativeCost;
     await logGameAction(_swGame, client, `**Squad Swarm** — Skipped.`, { phase: 'ROUND', icon: 'activate' });
   }
-  saveGames(); return;
+  saveGames(_swGame.gameId); return;
 }
 
 // ── 3. Overdrive ────────────────────────────────────────────────────────────
@@ -178,7 +178,7 @@ export async function handleOverdrive(interaction, ctx) {
   }
   await updateDcActionsMessage(_odGame, _odMsgId, client);
   await updateDcCardMessage(client, _odGame, _odMsgId, ctx, { exhausted: true, errorContext: 'Overdrive embed refresh failed:' });
-  saveGames(); return;
+  saveGames(_odGame.gameId); return;
 }
 
 // ── 4. Self-Destruct Probe ──────────────────────────────────────────────────
@@ -196,7 +196,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
   if (!await requirePlayer(interaction, _sdpGame, interaction.user.id, _sdpMeta.playerNum, canActAsPlayer, 'Only the DC owner can respond.')) return;
   if (buttonKey === 'self_destruct_probe_skip_') {
     await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName} skipped.`, { phase: 'ROUND', icon: 'card' });
-    saveGames(); return;
+    saveGames(_sdpGame.gameId); return;
   }
   // Use: roll 1 red die, apply Hits to adjacent hostile figures, defeat probe
   const _sdpDiceData = getDiceData ? getDiceData() : null;
@@ -254,7 +254,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
       source: 'Self-Destruct Probe',
     });
   }
-  saveGames(); return;
+  saveGames(_sdpGame.gameId); return;
 }
 
 // ── 5. Self-Destruct Protocol ───────────────────────────────────────────────
@@ -333,7 +333,7 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
     attackerPlayerNum: _sdcpPending.attackerPlayerNum, ownerId: _sdcpPending.ownerId,
     targetMsgId: _sdcpPending.targetMsgId, targetFigIndex: _sdcpPending.targetFigIndex,
   }, client);
-  saveGames(); return;
+  saveGames(_sdcpGame.gameId); return;
 }
 
 // ── 5b. You Have Something I Want (Moff Gideon) ────────────────────────────
@@ -397,7 +397,7 @@ export async function handleYHSIW(interaction, ctx) {
   }
   // Disable the buttons
   try { await interaction.message.edit({ components: [] }); } catch {}
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── 6. Last Resort ──────────────────────────────────────────────────────────
@@ -483,7 +483,7 @@ export async function handleLastResort(interaction, ctx) {
     attackerPlayerNum: _lrPending.attackerPlayerNum, ownerId: _lrPending.ownerId,
     targetMsgId: _lrPending.targetMsgId, targetFigIndex: _lrPending.targetFigIndex,
   }, client);
-  saveGames(); return;
+  saveGames(_lrGame.gameId); return;
 }
 
 // ── 7. Scavenged Walker ─────────────────────────────────────────────────────
@@ -508,7 +508,7 @@ export async function handleScavengedWalker(interaction, ctx) {
   } else {
     await logGameAction(_swGame, client, `**Scavenged Walker** — **${_swMeta.displayName || _swMeta.dcName}** skipped end-of-round attack.`, { phase: 'ROUND', icon: 'card' });
   }
-  saveGames(); return;
+  saveGames(_swGame.gameId); return;
 }
 
 // ── 8. On a Diplomatic Mission ──────────────────────────────────────────────
@@ -545,7 +545,7 @@ export async function handleOnDiplomatic(interaction, ctx) {
       await checkWinConditions(_odmGame, client);
     }
   }
-  saveGames(); return;
+  saveGames(_odmGame.gameId); return;
 }
 
 // ── 9. Behind Enemy Lines (Bel Reorder) ─────────────────────────────────────
@@ -570,7 +570,7 @@ export async function handleBelReorder(interaction, ctx) {
     const _belHandId = _belData.playerNum === 1 ? _belGame.p1HandId : _belGame.p2HandId;
     const _belHandCh2 = await fetchGameChannel(client, _belHandId);
     if (_belHandCh2) await _belHandCh2.send({ content: `**Behind Enemy Lines** — **${_belData.cards[_belCardIdx]}** goes 1st. Choose 2nd card:`, components: [new ActionRowBuilder().addComponents(..._belBtns2.slice(0, 5))] }).catch(discordCatch);
-    saveGames(); return;
+    saveGames(_belGame.gameId); return;
   }
   // bel_reorder_2_: finalize order
   const _belFirst = _belData.picked[0];
@@ -581,7 +581,7 @@ export async function handleBelReorder(interaction, ctx) {
   _belGame[_belData.deckKey] = [..._belNewOrder, ..._belDeck.slice(_belData.cards.length)];
   clearPendingBELReorder(_belGame);
   await logGameAction(_belGame, client, `**Behind Enemy Lines** — Opponent's deck top 3 reordered to: ${_belNewOrder.map(c => `**${c}**`).join(', ')}.`, { phase: 'ROUND', icon: 'card' });
-  saveGames(); return;
+  saveGames(_belGame.gameId); return;
 }
 
 // ── 10. Assassin's Blade pick ──────────────────────────────────────────────
@@ -625,7 +625,7 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
       source: "Assassin's Blade",
     });
   }
-  saveGames(); return;
+  saveGames(game.gameId); return;
 }
 
 // ── 11. Suppressive Fire MP pick ───────────────────────────────────────────
@@ -657,7 +657,7 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
   grantMovementBank(game, targetMsgId, 2);
   await interaction.message.edit({ content: `**Suppressive Fire** — **${dcName}** gains **2 MP**.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Suppressive Fire** — **${dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
-  saveGames(); return;
+  saveGames(game.gameId); return;
 }
 
 // ── 12. Force Slow pick ────────────────────────────────────────────────────
@@ -680,7 +680,7 @@ export async function handleForceSlowPick(interaction, ctx) {
   await interaction.message.edit({ content: `🐌 **Force Slow** — **${dcName}** will skip its next activation.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `🐌 **Force Slow** — **${dcName}** will skip its next activation.`, { phase: 'ROUND', icon: 'round' });
   await resolveStartOfRoundEffect(game, ctx);
-  saveGames(); return;
+  saveGames(game.gameId); return;
 }
 
 // ── 13. Excavation pick ────────────────────────────────────────────────────
@@ -717,7 +717,7 @@ export async function handleExcavationPick(interaction, ctx) {
   await logGameAction(game, client, `⛏️ **Excavation** — retrieved **${cardName}** from discard pile.`, { phase: 'ROUND', icon: 'round' });
   if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
   await resolveStartOfRoundEffect(game, ctx);
-  saveGames(); return;
+  saveGames(game.gameId); return;
 }
 
 // ── 14. Driven by Hatred (Darth Vader EOR) ──────────────────────────────────
@@ -762,7 +762,7 @@ export async function handleDrivenByHatred(interaction, ctx) {
       await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** gains 2 MP. After moving, use the **Attack** button (1 die will be removed from the attack pool).`, { phase: 'ROUND', icon: 'card' });
     }
   }
-  saveGames(); return;
+  saveGames(_dbhGame.gameId); return;
 }
 
 // ── Submit or Fight (Paz Vizsla) ────────────────────────────────────────────
@@ -807,7 +807,7 @@ export async function handleSubmitOrFight(interaction, ctx) {
   } else {
     await interaction.message.edit({ content: '**Submit or Fight** — Skipped.', components: [] }).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── [Black Market] SU ────────────────────────────────────────────────────────
@@ -847,7 +847,7 @@ export async function handleBlackMarket(interaction, ctx) {
   if (_bmChoice === 'skip') {
     delete game.pendingBlackMarket[_bmPn];
     await interaction.message.edit({ content: '**[Black Market]** — Skipped. No Strain suffered.', components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -896,7 +896,7 @@ export async function handleBlackMarket(interaction, ctx) {
   await interaction.message.edit({ content: `**[Black Market]** — ${resultMsg}`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**[Black Market]** — ${resultMsg}`, { phase: 'ROUND', icon: 'card' });
   await checkWinConditions(game, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Punishing Strike (Skirmish Upgrade) ─────────────────────────────────────
@@ -923,7 +923,7 @@ export async function handlePunishingStrike(interaction, ctx) {
   if (choice === 'skip') {
     clearPendingPunishingStrike(game);
     await interaction.message.edit({ content: `**Punishing Strike** — Skipped. **${originalCondition}** remains on **${dcNameFromFigureKey(targetFigureKey)}**.`, components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -940,7 +940,7 @@ export async function handlePunishingStrike(interaction, ctx) {
   clearPendingPunishingStrike(game);
   await interaction.message.edit({ content: `**Punishing Strike** — Exhausted: replaced **${originalCondition}** with **${choice}** on **${targetName}**.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**[Punishing Strike]** — Replaced **${originalCondition}** with **${choice}** on **${targetName}**.`, { phase: 'ROUND', icon: 'card' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Executor (Royal Guard Champion) ──────────────────────────────────────────
@@ -996,7 +996,7 @@ export async function handleExecutor(interaction, ctx) {
     attackerPlayerNum: _exPending.attackerPlayerNum, ownerId: _exPending.ownerId,
     targetMsgId: _exPending.targetMsgId, targetFigIndex: _exPending.targetFigIndex,
   }, client);
-  saveGames();
+  saveGames(_exGame.gameId);
   return;
 }
 
@@ -1057,6 +1057,6 @@ export async function handleExtraProtection(interaction, ctx) {
     attackerPlayerNum: _epPending.attackerPlayerNum, ownerId: _epPending.ownerId,
     targetMsgId: _epPending.targetMsgId, targetFigIndex: _epPending.targetFigIndex,
   }, client);
-  saveGames();
+  saveGames(_epGame.gameId);
   return;
 }

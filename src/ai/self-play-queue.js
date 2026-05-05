@@ -163,7 +163,7 @@ async function _runQueueLoop() {
         game.selfPlay = true;
         game.guildId = guildId;
         if (trainingMode) game.trainingMode = true;
-        saveGames();
+        saveGames(game.gameId);
 
         // 2. Run self-play loop
         const loopResult = await runSelfPlayLoop(game, client, {

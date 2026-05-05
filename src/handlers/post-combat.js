@@ -42,10 +42,10 @@ export async function handleReactionSkip(interaction, ctx) {
   const cThread = await fetchCombatThread(client, pending.combatThreadId);
   if (cThread) {
     const triggered = await checkPostCombatSurges(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds), cThread, ownerId, pending.defenderPlayerNum);
-    if (triggered) { saveGames(); return; }
+    if (triggered) { saveGames(game.gameId); return; }
   }
   await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds), client);
-  saveGames();
+  saveGames(game.gameId);
   return;
 }
 
@@ -127,7 +127,7 @@ export async function handleReactionUse(interaction, ctx) {
         allowedMentions: { users: [ownerId] },
         components: [new ActionRowBuilder().addComponents(btn3, btn1)],
       }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // No block token — just 1 damage
@@ -138,10 +138,10 @@ export async function handleReactionUse(interaction, ctx) {
   // Check for more reactions or finish
   if (thread) {
     const triggered = await checkPostCombatSurges(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds), thread, ownerId, defenderPlayerNum);
-    if (triggered) { saveGames(); return; }
+    if (triggered) { saveGames(game.gameId); return; }
   }
   await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds), client);
-  saveGames();
+  saveGames(game.gameId);
   return;
 }
 
@@ -180,10 +180,10 @@ export async function handleRightBack(interaction, ctx) {
   // Continue checking for more reactions or finish
   if (thread) {
     const triggered = await checkPostCombatSurges(game, rbPending.combat, rbPending.resultText, new Set(rbPending.initialEmbedRefreshMsgIds), thread, ownerId, defenderPlayerNum);
-    if (triggered) { saveGames(); return; }
+    if (triggered) { saveGames(game.gameId); return; }
   }
   await finishCombatResolution(game, rbPending.combat, rbPending.resultText, new Set(rbPending.initialEmbedRefreshMsgIds), client);
-  saveGames();
+  saveGames(game.gameId);
   return;
 }
 
@@ -232,10 +232,10 @@ export async function handleMasteryPick(interaction, ctx) {
   const mastCThread = await fetchCombatThread(client, mastCombat.combatThreadId);
   if (mastCThread) {
     const triggered = await checkPostCombatSurges(mastGame, mastCombat, mastRT, new Set(mastEmbed), mastCThread, mastOwnerId, mastDPN);
-    if (triggered) { saveGames(); return; }
+    if (triggered) { saveGames(game.gameId); return; }
   }
   await finishCombatResolution(mastGame, mastCombat, mastRT, new Set(mastEmbed), client);
-  saveGames();
+  saveGames(game.gameId);
   return;
 }
 
@@ -265,7 +265,7 @@ export async function handleInterrogatePick(interaction, ctx) {
     // Step 1: attacker chose a card from opponent's hand. Show own hand to optionally discard.
     const intPickIdx = parseInt(splitCustomId(interaction.customId, 'interrogate_pick_')[1], 10);
     const intChosenCard = intOHS[intPickIdx];
-    if (!intChosenCard) { clearPendingInterrogate(intGame); saveGames(); return; }
+    if (!intChosenCard) { clearPendingInterrogate(intGame); saveGames(game.gameId); return; }
     intGame.pendingInterrogate.chosenCardName = intChosenCard;
     const intChosenCost = getCcEffect(intChosenCard)?.cost ?? 0;
     const intHandKey = ccHandKey(intAPN);
@@ -276,9 +276,9 @@ export async function handleInterrogatePick(interaction, ctx) {
       if (intThread) await intThread.send(`**Interrogate** — You chose **${intChosenCard}** (cost ${intChosenCost}). No cards in your hand with equal or greater cost to force the discard.`).catch(discordCatch);
       clearPendingInterrogate(intGame);
       const triggered = intThread ? await checkPostCombatSurges(intGame, intCombat, intRT, new Set(intEmbed), intThread, intOwnerId, intDPN) : false;
-      if (triggered) { saveGames(); return; }
+      if (triggered) { saveGames(game.gameId); return; }
       await finishCombatResolution(intGame, intCombat, intRT, new Set(intEmbed), client);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     intGame.pendingInterrogate.ownEligibleSnapshot = intEligible;
@@ -291,12 +291,12 @@ export async function handleInterrogatePick(interaction, ctx) {
       allowedMentions: { users: [intOwnerId] },
       components: [new ActionRowBuilder().addComponents(intStep2Btns)],
     }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
   // Step 2: interrogate_discard_ or interrogate_skip_
-  if (!intChosen) { clearPendingInterrogate(intGame); saveGames(); return; }
+  if (!intChosen) { clearPendingInterrogate(intGame); saveGames(game.gameId); return; }
   if (buttonKey === 'interrogate_discard_') {
     const intDisIdx = parseInt(splitCustomId(interaction.customId, 'interrogate_discard_')[1], 10);
     const intOwnCard = (intOES || [])[intDisIdx];
@@ -326,8 +326,8 @@ export async function handleInterrogatePick(interaction, ctx) {
   }
   clearPendingInterrogate(intGame);
   const intTriggered = intThread ? await checkPostCombatSurges(intGame, intCombat, intRT, new Set(intEmbed), intThread, intOwnerId, intDPN) : false;
-  if (intTriggered) { saveGames(); return; }
+  if (intTriggered) { saveGames(game.gameId); return; }
   await finishCombatResolution(intGame, intCombat, intRT, new Set(intEmbed), client);
-  saveGames();
+  saveGames(game.gameId);
   return;
 }

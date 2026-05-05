@@ -114,7 +114,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     const otherZone = getPlayerZoneLabel(game, otherId);
     await logGameAction(game, client, `**End of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — your turn for end-of-round effects. Click **End 'End of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
     await updateHandChannelMessages(game, client);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   game.endOfRoundWhoseTurn = null;
@@ -124,7 +124,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   if (_eorSendGate) {
     if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
     await _eorSendGate(game, 'post_end_of_round', ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Fallback: no gate function available, run status phase directly
@@ -768,7 +768,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     const { gameEnded } = await runEndOfRoundRules(game, mapId, variant, endOfRoundRules, ruleCtx);
     if (gameEnded) {
       if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Check for power token overflow from mission rules (fluctuation/crate tokens)
@@ -796,7 +796,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       await checkWinConditions(game, client);
       if (game.ended) {
         if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
     }
@@ -819,7 +819,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       await postFluctuationSwapButtons(game, _fGenCh, gameId, _fInitNum);
     }
     if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -877,7 +877,7 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
     if (interaction?.message) {
       await interaction.message.edit({ components: [] }).catch(discordCatch);
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -1007,7 +1007,7 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
   if (interaction?.message) {
     await interaction.message.edit({ components: [] }).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1292,7 +1292,7 @@ export async function resolveStartOfRoundEffect(game, ctx) {
     if (sendPhaseGateMessages) {
       await sendPhaseGateMessages(game, 'pre_activation', ctx);
     }
-    if (saveGames) saveGames();
+    if (saveGames) saveGames(game.gameId);
   }
 }
 
@@ -1335,7 +1335,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
     const otherZone = getPlayerZoneLabel(game, otherId);
     await logGameAction(game, client, `**Start of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — your turn for start-of-round effects. Click **End 'Start of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
     await updateHandChannelMessages(game, client);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   game.startOfRoundWhoseTurn = null;
@@ -1409,14 +1409,14 @@ export async function handleEndStartOfRound(interaction, ctx) {
   // Phase gate: both confirm SOR effects done before activation begins
   if ((game.pendingStartOfRoundResolve || 0) > 0) {
     await interaction.message.edit({ components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   const { sendPhaseGateMessages: _sorSendGate } = ctx;
   if (_sorSendGate) {
     await interaction.message.edit({ components: [] }).catch(discordCatch);
     await _sorSendGate(game, 'pre_activation', ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -1461,7 +1461,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   await updateHandChannelMessages(game, client);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Helpers: Force Slow & Excavation pickers (shared by handleEndEndOfRound + handleEndStartOfRound) ──
@@ -1658,7 +1658,7 @@ export async function handleExtraArmorPick(interaction, ctx) {
     allocation[figureKey] = next;
   }
   pending.allocation = allocation;
-  saveGames();
+  saveGames(game.gameId);
 
   const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
   const ui = _buildExtraArmorUI(gameId, playerNum, allFks, game, allocation, total);
@@ -1699,7 +1699,7 @@ export async function handleExtraArmorConfirm(interaction, ctx) {
     logParts.push(`**${dcNameFromFigureKey(fk)}** +${count}`);
   }
   delete game[`pendingExtraArmor_p${playerNum}`];
-  saveGames();
+  saveGames(game.gameId);
 
   // Single log entry for the whole allocation
   await logGameAction(game, client, `🛡️ **Extra Armor** — Block Tokens distributed: ${logParts.join(', ')}.`);
@@ -1752,7 +1752,7 @@ export async function handleRbfDiscard(interaction, ctx) {
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
   if (updateDiscardPileMessage) await updateDiscardPileMessage(game, playerNum, client).catch(discordCatch);
   if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
-  saveGames();
+  saveGames(game.gameId);
   await interaction.followUp({ content: `Discarded **${card}**.`, ephemeral: true }).catch(discordCatch);
   // Resolve start-of-round blocking effect
   if (game.pendingStartOfRoundResolve > 0) {
@@ -1815,7 +1815,7 @@ export async function handleRogueOneReturn(interaction, ctx) {
   }
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
   if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1927,7 +1927,7 @@ export async function handleCtfPick(interaction, ctx) {
     }
   }
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1971,7 +1971,7 @@ export async function handleCtfStrain(interaction, ctx) {
   await logGameAction(game, client,
     `**Channel the Force** — **${fig.dcName}** suffers **${pending.cost} Strain**.`,
     { phase: 'ROUND', icon: 'condition' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2004,7 +2004,7 @@ export async function handleImpCitadel(interaction, ctx) {
     await updateDcCardMessage(client, game, msgIds[idx], ctx, { errorContext: 'Failed to refresh Imperial Citadel embed:' });
   }
   await resolveStartOfRoundEffect(game, ctx);
-  saveGames();
+  saveGames(game.gameId);
   await interaction.followUp({ content: `Placed ${label} token on Imperial Citadel.`, ephemeral: true }).catch(discordCatch);
 }
 
@@ -2027,7 +2027,7 @@ export async function handleProgrammingOverride(interaction, ctx) {
   await logGameAction(game, client, `🔧 **Programming Override** — **4-LOM** gains **${trait}** until end of round.`, { phase: 'ROUND', icon: 'round' });
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await resolveStartOfRoundEffect(game, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2048,7 +2048,7 @@ export async function handleDoubtFigPick(interaction, ctx) {
 
   if (target === 'skip') {
     await interaction.message.edit({ content: '**[Doubt]** — Skipped condition/token removal.', components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2089,7 +2089,7 @@ export async function handleDoubtFigPick(interaction, ctx) {
       components: rows.slice(0, 5),
     }).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2132,5 +2132,5 @@ export async function handleDoubtRemove(interaction, ctx) {
       await logGameAction(game, client, `**[Doubt]** — Discarded ${removed} Token from ${targetDcName}.`, { phase: 'ROUND', icon: 'card' });
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }

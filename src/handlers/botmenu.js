@@ -149,7 +149,7 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
   await clearGameErrorThread(gameId, client);
   await cleanupIncidentMirrors(gameId, client);
   cleanupCompanionEmbedDeps(gameId);
-  saveGames();
+  saveGames(game.gameId);
   if (deleteGameFromDb) await deleteGameFromDb(gameId).catch(discordCatch);
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId === gameId) {

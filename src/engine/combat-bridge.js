@@ -437,7 +437,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
       await thread.send({ content: resultText || '(No effect)', components: [] });
       delete game.pendingCombat;
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Thug / Krykna
@@ -463,7 +463,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
     await thread.send({ content: resultText || '(No effect)', components: [] });
     delete game.pendingCombat;
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -668,7 +668,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
                 new ButtonBuilder().setCustomId(`extra_protection_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
               );
               await logGameAction(game, client, `<@${_epOwnerId}> **Extra Protection** — **${_epDamagedLabel}** suffered ${damage} Damage. **${_epDcName}** is within 2 spaces and may play Extra Protection (move up to 2 spaces, then perform an attack).`, { components: [_epRow], allowedMentions: { users: [_epOwnerId] } });
-              saveGames();
+              saveGames(game.gameId);
               return;
             }
           }
@@ -955,7 +955,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             new ButtonBuilder().setCustomId(`self_destruct_protocol_skip_${game.gameId}_${targetMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
           );
           await logGameAction(game, client, `<@${_sdpOwnerId2}> **Self-Destruct Protocol** — **${combat.target.label || _sdpDcName2}** is about to be defeated! Roll 1 red die, apply Hits to adjacent figures, then the figure is defeated.`, { components: [_sdpRow2], allowedMentions: { users: [_sdpOwnerId2] } });
-          saveGames();
+          saveGames(game.gameId);
           return;
         }
       }
@@ -985,7 +985,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             new ButtonBuilder().setCustomId(`last_resort_skip_${game.gameId}_${targetMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
           );
           await logGameAction(game, client, `<@${_lrOwnerId}> **Last Resort** — **${combat.target.label}** is about to be defeated! Deplete to roll 1 red die — adjacent figures suffer Hits as Damage.`, { components: [_lrRow], allowedMentions: { users: [_lrOwnerId] } });
-          saveGames();
+          saveGames(game.gameId);
           return;
         }
       }
@@ -1023,7 +1023,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
               new ButtonBuilder().setCustomId(`executor_skip_${game.gameId}_${_exRgcMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
             );
             await logGameAction(game, client, `<@${_exOwnerId}> **Executor** — **${_exDcName}** may interrupt (friendly **${combat.target.label}** defeated within 3 spaces). Move up to 2 spaces, then perform an attack.`, { components: [_exRow], allowedMentions: { users: [_exOwnerId] } });
-            saveGames();
+            saveGames(game.gameId);
             return;
           }
         }

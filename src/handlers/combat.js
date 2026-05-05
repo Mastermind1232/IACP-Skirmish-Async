@@ -381,7 +381,7 @@ export async function handleCombatGateReady(interaction, ctx) {
   if (!gate.p1Ready || !gate.p2Ready) {
     const content = `🔔 ${label}\n${atkLabel} (ATK) ${atkStatus} | ${defLabel} (DEF) ${defStatus}\nBoth players: click **Ready** when done with reactions.`;
     await interaction.message.edit({ content, components: interaction.message.components }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -395,10 +395,10 @@ export async function handleCombatGateReady(interaction, ctx) {
   delete combat.combatGate;
 
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-  if (!thread) { saveGames(); return; }
+  if (!thread) { saveGames(game.gameId); return; }
 
   await dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -848,7 +848,7 @@ export async function handleStrainChoice(interaction, ctx) {
   const thread = await fetchCombatThread(client, pending.threadId);
   if (!thread) {
     clearPendingStrainChoice(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -856,7 +856,7 @@ export async function handleStrainChoice(interaction, ctx) {
     // All strain as HP damage (headhunterDmg already applied when pending was created)
     clearPendingStrainChoice(game);
     await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -872,7 +872,7 @@ export async function handleStrainChoice(interaction, ctx) {
     // No deck cards available — fall back to all damage
     clearPendingStrainChoice(game);
     await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -913,7 +913,7 @@ export async function handleStrainChoice(interaction, ctx) {
   } else {
     await thread.send(`**Strain** — All ${pending.amount} Strain resolved via CC discard${pending.amount > 1 ? 's' : ''}.`).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Under Duress deplete handler (M79-M80) ──────────────────────────────────
@@ -947,7 +947,7 @@ export async function handleUnderDuress(interaction, ctx) {
   const thread = await fetchCombatThread(client, pending.threadId);
   if (!thread) {
     clearPendingStrainChoice(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -980,7 +980,7 @@ export async function handleUnderDuress(interaction, ctx) {
       // No CC discards possible — all damage
       clearPendingStrainChoice(game);
       await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
 
@@ -1023,7 +1023,7 @@ export async function handleUnderDuress(interaction, ctx) {
       // No CC discards possible — all damage
       clearPendingStrainChoice(game);
       await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
 
@@ -1053,7 +1053,7 @@ export async function handleUnderDuress(interaction, ctx) {
       allowedMentions: { users: [ownerId] },
     })));
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2299,7 +2299,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (hasAwkwardAbility(atkSpecialIds) && awkwardBlocks(distanceToTarget)) {
     await thread.send('**Awkward** — Cannot attack adjacent figures. Attack cancelled.');
     delete game.pendingCombat;
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2309,7 +2309,7 @@ export async function handleAttackTarget(interaction, ctx) {
     const camName = defSpecialIds.includes('camouflage_mak') ? 'Mak' : 'Scout Trooper';
     await thread.send(`**Camouflage** (${camName}) — Hostile figures 4+ spaces away cannot target this figure. Attack cancelled.`);
     delete game.pendingCombat;
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2408,7 +2408,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (tripodBlocksAttack({ specialAbilityIds: atkSpecialIds, moved: game.figureMoved?.[attackerFigureKey] })) {
     await thread.send('**Tripod** — Has exited space this activation. Cannot attack.');
     delete game.pendingCombat;
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2629,7 +2629,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Awe on Cara, on-declare CCs, etc.). Click Ready to advance to the
   // power-token phase. Self-play auto-advances. Per Destruct's spec.
   await sendCombatGate(thread, game, game.pendingCombat, 'on_declare', ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2664,7 +2664,7 @@ export async function handleCombatReady(interaction, ctx) {
   const _readyName = getPlayerDisplayName(game, playerNum, interaction.client);
   await interaction.message.channel.send(`**${_readyName}** is ready to roll combat.`);
   if (!combat.p1Ready || !combat.p2Ready) {
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
@@ -2677,7 +2677,7 @@ export async function handleCombatReady(interaction, ctx) {
   // The token phase posts the Roll Combat Dice button itself when both players
   // are done (see postRollDiceButton).
   await proceedToTokenPhase(thread, game, combat, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2761,7 +2761,7 @@ export async function handleCombatRoll(interaction, ctx) {
     combat.attackRoll = { acc: result.acc, dmg: result.dmg, surge: result.surge };
     combat.attackDiceResults = result.dice;
     await _updateRollPromptStatus(thread, game, combat, interaction.client);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2789,7 +2789,7 @@ export async function handleCombatRoll(interaction, ctx) {
     combat.defenseDiceResults = defDiceResults;
     combat.defenseDiceCount = diceToRoll.length;
     await _updateRollPromptStatus(thread, game, combat, interaction.client);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2852,7 +2852,7 @@ export async function handleCombatRoll(interaction, ctx) {
         const _otlMsg = _otlMissReason || 'Target moved out of line of sight.';
         await thread.send(`**On the Lam** — ${_otlMsg} The attack misses.`);
         await sendReadyToResolveRolls(thread, game.gameId, game, ctx);
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
     }
@@ -2909,7 +2909,7 @@ export async function handleCombatRoll(interaction, ctx) {
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
       await thread.send({ content: `**Veteran Instincts** — <@${game[`player${attackerPlayerNum}Id`] ?? ''}> add +1 Damage or +1 Surge to the attack roll?`, components: [_viRow] }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Guidance Systems (Mortar Trooper): optional -1 Hit, +2 Accuracy, repeatable
@@ -2920,10 +2920,10 @@ export async function handleCombatRoll(interaction, ctx) {
         new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
       );
       await thread.send({ content: `**Guidance Systems** — <@${game[`player${effectiveAttackerPlayerNum}Id`] ?? ''}> Apply -1 Hit and +2 Accuracy? (May use multiple times.)`, components: [_gsRow] }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -3002,7 +3002,7 @@ export async function handleCombatRoll(interaction, ctx) {
         _tintBtns.push(new ButtonBuilder().setCustomId(`there_is_no_try_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         const _tintRows = chunkButtonsToRows(_tintBtns);
         await thread.send({ content: `**There Is No Try** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> choose a defense die to set to any face:`, components: _tintRows }).catch(discordCatch);
-        saveGames();
+        saveGames(game.gameId);
         return; // Wait for TINT response before entering reroll window
       }
     }
@@ -3339,7 +3339,7 @@ export async function handleCombatRoll(interaction, ctx) {
             await _pcHand.send({ content: `⚡ **Power Converter** — **${combat.attackerDcName}** has a Device token. Reroll 1 attack die (may swap die color first)?\n<@${game[`player${attackerPlayerNum}Id`] ?? ''}>`, components: [_pcRow] }).catch(discordCatch);
           }
         }
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
     }
@@ -3353,7 +3353,7 @@ export async function handleCombatRoll(interaction, ctx) {
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
       await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // [Doubt] SU: defender may deplete to force 1 attack die reroll
@@ -3378,7 +3378,7 @@ export async function handleCombatRoll(interaction, ctx) {
           new ButtonBuilder().setCustomId(`doubt_reroll_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
         );
         await thread.send({ content: `**[Doubt]** — <@${defId}> Deplete to force your opponent to reroll 1 attack die?`, components: [_dbtRow] }).catch(discordCatch);
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
     }
@@ -3389,10 +3389,10 @@ export async function handleCombatRoll(interaction, ctx) {
     combat.defenderRerolledIndices = [];
     // Combat gate: both players review dice results before reroll window
     await sendCombatGate(thread, game, combat, 'post_roll', ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Chunk buttons into ActionRows of up to 5 (Discord limit). Max 5 rows = 25 buttons. */
@@ -3755,7 +3755,7 @@ export async function handleCombatRerollYn(interaction, ctx) {
   if (choice === 'yes') {
     // Show the picker. The YnAsked flag is set so sendRerollUI falls through.
     await sendRerollUI(thread, game, combat, side === 'atk' ? 'attacker' : 'defender');
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // No: advance as if the user clicked "Done (no rerolls)" on the picker.
@@ -3885,7 +3885,7 @@ export async function handleCombatReroll(interaction, ctx) {
               allowedMentions: { users: [_dmCasterId] },
               components: [_dmRow],
             })).catch(discordCatch);
-            saveGames();
+            saveGames(game.gameId);
             return; // pause; reveal handler resumes the queue
           }
         }
@@ -3897,12 +3897,12 @@ export async function handleCombatReroll(interaction, ctx) {
     }
     if ((combat.forcedRerollQueue || []).length > 0) {
       await sendRerollUI(thread, game, combat, 'forced');
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // All forced rerolls done — combat gate before defender rerolls
     await sendCombatGate(thread, game, combat, 'post_forced_reroll', ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -4011,25 +4011,25 @@ export async function handleCombatReroll(interaction, ctx) {
       }
     }
   }
-  if (_tlTriggered) { saveGames(); return; }
+  if (_tlTriggered) { saveGames(game.gameId); return; }
 
   // Check if current side is done (clicked done or exhausted rerolls)
   if (side === 'atk' && (choice === 'done' || combat.attackerRerollsRemaining <= 0)) {
     // Combat gate: both players review attacker rerolls before proceeding
     await sendCombatGate(thread, game, combat, 'post_attacker_reroll', ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   if (side === 'def' && (choice === 'done' || (combat.defenderRerollsRemaining <= 0 && !(combat.crossTrainingAvailable && !combat.crossTrainingUsed)))) {
     // Combat gate: both players review defender rerolls before modifications
     await sendCombatGate(thread, game, combat, 'post_defender_reroll', ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
   // Still has rerolls — show updated UI
   await sendRerollUI(thread, game, combat, combat.rerollPhase);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -4081,7 +4081,7 @@ export async function handleCrossTrainingReroll(interaction, ctx) {
       content: '**Cross Training** — Pick a defense die to replace & reroll:',
       components: buildActionRows(buttons),
     });
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -4109,7 +4109,7 @@ export async function handleCrossTrainingReroll(interaction, ctx) {
       content: `**Cross Training** — Replace ${currentColor} die #${dieIdx + 1} with:`,
       components: buildActionRows(buttons),
     });
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -4151,12 +4151,12 @@ export async function handleCrossTrainingReroll(interaction, ctx) {
     const ctStillAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
     if (combat.defenderRerollsRemaining <= 0 && !ctStillAvailable) {
       await sendCombatGate(thread, game, combat, 'post_defender_reroll', ctx);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Still has rerolls — show updated UI
     await sendRerollUI(thread, game, combat, 'defender');
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 }
@@ -4268,7 +4268,7 @@ export async function handlePreReroll(interaction, ctx) {
   if ((combat.pendingPreRerolls || []).length > 0) {
     combat.rerollPhase = 'attacker';
     await sendRerollUI(thread, game, combat, 'attacker');
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -4288,13 +4288,13 @@ export async function handlePreReroll(interaction, ctx) {
       combat.rerollPhase = 'defender';
       await sendRerollUI(thread, game, combat, 'defender');
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // No rerolls — proceed directly
   combat.rerollPhase = null;
   await proceedAfterRerolls(thread, game, combat, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // Delegate to src/game/spatial.js (canonical implementation)
@@ -4808,14 +4808,14 @@ export async function handleCombatPassive(interaction, ctx) {
     }
     combat.negotiateResolved = true;
     delete combat.pendingCombatPassive;
-    saveGames();
+    saveGames(game.gameId);
     // After Negotiate (ATK modifier) resolves, re-enter the modifier sequence so
     // Call the Shots / Heavy Repeater / Lasat Honor Guard / DEF blocks can fire.
     await proceedAfterRerolls(thread, game, combat, ctx);
     return;
   }
 
-  saveGames();
+  saveGames(game.gameId);
   await proceedAfterRerolls(thread, game, combat, ctx);
 }
 
@@ -4924,7 +4924,7 @@ export async function handleCombatModsYn(interaction, ctx) {
       components: [continueRow],
       allowedMentions: { users: [expectedId] },
     }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // 'no' or 'continue' — advance.
@@ -4933,7 +4933,7 @@ export async function handleCombatModsYn(interaction, ctx) {
   } else {
     await proceedAfterRerolls(thread, game, combat, ctx);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -5006,7 +5006,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
           allowedMentions: { users: [_negDefId] },
           components: [_negRow],
         })).catch(discordCatch);
-        saveGames?.();
+        saveGames?.(game.gameId);
         return;
       }
     }
@@ -5046,7 +5046,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         content: `**Call the Shots** (${_ctsHeraDcName}): Apply +2 Accuracy, +1 Damage, or +1 Surge to **${combat.attackerDcName}**'s attack?`,
         components: [new ActionRowBuilder().addComponents(btns)],
       });
-      saveGames?.();
+      saveGames?.(game.gameId);
       return;
     }
     combat.callTheShotsResolved = true;
@@ -5069,7 +5069,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         content: `**Heavy Repeater** — **${hrDcName}** may suffer 1 Strain to apply a bonus:`,
         components: [new ActionRowBuilder().addComponents(btns)],
       });
-      saveGames?.();
+      saveGames?.(game.gameId);
       return;
     }
     combat.heavyRepeaterResolved = true;
@@ -5090,7 +5090,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         combat.lasatHonorGuardUsed = true;
         combat.lasatEligibleDiceIndices = eligibleIdxs;
         await sendLasatDiePicker(thread, game.gameId, combat, eligibleIdxs, ctx);
-        saveGames?.();
+        saveGames?.(game.gameId);
         return;
       }
     }
@@ -5135,7 +5135,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         content: `**Defensible** (${_defsDefDcName}): Apply +1 Block or +1 Evade?`,
         components: [new ActionRowBuilder().addComponents(btns)],
       });
-      saveGames?.();
+      saveGames?.(game.gameId);
       return;
     }
     combat.defensibleResolved = true;
@@ -5180,7 +5180,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
           content: `**Get Down** (${_gdOnarDcName}): Apply +1 Block or +1 Evade to **${_gdDefDcName}**'s defense?`,
           components: [new ActionRowBuilder().addComponents(btns)],
         });
-        saveGames?.();
+        saveGames?.(game.gameId);
         return;
       }
     }
@@ -5222,7 +5222,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
           allowedMentions: { users: [_ztDefOwnerId] },
           components: [_ztYesNoRow],
         })).catch(discordCatch);
-        saveGames?.();
+        saveGames?.(game.gameId);
         return;
       }
     }
@@ -5247,7 +5247,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       content: `**Elusive** — <@${defenderId}> choose an attack die to nullify (its results will be removed). One defense die will also be nullified.`,
       components: rows,
     });
-    saveGames?.();
+    saveGames?.(game.gameId);
     return;
   }
 
@@ -5436,7 +5436,7 @@ async function postRollDiceButton(thread, game, combat, ctx) {
     );
     const legacyMsg = await thread.send({ embeds: [combatEmbed], components: [legacyRow] });
     combat.rollMessageId = legacyMsg.id;
-    if (ctx?.saveGames) ctx.saveGames();
+    if (ctx?.saveGames) ctx.saveGames(game.gameId);
     return;
   }
 
@@ -5458,7 +5458,7 @@ async function postRollDiceButton(thread, game, combat, ctx) {
     allowedMentions: { users: [atkId, defId].filter(Boolean) },
   });
   combat.rollMessageId = rollMsgSent.id;
-  if (ctx?.saveGames) ctx.saveGames();
+  if (ctx?.saveGames) ctx.saveGames(game.gameId);
 }
 
 /** Edit the roll prompt to reflect which sides have rolled (held). Called
@@ -5642,7 +5642,7 @@ export async function handleCombatResolveReady(interaction, ctx) {
   }
   if (!canActAsPlayer(game, interaction.user.id, 1) && !await requirePlayer(interaction, game, interaction.user.id, 2, canActAsPlayer, 'Only players in this game can confirm.')) return;
   await resolveCombatAfterRolls(game, combat, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -5737,7 +5737,7 @@ export async function handleCombatSurge(interaction, ctx) {
         content: '**Rogue One** — Choose a power token to discard from a friendly figure for **+1 Hit**:',
         components: rows,
       }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return; // wait for player to pick a token
     }
   } else if (choice === 'bleed_prevention') {
@@ -5920,7 +5920,7 @@ export async function handleCombatSurge(interaction, ctx) {
             new ButtonBuilder().setCustomId(`hunter_protocol_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
           );
           await thread.send({ content: `**Hunter Protocol** — Trigger **${label}** once more?`, components: [_hpRow] }).catch(discordCatch);
-          saveGames();
+          saveGames(game.gameId);
           return;
         }
       }
@@ -5928,7 +5928,7 @@ export async function handleCombatSurge(interaction, ctx) {
       if (game.pendingPowerTokenGrant?.channelId === null) {
         game.pendingPowerTokenGrant.channelId = thread.id;
         await sendPowerTokenChoicePrompt(thread, gameId, game.pendingPowerTokenGrant.grants);
-        saveGames();
+        saveGames(game.gameId);
         return; // wait for player to choose token type before continuing surge
       }
       // Spread the Pain (Dengar): prompt attacker to choose a HARMFUL condition
@@ -5947,7 +5947,7 @@ export async function handleCombatSurge(interaction, ctx) {
           content: `**Spread the Pain** — Choose a HARMFUL condition (not already chosen this attack):`,
           components: [new ActionRowBuilder().addComponents(btns.slice(0, 5))],
         }).catch(discordCatch);
-        saveGames();
+        saveGames(game.gameId);
         return; // wait for player to choose condition before continuing surge
       }
     }
@@ -6010,7 +6010,7 @@ export async function handleCombatSurge(interaction, ctx) {
       components: [surgeRow],
     });
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -6078,7 +6078,7 @@ export async function handleCombatToken(interaction, ctx) {
       combat.pendingWildTokenIndex = null;
       combat.pendingWildCohesionFigureKey = null;
       combat.pendingWildCohesionOwnerName = null;
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     applyTokenBonus(combat, resolvedType, wildIsAttacker);
@@ -6111,7 +6111,7 @@ export async function handleCombatToken(interaction, ctx) {
     combat.pendingWildCohesionFigureKey = null;
     combat.pendingWildCohesionOwnerName = null;
     await advanceTokenPhase(thread, game, combat, completedRole, ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -6126,7 +6126,7 @@ export async function handleCombatToken(interaction, ctx) {
   if (choice === 'skip') {
     await thread.send(`**Power Token — ${isAttacker ? 'Attacker' : 'Defender'}:** No token spent.`);
     await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -6145,7 +6145,7 @@ export async function handleCombatToken(interaction, ctx) {
       combat.pendingWildCohesionFigureKey = scEntry.figureKey;
       combat.pendingWildCohesionOwnerName = scEntry.ownerName;
       await sendWildTypeWindow(thread, game.gameId, expectedPhase);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Krennic's Unhinged Director — Squad Cohesion attacker spend.
@@ -6158,7 +6158,7 @@ export async function handleCombatToken(interaction, ctx) {
       isAttacker,
       sourceLabel: `Squad Cohesion · ${scEntry.ownerName}`,
     })) {
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     applyTokenBonus(combat, scTokenType, isAttacker);
@@ -6178,7 +6178,7 @@ export async function handleCombatToken(interaction, ctx) {
       }
     }
     await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -6194,7 +6194,7 @@ export async function handleCombatToken(interaction, ctx) {
     combat.pendingWildRole = expectedPhase;
     combat.pendingWildTokenIndex = tokenIndex;
     await sendWildTypeWindow(thread, game.gameId, expectedPhase);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -6206,7 +6206,7 @@ export async function handleCombatToken(interaction, ctx) {
     atkPlayerNum,
     isAttacker,
   })) {
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   applyTokenBonus(combat, tokenType, isAttacker);
@@ -6231,7 +6231,7 @@ export async function handleCombatToken(interaction, ctx) {
     }
   }
   await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -6304,7 +6304,7 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
 
   if (!isPlus2) {
     await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -6329,7 +6329,7 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
     }
     await thread.send(`**Unhinged Director Strain** — **${strainDcName}** suffers 1 Damage (no CCs in deck to absorb).`).catch(discordCatch);
     await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -6357,7 +6357,7 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
     components: [_udsRow],
     allowedMentions: { users: [ownerId].filter(Boolean) },
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -6431,7 +6431,7 @@ export async function handleUnhingedStrainAbsorb(interaction, ctx) {
 
   clearPendingUnhingedStrain(game);
   await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -6588,7 +6588,7 @@ export async function handleCleaveTarget(interaction, ctx) {
             components: nextRows,
           })).catch(discordCatch);
         }
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
     }
@@ -6600,11 +6600,11 @@ export async function handleCleaveTarget(interaction, ctx) {
     const cThread = await fetchCombatThread(client, pending.combat.combatThreadId);
     if (cThread) {
       const triggered = await checkPostCombatSurges(game, pending.combat, pending.resultText, embedRefreshMsgIds, cThread, pending.ownerId, defPN);
-      if (triggered) { saveGames(); return; }
+      if (triggered) { saveGames(game.gameId); return; }
     }
   }
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -6654,7 +6654,7 @@ export async function handlePowerTokenChoice(interaction, ctx) {
       await resumeSurgeChoiceOrResolve(game, gameId, combat, thread, ctx);
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -6675,10 +6675,10 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   game.pendingSpreadThePainCondPick = null;
   const combat = game.pendingCombat;
-  if (!combat || combat.gameId !== gameId) { saveGames(); return; }
+  if (!combat || combat.gameId !== gameId) { saveGames(game.gameId); return; }
 
   const thread = await fetchCombatThread(interaction.client, combatThreadId);
-  if (!thread) { saveGames(); return; }
+  if (!thread) { saveGames(game.gameId); return; }
 
   if (condRaw !== 'skip') {
     const cond = condRaw[0].toUpperCase() + condRaw.slice(1); // 'Stun' | 'Weaken' | 'Bleed'
@@ -6694,7 +6694,7 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
   }
   // Resume surge phase
   await resumeSurgeChoiceOrResolve(game, gameId, combat, thread, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -6715,12 +6715,12 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
     const combat = game.pendingCombat;
     if (!combat) return;
     const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-    if (!thread) { saveGames(); return; }
+    if (!thread) { saveGames(game.gameId); return; }
     await interaction.message.edit({ components: [] }).catch(discordCatch);
     await thread.send('**Rogue One** — Cancelled, no token discarded.').catch(discordCatch);
     // Re-show surge UI
     await _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Parse figureKey and tokenIndex — figureKey can contain hyphens (e.g. "Cassian Andor-1-0")
@@ -6749,16 +6749,16 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   const combat = game.pendingCombat;
-  if (!combat || combat.gameId !== gameId) { saveGames(); return; }
+  if (!combat || combat.gameId !== gameId) { saveGames(game.gameId); return; }
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-  if (!thread) { saveGames(); return; }
+  if (!thread) { saveGames(game.gameId); return; }
 
   // Validate the token still exists
   const tokens = game.figurePowerTokens?.[figureKey] || [];
   if (tokenIndex >= tokens.length) {
     await thread.send('**Rogue One** — That token is no longer available.').catch(discordCatch);
     await _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   const tokenType = tokens[tokenIndex];
@@ -6772,7 +6772,7 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
 
   // Re-show surge UI
   await _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Helper to re-show the surge UI after Rogue One token pick resolves. */
@@ -6885,7 +6885,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
     await ctx.updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client).catch(discordCatch);
   }
   await interaction.editReply({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ─── Lasat Honor Guard helpers ────────────────────────────────────────────────
@@ -6963,7 +6963,7 @@ export async function handleLasatDiePick(interaction, ctx) {
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   combat.lasatChosenDieIndex = dieIdx;
   await sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -7004,7 +7004,7 @@ export async function handleLasatFacePick(interaction, ctx) {
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   await thread.send(`**Lasat Honor Guard** — Turned die to ${newFace.acc || 0}a/${newFace.dmg || 0}d/${newFace.surge || 0}s. New total: ${combat.attackRoll.acc}a/${combat.attackRoll.dmg}d/${combat.attackRoll.surge}s.`);
   await proceedAfterRerolls(thread, game, combat, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ─── False Orders combat handler ──────────────────────────────────────────────
@@ -7103,7 +7103,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   if (logGameAction) await logGameAction(game, client, `⚔️ **${abilityLabel}** — **${controllerUserName}** controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   // Skip the legacy pre-combat ready gate; go straight to the token phase.
   await proceedToTokenPhase(thread, game, game.pendingCombat, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -7131,7 +7131,7 @@ export async function handleCoverFireBlock(interaction, ctx) {
     if (ch) await sendPowerTokenOverflowUI(game, gameId, ch, playerNum, saveGames);
     return;
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -7148,7 +7148,7 @@ export async function handleCoverFireDiscard(interaction, ctx) {
     const skipGame = await requireGame(interaction, getGame, skipGameId, { silent: true });
     if (skipGame) clearPendingCoverFire(skipGame);
     await interaction.message.edit({ content: '🛡️ **Cover Fire** — Skipped condition/token removal.', components: [] }).catch(discordCatch);
-    if (skipGame) saveGames();
+    if (skipGame) saveGames(game.gameId);
     return;
   }
   const match = interaction.customId.match(/^cover_fire_discard_(\d+)_(condition|token)_(\d+)_(.+)$/);
@@ -7178,7 +7178,7 @@ export async function handleCoverFireDiscard(interaction, ctx) {
       if (logGameAction) await logGameAction(game, client, `🛡️ **Cover Fire** — Discarded **${removed} Token** from **${dcName}**.`, { phase: 'ROUND', icon: 'card' });
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Guidance Systems (Mortar Trooper): apply -1 Hit, +2 Accuracy. May be used multiple times. */
@@ -7208,7 +7208,7 @@ export async function handleGuidanceSystems(interaction, ctx) {
       content: `**Guidance Systems** — Applied ${gsCount}x (-${gsCount} Hit, +${gsCount * 2} Acc). Current: ${combat.attackRoll.acc} acc, ${combat.attackRoll.dmg} dmg, ${combat.attackRoll.surge} surge. Use again?`,
       components: [_gsRow],
     }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
   } else {
     // Done — continue to defense roll
     const gsCount = combat.guidanceSystemsCount || 0;
@@ -7216,7 +7216,7 @@ export async function handleGuidanceSystems(interaction, ctx) {
       content: `**Guidance Systems** — Applied ${gsCount}x. Final attack: ${combat.attackRoll.acc} acc, ${combat.attackRoll.dmg} dmg, ${combat.attackRoll.surge} surge.`,
       components: [],
     }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
   }
 }
 
@@ -7272,7 +7272,7 @@ async function maybePromptZilloPierceCancel(thread, game, ctx) {
     allowedMentions: { users: [defOwnerId] },
     components: [row],
   })).catch(discordCatch);
-  if (ctx?.saveGames) ctx.saveGames();
+  if (ctx?.saveGames) ctx.saveGames(game.gameId);
   return true;
 }
 
@@ -7318,7 +7318,7 @@ export async function handleZilloPierceCancel(interaction, ctx) {
       components: [],
     }).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
   if (thread) await sendReadyToResolveRolls(thread, gameId, game, ctx);
 }
 
@@ -7378,7 +7378,7 @@ export async function handleZilloUseYes(interaction, ctx) {
   } catch (err) {
     console.error('Zillo Technique private picker failed:', err);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -7422,7 +7422,7 @@ export async function handleZilloDiscard(interaction, ctx) {
   // Mark resolved (Skip or use): per-attack once-per-attack limit. Re-enter the
   // step-4 modifier sequence so subsequent DEF / surge / resolve steps continue.
   combat.zilloDiscardResolved = true;
-  saveGames();
+  saveGames(game.gameId);
   if (thread) await proceedAfterRerolls(thread, game, combat, ctx);
 }
 
@@ -7493,7 +7493,7 @@ export async function handleDemoralizingMonologueReveal(interaction, ctx) {
     const _entry = combat.forcedRerollQueue[0];
     if (_entry?.demoralizingMonologue) combat.forcedRerollQueue.shift();
   }
-  saveGames();
+  saveGames(game.gameId);
   if (thread) {
     if ((combat.forcedRerollQueue || []).length > 0) {
       await sendRerollUI(thread, game, combat, 'forced');
@@ -7598,5 +7598,5 @@ export async function handlePowerTokenOverflowDiscard(interaction, ctx) {
       }
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }

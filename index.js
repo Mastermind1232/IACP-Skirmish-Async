@@ -2719,7 +2719,7 @@ client.on('messageCreate', async (message) => {
         game.guildId = message.guild.id;
         // Test flag: --test-overflow routes through PvP overflow prompt path
         if (seedTextRaw.includes('--test-overflow')) game.testPvpOverflowPath = true;
-        saveGames();
+        saveGames(game.gameId);
 
         const loopResult = await runSelfPlayLoop(game, client, {
           buildAllDeps,
@@ -3198,7 +3198,7 @@ client.on('messageCreate', async (message) => {
       vp.total = Math.max(0, before + delta);
       const actualDelta = vp.total - before;
       setGame(gameId, game);
-      saveGames();
+      saveGames(game.gameId);
       const newTotal = vp.total;
       const side = isP1 ? 'Player 1' : 'Player 2';
       await message.reply(`✓ **${side}** VP adjusted ${actualDelta >= 0 ? '+' : ''}${actualDelta}. Total is now **${newTotal}** VP.`).catch(discordCatch);
@@ -3643,7 +3643,7 @@ client.on('interactionCreate', async (interaction) => {
           return;
         }
         game.figurePowerTokens[fk] = [...game.figurePowerTokens[fk], type];
-        saveGames();
+        saveGames(game.gameId);
         await interaction.reply({
           content: `Added **${type}** Power Token to **${fk}**.`,
           ephemeral: false,
@@ -3661,7 +3661,7 @@ client.on('interactionCreate', async (interaction) => {
         const removed = arr[idx - 1];
         game.figurePowerTokens[fk] = arr.filter((_, i) => i !== idx - 1);
         if (game.figurePowerTokens[fk].length === 0) delete game.figurePowerTokens[fk];
-        saveGames();
+        saveGames(game.gameId);
         await interaction.reply({
           content: `Removed **${removed}** Power Token from **${fk}**.`,
           ephemeral: false,
@@ -3716,7 +3716,7 @@ client.on('interactionCreate', async (interaction) => {
       const condType = interaction.options.getString('type');
       if (sub === 'add') {
         const applied = _applyCondition(game, fk, condType);
-        saveGames();
+        saveGames(game.gameId);
         await interaction.reply({
           content: applied
             ? `Applied **${condType}** to **${fk}**.`
@@ -3726,7 +3726,7 @@ client.on('interactionCreate', async (interaction) => {
       } else {
         const had = game.figureConditions?.[fk]?.includes(condType);
         filterCondition(game, fk, condType);
-        saveGames();
+        saveGames(game.gameId);
         await interaction.reply({
           content: had
             ? `Removed **${condType}** from **${fk}**.`
@@ -3769,7 +3769,7 @@ client.on('interactionCreate', async (interaction) => {
       }
       const prevCoord = poses[playerNum][fk];
       game.figurePositions[playerNum][fk] = coordRaw;
-      saveGames();
+      saveGames(game.gameId);
       await logGameAction(game, interaction.client, `🔧 **Manual move**: **${fk}** from **${String(prevCoord).toUpperCase()}** → **${coordRaw.toUpperCase()}** (by <@${interaction.user.id}>)`, { phase: 'ROUND', icon: 'move' });
       if (game.boardId && game.selectedMap) {
         try {
@@ -3864,7 +3864,7 @@ client.on('interactionCreate', async (interaction) => {
         if (game) {
           game.aiPlayerNum = 2;
           game.guildId = interaction.guild.id;
-          saveGames();
+          saveGames(game.gameId);
           // Kick off AI turns after a brief delay
           setTimeout(async () => {
             try {
@@ -3912,7 +3912,7 @@ client.on('interactionCreate', async (interaction) => {
       const aiUserId = `${AI_USER_PREFIX}${playerNum}`;
       markGameAsAi(game, playerNum);
       game.guildId = interaction.guild?.id || game.guildId;
-      saveGames();
+      saveGames(game.gameId);
       await interaction.reply({
         content: `AI added as **Player ${playerNum}** in game **${game.gameId}**. The AI will respond automatically after your actions.`,
       }).catch(discordCatch);
@@ -4035,7 +4035,7 @@ client.on('interactionCreate', async (interaction) => {
           if (!game) throw new Error('Game creation returned no game state');
           game.selfPlay = true;
           game.guildId = interaction.guild.id;
-          saveGames();
+          saveGames(game.gameId);
 
           // Run self-play loop (single game, not queued)
           const loopResult = await runSelfPlayLoop(game, client, {
@@ -4390,7 +4390,7 @@ client.on('interactionCreate', async (interaction) => {
       const pid2 = ctrl ? (ctrl === 1 ? game2.player1Id : game2.player2Id) : interaction.user.id;
       await logGameAction(game2, client, `📦 <@${pid2}> pushed crate from **${curCoord2.toUpperCase()}** → **${targetRaw.toUpperCase()}** (${dist} space${dist !== 1 ? 's' : ''}).`, { allowedMentions: { users: [pid2] }, phase: 'ROUND', icon: 'round' });
       await interaction.editReply({ content: `Crate pushed: ${curCoord2.toUpperCase()} → ${targetRaw.toUpperCase()} ✓` }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
     } else if (modalKey === 'krykna_push_modal_') {
       // customId: krykna_push_modal_{gameId}_krykna-{N}
       const rest2 = interaction.customId.replace('krykna_push_modal_', '');
@@ -4445,7 +4445,7 @@ client.on('interactionCreate', async (interaction) => {
           }
         }
       }
-      saveGames();
+      saveGames(game.gameId);
     } else if (modalKey === 'dc_rename_modal_') {
       const renameMsgId = interaction.customId.replace('dc_rename_modal_', '');
       const renameMeta = dcMessageMeta.get(renameMsgId);
@@ -4478,7 +4478,7 @@ client.on('interactionCreate', async (interaction) => {
         console.error('Failed to refresh DC embed after rename:', err);
       }
       await interaction.reply({ content: 'Figures renamed!', ephemeral: true }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
     } else if (modalKey === 'fav_name_modal_' || modalKey === 'fav_rename_modal_' || modalKey === 'fav_list_rename_modal_') {
       const favGroup = modalKey === 'fav_list_rename_modal_' ? 'favList' : 'favorites';
       const favCtx = buildContext(favGroup, buildAllDeps());
@@ -4519,7 +4519,7 @@ client.on('interactionCreate', async (interaction) => {
       game.dcActionsData = game.dcActionsData || {};
       game.dcActionsData[msgId] = game.dcActionsData[msgId] || {};
       game.dcActionsData[msgId].selectedFigure = selectedFigure;
-      saveGames();
+      saveGames(game.gameId);
       await updateDcActionsMessage(game, msgId, interaction.client);
       return;
     }

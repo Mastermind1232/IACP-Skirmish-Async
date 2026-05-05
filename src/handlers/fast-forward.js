@@ -384,7 +384,7 @@ export async function handleFastForward(interaction, ctx) {
       { icon: 'activate' }
     );
 
-    saveGames();
+    saveGames(game.gameId);
   } catch (err) {
     console.error('handleFastForward error:', err);
     await interaction.followUp({ content: `Fast Forward failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch((err2) => { console.error('[discord]', err2?.message ?? err2); });
@@ -464,5 +464,5 @@ export async function handleDefenderCcPlay(interaction, ctx) {
   await logGameAction(game, client, `🛡️ <@${getPlayerId(game, playerNum)}> played defender CC **${card}**.`, { icon: 'card' });
   await refreshHandAndDiscard(game, playerNum, client, ctx);
 
-  saveGames();
+  saveGames(game.gameId);
 }

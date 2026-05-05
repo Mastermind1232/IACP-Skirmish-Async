@@ -47,7 +47,7 @@ export async function handleBotmenuRecover(interaction, ctx) {
     const summary = results.map(r => `- ${r}`).join('\n');
     await interaction.editReply({ content: `**Recovered ${results.length} prompt(s):**\n${summary}`, components: [] }).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -148,7 +148,7 @@ export async function handleResync(interaction, ctx) {
     phases.push(`[ERROR] refresh: ${err.message}`);
   }
 
-  saveGames();
+  saveGames(game.gameId);
 
   const summary = [
     `✅ **Resync complete.** ${phases.join(' · ')}.`,
@@ -277,7 +277,7 @@ async function recoverBothSquadsReady(game, gameId, ctx) {
     populatePlayAreas: ctx.populatePlayAreas,
     getDetermineInitiativeButtons: ctx.getDetermineInitiativeButtons,
   }, { tag: '[Recovered]' });
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
   return 'Re-posted "Both Squads Ready" with initiative button';
 }
 

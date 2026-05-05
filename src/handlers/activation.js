@@ -182,7 +182,7 @@ export async function handleStatusPhase(interaction, ctx) {
       embeds: [],
       components: [endBtn],
     }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   game.p1ActivationPhaseEnded = false;
@@ -194,7 +194,7 @@ export async function handleStatusPhase(interaction, ctx) {
   if (sendPhaseGateMessages) {
     await sendPhaseGateMessages(game, 'pre_end_of_round', ctx);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -247,7 +247,7 @@ export async function handlePassActivationTurn(interaction, ctx) {
   // Turn change → repost the activation prompt at the bottom so the new
   // turn-player sees it without scrolling past their action logs.
   await repostRoundActivationMessage?.(game, gameId, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Lie in Ambush: trigger check + deploy handler ───────────────────────────
@@ -473,7 +473,7 @@ export async function handleLiaDeployZone(interaction, ctx) {
     icon: 'deploy',
   });
 
-  saveGames();
+  saveGames(game.gameId);
   await updateActivationsMessage?.(game, playerNum, client);
 
   // Refresh round activation message — LiA deployment changes the activation balance
@@ -624,7 +624,7 @@ export async function handleEndTurn(interaction, ctx) {
   await maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, client, ctx.findDcMessageIdForFigure);
   // Lie in Ambush: after opponent activates, check if trigger fires
   await checkLieInAmbushTrigger(game, meta.playerNum, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -649,7 +649,7 @@ export async function handleDcSwitchFig(interaction, ctx) {
   if (game.dcActionsData?.[msgId]) {
     game.dcActionsData[msgId].selectedFigure = null;
   }
-  saveGames();
+  saveGames(game.gameId);
   await updateDcActionsMessage(game, msgId, client);
 }
 
@@ -859,7 +859,7 @@ export async function handleDcEndActivation(interaction, ctx) {
   // Field Tactics (Death Trooper): after activation, choose a friendly TROOPER/LEADER within 2 to perform a free attack
   await maybePromptFieldTactics(game, meta, msgId, logGameAction, client, ctx.findDcMessageIdForFigure);
 
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1112,7 +1112,7 @@ export async function handleActPassive(interaction, ctx) {
         new BB().setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(BS.Secondary)
       );
       await interaction.message.edit({ content: `🧠 **Open-Minded** — **${displayName}**: Choose Power Token type:`, components: [new AR().addComponents(tokenBtns)] }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return; // Don't save twice
     }
   // --- Calming Presence: pick condition to remove, suffer 1 Strain ---
@@ -1499,7 +1499,7 @@ export async function handleActPassive(interaction, ctx) {
               spaceBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslamspace_skip`).setLabel('Skip push').setStyle(ButtonStyle.Secondary));
               await interaction.message.edit({ content: `**Wookiee Avenger Slam** — ${resultParts.join('. ')}. Push **${targetDcName}** to which space?`, components: [new ActionRowBuilder().addComponents(spaceBtns)] }).catch(discordCatch);
               await logGameAction?.(game, client, `**Wookiee Avenger Slam** — Rolled ${diceResult} against ${targetDcName}. Push pending.`, { phase: 'ACTIVATION', icon: 'activate' });
-              saveGames();
+              saveGames(game.gameId);
               return; // Don't save again at the end
             }
           }
@@ -1887,7 +1887,7 @@ export async function handleActPassive(interaction, ctx) {
               btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_skip`).setLabel('Done').setStyle(ButtonStyle.Secondary));
               const thread = interaction.channel;
               await thread.send({ content: `🗣️ **Conspire** — ${game.pendingConspire.tokensRemaining} Focus token(s) remaining. Choose a figure:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
-              saveGames();
+              saveGames(game.gameId);
               return;
             }
           }
@@ -1937,7 +1937,7 @@ export async function handleActPassive(interaction, ctx) {
       }).catch(discordCatch);
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1957,7 +1957,7 @@ export async function handleFieldTacticsPick(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   if (chosenValue === 'skip') {
     await interaction.message.edit({ content: '**Field Tactics** — Skipped.', components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   const figureKey = chosenValue;
@@ -1977,7 +1977,7 @@ export async function handleFieldTacticsPick(interaction, ctx) {
   const chosenName = dcNameFromFigureKey(figureKey);
   await interaction.message.edit({ content: `**Field Tactics** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Field Tactics** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.`, { phase: 'ROUND', icon: 'activate' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2016,7 +2016,7 @@ export async function handleForceVisionPick(interaction, ctx) {
     allowedMentions: { users: [] },
   }).catch(discordCatch);
   await logGameAction(game, client, `👁️ **Force Vision** — **${displayName}** must be activated next by Player ${oppNum}, if possible.`, { phase: 'ROUND', icon: 'activate' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2053,7 +2053,7 @@ export async function handleHeroicEffortReturn(interaction, ctx) {
   }).catch(discordCatch);
   await logGameAction(game, client, `**Heroic Effort** — P${playerNum} returned 1 Command card to deck bottom.`, { phase: 'ROUND', icon: 'card' });
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2086,7 +2086,7 @@ export async function handleScavWeaponTransfer(interaction, ctx) {
     components: [],
   }).catch(discordCatch);
   await logGameAction(game, client, `**Scavenged Weaponry** — Transferred to **${target.displayName}** after defeat.`, { phase: 'ROUND', icon: 'card' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2110,7 +2110,7 @@ export async function handleScFigPick(interaction, ctx) {
 
   if (target === 'cancel') {
     await interaction.message.edit({ content: '**[Spectre Cell]** — Cancelled.', components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2150,7 +2150,7 @@ export async function handleScFigPick(interaction, ctx) {
     components: [],
   }).catch(discordCatch);
   await logGameAction?.(game, client, `**[Spectre Cell]** — ${targetDcName} gains 2 MP, may interrupt attack. (Exhausted)`, { phase: 'ACTIVATION', icon: 'card' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2182,7 +2182,7 @@ export async function handleHairTriggerUse(interaction, ctx) {
     content: `**Hair Trigger** — **${htDcName}** interrupts! Use the **Attack** button on your DC card to perform a free attack.`,
   }).catch(discordCatch);
   await logGameAction(game, client, `**Hair Trigger** — **${htDcName}** interrupts to perform a free attack.`, { phase: 'ACTIVATION', icon: 'attack' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2197,7 +2197,7 @@ export async function handleHairTriggerSkip(interaction, ctx) {
   const gameId = parts[0];
   const game = getGame(gameId);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  if (game) saveGames();
+  if (game) saveGames(game.gameId);
 }
 
 /**
@@ -2239,7 +2239,7 @@ export async function handleItWillBeAlrightUse(interaction, ctx) {
 
   if (targets.length === 0) {
     await interaction.message.edit({ content: '**It Will Be Alright** — No eligible friendly figures within 2 spaces.', components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2263,7 +2263,7 @@ export async function handleItWillBeAlrightUse(interaction, ctx) {
     content: `**It Will Be Alright** — Choose a friendly figure to sacrifice:`,
     components: rows.slice(0, 5),
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2279,7 +2279,7 @@ export async function handleItWillBeAlrightSkip(interaction, ctx) {
   await interaction.message.edit({ content: '**It Will Be Alright** — Skipped.', components: [] }).catch(discordCatch);
   if (game) {
     clearPendingItWillBeAlright(game);
-    saveGames();
+    saveGames(game.gameId);
   }
 }
 
@@ -2347,7 +2347,7 @@ export async function handleItWillBeAlrightPick(interaction, ctx) {
     content: `**It Will Be Alright** — **${targetDcName}** defeated. **${cassianDisplay}** may perform a free move or attack:`,
     components: [actionRow],
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2388,5 +2388,5 @@ export async function handleItWillBeAlrightAction(interaction, ctx) {
   }
 
   clearPendingItWillBeAlright(game);
-  saveGames();
+  saveGames(game.gameId);
 }

@@ -459,7 +459,7 @@ export async function handleMapTypeChoice(interaction, ctx) {
     const missionMenu = type === 'select_draw'
       ? getMissionSelectDrawMenu(gameId, options)
       : getMissionSelectionPickMenu(gameId, options);
-    saveGames();
+    saveGames(game.gameId);
     await interaction.editReply({ content, embeds: [], components: [getMapTypeButtons(gameId, type), missionMenu] }).catch(discordCatch);
     return;
   }
@@ -509,7 +509,7 @@ export async function handleMapTypeChoice(interaction, ctx) {
 
   // Show confirmation WITHOUT revealing the map name
   const typeLabel = type === 'competitive' ? 'Competitive — Random from tournament rotation' : 'Random — Random map and mission';
-  saveGames();
+  saveGames(game.gameId);
   await interaction.editReply({
     content: `**${typeLabel}**\nMap selected. Click **Confirm Selection** to reveal and proceed, or pick a different method.`,
     embeds: [],
@@ -610,7 +610,7 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
   } catch (err) {
     console.error('Failed to create/populate Hand threads:', err);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -664,7 +664,7 @@ export async function handleMapSelectionDraw(interaction, ctx) {
   const options = buildPlayableMissionOptions(ctx.getPlayReadyMaps, getMissionCardsData);
   const confirmLabel = game.selectedMission?.fullName || game.selectedMap?.name || 'Map';
   const components = [getMapTypeButtons(gameId, 'select_draw'), getMissionSelectDrawMenu(gameId, options), getMapConfirmButton(gameId)];
-  ctx.saveGames();
+  ctx.saveGames(game.gameId);
   await interaction.editReply({ content: `Drew: **${confirmLabel}**\nClick **Confirm Selection** to proceed, or re-draw above.`, components }).catch(discordCatch);
 }
 
@@ -699,7 +699,7 @@ export async function handleMapSelectionPick(interaction, ctx) {
   const options = buildPlayableMissionOptions(ctx.getPlayReadyMaps, getMissionCardsData);
   const confirmLabel = game.selectedMission?.fullName || game.selectedMap?.name || 'Map';
   const components = [getMapTypeButtons(gameId, 'selection'), getMissionSelectionPickMenu(gameId, options, missionId), getMapConfirmButton(gameId)];
-  ctx.saveGames();
+  ctx.saveGames(game.gameId);
   await interaction.editReply({ content: `Selected: **${confirmLabel}**\nClick **Confirm Selection** to proceed, or change your pick above.`, components }).catch(discordCatch);
 }
 
@@ -760,7 +760,7 @@ export async function handleMapGoBack(interaction, ctx) {
   delete game.selectedMap;
   delete game.selectedMission;
   delete game.mapSelectionType;
-  ctx.saveGames();
+  ctx.saveGames(game.gameId);
   const tooltipEmbed = getMapSelectionTooltipEmbed?.();
   await interaction.editReply({
     content: 'Choose how to select the map:',
@@ -804,7 +804,7 @@ export async function handleDraftRandom(interaction, ctx) {
         console.error('Failed to update setup buttons after Draft Random:', err);
       }
     }
-    saveGames();
+    saveGames(game.gameId);
   } catch (err) {
     console.error('Draft Random error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'draft_random');
@@ -912,7 +912,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
     });
     game.deploymentZoneMessageId = zoneMsg.id;
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1009,7 +1009,7 @@ export async function handleDeploymentZone(interaction, ctx) {
       }
       await _sendAttachmentDropdown(game, gameId, pn, pending[0], client);
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -1018,7 +1018,7 @@ export async function handleDeploymentZone(interaction, ctx) {
   if (isBlitzMission(game)) {
     initBlitzDeployment(game);
     await sendBlitzTurnPrompt(game, game.blitzDeployment.currentPlayerNum, ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   await _sendInitiativeDeployButtons(game, gameId, ctx);
@@ -1028,7 +1028,7 @@ export async function handleDeploymentZone(interaction, ctx) {
     undoEntry.deployMessageIds = game.initiativeDeployMessageIds || [];
     undoEntry.deployHandChannelId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1096,11 +1096,11 @@ export async function startDeploymentAfterAttachments(game, client, ctx) {
   if (isBlitzMission(game)) {
     initBlitzDeployment(game);
     await sendBlitzTurnPrompt(game, game.blitzDeployment.currentPlayerNum, ctx);
-    ctx.saveGames();
+    ctx.saveGames(game.gameId);
     return;
   }
   await _sendInitiativeDeployButtons(game, gameId, ctx);
-  ctx.saveGames();
+  ctx.saveGames(game.gameId);
 }
 
 /**
@@ -1557,7 +1557,7 @@ export async function handleDeployPick(interaction, ctx) {
     game.figureOrientations[figureKey] = pendingOrientation;
     delete game.pendingDeployOrientation[`${playerNum}_${flatIndex}`];
   }
-  saveGames();
+  saveGames(game.gameId);
   const spaceUpper = space.toUpperCase();
   const gridKey = `${playerNum}_${flatIndex}`;
   const gridMsgIds = game.deploySpaceGridMessageIds?.[gridKey] || [];
@@ -1622,7 +1622,7 @@ export async function handleDeployPick(interaction, ctx) {
     const names = Object.keys(loadoutCards);
     if (names.length > 0) {
       setPendingLoadoutSelection(game, { figureKey, playerNum });
-      saveGames();
+      saveGames(game.gameId);
       const defaultName = names[0];
       const selectionRow = _getLoadoutSelectionRow(game.gameId, figureKey, names, defaultName);
       const confirmRow = _getLoadoutConfirmRow(game.gameId, figureKey);
@@ -1780,7 +1780,7 @@ export async function handleLoadoutConfirm(interaction, ctx) {
   // Clear the deployment gate
   const wasPending = game.pendingLoadoutSelection?.playerNum;
   clearPendingLoadoutSelection(game);
-  saveGames();
+  saveGames(game.gameId);
 
   // Remove the loadout picker from the hand channel
   await interaction.message.delete().catch(discordCatch);
@@ -1851,7 +1851,7 @@ export async function handleFormPick(interaction, ctx) {
   }
 
   setConfig(game, figureKey, 'form', formName);
-  saveGames();
+  saveGames(game.gameId);
   const { join } = await import('path');
   const { getRootDir } = await import('../data-loader.js');
   const files = [];
@@ -1984,7 +1984,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     } catch (err) {
       console.error('Failed to send deploy prompt to non-initiative player:', err);
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2014,7 +2014,7 @@ export async function handleDeploymentDone(interaction, ctx) {
   // Phase gate: both players deployed — wait for both to confirm before advancing
   const { sendPhaseGateMessages } = ctx;
   await sendPhaseGateMessages(game, 'deploy_done', ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2148,7 +2148,7 @@ export async function handleAutoDeploy(interaction, ctx) {
   }
 
   await logGameAction(game, client, `<@${interaction.user.id}> auto-deployed ${placed} figure(s) in the ${playerZone} zone`, { phase: 'DEPLOYMENT', icon: 'deploy' });
-  saveGames();
+  saveGames(game.gameId);
   await interaction.followUp({ content: `Auto-deployed ${placed} figure(s) at the ${playerZone} zone entrance.`, ephemeral: true }).catch(discordCatch);
 }
 
@@ -2218,7 +2218,7 @@ export async function handleSetupAttachTo(interaction, ctx) {
     content: `Attach **${card}** to **${dcDisplayName}**?`,
     components: [confirmRow],
   });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2307,7 +2307,7 @@ export async function handleAttachReselect(interaction, ctx) {
   if (!pending || pending.length === 0) return;
 
   await _sendAttachmentDropdown(game, gameId, playerNum, pending[0], client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2363,7 +2363,7 @@ export async function handleAttachDoneConfirm(interaction, ctx) {
     const handChannel = await fetchGameChannel(client, handId);
     await handChannel.send({ content: 'Attachments confirmed. Waiting for your opponent to finish placing theirs.' });
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2477,7 +2477,7 @@ export async function handleAttachDoneRedo(interaction, ctx) {
     // All auto-attached again — show done confirmation
     await _sendAttachDonePrompt(game, gameId, playerNum, client);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2572,7 +2572,7 @@ async function _proceedAttachmentPhase(game, gameId, playerNum, interaction, ctx
 
   if (pending.length > 0) {
     await _sendAttachmentDropdown(game, gameId, playerNum, pending[0], client);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2589,5 +2589,5 @@ async function _proceedAttachmentPhase(game, gameId, playerNum, interaction, ctx
     // Opponent not done yet — show prompt with waiting note
     await _sendAttachDonePrompt(game, gameId, playerNum, client);
   }
-  saveGames();
+  saveGames(game.gameId);
 }

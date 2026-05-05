@@ -185,7 +185,7 @@ export async function handleLobbyStart(interaction, ctx) {
       });
     }
     game.generalSetupMessageId = setupMsg.id;
-    saveGames();
+    saveGames(game.gameId);
     await interaction.followUp({
       content: lobby.loadCheckpoint
         ? `Game **IA Game #${gameId}** is ready! Head to <#${generalChannel.id}> to pick a checkpoint.`

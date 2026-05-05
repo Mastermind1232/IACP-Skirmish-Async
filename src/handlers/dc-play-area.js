@@ -169,7 +169,7 @@ export async function handleDcActivate(interaction, ctx) {
         game[activatedKey] = game[activatedKey] || [];
         if (!game[activatedKey].includes(dcIndex)) game[activatedKey].push(dcIndex);
         recomputeActivationCounts(game, playerNum);
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
     }
@@ -345,7 +345,7 @@ export async function handleDcUnactivate(interaction, ctx) {
     files,
     components: getDcPlayAreaComponents(msgId, false, game, meta.dcName),
   });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -405,7 +405,7 @@ export async function handleDcRemoveStun(interaction, ctx) {
   await logGameAction(game, client, `⚡ **${displayName}** spent 1 action to remove **Stunned**.`, { phase: 'ACTIVATION', icon: 'condition' });
 
   await updateDcActionsMessage(interaction, game, msgId, meta);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -520,7 +520,7 @@ export async function handleDcToggle(interaction, ctx) {
       delete game.dcActivationLogMessageIds[msgId];
     }
   }
-  saveGames();
+  saveGames(game.gameId);
   if (!nowExhausted) {
     const pLabel = `P${meta.playerNum}`;
     await logGameAction(game, client, `**${pLabel}:** <@${playerId}> readied **${displayName}**`, { allowedMentions: { users: [playerId] }, icon: 'ready' });
@@ -576,7 +576,7 @@ export async function handleDcDeplete(interaction, ctx) {
   embed.setColor(COLORS.GRAY);
   await withDiscordRetry(() => interaction.message.edit({ embeds: [embed], files, components: [] }));
   await logGameAction(game, client, `**P${meta.playerNum}:** <@${ownerId}> depleted **${displayName}** — removed from game`, { allowedMentions: { users: [ownerId] }, icon: 'deplete' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -777,7 +777,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
         gameLogMessageId: logMsg?.id,
       });
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   if (ctx.resolveAbility) {
@@ -844,7 +844,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, meta.playerNum, meta.displayName || meta.dcName);
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1607,7 +1607,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
             components: [new ActionRowBuilder().addComponents(dieBtns)],
             ephemeral: false,
           }).catch(discordCatch);
-          saveGames();
+          saveGames(game.gameId);
           return;
         }
       }
@@ -1633,7 +1633,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
           content: `**Bo-Rifle** — Treat this attack as **Melee** (swap Blue→Red die)?`,
           components: [new ActionRowBuilder().addComponents(brBtns)],
         }).catch(discordCatch);
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
     }
@@ -1795,7 +1795,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
           actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
           await updateDcActionsMessage(game, msgId, client);
         }
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
       // Deplete: remove card from attachments
@@ -1810,7 +1810,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await logGameAction(game, client, `**Smuggler's Run** — **${displayName}** depleted in opponent's deployment zone. +5 VP.`, { phase: 'ROUND', icon: 'card' });
       if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(discordCatch);
       if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
 
@@ -1822,7 +1822,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.pendingMpBonus[msgId] = 1;
       await thread.send(`**Vader's Finest** — Your next attack is free. After attack resolves, gain **1 MP**.`).catch(discordCatch);
       await updateDcActionsMessage(game, msgId, client);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
 
@@ -1835,7 +1835,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
           actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
           await updateDcActionsMessage(game, msgId, client);
         }
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
       // Check printed attack dice count for the acting figure
@@ -1863,7 +1863,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
           actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
           await updateDcActionsMessage(game, msgId, client);
         }
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
       // Apply Focus
@@ -1875,7 +1875,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await thread.send(`**Vader's Finest** — **${displayName}** becomes **Focused**.`).catch(discordCatch);
       await logGameAction(game, client, `**Vader's Finest** — **${displayName}** becomes Focused.`, { phase: 'ROUND', icon: 'card' });
       if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
 
@@ -1886,7 +1886,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = { from: 'Autofire' };
       await thread.send(`**Autofire** — Your next attack: defender adds **1 white die**. Surge: **Chain attack** targeting a figure within 3 of target space.`).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
 
@@ -1897,7 +1897,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = { from: 'Fire Mission' };
       await thread.send(`**Fire Mission** — Your next attack: LOS from **any figure in this group** (range from acting figure). **+Blast 1**.`).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
 
@@ -1911,7 +1911,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.darksaberSecondAttack = game.darksaberSecondAttack || {};
       game.darksaberSecondAttack[msgId] = true;
       await thread.send(`**Darksaber Strike** — Your next attack: **1 red die, Melee**. **Blast → Cleave** conversion. Then you may perform another attack.`).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
 
@@ -1925,7 +1925,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = { from: 'Orbital Bombardment' };
       await logGameAction(game, client, `**Orbital Bombardment** — **${displayName}** placed ${roundNum} Bombardment tokens (total: ${game.orbitalBombardmentTokens[msgId]}).`, { phase: 'ROUND', icon: 'card' });
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
 
@@ -1937,14 +1937,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const pos = game.figurePositions?.[meta.playerNum]?.[figKey];
       if (!pos) {
         await thread.send('**Overwatch** — Figure has no position.').catch(discordCatch);
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
       const mapId = game.selectedMap?.id;
       const ms = getEffectiveMapSpaces(game, getMapData(mapId));
       if (!ms?.adjacency) {
         await thread.send('**Overwatch** — Map data not available.').catch(discordCatch);
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
       // Build LOS-valid spaces (all map spaces with LOS from this figure)
@@ -1956,7 +1956,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       }
       if (losValid.length === 0) {
         await thread.send('**Overwatch** — No valid spaces in LOS to place the token.').catch(discordCatch);
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
       // Store pending state and show space picker
@@ -1976,7 +1976,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         content: `${owHeader}:\nChoose a row:`,
         components: owRowBtns.slice(0, 5),
       }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
   }
@@ -1989,20 +1989,20 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const figKey = `${meta.dcName}-${dgIdx}-${selectedFig}`;
     if (!game.figureContraband?.[figKey]) {
       await thread.send('**Bomb Drop** — This figure is not carrying an explosive.').catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     const pos = game.figurePositions?.[meta.playerNum]?.[figKey];
     if (!pos) {
       await thread.send('**Bomb Drop** — Figure has no position.').catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     const mapId = game.selectedMap?.id;
     const ms = getEffectiveMapSpaces(game, getMapData(mapId));
     if (!ms?.adjacency) {
       await thread.send('**Bomb Drop** — Map data not available.').catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Find spaces within 3 using BFS
@@ -2022,7 +2022,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const validSpaces = [...visited];
     if (validSpaces.length === 0) {
       await thread.send('**Bomb Drop** — No valid spaces within range.').catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     game.pendingBombDrop = game.pendingBombDrop || {};
@@ -2041,7 +2041,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       content: `${bdHeader}:\nChoose a row:`,
       components: bdRowBtns.slice(0, 5),
     }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2083,7 +2083,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await ctx.updateAttachmentMessageForDc(game, meta?.playerNum, msgId, client).catch(discordCatch);
     }
     await interaction.followUp({ content: `**${action}** — Choose one:`, components: rows, ephemeral: false }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Handle space-choice abilities (e.g. Pounce teleport destination)
@@ -2107,7 +2107,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const payload = { content: `${spacePickLabel}\nChoose a row:`, components: pounceRowBtns.slice(0, 5), ephemeral: false, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await interaction.followUp(payload).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
   }
@@ -2129,7 +2129,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       } else {
         await interaction.followUp(sanitizeMentions({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] }, ephemeral: false })).catch(discordCatch);
       }
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
   }
@@ -2231,7 +2231,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, meta.playerNum, displayName);
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2270,7 +2270,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     const wvLog = `**Wreak Vengeance** — Both Dual-Bladed Fury effects applied:\n${logParts.join('\n')}`;
     await interaction.deferUpdate().catch(discordCatch);
     await interaction.followUp({ content: wvLog, ephemeral: false }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2286,7 +2286,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     const fo = game.pendingFalseOrders;
     if (!fo) {
       await interaction.followUp({ content: 'False Orders state lost.', ephemeral: true }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     const controlledName = dcNameFromFigureKey(fo.controlledFigureKey);
@@ -2303,7 +2303,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       components: [new ActionRowBuilder().addComponents(moveBtn, atkBtn)],
       ephemeral: false,
     }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2312,7 +2312,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     const lure = game.pendingLure;
     if (!lure) {
       await interaction.followUp({ content: 'Lure state lost.', ephemeral: true }).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Convert pendingLure to pendingFalseOrders format for combat reuse
@@ -2340,7 +2340,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       components: [new ActionRowBuilder().addComponents(atkBtn, skipBtn)],
       ephemeral: false,
     }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2365,12 +2365,12 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       const payload = { content: `${spacePickLabel}\nChoose a row:`, components: p2RowBtns.slice(0, 5), ephemeral: false };
       if (mapAttachment) payload.files = [mapAttachment];
       await interaction.followUp(payload).catch(discordCatch);
-      saveGames();
+      saveGames(game.gameId);
       return;
     }
     // Fallback if space choice helpers not available
     await interaction.followUp({ content: `${resolveResult.spaceChoiceLabel || 'Pick a landing space'} (resolve manually — space picker unavailable).`, ephemeral: false }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2391,7 +2391,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     const rows = chunkButtonsToRows(choiceButtons);
     const prompt = resolveResult.choicePrompt || `**${abilityId}** — Choose:`;
     await interaction.followUp({ content: prompt, components: rows, ephemeral: false }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2425,7 +2425,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       ephemeral: false,
     }).catch(discordCatch);
     if (logGameAction) await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2454,7 +2454,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   if (resolveResult.applied && resolveResult.logMessage && logGameAction) {
     await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2519,7 +2519,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
     const rows = chunkButtonsToRows(choiceButtons);
     const prompt = result.choicePrompt || `Choose a target:`;
     await interaction.followUp({ content: prompt, components: rows, ephemeral: false }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2558,7 +2558,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
   } else {
     await interaction.message.edit({ content: `${abilityId === 'pounce' ? 'Pounce' : 'Ability'} failed: ${result.manualMessage}`, components: [] }).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2586,7 +2586,7 @@ export async function handleArsenalPick(interaction, ctx) {
   const chosenDice = interaction.values[0].split(',');
   game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
   game.pendingOverrideAttackDice[msgId] = { dice: chosenDice };
-  saveGames();
+  saveGames(game.gameId);
 
   const stats = getDcStats(meta.dcName);
   const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
@@ -2649,7 +2649,7 @@ export async function handleEe3DiePick(interaction, ctx) {
     game.pendingOverrideAttackDice[msgId] = { dice: baseDice };
   }
   game.pendingEe3Carbine[msgId] = 'decided';
-  saveGames();
+  saveGames(game.gameId);
 
   // Proceed to attack target selection
   const stats = getDcStats(meta.dcName);
@@ -2708,7 +2708,7 @@ export async function handleBoRiflePick(interaction, ctx) {
     await interaction.message.edit({ content: '**Bo-Rifle** — Skipped (normal ranged attack).', components: [] }).catch(discordCatch);
   }
   if (game.pendingBoRifle?.[msgId]) delete game.pendingBoRifle[msgId];
-  saveGames();
+  saveGames(game.gameId);
 
   const stats = getDcStats(meta.dcName);
   const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
@@ -2792,7 +2792,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
       await interaction.followUp({ content: `Skipped.`, ephemeral: false }).catch(discordCatch);
     }
     clearPendingFalseOrders(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2833,7 +2833,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     };
     if (mapAttachment) payload.files = [mapAttachment];
     await interaction.followUp(payload).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -2942,7 +2942,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     components: targetRows,
     ephemeral: false,
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -2989,7 +2989,7 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   };
   if (boardPayload?.files) replyPayload.files = boardPayload.files;
   await interaction.followUp(replyPayload).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -3022,7 +3022,7 @@ export async function handleOrderMove(interaction, ctx) {
     const dcName = dcNameFromFigureKey(figureKey);
     await interaction.followUp({ content: `**${dcName}** has no position on the board.`, ephemeral: false }).catch(discordCatch);
     clearPendingOrderedMove(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -3038,7 +3038,7 @@ export async function handleOrderMove(interaction, ctx) {
   if (reachableSpaces.length === 0) {
     await interaction.followUp({ content: `**${dcName}** cannot move (no valid spaces within ${mp} MP).`, ephemeral: false }).catch(discordCatch);
     clearPendingOrderedMove(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -3060,7 +3060,7 @@ export async function handleOrderMove(interaction, ctx) {
   };
   if (mapAttachment) payload.files = [mapAttachment];
   await interaction.followUp(payload).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -3115,7 +3115,7 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
   };
   if (boardPayload?.files) replyPayload.files = boardPayload.files;
   await interaction.followUp(replyPayload).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -3169,7 +3169,7 @@ export async function handleRushPushFig(interaction, ctx) {
   if (!targetPos) {
     clearPendingRushPush(game);
     await interaction.message.edit({ content: '**Rush** — Target no longer on board.', components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Find valid landing spaces: target's current space + adjacent unoccupied
@@ -3200,7 +3200,7 @@ export async function handleRushPushFig(interaction, ctx) {
     await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
     clearPendingRushPush(game);
     await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Show 2-step row→cell space picker via generic space_row_ handler
@@ -3225,7 +3225,7 @@ export async function handleRushPushFig(interaction, ctx) {
   if (mapAttachment) payload.files = [mapAttachment];
   await interaction.message.edit({ content: '**Rush** — Choosing push destination...', components: [] }).catch(discordCatch);
   await interaction.followUp(payload).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -3279,7 +3279,7 @@ export async function handleRushPushSpace(interaction, ctx) {
   await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
   clearPendingRushPush(game);
   await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -3295,7 +3295,7 @@ export async function handleRushPushSkip(interaction, ctx) {
   cleanupSpacePick(game, `${gameId}_${msgId}`);
   clearPendingRushPush(game);
   await interaction.message.edit({ content: '**Rush** — Push skipped.', components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -3324,7 +3324,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
   if (!targetPos) {
     clearPendingShoulderRush(game);
     await interaction.message.edit({ content: '**Shoulder Rush** — Target no longer on board.', components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Check if target is SMALL
@@ -3344,7 +3344,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
     await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
     clearPendingShoulderRush(game);
     await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Target is SMALL: show push space picker (adjacent to target, unoccupied)
@@ -3370,7 +3370,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
     await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
     clearPendingShoulderRush(game);
     await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   // Show 2-step row→cell space picker via generic space_row_ handler
@@ -3394,7 +3394,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
   if (mapAttachment) payload.files = [mapAttachment];
   await interaction.message.edit({ content: '**Shoulder Rush** — Choosing push destination...', components: [] }).catch(discordCatch);
   await interaction.followUp(payload).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -3444,7 +3444,7 @@ export async function handleShoulderRushSpace(interaction, ctx) {
   await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
   clearPendingShoulderRush(game);
   await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -3460,7 +3460,7 @@ export async function handleShoulderRushSkip(interaction, ctx) {
   cleanupSpacePick(game, `${gameId}_${msgId}`);
   clearPendingShoulderRush(game);
   await interaction.message.edit({ content: '**Shoulder Rush** — No target chosen.', components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Handle Overwatch token space placement. */
@@ -3480,7 +3480,7 @@ export async function handleOverwatchSpacePick(interaction, ctx) {
   const displayName = meta?.displayName || meta?.dcName || 'E-Web Engineer';
   await interaction.message.edit({ content: `**Overwatch** — Token placed at **${chosenSpace.toUpperCase()}**. When a hostile figure enters a space on or adjacent to this token, you may interrupt to attack.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Overwatch** — **${displayName}** placed token at **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'card' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Handle Orbital Bombardment deplete — start space selection for damage. */
@@ -3512,7 +3512,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
   if (allSpaces.length === 0) {
     await interaction.message.edit({ content: '**Orbital Bombardment** — Map data unavailable. Choose spaces manually.', components: [] }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   const obContextKey = `${gameId}_${msgId}`;
@@ -3530,7 +3530,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
     components: obRowBtns.slice(0, 5),
   }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — **${meta?.displayName || 'DC'}** depleted. Choosing ${tokenCount} spaces for bombardment.`, { phase: 'ROUND', icon: 'card' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Handle Orbital Bombardment skip (decline to deplete at activation start). */
@@ -3541,7 +3541,7 @@ export async function handleOrbitalBombardmentSkip(interaction, ctx) {
   const game = getGame(m[1]);
   if (!game) return;
   await interaction.message.edit({ content: '**Orbital Bombardment** — Skipped (tokens remain on card).', components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Handle Orbital Bombardment space selection (sequential picker). */
@@ -3575,7 +3575,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
       content: `${obSeqHeader}:\nChoose a row:`,
       components: obSeqRowBtns.slice(0, 5),
     }).catch(discordCatch);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -3629,7 +3629,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   }
   cleanupSpacePick(game, `${gameId}_${msgId}`);
   clearPendingOrbitalBombardment(game);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Handle Bomb Drop space selection — apply 2 damage to all figures on/adjacent to chosen space. */
@@ -3697,5 +3697,5 @@ export async function handleBombDropSpacePick(interaction, ctx) {
     }
   }
   delete game.pendingBombDrop[msgId];
-  saveGames();
+  saveGames(game.gameId);
 }

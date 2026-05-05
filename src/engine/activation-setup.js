@@ -1328,7 +1328,7 @@ export async function finalizeActivation({
   }
 
   // E5. saveGames + log message + store ID
-  saveGames();
+  saveGames(game.gameId);
   const logCh = await fetchGameChannel(client, game.generalId);
   const icon = ACTION_ICONS.activate || '⚡';
   const pLabel = `P${playerNum}`;
@@ -1338,7 +1338,7 @@ export async function finalizeActivation({
   }));
   game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
   game.dcActivationLogMessageIds[msgId] = logMsg.id;
-  saveGames(); // save again after storing log message ID
+  saveGames(game.gameId); // save again after storing log message ID
 
   // E6. Still Faster Than You: opponent interrupt
   if (game.stillFasterPlayerNum && game.stillFasterPlayerNum !== playerNum) {

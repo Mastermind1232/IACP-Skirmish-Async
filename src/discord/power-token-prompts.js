@@ -55,6 +55,6 @@ export async function sendPowerTokenOverflowUI(game, gameId, channel, playerNum,
     components: rows,
   }).catch(discordCatch);
 
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
   return true;
 }

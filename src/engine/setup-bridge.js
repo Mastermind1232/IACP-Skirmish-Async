@@ -341,7 +341,7 @@ export async function finishSetupAttachments(game, client, deps) {
   if (deps.startDeploymentAfterAttachments) {
     await deps.startDeploymentAfterAttachments(game, client, deps);
   }
-  deps.saveGames();
+  deps.saveGames(game.gameId);
 }
 
 /**
@@ -653,13 +653,13 @@ export async function runDraftRandom(game, client, deps, options = {}) {
       getDcPlayAreaComponents: deps.getDcPlayAreaComponents, getNicknamesForDcMessage: deps.getNicknamesForDcMessage,
     }, async () => {
       await runSorContinuation();
-      deps.saveGames();
+      deps.saveGames(game.gameId);
     });
   }
   if (!postDeployActive) {
     await runSorContinuation();
   }
-  deps.saveGames();
+  deps.saveGames(game.gameId);
 }
 
 /**

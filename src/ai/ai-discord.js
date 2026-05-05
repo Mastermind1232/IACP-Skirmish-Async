@@ -192,7 +192,7 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
         console.log(`[AI] Auto-deployed for player ${aiPlayerNum}: ${r.placed} placed, ${r.skipped} skipped, ${r.alreadyDeployed} already deployed`);
         // Persist via buildAllDeps if it exposes saveGames; the in-memory
         // mutation is enough for the next loop iteration regardless.
-        try { buildAllDeps()?.saveGames?.(); } catch {}
+        try { buildAllDeps()?.saveGames?.(game.gameId); } catch {}
         // Loop again — next iteration sees figures placed and clicks
         // deployment_done (which IS a non-modal action AI can handle).
         continue;

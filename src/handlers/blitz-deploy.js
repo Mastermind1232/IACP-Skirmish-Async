@@ -190,7 +190,7 @@ export async function sendBlitzTurnPrompt(game, playerNum, ctx) {
 
   game.blitzDeployment.uiMessageIds[playerNum] = [msg.id];
   game.blitzDeployment.phase = 'group_select';
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 // ── UI: Group figure deploy buttons ────────────────────────────────────────
@@ -349,7 +349,7 @@ export async function handleBlitzGroupSelect(interaction, ctx) {
   await cleanupBlitzMessages(game, playerNum, client);
   await logGameAction(game, client, `<@${interaction.user.id}> selected **${group.dcName}** to deploy (Blitz)`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
   await sendBlitzGroupDeployButtons(game, playerNum, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Handler: Pass ──────────────────────────────────────────────────────────
@@ -390,7 +390,7 @@ export async function handleBlitzPass(interaction, ctx) {
     game.blitzDeployment.currentPlayerNum = nextPlayerNum;
     await sendBlitzTurnPrompt(game, nextPlayerNum, ctx);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Auto-pass when a player has no undeployed groups. */
@@ -408,7 +408,7 @@ async function handleAutoPass(game, playerNum, ctx) {
     game.blitzDeployment.currentPlayerNum = nextPlayerNum;
     await sendBlitzTurnPrompt(game, nextPlayerNum, ctx);
   }
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 // ── Handler: Move figure select ────────────────────────────────────────────
@@ -469,7 +469,7 @@ export async function handleBlitzMoveFig(interaction, ctx) {
     // Mark as moved (nowhere to go)
     blitz.pendingMovement.movedKeys.push(figureKey);
     await sendBlitzMovementPrompt(game, playerNum, ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -505,7 +505,7 @@ export async function handleBlitzMoveFig(interaction, ctx) {
   });
 
   blitz.uiMessageIds[playerNum] = [msg.id];
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Handler: Move pick (destination selected) ──────────────────────────────
@@ -578,7 +578,7 @@ export async function handleBlitzMovePick(interaction, ctx) {
 
   // Continue with remaining movement or advance turn
   await sendBlitzMovementPrompt(game, playerNum, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Handler: Skip remaining movement ───────────────────────────────────────
@@ -615,7 +615,7 @@ export async function handleBlitzMoveDone(interaction, ctx) {
   await logGameAction(game, client, `<@${interaction.user.id}> skipped remaining Blitz movement`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'move' });
 
   await advanceBlitzTurn(game, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Blitz group completion check (called from handleDeployPick) ────────────
@@ -633,7 +633,7 @@ export async function checkBlitzGroupComplete(game, playerNum, interaction, ctx)
   if (!allPlaced) {
     // Not all placed — refresh group deploy buttons
     await sendBlitzGroupDeployButtons(game, playerNum, ctx);
-    ctx.saveGames();
+    ctx.saveGames(game.gameId);
     return;
   }
 
@@ -660,7 +660,7 @@ export async function checkBlitzGroupComplete(game, playerNum, interaction, ctx)
     { phase: 'DEPLOYMENT', icon: 'deploy' });
 
   await sendBlitzMovementPrompt(game, playerNum, ctx);
-  ctx.saveGames();
+  ctx.saveGames(game.gameId);
 }
 
 // ── Turn management ────────────────────────────────────────────────────────
@@ -708,5 +708,5 @@ async function endBlitzDeployment(game, ctx) {
 
   // Use the standard phase gate to advance from deployment → CC draw
   await sendPhaseGateMessages(game, 'deploy_done', ctx);
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }

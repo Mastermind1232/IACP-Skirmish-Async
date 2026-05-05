@@ -49,7 +49,7 @@ export async function handleDevaronDoorOpen(interaction, ctx) {
     } else {
       await postDevaronCratePushPrompts(game, generalCh, gameId);
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
 }
 
@@ -166,7 +166,7 @@ export async function handleFluctuationSwap(interaction, ctx) {
     if (postFluctuationSwapButtons) {
       await postFluctuationSwapButtons(game, generalCh, gameId, expectedPlayerNum);
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -212,13 +212,13 @@ export async function handleFluctuationSwap(interaction, ctx) {
     if (postFluctuationSwapButtons) {
       await postFluctuationSwapButtons(game, generalCh, gameId, nextPn);
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
   // Queue empty — continue round flow
   await continueAfterFluctuationSwap(game, gameId, interaction, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -259,13 +259,13 @@ export async function handleFluctuationSkip(interaction, ctx) {
     if (postFluctuationSwapButtons) {
       await postFluctuationSwapButtons(game, generalCh, gameId, nextPn);
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
   // Queue empty — continue round flow
   await continueAfterFluctuationSwap(game, gameId, interaction, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Claimed Krykna Placement handlers ──────────────────────────────────────
@@ -318,7 +318,7 @@ export async function handleKryknaPlace(interaction, ctx) {
     content: `🕷️ **Place Krykna** — Pick a row, then a space in opponent's deployment zone:`,
     components: rows.slice(0, 5),
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -353,7 +353,7 @@ export async function handleKryknaPlaceSkip(interaction, ctx) {
   } else {
     delete game.pendingClaimedKryknaQueue;
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -412,5 +412,5 @@ export async function handleKryknaPlacePick(interaction, ctx) {
   } else {
     delete game.pendingClaimedKryknaQueue;
   }
-  saveGames();
+  saveGames(game.gameId);
 }

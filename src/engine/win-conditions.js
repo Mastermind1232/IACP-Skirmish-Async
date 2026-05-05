@@ -198,7 +198,7 @@ export async function postGameOver(game, client, winnerId, reason, deps) {
       })();
     }
   }
-  deps.saveGames();
+  deps.saveGames(game.gameId);
 }
 
 /**

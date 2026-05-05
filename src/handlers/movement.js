@@ -38,7 +38,7 @@ async function _showMassivePushPicker(game, choice, interaction, client, logGame
   pending._currentControllerPlayerNum = controllerPlayerNum;
   pending._currentValidSpaces = validSpaces;
   await renderMassivePushSpacePrompt(game, client, { fallbackChannel: interaction?.channel });
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
@@ -61,7 +61,7 @@ async function _showMassivePushFigurePicker(game, figurePick, interaction, clien
   }));
   pending._currentValidSpaces = null;
   await renderMassivePushFigurePrompt(game, client, { fallbackChannel: interaction?.channel });
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
@@ -160,7 +160,7 @@ async function _dispatchNextMassivePush(game, result, interaction, ctx) {
     // pendingMassivePush. No-op if nothing was deferred.
     const { resumeDeferredPostDeployMove } = await import('./post-deploy.js');
     await resumeDeferredPostDeployMove(game, gameId, client, ctx);
-    if (saveGames) saveGames();
+    if (saveGames) saveGames(game.gameId);
     return;
   }
   if (result.needsFigurePick) {
@@ -220,7 +220,7 @@ export async function handleMassivePushSpace(interaction, ctx) {
     await logGameAction(game, client, `**${r.entry.dcName}** displaced **${from}** → **${to}** by massive figure${suffix}.`, { icon: 'move', phase: 'ROUND' });
   }
   await _dispatchNextMassivePush(game, result, interaction, ctx);
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
@@ -271,7 +271,7 @@ export async function handleMassivePushFigure(interaction, ctx) {
     await logGameAction(game, client, `**${r.entry.dcName}** displaced **${from}** → **${to}** by massive figure${suffix}.`, { icon: 'move', phase: 'ROUND' });
   }
   await _dispatchNextMassivePush(game, result, interaction, ctx);
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
@@ -696,7 +696,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     if (ctx.updateDcActionsMessage) {
       await ctx.updateDcActionsMessage(game, msgId, client).catch(() => {});
     }
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -1299,7 +1299,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       await logGameAction(game, client, `⚠️ Movement interrupt opportunity: ${trigger.description}`, { phase: 'ROUND', icon: 'warn' });
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1333,7 +1333,7 @@ export async function handleMoveInterruptPlay(interaction, ctx) {
     content: `✅ **${cardName}** acknowledged — play the card from your hand to resolve it.`,
     ephemeral: true,
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1362,7 +1362,7 @@ export async function handleMoveInterruptSkip(interaction, ctx) {
   }
 
   await logGameAction(game, client, `**${dcName}** skipped **${cardName}** opportunity.`, { phase: 'ROUND', icon: 'skip' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1399,7 +1399,7 @@ export async function handleOverwatchInterruptUse(interaction, ctx) {
 
   await logGameAction(game, client, `**Overwatch** — **${dcDisplayName}** interrupts to perform an attack! Use the DC's Attack button. Token removed. (Exhausted)`, { phase: 'ROUND', icon: 'attack' });
   await interaction.followUp({ content: `✅ **Overwatch** activated — use **${dcDisplayName}**'s Attack button to perform the interrupt attack. The Overwatch token has been removed.`, ephemeral: true }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1416,7 +1416,7 @@ export async function handleOverwatchInterruptSkip(interaction, ctx) {
   try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
 
   await logGameAction(game, client, `**Overwatch** interrupt opportunity skipped.`, { phase: 'ROUND', icon: 'skip' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1445,7 +1445,7 @@ export async function handleDioFollowPick(interaction, ctx) {
 
   await interaction.message.edit({ content: `**Attached** — **Dio** moved from **${currentSpace.toUpperCase()}** to **${space.toUpperCase()}** (following Iden Versio).`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Attached** — **Dio** moved to **${space.toUpperCase()}** (following Iden Versio).`, { phase: 'ROUND', icon: 'move' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -1464,6 +1464,6 @@ export async function handleDioStay(interaction, ctx) {
   clearPendingDioFollow(game);
   await interaction.message.edit({ content: `**Attached** — **Dio** stays put.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Attached** — Dio chose to stay (did not follow Iden).`, { phase: 'ROUND', icon: 'skip' });
-  saveGames();
+  saveGames(game.gameId);
 }
 

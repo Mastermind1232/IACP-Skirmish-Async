@@ -118,7 +118,7 @@ async function mutateToEndOfRound(game, client, deps, userId) {
   await updatePlayAreaDcButtons(game, client);
   // Update hand channel messages to show EOR CC play buttons
   await updateHandChannelMessages(game, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -165,7 +165,7 @@ async function mutateToStartOfRound(game, client, deps, userId) {
 
   // Update DC embeds to show fresh (unexhausted) state
   await updatePlayAreaDcButtons(game, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /**
@@ -259,5 +259,5 @@ async function mutateToCombat(game, client, deps, userId) {
   });
 
   await updatePlayAreaDcButtons(game, client);
-  saveGames();
+  saveGames(game.gameId);
 }

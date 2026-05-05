@@ -109,7 +109,7 @@ export async function sendPhaseGateMessages(game, phase, ctx) {
   // Hand channel messages are sufficient — no Game Log message needed
   // (players see Ready/Not Ready buttons in their Hand channels without revealing opponent status)
 
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }
 
 // ── Update gate messages ────────────────────────────────────────────────────
@@ -205,7 +205,7 @@ export async function handlePhaseGateReady(interaction, ctx) {
 
   if (!bothReady) {
     await updateGateMessages(game, ctx);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -215,7 +215,7 @@ export async function handlePhaseGateReady(interaction, ctx) {
   const phase = game.phaseGate.phase;
   clearPhaseGate(game);
   await dispatchPhaseAdvance(game, phase, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Unready handler ─────────────────────────────────────────────────────────
@@ -252,7 +252,7 @@ export async function handlePhaseGateUnready(interaction, ctx) {
   }
 
   await updateGateMessages(game, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Dispatch table ──────────────────────────────────────────────────────────
@@ -305,7 +305,7 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
           components: [row],
         });
         setPendingMissionSorReveal(game);
-        saveGames();
+        saveGames(game.gameId);
         return;
       }
       if (runStartOfRoundRules && missionRules?.startOfRound) {
@@ -430,5 +430,5 @@ async function advanceFromDeployment(game, ctx) {
   if (!postDeployActive) {
     await _sendCcPrompts();
   }
-  if (saveGames) saveGames();
+  if (saveGames) saveGames(game.gameId);
 }

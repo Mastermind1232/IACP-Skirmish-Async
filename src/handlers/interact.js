@@ -197,5 +197,5 @@ export async function handleInteractChoice(interaction, ctx) {
       }
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }

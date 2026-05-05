@@ -310,7 +310,7 @@ export async function maybeShowEndActivationPhaseButton(game, client, deps) {
       allowedMentions: { users: [game.initiativePlayerId] },
     })).catch(deps.discordCatch);
     game.roundActivationButtonShown = true;
-    deps.saveGames();
+    deps.saveGames(game.gameId);
   } catch (err) {
     console.error('Failed to show End Activation Phase button:', err);
   }
@@ -391,7 +391,7 @@ export async function repostRoundActivationMessage(game, gameId, client, deps) {
   } catch (err) {
     console.error('repostRoundActivationMessage: send failed', err);
   }
-  if (deps.saveGames) deps.saveGames();
+  if (deps.saveGames) deps.saveGames(game.gameId);
 }
 
 /** Update both Hand channel messages (for window buttons). Call when entering/exiting Start or End of Round window. */
@@ -706,7 +706,7 @@ export async function refreshAllGameComponents(game, client, deps) {
     ) {
       deps.setRoundPhase(game, deps.ROUND_PHASES.ACTIVATION);
       await deps.sendRoundActivationPhaseMessage(game, client);
-      if (deps.saveGames) deps.saveGames();
+      if (deps.saveGames) deps.saveGames(game.gameId);
     }
   } catch (err) {
     console.error('Refresh All: activation-phase safety net failed', err);

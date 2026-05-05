@@ -78,7 +78,7 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
   const msg = `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`;
   await thread.send(msg).catch(discordCatch);
   await logGameAction(game, client, `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`, { phase: 'ROUND', icon: 'attack' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Show next Spread the Pain figure-pick prompt, or finish if all conditions applied. */
@@ -87,11 +87,11 @@ async function advanceSpreadThePain(game, pending, ctx) {
     client, saveGames, finishCombatResolution, getMapData, getFigureLabel,
   } = ctx;
   const thread = await fetchCombatThread(client, pending.combatThreadId);
-  if (!thread) { await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client); saveGames(); return; }
+  if (!thread) { await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client); saveGames(game.gameId); return; }
   if (pending.conditionIdx >= pending.conditions.length) {
     clearPendingSpreadThePain(game);
     await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   const nextCond = pending.conditions[pending.conditionIdx];
@@ -113,7 +113,7 @@ async function advanceSpreadThePain(game, pending, ctx) {
   if (figuresAtSpaces.length === 0) {
     clearPendingSpreadThePain(game);
     await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
   const btns = figuresAtSpaces.slice(0, 4).map((f) =>
@@ -128,7 +128,7 @@ async function advanceSpreadThePain(game, pending, ctx) {
     allowedMentions: { users: [pending.ownerId] },
     components: [new ActionRowBuilder().addComponents(btns)],
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Exported handlers ───────────────────────────────────────────────────────
@@ -232,7 +232,7 @@ export async function handleBleedResolve(interaction, ctx) {
   filterCondition(game, figureKey, 'Bleed');
   delete game.pendingBleeding; // Clear headless pending state if present
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Sidewinder (Jyn Odan): apply 1 Strain + grant 2 MP after attack. */
@@ -274,14 +274,14 @@ export async function handleSidewinderApply(interaction, ctx) {
   await logGameAction(game, client, `**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.`, { phase: 'ROUND', icon: 'card' });
   await ensureMovementBankMessage(game, attackerMsgId, client);
   await updateDcCardMessage(client, game, attackerMsgId, ctx, { errorContext: 'Failed to refresh Sidewinder DC embed:' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleSidewinderSkip(interaction, ctx) {
   const { saveGames } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Boltslinger (Vinto Hreeda): deal 1 Dmg to chosen nearby hostile. */
@@ -327,7 +327,7 @@ export async function handleBoltslingerTarget(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Boltslinger** — **${target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
   clearPendingBoltslinger(game);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleBoltslingerSkip(interaction, ctx) {
@@ -338,7 +338,7 @@ export async function handleBoltslingerSkip(interaction, ctx) {
   const game = getGame(m[1]);
   if (game) clearPendingBoltslinger(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Indiscriminate Fire die choice button: indiscriminate_die_{gameId}_{dieIndex} */
@@ -358,7 +358,7 @@ export async function handleIndiscriminateFireDie(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const thread = await fetchCombatThread(client, combatThreadId);
   if (thread) await applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThreadId, die, targets, thread, ctx);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Indiscriminate Fire skip button: indiscriminate_skip_{gameId} */
@@ -370,7 +370,7 @@ export async function handleIndiscriminateFireSkip(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   if (game) clearPendingIndiscriminateFire(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Fighting Knife target pick: fighting_knife_target_{gameId}_{index} */
@@ -397,7 +397,7 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   const die = rollSingleAttackDie('red');
   const hits = die.dmg || 0;
   const thread = await fetchCombatThread(client, pending.combatThreadId);
-  if (!thread) { saveGames(); return; }
+  if (!thread) { saveGames(game.gameId); return; }
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (hits > 0 && target.msgId) {
     const { figureIndex: figIndex } = parseFigureKey(target.figureKey);
@@ -432,7 +432,7 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   await logGameAction(game, client, `**Fighting Knife** — ${target.label}: rolled 1 red die (${dieDesc}), dealt **${hits}** damage`, { phase: 'ROUND', icon: 'attack' });
   await thread.send(`**Fighting Knife** — Rolled 1 red die on **${target.label}**: ${dieDesc} \u2192 **${hits} Damage**.`).catch(discordCatch);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Fighting Knife skip: fighting_knife_skip_{gameId} */
@@ -448,7 +448,7 @@ export async function handleFightingKnifeSkip(interaction, ctx) {
   clearPendingFightingKnife(game);
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Concussive Bolt push target: concussive_bolt_push_{gameId}_{space} */
@@ -473,7 +473,7 @@ export async function handleConcussiveBoltPush(interaction, ctx) {
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await logGameAction(game, client, `**Concussive Bolt** — **${pending.figureLabel}** pushed from ${String(pending.currentPos).toUpperCase()} to **${space.toUpperCase()}**`, { phase: 'ROUND', icon: 'attack' });
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Durasteel Fist push: durasteel_push_{gameId}_{space} */
@@ -495,7 +495,7 @@ export async function handleDurasteelPush(interaction, ctx) {
   const { prevPos, newPos } = pushFigure(game, pending.targetPlayerNum, pending.targetFigureKey, space) || {};
   await logGameAction(game, client, `**Durasteel Fist** — Pushed **${pending.targetDcName}** from ${String(prevPos).toUpperCase()} to **${String(newPos).toUpperCase()}**.`, { phase: 'ACTIVATION', icon: 'activate' });
   clearPendingDurasteelFistPush(game);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Concussive Bolt skip: concussive_bolt_skip_{gameId} */
@@ -511,7 +511,7 @@ export async function handleConcussiveBoltSkip(interaction, ctx) {
   clearPendingConcussiveBolt(game);
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Spread the Pain figure pick: spread_pain_fig_{gameId}_{figureKey} */
@@ -585,7 +585,7 @@ export async function handleMissileSalvoDie(interaction, ctx) {
   const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
   const msg = `<@${ownerId}> **Missile Salvo** — **${colorLabel} die** selected (+3 Accuracy). Click **Attack** to target a different hostile figure. This attack costs no action.`;
   if (salvoThread) await salvoThread.send(sanitizeMentions({ content: msg, allowedMentions: { users: [ownerId] } })).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Missile Salvo done: missile_salvo_done_{gameId}_{msgId} */
@@ -617,7 +617,7 @@ export async function handleMissileSalvoDone(interaction, ctx) {
       }
     }
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Heavy Fire handlers ─────────────────────────────────────────────────────
@@ -626,7 +626,7 @@ export async function handleMissileSalvoDone(interaction, ctx) {
 async function advanceHeavyFirePick(game, pending, ctx) {
   const { client, saveGames, logGameAction } = ctx;
   const thread = await fetchCombatThread(client, pending.combatThreadId);
-  if (!thread) { saveGames(); return; }
+  if (!thread) { saveGames(game.gameId); return; }
 
   const remaining = pending.diceCount - pending.chosenTargets.length;
   if (remaining <= 0 || pending.hostiles.length === 0) {
@@ -655,7 +655,7 @@ async function advanceHeavyFirePick(game, pending, ctx) {
     allowedMentions: { users: [ownerId] },
     components: [new ActionRowBuilder().addComponents(btns)],
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Internal helper: apply damage to all chosen targets, then start opponent condition picking. */
@@ -666,12 +666,12 @@ async function startHeavyFireConditions(game, pending, ctx) {
     processFigureDefeat,
   } = ctx;
   const thread = await fetchCombatThread(client, pending.combatThreadId);
-  if (!thread) { saveGames(); return; }
+  if (!thread) { saveGames(game.gameId); return; }
 
   if (pending.chosenTargets.length === 0) {
     await thread.send('**Heavy Fire** — No targets chosen. Effect skipped.').catch(discordCatch);
     clearPendingHeavyFire(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -712,7 +712,7 @@ async function startHeavyFireConditions(game, pending, ctx) {
   if (pending.conditionsOwed <= 0) {
     await thread.send('**Heavy Fire** — No conditions owed (all targeted figures were defeated).').catch(discordCatch);
     clearPendingHeavyFire(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -725,12 +725,12 @@ async function startHeavyFireConditions(game, pending, ctx) {
 async function advanceHeavyFireConditionPick(game, pending, ctx) {
   const { client, saveGames } = ctx;
   const thread = await fetchCombatThread(client, pending.combatThreadId);
-  if (!thread) { saveGames(); return; }
+  if (!thread) { saveGames(game.gameId); return; }
 
   if (pending.conditionsApplied >= pending.conditionsOwed) {
     await thread.send(`**Heavy Fire** — All ${pending.conditionsOwed} harmful condition${pending.conditionsOwed !== 1 ? 's' : ''} applied to **${pending.attackerDcName}**.`).catch(discordCatch);
     clearPendingHeavyFire(game);
-    saveGames();
+    saveGames(game.gameId);
     return;
   }
 
@@ -749,7 +749,7 @@ async function advanceHeavyFireConditionPick(game, pending, ctx) {
     allowedMentions: { users: [oppId] },
     components: [new ActionRowBuilder().addComponents(btns)],
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Heavy Fire "Use" button: heavy_fire_use_{gameId} */
@@ -793,7 +793,7 @@ export async function handleHeavyFireSkip(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   if (game) clearPendingHeavyFire(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 /** Heavy Fire target pick: heavy_fire_tgt_{gameId}_{figureKey} */
@@ -899,7 +899,7 @@ export async function handleHavocShotUse(interaction, ctx) {
     components: rows,
   }).catch(discordCatch);
   await logGameAction(game, client, `**Havoc Shot** — **${dcNameFromFigureKey(hs.attackerFigureKey)}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleHavocShotSkip(interaction, ctx) {
@@ -910,7 +910,7 @@ export async function handleHavocShotSkip(interaction, ctx) {
   const game = getGame(m[1]);
   if (game) clearPendingHavocShot(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleHavocShotPick(interaction, ctx) {
@@ -953,7 +953,7 @@ export async function handleHavocShotPick(interaction, ctx) {
     clearPendingHavocShot(game);
     await interaction.message.edit({ content: `**Havoc Shot** — Complete.`, components: [] }).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleHavocShotDone(interaction, ctx) {
@@ -964,7 +964,7 @@ export async function handleHavocShotDone(interaction, ctx) {
   const game = getGame(m[1]);
   if (game) clearPendingHavocShot(game);
   await interaction.message.edit({ content: `**Havoc Shot** — Complete.`, components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Deflect (Luke Skywalker JK) ──────────────────────────────────────────
@@ -992,7 +992,7 @@ export async function handleDeflectPick(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Deflect** — **${df.deflectorDcName}** redirects 1 Damage to **${target.label}**.`, { phase: 'ROUND', icon: 'attack' });
   clearPendingDeflect(game);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleDeflectSkip(interaction, ctx) {
@@ -1003,7 +1003,7 @@ export async function handleDeflectSkip(interaction, ctx) {
   const game = getGame(m[1]);
   if (game) clearPendingDeflect(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 // ── Wanton Destruction (Saw Gerrera) ─────────────────────────────────────
@@ -1023,7 +1023,7 @@ export async function handleWantonUse(interaction, ctx) {
     await interaction.followUp({ content: 'No Command cards in hand to discard.', ephemeral: true }).catch(discordCatch);
     clearPendingWantonDestruction(game);
     await interaction.message.edit({ components: [] }).catch(discordCatch);
-    saveGames(); return;
+    saveGames(game.gameId); return;
   }
   // Show CC cards as buttons for the player to pick which to discard
   // Discord allows max 25 buttons (5 rows x 5)
@@ -1035,7 +1035,7 @@ export async function handleWantonUse(interaction, ctx) {
     content: `**Wanton Destruction** — Choose a Command card to discard:`,
     components: ccRows,
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleWantonCcPick(interaction, ctx) {
@@ -1074,7 +1074,7 @@ export async function handleWantonCcPick(interaction, ctx) {
     content: `**Wanton Destruction** — CC discarded. Choose up to ${wd.maxPicks} figures to deal 1 Damage:`,
     components: rows,
   }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleWantonPick(interaction, ctx) {
@@ -1115,7 +1115,7 @@ export async function handleWantonPick(interaction, ctx) {
     clearPendingWantonDestruction(game);
     await interaction.message.edit({ content: `**Wanton Destruction** — Complete.`, components: [] }).catch(discordCatch);
   }
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleWantonDone(interaction, ctx) {
@@ -1126,7 +1126,7 @@ export async function handleWantonDone(interaction, ctx) {
   const game = getGame(m[1]);
   if (game) clearPendingWantonDestruction(game);
   await interaction.message.edit({ content: `**Wanton Destruction** — Complete.`, components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
 
 export async function handleWantonSkip(interaction, ctx) {
@@ -1137,5 +1137,5 @@ export async function handleWantonSkip(interaction, ctx) {
   const game = getGame(m[1]);
   if (game) clearPendingWantonDestruction(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  saveGames();
+  saveGames(game.gameId);
 }
