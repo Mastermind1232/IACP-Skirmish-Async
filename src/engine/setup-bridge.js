@@ -203,9 +203,17 @@ export async function reorderPlayAreaAfterCheckpointLoad(game, client, deps) {
  * re-posted, false if it skipped (no attachments + no companions to interleave).
  */
 async function reorderOnePlayerForLoad(game, playerNum, client, deps) {
+  // CRITICAL: read the PROCESSED DC list (`p1DcList` / `p2DcList`), not the
+  // raw squad input (`player1Squad.dcList` / `player2Squad.dcList`). The raw
+  // squad is an array of DC name strings (incl. attachment cards like
+  // `"[Lie in Ambush]"`); the processed list is `[{ dcName, dgIndex,
+  // displayName, healthState }, ...]` with attachments filtered out and
+  // healthState carried through. Reading the raw squad makes every snapshot
+  // hit the `!s.dc.dcName` skip-path, deletes the DCs, and re-posts nothing
+  // — see commit 48ef4ef regression repaired here.
   const dcList = playerNum === 1
-    ? (game.player1Squad?.dcList || [])
-    : (game.player2Squad?.dcList || []);
+    ? (game.p1DcList || [])
+    : (game.p2DcList || []);
   const dcMsgIdsKey = playerNum === 1 ? 'p1DcMessageIds' : 'p2DcMessageIds';
   const attIdsKey   = playerNum === 1 ? 'p1DcAttachmentMessageIds' : 'p2DcAttachmentMessageIds';
   const compIdsKey  = playerNum === 1 ? 'p1DcCompanionMessageIds'  : 'p2DcCompanionMessageIds';

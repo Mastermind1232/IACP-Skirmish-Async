@@ -306,6 +306,14 @@ const CONTEXT_GROUPS = {
     // second + third phases (re-render UI, recompute derived state).
     'refreshAllGameComponents', 'recomputeActivationCounts',
     'repopulateDcMapsForGame',
+    // Phase 1.5 (recoverMissingDcCards): re-post DC cards when a buggy
+    // reorder pass left the msgId arrays as all-nulls. Same deps as the
+    // checkpoint-loader's DC posting path, plus checkpoint DB lookups
+    // for best-effort attachment recovery.
+    'buildDcEmbedAndFiles', 'getDcPlayAreaComponents', 'getNicknamesForDcMessage',
+    'dcHealthState',
+    'updateAttachmentMessageForDc', 'renderDcCompanion',
+    'listCheckpointsForGame', 'getCheckpointById',
   ],
 
   checkpoint: [

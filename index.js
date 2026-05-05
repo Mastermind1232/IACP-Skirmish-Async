@@ -53,7 +53,10 @@ import {
   getCoverageSummary,
   getCoverageGaps,
   upsertBothelperMembers,
+  listCheckpointsForGame,
+  getCheckpointById,
 } from './src/db.js';
+import { renderDcCompanion } from './src/engine/renderer.js';
 import {
   getGame,
   setGame,
@@ -3513,6 +3516,12 @@ function buildAllDeps() {
     // Lobby
     lobbies: getLobbiesMap(),
     createGameChannels,
+
+    // Renderer + checkpoint helpers (used by the recover group's Phase 1.5
+    // missing-DC repair path, alongside the checkpoint loader).
+    renderDcCompanion,
+    listCheckpointsForGame,
+    getCheckpointById,
   };
 }
 

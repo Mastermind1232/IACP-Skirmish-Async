@@ -73,7 +73,15 @@ export async function handleBotmenuRecover(interaction, ctx) {
  *   everything Recover needs.
  */
 export async function handleResync(interaction, ctx) {
-  const { getGame, saveGames, client, refreshAllGameComponents, recomputeActivationCounts, repopulateDcMapsForGame } = ctx;
+  const {
+    getGame, saveGames, client,
+    refreshAllGameComponents, recomputeActivationCounts, repopulateDcMapsForGame,
+    // Repair-missing-DCs deps (Phase 1.5).
+    buildDcEmbedAndFiles, getDcPlayAreaComponents, getNicknamesForDcMessage,
+    dcMessageMeta, dcExhaustedState, dcHealthState,
+    updateAttachmentMessageForDc, renderDcCompanion,
+    listCheckpointsForGame, getCheckpointById,
+  } = ctx;
   const gameId = parseCustomId(interaction.customId, 'resync_');
   const game = getGame(gameId);
   if (!game) {
@@ -126,6 +134,31 @@ export async function handleResync(interaction, ctx) {
     phases.push(`[ERROR] recompute: ${err.message}`);
   }
 
+  // Phase 1.5: repair missing DC cards. The reorder-after-checkpoint-load
+  // bug (commit 48ef4ef → fixed 2026-05-04) deleted DC + attachment +
+  // companion messages from Discord and reset their msgId arrays to all
+  // nulls. Detect that signature and re-post DCs from p1DcList / p2DcList
+  // (which survived in game state). Best-effort attachment recovery from
+  // the most recent origin checkpoint by per-DC index.
+  try {
+    const repairResult = await recoverMissingDcCards(game, gameId, {
+      client,
+      buildDcEmbedAndFiles, getDcPlayAreaComponents, getNicknamesForDcMessage,
+      dcMessageMeta, dcExhaustedState, dcHealthState,
+      updateAttachmentMessageForDc, renderDcCompanion,
+      listCheckpointsForGame, getCheckpointById,
+    });
+    if (repairResult.repaired > 0) {
+      phases.push(`re-posted ${repairResult.repaired} missing DC card(s)`);
+      if (repairResult.attachmentsRestored > 0) {
+        phases.push(`restored ${repairResult.attachmentsRestored} attachment(s) from checkpoint`);
+      }
+    }
+  } catch (err) {
+    console.error('[resync] DC-card repair failed:', err);
+    phases.push(`[ERROR] DC repair: ${err.message}`);
+  }
+
   // Phase 2: re-send missing prompts.
   let recoveryResults = [];
   try {
@@ -162,6 +195,173 @@ export async function handleResync(interaction, ctx) {
   } catch {}
   // Best-effort cleanup of the "starting" placeholder.
   if (startingMsg) await startingMsg.delete().catch(() => {});
+}
+
+/**
+ * Repair missing DC cards left behind by a buggy reorder pass.
+ *
+ * Detects the corruption signature: p{1,2}DcList is populated (game state
+ * survived) but every entry of p{1,2}DcMessageIds is null (the helper
+ * deleted Discord messages and never re-posted them). When found, re-posts
+ * each DC card to the play area, refills the msgId arrays, and registers
+ * the new ids in dcMessageMeta / dcExhaustedState / dcHealthState.
+ *
+ * Best-effort attachment recovery: the buggy reorder also wiped
+ * p{1,2}CcAttachments and p{1,2}DcAttachments to {}. If the most recent
+ * origin-game checkpoint has those keyed by old msgIds, we re-key them to
+ * new msgIds by per-DC index (DCs are saved in p{1,2}DcList order and
+ * the checkpoint's msgId arrays match that order index-for-index).
+ *
+ * Returns { repaired, attachmentsRestored }. repaired=0 means no
+ * corruption signature detected — function is a no-op for healthy games.
+ *
+ * Idempotent: re-running on a healthy game (msgIds populated) does
+ * nothing.
+ */
+export async function recoverMissingDcCards(game, gameId, deps) {
+  const {
+    client,
+    buildDcEmbedAndFiles, getDcPlayAreaComponents, getNicknamesForDcMessage,
+    dcMessageMeta, dcExhaustedState, dcHealthState,
+    updateAttachmentMessageForDc, renderDcCompanion,
+    listCheckpointsForGame, getCheckpointById,
+  } = deps;
+  let repaired = 0;
+  let attachmentsRestored = 0;
+
+  // Try to fetch the most recent origin checkpoint once for attachment
+  // recovery. Best-effort — if it fails or there's no checkpoint, we still
+  // re-post DC cards (they're the bigger win).
+  let checkpointState = null;
+  if (listCheckpointsForGame && getCheckpointById) {
+    try {
+      const cps = await listCheckpointsForGame(gameId);
+      if (cps && cps.length > 0) {
+        const fullCp = await getCheckpointById(cps[0].id);
+        checkpointState = fullCp?.game_state || null;
+      }
+    } catch (err) {
+      console.error('[dc-repair] checkpoint lookup failed:', err.message);
+    }
+  }
+
+  for (const playerNum of [1, 2]) {
+    const dcListKey   = playerNum === 1 ? 'p1DcList' : 'p2DcList';
+    const dcMsgKey    = playerNum === 1 ? 'p1DcMessageIds' : 'p2DcMessageIds';
+    const attMsgKey   = playerNum === 1 ? 'p1DcAttachmentMessageIds' : 'p2DcAttachmentMessageIds';
+    const compMsgKey  = playerNum === 1 ? 'p1DcCompanionMessageIds' : 'p2DcCompanionMessageIds';
+    const ccAttKey    = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+    const dcAttKey    = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+    const playAreaKey = playerNum === 1 ? 'p1PlayAreaId' : 'p2PlayAreaId';
+    const activatedKey = playerNum === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices';
+
+    const dcList = game[dcListKey] || [];
+    const msgIds = game[dcMsgKey] || [];
+    if (dcList.length === 0) continue;
+
+    // Detection: every entry in msgIds is null AND there's at least one
+    // entry. Healthy games have real ids; this is the corruption shape.
+    const allNull = msgIds.length > 0 && msgIds.every((id) => id === null);
+    if (!allNull) continue;
+
+    const playAreaId = game[playAreaKey];
+    if (!playAreaId) {
+      console.error(`[dc-repair] player ${playerNum}: no play area id, skipping`);
+      continue;
+    }
+    const channel = await fetchGameChannel(client, playAreaId);
+    if (!channel) {
+      console.error(`[dc-repair] player ${playerNum}: play area channel not fetchable`);
+      continue;
+    }
+
+    const activatedSet = new Set(game[activatedKey] || []);
+
+    // Pull old msgIds from checkpoint to drive attachment re-keying.
+    const oldMsgIds = checkpointState?.[dcMsgKey] || [];
+    const oldCcAtt = checkpointState?.[ccAttKey] || {};
+    const oldDcAtt = checkpointState?.[dcAttKey] || {};
+
+    // Reset arrays to track new posting; keep length aligned with dcList.
+    game[dcMsgKey]   = [];
+    game[attMsgKey]  = [];
+    game[compMsgKey] = [];
+    game[ccAttKey]   = {};
+    game[dcAttKey]   = {};
+
+    for (let i = 0; i < dcList.length; i++) {
+      const dc = dcList[i];
+      if (!dc || !dc.dcName) {
+        game[dcMsgKey].push(null);
+        game[attMsgKey].push(null);
+        game[compMsgKey].push(null);
+        continue;
+      }
+      const exhausted = activatedSet.has(i);
+      const { embed, files } = await buildDcEmbedAndFiles(
+        dc.dcName, exhausted, dc.displayName, dc.healthState,
+        undefined, [], null, null,
+        getNicknamesForDcMessage(game, dc),
+      );
+      let newMsgId = null;
+      try {
+        const msg = await channel.send({ embeds: [embed], files });
+        newMsgId = msg.id;
+        const components = getDcPlayAreaComponents(newMsgId, exhausted, game, dc.dcName);
+        await msg.edit({ components });
+      } catch (err) {
+        console.error(`[dc-repair] player ${playerNum} idx ${i} send failed:`, err.message);
+        game[dcMsgKey].push(null);
+        game[attMsgKey].push(null);
+        game[compMsgKey].push(null);
+        continue;
+      }
+      game[dcMsgKey].push(newMsgId);
+      game[attMsgKey].push(null);
+      game[compMsgKey].push(null);
+      dcMessageMeta?.set(newMsgId, {
+        gameId, playerNum,
+        dcName: dc.dcName, displayName: dc.displayName,
+      });
+      dcExhaustedState?.set(newMsgId, exhausted);
+      dcHealthState?.set(newMsgId, dc.healthState || []);
+      repaired += 1;
+
+      // Best-effort attachment recovery from checkpoint by index.
+      const oldId = oldMsgIds[i];
+      if (oldId) {
+        const ccs = oldCcAtt[oldId];
+        if (Array.isArray(ccs) && ccs.length > 0) {
+          game[ccAttKey][newMsgId] = [...ccs];
+          attachmentsRestored += ccs.length;
+        }
+        const dcas = oldDcAtt[oldId];
+        if (Array.isArray(dcas) && dcas.length > 0) {
+          game[dcAttKey][newMsgId] = [...dcas];
+          attachmentsRestored += dcas.length;
+        }
+      }
+
+      // Post attachment embed (no-op if no attachments under this id).
+      if (updateAttachmentMessageForDc) {
+        try {
+          await updateAttachmentMessageForDc(game, playerNum, newMsgId, client);
+        } catch (err) {
+          console.error(`[dc-repair] updateAttachmentMessageForDc p${playerNum} idx ${i}:`, err.message);
+        }
+      }
+      // Post companion embed (no-op for DCs without companions).
+      if (renderDcCompanion) {
+        try {
+          await renderDcCompanion(game, playerNum, i, client, deps);
+        } catch (err) {
+          console.error(`[dc-repair] renderDcCompanion p${playerNum} idx ${i}:`, err.message);
+        }
+      }
+    }
+  }
+
+  return { repaired, attachmentsRestored };
 }
 
 /**

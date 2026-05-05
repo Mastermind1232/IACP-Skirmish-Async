@@ -55,16 +55,19 @@
     "baselineTypeMismatchCount": 97
   },
   "depBagParity": {
-    "totalRequiredDepKeys": 233,
-    "allowedOmissionsCount": 10,
+    "totalRequiredDepKeys": 236,
+    "allowedOmissionsCount": 13,
     "allowedOmissions": [
       "buildSquadConfirmText",
       "channelDeleteGuard",
+      "getCheckpointById",
       "getDetermineInitiativeButtons",
+      "listCheckpointsForGame",
       "populatePlayAreas",
       "postFluctuationSwapButtons",
       "postGameOver",
       "postKryknaPlaceButtons",
+      "renderDcCompanion",
       "renderDcEmbed",
       "reorderPlayAreaAfterAttachments",
       "reorderPlayAreaAfterCheckpointLoad"

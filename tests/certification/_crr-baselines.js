@@ -180,6 +180,9 @@ export const DEP_BAG_ALLOWED_OMISSIONS = {
   renderDcEmbed:                    'Discord embed renderer for DC cards; Discord-side callers guard with optional chaining',
   reorderPlayAreaAfterAttachments:  'Reorders Discord channels after setup-attachments phase; headless has no channels to reorder',
   reorderPlayAreaAfterCheckpointLoad: 'Cosmetic Discord-channel reorder after checkpoint load; headless has no channels',
+  renderDcCompanion:                  'Discord renderer for DC companion embeds (e.g. Baze\'s Child); headless has no Discord channels',
+  listCheckpointsForGame:             'Postgres checkpoint lookup; headless tests do not exercise checkpoint persistence',
+  getCheckpointById:                  'Postgres checkpoint fetch; headless tests do not exercise checkpoint persistence',
 };
 
 // ── Handler-vs-engine parity scenarios ──────────────────────────────────────
