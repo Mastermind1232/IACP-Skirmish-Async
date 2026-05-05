@@ -121,6 +121,15 @@ const ACTIVATION_PLAYERNUM_FLAGS = [
  */
 const ACTIVATION_SCALAR_FLAGS = [
   'commsJammerActivePlayerNum',
+  // partingShotTriggered is technically msgId-keyed (game.partingShotTriggered[msgId] = true)
+  // but is INTENTIONALLY registered here, NOT in ACTIVATION_MSGID_FLAGS. The desired
+  // semantic at activation end is "wipe everyone's parting-shot tracking" so the
+  // next round's interrupts can fire fresh. ACTIVATION_SCALAR_FLAGS does
+  // `delete game[key]` which achieves that whole-field wipe; the defensive
+  // `game.partingShotTriggered = game.partingShotTriggered || {}` guard at the use
+  // sites rebuilds the map cleanly. Moving to ACTIVATION_MSGID_FLAGS would only
+  // delete the activating DC's entry per-msgId — preserving OTHER DCs' stale
+  // parting-shot state across activations. Don't move. (Audit 2026-05-05.)
   'partingShotTriggered',
   'onTheLamActive',
   'arcingShotActiveScalar',
@@ -283,6 +292,11 @@ const ROUND_OBJECT_FLAGS = [
   'activationDamagedFigures',
   'pendingBombDrop',
   // crossTrainingExhausted — removed: Cross Training now uses exhaustedSkirmishUpgrades
+  // Moved 2026-05-05 from ROUND_NULL_FLAGS — used as msgId-keyed objects;
+  // ROUND_OBJECT_FLAGS resets to {} which matches the defensive
+  // `game.X = game.X || {}` guard pattern at all call sites.
+  'pendingEe3Carbine',
+  'pendingVoracious',
   'massiveMovementLocked',
   'disarmPermanentWeakened',
   'adrenalineBonuses',
@@ -368,7 +382,10 @@ const ROUND_NULL_FLAGS = [
   'pendingCommDisruptionPrompt',
   'pendingCoverFire',
   'pendingStrainChoice',
-  'pendingVoracious',
+  // pendingVoracious moved to ROUND_OBJECT_FLAGS 2026-05-05 — used as
+  // game.pendingVoracious[rMsgId] = { ... }, so its conceptual home is
+  // the object-shaped reset list. No behavior change (callers guard
+  // with `game.X = game.X || {}` defensively).
   'pendingAssassinsBlade',
   'pendingPunishingStrike',
   'pendingConspire',
@@ -417,7 +434,8 @@ const ROUND_NULL_FLAGS = [
   'pendingOrderedMove',
   'pendingShoulderRush',
   'pendingDioFollow',
-  'pendingEe3Carbine',
+  // pendingEe3Carbine moved to ROUND_OBJECT_FLAGS 2026-05-05 — same
+  // reasoning as pendingVoracious above.
   'pendingRightBackAtYa',
   'pendingBattlefieldLeadership',
   'pendingScavengedWeaponryTransfer',

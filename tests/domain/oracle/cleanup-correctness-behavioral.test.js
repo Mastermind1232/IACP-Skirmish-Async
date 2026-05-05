@@ -98,9 +98,12 @@ describe('B-CLEANUP-002: Combat pipeline pendings in ROUND_NULL_FLAGS', () => {
 // ── B-CLEANUP-003: Movement/activation pendings ─────────────────────────────
 
 describe('B-CLEANUP-003: Movement/activation pendings in ROUND_NULL_FLAGS', () => {
+  // Single-pending scalar fields (one pending object per game).
+  // pendingEe3Carbine moved out 2026-05-05 — it's actually msgId-keyed
+  // (game.pendingEe3Carbine[msgId] = ...) and belongs in ROUND_OBJECT_FLAGS.
   const MOVEMENT_PENDINGS = [
     'pendingFalseOrders', 'pendingOrderedMove', 'pendingShoulderRush',
-    'pendingDioFollow', 'pendingEe3Carbine', 'pendingRightBackAtYa',
+    'pendingDioFollow', 'pendingRightBackAtYa',
     'pendingBattlefieldLeadership', 'pendingScavengedWeaponryTransfer',
     'pendingHeroicEffortReturn',
   ];
@@ -122,6 +125,15 @@ describe('B-CLEANUP-003: Movement/activation pendings in ROUND_NULL_FLAGS', () =
       assert.strictEqual(game[flag], null,
         `${flag} must be null after round cleanup`);
     }
+  });
+
+  // pendingEe3Carbine + pendingVoracious — msgId-keyed objects, in ROUND_OBJECT_FLAGS.
+  it('003b: pendingEe3Carbine + pendingVoracious are in ROUND_OBJECT_FLAGS (msgId-keyed)', async () => {
+    const { ROUND_OBJECT_FLAGS } = await import('../../../src/game/activation-state.js');
+    assert.ok(ROUND_OBJECT_FLAGS.includes('pendingEe3Carbine'),
+      'pendingEe3Carbine must be in ROUND_OBJECT_FLAGS — used as msgId-keyed map');
+    assert.ok(ROUND_OBJECT_FLAGS.includes('pendingVoracious'),
+      'pendingVoracious must be in ROUND_OBJECT_FLAGS — used as msgId-keyed map');
   });
 });
 
