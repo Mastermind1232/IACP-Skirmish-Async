@@ -408,6 +408,11 @@ function remapMsgIdKeyedFields(game, oldP1Ids, oldP2Ids) {
     'overwatchTokenPosition',    // persists until movement triggers it
     'secondChanceDcMsgId',       // round-scoped reset, but populated mid-round
     'selfAugmentationMsgId',     // persists once applied
+    // Companion HP storage (added 2026-05-05). Canonical state for The
+    // Child / Junk Droid / etc. — DerivedDcHealthState reads/writes
+    // through to it for companion msgIds. Persists across activations
+    // and rounds; needs cross-lobby key remap.
+    'companionHealthState',
   ];
   for (const flagName of MSGID_FLAGS) {
     const obj = game[flagName];

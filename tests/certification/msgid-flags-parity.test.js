@@ -63,6 +63,7 @@ const CHECKPOINT_MSGID_EXTRAS = new Set([
   'overwatchTokenPosition',
   'secondChanceDcMsgId',
   'selfAugmentationMsgId',
+  'companionHealthState',  // canonical companion HP storage (audit 2026-05-05)
 ]);
 
 function getCheckpointMsgIdFlags() {

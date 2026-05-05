@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb, savePromise, getActiveGameIdsFromEvents, markGameDirty } from './db.js';
 import { initSeqCounters, replayToState } from './domain/event-store.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices } from './game/player-helpers.js';
+import { getDcEffects } from './data-loader.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
@@ -234,6 +235,31 @@ function ensureGameShape(game) {
  * always a logical bug (storing meta for a msgId that game state
  * doesn't acknowledge).
  */
+/**
+ * Look up a companion's dcName from the host DC's attachments (CC + DC).
+ * Returns null if no attachment defines a companion.
+ *
+ * Companion names live on attachment-card definitions in data/dc-effects.json
+ * via the `companion: "X"` field — e.g. `[Clan of Two]` → "The Child".
+ * Built-in (non-attachment) companions live on the host DC itself via the
+ * same field (e.g. R2-D2's Junk Droid).
+ */
+function _companionDcNameForHost(game, playerNum, hostMsgId, hostDcName) {
+  const eff = getDcEffects() || {};
+  // Built-in companion on the host DC itself.
+  const hostData = eff[hostDcName];
+  if (typeof hostData?.companion === 'string') return hostData.companion;
+  // Otherwise scan host's attachments for a `companion` field.
+  const ccAtts = game[playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments'] || {};
+  const dcAtts = game[playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments'] || {};
+  const all = [...(ccAtts[hostMsgId] || []), ...(dcAtts[hostMsgId] || [])];
+  for (const att of all) {
+    const data = eff[att] || eff[`[${att}]`];
+    if (typeof data?.companion === 'string') return data.companion;
+  }
+  return null;
+}
+
 class DerivedDcMessageMeta {
   constructor(gamesMap) { this._games = gamesMap; }
 
@@ -241,6 +267,7 @@ class DerivedDcMessageMeta {
     if (!msgId) return undefined;
     for (const [gameId, game] of this._games) {
       for (const playerNum of [1, 2]) {
+        // Host DC msgIds.
         const ids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
         const idx = (ids || []).indexOf(msgId);
         if (idx >= 0) {
@@ -252,6 +279,34 @@ class DerivedDcMessageMeta {
               dcName: dc.dcName,
               displayName: dc.displayName || dc.dcName,
             };
+          }
+        }
+        // Companion msgIds (parallel array; companion msgs aren't in
+        // p{n}DcMessageIds but DO need meta resolution for button-routing).
+        // Audit 2026-05-05: prior to this fallback, dcMessageMeta.get(...)
+        // returned undefined for companion msgIds — every handler that
+        // does `const meta = dcMessageMeta.get(msgId); if (!meta) return;`
+        // silently bailed when a button on a companion's posted card
+        // (e.g. The Child's Force Heal) was clicked.
+        const compIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+        const cIdx = (compIds || []).indexOf(msgId);
+        if (cIdx >= 0) {
+          const hostMsgId = ids?.[cIdx];
+          const hostDc = (playerNum === 1 ? game.p1DcList : game.p2DcList)?.[cIdx];
+          if (hostMsgId && hostDc) {
+            const companionDcName = _companionDcNameForHost(game, playerNum, hostMsgId, hostDc.dcName);
+            if (companionDcName) {
+              return {
+                gameId,
+                playerNum,
+                dcName: companionDcName,
+                displayName: companionDcName,
+                isCompanion: true,
+                hostMsgId,
+                hostDcName: hostDc.dcName,
+                hostIndex: cIdx,
+              };
+            }
           }
         }
       }
@@ -283,6 +338,28 @@ class DerivedDcMessageMeta {
               displayName: dc.displayName || dc.dcName,
             }];
           }
+        }
+        // Companion msgIds — yield meta entries so iteration covers them.
+        const compIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+        const compIdsArr = compIds || [];
+        for (let i = 0; i < compIdsArr.length; i++) {
+          const cMsgId = compIdsArr[i];
+          if (!cMsgId) continue;
+          const hostMsgId = idsArr[i];
+          const hostDc = listArr[i];
+          if (!hostMsgId || !hostDc) continue;
+          const companionDcName = _companionDcNameForHost(game, playerNum, hostMsgId, hostDc.dcName);
+          if (!companionDcName) continue;
+          yield [cMsgId, {
+            gameId,
+            playerNum,
+            dcName: companionDcName,
+            displayName: companionDcName,
+            isCompanion: true,
+            hostMsgId,
+            hostDcName: hostDc.dcName,
+            hostIndex: i,
+          }];
         }
       }
     }
@@ -330,6 +407,11 @@ class DerivedDcExhaustedState {
     if (!meta) return null;
     const game = this._games.get(meta.gameId);
     if (!game) return null;
+    // Companion msgIds are valid (meta resolved them) but they don't
+    // appear in p{n}DcMessageIds — companions don't activate as their
+    // own DC, so "exhausted" doesn't apply. Caller-visible: get returns
+    // false, set is a no-op for companions.
+    if (meta.isCompanion) return { game, meta, isCompanion: true };
     const dcMsgIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
     const dcIndex = (dcMsgIds || []).indexOf(msgId);
     if (dcIndex < 0) return null;
@@ -340,6 +422,7 @@ class DerivedDcExhaustedState {
     if (!msgId) return undefined;
     const r = this._resolve(msgId);
     if (!r) return undefined;
+    if (r.isCompanion) return false; // companions never exhaust as DCs
     const { game, meta, dcIndex } = r;
     const activatedKey = meta.playerNum === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices';
     if ((game[activatedKey] || []).includes(dcIndex)) return true;
@@ -352,6 +435,7 @@ class DerivedDcExhaustedState {
   set(msgId, value) {
     const r = this._resolve(msgId);
     if (!r) return this; // unknown msgId: silently drop (matches DerivedDcMessageMeta semantics)
+    if (r.isCompanion) return this; // companion exhaust is no-op
     const { game, meta, dcIndex } = r;
     if (value) {
       game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
@@ -422,6 +506,16 @@ class DerivedDcHealthState {
     if (!meta) return null;
     const game = this._games.get(meta.gameId);
     if (!game) return null;
+    // Companion HP storage: canonical state lives at
+    // game.companionHealthState[msgId] = [[hp, maxHp], ...]. The field is
+    // registered in CHECKPOINT MSGID_FLAGS so cross-lobby load remaps
+    // its keys. Without this branch, dcHealthState.get(companionMsgId)
+    // returned undefined → reduceHp silently no-op'd → companions
+    // (The Child, Junk Droid) were effectively immortal even when
+    // attacked, since damage couldn't be applied. (Audit 2026-05-05.)
+    if (meta.isCompanion) {
+      return { game, meta, isCompanion: true };
+    }
     const dcMsgIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
     const dcIndex = (dcMsgIds || []).indexOf(msgId);
     if (dcIndex < 0) return null;
@@ -435,6 +529,10 @@ class DerivedDcHealthState {
     if (!msgId) return undefined;
     const r = this._resolve(msgId);
     if (!r) return undefined;
+    if (r.isCompanion) {
+      const store = r.game.companionHealthState || {};
+      return store[msgId];
+    }
     return r.dc.healthState;
   }
 
@@ -443,6 +541,11 @@ class DerivedDcHealthState {
   set(msgId, healthArr) {
     const r = this._resolve(msgId);
     if (!r) return this;
+    if (r.isCompanion) {
+      r.game.companionHealthState = r.game.companionHealthState || {};
+      r.game.companionHealthState[msgId] = healthArr;
+      return this;
+    }
     r.dc.healthState = healthArr;
     return this;
   }

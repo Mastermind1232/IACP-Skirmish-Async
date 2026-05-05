@@ -372,20 +372,30 @@ async function _createCompanionDcEmbed(game, companionName, playerNum, hostMsgId
   const playArea = await fetchGameChannel(client, playAreaId);
   const msg = await playArea.send({ embeds: [embed], files });
 
-  dcMessageMeta.set(msg.id, { gameId: game.gameId, playerNum, dcName: companionName, displayName });
-  dcExhaustedState.set(msg.id, false);
-  dcHealthState.set(msg.id, healthState);
-
-  const components = getDcPlayAreaComponents(msg.id, false, game, companionName);
-  await msg.edit({ components });
-
-  // Store companion message ID at the host DC's index
+  // Register companion msgId at the host DC's index FIRST. The Derived
+  // dcMessageMeta / dcHealthState views resolve companion msgIds by
+  // walking p{n}DcCompanionMessageIds — without this prior write, the
+  // .set() calls below find no meta and silently no-op (audit
+  // 2026-05-05). Must come before dcHealthState.set so HP gets stored
+  // canonically into game.companionHealthState[msg.id].
   const hostMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
   const companionMsgIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
   const hostIdx = hostMsgIds?.indexOf(hostMsgId);
   if (hostIdx >= 0 && companionMsgIds) {
     companionMsgIds[hostIdx] = msg.id;
   }
+
+  // dcMessageMeta.set on a companion is still a no-op (Derived view's
+  // resolution is now automatic via the parallel-array fallback) but
+  // we keep the call for symmetry with host-DC creation. dcExhaustedState
+  // .set is also no-op for companions. Only dcHealthState.set actually
+  // writes through — to game.companionHealthState[msgId].
+  dcMessageMeta.set(msg.id, { gameId: game.gameId, playerNum, dcName: companionName, displayName });
+  dcExhaustedState.set(msg.id, false);
+  dcHealthState.set(msg.id, healthState);
+
+  const components = getDcPlayAreaComponents(msg.id, false, game, companionName);
+  await msg.edit({ components });
 }
 
 /**
