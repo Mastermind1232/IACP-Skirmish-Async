@@ -313,6 +313,10 @@ const CONTEXT_GROUPS = {
     'buildDcEmbedAndFiles', 'getDcPlayAreaComponents', 'getNicknamesForDcMessage',
     'dcHealthState',
     'updateAttachmentMessageForDc', 'renderDcCompanion',
+    // createCompanionDcEmbed is the actual poster that renderDcCompanion
+    // delegates to. Missing this dep made the original /resync repair
+    // silently skip companion embeds (The Child for Baze never appeared).
+    'createCompanionDcEmbed',
     'listCheckpointsForGame', 'getCheckpointById',
   ],
 

@@ -79,7 +79,7 @@ export async function handleResync(interaction, ctx) {
     // Repair-missing-DCs deps (Phase 1.5).
     buildDcEmbedAndFiles, getDcPlayAreaComponents, getNicknamesForDcMessage,
     dcMessageMeta, dcExhaustedState, dcHealthState,
-    updateAttachmentMessageForDc, renderDcCompanion,
+    updateAttachmentMessageForDc, renderDcCompanion, createCompanionDcEmbed,
     listCheckpointsForGame, getCheckpointById,
   } = ctx;
   const gameId = parseCustomId(interaction.customId, 'resync_');
@@ -145,7 +145,7 @@ export async function handleResync(interaction, ctx) {
       client,
       buildDcEmbedAndFiles, getDcPlayAreaComponents, getNicknamesForDcMessage,
       dcMessageMeta, dcExhaustedState, dcHealthState,
-      updateAttachmentMessageForDc, renderDcCompanion,
+      updateAttachmentMessageForDc, renderDcCompanion, createCompanionDcEmbed,
       listCheckpointsForGame, getCheckpointById,
     });
     if (repairResult.repaired > 0) {
@@ -223,9 +223,16 @@ export async function recoverMissingDcCards(game, gameId, deps) {
     client,
     buildDcEmbedAndFiles, getDcPlayAreaComponents, getNicknamesForDcMessage,
     dcMessageMeta, dcExhaustedState, dcHealthState,
-    updateAttachmentMessageForDc, renderDcCompanion,
+    updateAttachmentMessageForDc, renderDcCompanion, createCompanionDcEmbed,
     listCheckpointsForGame, getCheckpointById,
   } = deps;
+  // Required for renderDcCompanion's actual posting path. Surface a clear
+  // error rather than silently no-op'ing all companion embeds (the
+  // failure mode that left destruct's The Child invisible after his
+  // first /resync attempt 2026-05-04).
+  if (typeof createCompanionDcEmbed !== 'function') {
+    throw new Error('recoverMissingDcCards requires deps.createCompanionDcEmbed');
+  }
   let repaired = 0;
   let attachmentsRestored = 0;
 

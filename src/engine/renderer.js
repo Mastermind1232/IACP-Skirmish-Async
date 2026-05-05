@@ -314,8 +314,13 @@ export async function renderDcCompanion(game, playerNum, dcIndex, client, ctx = 
   }
 
   if (typeof ctx.createCompanionDcEmbed !== 'function') {
-    console.warn(`[renderer] renderDcCompanion: ctx.createCompanionDcEmbed missing; cannot post for ${dc.dcName}`);
-    return { posted: false, msgId: null };
+    // Loud failure: silent no-op left destruct's The Child invisible
+    // after the original /resync repair attempt 2026-05-04. If the host
+    // DC has a companion to render, missing the creator means a caller's
+    // ctx group is wrong — surface that immediately rather than warn into
+    // the void. Catch sites in the loaders log and continue, so this
+    // never wedges the load itself.
+    throw new Error(`renderDcCompanion: ctx.createCompanionDcEmbed missing — ${dc.dcName} has companion ${companionInfo.companionName} but no creator dep`);
   }
   // Canonical creator handles dcMessageMeta registration, p_DcCompanionMessageIds
   // assignment, exhausted/health state — same shape as the post-deploy path.
