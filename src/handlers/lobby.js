@@ -9,6 +9,7 @@ import { PHASES } from '../game/phase.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { snowflakeUsers } from '../discord/channel-helpers.js';
 import { AI_USER_PREFIX } from '../ai/ai-discord.js';
+import { deleteLobby } from '../lobby-state.js';
 
 /**
  * Handle Join Game button in a lobby post.
@@ -193,6 +194,10 @@ export async function handleLobbyStart(interaction, ctx) {
     });
     await updateThreadName(interaction.channel, lobby);
     await interaction.channel.setArchived(true);
+    // Lobby data has been copied into the game record; the in-memory
+    // lobby entry is no longer needed. Clean up to prevent unbounded
+    // growth in the lobbies Map across the bot's lifetime.
+    deleteLobby(interaction.channel.id);
   } catch (err) {
     console.error('Failed to create game channels:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'create_game_channels');
