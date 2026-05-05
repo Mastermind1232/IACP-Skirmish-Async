@@ -399,6 +399,15 @@ function remapMsgIdKeyedFields(game, oldP1Ids, oldP2Ids) {
     // moveCleaveActive + roundDcAbilityUsed removed: declared but never written
     // anywhere in the codebase.
     'overrunDamagedThisMove',
+    // Audit 2026-05-05: persistent / round-scoped msgId-keyed fields surfaced by
+    // tests/certification/msgid-flags-completeness.test.js. These survive
+    // mid-round (or longer) and would silently no-op on cross-lobby load
+    // without remap — the same failure shape that bit dcFinishedPinged.
+    'bloodFeudTargets',          // CC effect, persists across attacks
+    'orbitalBombardmentTokens',  // accumulating tokens, consumed when bombardment fires
+    'overwatchTokenPosition',    // persists until movement triggers it
+    'secondChanceDcMsgId',       // round-scoped reset, but populated mid-round
+    'selfAugmentationMsgId',     // persists once applied
   ];
   for (const flagName of MSGID_FLAGS) {
     const obj = game[flagName];

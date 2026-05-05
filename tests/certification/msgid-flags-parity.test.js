@@ -55,6 +55,14 @@ const CHECKPOINT_MSGID_EXTRAS = new Set([
   'movementBank',            // active move bank (msgId-keyed)
   'overrunDamagedThisMove',  // round-scope, but msgId-keyed
   'roundFigureAbilityUsed',  // compound key includes msgId
+  // Audit 2026-05-05: persistent / round-scoped msgId-keyed fields added
+  // by tests/certification/msgid-flags-completeness.test.js. Each survives
+  // mid-round (or longer) and needs cross-lobby remap.
+  'bloodFeudTargets',
+  'orbitalBombardmentTokens',
+  'overwatchTokenPosition',
+  'secondChanceDcMsgId',
+  'selfAugmentationMsgId',
 ]);
 
 function getCheckpointMsgIdFlags() {

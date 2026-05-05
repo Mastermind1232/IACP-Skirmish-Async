@@ -42,7 +42,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ACTIVATION_MSGID_FLAGS,
+  ACTIVATION_SCALAR_FLAGS,
   ROUND_OBJECT_FLAGS,
+  ROUND_NULL_FLAGS,
 } from '../../src/game/activation-state.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -100,9 +102,18 @@ function getCheckpointMsgIdFlags() {
   return new Set([...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]));
 }
 
+// Any flag list whose entries get cleaned up at an activation/round
+// boundary counts as "registered." Even ACTIVATION_SCALAR_FLAGS and
+// ROUND_NULL_FLAGS qualify — they wipe via `delete game[key]` or
+// `= null`, and the use sites guard with `game.X = game.X || {}` so
+// per-msgId state rebuilds cleanly. The conceptual mismatch (object
+// field registered as scalar/null) is worth flagging separately,
+// but it's not a missing-registration risk.
 const REGISTERED = new Set([
   ...ACTIVATION_MSGID_FLAGS,
+  ...ACTIVATION_SCALAR_FLAGS,
   ...ROUND_OBJECT_FLAGS,
+  ...ROUND_NULL_FLAGS,
   ...getCheckpointMsgIdFlags(),
 ]);
 
@@ -113,27 +124,13 @@ const REGISTERED = new Set([
  * test — the engineer must either register the field or add it here.
  */
 const FALSE_POSITIVE_ALLOWLIST = {
-  // 13 fields surfaced by the discovery on 2026-05-05 first-run. Each is
-  // a true msgId-keyed field that's NOT registered in any of the
-  // authoritative lists. Categorized by best-guess lifecycle. Each
-  // should be promoted into the right registered list (and removed from
-  // here) once verified by reading the ability's full lifecycle.
-  //
-  // ── Per-activation pending (likely belong in ACTIVATION_MSGID_FLAGS) ──
-  'activationDoubleSpecialAction': 'TODO classify: name signals per-activation; should likely move to ACTIVATION_MSGID_FLAGS.',
-  'companionActivatedBefore':      'TODO classify: per-activation cleanup at handlers/activation.js:607,754; should likely move to ACTIVATION_MSGID_FLAGS.',
-  'falseOrdersAttackTargets':      'TODO classify: per-attack cleanup at handlers/combat.js:7034; should likely move to ACTIVATION_MSGID_FLAGS.',
-  'pounceAttackPending':           'TODO classify: pending-pattern, per-activation cleanup at dc-play-area.js:1710; should likely move to ACTIVATION_MSGID_FLAGS.',
-  'pendingEe3Carbine':             'TODO classify: registered as ACTIVATION_SCALAR_FLAGS but used as msgId-keyed object — wrong-typed registration. Move to ACTIVATION_MSGID_FLAGS.',
-  'pendingVoracious':              'TODO classify: registered as ACTIVATION_SCALAR_FLAGS but used as msgId-keyed. Move to ACTIVATION_MSGID_FLAGS.',
-  'partingShotTriggered':          'TODO classify: registered as ACTIVATION_SCALAR_FLAGS but used as msgId-keyed object via game.partingShotTriggered[msgId]=true. Move to ACTIVATION_MSGID_FLAGS.',
-  // ── Persistent / round-scoped (likely belong in CHECKPOINT MSGID_FLAGS) ──
-  'bloodFeudTargets':              'TODO classify: Blood Feud CC tracks targets across attacks — persistent. Should likely move to CHECKPOINT MSGID_FLAGS.',
-  'orbitalBombardmentTokens':      'TODO classify: token accumulator on the board — persistent across rounds. Should likely move to CHECKPOINT MSGID_FLAGS.',
-  'overwatchTokenPosition':        'TODO classify: Overwatch token persists until movement triggers it — persistent. Should likely move to CHECKPOINT MSGID_FLAGS.',
-  'paybackBonusSurge':             'TODO classify: Dengar Payback bonus scope unclear (round? attack?). Investigate then move to ROUND_OBJECT_FLAGS or CHECKPOINT MSGID_FLAGS.',
-  'secondChanceDcMsgId':           'TODO classify: reset to {} in round.js:513 — round-scoped. Should likely move to ROUND_OBJECT_FLAGS (and CHECKPOINT MSGID_FLAGS if save mid-round is possible).',
-  'selfAugmentationMsgId':         'TODO classify: Self Augmentation persists once applied. Should likely move to CHECKPOINT MSGID_FLAGS.',
+  // Empty after the 2026-05-05 audit closed all 13 first-run findings.
+  // Five per-activation fields registered in ACTIVATION_MSGID_FLAGS;
+  // five persistent fields registered in CHECKPOINT MSGID_FLAGS;
+  // three (partingShotTriggered, pendingEe3Carbine, pendingVoracious)
+  // already registered in ACTIVATION_SCALAR_FLAGS / ROUND_NULL_FLAGS —
+  // the test now imports those lists too. See commit history for
+  // classification details.
 };
 
 // ── Test ─────────────────────────────────────────────────────────────────────

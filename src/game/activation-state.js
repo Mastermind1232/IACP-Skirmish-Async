@@ -78,6 +78,17 @@ const ACTIVATION_MSGID_FLAGS = [
   'spotWeldPending',
   'pendingMissileSalvo',
   'pendingPounceSpaceChoice',
+  // Audit 2026-05-05: per-activation msgId-keyed fields surfaced by
+  // tests/certification/msgid-flags-completeness.test.js. Each was used
+  // as `game.X[msgId] = ...` with inline cleanup at activation/attack
+  // resolve, but never registered for the universal cleanup routine.
+  // Registering here makes cleanupActivation() zero them per-msgId at
+  // activation end, matching their actual lifecycle.
+  'activationDoubleSpecialAction',
+  'companionActivatedBefore',
+  'falseOrdersAttackTargets',
+  'paybackBonusSurge',
+  'pounceAttackPending',
 ];
 
 /**
