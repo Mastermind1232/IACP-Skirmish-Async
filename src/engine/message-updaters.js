@@ -6,6 +6,7 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
 import { isActivationActionInProgress } from '../game/activation-state.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
 import { getPlayAreaId } from '../game/player-helpers.js';
+import { runWithLimit, DISCORD_REFRESH_CONCURRENCY } from '../utils/concurrency.js';
 
 /**
  * Re-fetch a DC's Play Area message and rewrite its embed + components.
@@ -517,13 +518,17 @@ export async function refreshAllGameComponents(game, client, deps) {
     }
   }
 
+  // DC card refresh — bounded-parallel. Independent per msgId (each
+  // edits a different Discord message), so wall time scales 1/concurrency.
+  // The healthState normalization MUST happen before the parallel batch
+  // because dcHealthState.set + read pattern shares state.
   const allDcMsgIds = [...(game.p1DcMessageIds || []), ...(game.p2DcMessageIds || [])];
+  const dcRefreshTasks = [];
   for (const msgId of allDcMsgIds) {
     const meta = deps.dcMessageMeta.get(msgId);
     if (!meta || meta.gameId !== gameId) continue;
     if (deps.isDepletedRemovedFromGame(game, msgId)) continue;
     const exhausted = deps.dcExhaustedState.get(msgId) ?? false;
-    const displayName = meta.displayName || meta.dcName;
     let healthState = deps.dcHealthState.get(msgId) ?? [];
     const stats = deps.getDcStats(meta.dcName);
     const figureless = deps.isFigurelessDc(meta.dcName);
@@ -537,6 +542,9 @@ export async function refreshAllGameComponents(game, client, deps) {
       });
       deps.dcHealthState.set(msgId, healthState);
     }
+    dcRefreshTasks.push({ msgId, meta, exhausted });
+  }
+  await runWithLimit(DISCORD_REFRESH_CONCURRENCY, dcRefreshTasks, async ({ msgId, meta, exhausted }) => {
     try {
       const channelId = deps.getPlayAreaId(game, meta.playerNum);
       const channel = await fetchGameChannel(client, channelId);
@@ -547,7 +555,7 @@ export async function refreshAllGameComponents(game, client, deps) {
     } catch (err) {
       console.error('Refresh All: DC message failed', msgId, err);
     }
-  }
+  });
 
   // Update Companion embeds from dc-effects (so figure DC companions show after edit + Refresh All)
   const p1PlayAreaId = game.p1PlayAreaId;
@@ -556,44 +564,43 @@ export async function refreshAllGameComponents(game, client, deps) {
   const p2CompanionIds = game.p2DcCompanionMessageIds || [];
   const p1DcList = game.p1DcList || [];
   const p2DcList = game.p2DcList || [];
+  // Companion embed refresh — bounded-parallel. Each companion is in a
+  // different message; independent edits.
+  const companionTasks = [];
   for (let i = 0; i < p1CompanionIds.length; i++) {
     if (!p1CompanionIds[i]) continue;
     const dcName = p1DcList[i]?.dcName;
     if (!dcName) continue;
-    try {
-      const ch = await fetchGameChannel(client, p1PlayAreaId);
-      const companionMsg = await ch.messages.fetch(p1CompanionIds[i]);
-      const desc = deps.getCompanionDescriptionForDc(dcName);
-      await companionMsg.edit({ embeds: [new deps.EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(deps.COLORS.DARK_EMBED)] });
-    } catch (err) {
-      console.error('Refresh All: P1 companion message failed', p1CompanionIds[i], err);
-    }
+    companionTasks.push({ playerNum: 1, msgId: p1CompanionIds[i], dcName, playAreaId: p1PlayAreaId });
   }
   for (let i = 0; i < p2CompanionIds.length; i++) {
     if (!p2CompanionIds[i]) continue;
     const dcName = p2DcList[i]?.dcName;
     if (!dcName) continue;
+    companionTasks.push({ playerNum: 2, msgId: p2CompanionIds[i], dcName, playAreaId: p2PlayAreaId });
+  }
+  await runWithLimit(DISCORD_REFRESH_CONCURRENCY, companionTasks, async ({ playerNum, msgId, dcName, playAreaId }) => {
     try {
-      const ch = await fetchGameChannel(client, p2PlayAreaId);
-      const companionMsg = await ch.messages.fetch(p2CompanionIds[i]);
+      const ch = await fetchGameChannel(client, playAreaId);
+      const companionMsg = await ch.messages.fetch(msgId);
       const desc = deps.getCompanionDescriptionForDc(dcName);
       await companionMsg.edit({ embeds: [new deps.EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(deps.COLORS.DARK_EMBED)] });
     } catch (err) {
-      console.error('Refresh All: P2 companion message failed', p2CompanionIds[i], err);
+      console.error(`Refresh All: P${playerNum} companion message failed`, msgId, err);
     }
-  }
+  });
 
-  // Refresh any active activation threads (dcActionsData)
+  // Refresh any active activation threads (dcActionsData) — bounded-parallel.
   if (game.dcActionsData) {
-    for (const msgId of Object.keys(game.dcActionsData)) {
-      const data = game.dcActionsData[msgId];
-      if (!data?.threadId) continue;
+    const activationMsgIds = Object.keys(game.dcActionsData)
+      .filter((msgId) => game.dcActionsData[msgId]?.threadId);
+    await runWithLimit(DISCORD_REFRESH_CONCURRENCY, activationMsgIds, async (msgId) => {
       try {
         await updateDcActionsMessage(game, msgId, client, deps);
       } catch (err) {
         console.error('Refresh All: activation thread failed', msgId, err);
       }
-    }
+    });
   }
 
   // Recompute activation counts from board state (single source of truth)
