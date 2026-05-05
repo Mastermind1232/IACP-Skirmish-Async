@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dice Audit Dashboard</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #1e1f22;
+    color: #e0e0e0;
+    margin: 0;
+    padding: 24px;
+  }
+  h1 { margin: 0 0 8px 0; }
+  .lede { color: #9aa0a6; margin-bottom: 24px; max-width: 720px; line-height: 1.5; }
+  .die-section {
+    margin-bottom: 32px;
+    padding: 16px;
+    background: #2b2d31;
+    border-radius: 8px;
+  }
+  .die-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .face-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+  }
+  .face-card {
+    background: #1e1f22;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+    border: 1px solid #3a3c40;
+  }
+  .face-num {
+    font-weight: 700;
+    color: #9aa0a6;
+    margin-bottom: 6px;
+    font-size: 13px;
+    letter-spacing: 0.4px;
+  }
+  .face-img {
+    width: 96px;
+    height: 96px;
+    border-radius: 6px;
+    background: #444;
+    display: block;
+    margin: 0 auto 10px;
+  }
+  .face-data, .face-outcome {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 11px;
+    text-align: left;
+    padding: 4px 6px;
+    border-radius: 4px;
+    margin-top: 4px;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  .face-data {
+    background: #2a3a4d;
+    color: #b6d8ff;
+  }
+  .face-outcome {
+    background: #3a3a2a;
+    color: #ffe09a;
+  }
+  .face-mismatch {
+    border: 2px solid #ff5555;
+    background: #4a1f1f;
+  }
+  .label-tag {
+    display: inline-block;
+    font-size: 9px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #9aa0a6;
+    margin-bottom: 2px;
+  }
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin: 0 0 24px;
+    font-size: 12px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+  }
+  .swatch-data { background: #2a3a4d; }
+  .swatch-outcome { background: #3a3a2a; }
+  .swatch-mismatch { background: #4a1f1f; border: 2px solid #ff5555; }
+  .summary {
+    background: #25272a;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    color: #c0c0c0;
+  }
+  .summary code {
+    background: #1a1b1d;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #ffe09a;
+  }
+  .face-edit {
+    background: #2a4a2a;
+    color: #b6ffb6;
+    margin-top: 4px;
+    padding: 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 11px;
+    text-align: left;
+    line-height: 1.4;
+  }
+  .face-edit input {
+    width: 30px;
+    background: #1e2a1e;
+    color: #b6ffb6;
+    border: 1px solid #3a3c40;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-family: inherit;
+    font-size: 11px;
+    text-align: center;
+  }
+  .face-edit label {
+    display: inline-block;
+    width: 38px;
+    color: #6a9a6a;
+  }
+  .face-edit input.dirty {
+    border-color: #ff8800;
+    background: #3a2a1a;
+  }
+  .face-edit input[type="checkbox"] { width: 14px; height: 14px; vertical-align: middle; }
+  .controls {
+    background: #25272a;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .controls button {
+    background: #3a5a3a;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .controls button:hover { background: #4a7a4a; }
+  .controls button.danger { background: #5a3a3a; }
+  .controls button.danger:hover { background: #7a4a4a; }
+  .controls button.save { background: #2c5a8a; font-size: 14px; padding: 10px 20px; font-weight: 600; }
+  .controls button.save:hover { background: #3c7aaa; }
+  .controls button.save:disabled { background: #444; cursor: not-allowed; opacity: 0.6; }
+  #json-output {
+    display: none;
+    background: #1a1b1d;
+    color: #b6ffb6;
+    padding: 16px;
+    border-radius: 6px;
+    margin-top: 12px;
+    white-space: pre;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    overflow-x: auto;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .dirty-count {
+    color: #ff8800;
+    font-weight: 600;
+    margin-left: auto;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<h1>Dice Audit Dashboard</h1>
+<p class="lede">
+  Visual cross-check of <code>data/dice.json</code> (used by the bot for combat math) against
+  <code>data/dice-face-outcomes.json</code> (Symbol Labeling Tool reference) and the actual VASSAL
+  dice-face images. Compare each face image to the data values + outcome label, and look for any
+  face flagged as a mismatch (red border).
+</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch swatch-data"></div>dice.json (used by bot)</div>
+  <div class="legend-item"><div class="legend-swatch swatch-outcome"></div>dice-face-outcomes.json (reference)</div>
+  <div class="legend-item"><div class="legend-swatch swatch-mismatch"></div>data ↔ outcomes mismatch</div>
+</div>
+
+<div id="summary" class="summary">Loading…</div>
+
+<div class="controls">
+  <button id="save-btn" class="save">💾 Save to data/dice.json</button>
+  <button id="reset-btn" class="danger">↺ Reset All Edits</button>
+  <span class="dirty-count" id="dirty-count"></span>
+  <span id="save-status" style="margin-left: 12px; font-size: 13px;"></span>
+</div>
+
+<div id="root"></div>
+
+<script>
+// Inline both data sources so the page works from file://
+const DICE_DATA = {
+  attack: {
+    red: [
+      { acc: 0, dmg: 1, surge: 0 },
+      { acc: 0, dmg: 2, surge: 0 },
+      { acc: 0, dmg: 2, surge: 0 },
+      { acc: 0, dmg: 2, surge: 1 },
+      { acc: 0, dmg: 3, surge: 0 },
+      { acc: 0, dmg: 3, surge: 0 },
+    ],
+    yellow: [
+      { acc: 0, dmg: 0, surge: 1 },
+      { acc: 2, dmg: 0, surge: 1 },
+      { acc: 2, dmg: 1, surge: 0 },
+      { acc: 1, dmg: 1, surge: 1 },
+      { acc: 1, dmg: 2, surge: 0 },
+      { acc: 1, dmg: 1, surge: 2 },
+    ],
+    green: [
+      { acc: 1, dmg: 0, surge: 1 },
+      { acc: 1, dmg: 1, surge: 1 },
+      { acc: 2, dmg: 1, surge: 1 },
+      { acc: 3, dmg: 2, surge: 0 },
+      { acc: 1, dmg: 2, surge: 0 },
+      { acc: 2, dmg: 2, surge: 0 },
+    ],
+    blue: [
+      { acc: 2, dmg: 0, surge: 1 },
+      { acc: 2, dmg: 1, surge: 0 },
+      { acc: 5, dmg: 1, surge: 0 },
+      { acc: 3, dmg: 1, surge: 1 },
+      { acc: 3, dmg: 2, surge: 0 },
+      { acc: 4, dmg: 2, surge: 0 },
+    ],
+  },
+  defense: {
+    white: [
+      { block: 0, evade: 0 },
+      { block: 1, evade: 0 },
+      { block: 1, evade: 0 },
+      { block: 0, evade: 1 },
+      { block: 1, evade: 1 },
+      { block: 0, evade: 0, dodge: true },
+    ],
+    black: [
+      { block: 0, evade: 0 },
+      { block: 1, evade: 0 },
+      { block: 2, evade: 0 },
+      { block: 2, evade: 0 },
+      { block: 3, evade: 0 },
+      { block: 0, evade: 1 },
+    ],
+  },
+};
+
+const OUTCOMES = {
+  red:    { 1: '+1 Hit', 2: '+2 Hit', 3: '+2 Hit', 4: '+2 Hit, +1 Surge', 5: '+3 Hit', 6: '+3 Hit' },
+  blue:   { 1: '+2 Accuracy, +1 Surge', 2: '+2 Accuracy, +1 Hit', 3: '+5 Accuracy, +1 Hit', 4: '+3 Accuracy, +1 Hit, +1 Surge', 5: '+3 Accuracy, +2 Hit', 6: '+4 Accuracy, +2 Hit' },
+  green:  { 1: '+1 Accuracy, +1 Surge', 2: '+1 Accuracy, +1 Hit, +1 Surge', 3: '+2 Accuracy, +1 Hit, +1 Surge', 4: '+3 Accuracy, +2 Hit', 5: '+1 Accuracy, +2 Hit', 6: '+2 Accuracy, +2 Hit' },
+  yellow: { 1: '+1 Surge', 2: '+2 Accuracy, +1 Surge', 3: '+2 Accuracy, +1 Hit', 4: '+1 Accuracy, +1 Hit, +1 Surge', 5: '+1 Accuracy, +2 Hit', 6: '+1 Hit, +2 Surge' },
+  white:  { 1: 'blank', 2: '+1 Evade', 3: '+1 Block', 4: '+1 Evade, +1 Block', 5: '+1 Block, +1 Evade', 6: 'Dodge' },
+  black:  { 1: '+1 Block', 2: '+1 Block', 3: '+2 Block', 4: '+2 Block', 5: '+3 Block', 6: '+1 Evade' },
+};
+
+// Deep clone so we keep the original around for diffing.
+const ORIGINAL = JSON.parse(JSON.stringify(DICE_DATA));
+const EDITS = JSON.parse(JSON.stringify(DICE_DATA));
+
+function formatAttack(face) {
+  const parts = [];
+  if (face.acc) parts.push(`+${face.acc} Accuracy`);
+  if (face.dmg) parts.push(`+${face.dmg} Hit`);
+  if (face.surge) parts.push(`+${face.surge} Surge`);
+  return parts.length ? parts.join(', ') : 'blank';
+}
+function formatDefense(face) {
+  const parts = [];
+  if (face.block) parts.push(`+${face.block} Block`);
+  if (face.evade) parts.push(`+${face.evade} Evade`);
+  if (face.dodge) parts.push('Dodge');
+  return parts.length ? parts.join(', ') : 'blank';
+}
+function normalize(s) {
+  return s.toLowerCase().replace(/[+,\s]/g, '').replace(/hit/g, 'dmg').replace(/accuracy/g, 'acc').split('').sort().join('');
+}
+function isFaceDirty(color, idx, isAttack) {
+  const o = isAttack ? ORIGINAL.attack[color][idx] : ORIGINAL.defense[color][idx];
+  const e = isAttack ? EDITS.attack[color][idx] : EDITS.defense[color][idx];
+  return JSON.stringify(o) !== JSON.stringify(e);
+}
+
+function attackEditor(color, idx) {
+  const face = EDITS.attack[color][idx];
+  return `
+    <div class="face-edit">
+      <div class="label-tag">EDIT (LIVE)</div>
+      <div><label>acc</label><input type="number" min="0" max="9" value="${face.acc || 0}" data-color="${color}" data-idx="${idx}" data-field="acc" data-attack="1"></div>
+      <div><label>dmg</label><input type="number" min="0" max="9" value="${face.dmg || 0}" data-color="${color}" data-idx="${idx}" data-field="dmg" data-attack="1"></div>
+      <div><label>surge</label><input type="number" min="0" max="9" value="${face.surge || 0}" data-color="${color}" data-idx="${idx}" data-field="surge" data-attack="1"></div>
+    </div>
+  `;
+}
+
+function defenseEditor(color, idx) {
+  const face = EDITS.defense[color][idx];
+  return `
+    <div class="face-edit">
+      <div class="label-tag">EDIT (LIVE)</div>
+      <div><label>block</label><input type="number" min="0" max="9" value="${face.block || 0}" data-color="${color}" data-idx="${idx}" data-field="block" data-attack="0"></div>
+      <div><label>evade</label><input type="number" min="0" max="9" value="${face.evade || 0}" data-color="${color}" data-idx="${idx}" data-field="evade" data-attack="0"></div>
+      <div><label>dodge</label><input type="checkbox" ${face.dodge ? 'checked' : ''} data-color="${color}" data-idx="${idx}" data-field="dodge" data-attack="0"></div>
+    </div>
+  `;
+}
+
+function renderColor(color, faces, isAttack) {
+  const cap = color.charAt(0).toUpperCase() + color.slice(1);
+  const cards = faces.map((face, i) => {
+    const fileFace = i + 1;
+    const dataLabel = isAttack ? formatAttack(face) : formatDefense(face);
+    const outcomeLabel = OUTCOMES[color][fileFace];
+    const mismatch = normalize(dataLabel) !== normalize(outcomeLabel);
+    // When served via the local node server, use /dice-img/. Falls back to
+    // relative path so the file:// view still works.
+    const imgUrl = window.location.protocol === 'http:'
+      ? `/dice-img/Dice-${cap}%20${fileFace}.jpg`
+      : `../vassal_extracted/images/dice/Dice-${cap}%20${fileFace}.jpg`;
+    return `
+      <div class="face-card${mismatch ? ' face-mismatch' : ''}" id="card-${color}-${i}">
+        <div class="face-num">FACE ${fileFace}</div>
+        <img class="face-img" src="${imgUrl}" alt="${cap} ${fileFace}" onerror="this.style.background='#552'; this.alt='(image not found)';">
+        <div class="face-data">
+          <div class="label-tag">DICE.JSON</div>
+          ${dataLabel}
+        </div>
+        <div class="face-outcome">
+          <div class="label-tag">OUTCOMES.JSON</div>
+          ${outcomeLabel}
+        </div>
+        ${isAttack ? attackEditor(color, i) : defenseEditor(color, i)}
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="die-section">
+      <div class="die-title">${color} ${isAttack ? 'attack' : 'defense'} die</div>
+      <div class="face-grid">${cards}</div>
+    </div>
+  `;
+}
+
+const sections = [
+  ...['red', 'blue', 'yellow', 'green'].map(c => renderColor(c, DICE_DATA.attack[c], true)),
+  ...['white', 'black'].map(c => renderColor(c, DICE_DATA.defense[c], false)),
+];
+document.getElementById('root').innerHTML = sections.join('');
+
+function recomputeSummary() {
+  const mismatches = [];
+  let dirtyCount = 0;
+  for (const c of ['red', 'blue', 'yellow', 'green']) {
+    EDITS.attack[c].forEach((face, i) => {
+      if (isFaceDirty(c, i, true)) dirtyCount++;
+      if (normalize(formatAttack(face)) !== normalize(OUTCOMES[c][i+1])) {
+        mismatches.push(`${c} face ${i+1}: dice.json="${formatAttack(face)}" vs outcomes="${OUTCOMES[c][i+1]}"`);
+      }
+    });
+  }
+  for (const c of ['white', 'black']) {
+    EDITS.defense[c].forEach((face, i) => {
+      if (isFaceDirty(c, i, false)) dirtyCount++;
+      if (normalize(formatDefense(face)) !== normalize(OUTCOMES[c][i+1])) {
+        mismatches.push(`${c} face ${i+1}: dice.json="${formatDefense(face)}" vs outcomes="${OUTCOMES[c][i+1]}"`);
+      }
+    });
+  }
+  const summary = document.getElementById('summary');
+  if (mismatches.length === 0) {
+    summary.innerHTML = '<strong>✓ No mismatches.</strong> Edited values agree with outcomes.json on every face.';
+  } else {
+    summary.innerHTML = `<strong>${mismatches.length} mismatch(es) (between current edits & outcomes.json):</strong><ul style="margin: 8px 0 0; padding-left: 18px;">${mismatches.map(m => `<li><code>${m}</code></li>`).join('')}</ul>`;
+  }
+  document.getElementById('dirty-count').textContent = dirtyCount > 0 ? `${dirtyCount} face(s) edited` : '';
+}
+
+function refreshFaceCard(color, idx, isAttack) {
+  // Update the face-data label + mismatch border to reflect live edits.
+  const card = document.getElementById(`card-${color}-${idx}`);
+  if (!card) return;
+  const face = isAttack ? EDITS.attack[color][idx] : EDITS.defense[color][idx];
+  const newLabel = isAttack ? formatAttack(face) : formatDefense(face);
+  const dataDiv = card.querySelector('.face-data');
+  // Preserve the inner label-tag, replace the text after it.
+  dataDiv.innerHTML = `<div class="label-tag">DICE.JSON${isFaceDirty(color, idx, isAttack) ? ' (edited)' : ''}</div>${newLabel}`;
+  const outcomeLabel = OUTCOMES[color][idx + 1];
+  const mismatch = normalize(newLabel) !== normalize(outcomeLabel);
+  card.classList.toggle('face-mismatch', mismatch);
+  // Mark dirty inputs.
+  card.querySelectorAll('input').forEach(inp => {
+    inp.classList.toggle('dirty', isFaceDirty(color, idx, isAttack));
+  });
+}
+
+// Wire input listeners.
+document.querySelectorAll('.face-edit input').forEach(inp => {
+  inp.addEventListener('input', (e) => {
+    const { color, idx, field, attack } = e.target.dataset;
+    const isAttack = attack === '1';
+    const target = isAttack ? EDITS.attack[color][parseInt(idx, 10)] : EDITS.defense[color][parseInt(idx, 10)];
+    if (field === 'dodge') {
+      if (e.target.checked) target.dodge = true;
+      else delete target.dodge;
+    } else {
+      target[field] = parseInt(e.target.value, 10) || 0;
+    }
+    refreshFaceCard(color, parseInt(idx, 10), isAttack);
+    recomputeSummary();
+  });
+});
+
+// Buttons.
+function buildPayload() {
+  return {
+    source: 'FFG Imperial Assault / IACP - attack {acc, dmg, surge}, defense {block, evade}',
+    attack: {
+      red: EDITS.attack.red,
+      yellow: EDITS.attack.yellow,
+      green: EDITS.attack.green,
+      blue: EDITS.attack.blue,
+    },
+    defense: {
+      white: EDITS.defense.white,
+      black: EDITS.defense.black,
+    },
+  };
+}
+
+document.getElementById('save-btn').addEventListener('click', async () => {
+  const status = document.getElementById('save-status');
+  const btn = document.getElementById('save-btn');
+  if (window.location.protocol !== 'http:') {
+    status.style.color = '#ff8800';
+    status.textContent = '⚠️ Open via the local server (run: node tools/dice-audit-server.js)';
+    return;
+  }
+  btn.disabled = true;
+  status.style.color = '#9aa0a6';
+  status.textContent = 'Saving…';
+  try {
+    const resp = await fetch('/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dice: buildPayload() }),
+    });
+    const result = await resp.json();
+    if (!result.ok) throw new Error(result.error || 'unknown');
+    status.style.color = '#9bff9b';
+    status.textContent = '✓ Saved to data/dice.json';
+    // Sync ORIGINAL with what we just persisted so dirty-state resets.
+    Object.assign(ORIGINAL.attack, JSON.parse(JSON.stringify(EDITS.attack)));
+    Object.assign(ORIGINAL.defense, JSON.parse(JSON.stringify(EDITS.defense)));
+    document.querySelectorAll('.face-edit input').forEach(inp => inp.classList.remove('dirty'));
+    document.querySelectorAll('.face-data .label-tag').forEach(tag => {
+      tag.textContent = 'DICE.JSON';
+    });
+    recomputeSummary();
+  } catch (err) {
+    status.style.color = '#ff5555';
+    status.textContent = `✗ Save failed: ${err.message}`;
+  }
+  btn.disabled = false;
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (!confirm('Reset all edits back to the original dice.json values?')) return;
+  ['red', 'blue', 'yellow', 'green'].forEach(c => {
+    EDITS.attack[c] = JSON.parse(JSON.stringify(ORIGINAL.attack[c]));
+  });
+  ['white', 'black'].forEach(c => {
+    EDITS.defense[c] = JSON.parse(JSON.stringify(ORIGINAL.defense[c]));
+  });
+  // Re-render everything.
+  document.getElementById('root').innerHTML = sections.join('');
+  // Re-wire listeners.
+  document.querySelectorAll('.face-edit input').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const { color, idx, field, attack } = e.target.dataset;
+      const isAttack = attack === '1';
+      const target = isAttack ? EDITS.attack[color][parseInt(idx, 10)] : EDITS.defense[color][parseInt(idx, 10)];
+      if (field === 'dodge') {
+        if (e.target.checked) target.dodge = true;
+        else delete target.dodge;
+      } else {
+        target[field] = parseInt(e.target.value, 10) || 0;
+      }
+      refreshFaceCard(color, parseInt(idx, 10), isAttack);
+      recomputeSummary();
+    });
+  });
+  document.getElementById('json-output').style.display = 'none';
+  recomputeSummary();
+});
+
+recomputeSummary();
+</script>
+</body>
+</html>
