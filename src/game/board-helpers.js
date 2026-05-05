@@ -417,7 +417,17 @@ export function getSpaceController(game, mapId, coord) {
   return null;
 }
 
-/** Returns array of figure keys for playerNum whose positions are on or adjacent to coord. */
+/** Returns array of figure keys for playerNum whose positions are on or adjacent to coord.
+ *
+ * Multi-cell figures (Massive: AT-DP, AT-ST, walkers) are detected via their full
+ * footprint, not just the anchor. CRR figure-occupancy semantics: a figure occupies
+ * every cell of its footprint, so a 2x2 figure whose anchor sits offset from `coord`
+ * but whose footprint touches `coord` (or a neighbor of `coord`) must still be
+ * counted as "on or adjacent." Without this, crate-explosion damage and crate-
+ * control rules silently miss Massive figures whose anchor isn't in the controlSet
+ * — same shape as the same-square gap in getFiguresAdjacentToTarget patched
+ * 2026-05-04. Mirrors the footprint loop in getFiguresAdjacentToCoord.
+ */
 export function getFiguresOnOrAdjacentToSpace(game, playerNum, coord, mapId) {
   const mapSpaces = getBoundedMapSpaces(mapId);
   if (!mapSpaces?.adjacency) return [];
@@ -429,7 +439,11 @@ export function getFiguresOnOrAdjacentToSpace(game, playerNum, coord, mapId) {
   const result = [];
   const poses = game.figurePositions?.[playerNum] || {};
   for (const [figKey, figCoord] of Object.entries(poses)) {
-    if (controlSet.has(normalizeCoord(figCoord))) result.push(figKey);
+    if (!figCoord) continue;
+    const dcName = dcNameFromFigureKey(figKey);
+    const size = game.figureOrientations?.[figKey] || getFigureSize(dcName);
+    const cells = getFootprintCells(figCoord, size).map((c) => normalizeCoord(c));
+    if (cells.some((cell) => controlSet.has(cell))) result.push(figKey);
   }
   return result;
 }
