@@ -5401,11 +5401,66 @@ function _isHeldRollSafe(game, combat) {
   return true;
 }
 
+/** Auto-roll both sides' dice without a user click (per Destruct's UX
+ * feedback 2026-05-04: "the dice can auto roll, no need for prompt in
+ * future"). Reuses handleCombatRoll's existing logic by invoking it
+ * twice with synthetic interactions:
+ *   - First synth (role=atk): stores combat.attackRoll, no image yet.
+ *   - Second synth (role=def): computes defense, posts BOTH images
+ *     (Case A flow), runs reroll-window setup, sendCombatGate('post_roll').
+ *
+ * Only safe when _isHeldRollSafe(game, combat) — combats with mid-roll
+ * abilities (Vet Instincts, Guidance Systems, TINT, Doubt) need the
+ * legacy single-button flow because those abilities chain via re-clicks
+ * and there's no Roll button in auto-roll. postRollDiceButton checks
+ * the predicate before calling.
+ */
+async function autoRollDice(thread, game, combat, ctx) {
+  const atkPN = combat.attackerPlayerNum;
+  const defPN = opponentPlayerNum(atkPN);
+  const atkOwnerId = getPlayerId(game, atkPN);
+  const defOwnerId = getPlayerId(game, defPN);
+  const gameId = game.gameId;
+
+  const synth = (role, ownerId) => ({
+    customId: `combat_roll_${role}_${gameId}`,
+    user: { id: ownerId },
+    client: ctx.client,
+    followUp: async () => {},
+    deferUpdate: async () => {},
+    message: { components: [], edit: async () => ({}) },
+  });
+
+  // First "press" (atk): held early-return path stores combat.attackRoll
+  // + computes attackDiceResults; no image posted yet (image posts on
+  // the second press, in chronological atk→def order).
+  try {
+    await handleCombatRoll(synth('atk', atkOwnerId), ctx);
+  } catch (err) {
+    console.error('[autoRollDice] attack synth failed:', err);
+    return;
+  }
+
+  // Second "press" (def): enters the !combat.defenseRoll block (Case A
+  // flow), which posts the atk image first, computes defense roll, posts
+  // the def image, runs the reroll-window setup (innate + ability-based
+  // rerolls, Power Converter check, etc.), then calls
+  // sendCombatGate('post_roll', ctx).
+  try {
+    await handleCombatRoll(synth('def', defOwnerId), ctx);
+  } catch (err) {
+    console.error('[autoRollDice] defense synth failed:', err);
+  }
+}
+
 /** Post the "Roll Combat Dice" buttons after the pre-roll token phase completes.
  *
- * Default path: two buttons (atk + def), each player's roll held until
- * both have pressed. When the second press lands, both dice images post
- * together — neither player sees the other's result before committing.
+ * Default path: ⚔️ Roll Attack + 🛡️ Roll Defense buttons (each player's
+ * roll held until both press). HOWEVER: when held-roll-safe (no mid-roll
+ * abilities active), this function instead AUTO-ROLLS — Destruct's UX
+ * feedback was that the held-roll buttons are an extra click for no
+ * gameplay reason once both players have completed the on-declare
+ * ready check + token phase.
  *
  * Fallback path: when an ability that needs the post-roll chain is
  * active (Vet Instincts, Guidance Systems, There Is No Try, Doubt SU),
@@ -5413,21 +5468,16 @@ function _isHeldRollSafe(game, combat) {
  * which still work; held-roll's reveal would strand the user mid-chain.
  */
 async function postRollDiceButton(thread, game, combat, ctx) {
-  const combatRound = game.currentRound ?? 1;
-  const atkPN = combat.attackerPlayerNum;
-  const defPN = opponentPlayerNum(atkPN);
-  const atkId = getPlayerId(game, atkPN);
-  const defId = getPlayerId(game, defPN);
-  const atkName = getPlayerDisplayName(game, atkPN, ctx?.client);
-  const defName = getPlayerDisplayName(game, defPN, ctx?.client);
-  const combatEmbed = new EmbedBuilder()
-    .setTitle(`COMBAT: ROUND ${combatRound}`)
-    .setColor(COLORS.ORANGE)
-    .setDescription("Both players roll. Each side's dice are held until the other has rolled — neither player sees the other's result before committing.");
-
   if (!_isHeldRollSafe(game, combat)) {
-    // Legacy single-button flow for ability-active combats.
-    combatEmbed.setDescription('Attacker rolls offense, Defender rolls defense.');
+    // Legacy single-button flow for ability-active combats — needed
+    // because mid-roll abilities (Vet Instincts, Guidance Systems, TINT,
+    // Doubt) chain via re-clicks of the Roll button, and auto-roll has
+    // no Roll button to re-click.
+    const combatRound = game.currentRound ?? 1;
+    const combatEmbed = new EmbedBuilder()
+      .setTitle(`COMBAT: ROUND ${combatRound}`)
+      .setColor(COLORS.ORANGE)
+      .setDescription('Attacker rolls offense, Defender rolls defense.');
     const legacyRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`combat_roll_${game.gameId}`)
@@ -5440,25 +5490,12 @@ async function postRollDiceButton(thread, game, combat, ctx) {
     return;
   }
 
-  const status = `<@${atkId}> **${atkName}** (ATK) ⏳ | <@${defId}> **${defName}** (DEF) ⏳`;
-  const rollRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`combat_roll_atk_${game.gameId}`)
-      .setLabel('⚔️ Roll Attack Dice')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`combat_roll_def_${game.gameId}`)
-      .setLabel('🛡️ Roll Defense Dice')
-      .setStyle(ButtonStyle.Primary),
-  );
-  const rollMsgSent = await thread.send({
-    content: status,
-    embeds: [combatEmbed],
-    components: [rollRow],
-    allowedMentions: { users: [atkId, defId].filter(Boolean) },
-  });
-  combat.rollMessageId = rollMsgSent.id;
-  if (ctx?.saveGames) ctx.saveGames(game.gameId);
+  // Held-safe + no held-unsafe abilities active → auto-roll (Destruct UX
+  // feedback: "the dice can auto roll, no need for prompt in future"
+  // 2026-05-04). Skip the held-roll buttons entirely; dice compute and
+  // images post immediately. Reroll-window setup + post_roll gate fire
+  // via the second synthetic call inside autoRollDice.
+  await autoRollDice(thread, game, combat, ctx);
 }
 
 /** Edit the roll prompt to reflect which sides have rolled (held). Called

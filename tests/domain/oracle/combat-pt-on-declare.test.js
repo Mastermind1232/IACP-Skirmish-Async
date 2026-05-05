@@ -51,22 +51,44 @@ describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
       'proceedToTokenPhase must end with postRollDiceButton when no tokens to spend');
   });
 
-  it('postRollDiceButton exists and posts attack + defense roll buttons', () => {
+  it('postRollDiceButton auto-rolls when held-safe + posts legacy button when held-unsafe', () => {
     const fnMatch = H_CB_SRC.match(/async function postRollDiceButton\(thread, game, combat, ctx\) \{[\s\S]*?^}/m);
     assert.ok(fnMatch, 'postRollDiceButton must exist');
     const body = fnMatch[0];
-    // 2026-05-04: split into two role-specific buttons (held-roll feature).
-    // Attacker presses "Roll Attack Dice"; defender presses "Roll Defense Dice".
-    // Each player's roll is held until the other has rolled — neither sees
-    // the other's dice before committing.
-    assert.match(body, /setLabel\('⚔️ Roll Attack Dice'\)/,
-      'postRollDiceButton must post the Roll Attack Dice button (sword emoji)');
-    assert.match(body, /setLabel\('🛡️ Roll Defense Dice'\)/,
-      'postRollDiceButton must post the Roll Defense Dice button (shield emoji)');
-    assert.match(body, /combat_roll_atk_/,
-      'postRollDiceButton must wire combat_roll_atk_ custom id');
-    assert.match(body, /combat_roll_def_/,
-      'postRollDiceButton must wire combat_roll_def_ custom id');
+    // 2026-05-04 (later): held-roll buttons removed per Destruct UX feedback
+    // ("the dice can auto roll, no need for prompt"). Held-safe combats now
+    // call autoRollDice directly (which simulates both clicks via synthetic
+    // interactions through handleCombatRoll). Held-UNSAFE combats keep the
+    // legacy single-button flow so mid-roll abilities (Vet Instincts,
+    // Guidance Systems, TINT, Doubt) can chain via re-clicks.
+    assert.match(body, /_isHeldRollSafe\(game, combat\)/,
+      'postRollDiceButton must branch on _isHeldRollSafe');
+    assert.match(body, /await autoRollDice\(thread, game, combat, ctx\);/,
+      'postRollDiceButton must call autoRollDice in the held-safe branch');
+    assert.match(body, /setLabel\('Roll Combat Dice'\)/,
+      'postRollDiceButton must keep the legacy single-button fallback for held-unsafe combats');
+    assert.match(body, /combat_roll_\$\{game\.gameId\}/,
+      'postRollDiceButton must wire the legacy combat_roll_<gameId> custom id (no role suffix)');
+    // Sanity: the held-roll buttons (atk/def) should NO LONGER be posted by
+    // this function — autoRollDice handles their logic via synthetic clicks.
+    assert.doesNotMatch(body, /setLabel\('⚔️ Roll Attack Dice'\)/,
+      'postRollDiceButton must NOT post the held-roll attack button anymore');
+    assert.doesNotMatch(body, /setLabel\('🛡️ Roll Defense Dice'\)/,
+      'postRollDiceButton must NOT post the held-roll defense button anymore');
+  });
+
+  it('autoRollDice exists and synthesizes both roll-button clicks', () => {
+    const fnMatch = H_CB_SRC.match(/async function autoRollDice\(thread, game, combat, ctx\) \{[\s\S]*?^}/m);
+    assert.ok(fnMatch, 'autoRollDice must exist');
+    const body = fnMatch[0];
+    assert.match(body, /handleCombatRoll/,
+      'autoRollDice must invoke handleCombatRoll to reuse existing roll + reroll-window logic');
+    assert.match(body, /combat_roll_\$\{role\}/,
+      'autoRollDice must synthesize a role-suffixed roll customId');
+    assert.match(body, /'atk'/,
+      'autoRollDice must call synth with role=atk');
+    assert.match(body, /'def'/,
+      'autoRollDice must call synth with role=def');
   });
 
   it('proceedAfterRerolls no longer opens token windows (tokens already resolved pre-roll)', () => {
