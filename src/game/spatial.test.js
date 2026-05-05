@@ -2,12 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getRange,
-  isAdjacentCoords,
-  isWithinRange,
   hasLineOfSight,
   isWithinSpaces,
-  getFiguresWithinRange,
-  getFiguresAdjacentTo,
   countSpaces,
 } from './spatial.js';
 
@@ -26,30 +22,8 @@ describe('getRange', () => {
   });
 });
 
-describe('isAdjacentCoords', () => {
-  it('returns true for adjacent', () => {
-    assert.ok(isAdjacentCoords('a1', 'a2'));
-    assert.ok(isAdjacentCoords('a1', 'b1'));
-  });
-  it('returns false for same space', () => {
-    assert.ok(!isAdjacentCoords('a1', 'a1'));
-  });
-  it('returns false for diagonal', () => {
-    assert.ok(!isAdjacentCoords('a1', 'b2'));
-  });
-});
-
-describe('isWithinRange', () => {
-  it('returns true when within range', () => {
-    assert.ok(isWithinRange('a1', 'c1', 3));
-  });
-  it('returns false when out of range', () => {
-    assert.ok(!isWithinRange('a1', 'e1', 3));
-  });
-  it('returns true for same space at range 0', () => {
-    assert.ok(isWithinRange('a1', 'a1', 0));
-  });
-});
+// isAdjacentCoords + isWithinRange describe blocks removed 2026-05-05
+// alongside the dead Manhattan helpers themselves.
 
 describe('hasLineOfSight', () => {
   const emptyMap = { blocking: [], impassableEdges: [] };
@@ -184,47 +158,5 @@ describe('countSpaces', () => {
   });
 });
 
-describe('getFiguresWithinRange', () => {
-  const game = {
-    figurePositions: {
-      1: { 'Stormtrooper-0-0': 'a1', 'Stormtrooper-0-1': 'c3' },
-      2: { 'Rebel-0-0': 'b2' },
-    },
-  };
-  it('finds figures within range', () => {
-    const result = getFiguresWithinRange(game, 'a1', 2);
-    const keys = result.map((r) => r.figureKey);
-    assert.ok(keys.includes('Stormtrooper-0-0')); // distance 0
-    assert.ok(keys.includes('Rebel-0-0')); // distance 2
-    assert.ok(!keys.includes('Stormtrooper-0-1')); // distance 4
-  });
-  it('filters by playerNum', () => {
-    const result = getFiguresWithinRange(game, 'a1', 5, 2);
-    assert.strictEqual(result.length, 1);
-    assert.strictEqual(result[0].figureKey, 'Rebel-0-0');
-  });
-  it('includes distance', () => {
-    const result = getFiguresWithinRange(game, 'a1', 5);
-    const rebel = result.find((r) => r.figureKey === 'Rebel-0-0');
-    assert.strictEqual(rebel.distance, 2);
-  });
-});
-
-describe('getFiguresAdjacentTo', () => {
-  const game = {
-    figurePositions: {
-      1: { 'Trooper-0-0': 'a2' },
-      2: { 'Rebel-0-0': 'c1' },
-    },
-  };
-  it('returns only adjacent figures (distance === 1)', () => {
-    const result = getFiguresAdjacentTo(game, 'a1');
-    assert.strictEqual(result.length, 1);
-    assert.strictEqual(result[0].figureKey, 'Trooper-0-0');
-  });
-  it('excludes same-space figures', () => {
-    const result = getFiguresAdjacentTo(game, 'a2');
-    // Trooper at a2 has distance 0, not adjacent
-    assert.strictEqual(result.length, 0);
-  });
-});
+// getFiguresWithinRange + getFiguresAdjacentTo describe blocks removed
+// 2026-05-05 alongside the dead Manhattan helpers themselves.

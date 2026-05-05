@@ -80,8 +80,6 @@ export { getConfig, setConfig, clearConfig, getAttachments, hasAttachment } from
 
 export {
   getRange,
-  isAdjacentCoords,
-  isWithinRange,
   hasLineOfSight,
   hasLineOfSightByCoord,
   hasFigureLineOfSight,
@@ -90,8 +88,6 @@ export {
   expandCoordToFigureFootprint,
   isWithinSpaces,
   countSpaces,
-  getFiguresWithinRange,
-  getFiguresAdjacentTo,
 } from './spatial.js';
 
 export { cleanupActivation, cleanupRoundStart } from './activation-state.js';

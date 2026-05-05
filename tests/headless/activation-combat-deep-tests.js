@@ -28,12 +28,8 @@ import {
 } from '../../src/game/conditions.js';
 import {
   getRange,
-  isAdjacentCoords,
-  isWithinRange,
   hasLineOfSight,
   isWithinSpaces,
-  getFiguresWithinRange,
-  getFiguresAdjacentTo,
 } from '../../src/game/spatial.js';
 import {
   parseCoord,
@@ -296,18 +292,8 @@ describe('movement: spatial getRange and adjacency', () => {
     assert.strictEqual(getRange('a1', ''), 999);
   });
 
-  it('isAdjacentCoords is true for distance=1', () => {
-    assert.ok(isAdjacentCoords('c3', 'c4'));
-    assert.ok(isAdjacentCoords('c3', 'd3'));
-    assert.ok(!isAdjacentCoords('c3', 'c3'));
-    assert.ok(!isAdjacentCoords('c3', 'd4'));
-  });
-
-  it('isWithinRange checks <= range', () => {
-    assert.ok(isWithinRange('a1', 'a3', 2));
-    assert.ok(isWithinRange('a1', 'a3', 3));
-    assert.ok(!isWithinRange('a1', 'a3', 1));
-  });
+  // isAdjacentCoords + isWithinRange tests removed 2026-05-05 — helpers
+  // deleted (Manhattan-based, CRR-incorrect, zero production callers).
 });
 
 describe('movement: isWithinSpaces BFS', () => {
@@ -336,28 +322,8 @@ describe('movement: isWithinSpaces BFS', () => {
   });
 });
 
-describe('movement: getFiguresWithinRange and getFiguresAdjacentTo', () => {
-  it('finds figures within Manhattan range', () => {
-    const game = { figurePositions: { 1: { 'A-0-0': 'c3' }, 2: { 'B-0-0': 'c5', 'B-0-1': 'h1' } } };
-    const results = getFiguresWithinRange(game, 'c3', 2);
-    assert.ok(results.some(r => r.figureKey === 'A-0-0'), 'self at distance 0');
-    assert.ok(results.some(r => r.figureKey === 'B-0-0'), 'B-0-0 at distance 2');
-    assert.ok(!results.some(r => r.figureKey === 'B-0-1'), 'B-0-1 too far');
-  });
-
-  it('filters by playerNum', () => {
-    const game = { figurePositions: { 1: { 'A-0-0': 'c3' }, 2: { 'B-0-0': 'c4' } } };
-    const p2Only = getFiguresWithinRange(game, 'c3', 2, 2);
-    assert.ok(p2Only.every(r => r.playerNum === 2));
-  });
-
-  it('getFiguresAdjacentTo returns only distance=1 results', () => {
-    const game = { figurePositions: { 1: { 'A-0-0': 'c3', 'A-0-1': 'c4', 'A-0-2': 'c5' }, 2: {} } };
-    const adj = getFiguresAdjacentTo(game, 'c3');
-    assert.ok(adj.some(r => r.figureKey === 'A-0-1'), 'c4 is adjacent');
-    assert.ok(!adj.some(r => r.figureKey === 'A-0-2'), 'c5 is not adjacent');
-  });
-});
+// getFiguresWithinRange + getFiguresAdjacentTo describe block removed
+// 2026-05-05 alongside the dead Manhattan helpers themselves.
 
 describe('movement: computeMovementCache basics', () => {
   it('computes reachable cells on a simple linear map', () => {

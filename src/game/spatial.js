@@ -21,26 +21,14 @@ export function getRange(coord1, coord2) {
   return Math.abs(a.col - b.col) + Math.abs(a.row - b.row);
 }
 
-/**
- * Whether two coords are exactly adjacent (Manhattan distance === 1).
- * @param {string} coord1
- * @param {string} coord2
- * @returns {boolean}
- */
-export function isAdjacentCoords(coord1, coord2) {
-  return getRange(coord1, coord2) === 1;
-}
-
-/**
- * Whether two coords are within range (Manhattan distance <= range).
- * @param {string} coord1
- * @param {string} coord2
- * @param {number} range
- * @returns {boolean}
- */
-export function isWithinRange(coord1, coord2, range) {
-  return getRange(coord1, coord2) <= range;
-}
+// isAdjacentCoords + isWithinRange removed 2026-05-05 — Manhattan-based
+// helpers that excluded same-square (CRR-incorrect) and undercounted
+// diagonals. Zero production callers; only test files referenced them.
+// Adjacency / range queries in rules code go through the map-graph
+// helpers: getFiguresAdjacentToTarget / getFiguresAdjacentToCoord
+// (movement.js) for figure adjacency, isWithinN (engine/utils.js) and
+// isWithinSpaces (this file) for "within N" counts. All map-graph based
+// (8-direction, walls + same-square correct).
 
 // ── LOS helpers (private) ───────────────────────────────────────────────────
 
@@ -454,47 +442,11 @@ export function countSpaces(mapSpaces, coordA, coordB, blockedEdges = null, maxD
   return Infinity;
 }
 
-// ── Figure enumeration ──────────────────────────────────────────────────────
-
-/**
- * Get all figure keys within Manhattan range of a coord.
- * Accounts for large figure footprints — distance is computed to the closest footprint cell.
- * @param {object} game - game state with figurePositions, figureOrientations
- * @param {string} coord - center coord
- * @param {number} range - max Manhattan distance
- * @param {number|null} [playerNum] - filter to specific player (null = both)
- * @returns {Array<{figureKey: string, playerNum: number, coord: string, distance: number}>}
- */
-export function getFiguresWithinRange(game, coord, range, playerNum = null) {
-  const results = [];
-  const players = playerNum ? [playerNum] : [1, 2];
-  for (const pn of players) {
-    const poses = game.figurePositions?.[pn] || {};
-    for (const [fk, fCoord] of Object.entries(poses)) {
-      if (!fCoord) continue;
-      // For large figures, compute distance to closest footprint cell
-      const size = game.figureOrientations?.[fk];
-      let d;
-      if (size && size !== '1x1') {
-        const cells = getFootprintCells(fCoord, size);
-        d = Math.min(...cells.map(c => getRange(coord, c)));
-      } else {
-        d = getRange(coord, fCoord);
-      }
-      if (d <= range) results.push({ figureKey: fk, playerNum: pn, coord: fCoord, distance: d });
-    }
-  }
-  return results;
-}
-
-/**
- * Get all figure keys adjacent (Manhattan distance === 1) to a coord.
- * @param {object} game
- * @param {string} coord
- * @param {number|null} [playerNum]
- * @returns {Array<{figureKey: string, playerNum: number, coord: string}>}
- */
-export function getFiguresAdjacentTo(game, coord, playerNum = null) {
-  return getFiguresWithinRange(game, coord, 1, playerNum)
-    .filter((f) => f.distance === 1);
-}
+// getFiguresWithinRange + getFiguresAdjacentTo removed 2026-05-05.
+// Manhattan-based — diagonals undercounted, same-square excluded.
+// Zero production callers (only test files referenced them; tests
+// removed alongside). Figure-adjacency / range queries in rules code
+// use the map-graph helpers: getFiguresAdjacentToCoord /
+// getFiguresAdjacentToTarget (movement.js) for figure adjacency,
+// isWithinN (engine/utils.js) and isWithinSpaces (this file) for
+// "within N" counts.
