@@ -5533,11 +5533,13 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const perDefDieSurge = (combat.bonusSurgePerDefenseDie || 0) * defenseDiceCount;
-  // Hidden on attacker: +1 surge
-  const hiddenSurgeBonus = combat.attackerConds?.includes('Hide') ? 1 : 0;
+  // Hidden on attacker is NOT a surge bonus — it grants +1 Damage per the
+  // canonical condition card text. The damage bonus lives in
+  // computeCombatResult (src/game/combat.js); here we keep zero so the
+  // surge total isn't double-credited. (Audit 2026-05-05 fix.)
   // Fury (Wookiee Warriors): +1 surge if 5+ damage (set at attack declare time)
   const furyBonus = combat.furyBonus || 0;
-  const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge + hiddenSurgeBonus + furyBonus;
+  const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge + furyBonus;
   const rawSurge = roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0);
   const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
   const totalEvade = defRoll.evade + (combat.bonusEvade || 0) + roundEvade;
@@ -5602,8 +5604,8 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
     const roundSurge = game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0;
     const ccSurge = (combat.surgeBonus || 0);
-    const surgeDisplay = (ccSurge > 0 || roundSurge > 0 || hiddenSurgeBonus > 0 || furyBonus > 0)
-      ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''}${hiddenSurgeBonus ? ` + 1 (Hidden)` : ''}${furyBonus ? ` + ${furyBonus} (Fury)` : ''} = **${totalSurge}**`
+    const surgeDisplay = (ccSurge > 0 || roundSurge > 0 || furyBonus > 0)
+      ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''}${furyBonus ? ` + ${furyBonus} (Fury)` : ''} = **${totalSurge}**`
       : `**${totalSurge}**`;
     // @ the attacker so they get a notification when surge spending opens.
     const _surgeAtkPN = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;

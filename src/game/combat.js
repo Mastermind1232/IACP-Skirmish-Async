@@ -317,7 +317,15 @@ export function computeCombatResult(combat) {
   }
   const defenseDiceCount = combat.defenseDiceCount ?? 1;
   const perDefDieDamage = (combat.bonusDamagePerDefenseDie || 0) * defenseDiceCount;
-  let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage - effectiveBlock) : 0;
+  // Hidden on attacker: +1 Damage to attack results.
+  // Per the canonical IACP Hidden condition card: "While attacking,
+  // apply +1 [Damage] to the attack results." (Verified against
+  // vassal_extracted/images/conditions/Condition card--Hidden.jpg.)
+  // CRR p.34 paraphrases this as "+1 while attacking" without naming
+  // the symbol; the card image is authoritative. Audit 2026-05-05.
+  const attackerHidden = !!combat.attackerConds?.includes('Hide');
+  const hiddenDmgBonus = attackerHidden ? 1 : 0;
+  let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage + hiddenDmgBonus - effectiveBlock) : 0;
   // Weakened on attacker: -1 to their final damage output
   const attackerWeakened = combat.attackerConds?.includes('Weaken');
   if (attackerWeakened && damage > 0) {
@@ -369,6 +377,7 @@ export function computeCombatResult(combat) {
   if (attackerWeakened) details += ` | **Weakened** (attacker -1 dmg)`;
   if (defenderWeakened) details += ` | **Weakened** (defender -1 block)`;
   if (defenderHidden) details += ` | **Hidden** (defender -2 accuracy)`;
+  if (attackerHidden) details += ` | **Hidden** (attacker +1 damage)`;
   if (defenderAccPenalty) details += ` | **CC** (defender -${defenderAccPenalty} accuracy)`;
   if (defRoll.dodge && combat.surgeCancelDodge) details += ` | **Deadly Spin**: Dodge cancelled`;
   let resultText = `${headline}\n${details}`;
