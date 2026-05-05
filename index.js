@@ -1019,7 +1019,10 @@ function resolveGameIdForLock(interaction) {
 const atomicOpts = {
   getGame,
   setGame,
-  commitFn: () => saveGames(),
+  // Per-game commit: withAtomicGameLock passes the locked gameId here.
+  // Prior shape `() => saveGames()` marked ALL games dirty at handler
+  // exit, widening one-game work to all-game writes (audit 2026-05-04).
+  commitFn: (gameId) => saveGames(gameId),
   onRollback: (gid) => repopulateDcMapsForGame(gid),
 };
 

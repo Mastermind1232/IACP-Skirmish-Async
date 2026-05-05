@@ -77,9 +77,12 @@ export async function withAtomicGameLock(gameId, opts, fn) {
     }
     try {
       await fn();
-      // Commit: persist after successful handler
+      // Commit: persist after successful handler. Pass gameId so the
+      // commit can target just this game's row instead of marking all
+      // games dirty (the prior `() => saveGames()` shape widened one-game
+      // work to all-game writes — see audit memory 2026-05-04).
       if (opts.commitFn) {
-        await opts.commitFn();
+        await opts.commitFn(gameId);
       }
     } catch (err) {
       // Rollback: restore pre-handler state

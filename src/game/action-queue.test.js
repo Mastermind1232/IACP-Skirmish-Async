@@ -102,6 +102,23 @@ describe('withAtomicGameLock', () => {
     cleanupGameLock('g1');
   });
 
+  it('passes gameId to commitFn so per-game saves can target one row', async () => {
+    // Per-game commit narrowing (audit 2026-05-04): without gameId,
+    // the index.js commitFn defaulted to `() => saveGames()` which
+    // marked all games dirty on every handler exit.
+    const store = new Map([['g_id_pass', { hp: 10 }]]);
+    let receivedGameId = null;
+    const opts = {
+      getGame: (id) => store.get(id),
+      setGame: (id, g) => store.set(id, g),
+      commitFn: async (gid) => { receivedGameId = gid; },
+    };
+    await withAtomicGameLock('g_id_pass', opts, async () => {});
+    assert.strictEqual(receivedGameId, 'g_id_pass',
+      'commitFn must receive the locked gameId so it can save just that game');
+    cleanupGameLock('g_id_pass');
+  });
+
   it('rolls back state on handler throw', async () => {
     const store = new Map([['g2', { hp: 10, name: 'test', items: [1, 2] }]]);
     let committed = false;
