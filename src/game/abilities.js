@@ -302,7 +302,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'dcSpecial' && entry.pushTargetWithinRange && typeof entry.pushTargetWithinRange === 'object') {
     const { range = 3, requiresSmall = false, requiresLos = false, hostileOnly = false } = entry.pushTargetWithinRange;
     const { mustAdjacentToActivator = false, maxDistanceFromTarget } = entry.pushLandingEffect || {};
-    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSightByCoord: losCheck, getRange: getRng, getMapData: getMs, getFigureSize: gfs, targetFigureKey, chosenSpace } = context;
+    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSightByCoord: losCheck, getMapData: getMs, getFigureSize: gfs, targetFigureKey, chosenSpace } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
     const enemyNum = opponentPlayerNum(playerNum);
     const label = entry.label || 'Push';
@@ -457,7 +457,7 @@ export function resolveAbility(abilityId, context) {
   // First call: returns requiresChoice with enemy figure list; second call: applies effect to chosen figure.
   if (entry.type === 'dcSpecial' && entry.targetHostileFigure && typeof entry.targetHostileFigure === 'object') {
     const { damage = 0, strain = 0, applyCondition: condToApply, requiresLos = false, range: maxRange = 999, splashDamageNote, splashDamage = 0, splashConditions = [] } = entry.targetHostileFigure;
-    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSightByCoord: losCheck, getRange: getRng, getMapData: getMs, getFigureSize: gfs, choiceIndex, targetFigureKey } = context;
+    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSightByCoord: losCheck, getMapData: getMs, getFigureSize: gfs, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.logMessage || `Resolve ${entry.label} manually.` };
     const enemyPlayerNum = opponentPlayerNum(playerNum);
     const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
@@ -666,7 +666,7 @@ export function resolveAbility(abilityId, context) {
   // dcSpecial: applyHideToFriendlyWithinRange (Field Report) — apply Hide condition to qualifying friendly figures within range
   if (entry.type === 'dcSpecial' && entry.applyHideToFriendlyWithinRange && typeof entry.applyHideToFriendlyWithinRange === 'object') {
     const { range: maxRange = 4, maxDiceCount = 2, maxTargets = 2 } = entry.applyHideToFriendlyWithinRange;
-    const { game, playerNum, meta, msgId, getRange: getRng } = context;
+    const { game, playerNum, meta, msgId } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve ${entry.label} manually.` };
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
@@ -700,7 +700,7 @@ export function resolveAbility(abilityId, context) {
 
   // battlefield_leadership (Leia Organa): pick a friendly figure within 3 spaces; it gets a free attack
   if (abilityId === 'battlefield_leadership') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Battlefield Leadership** manually.' };
     // Phase 2: figure chosen — set pending flag and return applied
     if (choiceIndex != null && targetFigureKey) {
@@ -733,7 +733,7 @@ export function resolveAbility(abilityId, context) {
 
   // emperor_interrupt (Emperor Palpatine): choose a friendly figure within 4 spaces; it gets a free attack
   if (abilityId === 'emperor_interrupt') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Emperor** manually.' };
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
@@ -764,7 +764,7 @@ export function resolveAbility(abilityId, context) {
 
   // You Have Something I Want (Moff Gideon): choose hostile with token within 4, transfer or 3 damage
   if (abilityId === 'you_have_something_i_want_gideon') {
-    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, choiceIndex, targetFigureKey, getRange: getRng } = context;
+    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum || !meta || !msgId) return { applied: false, manualMessage: 'Resolve **You Have Something I Want** manually.' };
 
     // Phase 2: target+token chosen → set up opponent decision
@@ -840,7 +840,7 @@ export function resolveAbility(abilityId, context) {
 
   // tempt (Emperor Palpatine): choose any figure within 4 spaces; 1 damage + 1 Damage Token
   if (abilityId === 'tempt') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, dcMessageMeta, dcHealthState, getRange: getRng } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, dcMessageMeta, dcHealthState } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Tempt** manually.' };
     const enemyNum = opponentPlayerNum(playerNum);
     if (choiceIndex != null && targetFigureKey) {
@@ -937,7 +937,7 @@ export function resolveAbility(abilityId, context) {
 
   // executive_order (Imperial Officer Elite): choose an Imperial figure within 2 spaces; it interrupts to move or attack
   if (abilityId === 'executive_order') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng, getDcEffects: getEff } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Executive Order** manually.' };
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
@@ -973,7 +973,7 @@ export function resolveAbility(abilityId, context) {
 
   // officer_order (Imperial Officer Regular): choose a friendly figure within 2 spaces; it gains 2 MP
   if (abilityId === 'officer_order') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Order** manually.' };
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
@@ -1004,7 +1004,7 @@ export function resolveAbility(abilityId, context) {
 
   // bombardment_sorin (General Sorin): choose an adjacent friendly; it interrupts to attack with Blast 1 + Accuracy 1
   if (abilityId === 'bombardment_sorin') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Bombardment** manually.' };
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
@@ -1038,7 +1038,7 @@ export function resolveAbility(abilityId, context) {
 
   // firing_squad (Kayn Somos): choose up to 2 adjacent Troopers; each interrupts to attack same target
   if (abilityId === 'firing_squad') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng, getDcEffects: getEff } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Firing Squad** manually.' };
     // Phase 2: first trooper chosen
     if (choiceIndex != null && targetFigureKey) {
@@ -1150,7 +1150,7 @@ export function resolveAbility(abilityId, context) {
 
   // do_or_do_not_yoda (Yoda): choose a friendly REBEL FORCE USER within 4 → Focus
   if (abilityId === 'do_or_do_not_yoda') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng, getDcEffects: getEff } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Do or Do Not** manually.' };
     if (choiceIndex != null && targetFigureKey) {
       applyCondition(game, targetFigureKey, 'Focus');
@@ -1185,7 +1185,7 @@ export function resolveAbility(abilityId, context) {
 
   // coordinated_raid_elite (ISB Infiltrator Elite): choose a friendly IMPERIAL figure (cost ≤4) within 4 spaces → interrupt to attack
   if (abilityId === 'coordinated_raid_elite') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng, getDcEffects: getEff } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Coordinated Raid** manually.' };
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
@@ -1254,7 +1254,7 @@ export function resolveAbility(abilityId, context) {
 
   // bartered_information (Bib Fortuna): choose a friendly SCUM figure within 2 → Focus
   if (abilityId === 'bartered_information') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng, getDcEffects: getEff } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Bartered Information** manually.' };
     if (choiceIndex != null && targetFigureKey) {
       applyCondition(game, targetFigureKey, 'Focus');
@@ -1478,7 +1478,7 @@ export function resolveAbility(abilityId, context) {
 
   // false_orders (Murne Rin): choose a hostile figure (cost ≤ 4, within 4 spaces); perform move or attack with it
   if (abilityId === 'false_orders') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **False Orders** manually.' };
     const enemyNum = opponentPlayerNum(playerNum);
     // Phase 2: figure chosen — set pending state and return marker for Move/Attack choice
@@ -2247,7 +2247,7 @@ export function resolveAbility(abilityId, context) {
       if (!mapId || !activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
       const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
       const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
-      const { hasLineOfSightByCoord: losCheck, getRange: getRng, getFigureSize: gfs } = context;
+      const { hasLineOfSightByCoord: losCheck, getFigureSize: gfs } = context;
       const validTargets = [];
       for (const [fk, pos] of Object.entries(enemyPositions)) {
         if (!pos) continue;
@@ -6458,7 +6458,7 @@ export function resolveAbility(abilityId, context) {
   // Phase 3 (targetFigureKey + chosenSpace set): apply position update.
   if (entry.type === 'ccEffect' && typeof entry.pushFriendlyWithin3Spaces === 'number' && entry.pushFriendlyWithin3Spaces > 0) {
     const pushDist = entry.pushFriendlyWithin3Spaces;
-    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace, getRange: getRng, getMapData: getMs } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace, getMapData: getMs } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const targetFigureKey = chosenFigureKey;
 
