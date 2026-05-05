@@ -62,8 +62,17 @@ export async function withAtomicGameLock(gameId, opts, fn) {
       try {
         snapshot = JSON.parse(JSON.stringify(game));
       } catch (cloneErr) {
-        console.error(`[atomicity] Failed to snapshot game ${gameId}:`, cloneErr.message);
-        // Fall through without snapshot — better to run without rollback than to block
+        // Fail closed: refuse the handler instead of running without rollback.
+        // If JSON-clone fails (circular refs, BigInt, etc.), saveGames() will
+        // also fail downstream — running without rollback would only let
+        // partial mutations accumulate before the eventual save error. Better
+        // to surface the corruption immediately and let the outer error
+        // handler / user retry path deal with it.
+        console.error(`[atomicity] Failed to snapshot game ${gameId} — refusing handler:`, cloneErr.message);
+        const wrapped = new Error(`Cannot acquire atomic lock for game ${gameId}: state snapshot failed (${cloneErr.message}). State may be unserializable.`);
+        wrapped.cause = cloneErr;
+        wrapped.code = 'ATOMIC_SNAPSHOT_FAILED';
+        throw wrapped;
       }
     }
     try {

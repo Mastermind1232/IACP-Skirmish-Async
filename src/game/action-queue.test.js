@@ -167,4 +167,44 @@ describe('withAtomicGameLock', () => {
     assert.ok(ran);
     cleanupGameLock('g_none');
   });
+
+  it('fails closed when snapshot clone throws (refuses handler)', async () => {
+    // Game with a circular reference — JSON.stringify will throw.
+    const game = { hp: 10 };
+    game.self = game;
+    const store = new Map([['g_circular', game]]);
+    let ran = false;
+    let committed = false;
+    const opts = {
+      getGame: (id) => store.get(id),
+      setGame: (id, g) => store.set(id, g),
+      commitFn: async () => { committed = true; },
+    };
+    await assert.rejects(
+      () => withAtomicGameLock('g_circular', opts, async () => { ran = true; }),
+      (err) => err.code === 'ATOMIC_SNAPSHOT_FAILED' && /snapshot failed/.test(err.message),
+    );
+    assert.ok(!ran, 'Handler must NOT run when snapshot fails');
+    assert.ok(!committed, 'commitFn must NOT be called when snapshot fails');
+    cleanupGameLock('g_circular');
+  });
+
+  it('releases lock after snapshot failure so next handler can run', async () => {
+    const game = { hp: 10 };
+    game.self = game;
+    const store = new Map([['g_circular2', game]]);
+    const opts = {
+      getGame: (id) => store.get(id),
+      setGame: (id, g) => store.set(id, g),
+    };
+    try {
+      await withAtomicGameLock('g_circular2', opts, async () => {});
+    } catch (_) {}
+    // Replace with a non-circular game — next handler should run.
+    store.set('g_circular2', { hp: 10 });
+    let secondRan = false;
+    await withAtomicGameLock('g_circular2', opts, async () => { secondRan = true; });
+    assert.ok(secondRan, 'Lock must release after snapshot-failure throw');
+    cleanupGameLock('g_circular2');
+  });
 });
