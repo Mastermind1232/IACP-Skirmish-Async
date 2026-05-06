@@ -1593,7 +1593,16 @@ export function resolveAbility(abilityId, context) {
           if (entry.grantMpToTarget > 0) {
             addMovementPoints(game, tgtMsgId, entry.grantMpToTarget);
           }
-          return { applied: true, logMessage: `**${entry.label}** — **${dcName}** may interrupt to perform a free attack and gains ${entry.grantMpToTarget || 0} MP.${entry.autoDeductVp ? ` (−${entry.autoDeductVp} VP)` : ''}`, refreshDcEmbed: true };
+          // Include the TARGET's msgId in the refresh list so their DC
+          // embed updates with the new MP + any newly-enabled MP-cost
+          // buttons (e.g. Boba Fett's Wrist Cord / Wrist Flamethrower
+          // when granted MP out-of-activation via Order Hit).
+          return {
+            applied: true,
+            logMessage: `**${entry.label}** — **${dcName}** may interrupt to perform a free attack and gains ${entry.grantMpToTarget || 0} MP.${entry.autoDeductVp ? ` (−${entry.autoDeductVp} VP)` : ''}`,
+            refreshDcEmbed: true,
+            refreshDcEmbedMsgIds: [tgtMsgId],
+          };
         }
       }
       return { applied: true, logMessage: `**${entry.label}** — **${dcName}** is now **Focused**.`, refreshDcEmbed: true };
