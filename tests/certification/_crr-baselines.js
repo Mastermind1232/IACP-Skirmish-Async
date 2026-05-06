@@ -39,11 +39,19 @@ import { createTestGame } from '../fixtures/game-builder.js';
 // flag set by Force Exhaustion); getOccupiedSpacesForMovement now includes
 // The Child's footprint when incapacitated. Single known incap-capable
 // figure, so a dcName equality check is the correct shape here.
+// 2026-05-06: cardNameIncludes 82→90. ACS audit added Advanced Com Systems
+// range checks at six DC ability sites in abilities.js (executive_order,
+// officer_order, bombardment_sorin, firing_squad phase 1 + phase 2,
+// bartered_information) plus two it_will_be_alright sites (Cassian's
+// activation-setup wiring + handlers/activation.js iwba_use handler).
+// All eight extend "adjacent" or "within 2" → "within 3" per the IACP
+// ACS card text — they're DC-ability ACS gaps that the previous audit
+// missed.
 export const DD_BASELINE = {
   dcName_equality: 57,
   dcName_includes: 5,
   dcName_startsWith: 4,
-  cardNameIncludes: 82,
+  cardNameIncludes: 90,
 };
 export const DD_BASELINE_TOTAL = Object.values(DD_BASELINE).reduce((a, b) => a + b, 0);
 

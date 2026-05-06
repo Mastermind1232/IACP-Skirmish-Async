@@ -10,6 +10,7 @@ import { reduceHp, healHp, applyDamageWithDefeatCheck, suffersStrain } from './d
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
+import { cardNameIncludes } from './card-names.js';
 
 
 /**
@@ -983,18 +984,21 @@ export function resolveAbility(abilityId, context) {
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
     if (!activatingPos) return { applied: false, manualMessage: '**Executive Order** — No position on the board. Resolve manually.' };
+    // ACS extends "within 2" → "within 3" when attached to this DC.
+    const _eoAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _eoMaxRange = cardNameIncludes(_eoAtts, 'Advanced Com Systems') ? 3 : 2;
     const validTargets = [];
     const dcEffects = typeof getEff === 'function' ? getEff() : null;
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (countGameSpaces(game, activatingPos, pos) > 2) continue;
+      if (countGameSpaces(game, activatingPos, pos) > _eoMaxRange) continue;
       // Must be Imperial affiliation
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = dcEffects?.[fkDcName];
       if (fkEff?.affiliation && fkEff.affiliation !== 'Imperial') continue;
       validTargets.push(fk);
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Executive Order** — No friendly Imperial figures within 2 spaces.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: `**Executive Order** — No friendly Imperial figures within ${_eoMaxRange} spaces.` };
     return {
       applied: false,
       requiresChoice: true,
@@ -1019,13 +1023,16 @@ export function resolveAbility(abilityId, context) {
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
     if (!activatingPos) return { applied: false, manualMessage: '**Order** — No position on the board. Resolve manually.' };
+    // ACS extends "within 2" → "within 3" when attached to this DC.
+    const _ooAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _ooMaxRange = cardNameIncludes(_ooAtts, 'Advanced Com Systems') ? 3 : 2;
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (countGameSpaces(game, activatingPos, pos) > 2) continue;
+      if (countGameSpaces(game, activatingPos, pos) > _ooMaxRange) continue;
       validTargets.push(fk);
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Order** — No other friendly figures within 2 spaces.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: `**Order** — No other friendly figures within ${_ooMaxRange} spaces.` };
     return {
       applied: false,
       requiresChoice: true,
@@ -1053,13 +1060,17 @@ export function resolveAbility(abilityId, context) {
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
     if (!activatingPos) return { applied: false, manualMessage: '**Bombardment** — No position on the board. Resolve manually.' };
+    // ACS extends "adjacent" → "within 3" when attached to this DC.
+    const _bsAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _bsHasACS = cardNameIncludes(_bsAtts, 'Advanced Com Systems');
+    const _bsMaxRange = _bsHasACS ? 3 : 1;
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (countGameSpaces(game, activatingPos, pos) > 1) continue; // adjacent = within 1
+      if (countGameSpaces(game, activatingPos, pos) > _bsMaxRange) continue;
       validTargets.push(fk);
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Bombardment** — No adjacent friendly figures.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: `**Bombardment** — No friendly figures ${_bsHasACS ? 'within 3 spaces (ACS)' : 'adjacent'}.` };
     return {
       applied: false,
       requiresChoice: true,
@@ -1091,11 +1102,14 @@ export function resolveAbility(abilityId, context) {
       const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
       const alreadyChosen = new Set((game.pendingFiringSquad || []).map(p => p.chosenFigureKey));
       const dcEffects = typeof getEff === 'function' ? getEff() : null;
+      // ACS extends "adjacent" → "within 3" for Firing Squad.
+      const _fs2Atts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      const _fs2MaxRange = cardNameIncludes(_fs2Atts, 'Advanced Com Systems') ? 3 : 1;
       const moreTargets = [];
       if (activatingPos) {
         for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
           if (fk === activatingKey || !pos || alreadyChosen.has(fk)) continue;
-          if (countGameSpaces(game, activatingPos, pos) > 1) continue;
+          if (countGameSpaces(game, activatingPos, pos) > _fs2MaxRange) continue;
           const fkDcName = dcNameFromFigureKey(fk);
           const fkEff = dcEffects?.[fkDcName];
           const fkKeywords = (fkEff?.keywords || []).map(k => k.toUpperCase());
@@ -1119,17 +1133,21 @@ export function resolveAbility(abilityId, context) {
     const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
     if (!activatingPos) return { applied: false, manualMessage: '**Firing Squad** — No position on the board. Resolve manually.' };
     const dcEffects = typeof getEff === 'function' ? getEff() : null;
+    // ACS extends "adjacent" → "within 3" for Firing Squad.
+    const _fsAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _fsHasACS = cardNameIncludes(_fsAtts, 'Advanced Com Systems');
+    const _fsMaxRange = _fsHasACS ? 3 : 1;
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (countGameSpaces(game, activatingPos, pos) > 1) continue; // adjacent
+      if (countGameSpaces(game, activatingPos, pos) > _fsMaxRange) continue;
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = dcEffects?.[fkDcName];
       const fkKeywords = (fkEff?.keywords || []).map(k => k.toUpperCase());
       if (!fkKeywords.includes('TROOPER')) continue;
       validTargets.push(fk);
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Firing Squad** — No adjacent friendly Troopers.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: `**Firing Squad** — No friendly Troopers ${_fsHasACS ? 'within 3 spaces (ACS)' : 'adjacent'}.` };
     game.pendingFiringSquad = [];
     return {
       applied: false,
@@ -1298,17 +1316,20 @@ export function resolveAbility(abilityId, context) {
     const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
     if (!activatingPos) return { applied: false, manualMessage: '**Bartered Information** — No position. Resolve manually.' };
     const dcEffects = typeof getEff === 'function' ? getEff() : null;
+    // ACS extends "within 2" → "within 3" when attached to this DC.
+    const _biAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _biMaxRange = cardNameIncludes(_biAtts, 'Advanced Com Systems') ? 3 : 2;
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (countGameSpaces(game, activatingPos, pos) > 2) continue;
+      if (countGameSpaces(game, activatingPos, pos) > _biMaxRange) continue;
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = dcEffects?.[fkDcName];
       if (!fkEff) continue;
       if (fkEff.affiliation !== 'Scum') continue;
       validTargets.push(fk);
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Bartered Information** — No friendly SCUM figure within 2 spaces.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: `**Bartered Information** — No friendly SCUM figure within ${_biMaxRange} spaces.` };
     return {
       applied: false,
       requiresChoice: true,

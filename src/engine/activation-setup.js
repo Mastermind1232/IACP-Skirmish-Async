@@ -309,16 +309,19 @@ export async function finalizeActivation({
     }
   }
 
-  // C3. It Will Be Alright (Cassian Andor): sacrifice a friendly for free action
+  // C3. It Will Be Alright (Cassian Andor): sacrifice a friendly for free action.
+  // ACS extends "within 2" → "within 3" when attached to Cassian's DC.
   if (dcName === 'Cassian Andor') {
     const _iwbaDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _iwbaSelfFk = `Cassian Andor-${_iwbaDgIndex}-0`;
     const _iwbaSelfPos = game.figurePositions?.[playerNum]?.[_iwbaSelfFk];
     if (_iwbaSelfPos) {
+      const _iwbaAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      const _iwbaMaxRange = cardNameIncludes(_iwbaAtts, 'Advanced Com Systems') ? 3 : 2;
       const _iwbaTargets = [];
       for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
         if (!pos || fk === _iwbaSelfFk) continue;
-        if (countGameSpaces(game, _iwbaSelfPos, pos) > 2) continue;
+        if (countGameSpaces(game, _iwbaSelfPos, pos) > _iwbaMaxRange) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkMsgId = findDcMessageIdForFigure(gameId, playerNum, fk);
         if (!fkMsgId) continue;
