@@ -3747,22 +3747,24 @@
       "category": "active",
       "trigger": "activation",
       "label": "Rapid Fire",
-      "description": "Perform 2 attacks.",
+      "description": "Special Action: Perform 2 attacks.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Rapid Fire** — Your next attack costs no action (2 attacks total for this activation).",
-      "freeAttackBonus": true
+      "logMessage": "**Rapid Fire** (Special Action) — Perform 2 attacks. Click Attack twice (each is free).",
+      "freeAttackBonus": true,
+      "freeAttackBonusCount": 2
     },
     "rapid_fire_vinto": {
       "type": "dcSpecial",
       "category": "active",
       "trigger": "activation",
       "label": "Rapid Fire",
-      "description": "Perform 2 attacks.",
+      "description": "Special Action: Perform 2 attacks.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Rapid Fire** — Your next attack costs no action (2 attacks total for this activation).",
-      "freeAttackBonus": true
+      "logMessage": "**Rapid Fire** (Special Action) — Perform 2 attacks. Click Attack twice (each is free).",
+      "freeAttackBonus": true,
+      "freeAttackBonusCount": 2
     },
     "rat_catcher_lothcat": {
       "type": "dcSpecial",
