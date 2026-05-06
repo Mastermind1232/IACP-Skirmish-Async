@@ -7377,8 +7377,9 @@ export function resolveAbility(abilityId, context) {
       }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const baseCost = getDcEffects()[dcName]?.cost ?? 0;
-      // IACP ruling: halve (base + positive attachments), then subtract
-      // negative-cost attachments AFTER halving (not half the subtracted cost).
+      // IACP ruling: halve (base + positive attachments) **rounded down**
+      // per card text "rounded down", then subtract negative-cost
+      // attachments AFTER halving (not half the subtracted cost).
       // Covers DC attachments (Scavenged Walker -1, Wookiee Avenger -4, etc.)
       // which were previously omitted entirely, plus CC attachments.
       let posAttCost = 0;
@@ -7399,7 +7400,7 @@ export function resolveAbility(abilityId, context) {
           if (entry?.attachment) _addAtt(entry.cost);
         }
       }
-      const halfVp = Math.max(0, Math.ceil((baseCost + posAttCost) / 2) + negAttCost);
+      const halfVp = Math.max(0, Math.floor((baseCost + posAttCost) / 2) + negAttCost);
       const _hadAtts = (Array.isArray(_evCcAtts) && _evCcAtts.length) || (Array.isArray(_evDcAtts) && _evDcAtts.length);
       return { applied: true, logMessage: `**Evacuate** — **${dcName}** is defeated. Opponent gains ${halfVp > 0 ? halfVp + ' VP (half the deployment cost' + (_hadAtts ? ' incl. attachments' : '') + ' — use `/editvp -' + halfVp + '` to adjust)' : 'no VP'} from this defeat.`, refreshDcEmbed: true };
     }

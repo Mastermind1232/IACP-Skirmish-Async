@@ -1,15 +1,17 @@
 /**
  * Evacuate VP calculation — behavioral probe.
  *
- * Destruct V2 ruling (CC17): Evacuate halves the DC's BASE cost first,
+ * Destruct V2 ruling (CC17) + 2026-05-06 ceil→floor fix: Evacuate halves
+ * the DC's BASE cost first (rounded DOWN per card text "rounded down"),
  * then applies negative-cost attachments AFTER halving. Formula:
- *   halfVp = max(0, ceil((baseCost + positiveAttachments) / 2) + negativeAttachments)
+ *   halfVp = max(0, floor((baseCost + positiveAttachments) / 2) + negativeAttachments)
  *
- * Prior code only summed CC attachments and halved the total, which (a)
- * ignored DC-level attachments like [Scavenged Walker] -1, [Wookiee Avenger] -4,
- * [Driven by Hatred] -5, etc., and (b) under-counted the VP swing for
- * negative-cost attachments. Example: Chewbacca (15) + Wookiee Avenger (-4)
- * previously gave 6 VP (ceil(11/2)), now correctly gives 4 VP (ceil(15/2) − 4).
+ * Prior code (a) only summed CC attachments and halved the total — ignored
+ * DC-level attachments — and (b) used Math.ceil for the halve, contradicting
+ * the card's "rounded down" text. Example: Chewbacca (15) + Wookiee Avenger (-4)
+ *   previously: ceil(11/2) = 6 VP (no DC-att support)
+ *   then briefly: ceil(15/2) − 4 = 4 VP (DC-att support, wrong rounding)
+ *   now correctly: floor(15/2) − 4 = 3 VP
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,7 +51,7 @@ function vpFromLog(logMessage) {
 // ── PROBE-EVAC-001: negative DC attachment (Wookiee Avenger on Chewbacca) ───
 
 describe('PROBE-EVAC-001: negative DC attachment subtracted AFTER halving', () => {
-  it('Chewbacca (15) + Wookiee Avenger (-4) = 4 VP (not 6)', () => {
+  it('Chewbacca (15) + Wookiee Avenger (-4) = 3 VP (floor(15/2)−4)', () => {
     const { context } = setup({
       dcName: 'Chewbacca', baseCost: 15,
       targetFigKey: 'Chewbacca-1-0',
@@ -58,10 +60,10 @@ describe('PROBE-EVAC-001: negative DC attachment subtracted AFTER halving', () =
     const result = resolveAbility('Evacuate', context);
     assert.equal(result.applied, true, 'Evacuate should resolve');
     const vp = vpFromLog(result.logMessage);
-    assert.equal(vp, 4, `expected 4 VP (ceil(15/2)−4), got ${vp} — log: ${result.logMessage}`);
+    assert.equal(vp, 3, `expected 3 VP (floor(15/2)−4), got ${vp} — log: ${result.logMessage}`);
   });
 
-  it('Gaarkhan (7) + Driven by Hatred (-5) = 0 VP (ceil(7/2)−5, clamped)', () => {
+  it('Gaarkhan (7) + Driven by Hatred (-5) = 0 VP (floor(7/2)−5, clamped)', () => {
     const { context } = setup({
       dcName: 'Gaarkhan', baseCost: 7,
       targetFigKey: 'Gaarkhan-1-0',
@@ -70,7 +72,7 @@ describe('PROBE-EVAC-001: negative DC attachment subtracted AFTER halving', () =
     const result = resolveAbility('Evacuate', context);
     assert.equal(result.applied, true);
     const vp = vpFromLog(result.logMessage);
-    assert.equal(vp, 0, `expected 0 VP (4−5 with floor at 0), got ${vp} — log: ${result.logMessage}`);
+    assert.equal(vp, 0, `expected 0 VP (3−5 clamped at 0), got ${vp} — log: ${result.logMessage}`);
   });
 
   it('AT-ST (10) + Scavenged Walker (-1) = 4 VP', () => {
@@ -82,21 +84,21 @@ describe('PROBE-EVAC-001: negative DC attachment subtracted AFTER halving', () =
     const result = resolveAbility('Evacuate', context);
     assert.equal(result.applied, true);
     const vp = vpFromLog(result.logMessage);
-    assert.equal(vp, 4, `expected 4 VP (ceil(10/2)−1), got ${vp} — log: ${result.logMessage}`);
+    assert.equal(vp, 4, `expected 4 VP (floor(10/2)−1), got ${vp} — log: ${result.logMessage}`);
   });
 });
 
 // ── PROBE-EVAC-002: no attachments — baseline (half of base, rounded up) ────
 
 describe('PROBE-EVAC-002: no-attachment baseline', () => {
-  it('Chewbacca (15) alone = 8 VP', () => {
+  it('Chewbacca (15) alone = 7 VP (floor(15/2))', () => {
     const { context } = setup({
       dcName: 'Chewbacca', baseCost: 15,
       targetFigKey: 'Chewbacca-1-0',
     });
     const result = resolveAbility('Evacuate', context);
     const vp = vpFromLog(result.logMessage);
-    assert.equal(vp, 8, `expected 8 VP (ceil(15/2)), got ${vp} — log: ${result.logMessage}`);
+    assert.equal(vp, 7, `expected 7 VP (floor(15/2)), got ${vp} — log: ${result.logMessage}`);
   });
 
   it('Rebel Trooper Regular (6) alone = 3 VP', () => {
@@ -106,14 +108,14 @@ describe('PROBE-EVAC-002: no-attachment baseline', () => {
     });
     const result = resolveAbility('Evacuate', context);
     const vp = vpFromLog(result.logMessage);
-    assert.equal(vp, 3, `expected 3 VP (ceil(6/2)), got ${vp} — log: ${result.logMessage}`);
+    assert.equal(vp, 3, `expected 3 VP (floor(6/2)), got ${vp} — log: ${result.logMessage}`);
   });
 });
 
 // ── PROBE-EVAC-003: positive DC attachment folded into pre-halving sum ──────
 
 describe('PROBE-EVAC-003: positive DC attachment folded into pre-halving sum', () => {
-  it('Stormtrooper Regular (6) + Flame Trooper upgrade (+5) = 6 VP (ceil(11/2))', () => {
+  it('Stormtrooper Regular (6) + Flame Trooper upgrade (+5) = 5 VP (floor(11/2))', () => {
     const { context } = setup({
       dcName: 'Stormtrooper (Regular)', baseCost: 6,
       targetFigKey: 'Stormtrooper (Regular)-1-0',
@@ -121,7 +123,7 @@ describe('PROBE-EVAC-003: positive DC attachment folded into pre-halving sum', (
     });
     const result = resolveAbility('Evacuate', context);
     const vp = vpFromLog(result.logMessage);
-    assert.equal(vp, 6, `expected 6 VP (ceil((6+5)/2)), got ${vp} — log: ${result.logMessage}`);
+    assert.equal(vp, 5, `expected 5 VP (floor((6+5)/2)), got ${vp} — log: ${result.logMessage}`);
   });
 });
 
