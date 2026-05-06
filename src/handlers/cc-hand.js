@@ -73,6 +73,39 @@ function recordCcOnCombatStack(game, playerNum, card) {
 }
 
 /**
+ * Slice 5.7: mark the most-recently-played CC as canceled so downstream
+ * effect-firing code skips it. Also tags game.canceledCcs[card] for
+ * out-of-combat consumers (legacy promptCommDisruption + Negation paths).
+ *
+ * Per destruct 2026-05-05: cancellation suppresses ALL effects of the
+ * canceled CC including "when discarded" triggers.
+ */
+function markTopCcCanceled(game, card) {
+  const cbt = game?.combat || game?.pendingCombat;
+  const stack = cbt?.ccPlayStack;
+  if (Array.isArray(stack) && stack.length > 0) {
+    const top = stack[stack.length - 1];
+    if (top && top.ccName === card) top.canceled = true;
+  }
+  game.canceledCcs = game.canceledCcs || {};
+  game.canceledCcs[card] = true;
+}
+
+/**
+ * Slice 5.7: read whether a card's most recent play was canceled. Used by
+ * handleNegationLetResolve to skip resolveAbility when CD already canceled
+ * the same card (dual-prompt race fix).
+ */
+function isCcCanceled(game, card) {
+  return Boolean(game?.canceledCcs?.[card]);
+}
+
+/** Clear the canceled flag for a card. Called when the play resolves cleanly. */
+function clearCcCanceled(game, card) {
+  if (game?.canceledCcs) delete game.canceledCcs[card];
+}
+
+/**
  * C14: After a CC is played, check if opponent has Comm Disruption in hand
  * and prompt them to play it reactively.
  * @param {object} game - Game state
@@ -847,11 +880,20 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
   game[handKey] = hand;
   game[discardKey] = (game[discardKey] || []).concat('Comm Disruption');
 
-  // Also discard the played card from the opponent's discard (cancel its effects)
-  // The card is already in the opponent's discard — we note the cancellation
+  // Slice 5.7: mark the canceled CC so downstream code (Negation
+  // let-resolve, applyAbilityResult callers, "when discarded" hooks)
+  // can skip ALL its effects per destruct 2026-05-05.
+  markTopCcCanceled(game, playedCard);
+  // Dual-prompt race fix: a cost-0 CC can be targeted by both Negation
+  // and Comm Disruption simultaneously. CD canceling means Negation must
+  // not subsequently resolveAbility on let-resolve. Clear pendingNegation
+  // here; handleNegationLetResolve also reads isCcCanceled as a backstop.
+  if (game.pendingNegation && game.pendingNegation.card === playedCard) {
+    clearPendingNegation(game);
+  }
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await refreshHandAndDiscard(game, targetPlayerNum, interaction.client, ctx);
-  await logGameAction(game, interaction.client, `**Comm Disruption** — <@${interaction.user.id}> cancelled **${playedCard}** (locked at ${cdSpyCount} SPY)! Discard that card and cancel its effects.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  await logGameAction(game, interaction.client, `**Comm Disruption** — <@${interaction.user.id}> cancelled **${playedCard}** (locked at ${cdSpyCount} SPY)! Discard that card and cancel ALL its effects (including any "when discarded" triggers).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   saveGames(game.gameId);
 }
 
@@ -1130,10 +1172,18 @@ export async function handleNegationPlay(interaction, ctx) {
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push('Negation');
   clearPendingNegation(game);
+  // Slice 5.7: mark the canceled CC so downstream effect-firing code
+  // skips ALL its effects (including "when discarded" triggers) per
+  // destruct 2026-05-05.
+  markTopCcCanceled(game, card);
+  // Dual-prompt race fix: clear any pending CD prompt for the same card.
+  if (game.pendingCommDisruptionPrompt && game.pendingCommDisruptionPrompt.playedCard === card) {
+    clearPendingCommDisruptionPrompt(game);
+  }
   await refreshHandAndDiscard(game, oppNum, client, ctx);
   await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch(discordCatch);
   const negPlayerId = getPlayerId(game, oppNum);
-  await logGameAction(game, client, `<@${negPlayerId}> played **Negation** — cancelled **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [negPlayerId] } });
+  await logGameAction(game, client, `<@${negPlayerId}> played **Negation** — cancelled **${card}** (all effects suppressed).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [negPlayerId] } });
   // Notify the player whose card was cancelled
   if (waitingMsgId && handChannelId) {
     const playingHandChannel = await fetchGameChannel(client, handChannelId);
@@ -1174,12 +1224,19 @@ export async function handleNegationLetResolve(interaction, ctx) {
     game[attachKey][msgId].push(card);
     await updateAttachmentMessageForDc(game, playedBy, msgId, client);
   }
-  if (resolveAbility) {
+  // Slice 5.7: skip resolveAbility if a parallel counter (CD) already
+  // canceled this card. Without this, the dual-prompt race lets a
+  // canceled CC's effects fire when Negation's "let resolve" is clicked
+  // after CD already canceled.
+  if (resolveAbility && !isCcCanceled(game, card)) {
     const effectData = getCcEffect(card);
     const abilityId = effectData?.abilityId ?? card;
     const result = resolveAbility(abilityId, { game, playerNum: playedBy, cardName: card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat, msgId });
     await applyAbilityResult(result, { game, playerNum: playedBy, msgId: fromDc ? msgId : undefined, client, ctx });
+  } else if (isCcCanceled(game, card)) {
+    await logGameAction(game, client, `**${card}** had already been cancelled by another counter — effects suppressed.`, { phase: 'ACTION', icon: 'card' }).catch(discordCatch);
   }
+  clearCcCanceled(game, card);
   // Notify the player whose card resolved
   if (waitingMsgId && handChannelId) {
     const playingHandChannel = await fetchGameChannel(client, handChannelId);
