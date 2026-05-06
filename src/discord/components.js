@@ -175,9 +175,13 @@ export function getDcPlayAreaComponents(msgId, exhausted, game, dcName, helpers 
     // else: no toggle row for figureless cards without exhaust
   } else {
     // Don't show Activate for DCs with no figures on the board (e.g. Lie in Ambush — not yet deployed)
+    // Filter by group identity ([DG N] suffix → dgIndex N), not just dcName base, so a set-aside
+    // LiA group doesn't inherit the deployed sibling group's "has figures" state.
+    const _suffixMatch = (dcName || '').match(/\s*\[(?:DG|Group) (\d+)\]$/i);
     const _dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').trim();
+    const _figurePrefix = _suffixMatch ? `${_dcBase}-${_suffixMatch[1]}-` : `${_dcBase}-`;
     const _hasFiguresOnBoard = !game || !_dcBase || [1, 2].some(pn =>
-      Object.keys(game.figurePositions?.[pn] || {}).some(fk => fk.startsWith(_dcBase + '-'))
+      Object.keys(game.figurePositions?.[pn] || {}).some(fk => fk.startsWith(_figurePrefix))
     );
     toggleRow = _hasFiguresOnBoard ? getDcToggleButton(msgId, exhausted, game) : null;
   }
