@@ -5668,6 +5668,12 @@
       "cost": 9,
       "health": 12,
       "speed": 4,
+      "specials": [
+        "Focus Fire"
+      ],
+      "specialCosts": [
+        2
+      ],
       "passives": [
         "+2 Accuracy",
         "Massive"
@@ -5798,7 +5804,7 @@
         "Charged Shot"
       ],
       "specialCosts": [
-        1,
+        2,
         1
       ],
       "attack": {
@@ -5843,7 +5849,7 @@
         "Charged Shot"
       ],
       "specialCosts": [
-        1,
+        2,
         1
       ],
       "attack": {
