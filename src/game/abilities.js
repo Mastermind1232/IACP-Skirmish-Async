@@ -2106,6 +2106,8 @@ export function resolveAbility(abilityId, context) {
         const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
         const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
         const resultParts = [];
+        // Slice 6.13 ext: collect lethal hits for processFigureDefeat routing.
+        const _adjHostileDefeated = [];
         if (hits > 0) {
           const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
           if (dcHealthState && targetMsgId) {
@@ -2115,11 +2117,20 @@ export function resolveAbility(abilityId, context) {
             const entryHp = healthState[figIdx];
             if (entryHp) {
               const [cur, max] = entryHp;
-              const newCur = Math.max(0, (cur ?? max) - hits);
+              const prevCur = cur ?? max;
+              const newCur = Math.max(0, prevCur - hits);
               healthState[figIdx] = [newCur, max ?? newCur];
               dcHealthState.set(targetMsgId, healthState);
               syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
-              resultParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+              resultParts.push(`${hits} Damage (HP: ${prevCur} → ${newCur})`);
+              if (newCur <= 0 && prevCur > 0) {
+                _adjHostileDefeated.push({
+                  figureKey: targetFigureKey,
+                  defeatedPlayerNum: enemyPlayerNum,
+                  attackerPlayerNum: playerNum || 1,
+                  source: entry.label || 'adjacent-hostile damage',
+                });
+              }
             } else {
               resultParts.push(`apply ${hits} Damage manually`);
             }
@@ -2179,6 +2190,7 @@ export function resolveAbility(abilityId, context) {
           applied: true,
           logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
           refreshDcEmbed: true,
+          ...(_adjHostileDefeated.length > 0 ? { defeatedFigures: _adjHostileDefeated, refreshBoard: true } : {}),
         };
         if (entry.rollOneDieSurgeSelfPowerToken && surges >= 1 && game.pendingPowerTokenGrant) {
           _rodResult.requiresPowerTokenChoice = true;
