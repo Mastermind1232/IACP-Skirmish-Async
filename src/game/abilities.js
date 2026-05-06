@@ -3156,8 +3156,13 @@ export function resolveAbility(abilityId, context) {
     const swapperConds = game.figureConditions?.[playerNum]?.[swapperFk] || [];
     combat.defenderConds = swapperConds;
 
-    // C20: When target changes via Get Behind Me, cancel defender-side CC effects on the combat
-    // (defense bonuses that were applied for the original defender no longer apply)
+    // C20 / slice 6.6: When target changes via Get Behind Me, cancel ALL
+    // defender-side CC effects on the combat (defense bonuses that were
+    // applied for the original defender no longer apply). Per CRR + destruct
+    // 2026-05-05 Q8: "the −1 die modifier was applied to the original
+    // target's defense pool, no longer applies. The new defender rolls their
+    // full defense pool." Attacker-side modifiers (bonusHits, bonusPierce,
+    // attack pool changes) PERSIST since the attacker doesn't change.
     if (isGetBehindMe) {
       const cancelledEffects = [];
       if (combat.bonusBlock) { cancelledEffects.push(`+${combat.bonusBlock} Block`); delete combat.bonusBlock; }
@@ -3168,6 +3173,12 @@ export function resolveAbility(abilityId, context) {
       }
       if (combat.defensePoolRemoveMax) { cancelledEffects.push(`defense pool remove limit`); delete combat.defensePoolRemoveMax; }
       if (combat.defensePoolRemoveAll) { cancelledEffects.push(`defense pool remove all`); delete combat.defensePoolRemoveAll; }
+      // Slice 6.6 additions: defender-bound Pierce modifications (Heavy Armor,
+      // Combat Suit), defender-side reroll allowances, and damage-cap (Iron Will).
+      if (combat.defenderIgnorePierce) { cancelledEffects.push(`Pierce ignored`); delete combat.defenderIgnorePierce; }
+      if (combat.defenderReducePierce) { cancelledEffects.push(`Pierce reduced by ${combat.defenderReducePierce}`); delete combat.defenderReducePierce; }
+      if (combat.defenderRerollDiceMax) { cancelledEffects.push(`defender reroll allowance`); delete combat.defenderRerollDiceMax; }
+      if (combat.maxDamageToDefender != null) { cancelledEffects.push(`damage cap (${combat.maxDamageToDefender})`); delete combat.maxDamageToDefender; }
       if (cancelledEffects.length > 0) {
         const cancelNote = ` Cancelled prior defender CC effects: ${cancelledEffects.join(', ')}.`;
         const swapLog = `${mpNote} **${cardLabel}** — Attack target swapped from **${originalLabel}** to **${swapperLabel}**.${adjacencyNote}${cancelNote}`;
