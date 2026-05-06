@@ -2290,6 +2290,13 @@ export function resolveAbility(abilityId, context) {
           for (const pn of [1, 2]) {
             for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
               if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
+              // Combat-pipeline rebuild (slice 6.11): per CRR + destruct
+              // 2026-05-05 "each other figure" excludes the SOURCE (the
+              // figure whose ability this is). Wrist Flamethrower (Boba),
+              // Flamethrower (Captain Terro, Gar Saxon, Din), Shock Grenade
+              // (General Sorin), Parting Gift, etc. all use this pattern.
+              // Without this guard the source figure damages itself.
+              if (_rollOneDieSelfFigureKey && fk === _rollOneDieSelfFigureKey) continue;
               const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
               if (dcHealthState && figMsgId) {
                 const healthState = dcHealthState.get(figMsgId) || [];
