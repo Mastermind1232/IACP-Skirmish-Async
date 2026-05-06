@@ -233,8 +233,9 @@ async function mutateToCombat(game, client, deps, userId) {
     bonusSurgeAbilities: [],
     bonusPierce: 0,
     isRanged: false,
-    p1Ready: false,
-    p2Ready: false,
+    // Session 11 retirement: legacy p1Ready/p2Ready replaced by acked map.
+    currentStep: 'step1+2-attacker',
+    acked: {},
   };
 
   // Log to Game Log

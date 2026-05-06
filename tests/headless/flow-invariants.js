@@ -197,7 +197,7 @@ export function assertFlowInvariants(game, actionDeps) {
           `attackRoll=${!!game.pendingCombat.attackRoll}, defenseRoll=${!!game.pendingCombat.defenseRoll}, ` +
           `rerollPhase=${game.pendingCombat.rerollPhase || 'none'}, surgeRemaining=${game.pendingCombat.surgeRemaining ?? '?'}, ` +
           `attackerPn=${game.pendingCombat.attackerPlayerNum}, defenderPn=${game.pendingCombat.defenderPlayerNum}, ` +
-          `p1Ready=${game.pendingCombat.p1Ready}, p2Ready=${game.pendingCombat.p2Ready}, ` +
+          `currentStep=${game.pendingCombat.currentStep || '?'}, acked=${JSON.stringify(game.pendingCombat.acked || {})}, ` +
           `pendingNegation=${!!game.pendingNegation}, otherActions=[${allTypes.join(',')}]`
         );
       }

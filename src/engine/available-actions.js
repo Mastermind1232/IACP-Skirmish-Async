@@ -1082,10 +1082,15 @@ function getCombatActions(game, playerNum, deps) {
     return actions;
   }
 
-  // Combat ready check — both players must confirm
-  if (!combat.p1Ready || !combat.p2Ready) {
-    const isReady = playerNum === 1 ? combat.p1Ready : combat.p2Ready;
-    if (!isReady) {
+  // Combat ready check — both players must confirm modify-yn before roll.
+  // Session 11 migration: read currentStep (canonical CRR gate) instead
+  // of legacy p1Ready/p2Ready. Per-player ack tracked on combat.acked.
+  const _stepIsPreRoll = combat.currentStep === 'step1+2-attacker'
+    || combat.currentStep === 'step1+2-defender';
+  if (_stepIsPreRoll) {
+    const _ackedMap = combat.acked || {};
+    const _isAcked = Boolean(_ackedMap[playerNum]);
+    if (!_isAcked) {
       actions.push({
         type: ACTION_TYPES.COMBAT_READY,
         customId: buildCustomId(ACTION_TYPES.COMBAT_READY, { gameId }),

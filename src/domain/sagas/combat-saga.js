@@ -70,12 +70,14 @@ export class CombatSaga extends Saga {
   }
 
   static fromPendingCombat(gameId, pendingCombat) {
+    // Session 11 retirement: derive phase from currentStep + acked map
+    // instead of legacy p1Ready/p2Ready scalars.
     let phase = COMBAT_STATES.DECLARED;
     if (pendingCombat.attackRoll && pendingCombat.defenseRoll) {
       phase = pendingCombat.surgeRemaining > 0 ? COMBAT_STATES.SURGE_SPENDING : COMBAT_STATES.RESOLUTION;
-    } else if (pendingCombat.p1Ready && pendingCombat.p2Ready) {
+    } else if (pendingCombat.currentStep === 'roll') {
       phase = COMBAT_STATES.ROLLING;
-    } else if (pendingCombat.p1Ready || pendingCombat.p2Ready) {
+    } else if (pendingCombat.currentStep === 'step1+2-attacker' || pendingCombat.currentStep === 'step1+2-defender') {
       phase = COMBAT_STATES.DECLARED;
     }
     return new CombatSaga(`${gameId}_combat`, { ...pendingCombat, phase });

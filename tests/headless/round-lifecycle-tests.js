@@ -47,8 +47,9 @@ function makeCombat(overrides = {}) {
     defenseDice: ['black'],
     attackResults: {},
     defenseResults: {},
-    p1Ready: false,
-    p2Ready: false,
+    // Session 11: legacy p1Ready/p2Ready replaced by currentStep + acked.
+    currentStep: 'step1+2-attacker',
+    acked: {},
     attackerRerolledIndices: [],
     defenderRerolledIndices: [],
     surgeDamage: 0,
@@ -487,31 +488,30 @@ describe('Combat Lifecycle — object structure', () => {
 // SUITE 9: Combat Lifecycle — ready gate
 // ===================================================================
 describe('Combat Lifecycle — ready gate', () => {
-  it('both players start not ready', () => {
+  it('both players start not acked', () => {
     const combat = makeCombat();
-    assert.equal(combat.p1Ready, false);
-    assert.equal(combat.p2Ready, false);
+    assert.deepEqual(combat.acked, {});
   });
 
-  it('setting one player ready does not trigger both-ready', () => {
+  it('setting one player acked does not trigger both-ready', () => {
     const combat = makeCombat();
-    combat.p1Ready = true;
-    const bothReady = combat.p1Ready && combat.p2Ready;
+    combat.acked[1] = true;
+    const bothReady = Boolean(combat.acked[1]) && Boolean(combat.acked[2]);
     assert.equal(bothReady, false);
   });
 
-  it('setting both players ready triggers both-ready', () => {
+  it('setting both players acked triggers both-ready', () => {
     const combat = makeCombat();
-    combat.p1Ready = true;
-    combat.p2Ready = true;
-    assert.equal(combat.p1Ready && combat.p2Ready, true);
+    combat.acked[1] = true;
+    combat.acked[2] = true;
+    assert.equal(Boolean(combat.acked[1]) && Boolean(combat.acked[2]), true);
   });
 
   it('ready gate resets when a new combat starts', () => {
-    const combat1 = makeCombat({ p1Ready: true, p2Ready: true });
+    const combat1 = makeCombat({ acked: { 1: true, 2: true } });
     const combat2 = makeCombat();
-    assert.equal(combat1.p1Ready && combat1.p2Ready, true);
-    assert.equal(combat2.p1Ready || combat2.p2Ready, false);
+    assert.equal(Boolean(combat1.acked[1]) && Boolean(combat1.acked[2]), true);
+    assert.equal(Boolean(combat2.acked[1]) || Boolean(combat2.acked[2]), false);
   });
 });
 

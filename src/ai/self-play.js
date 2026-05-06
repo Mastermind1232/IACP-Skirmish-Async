@@ -1104,7 +1104,8 @@ export async function runSelfPlayLoop(game, client, opts) {
           // Log diagnostic on first empty to help debug stuck states
           const pendingStates = PENDING_KEYS.filter(k => g[k] != null && g[k] !== false);
           const combatSnap = g.pendingCombat ? JSON.stringify({
-            p1Ready: g.pendingCombat.p1Ready, p2Ready: g.pendingCombat.p2Ready,
+            currentStep: g.pendingCombat.currentStep || '(unset)',
+            acked: g.pendingCombat.acked || {},
             attackRoll: !!g.pendingCombat.attackRoll, defenseRoll: !!g.pendingCombat.defenseRoll,
             rerollPhase: g.pendingCombat.rerollPhase || null,
             pendingSurges: !!g.pendingCombat.pendingSurges, surgeRemaining: g.pendingCombat.surgeRemaining,

@@ -14,8 +14,10 @@ export const combatReducerHandlers = {
         defenseDice: payload.defenseDice || [],
         attackRoll: null,
         defenseRoll: null,
-        p1Ready: false,
-        p2Ready: false,
+        // Session 11 retirement: legacy p1Ready/p2Ready replaced by per-
+        // step `acked` map keyed on currentStep transitions.
+        currentStep: 'step1+2-attacker',
+        acked: {},
         surgeRemaining: 0,
         surgesSpent: [],
         bonusHits: payload.bonusHits || 0,
@@ -31,12 +33,14 @@ export const combatReducerHandlers = {
   },
 
   CombatPlayerReady(state, payload) {
-    const readyKey = payload.playerNum === 1 ? 'p1Ready' : 'p2Ready';
+    // Session 11 retirement: write to combat.acked instead of legacy
+    // p1Ready/p2Ready. Caller is responsible for advancing currentStep.
+    const prevAcked = state.pendingCombat?.acked || {};
     return {
       ...state,
       pendingCombat: {
         ...state.pendingCombat,
-        [readyKey]: true,
+        acked: { ...prevAcked, [payload.playerNum]: true },
       },
     };
   },

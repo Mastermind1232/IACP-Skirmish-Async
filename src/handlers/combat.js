@@ -1487,14 +1487,12 @@ export async function handleAttackTarget(interaction, ctx) {
     combatThreadId: thread.id,
     combatDeclareMsgId: declareMsg.id,
     combatPreMsgId: preCombatMsg.id,
-    p1Ready: false,
-    p2Ready: false,
-    // Combat-pipeline rebuild (slice 3.6): explicit step state for the
-    // canonical CRR sequence per destruct's 2026-05-05 audit. Coexists with
-    // legacy p1Ready/p2Ready until the orchestrator becomes primary; advance
-    // points are wired in subsequent slices. Read by combat-order-validator
-    // and the orchestrator's snapshot adapter.
+    // Session 11 retirement: legacy p1Ready/p2Ready replaced by per-step
+    // `acked` map. currentStep is the authoritative gate; the acked map
+    // tracks per-player confirmation within the current sub-window and
+    // resets whenever currentStep advances.
     currentStep: 'step1+2-attacker',
+    acked: {},
     // Slice 8.4 follow-up: per-side condition-effect-suppression flags
     // (YWNDM-on-Fifth-Brother). Used by computeCombatResult to skip Weaken
     // penalties when the figure's condition effects are inert.
@@ -2715,26 +2713,35 @@ export async function handleCombatReady(interaction, ctx) {
     await interaction.followUp({ content: 'Only players in this game can indicate ready.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Session 11 retirement: combat.acked replaces legacy p1Ready/p2Ready.
+  // The acked map is per-step — it's reset whenever currentStep advances.
+  // currentStep itself is the authoritative gate; acked tracks who has
+  // confirmed at the current step.
+  combat.acked = combat.acked || {};
   // In test games, human (P1) can click for both sides; first click = P1, second = P2
   let playerNum = clickerIsP1 ? 1 : 2;
   if (game.isTestGame && clickerIsP1) {
-    playerNum = combat.p1Ready ? 2 : 1;
+    playerNum = combat.acked[1] ? 2 : 1;
   }
-  if (playerNum === 1) combat.p1Ready = true;
-  else combat.p2Ready = true;
-  // Combat-pipeline rebuild (slice 3.6): mirror the legacy ready-flag advance
-  // onto the new explicit step state. Attacker ready → defender's pre-roll
-  // window opens; both ready → roll happens. Sub-steps (step3-* / step4-* /
-  // step5 / zillo / step6 / step7 / step8) are advanced in handlers wired
-  // later in the rebuild.
-  const attackerIsReady = combat.attackerPlayerNum === 1 ? combat.p1Ready : combat.p2Ready;
-  const defenderIsReady = combat.attackerPlayerNum === 1 ? combat.p2Ready : combat.p1Ready;
-  if (attackerIsReady && defenderIsReady) combat.currentStep = 'roll';
-  else if (attackerIsReady) combat.currentStep = 'step1+2-defender';
+  combat.acked[playerNum] = true;
+  // Advance currentStep based on acked state. Attacker ready → defender's
+  // pre-roll window opens; both ready → roll happens. Sub-steps (step3-* /
+  // step4-* / step5 / zillo / step6 / step7 / step8) are advanced in
+  // their respective handlers (audited by currentstep-transition-audit.test.js).
+  const attackerIsReady = Boolean(combat.acked[combat.attackerPlayerNum]);
+  const defenderPn = combat.attackerPlayerNum === 1 ? 2 : 1;
+  const defenderIsReady = Boolean(combat.acked[defenderPn]);
+  if (attackerIsReady && defenderIsReady) {
+    combat.currentStep = 'roll';
+    // Step transition: reset per-step ack map for the next gate.
+    combat.acked = {};
+  } else if (attackerIsReady) {
+    combat.currentStep = 'step1+2-defender';
+  }
   if (!interaction.message?.channel) throw new Error(`handleCombatReady: interaction.message.channel is null (gameId=${gameId}, generalId=${game.generalId})`);
   const _readyName = getPlayerDisplayName(game, playerNum, interaction.client);
   await interaction.message.channel.send(`**${_readyName}** is ready to roll combat.`);
-  if (!combat.p1Ready || !combat.p2Ready) {
+  if (combat.currentStep === 'step1+2-attacker' || combat.currentStep === 'step1+2-defender') {
     saveGames(game.gameId);
     return;
   }
@@ -7165,10 +7172,10 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     combatThreadId: thread.id,
     combatDeclareMsgId: declareMsg.id,
     combatPreMsgId: preCombatMsg.id,
-    p1Ready: false,
-    p2Ready: false,
-    // Combat-pipeline rebuild (slice 3.6): see primary attack init for context.
+    // Session 11 retirement: legacy p1Ready/p2Ready replaced by per-step
+    // `acked` map. See primary attack init for context.
     currentStep: 'step1+2-attacker',
+    acked: {},
     attackRoll: null,
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,

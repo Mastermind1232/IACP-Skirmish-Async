@@ -52,10 +52,14 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
     });
   }
   if (set?.pendingCombat && before?.pendingCombat) {
-    if (set.pendingCombat.p1Ready && !before.pendingCombat.p1Ready) {
+    // Session 11 retirement: detect ack via combat.acked map instead of
+    // legacy p1Ready/p2Ready scalars.
+    const _setAcked = set.pendingCombat.acked || {};
+    const _beforeAcked = before.pendingCombat.acked || {};
+    if (_setAcked[1] && !_beforeAcked[1]) {
       emit('CombatPlayerReady', { playerNum: 1 });
     }
-    if (set.pendingCombat.p2Ready && !before.pendingCombat.p2Ready) {
+    if (_setAcked[2] && !_beforeAcked[2]) {
       emit('CombatPlayerReady', { playerNum: 2 });
     }
     if (set.pendingCombat.attackRoll && !before.pendingCombat.attackRoll) {

@@ -282,17 +282,17 @@ describe('Replay Accuracy', () => {
       allEvents.push(...events);
     }
 
-    // Both ready
+    // Both ready (session 11: write to combat.acked map)
     {
       const { after, events } = simulateTransition('combat_ready_', actualState, s => {
-        s.pendingCombat.p1Ready = true;
+        s.pendingCombat.acked = { ...(s.pendingCombat.acked || {}), 1: true };
       });
       actualState = after;
       allEvents.push(...events);
     }
     {
       const { after, events } = simulateTransition('combat_ready_', actualState, s => {
-        s.pendingCombat.p2Ready = true;
+        s.pendingCombat.acked = { ...(s.pendingCombat.acked || {}), 2: true };
       });
       actualState = after;
       allEvents.push(...events);

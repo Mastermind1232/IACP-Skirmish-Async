@@ -205,7 +205,8 @@ async function runOneGame(gameNum) {
         const p1Pos = Object.entries(g.figurePositions?.[1] || {}).filter(([,v]) => v).map(([k,v]) => `${k}@${v}`).join(', ');
         const p2Pos = Object.entries(g.figurePositions?.[2] || {}).filter(([,v]) => v).map(([k,v]) => `${k}@${v}`).join(', ');
         const combatSnap = g.pendingCombat ? JSON.stringify({
-          p1Rdy: g.pendingCombat.p1Ready, p2Rdy: g.pendingCombat.p2Ready,
+          currentStep: g.pendingCombat.currentStep || '(unset)',
+          acked: g.pendingCombat.acked || {},
           atkRoll: !!g.pendingCombat.attackRoll, defRoll: !!g.pendingCombat.defenseRoll,
           rerollPhase: g.pendingCombat.rerollPhase || null,
           surgeRem: g.pendingCombat.surgeRemaining, pendingSurges: !!g.pendingCombat.pendingSurges,
@@ -320,12 +321,15 @@ async function runOneGame(gameNum) {
     // Combat ready-gate: both players must confirm — submit before action generation
     // (matches train.js pattern; without this, getAvailableActions may return empty
     // during combat-ready phase, causing false NO_PROGRESS)
-    if (g.pendingCombat && (!g.pendingCombat.p1Ready || !g.pendingCombat.p2Ready)) {
+    if (g.pendingCombat
+        && (g.pendingCombat.currentStep === 'step1+2-attacker'
+            || g.pendingCombat.currentStep === 'step1+2-defender')) {
+      const _acked = g.pendingCombat.acked || {};
       const combatReadyId = `combat_ready_${g.gameId}`;
-      if (!g.pendingCombat.p1Ready) {
+      if (!_acked[1]) {
         try { await harness.submitAction(combatReadyId, g.player1Id); } catch {}
       }
-      if (g.pendingCombat && !g.pendingCombat.p2Ready) {
+      if (g.pendingCombat && !(g.pendingCombat.acked || {})[2]) {
         try { await harness.submitAction(combatReadyId, g.player2Id); } catch {}
       }
       continue;

@@ -91,10 +91,17 @@ function getWaitingPlayersFromGame(game) {
 
     if (game.pendingCombat) {
       const combat = game.pendingCombat;
-      if (!combat.p1Ready || !combat.p2Ready) {
+      // Session 11 migration: derive readiness from currentStep + per-step
+      // ack map. Pre-roll sub-windows ('step1+2-attacker', 'step1+2-defender')
+      // are the modify-yn gate; once both players ack, currentStep advances
+      // to 'roll' and we drop into "Combat in progress."
+      const _isPreRoll = combat.currentStep === 'step1+2-attacker'
+        || combat.currentStep === 'step1+2-defender';
+      if (_isPreRoll) {
+        const _ackedMap = combat.acked || {};
         const waiting = [];
-        if (!combat.p1Ready) waiting.push(1);
-        if (!combat.p2Ready) waiting.push(2);
+        if (!_ackedMap[1]) waiting.push(1);
+        if (!_ackedMap[2]) waiting.push(2);
         return { waitType: 'combatReady', description: 'Combat ready', playerNums: waiting };
       }
       return { waitType: 'combat', description: 'Combat in progress', playerNums: [1, 2] };

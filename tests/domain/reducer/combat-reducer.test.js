@@ -13,13 +13,14 @@ describe('Combat Reducer', () => {
     });
     assert.ok(state.pendingCombat);
     assert.equal(state.pendingCombat.attackerMsgId, 'msg1');
-    assert.equal(state.pendingCombat.p1Ready, false);
+    // Session 11 retirement: per-step ack tracked on combat.acked.
+    assert.deepEqual(state.pendingCombat.acked, {});
 
     state = combatReducerHandlers.CombatPlayerReady(state, { playerNum: 1 });
-    assert.equal(state.pendingCombat.p1Ready, true);
+    assert.equal(state.pendingCombat.acked[1], true);
 
     state = combatReducerHandlers.CombatPlayerReady(state, { playerNum: 2 });
-    assert.equal(state.pendingCombat.p2Ready, true);
+    assert.equal(state.pendingCombat.acked[2], true);
 
     state = combatReducerHandlers.CombatDiceRolled(state, {
       side: 'attack', dice: [{ color: 'green', face: { dmg: 1, surge: 1 } }],
@@ -80,6 +81,6 @@ describe('Combat Reducer', () => {
     });
     assert.ok(state.pendingCombat);
     assert.equal(state.pendingCombat.attackerMsgId, 'msg3');
-    assert.equal(state.pendingCombat.p1Ready, false);
+    assert.deepEqual(state.pendingCombat.acked, {});
   });
 });

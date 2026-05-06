@@ -109,12 +109,19 @@ function computeRoundActiveWaiting(game) {
     return { waitType: 'combatGate', description: `Combat gate: ${gate.phase}`, playerNums: waiting };
   }
 
-  // pendingCombat — not both ready
-  if (game.pendingCombat && (!game.pendingCombat.p1Ready || !game.pendingCombat.p2Ready)) {
-    const waiting = [];
-    if (!game.pendingCombat.p1Ready) waiting.push(1);
-    if (!game.pendingCombat.p2Ready) waiting.push(2);
-    return { waitType: 'combatReady', description: 'Waiting for combat ready', playerNums: waiting };
+  // pendingCombat — modify-yn gate still pending. Session 11 migration:
+  // read currentStep + acked map instead of legacy p1Ready/p2Ready.
+  if (game.pendingCombat) {
+    const _cbt = game.pendingCombat;
+    const _isPreRoll = _cbt.currentStep === 'step1+2-attacker'
+      || _cbt.currentStep === 'step1+2-defender';
+    if (_isPreRoll) {
+      const _acked = _cbt.acked || {};
+      const waiting = [];
+      if (!_acked[1]) waiting.push(1);
+      if (!_acked[2]) waiting.push(2);
+      return { waitType: 'combatReady', description: 'Waiting for combat ready', playerNums: waiting };
+    }
   }
 
   // pendingCombat — reroll phase
@@ -197,12 +204,19 @@ function getWaitingPlayersLegacy(game) {
     if (!gate.p2Ready) waiting.push(2);
     return { waitType: 'combatGate', description: `Combat gate: ${gate.phase}`, playerNums: waiting };
   }
-  // pendingCombat — not both ready
-  if (game.pendingCombat && (!game.pendingCombat.p1Ready || !game.pendingCombat.p2Ready)) {
-    const waiting = [];
-    if (!game.pendingCombat.p1Ready) waiting.push(1);
-    if (!game.pendingCombat.p2Ready) waiting.push(2);
-    return { waitType: 'combatReady', description: 'Waiting for combat ready', playerNums: waiting };
+  // pendingCombat — modify-yn gate still pending. Session 11 migration:
+  // read currentStep + acked map instead of legacy p1Ready/p2Ready.
+  if (game.pendingCombat) {
+    const _cbt = game.pendingCombat;
+    const _isPreRoll = _cbt.currentStep === 'step1+2-attacker'
+      || _cbt.currentStep === 'step1+2-defender';
+    if (_isPreRoll) {
+      const _acked = _cbt.acked || {};
+      const waiting = [];
+      if (!_acked[1]) waiting.push(1);
+      if (!_acked[2]) waiting.push(2);
+      return { waitType: 'combatReady', description: 'Waiting for combat ready', playerNums: waiting };
+    }
   }
   if (game.pendingCombat?.rerollPhase) {
     const rp = game.pendingCombat.rerollPhase;

@@ -234,13 +234,16 @@ async function runOneGame(learnings, gameNum) {
       }
       continue;
     }
-    // Auto-resolve combat ready
-    if (g.pendingCombat && (!g.pendingCombat.p1Ready || !g.pendingCombat.p2Ready)) {
+    // Auto-resolve combat ready (session 11: read combat.acked instead)
+    if (g.pendingCombat
+        && (g.pendingCombat.currentStep === 'step1+2-attacker'
+            || g.pendingCombat.currentStep === 'step1+2-defender')) {
+      const _acked = g.pendingCombat.acked || {};
       const combatReadyId = `combat_ready_${g.gameId}`;
-      if (!g.pendingCombat.p1Ready) {
+      if (!_acked[1]) {
         try { await harness.submitAction(combatReadyId, g.player1Id); } catch {}
       }
-      if (g.pendingCombat && !g.pendingCombat.p2Ready) {
+      if (g.pendingCombat && !(g.pendingCombat.acked || {})[2]) {
         try { await harness.submitAction(combatReadyId, g.player2Id); } catch {}
       }
       continue;

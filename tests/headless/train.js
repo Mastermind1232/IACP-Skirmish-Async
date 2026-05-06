@@ -715,12 +715,15 @@ async function runOneGame(learnings, gameNum) {
     }
     // Combat ready: both players must confirm — no decision involved.
     // Submit for each player sequentially so the handler sets ready flags.
-    if (g.pendingCombat && (!g.pendingCombat.p1Ready || !g.pendingCombat.p2Ready)) {
+    if (g.pendingCombat
+        && (g.pendingCombat.currentStep === 'step1+2-attacker'
+            || g.pendingCombat.currentStep === 'step1+2-defender')) {
+      const _acked = g.pendingCombat.acked || {};
       const combatReadyId = `combat_ready_${g.gameId}`;
-      if (!g.pendingCombat.p1Ready) {
+      if (!_acked[1]) {
         try { await harness.submitAction(combatReadyId, g.player1Id); } catch {}
       }
-      if (g.pendingCombat && !g.pendingCombat.p2Ready) {
+      if (g.pendingCombat && !(g.pendingCombat.acked || {})[2]) {
         try { await harness.submitAction(combatReadyId, g.player2Id); } catch {}
       }
       continue;

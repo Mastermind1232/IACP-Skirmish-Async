@@ -503,8 +503,9 @@ describe('Region 2: Wrong Player Routing', () => {
       if (!findAction(fh, 1, 'combat_ready') && !findAction(fh, 2, 'combat_ready')) break;
     }
 
-    // After ready, attacker should have combat_roll
-    if (game.pendingCombat && game.pendingCombat.p1Ready && game.pendingCombat.p2Ready) {
+    // After ready, attacker should have combat_roll. Session 11: currentStep
+    // advances to 'roll' after both players ack.
+    if (game.pendingCombat && game.pendingCombat.currentStep === 'roll') {
       const attackerPn = game.pendingCombat.attackerPlayerNum;
       const attackerRoll = findAction(fh, attackerPn, 'combat_roll');
       assert.ok(attackerRoll, `Attacker P${attackerPn} has combat_roll`);

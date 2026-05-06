@@ -514,8 +514,12 @@ async function recoverPendingCombat(game, gameId, ctx) {
     return null; // thread gone — cannot recover
   }
 
-  // No attack roll yet and not both ready → re-send combat_ready_ button
-  if (!combat.attackRoll && (!combat.p1Ready || !combat.p2Ready)) {
+  // No attack roll yet and modify-yn gate still pending → re-send the
+  // combat_ready_ button. Session 11 migration: read currentStep
+  // (canonical CRR gate) instead of legacy p1Ready/p2Ready.
+  const _stepIsPreRoll = combat.currentStep === 'step1+2-attacker'
+    || combat.currentStep === 'step1+2-defender';
+  if (!combat.attackRoll && _stepIsPreRoll) {
     const readyRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`combat_ready_${gameId}`)
@@ -529,8 +533,9 @@ async function recoverPendingCombat(game, gameId, ctx) {
     return 'Re-sent combat ready button';
   }
 
-  // Both ready but no roll yet → re-send combat_roll_ button
-  if (!combat.attackRoll && combat.p1Ready && combat.p2Ready) {
+  // Both ready but no roll yet → re-send combat_roll_ button. Session 11
+  // migration: post-modify-yn the canonical step transitions to 'roll'.
+  if (!combat.attackRoll && combat.currentStep === 'roll') {
     const rollRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`combat_roll_${gameId}`)

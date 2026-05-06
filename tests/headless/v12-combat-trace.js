@@ -414,8 +414,8 @@ async function runTracedGame(gameNum) {
     const combatBefore = g.pendingCombat ? {
       attackerFk: g.pendingCombat.attackerFigureKey,
       defenderFk: g.pendingCombat.target?.figureKey,
-      p1Ready: g.pendingCombat.p1Ready,
-      p2Ready: g.pendingCombat.p2Ready,
+      currentStep: g.pendingCombat.currentStep,
+      acked: g.pendingCombat.acked || {},
       hasAttackRoll: !!g.pendingCombat.attackRoll,
       hasDefenseRoll: !!g.pendingCombat.defenseRoll,
       surgeRemaining: g.pendingCombat.surgeRemaining ?? null,
