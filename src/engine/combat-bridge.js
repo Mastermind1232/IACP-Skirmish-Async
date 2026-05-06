@@ -567,7 +567,19 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           allConditions = allConditions.filter(c => c !== 'Bleed');
           await logGameAction(game, client, `**Fireproof** — **${combat.target.label}** is immune to Bleed.`, { phase: 'ROUND', icon: 'card' });
         }
-        for (const _ac of allConditions) _applyCondition(game, combat.target.figureKey, _ac);
+        // Combat-pipeline rebuild (slice 6.1): per CRR p.21 Condition Keywords,
+        // BENEFICIAL conditions (Focus, Hide) are applied to the ATTACKER, not
+        // the target. HARMFUL conditions (Bleed, Stun, Weaken) go to target.
+        // Both gated on damage>0 (this block is already inside `if (damage > 0)`).
+        // The previous code applied all conditions to the target; verified bug
+        // per destruct's 2026-05-05 audit and Explore-agent confirmation that
+        // surge:focus/surge:hide actually fire from card data.
+        const _attackerFigureKey = combat.attackerFigureKey;
+        for (const _ac of allConditions) {
+          const _isHarmful = HARMFUL_CONDITIONS.includes(_ac);
+          const _recipientKey = _isHarmful ? combat.target.figureKey : _attackerFigureKey;
+          if (_recipientKey) _applyCondition(game, _recipientKey, _ac);
+        }
         // Punishing Strike (Skirmish Upgrade): when one of your figures applies a HARMFUL condition,
         // exhaust to discard that condition and apply a different HARMFUL condition instead.
         const _psHarmful = allConditions.filter((c) => HARMFUL_CONDITIONS.includes(c));
