@@ -2027,34 +2027,23 @@ export function resolveAbility(abilityId, context) {
           const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
           const enemyPN = opponentPlayerNum(playerNum || 1);
           const parts = [];
-          // Slice 6.13 ext: Trample-style multi-target handler — collect lethal hits.
-          const _trampleDefeated = [];
+          // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck.
+          let _trampleHadDefeats = false;
           for (const tFk of targets) {
             const tName = dcNameFromFigureKey(tFk);
             const subParts = [];
             if (hits > 0) {
               const tMsgId = findMsgIdForFigureKey(game, enemyPN, tFk, dcMessageMeta);
               if (dcHealthState && tMsgId) {
-                const hs = dcHealthState.get(tMsgId) || [];
                 const fkM = tFk.match(/-(\d+)-(\d+)$/);
                 const fIdx = fkM ? parseInt(fkM[2], 10) : 0;
-                const hpE = hs[fIdx];
-                if (hpE) {
-                  const [cur, max] = hpE;
-                  const prevCur = cur ?? max;
-                  const newCur = Math.max(0, prevCur - hits);
-                  hs[fIdx] = [newCur, max ?? newCur];
-                  dcHealthState.set(tMsgId, hs);
-                  syncHealthStateToList(game, enemyPN, tMsgId, hs);
-                  subParts.push(`${hits} Dmg (HP: ${prevCur}→${newCur})`);
-                  if (newCur <= 0 && prevCur > 0) {
-                    _trampleDefeated.push({
-                      figureKey: tFk,
-                      defeatedPlayerNum: enemyPN,
-                      attackerPlayerNum: playerNum || 1,
-                      source: entry.label || 'Trample',
-                    });
-                  }
+                const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, tMsgId, fIdx, hits, enemyPN, {
+                  sourceLabel: entry.label || 'Trample',
+                  attackerPlayerNum: playerNum || 1,
+                });
+                if (dmgRes.maxHp > 0) {
+                  subParts.push(`${hits} Dmg (HP: ${dmgRes.prevHp}→${dmgRes.newHp})`);
+                  if (dmgRes.wasDefeated) _trampleHadDefeats = true;
                 }
               }
             }
@@ -2069,7 +2058,7 @@ export function resolveAbility(abilityId, context) {
             applied: true,
             logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. ${parts.join('; ')}.`,
             refreshDcEmbed: true,
-            ...(_trampleDefeated.length > 0 ? { defeatedFigures: _trampleDefeated, refreshBoard: true } : {}),
+            ...(_trampleHadDefeats ? { refreshBoard: true } : {}),
           };
         };
         // Phase 2+: accumulate sequential picks (only when > maxTargets adjacent)
