@@ -1013,6 +1013,23 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
       // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
+      //
+      // Slice 5 audit (destruct 2026-05-06): destruct's model is "damage
+      // capped at health, no Pierce overflow." Legacy approach heals back to
+      // HP 1 on defeat. Both produce IDENTICAL combat outcomes because:
+      //   - Within this attack: HP is now 1, downstream interrupts gate on
+      //     newCur <= 0 and skip correctly. Defeat at line ~1158 also
+      //     explicitly checks YWNDM-on-5th and skips processFigureDefeat.
+      //   - Next attack 1 damage: reduceHp at line ~581 sees cur=1 → newCur=0,
+      //     this YWNDM block fires AGAIN (flag persists), heals back to 1,
+      //     defeat skipped.
+      // The model-purist version (cur stays at 0, defeat suppressed) and the
+      // legacy heal-to-1 produce the same behavior for normal combat damage.
+      // The bug fixed in slice 5 was for NON-combat damage paths (Bleed,
+      // AOE, strain) that don't reach this YWNDM block — those now route
+      // through applyDamageWithDefeatCheck which consults isCannotBeDefeated
+      // and suppresses defeat directly. Both code paths reach the same
+      // outcome: 5th Brother does not defeat while YWNDM is active.
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
         const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         if (_ywndmDcName?.toLowerCase().includes('fifth')) {
