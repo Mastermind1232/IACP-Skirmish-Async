@@ -276,16 +276,21 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
   clearPendingSelfDestruct(_sdcpGame);
   const _sdcpCombat = _sdcpGame.pendingCombat;
   if (buttonKey === 'self_destruct_protocol_use_') {
-    // Card text (IG-11): "may move up to 2 spaces and roll 1 red die. Each
-    // adjacent figure suffers Damage and Strain equal to the Hit results."
-    // Three corrections from the previous impl (destruct 2026-05-06):
-    // 1. Apply STRAIN as well as Damage (was: damage only).
-    // 2. Hit "each adjacent figure" — friendly + hostile (was: hostiles only).
-    //    The IG-11 itself is excluded as the source.
-    // 3. The "move up to 2 spaces" preliminary step is still pending — the
-    //    move prompt is queued as a separate follow-up because it requires
-    //    a space-picker UI that's beyond this slice. Document and continue.
-    //    For now, IG-11 explodes from current position.
+    // Card text (IG-11): "you may move up to 3 spaces and roll 1 red die.
+    // Each figure or object adjacent to you suffers Damage equal to the Hit
+    // results. Then, you are defeated."
+    //
+    // Corrections per destruct 2026-05-06: "Self destruct was correct (red
+    // die damage), but IG 11 does get to move first. No strain involved."
+    //
+    // - Effect is DAMAGE ONLY — strain application was a prior misread and
+    //   is removed here. The two reduceHp calls (damage + strain) are now
+    //   collapsed to a single damage reduceHp.
+    // - Hit "each figure or object adjacent" — friendly + hostile, IG-11
+    //   itself excluded. (Object damage TODO; covered by figureKey loop.)
+    // - The "move up to 3 spaces" preliminary step still pending — needs a
+    //   dedicated space-picker UI integration. For now, IG-11 explodes from
+    //   current position. TODO: queue movement prompt before red-die roll.
     const _sdcpDiceData = getDiceData ? getDiceData() : null;
     const _sdcpFaces = _sdcpDiceData?.attack?.red || [];
     const _sdcpFace = _sdcpFaces[Math.floor(Math.random() * Math.max(_sdcpFaces.length, 1))] || {};
@@ -313,19 +318,14 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
           const _sfkFigMatch = _sfk.match(/^(.+)-(\d+)-(\d+)$/);
           if (!_sfkFigMatch) continue;
           const _sfkFigIdx = parseInt(_sfkFigMatch[3], 10);
-          // Damage = hits, then Strain = hits (from the same roll).
+          // Damage = hits (NO strain — destruct 2026-05-06 confirmed
+          // "No strain involved" for IG-11 Self-Destruct Protocol).
           const { prevHp: _shc, newHp: _shnc, maxHp: _sfkMaxHp } = reduceHp(dcHealthState, _sdcpGame, _sfkMsgId, _sfkFigIdx, _sdcpHits, _eachPN);
           if (_sfkMaxHp === 0 || _shc === null || _shc <= 0) { continue; }
-          // Apply strain as additional damage (skirmish: strain → damage).
-          let _afterStrainHp = _shnc;
-          if (_sdcpHits > 0) {
-            const { newHp: _strHp } = reduceHp(dcHealthState, _sdcpGame, _sfkMsgId, _sfkFigIdx, _sdcpHits, _eachPN);
-            _afterStrainHp = _strHp;
-          }
-          const _sdcpDefNote = _afterStrainHp <= 0 ? ' **(defeated)**' : '';
+          const _sdcpDefNote = _shnc <= 0 ? ' **(defeated)**' : '';
           const _sideLabel = _eachPN === _sdcpPending.defenderPlayerNum ? 'friendly' : 'hostile';
-          _sdcpDamaged.push(`${_sideLabel} ${dcMessageMeta.get(_sfkMsgId)?.displayName || _sfkFigMatch[1]} (HP: ${_shc}→${_afterStrainHp}, ${_sdcpHits} Damage + ${_sdcpHits} Strain)${_sdcpDefNote}`);
-          if (_afterStrainHp <= 0) _sdcpDefeated.push({ figureKey: _sfk, playerNum: _eachPN });
+          _sdcpDamaged.push(`${_sideLabel} ${dcMessageMeta.get(_sfkMsgId)?.displayName || _sfkFigMatch[1]} (HP: ${_shc}→${_shnc}, ${_sdcpHits} Damage)${_sdcpDefNote}`);
+          if (_shnc <= 0) _sdcpDefeated.push({ figureKey: _sfk, playerNum: _eachPN });
         }
       }
       _sdcpResultLog += _sdcpDamaged.length ? _sdcpDamaged.join('; ') : 'No adjacent figures.';
