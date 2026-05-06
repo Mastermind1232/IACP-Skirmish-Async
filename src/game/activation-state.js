@@ -354,6 +354,7 @@ const ROUND_NULL_FLAGS = [
   'pendingBELReorder',
   'pendingThereIsNoTry',
   'pendingSelfDestruct',
+  'pendingSelfDestructMove',
   'pendingLastResort',
   'nextDefeatedFriendlyVpReduction',
   'doubleMatchingIconsOnReroll',

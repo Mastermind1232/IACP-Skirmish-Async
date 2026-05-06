@@ -274,6 +274,7 @@ const CONTEXT_GROUPS = {
     'updateHandChannelMessages',
     'processFigureDefeat',
     'sendPhaseGateMessages',
+    'getBoardStateForMovement', 'getMovementProfile', 'computeMovementCache',
   ],
 
   requests: [

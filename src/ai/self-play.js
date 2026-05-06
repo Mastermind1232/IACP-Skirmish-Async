@@ -166,6 +166,7 @@ function determineActingPlayer(game) {
   if (game.pendingConcussiveBolt) return game.pendingConcussiveBolt.attackerPlayerNum || 'both';
   if (game.pendingExtraProtection) return 'both';
   if (game.pendingSelfDestruct) return game.pendingSelfDestruct.defenderPlayerNum || 'both';
+  if (game.pendingSelfDestructMove) return game.pendingSelfDestructMove.defenderPlayerNum || 'both';
   if (game.pendingExecutorInterrupt) return 'both';
 
   // Move in progress — keyed by moveKey, each entry has playerNum

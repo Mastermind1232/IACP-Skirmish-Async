@@ -258,14 +258,99 @@ export async function handleSelfDestructProbe(interaction, ctx) {
 }
 
 // ── 5. Self-Destruct Protocol ───────────────────────────────────────────────
+//
+// Card text (IG-11): "you may move up to 3 spaces and roll 1 red die. Each
+// figure or object adjacent to you suffers Damage equal to the Hit results.
+// Then, you are defeated."
+//
+// Two-step flow:
+//   1) handleSelfDestructProtocol — owner clicks Use → post a destination
+//      picker (cells reachable in ≤3 MP from current position) + a "Stay
+//      here" button. Pending state migrates from pendingSelfDestruct to
+//      pendingSelfDestructMove.
+//   2) handleSelfDestructMovePick — owner clicks a destination or Stay →
+//      update IG-11's position if a destination was picked, then run the
+//      explosion (red die + adjacency damage) at the new position, then
+//      finalize defeat via applyDamageAndFinishCombat.
+//
+// destruct 2026-05-06 corrections honored: damage only (no strain), each
+// adjacent figure (friendly + hostile, IG-11 excluded), move-first wired.
+
+async function _runSelfDestructExplode(game, pending, ctx) {
+  const { client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, applyDamageAndFinishCombat, processFigureDefeat, saveGames } = ctx;
+  const combat = game.pendingCombat;
+  const diceData = getDiceData ? getDiceData() : null;
+  const faces = diceData?.attack?.red || [];
+  const face = faces[Math.floor(Math.random() * Math.max(faces.length, 1))] || {};
+  const hits = face.dmg ?? 0;
+  const faceLabel = `${hits} Hit${hits === 1 ? '' : 's'}`;
+  const figKey = combat?.target?.figureKey;
+  // Read CURRENT position (may have just been updated by movement pick).
+  const pos = figKey ? game.figurePositions?.[pending.defenderPlayerNum]?.[figKey] : null;
+  let resultLog = `Rolled red die: **${faceLabel}** — `;
+  const damaged = [];
+  const defeated = [];
+  if (hits > 0 && pos && game.selectedMap?.id) {
+    const ms = getMapData ? getMapData(game.selectedMap.id) : null;
+    const adj = ms?.adjacency?.[String(pos).toLowerCase()] || [];
+    const allAdj = new Set([String(pos).toLowerCase(), ...adj.map(s => String(s).toLowerCase())]);
+    // Walk BOTH players' positions so friendly figures sharing IG-11's
+    // adjacency also take damage (CRR "each adjacent figure").
+    for (const eachPN of [1, 2]) {
+      for (const [sfk, sfkPos] of Object.entries(game.figurePositions?.[eachPN] || {})) {
+        if (!sfkPos || !allAdj.has(String(sfkPos).toLowerCase())) continue;
+        // Exclude IG-11 itself (the source).
+        if (eachPN === pending.defenderPlayerNum && sfk === figKey) continue;
+        let sfkMsgId = null;
+        for (const [mid, mm] of dcMessageMeta) { if (mm.playerNum === eachPN && sfk.startsWith(mm.dcName + '-')) { sfkMsgId = mid; break; } }
+        if (!sfkMsgId) continue;
+        const figMatch = sfk.match(/^(.+)-(\d+)-(\d+)$/);
+        if (!figMatch) continue;
+        const sfkFigIdx = parseInt(figMatch[3], 10);
+        // Damage = hits (NO strain — destruct 2026-05-06 confirmed
+        // "No strain involved" for IG-11 Self-Destruct Protocol).
+        const { prevHp, newHp, maxHp } = reduceHp(dcHealthState, game, sfkMsgId, sfkFigIdx, hits, eachPN);
+        if (maxHp === 0 || prevHp === null || prevHp <= 0) { continue; }
+        const defNote = newHp <= 0 ? ' **(defeated)**' : '';
+        const sideLabel = eachPN === pending.defenderPlayerNum ? 'friendly' : 'hostile';
+        damaged.push(`${sideLabel} ${dcMessageMeta.get(sfkMsgId)?.displayName || figMatch[1]} (HP: ${prevHp}→${newHp}, ${hits} Damage)${defNote}`);
+        if (newHp <= 0) defeated.push({ figureKey: sfk, playerNum: eachPN });
+      }
+    }
+    resultLog += damaged.length ? damaged.join('; ') : 'No adjacent figures.';
+  } else {
+    resultLog += 'No hits.';
+  }
+  await logGameAction(game, client, `**Self-Destruct Protocol** — ${combat?.target?.label || 'Figure'}: ${resultLog}`, { phase: 'ROUND', icon: 'attack' });
+  // Process defeats from the explosion (canonical defeat pipeline).
+  for (const df of defeated) {
+    if (processFigureDefeat) {
+      await processFigureDefeat(game, {
+        defeatedPlayerNum: df.playerNum,
+        figureKey: df.figureKey,
+        attackerPlayerNum: pending.defenderPlayerNum,
+        source: 'Self-Destruct Protocol',
+      });
+    }
+  }
+  // Finalize defeat by re-calling applyDamageAndFinishCombat (SDP flag already set so no re-trigger).
+  await applyDamageAndFinishCombat(game, combat, {
+    damage: pending.damage, hit: pending.hit, resultText: pending.resultText,
+    totalBlast: pending.totalBlast, defenderPlayerNum: pending.defenderPlayerNum,
+    attackerPlayerNum: pending.attackerPlayerNum, ownerId: pending.ownerId,
+    targetMsgId: pending.targetMsgId, targetFigIndex: pending.targetFigIndex,
+  }, client);
+  saveGames(game.gameId);
+}
+
 export async function handleSelfDestructProtocol(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, applyDamageAndFinishCombat, processFigureDefeat } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, getMapData, getBoardStateForMovement, getMovementProfile, computeMovementCache } = ctx;
   const buttonKey = interaction.customId.startsWith('self_destruct_protocol_use_') ? 'self_destruct_protocol_use_' : 'self_destruct_protocol_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
   const _sdcpSuffix = parseCustomId(interaction.customId, buttonKey);
   const _sdcpParts = _sdcpSuffix.split('_');
-  const _sdcpGameId = _sdcpParts[0]; const _sdcpTargetMsgId = _sdcpParts[1];
+  const _sdcpGameId = _sdcpParts[0];
   const _sdcpGame = await requireGame(interaction, getGame, _sdcpGameId, { silent: true });
   if (!_sdcpGame) return;
   if (!_sdcpGame.pendingSelfDestruct) {
@@ -273,88 +358,108 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
   }
   const _sdcpPending = _sdcpGame.pendingSelfDestruct;
   if (!await requirePlayer(interaction, _sdcpGame, interaction.user.id, _sdcpPending.defenderPlayerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
-  clearPendingSelfDestruct(_sdcpGame);
-  const _sdcpCombat = _sdcpGame.pendingCombat;
-  if (buttonKey === 'self_destruct_protocol_use_') {
-    // Card text (IG-11): "you may move up to 3 spaces and roll 1 red die.
-    // Each figure or object adjacent to you suffers Damage equal to the Hit
-    // results. Then, you are defeated."
-    //
-    // Corrections per destruct 2026-05-06: "Self destruct was correct (red
-    // die damage), but IG 11 does get to move first. No strain involved."
-    //
-    // - Effect is DAMAGE ONLY — strain application was a prior misread and
-    //   is removed here. The two reduceHp calls (damage + strain) are now
-    //   collapsed to a single damage reduceHp.
-    // - Hit "each figure or object adjacent" — friendly + hostile, IG-11
-    //   itself excluded. (Object damage TODO; covered by figureKey loop.)
-    // - The "move up to 3 spaces" preliminary step still pending — needs a
-    //   dedicated space-picker UI integration. For now, IG-11 explodes from
-    //   current position. TODO: queue movement prompt before red-die roll.
-    const _sdcpDiceData = getDiceData ? getDiceData() : null;
-    const _sdcpFaces = _sdcpDiceData?.attack?.red || [];
-    const _sdcpFace = _sdcpFaces[Math.floor(Math.random() * Math.max(_sdcpFaces.length, 1))] || {};
-    const _sdcpHits = _sdcpFace.dmg ?? 0;
-    const _sdcpFaceLabel = `${_sdcpHits} Hit${_sdcpHits === 1 ? '' : 's'}`;
-    const _sdcpFigKey = _sdcpCombat?.target?.figureKey;
-    const _sdcpPos = _sdcpFigKey ? _sdcpGame.figurePositions?.[_sdcpPending.defenderPlayerNum]?.[_sdcpFigKey] : null;
-    let _sdcpResultLog = `Rolled red die: **${_sdcpFaceLabel}** — `;
-    const _sdcpDamaged = [];
-    const _sdcpDefeated = [];
-    if (_sdcpHits > 0 && _sdcpPos && _sdcpGame.selectedMap?.id) {
-      const _sdcpMs = getMapData ? getMapData(_sdcpGame.selectedMap.id) : null;
-      const _sdcpAdj = _sdcpMs?.adjacency?.[String(_sdcpPos).toLowerCase()] || [];
-      const _sdcpAllAdj = new Set([String(_sdcpPos).toLowerCase(), ..._sdcpAdj.map(s => String(s).toLowerCase())]);
-      // Walk BOTH players' positions so friendly figures sharing IG-11's
-      // adjacency also take damage+strain (CRR "each adjacent figure").
-      for (const _eachPN of [1, 2]) {
-        for (const [_sfk, _sfkPos] of Object.entries(_sdcpGame.figurePositions?.[_eachPN] || {})) {
-          if (!_sfkPos || !_sdcpAllAdj.has(String(_sfkPos).toLowerCase())) continue;
-          // Exclude IG-11 itself (the source).
-          if (_eachPN === _sdcpPending.defenderPlayerNum && _sfk === _sdcpFigKey) continue;
-          let _sfkMsgId = null;
-          for (const [_mid, _mm] of dcMessageMeta) { if (_mm.playerNum === _eachPN && _sfk.startsWith(_mm.dcName + '-')) { _sfkMsgId = _mid; break; } }
-          if (!_sfkMsgId) continue;
-          const _sfkFigMatch = _sfk.match(/^(.+)-(\d+)-(\d+)$/);
-          if (!_sfkFigMatch) continue;
-          const _sfkFigIdx = parseInt(_sfkFigMatch[3], 10);
-          // Damage = hits (NO strain — destruct 2026-05-06 confirmed
-          // "No strain involved" for IG-11 Self-Destruct Protocol).
-          const { prevHp: _shc, newHp: _shnc, maxHp: _sfkMaxHp } = reduceHp(dcHealthState, _sdcpGame, _sfkMsgId, _sfkFigIdx, _sdcpHits, _eachPN);
-          if (_sfkMaxHp === 0 || _shc === null || _shc <= 0) { continue; }
-          const _sdcpDefNote = _shnc <= 0 ? ' **(defeated)**' : '';
-          const _sideLabel = _eachPN === _sdcpPending.defenderPlayerNum ? 'friendly' : 'hostile';
-          _sdcpDamaged.push(`${_sideLabel} ${dcMessageMeta.get(_sfkMsgId)?.displayName || _sfkFigMatch[1]} (HP: ${_shc}→${_shnc}, ${_sdcpHits} Damage)${_sdcpDefNote}`);
-          if (_shnc <= 0) _sdcpDefeated.push({ figureKey: _sfk, playerNum: _eachPN });
-        }
-      }
-      _sdcpResultLog += _sdcpDamaged.length ? _sdcpDamaged.join('; ') : 'No adjacent figures.';
-    } else {
-      _sdcpResultLog += 'No hits.';
-    }
-    await logGameAction(_sdcpGame, client, `**Self-Destruct Protocol** — ${_sdcpCombat?.target?.label || 'Figure'}: ${_sdcpResultLog}`, { phase: 'ROUND', icon: 'attack' });
-    // Process defeats from the explosion (canonical defeat pipeline).
-    for (const _sdcpDf of _sdcpDefeated) {
-      if (processFigureDefeat) {
-        await processFigureDefeat(_sdcpGame, {
-          defeatedPlayerNum: _sdcpDf.playerNum,
-          figureKey: _sdcpDf.figureKey,
-          attackerPlayerNum: _sdcpPending.defenderPlayerNum,
-          source: 'Self-Destruct Protocol',
-        });
-      }
-    }
-  } else {
+
+  if (buttonKey === 'self_destruct_protocol_skip_') {
+    clearPendingSelfDestruct(_sdcpGame);
+    const _sdcpCombat = _sdcpGame.pendingCombat;
     await logGameAction(_sdcpGame, client, `**Self-Destruct Protocol** — Skipped. ${_sdcpCombat?.target?.label || 'Figure'} is defeated.`, { phase: 'ROUND', icon: 'card' });
+    const { applyDamageAndFinishCombat } = ctx;
+    await applyDamageAndFinishCombat(_sdcpGame, _sdcpCombat, {
+      damage: _sdcpPending.damage, hit: _sdcpPending.hit, resultText: _sdcpPending.resultText,
+      totalBlast: _sdcpPending.totalBlast, defenderPlayerNum: _sdcpPending.defenderPlayerNum,
+      attackerPlayerNum: _sdcpPending.attackerPlayerNum, ownerId: _sdcpPending.ownerId,
+      targetMsgId: _sdcpPending.targetMsgId, targetFigIndex: _sdcpPending.targetFigIndex,
+    }, client);
+    saveGames(_sdcpGame.gameId); return;
   }
-  // Finalize defeat by re-calling applyDamageAndFinishCombat (SDP flag already set so no re-trigger)
-  await applyDamageAndFinishCombat(_sdcpGame, _sdcpCombat, {
-    damage: _sdcpPending.damage, hit: _sdcpPending.hit, resultText: _sdcpPending.resultText,
-    totalBlast: _sdcpPending.totalBlast, defenderPlayerNum: _sdcpPending.defenderPlayerNum,
-    attackerPlayerNum: _sdcpPending.attackerPlayerNum, ownerId: _sdcpPending.ownerId,
-    targetMsgId: _sdcpPending.targetMsgId, targetFigIndex: _sdcpPending.targetFigIndex,
-  }, client);
-  saveGames(_sdcpGame.gameId); return;
+
+  // Use → first prompt destination picker (cells reachable within 3 MP).
+  const _sdcpCombat = _sdcpGame.pendingCombat;
+  const _sdcpFigKey = _sdcpCombat?.target?.figureKey;
+  const _sdcpDcName = _sdcpFigKey ? dcNameFromFigureKey(_sdcpFigKey) : null;
+  const _sdcpPos = _sdcpFigKey ? _sdcpGame.figurePositions?.[_sdcpPending.defenderPlayerNum]?.[_sdcpFigKey] : null;
+  let _sdcpDestinations = [];
+  if (_sdcpPos && _sdcpGame.selectedMap?.id && getBoardStateForMovement && getMovementProfile && computeMovementCache) {
+    const _sdcpBoard = getBoardStateForMovement(_sdcpGame, _sdcpFigKey);
+    if (_sdcpBoard) {
+      const _sdcpProfile = getMovementProfile(_sdcpDcName, _sdcpFigKey, _sdcpGame);
+      const _sdcpCache = computeMovementCache(_sdcpPos, 3, _sdcpBoard, _sdcpProfile);
+      // Destinations: any reachable cell where IG-11 can end (excluding current position).
+      for (const [coord, node] of _sdcpCache.cells.entries()) {
+        if (!node.canEnd) continue;
+        if (coord === String(_sdcpPos).toLowerCase()) continue;
+        _sdcpDestinations.push(coord);
+      }
+    }
+  }
+  // Migrate pending state — same payload, separate slot so the original
+  // "use/skip" flag stays cleared and can't fire twice.
+  clearPendingSelfDestruct(_sdcpGame);
+  _sdcpGame.pendingSelfDestructMove = { ..._sdcpPending };
+
+  const _sdcpButtons = [];
+  // Cap destination buttons to 20 (Discord row limit ≈ 5 rows × 5 buttons,
+  // minus the Stay button = 24). Sort by coord for determinism.
+  const _sdcpSortedDests = _sdcpDestinations.sort();
+  for (const coord of _sdcpSortedDests.slice(0, 23)) {
+    _sdcpButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`sdp_move_pick_${_sdcpGame.gameId}_${coord}`)
+        .setLabel(coord.toUpperCase())
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  _sdcpButtons.push(
+    new ButtonBuilder()
+      .setCustomId(`sdp_move_skip_${_sdcpGame.gameId}`)
+      .setLabel('Stay (explode here)')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  const _sdcpRows = chunkButtonsToRows(_sdcpButtons).slice(0, 5);
+  const _sdcpOwnerId = _sdcpGame[`player${_sdcpPending.defenderPlayerNum}Id`];
+  const _sdcpLabel = _sdcpCombat?.target?.label || _sdcpDcName || 'Figure';
+  if (_sdcpDestinations.length === 0) {
+    await logGameAction(_sdcpGame, client, `<@${_sdcpOwnerId}> **Self-Destruct Protocol** — **${_sdcpLabel}** has no reachable destinations within 3 MP. Click below to explode in place.`, { components: _sdcpRows, allowedMentions: { users: [_sdcpOwnerId] } });
+  } else {
+    await logGameAction(_sdcpGame, client, `<@${_sdcpOwnerId}> **Self-Destruct Protocol** — **${_sdcpLabel}** may move up to 3 spaces before exploding. Pick a destination or Stay:`, { components: _sdcpRows, allowedMentions: { users: [_sdcpOwnerId] } });
+  }
+  saveGames(_sdcpGame.gameId);
+}
+
+export async function handleSelfDestructMovePick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
+  const isPick = interaction.customId.startsWith('sdp_move_pick_');
+  const buttonKey = isPick ? 'sdp_move_pick_' : 'sdp_move_skip_';
+  await interaction.deferUpdate().catch(discordCatch);
+  const _suffix = parseCustomId(interaction.customId, buttonKey);
+  const _parts = _suffix.split('_');
+  const _gameId = _parts[0];
+  const _destCoord = isPick ? _parts.slice(1).join('_').toLowerCase() : null;
+  const _game = await requireGame(interaction, getGame, _gameId, { silent: true });
+  if (!_game) return;
+  const _pending = _game.pendingSelfDestructMove;
+  if (!_pending) {
+    await interaction.followUp({ content: 'No pending Self-Destruct movement.', ephemeral: true }).catch(discordCatch); return;
+  }
+  if (!await requirePlayer(interaction, _game, interaction.user.id, _pending.defenderPlayerNum, canActAsPlayer, 'Only the DC owner may pick.')) return;
+
+  const _combat = _game.pendingCombat;
+  const _figKey = _combat?.target?.figureKey;
+  const _dcLabel = _combat?.target?.label || (_figKey ? dcNameFromFigureKey(_figKey) : 'Figure');
+
+  if (isPick && _destCoord && _figKey) {
+    // Move IG-11 to the chosen destination.
+    if (!_game.figurePositions) _game.figurePositions = { 1: {}, 2: {} };
+    if (!_game.figurePositions[_pending.defenderPlayerNum]) _game.figurePositions[_pending.defenderPlayerNum] = {};
+    _game.figurePositions[_pending.defenderPlayerNum][_figKey] = _destCoord;
+    await logGameAction(_game, client, `🚶 **Self-Destruct Protocol** — **${_dcLabel}** moves to **${_destCoord.toUpperCase()}** before exploding.`, { phase: 'ROUND', icon: 'card' });
+  } else {
+    await logGameAction(_game, client, `**Self-Destruct Protocol** — **${_dcLabel}** stays in place.`, { phase: 'ROUND', icon: 'card' });
+  }
+
+  // Run the explosion at IG-11's CURRENT position (may have been updated above).
+  delete _game.pendingSelfDestructMove;
+  await _runSelfDestructExplode(_game, _pending, ctx);
 }
 
 // ── 5b. You Have Something I Want (Moff Gideon) ────────────────────────────

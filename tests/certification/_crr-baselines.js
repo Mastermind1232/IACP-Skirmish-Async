@@ -163,6 +163,7 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingAssassinsBlade',
   'pendingStillFaster',
   'pendingSelfDestruct',
+  'pendingSelfDestructMove',
   'pendingMastery',
   'pendingInterrogate',
   'pendingHunterProtocol',
