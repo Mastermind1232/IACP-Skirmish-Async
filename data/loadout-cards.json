@@ -13,7 +13,7 @@
       "imagePath": "vassal_extracted/images/dc-supplemental/IACP_Loadout Card--Electrobatons.png"
     },
     "Electrohammer": {
-      "abilityText": "Ability (Electro-pulse): After you resolve an attack, each other figure adjacent to the target suffers 1 Damage.",
+      "abilityText": "Ability (Electro-pulse): After you resolve an attack, each other figure adjacent to the target space suffers 1 Damage.",
       "surges": [
         { "surgeCost": 1, "label": "+2 Hits" },
         { "surgeCost": 1, "label": "Pierce 2" }
