@@ -1767,6 +1767,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         game.freeAttackBonusPending[msgId] = _fabCount - 1;
       } else {
         delete game.freeAttackBonusPending[msgId];
+        // Brutality / Sarlacc Sweep: clear different-target tracker once the
+        // last free attack is consumed.
+        if (game.freeAttackDifferentTargets?.[msgId]) delete game.freeAttackDifferentTargets[msgId];
         // Wild Fury: on the last free attack, queue postActivationConditions (Stun + Bleed) to apply after combat
         if (game.postActivationConditions?.[msgId]) {
           game.pendingPostAttackConditions = game.pendingPostAttackConditions || {};

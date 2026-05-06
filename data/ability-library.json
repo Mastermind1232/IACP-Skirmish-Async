@@ -523,7 +523,8 @@
       "wiredStatus": "wired",
       "freeAttackBonus": true,
       "logMessage": "**Brutality** — Perform 2 attacks this activation (each must target a different figure). Your next 2 attacks cost no action.",
-      "freeAttackBonusCount": 2
+      "freeAttackBonusCount": 2,
+      "differentTargetsRequired": true
     },
     "Built on Hope": {
       "type": "ccEffect",
@@ -4027,6 +4028,7 @@
       "label": "2 free attacks, each targeting a different figure",
       "freeAttackBonus": true,
       "freeAttackBonusCount": 2,
+      "differentTargetsRequired": true,
       "wiredStatus": "wired"
     },
     "Savage Vigor": {

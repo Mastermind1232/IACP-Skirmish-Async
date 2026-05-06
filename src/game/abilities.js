@@ -1863,6 +1863,13 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     // freeAttackBonusCount > 1 (e.g. Sarlacc Sweep: 2 free attacks): store count, each attack decrements by 1
     game.freeAttackBonusPending[msgId] = entry.freeAttackBonusCount ?? true;
+    // Brutality / Sarlacc Sweep / Multi-Fire: each attack must target a different figure.
+    // Initialize an empty target-tracker; handlers/combat.js handleAttackTarget pushes
+    // each chosen figureKey and refuses duplicates while this entry is set.
+    if (entry.differentTargetsRequired) {
+      game.freeAttackDifferentTargets = game.freeAttackDifferentTargets || {};
+      game.freeAttackDifferentTargets[msgId] = [];
+    }
     // Stay Down: mark to apply Stun to the attacker figure when the free attack is consumed
     if (entry.label === 'Stay Down') {
       game.stayDownPendingMsgId = game.stayDownPendingMsgId || {};

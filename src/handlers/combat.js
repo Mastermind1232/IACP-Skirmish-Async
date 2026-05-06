@@ -1214,6 +1214,18 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     delete game.multiFireBlockedTarget[msgId];
   }
+  // Brutality / Sarlacc Sweep (differentTargetsRequired): when a multi-attack
+  // free-attack chain is active, each attack must target a different figure
+  // than any previously-attacked target in the chain. destruct 2026-05-06:
+  // "Brutality is one action to perform 2 attacks targeting different figures."
+  // freeAttackDifferentTargets[msgId] tracks figureKeys already attacked.
+  if (Array.isArray(game.freeAttackDifferentTargets?.[msgId]) && target.figureKey) {
+    if (game.freeAttackDifferentTargets[msgId].includes(target.figureKey)) {
+      await interaction.followUp({ content: '🚫 **Different target required** — this multi-attack ability requires each attack to target a different figure. Pick another target.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    game.freeAttackDifferentTargets[msgId].push(target.figureKey);
+  }
   // Droid Arm (Migs Mayfeld): deduct 1 Power Token when attacking a target only visible via Droid Arm
   if (target.droidArmLOS) {
     const _daTokens = game.figurePowerTokens?.[`${meta.dcName}-${(meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1}-${figureIndex}`] || [];
