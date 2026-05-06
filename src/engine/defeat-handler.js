@@ -313,7 +313,44 @@ export async function processFigureDefeat(game, opts, deps) {
     }
   }
 
-  // 9. Check win conditions (skipped when caller handles timing, e.g. combat post-defeat VP mods)
+  // 9b. Defeat-reaction CC prompts (Debts Repaid, Of No Importance, etc.)
+  // Slice 6.13: per destruct 2026-05-05 "Yes 'when defeat' applies no matter
+  // how defeated." Previously this prompt fired only after combat-resolved
+  // defeats; Bleed-end-of-action / Blast-splash / Cleave-secondary-kill /
+  // Strain defeats silently skipped. Centralizing here means every defeat
+  // path that calls processFigureDefeat (combat-bridge, combat-special-effects,
+  // movement-side strain conversion, etc.) now fires the prompt uniformly.
+  try {
+    const _drCcCards = deps.getCcEffectsData?.()?.cards || {};
+    const _drGetCcHand = deps.getCcHand;
+    const _drSendPrompt = deps.sendPrivateReactionPrompt;
+    if (_drGetCcHand && _drSendPrompt) {
+      const _drDefeatTimings = new Set([
+        'whenHostileFigureDefeatedNotYourActivation',
+        'whenHostileFigureWithin3SpacesDefeated',
+        'afterUniqueHostileDefeated',
+      ]);
+      const _drOwnDefeatTimings = new Set(['whenOneOfYourFiguresDefeated']);
+      // Notify attacker about hostile-defeat reactions (skip if no attacker — e.g. Strain self-kill)
+      if (attackerPlayerNum && attackerPlayerNum !== defeatedPlayerNum) {
+        const atkHand = _drGetCcHand(game, attackerPlayerNum) || [];
+        const atkDefeatCards = [...new Set(atkHand)].filter(c => _drCcCards[c]?.timing && _drDefeatTimings.has(_drCcCards[c].timing));
+        if (atkDefeatCards.length) {
+          await _drSendPrompt(client, game, attackerPlayerNum, atkDefeatCards.length, 'hostile defeated');
+        }
+      }
+      // Notify defeated owner about own-figure-defeat reactions
+      const defHand = _drGetCcHand(game, defeatedPlayerNum) || [];
+      const defDefeatCards = [...new Set(defHand)].filter(c => _drCcCards[c]?.timing && _drOwnDefeatTimings.has(_drCcCards[c].timing));
+      if (defDefeatCards.length) {
+        await _drSendPrompt(client, game, defeatedPlayerNum, defDefeatCards.length, 'your figure was defeated');
+      }
+    }
+  } catch (_drErr) {
+    console.error('Defeat-reaction prompt error in processFigureDefeat:', _drErr?.message ?? _drErr);
+  }
+
+  // 10. Check win conditions (skipped when caller handles timing, e.g. combat post-defeat VP mods)
   if (checkWinConditions && !skipWinConditions) {
     await checkWinConditions(game, client);
   }
