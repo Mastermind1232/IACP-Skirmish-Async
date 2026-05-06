@@ -40,6 +40,37 @@ import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { classifyCcStep } from '../engine/combat-order-validator.js';
+import { pushCcPlay } from '../engine/combat-counter-window.js';
+
+/**
+ * Slice 5.1: push a CC play onto the combat-scoped counter-window stack.
+ *
+ * Per destruct's 2026-05-05 audit: every CC play opens an opponent-only
+ * counter-window. Cancellation suppresses ALL of the canceled CC's effects,
+ * including "when discarded" triggers. The stack is recursive — Negation on
+ * Brace, Comm Disruption on Negation, etc.
+ *
+ * Slice 5.1 is data-only: we record the play onto pendingCombat.ccPlayStack.
+ * Subsequent slices (5.2+) wire prompts and resolution against this stack.
+ *
+ * No-op when there is no active combat (counter-window for non-combat CC
+ * plays is deferred — Comm Disruption already has a tailored helper).
+ */
+function recordCcOnCombatStack(game, playerNum, card) {
+  const cbt = game?.combat || game?.pendingCombat;
+  if (!cbt) return;
+  cbt.ccPlayStack = cbt.ccPlayStack || [];
+  try {
+    const { stack } = pushCcPlay(cbt.ccPlayStack, { ccName: card, playerNum });
+    cbt.ccPlayStack = stack;
+  } catch (_e) {
+    // pushCcPlay refuses same-player counter — surfaces a stale stack
+    // rather than the user's intended new play. Reset to a fresh top-level.
+    cbt.ccPlayStack = [];
+    const { stack } = pushCcPlay(cbt.ccPlayStack, { ccName: card, playerNum });
+    cbt.ccPlayStack = stack;
+  }
+}
 
 /**
  * C14: After a CC is played, check if opponent has Comm Disruption in hand
@@ -383,6 +414,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   // Track how many CCs played during this attack (for "first CC" conditions like Assassinate)
   if (_cbt) _cbt.attackCcCount = (_cbt.attackCcCount || 0) + 1;
+  // Slice 5.1: push the CC onto the counter-window stack so future
+  // Negation/CD/recursive counters can resolve against it. Combat-scoped
+  // for now; non-combat CC counter-window deferred.
+  recordCcOnCombatStack(game, playerNum, card);
   // Combat-order telemetry (slice 4.13, soft-warn mode): classify the CC
   // against the canonical CRR step it should fire at per destruct's
   // 2026-05-05 audit, and log a mismatch when pendingCombat.currentStep
