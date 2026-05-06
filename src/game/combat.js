@@ -306,6 +306,15 @@ export function computeCombatResult(combat) {
   const surgeCancel = combat.surgeCancel || 0;
   // Cunning: +1 Block per rolled Evade result while defending (Han Solo, Jyn Odan, Nexu)
   const cunningBonus = (combat.hasCunning) ? defRoll.evade : 0;
+  // Combat-pipeline rebuild (slice 6.15): Overwhelming Impact's
+  // ignoreDefenseResultsNotOnDice flag drops `bonusBlock` (token spends,
+  // innate flat +Block, CC-discard +Block from Zillo, surge-Block, mission
+  // rules like Harsh Environment, Mobile +Block, Personal Combat Shield)
+  // and keeps rolled-die block + Cunning. Cunning is computed from rolled
+  // evade results and is treated as on-die origin — destruct 2026-05-05
+  // ruling pending. Brace for Impact is NOT in this branch: it adds a die
+  // to defenseBonusDice which gets rolled into defRoll.block — correctly
+  // surviving OI as on-die. Knowledge and Defense behaves the same way.
   const blockForCalc = combat.ignoreDefenseResultsNotOnDice
     ? (defRoll.block + cunningBonus)
     : (defRoll.block + bonusBlock + cunningBonus);
