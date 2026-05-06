@@ -39,6 +39,7 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
+import { classifyCcStep } from '../engine/combat-order-validator.js';
 
 /**
  * C14: After a CC is played, check if opponent has Comm Disruption in hand
@@ -382,6 +383,17 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   // Track how many CCs played during this attack (for "first CC" conditions like Assassinate)
   if (_cbt) _cbt.attackCcCount = (_cbt.attackCcCount || 0) + 1;
+  // Combat-order telemetry (slice 3.5, warn-mode): classify the CC against the
+  // canonical CRR step it should fire at per destruct's 2026-05-05 audit. Once
+  // pendingCombat carries an explicit currentStep, this becomes a hard gate;
+  // for now it's a console log to surface ordering issues without breaking
+  // gameplay.
+  if (_cbt) {
+    const _classification = classifyCcStep(card);
+    if (_classification) {
+      console.log(`[combat-order] CC '${card}' played during attack — canonical step '${_classification.step}' (${_classification.side}). reason: ${_classification.reason}`);
+    }
+  }
   // Fast Learner (Mara Jade): if CC was played via Fast Learner bypass, mark ability as used for the round
   if (restriction.fastLearner) {
     const dcList2 = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
