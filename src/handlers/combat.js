@@ -5278,8 +5278,11 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       const mapSp = getMapData(game.selectedMap?.id);
       let _gdOnarFk = null;
       if (defCoord && mapSp) {
+        // Get Down card text (Onar Koma): "While a small figure within 2
+        // spaces is defending..." — note "a" not "another", so Onar IS
+        // eligible to use Get Down on himself when he's the defender.
+        // Distance 0 from self trivially passes the within-2 check.
         for (const [fk, pos] of Object.entries(friendlyFigs)) {
-          if (fk === combat.target.figureKey) continue;
           const fDcName = dcNameFromFigureKey(fk);
           const fEff = _gdDcEff[fDcName] || _gdDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
           if (!(fEff?.specialAbilityIds || []).includes('get_down_onar')) continue;
