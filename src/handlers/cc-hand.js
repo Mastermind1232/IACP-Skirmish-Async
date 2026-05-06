@@ -87,9 +87,13 @@ async function promptCommDisruption(game, gameId, playerNum, card, client, logGa
   // Don't prompt for Comm Disruption itself or Negation
   if (card === 'Comm Disruption' || card === 'Negation') return;
   const oppNum = opponentPlayerNum(playerNum);
-  const oppHand = getCcHand(game, oppNum) || [];
-  if (!oppHand.includes('Comm Disruption')) return;
-  // Check SPY group count for the opponent (Comm Disruption player)
+  // Slice 5.5 (hidden info, destruct 2026-05-05): we used to gate the prompt
+  // on `oppHand.includes('Comm Disruption')`, which leaked hand contents —
+  // the absence of a prompt told the playing player their opponent did NOT
+  // hold CD. Per CRR hidden-info rules the opponent must always be given
+  // the option to respond. The click handler already validates hand
+  // contents at click time ("Comm Disruption is no longer in your hand").
+  // SPY-count and cost gates remain — those use visible board info.
   const dcEffectsData = getDcEffects() || {};
   const oppDcList = (oppNum === 1 ? game.p1DcList : game.p2DcList) || [];
   const spyCount = oppDcList.filter((dc) => {
