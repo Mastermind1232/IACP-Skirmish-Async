@@ -444,16 +444,30 @@ export function resolveAbility(abilityId, context) {
     if (validTargets.length === 0) return { applied: false, manualMessage: `**${label}** — no valid SMALL targets in range. Resolve manually if applicable.` };
     // Deduct strain cost on activation (paid when ability is triggered, not when target is resolved)
     let strainApplied = false;
+    // Slice 6.13 ext: track self-defeat from strain (rare; self-damage paths
+    // may need defeat-trigger firing too — Adrenaline-style abilities).
+    const _strainCostDefeated = [];
     if (entry.strainCostToSelf > 0 && dcHealthState && msgId) {
       const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const healthState = dcHealthState.get(msgId) || [];
       if (healthState[selectedFig]) {
         const [cur, max] = healthState[selectedFig];
-        const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
+        const prevCur = cur ?? max;
+        const newCur = Math.max(0, prevCur - entry.strainCostToSelf);
         healthState[selectedFig] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, healthState);
         syncHealthStateToList(game, playerNum, msgId, healthState);
         strainApplied = true;
+        if (newCur <= 0 && prevCur > 0 && meta?.dcName) {
+          const dgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+          const dgIdx = dgM ? dgM[1] : '1';
+          _strainCostDefeated.push({
+            figureKey: `${meta.dcName}-${dgIdx}-${selectedFig}`,
+            defeatedPlayerNum: playerNum,
+            attackerPlayerNum: null, // self-inflicted: VP not awarded (per defeat-handler awardVp default)
+            source: `${entry.label || 'ability'} strain cost`,
+          });
+        }
       }
     }
     return {
@@ -462,6 +476,7 @@ export function resolveAbility(abilityId, context) {
       choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
       refreshDcEmbed: strainApplied,
+      ...(_strainCostDefeated.length > 0 ? { defeatedFigures: _strainCostDefeated, refreshBoard: true } : {}),
     };
   }
 
