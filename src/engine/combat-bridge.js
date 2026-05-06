@@ -32,6 +32,7 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
   }
 }
 import { countGameSpaces } from '../game/board-helpers.js';
+import { getLoadoutCards as _getLoadoutCardsImpl } from '../data-loader.js';
 import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
 
 /**
@@ -304,13 +305,42 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
   const {
     getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN,
     hasFigureLineOfSight, getFigureFootprint, getFigureSize, getFigureLabel,
+    getDcEffect: _getDcEffect, getLoadoutCards: _getLoadoutCards,
   } = deps;
   if (!game.selectedMap?.id) return [];
   const mapId = game.selectedMap.id;
   const attackerPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
   if (!attackerPos) return [];
+  // Combat-pipeline rebuild (slice 6.7): per CRR + destruct 2026-05-05
+  // "Reach applies to Cleave eligibility." Detect Reach on the attacker via
+  // the same paths as the standard target-eligibility check (DC keywords,
+  // DC passives, nextAttackReach flag, Electrostaff loadout passive). When
+  // Reach is active for a melee attack, Cleave eligibility extends from
+  // strict adjacency to "within 2 spaces + line of sight."
+  let _attackerHasReach = false;
+  if (!combat.isRanged && _getDcEffect) {
+    const _atkDcName = combat.attackerDcName || '';
+    const _atkEff = _getDcEffect(_atkDcName) || _getDcEffect(_atkDcName.replace(/\s*\[.*\]\s*$/, ''));
+    const _atkKws = (_atkEff?.keywords || []).map((k) => String(k).toUpperCase());
+    const _atkPassives = (_atkEff?.passives || []).map((p) => String(p).toUpperCase());
+    let _loadoutHasReach = false;
+    if (_getLoadoutCards) {
+      const _loadoutChoice = game.combatPassiveConfig?.[combat.attackerFigureKey]?.loadout
+        || game.figureConfig?.[combat.attackerFigureKey]?.loadout
+        || combat.attackerLoadout;
+      if (_loadoutChoice) {
+        const _loadoutCard = _getLoadoutCards()[_loadoutChoice];
+        if (_loadoutCard?.passive === 'Reach') _loadoutHasReach = true;
+      }
+    }
+    _attackerHasReach =
+      _atkKws.includes('REACH') ||
+      _atkPassives.includes('REACH') ||
+      !!game.nextAttackReach?.[combat.attackerPlayerNum] ||
+      _loadoutHasReach;
+  }
   const targets = [];
-  if (!combat.isRanged) {
+  if (!combat.isRanged && !_attackerHasReach) {
     const adjToAttacker = getFiguresAdjacentToCoord(game, attackerPos, mapId, combat.attackerFigureKey);
     for (const c of adjToAttacker) {
       if (c.playerNum !== defenderPlayerNum) continue;
@@ -325,6 +355,26 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
       atkAdj.add(atkNorm);
       for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
         if (atkAdj.has(String(curCoord).toLowerCase())) {
+          const hp = game.crateHealth?.[origCoord] ?? 5;
+          targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
+        }
+      }
+    }
+  } else if (!combat.isRanged && _attackerHasReach) {
+    // Reach + melee: eligibility extends to 2 spaces + LOS (per CRR).
+    const _reachRange = 2;
+    const mapSpaces = getEffectiveMapSpaces(game, mapId);
+    const attackerFp = getFigureFootprint(game, combat.attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
+    for (const [fk, fCoord] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
+      if (fk === combat.target?.figureKey) continue;
+      if (!isWithinN(attackerPos, fCoord, _reachRange, mapId)) continue;
+      const candFp = getFigureFootprint(game, defenderPlayerNum, fk, getFigureSize);
+      if (!hasFigureLineOfSight(attackerFp, candFp, mapSpaces, null)) continue;
+      targets.push({ figureKey: fk, playerNum: defenderPlayerNum });
+    }
+    if (game.cratePositions) {
+      for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
+        if (isWithinN(attackerPos, String(curCoord).toLowerCase(), _reachRange, mapId)) {
           const hp = game.crateHealth?.[origCoord] ?? 5;
           targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
         }
@@ -2072,6 +2122,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     const cleaveTargets = computeCleaveEligibleTargets(game, combat, defenderPlayerNum, {
       getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN,
       hasFigureLineOfSight, getFigureFootprint, getFigureSize, getFigureLabel,
+      // slice 6.7: pass DC-effect lookup + loadout cards so the helper can
+      // detect Reach (DC keywords/passives, nextAttackReach flag, Electrostaff).
+      getDcEffect, getLoadoutCards: _getLoadoutCardsImpl,
     });
     if (cleaveTargets.length > 0) {
       const firstSource = cleaveQueue.shift();
