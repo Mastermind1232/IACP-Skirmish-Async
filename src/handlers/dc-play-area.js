@@ -863,26 +863,55 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
  * @param {object} ctx
  * @param {string} buttonKey - 'dc_move_' | 'dc_attack_' | 'dc_interact_' | 'dc_special_'
  */
-/** Build options for the Arsenal die-selection select menu. */
-function buildArsenalSelectOptions(diceCount) {
+/**
+ * Build options for the Arsenal die-selection select menu.
+ *
+ * Epic Arsenal: 3-die pool with "no more than 2 dice of any single color".
+ * destruct 2026-05-06: "This restriction includes a potential focus die,
+ * which would always be a green die." When the attacker is Focused at
+ * declare time, the focus die (green) is appended to the chosen pool, so
+ * the chosen 3 must keep total greens ≤ 2 (i.e. ≤ 1 chosen green when
+ * focused).
+ *
+ * @param {number} diceCount  - 2 (Arsenal) or 3 (Epic Arsenal)
+ * @param {object} [opts]
+ * @param {string|null} [opts.extraDie] - color of an extra die that will be
+ *   appended at declare time (e.g. 'green' from Focus). Counted against the
+ *   max-2-same-color cap. Pass null/undefined when no extra die.
+ */
+export function buildArsenalSelectOptions(diceCount, opts = {}) {
+  const { extraDie = null } = opts;
   const colors = ['red', 'blue', 'yellow', 'green'];
   const labels = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green' };
   const options = [];
+  // Helper: count how many of `color` appear in `combo`, plus extraDie if matching
+  const countColor = (combo, color) => combo.filter((c) => c === color).length + (extraDie === color ? 1 : 0);
+  // Max-2-same-color rule applies to Epic Arsenal (3-die pool) and to any
+  // future variant that opts in via extraDie. Regular Arsenal (2 dice) has
+  // no same-color restriction in the canonical card.
+  const enforceMaxTwo = diceCount === 3;
+  const tooManySameColor = (combo) => {
+    if (!enforceMaxTwo) return false;
+    return colors.some((c) => countColor(combo, c) > 2);
+  };
+  const focusNote = extraDie === 'green' ? ' (focus die: +1 Green will be added)' : '';
   if (diceCount === 2) {
     for (let i = 0; i < colors.length; i++) {
       for (let j = i; j < colors.length; j++) {
         const c1 = colors[i], c2 = colors[j];
-        options.push({ label: `${labels[c1]} + ${labels[c2]}`, value: `${c1},${c2}`, description: `Roll 1 ${labels[c1]} and 1 ${labels[c2]} die` });
+        const combo = [c1, c2];
+        if (tooManySameColor(combo)) continue;
+        options.push({ label: `${labels[c1]} + ${labels[c2]}`, value: `${c1},${c2}`, description: `Roll 1 ${labels[c1]} and 1 ${labels[c2]} die${focusNote}`.slice(0, 100) });
       }
     }
   } else {
-    // 3 dice, no more than 2 of same color
     for (let i = 0; i < colors.length; i++) {
       for (let j = i; j < colors.length; j++) {
         for (let k = j; k < colors.length; k++) {
           const c1 = colors[i], c2 = colors[j], c3 = colors[k];
-          if (c1 === c2 && c2 === c3) continue;
-          options.push({ label: `${labels[c1]} + ${labels[c2]} + ${labels[c3]}`, value: `${c1},${c2},${c3}`, description: `Roll those 3 dice` });
+          const combo = [c1, c2, c3];
+          if (tooManySameColor(combo)) continue;
+          options.push({ label: `${labels[c1]} + ${labels[c2]} + ${labels[c3]}`, value: `${c1},${c2},${c3}`, description: `Roll those 3 dice${focusNote}`.slice(0, 100) });
         }
       }
     }
@@ -1577,14 +1606,21 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const diceCount = hasEpicArsenal ? 3 : 2;
       const abilityName = hasEpicArsenal ? 'Epic Arsenal' : 'Arsenal';
       const displayName_ = meta.displayName || meta.dcName;
+      // destruct 2026-05-06: Epic Arsenal's max-2-same-color cap includes
+      // the Focus die (always green) that gets appended at declare time.
+      // Pass extraDie='green' so the option set excludes combos that would
+      // exceed 2 greens once the focus die is added.
+      const _arsAttackerFocused = (game.figureConditions?.[figureKey] || []).includes('Focus');
+      const _arsExtraDie = (_arsAttackerFocused && hasEpicArsenal) ? 'green' : null;
       const selectRow = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`arsenal_pick_${meta.gameId}_${msgId}_${figureIndex}`)
           .setPlaceholder(`Choose ${diceCount} attack dice…`)
-          .addOptions(buildArsenalSelectOptions(diceCount))
+          .addOptions(buildArsenalSelectOptions(diceCount, { extraDie: _arsExtraDie }))
       );
+      const _focusNote = _arsExtraDie === 'green' ? '\n_Focused — a Green focus die will be added; combos that would exceed 2 of any color are filtered out._' : '';
       await interaction.followUp({
-        content: `**${displayName_} — ${abilityName}**: Choose your ${diceCount} attack dice:`,
+        content: `**${displayName_} — ${abilityName}**: Choose your ${diceCount} attack dice:${_focusNote}`,
         components: [selectRow],
         ephemeral: false,
       }).catch(discordCatch);
