@@ -1,9 +1,14 @@
 /**
  * Pure helpers for Ezra Bridger's **Much to Learn**.
  *
- * Card text: "While attacking, if a friendly Unique figure is
- *  within 3 spaces of you, you may reroll 1 attack die. If that
- *  friendly Unique is a Force User, you may choose a side instead."
+ * Canonical card text (data/dc-effects.json, IACP image): "While
+ *  attacking, if there is **another** friendly unique figure within 3
+ *  spaces, you may reroll 1 attack die. If that friendly Unique is a
+ *  Force User, you may choose a side instead."
+ *
+ * "another" excludes self — Ezra cannot trigger Much to Learn off his
+ * own attack. Iteration site at src/handlers/combat.js skips the
+ * attacker's own figureKey, which matches.
  *
  * Helper owns slug id, range predicate (distance ≤ 3), reroll
  * delta, FORCE USER keyword string, and small DC-effect-shape
