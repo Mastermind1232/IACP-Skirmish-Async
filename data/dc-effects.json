@@ -6918,7 +6918,7 @@
       "affiliation": "Scum"
     },
     "Wookiee Warrior (Elite)": {
-      "abilityText": "Fury: While attacking, if you have suffered 5 or Damage, apply +1 Surge to the attack results.",
+      "abilityText": "Fury: While attacking, if you have suffered 5 or more Damage, apply +1 Surge to the attack results.",
       "keywords": [
         "BRAWLER",
         "WOOKIEE"
