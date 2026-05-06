@@ -2187,7 +2187,23 @@ export function resolveAbility(abilityId, context) {
                 // validator that respects blocking, walls, occupancy, and
                 // Spiked Boots.
                 const _pusherKws = (getStatsForDc(meta.dcName)?.keywords || []).map(k => String(k).toUpperCase());
-                const validPushSpaces = getValidPushDestinations(game, targetFigureKey, enemyPlayerNum, { pusherIsMassive: _pusherKws.includes('MASSIVE') });
+                let validPushSpaces = getValidPushDestinations(game, targetFigureKey, enemyPlayerNum, { pusherIsMassive: _pusherKws.includes('MASSIVE') });
+                // Cara Dune's Smash card: "push it 1 space to a space
+                // ADJACENT TO YOU." Filter destinations to those that share
+                // an edge with Cara's footprint. Slam (Chewie) / Ram
+                // (Chopper) lack this restriction and so don't set the
+                // `pushMustRemainAdjacentToActivator` flag.
+                if (entry.pushMustRemainAdjacentToActivator) {
+                  const _activSize = game.figureOrientations?.[activFk] || getFigureSize(meta.dcName);
+                  const _activCells = getFootprintCells(activPos, _activSize).map((c) => normalizeCoord(c));
+                  const mapData = getMapData(mapId);
+                  const _activAdj = new Set();
+                  for (const c of _activCells) {
+                    _activAdj.add(c);
+                    for (const n of (mapData?.adjacency?.[c] || [])) _activAdj.add(normalizeCoord(n));
+                  }
+                  validPushSpaces = validPushSpaces.filter(s => _activAdj.has(normalizeCoord(s)));
+                }
                 if (validPushSpaces.length > 0) {
                   return {
                     applied: false,

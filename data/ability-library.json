@@ -4456,7 +4456,8 @@
       "wiredStatus": "wired",
       "rollOneDie": "red",
       "rollOneDieTarget": "adjacentHostile",
-      "rollOneDiePushSmall": true
+      "rollOneDiePushSmall": true,
+      "pushMustRemainAdjacentToActivator": true
     },
     "Smoke Grenade": {
       "type": "ccEffect",
