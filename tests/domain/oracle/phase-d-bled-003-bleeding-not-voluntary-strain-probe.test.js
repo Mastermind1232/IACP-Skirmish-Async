@@ -51,15 +51,15 @@ describe('PROBE-PD-BLED-003: Bleeding damage uses the HP-damage path, not the vo
       'Bleeding prompt must say "suffers 1 damage" — CRR-BLED-003');
   });
 
-  it('003d: source — applyStrainToFigure is reserved for voluntary self-strain abilities (Relentless/Keep the Peace/Heavy Repeater/Soresu), never for Bleeding', () => {
-    // Verify the voluntary-strain helper exists and its call sites are voluntary ability costs.
-    assert.match(CM_SRC, /async function applyStrainToFigure\(game, playerNum, figureKey, amount, abilityLabel, sourceLabel/,
-      'applyStrainToFigure helper must exist with an abilityLabel parameter — CRR-BLED-003');
-    const callSiteLabels = [...CM_SRC.matchAll(/applyStrainToFigure\([^)]*?'([^']+)',\s*'([^']*)',/g)].map(m => m[1]);
-    assert.ok(callSiteLabels.length >= 3,
-      `applyStrainToFigure must have multiple labeled call sites (found ${callSiteLabels.length}) — CRR-BLED-003`);
-    const hasBleedCaller = callSiteLabels.some(l => /bleed/i.test(l));
+  it('003d: source — applyStrain (voluntary-strain handler) is reserved for voluntary self-strain abilities, never for Bleeding', () => {
+    // Phase C migration (2026-05-06): voluntary strain is now routed through
+    // applyStrain (src/handlers/strain-handler.js) instead of the older
+    // applyStrainToFigure helper. Tripwire updated to check the new path.
+    const callSiteSources = [...CM_SRC.matchAll(/applyStrain\(game, ctx, \{[^}]*?source:\s*['"`]([^'"`]+)['"`]/g)].map(m => m[1]);
+    assert.ok(callSiteSources.length >= 3,
+      `applyStrain must have multiple labeled call sites (found ${callSiteSources.length}: ${callSiteSources.join(', ')}) — CRR-BLED-003`);
+    const hasBleedCaller = callSiteSources.some(l => /bleed/i.test(l));
     assert.ok(!hasBleedCaller,
-      `no applyStrainToFigure call site may be labeled as Bleeding (labels: ${callSiteLabels.join(',')}) — CRR-BLED-003`);
+      `no applyStrain call site may be labeled as Bleeding (sources: ${callSiteSources.join(',')}) — CRR-BLED-003`);
   });
 });

@@ -2045,8 +2045,16 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Relentless (Trandoshan Hunter, IG-88, Fifth Brother): 1 Strain to target within 3
+  // destruct 2026-05-06: routed through applyStrain so the target's controller
+  // gets the per-strain choice prompt + Under Duress pre-prompt fires for the
+  // attacker (UD prompt fires regardless of who caused the strain).
   if (hasRelentlessAbility(atkSpecialIds) && relentlessInRange(distanceToTarget)) {
-    await applyStrainToFigure(game, defenderPlayerNum, target.figureKey, RELENTLESS_STRAIN_AMOUNT, 'Relentless', meta.dcName, ctx, thread);
+    await applyStrain(game, ctx, {
+      figureKey: target.figureKey,
+      controllerPlayerNum: defenderPlayerNum,
+      amount: RELENTLESS_STRAIN_AMOUNT,
+      source: 'Relentless',
+    });
   }
 
   // Advanced Targeting Computer (Dark Trooper Mk III): auto-Focus on declare
@@ -2309,12 +2317,19 @@ export async function handleAttackTarget(interaction, ctx) {
       const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
       const fkAbilityIds = fkEff?.specialAbilityIds || [];
       if (!adjToTargetKP.has(String(pos).toLowerCase())) continue;
-      // Elite: automatic, limit 1 per group activation
+      // Elite: automatic, limit 1 per group activation. Routed through
+      // applyStrain so the attacker (strained party) gets the per-strain
+      // choice prompt + UD pre-prompt fires.
       if (hasKtpEliteAbility(fkAbilityIds)) {
         if (!isKtpAlreadyUsed(game.roundFigureAbilityUsed, fkDcName, game.currentRound)) {
           if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
           game.roundFigureAbilityUsed[buildKtpRoundKey(fkDcName, game.currentRound)] = true;
-          await applyStrainToFigure(game, attackerPlayerNum, attackerFigureKey, KTP_STRAIN_AMOUNT, 'Keep the Peace', fkDcName, ctx, thread);
+          await applyStrain(game, ctx, {
+            figureKey: attackerFigureKey,
+            controllerPlayerNum: attackerPlayerNum,
+            amount: KTP_STRAIN_AMOUNT,
+            source: `Keep the Peace (${fkDcName})`,
+          });
           ktpApplied = true;
         }
       }
@@ -4949,24 +4964,36 @@ export async function handleCombatPassive(interaction, ctx) {
     delete combat.pendingCombatPassive;
     delete combat.callTheShotsFigKey;
   } else if (abilityKey === 'hr') {
-    // Heavy Repeater (Paz Vizsla)
+    // Heavy Repeater (Paz Vizsla) — three options each cost 1 strain.
+    // destruct 2026-05-06: routed through applyStrain so the player gets
+    // the per-strain choice prompt (Paz's discard-return option will
+    // surface automatically since pazReturnAvailable matches dcName).
+    let _hrApplyStrain = false;
     if (choice === 'hit') {
       combat.bonusHits = (combat.bonusHits || 0) + 1;
       await thread.send('**Heavy Repeater** — Applied +1 Hit. Paz Vizsla suffers 1 Strain.');
-      await applyStrainToFigure(game, combat.attackerPlayerNum, combat.attackerFigureKey, 1, 'Heavy Repeater', 'Paz Vizsla', ctx, thread);
+      _hrApplyStrain = true;
     } else if (choice === 'blast') {
       combat.blastDamage = Math.max(combat.blastDamage || 0, 2);
       await thread.send('**Heavy Repeater** — Applied Blast 2. Paz Vizsla suffers 1 Strain.');
-      await applyStrainToFigure(game, combat.attackerPlayerNum, combat.attackerFigureKey, 1, 'Heavy Repeater', 'Paz Vizsla', ctx, thread);
+      _hrApplyStrain = true;
     } else if (choice === 'acc') {
       combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 3;
       await thread.send('**Heavy Repeater** — Applied +3 Accuracy. Paz Vizsla suffers 1 Strain.');
-      await applyStrainToFigure(game, combat.attackerPlayerNum, combat.attackerFigureKey, 1, 'Heavy Repeater', 'Paz Vizsla', ctx, thread);
+      _hrApplyStrain = true;
     } else {
       await thread.send('**Heavy Repeater** — Skipped.');
     }
     combat.heavyRepeaterResolved = true;
     delete combat.pendingCombatPassive;
+    if (_hrApplyStrain) {
+      await applyStrain(game, ctx, {
+        figureKey: combat.attackerFigureKey,
+        controllerPlayerNum: combat.attackerPlayerNum,
+        amount: 1,
+        source: 'Heavy Repeater',
+      });
+    }
   } else if (abilityKey === 'elusive') {
     // Elusive: defender chose an attack die to nullify, then worst defense die is also nullified
     if (choice === 'skip') {
@@ -5543,7 +5570,14 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     const strainNote = isFORCE_USER ? '' : ' Kanan suffers 1 Strain.';
     await thread.send(`**Soresu Form** — Dodge converted to +2 Block, +1 Evade.${strainNote}`);
     if (!isFORCE_USER) {
-      await applyStrainToFigure(game, kananPlayerNum, combat.soresuFormFigKey, 1, 'Soresu Form', 'Kanan Jarrus', ctx, thread);
+      // Routed through applyStrain so Kanan's controller gets the per-strain
+      // choice prompt + UD pre-prompt fires.
+      await applyStrain(game, ctx, {
+        figureKey: combat.soresuFormFigKey,
+        controllerPlayerNum: kananPlayerNum,
+        amount: 1,
+        source: 'Soresu Form',
+      });
     }
     combat.soresuFormFigKey = null;
   }
