@@ -383,15 +383,19 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   // Track how many CCs played during this attack (for "first CC" conditions like Assassinate)
   if (_cbt) _cbt.attackCcCount = (_cbt.attackCcCount || 0) + 1;
-  // Combat-order telemetry (slice 3.5, warn-mode): classify the CC against the
-  // canonical CRR step it should fire at per destruct's 2026-05-05 audit. Once
-  // pendingCombat carries an explicit currentStep, this becomes a hard gate;
-  // for now it's a console log to surface ordering issues without breaking
-  // gameplay.
+  // Combat-order telemetry (slice 3.6, warn-mode): classify the CC against the
+  // canonical CRR step it should fire at per destruct's 2026-05-05 audit, and
+  // log a mismatch warning when pendingCombat.currentStep disagrees. This stays
+  // warn-only for now — once every legacy advance point is wired (slice 3.7+),
+  // the warning escalates to a hard validate-or-throw gate.
   if (_cbt) {
     const _classification = classifyCcStep(card);
     if (_classification) {
-      console.log(`[combat-order] CC '${card}' played during attack — canonical step '${_classification.step}' (${_classification.side}). reason: ${_classification.reason}`);
+      const _legacyStep = _cbt.currentStep || '(unknown)';
+      const _matches = _classification.step === 'counter-window'
+        || _classification.step === _legacyStep;
+      const _tag = _matches ? 'ok' : 'WARN';
+      console.log(`[combat-order ${_tag}] CC '${card}' played at legacy step '${_legacyStep}' — canonical step '${_classification.step}' (${_classification.side}). reason: ${_classification.reason}`);
     }
   }
   // Fast Learner (Mara Jade): if CC was played via Fast Learner bypass, mark ability as used for the round

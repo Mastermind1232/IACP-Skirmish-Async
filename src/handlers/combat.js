@@ -1438,6 +1438,12 @@ export async function handleAttackTarget(interaction, ctx) {
     combatPreMsgId: preCombatMsg.id,
     p1Ready: false,
     p2Ready: false,
+    // Combat-pipeline rebuild (slice 3.6): explicit step state for the
+    // canonical CRR sequence per destruct's 2026-05-05 audit. Coexists with
+    // legacy p1Ready/p2Ready until the orchestrator becomes primary; advance
+    // points are wired in subsequent slices. Read by combat-order-validator
+    // and the orchestrator's snapshot adapter.
+    currentStep: 'step1+2-attacker',
     attackRoll: null,
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
@@ -2660,6 +2666,15 @@ export async function handleCombatReady(interaction, ctx) {
   }
   if (playerNum === 1) combat.p1Ready = true;
   else combat.p2Ready = true;
+  // Combat-pipeline rebuild (slice 3.6): mirror the legacy ready-flag advance
+  // onto the new explicit step state. Attacker ready → defender's pre-roll
+  // window opens; both ready → roll happens. Sub-steps (step3-* / step4-* /
+  // step5 / zillo / step6 / step7 / step8) are advanced in handlers wired
+  // later in the rebuild.
+  const attackerIsReady = combat.attackerPlayerNum === 1 ? combat.p1Ready : combat.p2Ready;
+  const defenderIsReady = combat.attackerPlayerNum === 1 ? combat.p2Ready : combat.p1Ready;
+  if (attackerIsReady && defenderIsReady) combat.currentStep = 'roll';
+  else if (attackerIsReady) combat.currentStep = 'step1+2-defender';
   if (!interaction.message?.channel) throw new Error(`handleCombatReady: interaction.message.channel is null (gameId=${gameId}, generalId=${game.generalId})`);
   const _readyName = getPlayerDisplayName(game, playerNum, interaction.client);
   await interaction.message.channel.send(`**${_readyName}** is ready to roll combat.`);
@@ -7084,6 +7099,8 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     combatPreMsgId: preCombatMsg.id,
     p1Ready: false,
     p2Ready: false,
+    // Combat-pipeline rebuild (slice 3.6): see primary attack init for context.
+    currentStep: 'step1+2-attacker',
     attackRoll: null,
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
