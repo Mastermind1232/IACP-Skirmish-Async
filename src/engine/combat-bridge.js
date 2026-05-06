@@ -1046,7 +1046,17 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const _psEff = getDcEffects()?.[_psDcName];
         const _psSIds = _psEff?.specialAbilityIds || [];
         const _psHas = _psSIds.some(id => id.startsWith('parting_shot_'));
-        if (_psHas) {
+        // Combat-pipeline rebuild (slice 6.3): per CRR p.58 STUNNED, a Stunned
+        // figure cannot declare an attack. Parting Shot is a Step 7 interrupt
+        // requiring attack declaration. Block if the figure is already Stunned
+        // from a prior source. NOTE: this attack's surge-Stun queues for Step 8
+        // and lands AFTER Parting Shot (per destruct Q2 audit) — so PS still
+        // fires against this attack's surge-Stun. Only pre-existing Stun blocks.
+        const _psFigConds = game.figureConditions?.[combat.target.figureKey] || [];
+        const _psStunnedAlready = _psFigConds.includes('Stun');
+        if (_psHas && _psStunnedAlready) {
+          await logGameAction(game, client, `**Parting Shot** suppressed — **${combat.target.label || _psDcName}** is Stunned and cannot declare an attack.`, { phase: 'ROUND', icon: 'attack' });
+        } else if (_psHas) {
           game.partingShotTriggered = game.partingShotTriggered || {};
           game.partingShotTriggered[targetMsgId] = true;
           const _psOwnerId = game[`player${defenderPlayerNum}Id`];
@@ -2827,6 +2837,16 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           const _rfUpgrades = _rfDefMsgId ? (game.p1DcAttachments?.[_rfDefMsgId] || game.p2DcAttachments?.[_rfDefMsgId] || []) : [];
           const _rfHasRogue = cardNameIncludes(_rfUpgrades, 'Rogue Smuggler');
           if (_rfDamage > 0 && !_rfHasRogue) _rfCanFire = false;
+        }
+        // Combat-pipeline rebuild (slice 6.5): Stunned figures cannot declare
+        // attacks (CRR p.58). Return Fire is a triggered out-of-activation
+        // attack that requires declaration. If Han is Stunned at Step 8 (e.g.
+        // attacker surged for Stun and damage was applied), Return Fire is
+        // blocked. Per destruct's Q1 audit: "Return Fire is blocked."
+        const _rfDefConds = game.figureConditions?.[_rfDefFk] || [];
+        if (_rfCanFire && _rfDefConds.includes('Stun')) {
+          _rfCanFire = false;
+          await logGameAction(game, client, `**Return Fire** suppressed — **${_rfDefDcName}** is Stunned and cannot declare an attack.`, { phase: 'ROUND', icon: 'attack' });
         }
         if (_rfCanFire) {
           game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
