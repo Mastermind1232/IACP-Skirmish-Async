@@ -824,6 +824,25 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
     saveGames(game.gameId);
     return;
   }
+  // Slice 5.8 (destruct 2026-05-05, "SPY count locked at play time"):
+  // re-validate SPY count + cost AT CLICK TIME, not at prompt-post time.
+  // SPYs may have died between prompt and click — the rule is that the
+  // CD player's count is whatever it is the moment they decide to play
+  // it, then locked through resolution.
+  const dcEffectsData = getDcEffects() || {};
+  const cdDcList = (targetPlayerNum === 1 ? game.p1DcList : game.p2DcList) || [];
+  const cdSpyCount = cdDcList.filter((dc) => {
+    if (!dc || dc.defeated) return false;
+    const kws = (dcEffectsData[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase());
+    return kws.includes('SPY');
+  }).length;
+  const playedEffectAtClick = getCcEffect ? getCcEffect(playedCard) : null;
+  const playedCostAtClick = typeof playedEffectAtClick?.cost === 'number' ? playedEffectAtClick.cost : 0;
+  if (cdSpyCount <= 0 || playedCostAtClick > cdSpyCount) {
+    await interaction.followUp({ content: `Cannot play Comm Disruption: cost ${playedCostAtClick} exceeds your **${cdSpyCount}** friendly SPY group${cdSpyCount === 1 ? '' : 's'}.`, ephemeral: true }).catch(discordCatch);
+    saveGames(game.gameId);
+    return;
+  }
   hand.splice(cdIdx, 1);
   game[handKey] = hand;
   game[discardKey] = (game[discardKey] || []).concat('Comm Disruption');
@@ -832,7 +851,7 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
   // The card is already in the opponent's discard — we note the cancellation
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await refreshHandAndDiscard(game, targetPlayerNum, interaction.client, ctx);
-  await logGameAction(game, interaction.client, `**Comm Disruption** — <@${interaction.user.id}> cancelled **${playedCard}**! Discard that card and cancel its effects.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  await logGameAction(game, interaction.client, `**Comm Disruption** — <@${interaction.user.id}> cancelled **${playedCard}** (locked at ${cdSpyCount} SPY)! Discard that card and cancel its effects.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   saveGames(game.gameId);
 }
 
