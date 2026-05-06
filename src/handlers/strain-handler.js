@@ -41,6 +41,8 @@ import { discordCatch } from '../error-handling.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
+import { cardNameIncludes } from '../game/card-names.js';
+import { getDcMessageIds, getDcAttachments, getCcHand, ccHandKey, ccDiscardKey, getPlayerId } from '../game/player-helpers.js';
 import {
   STRAIN_OPTIONS,
   resolveSingleStrainChoice,
@@ -65,19 +67,80 @@ const STRAIN_DC_PAZ = 'Paz Vizsla';
  * @param {object|null} [opts.followup]  { type, payload }
  */
 export async function applyStrain(game, ctx, opts) {
-  const amount = Math.max(0, parseInt(opts.amount || 0, 10));
+  let amount = Math.max(0, parseInt(opts.amount || 0, 10));
   if (amount === 0) {
     return _runStrainFollowup(game, ctx, opts.followup || null);
   }
+  const figureKey = opts.figureKey;
+  const controllerPN = opts.controllerPlayerNum;
+  const source = opts.source || 'Strain';
+
+  // ── Fireproof (Flame Trooper attachment): immune to Strain. Find the
+  //    figure's msgId via dcMessageMeta and check attachments.
+  const _fpMsgId = ctx.findDcMessageIdForFigure?.(game.gameId, controllerPN, figureKey);
+  if (_fpMsgId) {
+    const _fpAtts = (controllerPN === 1 ? game.p1DcAttachments : game.p2DcAttachments)?.[_fpMsgId] || [];
+    if (cardNameIncludes(_fpAtts, 'Flame Trooper')) {
+      const dcName = dcNameFromFigureKey(figureKey);
+      await ctx.logGameAction?.(game, ctx.client, `**Fireproof** — **${dcName}** is immune to Strain from ${source}.`, { phase: 'ROUND', icon: 'card' });
+      return _runStrainFollowup(game, ctx, opts.followup || null);
+    }
+  }
+
+  // ── Headhunter (attachment): when a hostile figure suffers Strain during
+  //    the Headhunter owner's activation, exhaust to reduce strain by 1
+  //    and force the controller to discard a random CC from hand (or +1
+  //    damage if hand is empty).
+  const _hhOwnerPN = controllerPN === 1 ? 2 : 1;
+  const _hhOwnerMsgIds = getDcMessageIds(game, _hhOwnerPN) || [];
+  const _hhOwnerAtts = getDcAttachments(game, _hhOwnerPN) || {};
+  const _hhInActivation = _hhOwnerMsgIds.some((mid) => game.dcActionsData?.[mid]?.threadId);
+  let _hhExtraDamage = 0;
+  if (_hhInActivation && amount > 0) {
+    for (const _hhMid of _hhOwnerMsgIds) {
+      const _hhAtts = _hhOwnerAtts[_hhMid] || [];
+      const _hhExh = game.exhaustedSkirmishUpgrades?.[_hhMid] || [];
+      if (_hhAtts.includes('Headhunter') && !_hhExh.includes('Headhunter')) {
+        amount = Math.max(0, amount - 1);
+        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+        game.exhaustedSkirmishUpgrades[_hhMid] = [..._hhExh, 'Headhunter'];
+        const _hhHandKey = ccHandKey(controllerPN);
+        const _hhHand = game[_hhHandKey] || [];
+        if (_hhHand.length > 0) {
+          const _hhRand = Math.floor(Math.random() * _hhHand.length);
+          const _hhDiscarded = _hhHand.splice(_hhRand, 1)[0];
+          const _hhDiscardKey = ccDiscardKey(controllerPN);
+          game[_hhDiscardKey] = (game[_hhDiscardKey] || []).concat(_hhDiscarded);
+          await ctx.logGameAction?.(game, ctx.client, `**Headhunter** — Strain on **${dcNameFromFigureKey(figureKey)}** reduced by 1; controller discards **${_hhDiscarded}** from hand.`, { phase: 'ROUND', icon: 'card' });
+        } else {
+          _hhExtraDamage = 1;
+          await ctx.logGameAction?.(game, ctx.client, `**Headhunter** — Strain on **${dcNameFromFigureKey(figureKey)}** reduced by 1; controller has no CCs in hand → suffers 1 Damage instead.`, { phase: 'ROUND', icon: 'card' });
+        }
+        break; // only one Headhunter per strain event
+      }
+    }
+  }
+  // Apply Headhunter's "no CCs → 1 damage" immediately (this is direct
+  // damage, not strain — no choice prompt for it).
+  if (_hhExtraDamage > 0) {
+    await _applyDamageFromStrain(game, ctx, {
+      figureKey, controllerPN, originalControllerPN: controllerPN, source: 'Headhunter',
+    });
+  }
+  // If Headhunter fully neutralized the strain (was 1, now 0), no prompt.
+  if (amount === 0) {
+    return _runStrainFollowup(game, ctx, opts.followup || null);
+  }
+
   const eventId = `strain_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   const ev = {
     eventId,
-    figureKey: opts.figureKey,
-    originalControllerPN: opts.controllerPlayerNum,
-    controllerPN: opts.controllerPlayerNum,
+    figureKey,
+    originalControllerPN: controllerPN,
+    controllerPN,
     remaining: amount,
     totalAmount: amount,
-    source: opts.source || 'Strain',
+    source,
     costMultiplier: 1,
     udPrompted: false,
     udResolved: false,
