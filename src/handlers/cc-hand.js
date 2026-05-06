@@ -1555,7 +1555,12 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   if (oppHasGideon && !game.iKnowEverythingResolved) {
     const attachKey2 = ccAttachmentsKey(playerNum);
     const placed2 = (attachKey2 && game[attachKey2] && Object.values(game[attachKey2]).flat()) || [];
-    const availableCards = ccList.filter(c => !placed2.includes(c));
+    // I Know Everything searches the opponent's DECK, not their hand. With
+    // Wookiee Avenger, Debts Repaid is pre-placed in hand at attachment
+    // phase — it's no longer in the deck and must NOT be in Moff Gideon's
+    // candidate pool. (destruct 2026-05-06: WA-DR + Moff interaction.)
+    const _ikeExistingHand = ((game[ccHandKey(playerNum)]) || []);
+    const availableCards = ccList.filter(c => !placed2.includes(c) && !_ikeExistingHand.includes(c));
     if (availableCards.length >= 2) {
       // Pick 2 random cards to reveal
       const shuffledCopy = [...availableCards];
@@ -1578,14 +1583,20 @@ export async function handleCcShuffleDraw(interaction, ctx) {
 
   const attachKey = ccAttachmentsKey(playerNum);
   const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
-  const deck = ccList.filter((c) => !placed.includes(c));
-  shuffleArray(deck);
-  let hand = deck.splice(0, 3);
-  const deckKey = ccDeckKey(playerNum);
   const handKey = ccHandKey(playerNum);
+  // WA setup (setup.js:267) puts Debts Repaid into hand BEFORE we draw the
+  // initial hand. Preserve it: filter out cards already in hand from the
+  // deck pool, and reduce the draw count by the WA penalty so the total
+  // starting hand size remains correct (1 + 2 = 3 with WA).
+  const _existingHand = (game[handKey] || []).slice();
+  const deck = ccList.filter((c) => !placed.includes(c) && !_existingHand.includes(c));
+  shuffleArray(deck);
+  const _drawCount = Math.max(0, 3 - (game.wookieeAvengerDrawPenalty || 0));
+  let hand = [..._existingHand, ...deck.splice(0, _drawCount)];
+  const deckKey = ccDeckKey(playerNum);
   if (game.testScenarioPrimaryCard && playerNum === 1 && !hand.includes(game.testScenarioPrimaryCard)) {
-    const replaced = hand[0];
-    hand = [game.testScenarioPrimaryCard, hand[1], hand[2]].filter(Boolean);
+    const replaced = hand[hand.length - 1];
+    hand = [...hand.slice(0, hand.length - 1), game.testScenarioPrimaryCard].filter(Boolean);
     if (replaced) deck.push(replaced);
     const pcIdx = deck.indexOf(game.testScenarioPrimaryCard);
     if (pcIdx >= 0) deck.splice(pcIdx, 1);
@@ -1594,7 +1605,9 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   game[handKey] = hand;
   game[drawnKey] = true;
   const playerId = getPlayerId(game, playerNum);
-  await logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
+  const _drewLogCount = _drawCount;
+  const _waNote = (game.wookieeAvengerDrawPenalty || 0) > 0 ? ` (1 fewer per Wookiee Avenger; Debts Repaid pre-placed in hand)` : '';
+  await logGameAction(game, client, `<@${playerId}> shuffled and drew ${_drewLogCount} Command Cards${_waNote}.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
   const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
   await interaction.message.edit({
     content: handPayload.content,
@@ -1650,21 +1663,26 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
   await logGameAction(game, client, `🕵️ **I Know Everything** — Kept **${keptCard}**. **${removedCard}** removed from the game.`, { phase: 'DEPLOYMENT', icon: 'card' });
   try { await interaction.message.edit({ components: [] }); } catch {}
 
-  // Now perform the shuffle and draw for the targeted player
+  // Now perform the shuffle and draw for the targeted player.
+  // WA fix: preserve any pre-placed cards (Debts Repaid) in hand, exclude
+  // them from the deck pool, and reduce draw count by drawPenalty.
   const ccList = squad?.ccList || [];
   const attachKey = ccAttachmentsKey(playerNum);
   const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
-  const deck = ccList.filter(c => !placed.includes(c));
-  shuffleArray(deck);
-  let hand = deck.splice(0, 3);
-  const deckKey = ccDeckKey(playerNum);
   const handKey = ccHandKey(playerNum);
+  const _existingHand = (game[handKey] || []).slice();
+  const deck = ccList.filter(c => !placed.includes(c) && !_existingHand.includes(c));
+  shuffleArray(deck);
+  const _drawCount = Math.max(0, 3 - (game.wookieeAvengerDrawPenalty || 0));
+  let hand = [..._existingHand, ...deck.splice(0, _drawCount)];
+  const deckKey = ccDeckKey(playerNum);
   game[deckKey] = deck;
   game[handKey] = hand;
   const drawnKey = ccDrawnKey(playerNum);
   game[drawnKey] = true;
   const playerId = getPlayerId(game, playerNum);
-  await logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
+  const _waNote = (game.wookieeAvengerDrawPenalty || 0) > 0 ? ` (1 fewer per Wookiee Avenger; Debts Repaid pre-placed in hand)` : '';
+  await logGameAction(game, client, `<@${playerId}> shuffled and drew ${_drawCount} Command Cards${_waNote}.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
 
   // Update hand display in the player's hand thread
   const handChannelId = getHandChannelId(game, playerNum);
