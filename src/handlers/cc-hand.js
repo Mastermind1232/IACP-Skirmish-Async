@@ -383,11 +383,20 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   // Track how many CCs played during this attack (for "first CC" conditions like Assassinate)
   if (_cbt) _cbt.attackCcCount = (_cbt.attackCcCount || 0) + 1;
-  // Combat-order telemetry (slice 3.6, warn-mode): classify the CC against the
-  // canonical CRR step it should fire at per destruct's 2026-05-05 audit, and
-  // log a mismatch warning when pendingCombat.currentStep disagrees. This stays
-  // warn-only for now — once every legacy advance point is wired (slice 3.7+),
-  // the warning escalates to a hard validate-or-throw gate.
+  // Combat-order telemetry (slice 4.13, soft-warn mode): classify the CC
+  // against the canonical CRR step it should fire at per destruct's
+  // 2026-05-05 audit, and log a mismatch when pendingCombat.currentStep
+  // disagrees. The warning is now ALSO surfaced to the game log channel (not
+  // just console) so destruct + adam can see real-game telemetry.
+  //
+  // Why this is soft-warn rather than validate-or-throw: the registry is
+  // currently 27 cards (out of ~200 in the game). Unregistered cards are
+  // benign-skipped here. For registered cards with nuanced sub-step timing
+  // (Hunter Protocol declares Step 4, effect persists Step 5; Lando trio's
+  // pre/post-reroll split; etc.) the validator is intentionally permissive
+  // — escalating to throw without finishing the registry + a clean
+  // sim:discord shadow run would block legitimate plays. Escalation queued
+  // for the slice that completes the registry + parallel-shadow sim.
   if (_cbt) {
     const _classification = classifyCcStep(card);
     if (_classification) {
@@ -396,6 +405,13 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         || _classification.step === _legacyStep;
       const _tag = _matches ? 'ok' : 'WARN';
       console.log(`[combat-order ${_tag}] CC '${card}' played at legacy step '${_legacyStep}' — canonical step '${_classification.step}' (${_classification.side}). reason: ${_classification.reason}`);
+      // Surface mismatches to game log so they're visible without log tail.
+      if (!_matches && logGameAction && client) {
+        await logGameAction(game, client,
+          `⚠️ **[combat-order]** \`${card}\` played at \`${_legacyStep}\` — canonical step is \`${_classification.step}\` (${_classification.side}). reason: ${_classification.reason}`,
+          { phase: 'ROUND', icon: 'card' }
+        ).catch(discordCatch);
+      }
     }
   }
   // Fast Learner (Mara Jade): if CC was played via Fast Learner bypass, mark ability as used for the round
