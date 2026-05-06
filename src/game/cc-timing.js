@@ -385,6 +385,15 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
     if (aff && aff !== 'any' && !armyAffiliation) armyAffiliation = aff;
   }
 
+  // Build a name → msgId map so we can check per-DC attachments below.
+  const _msgIds = getDcMessageIds(game, playerNum) || [];
+  const _attachments = (playerNum === 1 ? game.p1DcAttachments : game.p2DcAttachments) || {};
+  const _dcIdxByName = new Map();
+  for (let _i = 0; _i < dcList.length; _i++) {
+    const _n = typeof dcList[_i] === 'object' ? (dcList[_i].dcName || dcList[_i].displayName) : dcList[_i];
+    if (_n) _dcIdxByName.set(_n, _i);
+  }
+
   for (const dc of dcList) {
     const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
     if (!dcName) continue;
@@ -402,6 +411,17 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
     let effectiveAffiliation = affiliationLower;
     // Adaptive Skills: Mara Jade's affiliation matches the army's
     if (dcName === adaptiveSkillsDc && armyAffiliation) effectiveAffiliation = armyAffiliation;
+    // Scavenged Walker: card text "Treat this group's affiliation as SCUM."
+    // Only legal on AT-ST or AT-DP. When attached, flip the affiliation
+    // for CC playability + other affiliation-keyed rules.
+    {
+      const _idx = _dcIdxByName.get(dcName) ?? _dcIdxByName.get(dcBase);
+      const _mid = _idx != null ? _msgIds[_idx] : null;
+      const _atts = _mid ? (_attachments[_mid] || []) : [];
+      if (_atts.includes('Scavenged Walker')) {
+        effectiveAffiliation = 'scum';
+      }
+    }
 
     // Build effective keywords for this DC
     const effectiveKw = [...kwLower];
