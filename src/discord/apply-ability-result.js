@@ -163,8 +163,30 @@ export async function applyAbilityResult(result, opts) {
   }
 
   // --- Process figure defeats routed through processFigureDefeat pipeline ---
-  if (result.applied && result.defeatedFigures?.length && ctx.processFigureDefeat) {
-    for (const df of result.defeatedFigures) {
+  // Slice 6.13 ext (destruct 2026-05-06): two complementary sources of
+  // pending defeats:
+  //   1. result.defeatedFigures — handlers that explicitly collect lethal
+  //      hits during damage application (per-site retrofit pattern from
+  //      slice 6.13 ext commits).
+  //   2. game._pendingFigureDefeats — queue populated automatically by
+  //      applyDamageWithDefeatCheck. New damage call sites should use that
+  //      helper and the queue drains here without the caller plumbing
+  //      defeatedFigures explicitly.
+  // Dedupe by figureKey to avoid double-firing if a site happens to do both.
+  const _seenDefeats = new Set();
+  const _pendingFromQueue = (game._pendingFigureDefeats || []).slice();
+  if (Array.isArray(_pendingFromQueue) && _pendingFromQueue.length > 0) {
+    game._pendingFigureDefeats = [];
+  }
+  const _allDefeats = [
+    ...(result.applied && result.defeatedFigures ? result.defeatedFigures : []),
+    ..._pendingFromQueue,
+  ];
+  if (_allDefeats.length && ctx.processFigureDefeat) {
+    for (const df of _allDefeats) {
+      if (!df || !df.figureKey) continue;
+      if (_seenDefeats.has(df.figureKey)) continue;
+      _seenDefeats.add(df.figureKey);
       await ctx.processFigureDefeat(game, {
         defeatedPlayerNum: df.defeatedPlayerNum,
         figureKey: df.figureKey,

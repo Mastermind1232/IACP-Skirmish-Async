@@ -140,14 +140,25 @@ export function healHpDistributed(dcHealthState, game, msgId, totalAmount, playe
 export function applyDamageWithDefeatCheck(dcHealthState, game, msgId, figureIndex, damage, playerNum, opts = {}) {
   const { sourceLabel = '', attackerPlayerNum = null } = opts;
   const result = reduceHp(dcHealthState, game, msgId, figureIndex, damage, playerNum);
-  const defeatRecord = result.wasDefeated && result.prevHp > 0
-    ? {
+  let defeatRecord = null;
+  if (result.wasDefeated && result.prevHp > 0) {
+    defeatRecord = {
       figureKey: _figureKeyFromMsgIdAndIndex(game, msgId, figureIndex, playerNum),
       defeatedPlayerNum: playerNum,
       attackerPlayerNum: attackerPlayerNum ?? (playerNum === 1 ? 2 : 1),
       source: sourceLabel,
+    };
+    // Slice 6.13 ext (destruct 2026-05-06): centralize defeat queueing so any
+    // damage caller that uses this helper automatically surfaces defeats —
+    // no per-site defeatedFigures plumbing required. apply-ability-result.js
+    // drains game._pendingFigureDefeats after every ability resolution and
+    // routes through processFigureDefeat. Callers that DO populate
+    // result.defeatedFigures keep working — the consumer dedupes.
+    if (game) {
+      game._pendingFigureDefeats = game._pendingFigureDefeats || [];
+      game._pendingFigureDefeats.push(defeatRecord);
     }
-    : null;
+  }
   return { ...result, defeatRecord };
 }
 
