@@ -991,6 +991,17 @@ export async function handleCcSpacePick(interaction, ctx) {
     await interaction.followUp({ content: 'That space is not a valid choice.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Slice 5.7 follow-up: suppress effect-firing if a counter (Negation/CD)
+  // canceled this CC while the space-pick prompt was open.
+  if (pending.card && isCcCanceled(game, pending.card)) {
+    clearPendingCcSpaceChoice(game);
+    clearCcCanceled(game, pending.card);
+    if (logGameAction) {
+      await logGameAction(game, client, `**${pending.card}** space choice ignored — card was cancelled by a counter.`, { phase: 'ACTION', icon: 'card' }).catch(discordCatch);
+    }
+    saveGames(game.gameId);
+    return;
+  }
   const result = resolveAbility(pending.abilityId, {
     game,
     playerNum,
@@ -1058,6 +1069,24 @@ export async function handleCcChoice(interaction, ctx) {
     return;
   }
   const chosenOption = pending.choiceOptions?.[choiceIndex];
+  // Slice 5.7 follow-up (destruct 2026-05-06): if a counter-window play
+  // (Negation or CD) canceled this CC while the choice prompt was still
+  // open, suppress effect-firing entirely. Without this, a slow user
+  // could click the choice button after the cancel and re-fire the
+  // effect that should have been suppressed.
+  if (pending.card && isCcCanceled(game, pending.card)) {
+    clearPendingCcChoice(game);
+    clearCcCanceled(game, pending.card);
+    await interaction.message.edit({
+      content: `**${pending.card}** was cancelled by a counter — choice ignored, no effect.`,
+      components: [],
+    }).catch(discordCatch);
+    if (logGameAction) {
+      await logGameAction(game, client, `**${pending.card}** choice ignored — card was cancelled by a counter before the choice resolved.`, { phase: 'ACTION', icon: 'card' }).catch(discordCatch);
+    }
+    saveGames(game.gameId);
+    return;
+  }
   const result = resolveAbility(pending.abilityId, {
     game,
     playerNum,
