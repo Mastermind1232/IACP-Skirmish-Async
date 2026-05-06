@@ -580,6 +580,15 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     } else {
       ({ newHp: newCur } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, damage, defenderPlayerNum));
     }
+    // Combat-pipeline rebuild (slice 6.4): capture the defender's pre-condition
+    // state BEFORE the Step 8 condition application block. Parting Shot is a
+    // Step 7 interrupt that fires AFTER damage but BEFORE Step 8 surge-conditions
+    // land. Per destruct Q2: "Stun is queued for Step 8 — not yet on HG when
+    // Parting Shot triggers." Code-flow-wise the condition block runs before
+    // the PS trigger, so we snapshot Stun-state-at-Step-7 here for the PS gate
+    // to consult instead of the live (post-Step-8-conditions) condition list.
+    const _step7DefenderConds = (game.figureConditions?.[combat.target.figureKey] || []).slice();
+    combat._step7DefenderConds = _step7DefenderConds;
     if (dcHealthState.get(targetMsgId)?.[targetFigIndex]) {
       // Achievement: Devastator (10+ damage in a single attack)
       if (damage >= 10 && !_epReentry && isDbConfigured() && achievementsChannelId) {
@@ -1046,13 +1055,18 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const _psEff = getDcEffects()?.[_psDcName];
         const _psSIds = _psEff?.specialAbilityIds || [];
         const _psHas = _psSIds.some(id => id.startsWith('parting_shot_'));
-        // Combat-pipeline rebuild (slice 6.3): per CRR p.58 STUNNED, a Stunned
-        // figure cannot declare an attack. Parting Shot is a Step 7 interrupt
-        // requiring attack declaration. Block if the figure is already Stunned
-        // from a prior source. NOTE: this attack's surge-Stun queues for Step 8
-        // and lands AFTER Parting Shot (per destruct Q2 audit) — so PS still
-        // fires against this attack's surge-Stun. Only pre-existing Stun blocks.
-        const _psFigConds = game.figureConditions?.[combat.target.figureKey] || [];
+        // Combat-pipeline rebuild (slice 6.3 + 6.4): per CRR p.58 STUNNED, a
+        // Stunned figure cannot declare an attack. Parting Shot is a Step 7
+        // interrupt requiring attack declaration. Block if the figure was
+        // Stunned BEFORE this attack's Step 8 surge-conditions landed (i.e.
+        // a pre-existing Stun). Per destruct Q2: HG PS = YES against this
+        // attack's surge-Stun because PS at Step 7 fires before Stun at Step 8.
+        // We use the Step-7 snapshot captured before the condition application
+        // block, NOT the live post-conditions list — that snapshot reflects
+        // what the condition list looked like before this attack's Step 8
+        // resolved.
+        const _psFigConds = combat._step7DefenderConds
+          ?? (game.figureConditions?.[combat.target.figureKey] || []);
         const _psStunnedAlready = _psFigConds.includes('Stun');
         if (_psHas && _psStunnedAlready) {
           await logGameAction(game, client, `**Parting Shot** suppressed — **${combat.target.label || _psDcName}** is Stunned and cannot declare an attack.`, { phase: 'ROUND', icon: 'attack' });
