@@ -48,6 +48,13 @@ export function getCompanionForDc(dcName, attachments) {
     const companionName = dcData.companion;
     const companionStats = eff[companionName];
     if (!companionStats) return null;
+    // FIXME (companion-rules-rebuild): Junk Droid is a hybrid that activates as part of the
+    // host's group via Scrap Battalion (Ugnaught Tinkerer), with its own ready/exhaust state
+    // and an Overclock interrupt path on Elite. Standard companion rule per CRR (and destruct
+    // 2026-05-05) is "activates at start OR end of host's activation, player choice" — Junk
+    // Droid breaks that mold. This `isCoActivation` shim hardcodes the special case; revisit
+    // when wiring the new companion model so the rule has one clean path with this carveout
+    // explicitly documented in code, not a stringly-named branch.
     const isCoActivation = companionName === 'Junk Droid';
     return { companionName, companionStats, isCoActivation };
   }
