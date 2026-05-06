@@ -2461,8 +2461,8 @@ export function resolveAbility(abilityId, context) {
       const adj = entry.fixedAreaTargetOnly ? [] : (boardState?.mapSpaces?.adjacency?.[spaceNorm] || []);
       const affectedSpaces = new Set([spaceNorm, ...adj.map((s) => String(s).toLowerCase())]);
       const results = [];
-      // Slice 6.13 ext: fixedAreaDamage AOE — collect lethal hits.
-      const _fadDefeated = [];
+      // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck.
+      let _fadHadDefeats = false;
       for (const pn of [1, 2]) {
         for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
           if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
@@ -2471,27 +2471,16 @@ export function resolveAbility(abilityId, context) {
           if (totalPerFig > 0) {
             const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
             if (figMsgId) {
-              const hs = dcHealthState.get(figMsgId) || [];
               const fkMatch = fk.match(/-(\d+)-(\d+)$/);
               const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-              const hp = hs[figIdx];
-              if (hp) {
-                const [cur, max] = hp;
-                const prevCur = cur ?? max;
-                const newCur = Math.max(0, prevCur - totalPerFig);
-                hs[figIdx] = [newCur, max ?? newCur];
-                dcHealthState.set(figMsgId, hs);
-                syncHealthStateToList(game, pn, figMsgId, hs);
+              const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, figMsgId, figIdx, totalPerFig, pn, {
+                sourceLabel: entry.label || 'fixedArea damage',
+                attackerPlayerNum: playerNum || (pn === 1 ? 2 : 1),
+              });
+              if (dmgRes.maxHp > 0) {
                 const dmgLabel = [dmgAmt > 0 ? `${dmgAmt} Dmg` : null, strainAmt > 0 ? `${strainAmt} Strain` : null].filter(Boolean).join('+');
-                parts.push(`${dmgLabel} (HP: ${prevCur}→${newCur})`);
-                if (newCur <= 0 && prevCur > 0) {
-                  _fadDefeated.push({
-                    figureKey: fk,
-                    defeatedPlayerNum: pn,
-                    attackerPlayerNum: playerNum || (pn === 1 ? 2 : 1),
-                    source: entry.label || 'fixedArea damage',
-                  });
-                }
+                parts.push(`${dmgLabel} (HP: ${dmgRes.prevHp}→${dmgRes.newHp})`);
+                if (dmgRes.wasDefeated) _fadHadDefeats = true;
               } else {
                 parts.push(`apply ${totalPerFig} damage manually`);
               }
@@ -2548,8 +2537,7 @@ export function resolveAbility(abilityId, context) {
         applied: true,
         logMessage: `**${entry.label}** — Space **${spaceUpper}**. ${results.length ? results.join('; ') : 'No figures affected.'}`,
         refreshDcEmbed: results.length > 0,
-        refreshBoard: !!entry.placesRubble || _fadDefeated.length > 0,
-        ...(_fadDefeated.length > 0 ? { defeatedFigures: _fadDefeated } : {}),
+        refreshBoard: !!entry.placesRubble || _fadHadDefeats,
       };
     }
     // Phase 1: pick a space within range
