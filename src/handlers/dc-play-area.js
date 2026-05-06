@@ -436,6 +436,16 @@ export async function handleDcToggle(interaction, ctx) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Companions activate at the start or end of the host's activation, not independently.
+  // TODO: Ugnaught Tinkerer's Junk Droid (Scrap Battalion) is a special case that activates
+  // as part of the host's group — needs deeper review before allowing companion-button paths.
+  if (meta.isCompanion) {
+    await interaction.followUp({
+      content: `**${meta.displayName || meta.dcName}** activates with **${meta.hostDcName}** — pick the host's Activate button instead.`,
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
   const game = await requireGame(interaction, getGame, meta.gameId);
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can toggle their DCs.')) return;
