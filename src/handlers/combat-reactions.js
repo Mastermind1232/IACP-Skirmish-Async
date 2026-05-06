@@ -1,4 +1,5 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
+import { resolvePendingCombat } from '../game/combat-stack.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
 import { removeForceExhaustionDie } from '../game/force-exhaustion-helpers.js';
@@ -379,7 +380,7 @@ export async function handleStrikeMeDown(interaction, ctx) {
     if (reducedCost > 0) awardKillVp(game, atkPN, reducedCost);
 
     // Cancel the pending combat (attack ends)
-    game.pendingCombat = null;
+    resolvePendingCombat(game);
 
     if (thread) await thread.send(`**Strike Me Down** — Obi-Wan is defeated (VP cost reduced by 3: ${reducedCost} VP awarded to attacker). Attack ended.`).catch(discordCatch);
     if (logGameAction) await logGameAction(game, client, `**Strike Me Down** — Obi-Wan chose to be defeated. Attacker gains ${reducedCost} VP (cost reduced by 3). Attack cancelled.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
@@ -445,7 +446,7 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
       defenderPlayerNum: defPN,
     };
     // Clear pendingCombat so the defender can start a new attack
-    game.pendingCombat = null;
+    resolvePendingCombat(game);
 
     const defOwnerId = getPlayerId(game, defPN);
     if (thread) await thread.send(sanitizeMentions({ content: `**Slow on the Draw** — <@${defOwnerId}>, you may now perform an attack targeting **Greedo**. Use your DC's Attack action. After the interrupt attack resolves, click **Resume Original Attack** below to continue.`, allowedMentions: { users: [defOwnerId] } })).catch(discordCatch);

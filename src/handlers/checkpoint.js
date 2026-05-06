@@ -350,7 +350,11 @@ function clearPendingAndPerMsgIdState(game) {
   // field clears; this handles the new stack-based ones.
   clearAllInterrupts(game);
   // pendingCombat is covered by the pending* sweep but be explicit.
+  // Slice 7.3: also clear any stacked nested-combat frames — the
+  // checkpoint-load substitutes a fresh UI so paused outer attacks
+  // don't survive the load.
   delete game.pendingCombat;
+  delete game.combatStack;
   // Combat thread / pre-combat / roll messages live on dead channels.
   game.activeCombatThreadId = null;
   game.combatThreadId = null;

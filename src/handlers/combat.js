@@ -8,6 +8,7 @@ import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-pr
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
+import { pushNestedCombat, resolvePendingCombat } from '../game/combat-stack.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
@@ -1444,6 +1445,14 @@ export async function handleAttackTarget(interaction, ctx) {
   const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerPlayerNum] || 0) + (overrideDice?.bonusAccuracy || 0) + (game._closeQuartersBonusAcc || 0);
   const isRanged = attackInfo.type === 'range';
   const distanceToTarget = target.dist ?? 1;
+  // Slice 7.2 (destruct 2026-05-05, nested attack frames): if there's an
+  // outer attack already in progress (Parting Shot, Final Stand, Extra
+  // Protection, Counterattack, Electrobatons Flurry interrupts), preserve
+  // its state on game.combatStack before this nested attack overwrites
+  // game.pendingCombat. The pop happens at combat resolution (slice 7.3).
+  if (game.pendingCombat) {
+    pushNestedCombat(game);
+  }
   game.pendingCombat = {
     gameId: game.gameId,
     attackerPlayerNum,
@@ -2351,7 +2360,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Awkward (AT-ST): cannot attack adjacent figures
   if (hasAwkwardAbility(atkSpecialIds) && awkwardBlocks(distanceToTarget)) {
     await thread.send('**Awkward** — Cannot attack adjacent figures. Attack cancelled.');
-    delete game.pendingCombat;
+    resolvePendingCombat(game);
     saveGames(game.gameId);
     return;
   }
@@ -2361,7 +2370,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (defSpecialIds.some(id => camouflageIds.includes(id)) && isRanged && distanceToTarget >= 4) {
     const camName = defSpecialIds.includes('camouflage_mak') ? 'Mak' : 'Scout Trooper';
     await thread.send(`**Camouflage** (${camName}) — Hostile figures 4+ spaces away cannot target this figure. Attack cancelled.`);
-    delete game.pendingCombat;
+    resolvePendingCombat(game);
     saveGames(game.gameId);
     return;
   }
@@ -2460,7 +2469,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Tripod (E-Web E/R): if figure has moved this activation, cannot attack
   if (tripodBlocksAttack({ specialAbilityIds: atkSpecialIds, moved: game.figureMoved?.[attackerFigureKey] })) {
     await thread.send('**Tripod** — Has exited space this activation. Cannot attack.');
-    delete game.pendingCombat;
+    resolvePendingCombat(game);
     saveGames(game.gameId);
     return;
   }
@@ -7125,6 +7134,10 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
   const isRanged = attackInfo.type === 'range';
+  // Slice 7.2: same nested-frame guard as the primary attack-init path.
+  if (game.pendingCombat) {
+    pushNestedCombat(game);
+  }
   game.pendingCombat = {
     gameId,
     attackerPlayerNum: controlledPlayerNum,

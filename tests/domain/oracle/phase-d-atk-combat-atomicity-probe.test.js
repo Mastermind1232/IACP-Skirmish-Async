@@ -81,8 +81,13 @@ describe('PROBE-PD-ATK-007/008/028: combat is atomic — single pendingCombat li
   });
 
   it('028b: source — Slow-on-the-Draw interrupt clears pendingCombat (single cancel-and-replace path, not a resume-with-updated-state path)', () => {
+    // Slice 7.3 (2026-05-06): `game.pendingCombat = null;` migrated to
+    // `resolvePendingCombat(game)` (combat-stack helper that clears the
+    // current frame and pops any nested-outer frame). The cancel-and-
+    // replace semantic is unchanged — SoTD still stores its own outer
+    // combat separately in `game.slowOnTheDrawInterrupt`.
     assert.match(CR_SRC,
-      /game\.pendingCombat = null;/,
-      'Slow-on-the-Draw must null pendingCombat (cancel-and-replace, not mid-state resume) — CRR-ATK-028');
+      /resolvePendingCombat\(game\)/,
+      'Slow-on-the-Draw must clear pendingCombat via resolvePendingCombat (cancel-and-replace, not mid-state resume) — CRR-ATK-028');
   });
 });

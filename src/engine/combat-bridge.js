@@ -5,6 +5,7 @@
 
 import { processFigureDefeat } from './defeat-handler.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { resolvePendingCombat } from '../game/combat-stack.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { getHandChannelId, getPlayerId as _getPlayerIdHelper } from '../game/player-helpers.js';
@@ -517,7 +518,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
       await thread.send({ content: resultText || '(No effect)', components: [] });
-      delete game.pendingCombat;
+      resolvePendingCombat(game);
       saveGames(game.gameId);
       return;
     }
@@ -543,7 +544,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
     await thread.send({ content: resultText || '(No effect)', components: [] });
-    delete game.pendingCombat;
+    resolvePendingCombat(game);
     saveGames(game.gameId);
     return;
   }
@@ -3009,7 +3010,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
-  delete game.pendingCombat;
+  resolvePendingCombat(game);
   clearPendingCleave(game);
   if (combat.rollMessageId) {
     try {

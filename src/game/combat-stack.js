@@ -78,3 +78,25 @@ export function peekNestedCombat(game) {
 export function nestedCombatDepth(game) {
   return Array.isArray(game?.combatStack) ? game.combatStack.length : 0;
 }
+
+/**
+ * Slice 7.3: replacement for `delete game.pendingCombat`. Clears the
+ * current frame and, if there's a paused outer frame on the stack, pops
+ * it onto pendingCombat so the outer attack resumes.
+ *
+ * Returns true if an outer frame was restored, false if there was no
+ * outer (i.e. this was a top-level attack and combat is now fully
+ * cleared).
+ *
+ * @param {object} game
+ * @returns {boolean}
+ */
+export function resolvePendingCombat(game) {
+  if (!game) return false;
+  delete game.pendingCombat;
+  const restored = popNestedCombat(game);
+  // If no outer was restored, leave the field present-but-null so existing
+  // consumers/tests can do `assert.strictEqual(game.pendingCombat, null)`.
+  if (!restored) game.pendingCombat = null;
+  return restored;
+}
