@@ -276,12 +276,21 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
   clearPendingSelfDestruct(_sdcpGame);
   const _sdcpCombat = _sdcpGame.pendingCombat;
   if (buttonKey === 'self_destruct_protocol_use_') {
-    // Roll 1 red die, apply Hit results as Damage to adjacent hostile figures
+    // Card text (IG-11): "may move up to 2 spaces and roll 1 red die. Each
+    // adjacent figure suffers Damage and Strain equal to the Hit results."
+    // Three corrections from the previous impl (destruct 2026-05-06):
+    // 1. Apply STRAIN as well as Damage (was: damage only).
+    // 2. Hit "each adjacent figure" — friendly + hostile (was: hostiles only).
+    //    The IG-11 itself is excluded as the source.
+    // 3. The "move up to 2 spaces" preliminary step is still pending — the
+    //    move prompt is queued as a separate follow-up because it requires
+    //    a space-picker UI that's beyond this slice. Document and continue.
+    //    For now, IG-11 explodes from current position.
     const _sdcpDiceData = getDiceData ? getDiceData() : null;
     const _sdcpFaces = _sdcpDiceData?.attack?.red || [];
     const _sdcpFace = _sdcpFaces[Math.floor(Math.random() * Math.max(_sdcpFaces.length, 1))] || {};
     const _sdcpHits = _sdcpFace.dmg ?? 0;
-    const _sdcpFaceLabel = `${_sdcpHits}H`;
+    const _sdcpFaceLabel = `${_sdcpHits} Hit${_sdcpHits === 1 ? '' : 's'}`;
     const _sdcpFigKey = _sdcpCombat?.target?.figureKey;
     const _sdcpPos = _sdcpFigKey ? _sdcpGame.figurePositions?.[_sdcpPending.defenderPlayerNum]?.[_sdcpFigKey] : null;
     let _sdcpResultLog = `Rolled red die: **${_sdcpFaceLabel}** — `;
@@ -291,28 +300,40 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
       const _sdcpMs = getMapData ? getMapData(_sdcpGame.selectedMap.id) : null;
       const _sdcpAdj = _sdcpMs?.adjacency?.[String(_sdcpPos).toLowerCase()] || [];
       const _sdcpAllAdj = new Set([String(_sdcpPos).toLowerCase(), ..._sdcpAdj.map(s => String(s).toLowerCase())]);
-      const _sdcpHostileNum = opponentPlayerNum(_sdcpPending.defenderPlayerNum);
-      for (const [_sfk, _sfkPos] of Object.entries(_sdcpGame.figurePositions?.[_sdcpHostileNum] || {})) {
-        if (!_sfkPos || !_sdcpAllAdj.has(String(_sfkPos).toLowerCase())) continue;
-        if (_sfk === _sdcpFigKey) continue;
-        let _sfkMsgId = null;
-        for (const [_mid, _mm] of dcMessageMeta) { if (_mm.playerNum === _sdcpHostileNum && _sfk.startsWith(_mm.dcName + '-')) { _sfkMsgId = _mid; break; } }
-        if (!_sfkMsgId) continue;
-        const _sfkFigMatch = _sfk.match(/^(.+)-(\d+)-(\d+)$/);
-        if (!_sfkFigMatch) continue;
-        const _sfkFigIdx = parseInt(_sfkFigMatch[3], 10);
-        const { prevHp: _shc, newHp: _shnc, maxHp: _sfkMaxHp } = reduceHp(dcHealthState, _sdcpGame, _sfkMsgId, _sfkFigIdx, _sdcpHits, _sdcpHostileNum);
-        if (_sfkMaxHp === 0 || _shc === null || _shc <= 0) continue;
-        const _sdcpDefNote = _shnc <= 0 ? ' **(defeated)**' : '';
-        _sdcpDamaged.push(`${dcMessageMeta.get(_sfkMsgId)?.displayName || _sfkFigMatch[1]} (HP: ${_shc}→${_shnc})${_sdcpDefNote}`);
-        if (_shnc <= 0) _sdcpDefeated.push({ figureKey: _sfk, playerNum: _sdcpHostileNum });
+      // Walk BOTH players' positions so friendly figures sharing IG-11's
+      // adjacency also take damage+strain (CRR "each adjacent figure").
+      for (const _eachPN of [1, 2]) {
+        for (const [_sfk, _sfkPos] of Object.entries(_sdcpGame.figurePositions?.[_eachPN] || {})) {
+          if (!_sfkPos || !_sdcpAllAdj.has(String(_sfkPos).toLowerCase())) continue;
+          // Exclude IG-11 itself (the source).
+          if (_eachPN === _sdcpPending.defenderPlayerNum && _sfk === _sdcpFigKey) continue;
+          let _sfkMsgId = null;
+          for (const [_mid, _mm] of dcMessageMeta) { if (_mm.playerNum === _eachPN && _sfk.startsWith(_mm.dcName + '-')) { _sfkMsgId = _mid; break; } }
+          if (!_sfkMsgId) continue;
+          const _sfkFigMatch = _sfk.match(/^(.+)-(\d+)-(\d+)$/);
+          if (!_sfkFigMatch) continue;
+          const _sfkFigIdx = parseInt(_sfkFigMatch[3], 10);
+          // Damage = hits, then Strain = hits (from the same roll).
+          const { prevHp: _shc, newHp: _shnc, maxHp: _sfkMaxHp } = reduceHp(dcHealthState, _sdcpGame, _sfkMsgId, _sfkFigIdx, _sdcpHits, _eachPN);
+          if (_sfkMaxHp === 0 || _shc === null || _shc <= 0) { continue; }
+          // Apply strain as additional damage (skirmish: strain → damage).
+          let _afterStrainHp = _shnc;
+          if (_sdcpHits > 0) {
+            const { newHp: _strHp } = reduceHp(dcHealthState, _sdcpGame, _sfkMsgId, _sfkFigIdx, _sdcpHits, _eachPN);
+            _afterStrainHp = _strHp;
+          }
+          const _sdcpDefNote = _afterStrainHp <= 0 ? ' **(defeated)**' : '';
+          const _sideLabel = _eachPN === _sdcpPending.defenderPlayerNum ? 'friendly' : 'hostile';
+          _sdcpDamaged.push(`${_sideLabel} ${dcMessageMeta.get(_sfkMsgId)?.displayName || _sfkFigMatch[1]} (HP: ${_shc}→${_afterStrainHp}, ${_sdcpHits} Damage + ${_sdcpHits} Strain)${_sdcpDefNote}`);
+          if (_afterStrainHp <= 0) _sdcpDefeated.push({ figureKey: _sfk, playerNum: _eachPN });
+        }
       }
-      _sdcpResultLog += _sdcpDamaged.length ? _sdcpDamaged.join(', ') : 'No adjacent hostiles.';
+      _sdcpResultLog += _sdcpDamaged.length ? _sdcpDamaged.join('; ') : 'No adjacent figures.';
     } else {
       _sdcpResultLog += 'No hits.';
     }
     await logGameAction(_sdcpGame, client, `**Self-Destruct Protocol** — ${_sdcpCombat?.target?.label || 'Figure'}: ${_sdcpResultLog}`, { phase: 'ROUND', icon: 'attack' });
-    // Process defeats of hostile figures damaged by the explosion
+    // Process defeats from the explosion (canonical defeat pipeline).
     for (const _sdcpDf of _sdcpDefeated) {
       if (processFigureDefeat) {
         await processFigureDefeat(_sdcpGame, {
