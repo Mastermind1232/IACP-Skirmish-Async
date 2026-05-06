@@ -493,33 +493,20 @@ export function resolveAbility(abilityId, context) {
       const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
       const parts = [];
       const totalDmg = damage + strain;
-      // Slice 6.13 ext + destruct 2026-05-06: any damage application must
-      // route lethal hits through processFigureDefeat. Collect into
-      // _thfDefeated; surface as result.defeatedFigures for the
-      // apply-ability-result.js consumer.
-      const _thfDefeated = [];
+      // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck — auto-
+      // queues lethal hits onto game._pendingFigureDefeats.
+      let _hadDefeats = false;
       if (totalDmg > 0 && dcHealthState && targetMsgId) {
-        const healthState = dcHealthState.get(targetMsgId) || [];
         const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
         const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const entryHp = healthState[figIdx];
-        if (entryHp) {
-          const [cur, max] = entryHp;
-          const prevCur = cur ?? max;
-          const newCur = Math.max(0, prevCur - totalDmg);
-          healthState[figIdx] = [newCur, max ?? newCur];
-          dcHealthState.set(targetMsgId, healthState);
-          syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
+        const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, totalDmg, enemyPlayerNum, {
+          sourceLabel: entry.label || 'Force ability',
+          attackerPlayerNum: playerNum,
+        });
+        if (dmgRes.maxHp > 0) {
           const dmgStr = damage > 0 && strain > 0 ? `${damage} Damage + ${strain} Strain` : damage > 0 ? `${damage} Damage` : `${strain} Strain`;
-          parts.push(`suffered ${dmgStr} (HP: ${prevCur} → ${newCur})`);
-          if (newCur <= 0 && prevCur > 0) {
-            _thfDefeated.push({
-              figureKey: targetFigureKey,
-              defeatedPlayerNum: enemyPlayerNum,
-              attackerPlayerNum: playerNum,
-              source: entry.label || 'Force ability',
-            });
-          }
+          parts.push(`suffered ${dmgStr} (HP: ${dmgRes.prevHp} → ${dmgRes.newHp})`);
+          if (dmgRes.wasDefeated) _hadDefeats = true;
         } else {
           parts.push(`(HP not tracked — apply ${damage > 0 ? `${damage} Damage` : ''}${strain > 0 ? ` ${strain} Strain` : ''} manually)`);
         }
@@ -543,26 +530,15 @@ export function resolveAbility(abilityId, context) {
             const adjMsgId = findMsgIdForFigureKey(game, adjPnum, adjFk, dcMessageMeta);
             const adjName = dcNameFromFigureKey(adjFk);
             if (splashDamage > 0 && dcHealthState && adjMsgId) {
-              const adjHs = dcHealthState.get(adjMsgId) || [];
               const adjFkMatch = adjFk.match(/-(\d+)-(\d+)$/);
               const adjFigIdx = adjFkMatch ? parseInt(adjFkMatch[2], 10) : 0;
-              const adjEntry = adjHs[adjFigIdx];
-              if (adjEntry) {
-                const [aCur, aMax] = adjEntry;
-                const aPrev = aCur ?? aMax;
-                const aNew = Math.max(0, aPrev - splashDamage);
-                adjHs[adjFigIdx] = [aNew, aMax ?? aNew];
-                dcHealthState.set(adjMsgId, adjHs);
-                syncHealthStateToList(game, adjPnum, adjMsgId, adjHs);
-                splashParts.push(`**${adjName}** ${splashDamage} Damage (${aPrev}→${aNew})`);
-                if (aNew <= 0 && aPrev > 0) {
-                  _thfDefeated.push({
-                    figureKey: adjFk,
-                    defeatedPlayerNum: adjPnum,
-                    attackerPlayerNum: playerNum,
-                    source: `${entry.label || 'Force ability'} (splash)`,
-                  });
-                }
+              const adjRes = applyDamageWithDefeatCheck(dcHealthState, game, adjMsgId, adjFigIdx, splashDamage, adjPnum, {
+                sourceLabel: `${entry.label || 'Force ability'} (splash)`,
+                attackerPlayerNum: playerNum,
+              });
+              if (adjRes.maxHp > 0) {
+                splashParts.push(`**${adjName}** ${splashDamage} Damage (${adjRes.prevHp}→${adjRes.newHp})`);
+                if (adjRes.wasDefeated) _hadDefeats = true;
               } else {
                 splashParts.push(`**${adjName}** (apply ${splashDamage} Damage manually)`);
               }
@@ -594,7 +570,7 @@ export function resolveAbility(abilityId, context) {
         freeAction: !!entry.freeAction,
         logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashLog}${selfCondLog}`,
         refreshDcEmbed: true,
-        ...(_thfDefeated.length > 0 ? { defeatedFigures: _thfDefeated, refreshBoard: true } : {}),
+        ...(_hadDefeats ? { refreshBoard: true } : {}),
       };
     }
     // First call: enumerate valid enemy targets with range/LOS filter
