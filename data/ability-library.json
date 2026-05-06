@@ -960,9 +960,9 @@
     "crippling_blow": {
       "type": "dcSpecial",
       "label": "Crippling Blow",
-      "description": "Perform an attack. After the attack resolves, if it did not miss, the defender becomes Stunned.",
+      "description": "Special Action: Perform an attack. After the attack resolves, if it did not miss, the defender becomes Stunned.",
       "freeAttackBonus": true,
-      "logMessage": "**Crippling Blow** — Your next attack costs no action. After it resolves: if it didn't miss, the defender becomes **Stunned** (automated).",
+      "logMessage": "**Crippling Blow** (Special Action) — Perform an attack. If it does not miss, the defender becomes **Stunned** (automated).",
       "wiredStatus": "wired"
     },
     "critical_hit": {
