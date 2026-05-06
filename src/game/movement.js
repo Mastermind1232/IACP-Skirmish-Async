@@ -742,6 +742,41 @@ export function computeMovementCache(startCoord, mpLimit, board, profile) {
   return { nodes, cells, parent, maxMp: mpLimit };
 }
 
+/**
+ * Reachability for "move up to N spaces" abilities.
+ *
+ * destruct 2026-05-06: in IACP, "move N spaces" is distinct from "gain N MP":
+ * - "gain N MP" → respects difficult-terrain (+1) and hostile-occupancy (+1)
+ *   surcharges. 3 MP through 1 difficult cell + 1 normal cell = 2 cells of
+ *   movement (3 MP - 2 difficult - 1 normal = 0).
+ * - "move up to N spaces" → each cell costs exactly 1, regardless of terrain
+ *   or hostile occupancy. The figure can enter N cells regardless of what
+ *   they're made of (still respecting walls / impassable / closed-door
+ *   edges / blocking).
+ *
+ * Implementation reuses computeMovementCache by overriding the figure's
+ * profile with `ignoreDifficult: true, ignoreFigureCost: true` and passing
+ * the requested space-count as the MP-budget. The traversal still respects
+ * impassable edges, closed doors, and (for non-Massive figures) blocking
+ * terrain — it ONLY removes the per-cell surcharge.
+ *
+ * @param {string} startCoord - figure's current top-left.
+ * @param {number} spaceCount - max cells the figure may enter.
+ * @param {object} board - same board as computeMovementCache.
+ * @param {object} baseProfile - the figure's regular movement profile.
+ * @returns {object} same shape as computeMovementCache; cache.cells.cost
+ *   represents cells entered (not MP), so getSpacesAtCost(cache, N) returns
+ *   cells N spaces away.
+ */
+export function computeSpacesReachable(startCoord, spaceCount, board, baseProfile) {
+  const profile = {
+    ...baseProfile,
+    ignoreDifficult: true,
+    ignoreFigureCost: true,
+  };
+  return computeMovementCache(startCoord, spaceCount, board, profile);
+}
+
 export function getSpacesAtCost(cache, mpCost) {
   const matches = [];
   for (const [cell, info] of cache.cells.entries()) {

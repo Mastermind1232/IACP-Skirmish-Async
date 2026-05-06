@@ -316,6 +316,7 @@ import {
   movementStateKey,
   getNormalizedFootprint,
   computeMovementCache,
+  computeSpacesReachable,
   getSpacesAtCost,
   getMovementTarget,
   getMovementPath,
@@ -3426,7 +3427,7 @@ function buildAllDeps() {
     // Game logic (imported)
     validateDeckLegal, parseCoord, normalizeCoord, getFootprintCells,
     getFigureSize, getBoardStateForMovement, getMovementProfile,
-    computeMovementCache, getSpacesAtCost, getMovementTarget,
+    computeMovementCache, computeSpacesReachable, getSpacesAtCost, getMovementTarget,
     getMovementPath, ensureMovementCache, getNormalizedFootprint,
     initMassiveDisplacement, resolveNextDisplacements, applyDisplacementChoice,
     resolveMassivePush, rollAttackDice, rollDefenseDice,

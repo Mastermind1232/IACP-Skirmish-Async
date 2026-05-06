@@ -22,7 +22,7 @@ import { createFakeClient } from './fake-client.js';
 import {
   validateDeckLegal, parseCoord, normalizeCoord, getFootprintCells,
   getBoardStateForMovement, getMovementProfile,
-  computeMovementCache, getSpacesAtCost, getMovementTarget,
+  computeMovementCache, computeSpacesReachable, getSpacesAtCost, getMovementTarget,
   getMovementPath, ensureMovementCache, getNormalizedFootprint,
   initMassiveDisplacement, resolveNextDisplacements, applyDisplacementChoice,
   resolveMassivePush, rollAttackDice, rollDefenseDice,
@@ -522,7 +522,7 @@ export function buildHeadlessDeps(options = {}) {
     // Game logic (real implementations)
     validateDeckLegal, parseCoord, normalizeCoord, getFootprintCells,
     getBoardStateForMovement, getMovementProfile,
-    computeMovementCache, getSpacesAtCost, getMovementTarget,
+    computeMovementCache, computeSpacesReachable, getSpacesAtCost, getMovementTarget,
     getMovementPath, ensureMovementCache, getNormalizedFootprint,
     initMassiveDisplacement, resolveNextDisplacements, applyDisplacementChoice,
     resolveMassivePush, rollAttackDice, rollDefenseDice,

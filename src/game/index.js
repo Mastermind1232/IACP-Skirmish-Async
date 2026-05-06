@@ -39,6 +39,7 @@ export {
   movementStateKey,
   getNormalizedFootprint,
   computeMovementCache,
+  computeSpacesReachable,
   getSpacesAtCost,
   getMovementTarget,
   getMovementPath,

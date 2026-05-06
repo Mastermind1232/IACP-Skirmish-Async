@@ -275,6 +275,7 @@ const CONTEXT_GROUPS = {
     'processFigureDefeat',
     'sendPhaseGateMessages',
     'getBoardStateForMovement', 'getMovementProfile', 'computeMovementCache',
+    'computeSpacesReachable',
   ],
 
   requests: [

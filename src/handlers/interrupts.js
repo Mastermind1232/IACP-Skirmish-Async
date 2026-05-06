@@ -344,7 +344,7 @@ async function _runSelfDestructExplode(game, pending, ctx) {
 }
 
 export async function handleSelfDestructProtocol(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, getMapData, getBoardStateForMovement, getMovementProfile, computeMovementCache } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, getMapData, getBoardStateForMovement, getMovementProfile, computeMovementCache, computeSpacesReachable } = ctx;
   const buttonKey = interaction.customId.startsWith('self_destruct_protocol_use_') ? 'self_destruct_protocol_use_' : 'self_destruct_protocol_skip_';
 
   await interaction.deferUpdate().catch(discordCatch);
@@ -379,12 +379,15 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
   const _sdcpDcName = _sdcpFigKey ? dcNameFromFigureKey(_sdcpFigKey) : null;
   const _sdcpPos = _sdcpFigKey ? _sdcpGame.figurePositions?.[_sdcpPending.defenderPlayerNum]?.[_sdcpFigKey] : null;
   let _sdcpDestinations = [];
-  if (_sdcpPos && _sdcpGame.selectedMap?.id && getBoardStateForMovement && getMovementProfile && computeMovementCache) {
+  if (_sdcpPos && _sdcpGame.selectedMap?.id && getBoardStateForMovement && getMovementProfile && (computeSpacesReachable || computeMovementCache)) {
     const _sdcpBoard = getBoardStateForMovement(_sdcpGame, _sdcpFigKey);
     if (_sdcpBoard) {
       const _sdcpProfile = getMovementProfile(_sdcpDcName, _sdcpFigKey, _sdcpGame);
-      const _sdcpCache = computeMovementCache(_sdcpPos, 3, _sdcpBoard, _sdcpProfile);
-      // Destinations: any reachable cell where IG-11 can end (excluding current position).
+      // SDP card text: "you may move up to 3 spaces" — spaces semantics, not
+      // MP. computeSpacesReachable forces ignoreDifficult + ignoreFigureCost
+      // so each cell costs exactly 1 of the 3-space budget. Falls back to
+      // computeMovementCache for older ctx wiring.
+      const _sdcpCache = (computeSpacesReachable || computeMovementCache)(_sdcpPos, 3, _sdcpBoard, _sdcpProfile);
       for (const [coord, node] of _sdcpCache.cells.entries()) {
         if (!node.canEnd) continue;
         if (coord === String(_sdcpPos).toLowerCase()) continue;
