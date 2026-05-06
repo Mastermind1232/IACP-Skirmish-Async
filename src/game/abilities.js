@@ -2794,7 +2794,8 @@ export function resolveAbility(abilityId, context) {
     const healthState = dcHealthState.get(msgId) || [];
     if (!healthState.length || !Array.isArray(healthState[0])) return { applied: false, manualMessage: 'Resolve manually: no health state for this DC.' };
     const [cur, max] = healthState[0];
-    const newCur = Math.max(0, (cur ?? max ?? 0) - damage);
+    const prevCur = cur ?? max ?? 0;
+    const newCur = Math.max(0, prevCur - damage);
     healthState[0] = [newCur, max ?? cur];
     dcHealthState.set(msgId, healthState);
     syncHealthStateToList(game, playerNum, msgId, healthState);
@@ -2807,6 +2808,17 @@ export function resolveAbility(abilityId, context) {
         applyCondition(game, fk, 'Focus');
       }
     }
+    // Slice 6.13 ext: Stimulants-style self-damage. If the damage cost
+    // defeats the figure, fire processFigureDefeat. attackerPlayerNum:null
+    // marks self-inflicted (no VP awarded).
+    const _stimDefeated = (newCur <= 0 && prevCur > 0)
+      ? [{
+        figureKey: `${meta.dcName}-${(meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] || '1'}-0`,
+        defeatedPlayerNum: playerNum,
+        attackerPlayerNum: null,
+        source: entry.label || 'self-damage',
+      }]
+      : [];
     const parts = [`Suffered ${damage} Damage.`];
     if (mpBonus > 0) parts.push(`Gained ${mpBonus} MP.`);
     if (doFocus) parts.push('Became Focused.');
@@ -2814,6 +2826,7 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       logMessage: parts.join(' '),
       refreshDcEmbed: true,
+      ...(_stimDefeated.length > 0 ? { defeatedFigures: _stimDefeated, refreshBoard: true } : {}),
     };
   }
 
