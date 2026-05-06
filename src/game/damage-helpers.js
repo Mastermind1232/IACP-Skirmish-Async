@@ -112,6 +112,25 @@ export function healHpDistributed(dcHealthState, game, msgId, totalAmount, playe
 }
 
 /**
+ * Read-only view of a figure's damage state in destruct-model terms.
+ * Returns null if no entry. Translates from legacy [cur, max] storage.
+ *
+ * @param {Map} dcHealthState
+ * @param {string} msgId
+ * @param {number} figureIndex
+ * @returns {{ damage: number, health: number } | null}
+ */
+export function getDamageState(dcHealthState, msgId, figureIndex) {
+  const healthState = dcHealthState.get(msgId);
+  if (!healthState || !Array.isArray(healthState[figureIndex])) return null;
+  const [cur, max] = healthState[figureIndex];
+  const health = max ?? cur ?? 0;
+  const curHp = cur ?? max ?? 0;
+  const damage = Math.max(0, health - curHp);
+  return { damage, health };
+}
+
+/**
  * Apply damage to a figure and surface a defeat record if lethal.
  *
  * Per destruct's 2026-05-06 audit: "any time a figure suffers damage you
@@ -160,6 +179,68 @@ export function applyDamageWithDefeatCheck(dcHealthState, game, msgId, figureInd
     }
   }
   return { ...result, defeatRecord };
+}
+
+/**
+ * Apply Strain to a figure (skirmish semantics).
+ *
+ * Per CRR p.58 + destruct 2026-05-06: "every ability with a strain cost,
+ * and bleed, should trigger the same way that strain is dealt with."
+ * Centralizes the strain-as-damage conversion + defeat check so every
+ * strain-cost ability (Brutal Cleave, Stimulants, Adrenaline-style, etc.)
+ * and Bleed end-of-action damage flows through one helper.
+ *
+ * Skirmish strain (CRR p.58): strain converts to an equal amount of damage.
+ * The controlling player MAY prevent any of this damage by discarding 1 CC
+ * from the top of their deck per strain prevented. Paz Vizsla special case:
+ * returns CCs from his own discard pile to game box instead. Under Duress:
+ * doubles the prevention cost; deplete transfers choice to opposing player.
+ *
+ * Current implementation: routes unprevented strain through
+ * applyDamageWithDefeatCheck. Prevention UI (top-of-deck discard prompt) is
+ * a future enhancement — queued per destruct 2026-05-06. For now, callers
+ * applying strain skip the prevention path; the helper exists so the future
+ * UI integration is one place.
+ *
+ * @param {Map} dcHealthState
+ * @param {object} game
+ * @param {string} msgId
+ * @param {number} figureIndex
+ * @param {number} amount - strain amount
+ * @param {number} playerNum
+ * @param {object} opts
+ * @param {string} [opts.sourceLabel='Strain']    - e.g. "Bleed", "Brutal Cleave cost"
+ * @param {number|null} [opts.attackerPlayerNum=null]
+ * @returns {{ newHp: number, prevHp: number, wasDefeated: boolean, defeatRecord: object | null, prevented: number, applied: number }}
+ */
+export function suffersStrain(dcHealthState, game, msgId, figureIndex, amount, playerNum, opts = {}) {
+  const { sourceLabel = 'Strain', attackerPlayerNum = null } = opts;
+  // TODO (slice 8.5+): wire prevention path — top-of-deck CC discard, Paz
+  // exception, Under Duress cost-modifier + deplete choice-transfer. For now,
+  // unprevented strain converts directly to damage via the same helper used
+  // by other damage paths.
+  const prevented = 0;
+  const damageEquiv = Math.max(0, amount - prevented);
+  if (damageEquiv === 0) {
+    const cur = getDamageState(dcHealthState, msgId, figureIndex);
+    return {
+      newHp: cur ? Math.max(0, cur.health - cur.damage) : 0,
+      prevHp: cur ? Math.max(0, cur.health - cur.damage) : 0,
+      wasDefeated: false,
+      defeatRecord: null,
+      prevented: amount,
+      applied: 0,
+    };
+  }
+  const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, msgId, figureIndex, damageEquiv, playerNum, {
+    sourceLabel: `Strain (${sourceLabel})`,
+    attackerPlayerNum,
+  });
+  return {
+    ...dmgRes,
+    prevented,
+    applied: damageEquiv,
+  };
 }
 
 /**
