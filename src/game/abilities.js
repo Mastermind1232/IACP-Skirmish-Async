@@ -200,6 +200,18 @@ function addMovementPoints(game, msgId, n) {
   const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
   bank.total = (bank.total ?? 0) + n;
   bank.remaining = (bank.remaining ?? 0) + n;
+  // Slice 8.11 (destruct 2026-05-06): MP gained during own activation banks;
+  // gained outside own activation must be spent immediately. Tag the bank
+  // entry as "out-of-activation" when the figure isn't currently activating
+  // so downstream consumers can enforce immediate-spend semantics. Detection:
+  // game.dcActionsData[msgId] exists iff this DC is mid-activation. NOTE: a
+  // figure can be defending mid-own-activation (e.g. interrupted by Overwatch
+  // or a triggered out-of-activation attack) and still gain MP via Lam etc.
+  // — that case correctly stays "during own activation."
+  if (!game.dcActionsData?.[msgId]) {
+    bank._outOfActivation = true;
+    if (!bank._mustSpendImmediately) bank._mustSpendImmediately = true;
+  }
   game.movementBank[msgId] = bank;
 }
 
@@ -2282,6 +2294,14 @@ export function resolveAbility(abilityId, context) {
         const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
         const spaceUpper = String(chosenSpace).toUpperCase();
         const resultParts = [];
+        // Slice 6.13 + destruct 2026-05-06 audit: collect lethal hits so the
+        // caller can route them through processFigureDefeat. Previously the
+        // spaceWithin handler decremented HP directly, so figures killed by
+        // Wrist Flamethrower / Captain Terro Flamethrower / Gar Saxon /
+        // Din / Sorin Shock Grenade / Drokkatta Parting Gift / Sabine
+        // Parting Gift / Tauntaun Headbutt did NOT fire defeat triggers
+        // (no VP, no position cleanup, no when-defeated reaction prompts).
+        const _spaceWithinDefeated = [];
         if (hits > 0) {
           const boardState = getBoardStateForMovement(game, null);
           const adj = boardState?.mapSpaces?.adjacency?.[spaceUpper.toLowerCase()] || [];
@@ -2305,11 +2325,23 @@ export function resolveAbility(abilityId, context) {
                 const entryHp = healthState[figIdx];
                 if (entryHp) {
                   const [cur, max] = entryHp;
-                  const newCur = Math.max(0, (cur ?? max) - hits);
+                  const prevCur = cur ?? max;
+                  const newCur = Math.max(0, prevCur - hits);
                   healthState[figIdx] = [newCur, max ?? newCur];
                   dcHealthState.set(figMsgId, healthState);
                   syncHealthStateToList(game, pn, figMsgId, healthState);
                   affected.push(`${dcNameFromFigureKey(fk)} -${hits}HP (→${newCur})`);
+                  // Lethal? collect for centralized defeat handling.
+                  if (newCur <= 0 && prevCur > 0) {
+                    _spaceWithinDefeated.push({
+                      figureKey: fk,
+                      defeatedPlayerNum: pn,
+                      attackerPlayerNum: _rollOneDieSelfFigureKey
+                        ? (Object.entries(game.figurePositions?.[1] || {}).some(([k]) => k === _rollOneDieSelfFigureKey) ? 1 : 2)
+                        : (pn === 1 ? 2 : 1),
+                      source: entry.label || 'AOE',
+                    });
+                  }
                 } else {
                   affected.push(`${dcNameFromFigureKey(fk)} (-${hits}HP, apply manually)`);
                 }
@@ -2324,6 +2356,7 @@ export function resolveAbility(abilityId, context) {
           applied: true,
           logMessage: `**${entry.label}** — Space **${spaceUpper}** targeted. Rolled 1 ${entry.rollOneDie} die: **${diceResult}**. ${resultParts.join('. ') || 'No effect.'}`,
           refreshDcEmbed: hits > 0,
+          ...(_spaceWithinDefeated.length > 0 ? { defeatedFigures: _spaceWithinDefeated, refreshBoard: true } : {}),
         };
       }
       // Phase 1: enumerate valid spaces within N
