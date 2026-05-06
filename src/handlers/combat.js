@@ -1774,18 +1774,36 @@ export async function handleAttackTarget(interaction, ctx) {
     delete game.scavengedWalkerAttackPenalty[msgId];
     await thread.send('**Scavenged Walker** — -1 Hit applied to this interrupt attack.').catch(discordCatch);
   }
-  // Driven by Hatred: remove 1 die from attack pool on end-of-round attack
+  // Driven by Hatred: remove 1 die from attack pool on end-of-round attack.
+  // Per destruct 2026-05-06: any ability with multiple legal options must
+  // prompt the player — never auto-decided. Vader's controller picks
+  // which die to remove. Gate: handleCombatRoll refuses if pendingDbhDiePick
+  // is still set when the roll button is clicked.
   if (game.drivenByHatredAttackPenalty?.[msgId]) {
     const _dbhDice = [...(game.pendingCombat.attackInfo.dice || [])];
-    // Remove the weakest die (priority: yellow, green, blue, red)
-    const _dbhRemoveOrder = ['yellow', 'green', 'blue', 'red'];
-    for (const color of _dbhRemoveOrder) {
-      const idx = _dbhDice.indexOf(color);
-      if (idx >= 0) { _dbhDice.splice(idx, 1); break; }
+    if (_dbhDice.length > 0) {
+      // Build one button per UNIQUE die color, with a count suffix when
+      // there are duplicates (e.g. two reds → both buttons drop the same
+      // color but the player still gets a single click).
+      const _dbhCounts = _dbhDice.reduce((m, c) => (m[c] = (m[c] || 0) + 1, m), {});
+      const _dbhUnique = Object.keys(_dbhCounts);
+      const _dbhBtns = _dbhUnique.map((color) => {
+        const count = _dbhCounts[color];
+        const label = count > 1 ? `${color} (×${count})` : color;
+        return new ButtonBuilder()
+          .setCustomId(`dbh_pick_die_${game.gameId}_${color}`)
+          .setLabel(label.charAt(0).toUpperCase() + label.slice(1))
+          .setStyle(ButtonStyle.Primary);
+      });
+      game.pendingDbhDiePick = { msgId, attackerPlayerNum: combat.attackerPlayerNum, dice: _dbhDice };
+      const _dbhAtkOwnerId = game[`player${combat.attackerPlayerNum}Id`];
+      await thread.send({
+        content: `<@${_dbhAtkOwnerId}> **Driven by Hatred** — choose 1 die to remove from your attack pool. (You cannot roll until you pick.)`,
+        components: [new ActionRowBuilder().addComponents(_dbhBtns)],
+        allowedMentions: { users: [_dbhAtkOwnerId] },
+      }).catch(discordCatch);
+      delete game.drivenByHatredAttackPenalty[msgId];
     }
-    game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: _dbhDice };
-    delete game.drivenByHatredAttackPenalty[msgId];
-    await thread.send('**Driven by Hatred** — 1 die removed from attack pool.').catch(discordCatch);
   }
   // Flame Trooper Fireproof: this figure cannot suffer Strain (mark on combat object for handlers)
   if (cardNameIncludes(_atkUpgrades, 'Flame Trooper')) {
@@ -2813,6 +2831,16 @@ export async function handleCombatRoll(interaction, ctx) {
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, 1) && !await requirePlayer(interaction, game, interaction.user.id, 2, canActAsPlayer, 'Only players in this game can roll.')) return;
+  // Driven by Hatred die-pick gate (destruct 2026-05-06): the EOR penalty
+  // requires the attacker to choose a die before rolling. Refuse the roll
+  // until pendingDbhDiePick is cleared by the dbh_pick_die_ handler.
+  if (game.pendingDbhDiePick) {
+    await interaction.followUp({
+      content: '**Driven by Hatred** — pick a die to remove from your attack pool first (button in combat thread).',
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
@@ -7726,5 +7754,52 @@ export async function handlePowerTokenOverflowDiscard(interaction, ctx) {
       }
     }
   }
+  saveGames(game.gameId);
+}
+
+/**
+ * Driven by Hatred die-pick handler — Vader's controller picks which die
+ * to remove from the attack pool on the EOR interrupt attack. Card text:
+ * "When you declare this attack, remove 1 die from your attack pool."
+ *
+ * Per destruct 2026-05-06: any ability with multiple legal options must
+ * prompt the player. The previous auto-pick (weakest die first) was
+ * removed at combat.js:1778 and replaced with a button prompt that sets
+ * game.pendingDbhDiePick. This handler resolves that prompt.
+ *
+ * customId format: dbh_pick_die_<gameId>_<color>
+ */
+export async function handleDbhPickDie(interaction, ctx) {
+  const { getGame, saveGames, client } = ctx;
+  const m = interaction.customId.match(/^dbh_pick_die_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, color] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingDbhDiePick;
+  if (!pending) {
+    await interaction.followUp({ content: 'Driven by Hatred die-pick is no longer pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const combat = game.pendingCombat;
+  if (!combat) {
+    delete game.pendingDbhDiePick;
+    saveGames(game.gameId);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only Vader\'s controller can pick the die.')) return;
+  const dice = [...(combat.attackInfo?.dice || [])];
+  const idx = dice.indexOf(color);
+  if (idx < 0) {
+    await interaction.followUp({ content: `No ${color} die in the attack pool.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  dice.splice(idx, 1);
+  combat.attackInfo = { ...combat.attackInfo, dice };
+  delete game.pendingDbhDiePick;
+  await interaction.message.edit({
+    content: `**Driven by Hatred** — ${color} die removed from attack pool. Pool is now: ${dice.length ? dice.join(', ') : '(empty)'}.`,
+    components: [],
+  }).catch(discordCatch);
   saveGames(game.gameId);
 }
