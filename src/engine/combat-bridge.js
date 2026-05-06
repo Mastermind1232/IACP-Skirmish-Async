@@ -33,6 +33,7 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
 }
 import { countGameSpaces } from '../game/board-helpers.js';
 import { getLoadoutCards as _getLoadoutCardsImpl } from '../data-loader.js';
+import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
 
 /**
@@ -1068,7 +1069,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         // resolved.
         const _psFigConds = combat._step7DefenderConds
           ?? (game.figureConditions?.[combat.target.figureKey] || []);
-        const _psStunnedAlready = _psFigConds.includes('Stun');
+        const _psEffectsSuppressed = areConditionEffectsSuppressed(game, combat.target.figureKey);
+        const _psStunnedAlready = _psFigConds.includes('Stun') && !_psEffectsSuppressed;
         if (_psHas && _psStunnedAlready) {
           await logGameAction(game, client, `**Parting Shot** suppressed — **${combat.target.label || _psDcName}** is Stunned and cannot declare an attack.`, { phase: 'ROUND', icon: 'attack' });
         } else if (_psHas) {
@@ -2853,13 +2855,15 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           const _rfHasRogue = cardNameIncludes(_rfUpgrades, 'Rogue Smuggler');
           if (_rfDamage > 0 && !_rfHasRogue) _rfCanFire = false;
         }
-        // Combat-pipeline rebuild (slice 6.5): Stunned figures cannot declare
-        // attacks (CRR p.58). Return Fire is a triggered out-of-activation
-        // attack that requires declaration. If Han is Stunned at Step 8 (e.g.
-        // attacker surged for Stun and damage was applied), Return Fire is
-        // blocked. Per destruct's Q1 audit: "Return Fire is blocked."
+        // Combat-pipeline rebuild (slice 6.5 + 8.4): Stunned figures cannot
+        // declare attacks (CRR p.58). Return Fire is a triggered out-of-
+        // activation attack that requires declaration. If the figure is
+        // Stunned, Return Fire is blocked. EXCEPT YWNDM-on-Fifth-Brother:
+        // condition effects are suppressed (token placed but inert), so the
+        // Stun does not actually block declaration.
         const _rfDefConds = game.figureConditions?.[_rfDefFk] || [];
-        if (_rfCanFire && _rfDefConds.includes('Stun')) {
+        const _rfEffectsSuppressed = areConditionEffectsSuppressed(game, _rfDefFk);
+        if (_rfCanFire && _rfDefConds.includes('Stun') && !_rfEffectsSuppressed) {
           _rfCanFire = false;
           await logGameAction(game, client, `**Return Fire** suppressed — **${_rfDefDcName}** is Stunned and cannot declare an attack.`, { phase: 'ROUND', icon: 'attack' });
         }

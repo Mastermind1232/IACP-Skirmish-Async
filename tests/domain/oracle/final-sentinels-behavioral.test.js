@@ -64,10 +64,13 @@ describe('B-SENT-001: Condition immunity — harmful conditions rejected', () =>
       'Snowtrooper (Elite) detected as immune');
   });
 
-  it('001c: Fifth Brother immune when youWillNotDenyMeActive', () => {
+  it('001c: Fifth Brother NOT immune under YWNDM (effects suppressed, not blocked)', () => {
+    // Per destruct 2026-05-05: YWNDM applies conditions but suppresses
+    // their effects (token placed, downstream effects skipped). Immunity
+    // would block placement entirely — wrong for this card.
     const game = makeGame({ youWillNotDenyMeActive: true });
-    assert.strictEqual(isConditionImmune(game, 'Fifth Brother-2-0'), true,
-      'Fifth Brother immune while ability active');
+    assert.strictEqual(isConditionImmune(game, 'Fifth Brother-2-0'), false,
+      'Fifth Brother is NOT immune under YWNDM — conditions still applied');
   });
 
   it('001d: Fifth Brother NOT immune when ability inactive', () => {

@@ -24,6 +24,12 @@ export function filterCondition(game, figureKey, cond) {
 /**
  * Check if a figure is immune to HARMFUL conditions (Stun, Bleed, Weaken).
  * Currently: Onar Koma, Snowtrooper Elite.
+ *
+ * Per destruct's 2026-05-05 audit, YWNDM-on-Fifth-Brother is NOT immunity:
+ * the condition is APPLIED but INERT (token placed, effects suppressed —
+ * matters for HK-style "while you have a HARMFUL condition" checks).
+ * That semantic moved to areConditionEffectsSuppressed below.
+ *
  * @param {object} game
  * @param {string} figureKey
  * @returns {boolean}
@@ -33,8 +39,30 @@ export function isConditionImmune(game, figureKey) {
   const dcEff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const sIds = dcEff?.specialAbilityIds || [];
   if (sIds.includes('immune_onar') || sIds.includes('immune_snowtrooper_elite')) return true;
-  // You Will Not Deny Me: Fifth Brother ignores harmful conditions while active
-  if (game?.youWillNotDenyMeActive && dcName?.toLowerCase().includes('fifth brother')) return true;
+  return false;
+}
+
+/**
+ * Check whether a figure's HARMFUL condition effects are currently suppressed.
+ * The conditions remain APPLIED on the figure (token in figureConditions);
+ * only their downstream effects (Bleed end-of-action damage, Stun cannot-
+ * declare-attack, Weaken −1 to attack/defense) should be skipped.
+ *
+ * Currently: Fifth Brother under YWNDM.
+ *
+ * Per destruct 2026-05-05: "condition is applied but inert. token IS placed
+ * on the figure, effects suppressed. matters for HKs (HK abilities key off
+ * having a condition — the condition still satisfies that check, just
+ * doesn't damage you)."
+ *
+ * @param {object} game
+ * @param {string} figureKey
+ * @returns {boolean}
+ */
+export function areConditionEffectsSuppressed(game, figureKey) {
+  if (!game?.youWillNotDenyMeActive) return false;
+  const dcName = dcNameFromFigureKey(figureKey);
+  if (dcName?.toLowerCase().includes('fifth brother')) return true;
   return false;
 }
 

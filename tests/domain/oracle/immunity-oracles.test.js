@@ -27,11 +27,16 @@ describe('ORACLE-IMMUNE-001: Onar Koma is immune to harmful conditions', () => {
   });
 });
 
-// ── ORACLE-IMMUNE-002: Fifth Brother with You Will Not Deny Me ───────────────
-describe('ORACLE-IMMUNE-002: Fifth Brother immune when youWillNotDenyMeActive', () => {
-  it('002a: immune when youWillNotDenyMeActive is set', () => {
+// ── ORACLE-IMMUNE-002: Fifth Brother under You Will Not Deny Me ──────────────
+// Per destruct's 2026-05-05 audit: YWNDM is NOT immunity. Conditions ARE
+// applied to 5th Brother (token placed in figureConditions); their EFFECTS
+// are suppressed instead. This semantic distinction matters for HK-style
+// abilities that key off "while you have a HARMFUL condition." The
+// suppression-not-immunity behavior is exposed via areConditionEffectsSuppressed.
+describe('ORACLE-IMMUNE-002: Fifth Brother NOT condition-immune under YWNDM (effects suppressed instead)', () => {
+  it('002a: NOT immune when youWillNotDenyMeActive is set (conditions still applied)', () => {
     const game = { youWillNotDenyMeActive: true };
-    assert.equal(isConditionImmune(game, 'Fifth Brother-1-0'), true);
+    assert.equal(isConditionImmune(game, 'Fifth Brother-1-0'), false);
   });
 
   it('002b: NOT immune when youWillNotDenyMeActive is unset', () => {
