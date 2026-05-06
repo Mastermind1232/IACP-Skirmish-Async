@@ -206,9 +206,17 @@ With **[Scavenged Walker]** attached (eligible):
 
 ## Verifications still pending (deeper read needed)
 
-- Bo-Katan Kryze: 4 specials all need behavioral verification
-- IG-88 Arsenal vs Weiss Epic Arsenal: same dice-choice helper — ✓ both verified
-- Rancor: Crippling Blow + Trained Rancor passive
-- SC2-M Repulsor Tank: Focus Fire + Defensible
-- Sentry Droid (Elite): Charged Shot
-- Wookiee Warrior (Elite): Fury threshold
+- ✓ Bo-Katan Kryze: 4 specials verified — Defensive Fire / Dual-Wield Pistols / Personal Combat Shield / Last Wielder Darksaber all wired
+- ✓ IG-88 Arsenal vs Weiss Epic Arsenal: same dice-choice helper — both verified
+- ✓ Rancor: Crippling Blow (Stun on hit) + Trained Rancor passive (e38fe753 — 2 Damage cost)
+- ✓ SC2-M Repulsor Tank: Focus Fire (combat surge wired) + Defensible (player choice prompt)
+- ✓ Sentry Droid (Elite): Charged Shot (free attack +2 Accuracy)
+- ✓ Wookiee Warrior (Elite): Fury (5+ damage threshold) wired in fury-helpers.js
+- ⚠ Captain Terro Flamethrower data mismatch: abilityText says "1 Damage and 1 Strain", ability-library `fixedAreaDamage: 2`. Need canonical IACP card to confirm which is correct.
+
+## Cost-8/7 audit pass (2026-05-06)
+
+- Bossk Regenerate scope FIXED: was Bleed-only, now discards all harmful conditions (Bleed/Stun/Weaken) per card text "discard all Harmful conditions" (commit 0363e1f4)
+- Innate-passive double-apply BUG FIXED: applyDcPassivesToCombat at handlers/combat.js:1589 already covered all attacker/defender bonuses, but a redundant innate-passive helper at line 1965-1966 was double-counting bonusHits/bonusSurge/bonusBlock/bonusEvade (commit 34b3406c)
+- Verified wired: Beskar Armor, Submit or Fight, Heavy Repeater, Spread the Pain, Pulse Cannon, Self-Preservation, Last Stand, Aim, Merciless, Cover Fire, Smooth Landing, Brutal Tactics, Locked and Loaded, Open-Minded, Bounty, Stealthy/Ambush/In The Shadows, Into the Fray + Hold the Line, Hardy, Regenerate, Crippling Blow, Defensive Fire, Dual-Wield Pistols, Personal Combat Shield, Improvised Cover, Parting Gift, Flamethrower (Terro)
+- Auto-pick anti-pattern flagged: Last Stand picks `_lsAlive[0]` instead of prompting player when 2+ figures alive in defeated stormtrooper's group — falls under sweep task #90
