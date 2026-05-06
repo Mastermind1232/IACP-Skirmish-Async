@@ -350,10 +350,17 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     if (totalRecovered > 0) {
       await logGameAction(game, client, `♻️ **Regenerate** — **${meta.dcName}** recovered ${totalRecovered} HP.`, { phase: 'ROUND', icon: 'round' });
     }
-    // Discard Bleed
+    // Discard all Harmful conditions (CRR: Bleed, Stun, Weaken)
+    const _regenHarmful = ['Bleed', 'Stun', 'Weaken'];
+    let _regenCleared = false;
     for (const fk of Object.keys(game.figureConditions || {})) {
       if (!fk.startsWith(meta.dcName + '-')) continue;
-      filterCondition(game, fk, 'Bleed');
+      const _regenBefore = game.figureConditions[fk]?.length || 0;
+      for (const h of _regenHarmful) filterCondition(game, fk, h);
+      if ((game.figureConditions[fk]?.length || 0) < _regenBefore) _regenCleared = true;
+    }
+    if (_regenCleared) {
+      await logGameAction(game, client, `♻️ **Regenerate** — **${meta.dcName}** discarded harmful conditions.`, { phase: 'ROUND', icon: 'round' });
     }
   }
   // Hardy (Trandoshan Hunter Elite): discard all HARMFUL conditions at end of round
