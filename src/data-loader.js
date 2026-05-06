@@ -439,7 +439,8 @@ export function getDcStats(dcName) {
       'distracting_han','distracting_c3po','hunker_down','full_of_rage','fury_wookiee_elite','fury_wookiee_reg',
       'relentless_trandoshan_elite','relentless_trandoshan_reg','relentless_ig88','fifth_brother_relentless',
       'lasat_honor_guard','shock_and_awe','flawless_execution','expertise','regenerate_bossk',
-      'sidestep_nexu_elite','sidestep_nexu_reg','ee3_carbine']);
+      'sidestep_nexu_elite','sidestep_nexu_reg','ee3_carbine',
+      'guerrilla_alliance_ranger_elite','guerrilla_alliance_ranger_reg']);
     let specials = eff.specials;
     let specialIds = [];
     if (!specials && eff.specialAbilityIds?.length) {

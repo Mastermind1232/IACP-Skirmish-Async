@@ -777,15 +777,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
-      // Guerilla (Rebel Pathfinder E/R, Alliance Ranger E): after attack, if defender defeated, attacker becomes Hidden
-      if (newCur <= 0) {
-        const _guerAttEff = getDcEffects()?.[combat.attackerDcName];
-        if ((_guerAttEff?.abilityText || '').includes('Guerilla') || (_guerAttEff?.abilityText || '').includes('guerilla')) {
-          if (_applyCondition(game, combat.attackerFigureKey, 'Hide')) {
-            await logGameAction(game, client, `\u{1F977} **Guerilla** — **${combat.attackerDcName}** became **Hidden** (defender defeated).`, { phase: 'ROUND', icon: 'attack' });
-          }
-        }
-      }
+      // Guerrilla — handled below in the post-defeat block (line ~1270) via
+      // specialAbilityIds. Earlier abilityText fuzzy-match removed 2026-05-06
+      // after destruct's audit confirmed Alliance Ranger Regular needed its
+      // own slug ('guerrilla_alliance_ranger_reg'); now both Reg and Elite go
+      // through the slug-based check.
       // Jets (Sabine Wren): after attack, if target within 2 spaces, gain 1 MP
       if (combat.attackerDcName === 'Sabine Wren' && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
         const _jetsMsgId = combat.attackerMsgId;
@@ -1267,14 +1263,16 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             }
           }
         }
-        // Guerrilla (Alliance Ranger Elite): "After you resolve an attack,
-        // if the defender was defeated, become Hidden." Trigger on the
-        // attacker's specialAbilityIds. Apply Hide to the attacker.
-        // (destruct 2026-05-06 audit — was unimplemented.)
+        // Guerrilla (Alliance Ranger Regular + Elite): "After you resolve an
+        // attack, if the defender was defeated, become Hidden." Both slugs
+        // share the same effect (destruct 2026-05-06 audit — Regular was
+        // missing its slug; added 'guerrilla_alliance_ranger_reg' so both
+        // figures route through one slug-based check here).
         if (combat.attackerFigureKey) {
           const _gAtkDcName = combat.attackerDcName;
           const _gAtkEff = getDcEffects()?.[_gAtkDcName] || getDcEffects()?.[_gAtkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-          if ((_gAtkEff?.specialAbilityIds || []).includes('guerrilla_alliance_ranger_elite')) {
+          const _gIds = _gAtkEff?.specialAbilityIds || [];
+          if (_gIds.includes('guerrilla_alliance_ranger_elite') || _gIds.includes('guerrilla_alliance_ranger_reg')) {
             if (_applyCondition(game, combat.attackerFigureKey, 'Hide')) {
               await logGameAction(game, client, `🌑 **Guerrilla** — **${_gAtkDcName}** becomes **Hidden** (defeated the target).`, { phase: 'ROUND', icon: 'card' });
             }

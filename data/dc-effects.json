@@ -852,7 +852,8 @@
         "HUNTER"
       ],
       "specialAbilityIds": [
-        "sniper"
+        "sniper",
+        "guerrilla_alliance_ranger_reg"
       ],
       "cost": 9,
       "subCost": 3,
