@@ -3,6 +3,7 @@
  * No Discord dependency. Used by combat, abilities, handlers.
  */
 import { getDcMessageIds, getDcList } from './player-helpers.js';
+import { isCannotBeDefeated } from './conditions.js';
 
 /**
  * Sync healthState from dcHealthState Map to the redundant copy in game.p1/p2DcList.
@@ -160,22 +161,39 @@ export function applyDamageWithDefeatCheck(dcHealthState, game, msgId, figureInd
   const { sourceLabel = '', attackerPlayerNum = null } = opts;
   const result = reduceHp(dcHealthState, game, msgId, figureIndex, damage, playerNum);
   let defeatRecord = null;
-  if (result.wasDefeated && result.prevHp > 0) {
-    defeatRecord = {
-      figureKey: _figureKeyFromMsgIdAndIndex(game, msgId, figureIndex, playerNum),
-      defeatedPlayerNum: playerNum,
-      attackerPlayerNum: attackerPlayerNum ?? (playerNum === 1 ? 2 : 1),
-      source: sourceLabel,
-    };
-    // Slice 6.13 ext (destruct 2026-05-06): centralize defeat queueing so any
-    // damage caller that uses this helper automatically surfaces defeats —
-    // no per-site defeatedFigures plumbing required. apply-ability-result.js
-    // drains game._pendingFigureDefeats after every ability resolution and
-    // routes through processFigureDefeat. Callers that DO populate
-    // result.defeatedFigures keep working — the consumer dedupes.
-    if (game) {
-      game._pendingFigureDefeats = game._pendingFigureDefeats || [];
-      game._pendingFigureDefeats.push(defeatRecord);
+  if (result.wasDefeated) {
+    // Slice 5 (damage/health flip): per destruct 2026-05-06 "damage tokens
+    // capped at health. Pierce does NOT overflow." Check cannot-be-defeated
+    // before queueing a defeat. If the figure has a "cannot be defeated"
+    // protection active (YWNDM, Second Chance, Sustained by Rage), suppress
+    // the defeat — the figure's HP stays at 0 (damage capped at health) and
+    // future damage with the flag still active stays at 0 with no defeat.
+    // This replaces the legacy "heal to 1 on defeat" workaround which
+    // incorrectly left the figure vulnerable to a single-damage follow-up.
+    const figureKey = _figureKeyFromMsgIdAndIndex(game, msgId, figureIndex, playerNum);
+    if (game && isCannotBeDefeated(game, figureKey, msgId)) {
+      // Suppress defeat. Mutate the result so downstream callers see
+      // wasDefeated:false; the defeat record is NOT queued.
+      return { ...result, wasDefeated: false, defeatRecord: null, defeatSuppressed: true };
+    }
+    if (result.prevHp > 0) {
+      defeatRecord = {
+        figureKey,
+        defeatedPlayerNum: playerNum,
+        attackerPlayerNum: attackerPlayerNum ?? (playerNum === 1 ? 2 : 1),
+        source: sourceLabel,
+      };
+      // Slice 6.13 ext (destruct 2026-05-06): centralize defeat queueing so
+      // any damage caller that uses this helper automatically surfaces
+      // defeats — no per-site defeatedFigures plumbing required.
+      // apply-ability-result.js drains game._pendingFigureDefeats after every
+      // ability resolution and routes through processFigureDefeat. Callers
+      // that DO populate result.defeatedFigures keep working — the consumer
+      // dedupes.
+      if (game) {
+        game._pendingFigureDefeats = game._pendingFigureDefeats || [];
+        game._pendingFigureDefeats.push(defeatRecord);
+      }
     }
   }
   return { ...result, defeatRecord };

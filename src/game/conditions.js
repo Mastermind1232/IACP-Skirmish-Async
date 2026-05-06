@@ -67,6 +67,47 @@ export function areConditionEffectsSuppressed(game, figureKey) {
 }
 
 /**
+ * Check whether a figure cannot currently be defeated. Per destruct 2026-05-05:
+ * "damage tokens capped at health. Pierce does NOT overflow."
+ *
+ * Sources today:
+ *   - YWNDM (You Will Not Deny Me) on Fifth Brother
+ *   - Second Chance CC attached to a specific DC msgId
+ *   - Sustained by Rage on Krrsantan (when "no activation resolved this round")
+ *
+ * The destruct-correct semantic is: when this returns true, applying damage
+ * that would defeat the figure should leave HP at 0 (or damage at health,
+ * equivalently) and SUPPRESS the defeat trigger. Subsequent damage hits
+ * with flag still active also stay at 0/no-defeat. A heal removes damage
+ * normally and may bring the figure back above 0.
+ *
+ * This replaces the legacy "heal to 1 on defeat" approach which incorrectly
+ * left figures vulnerable to a single-damage follow-up.
+ *
+ * @param {object} game
+ * @param {string} figureKey
+ * @param {string} [msgId] - optional, enables Second Chance check
+ * @returns {boolean}
+ */
+export function isCannotBeDefeated(game, figureKey, msgId = null) {
+  if (!game) return false;
+  // YWNDM applies to Fifth Brother only.
+  if (game.youWillNotDenyMeActive) {
+    const dcName = dcNameFromFigureKey(figureKey);
+    if (dcName?.toLowerCase().includes('fifth brother')) return true;
+  }
+  // Second Chance is keyed per msgId.
+  if (msgId && game.secondChanceDcMsgId?.[msgId]) return true;
+  // Sustained by Rage (Krrsantan): requires "no activation resolved this round."
+  // The activation-state check is complex (read the figure's DC ability + the
+  // current round's activation history). Existing call sites at
+  // engine/combat-bridge.js:1015+ check it inline; not yet generalized here.
+  // Future: hoist that check into this helper too. For now, callers that need
+  // SbR coverage check independently.
+  return false;
+}
+
+/**
  * Apply a condition to a figure (with dedup). Initialises figureConditions if needed.
  * @param {object} game
  * @param {string} figureKey
