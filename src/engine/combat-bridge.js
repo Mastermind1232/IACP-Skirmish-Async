@@ -154,6 +154,12 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
     applyDamageAndFinishCombat: _applyDamageAndFinishCombat,
     discordCatch,
   } = deps;
+  // Combat-pipeline rebuild (slice 3.7): rolls completed → reroll/modifier/
+  // damage flow runs collapsed inside this function for now. Mark the entry
+  // step explicitly so combat-order telemetry can flag any CC played past
+  // this point as out-of-window. Sub-step transitions across reroll/modifier/
+  // surge/damage handlers land in subsequent slices.
+  if (combat.currentStep === 'roll') combat.currentStep = 'step3-attacker';
 
   // Beatdown / nextAttacksBonusHits: consume one charge and add bonus to this attack
   const pending = game.nextAttacksBonusHits?.[combat.attackerPlayerNum];
