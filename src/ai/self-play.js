@@ -172,6 +172,11 @@ function determineActingPlayer(game) {
     const _miOp = game.pendingMoveInterrupts.opportunities?.[game.pendingMoveInterrupts.opIndex];
     return _miOp?.triggerPlayerNum || 'both';
   }
+  if (game.pendingStrainEvent) {
+    // Strain pauses for the current chooser (original controller, or
+    // UD-controller if Under Duress was depleted).
+    return game.pendingStrainEvent.controllerPN || 'both';
+  }
   if (game.pendingExecutorInterrupt) return 'both';
 
   // Move in progress — keyed by moveKey, each entry has playerNum

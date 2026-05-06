@@ -165,6 +165,7 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingSelfDestruct',
   'pendingSelfDestructMove',
   'pendingMoveInterrupts',
+  'pendingStrainEvent',
   'pendingMastery',
   'pendingInterrogate',
   'pendingHunterProtocol',

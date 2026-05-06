@@ -154,6 +154,7 @@ import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterPr
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleSelfDestructMovePick, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 import { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue } from './move-interrupts-handler.js';
+import { handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz, applyStrain } from './strain-handler.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip } from './map-events.js';
 import {
   handleFavSave, handleFavRemove, handleFavRename,
@@ -507,6 +508,11 @@ register('sdp_move_skip_', handleSelfDestructMovePick, 'interrupts');
 register('move_interrupt_play_', handleSpacesMoveInterruptPlay, 'interrupts');
 register('move_interrupt_skip_', handleSpacesMoveInterruptSkip, 'interrupts');
 register('move_interrupt_continue_', handleSpacesMoveInterruptContinue, 'interrupts');
+register('strain_resolve_ud_deplete_', handleStrainUdDeplete, 'interrupts');
+register('strain_resolve_ud_skip_', handleStrainUdSkip, 'interrupts');
+register('strain_resolve_damage_', handleStrainChoiceDamage, 'interrupts');
+register('strain_resolve_discard_', handleStrainChoiceDiscard, 'interrupts');
+register('strain_resolve_paz_', handleStrainChoicePaz, 'interrupts');
 register('last_resort_use_', handleLastResort, 'interrupts');
 register('last_resort_skip_', handleLastResort, 'interrupts');
 register('yhsiw_transfer_', handleYHSIW, 'interrupts');
@@ -750,6 +756,7 @@ export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterPr
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleSelfDestructMovePick, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 export { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue, startMoveInterruptLoop } from './move-interrupts-handler.js';
+export { applyStrain, handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz } from './strain-handler.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip } from './map-events.js';
 export { buildFavoritesListPayload, handleFavNameModal, handleFavRenameModal, handleFavListRenameModal } from './favorites.js';
 export {
