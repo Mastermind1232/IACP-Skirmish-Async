@@ -5793,6 +5793,14 @@
       "health": 8,
       "speed": 4,
       "figures": 2,
+      "specials": [
+        "Multi-Fire",
+        "Charged Shot"
+      ],
+      "specialCosts": [
+        1,
+        1
+      ],
       "attack": {
         "dice": [
           "green",
@@ -5830,6 +5838,14 @@
       "health": 5,
       "speed": 4,
       "figures": 2,
+      "specials": [
+        "Multi-Fire",
+        "Charged Shot"
+      ],
+      "specialCosts": [
+        1,
+        1
+      ],
       "attack": {
         "dice": [
           "green",
