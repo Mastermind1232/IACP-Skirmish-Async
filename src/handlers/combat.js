@@ -226,12 +226,26 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after.
  * Now uses the combat gate system so both players must confirm.
  *
- * Per CRR step-4 modifier timing + Destruct: Zillo Technique's exhaust window
- * to cancel 2 Pierce fires HERE — after attacker has resolved any pierce
- * surges, before damage calc. If Zillo prompts, this defers the gate until
- * the defender responds (handleZilloPierceCancel re-enters this function).
+ * Per CRR + destruct 2026-05-05: Zillo Technique's exhaust window is the
+ * canonical 'zillo-window' step (between Step 5 surge spend and Step 7
+ * damage calc). The defender sees the attacker's total Pierce — including
+ * any surge-Pierce committed in Step 5 — and can choose to exhaust Zillo
+ * to reduce by 2. No other ability has this timing window.
+ *
+ * If Zillo prompts, this defers the pre_resolve gate until the defender
+ * responds (handleZilloPierceCancel re-enters this function). Otherwise
+ * the pre_resolve gate fires immediately.
+ *
+ * Slice 6.10 / 3.7-3.8: at this point combat.currentStep should be 'step5'
+ * (transitioning to 'zillo-window' or 'step6' depending on Zillo path).
+ * The slice 3.7 wiring at the pre_resolve dispatch handles the transition
+ * to 'zillo-window' regardless of whether the prompt fires.
  */
 export async function sendReadyToResolveRolls(thread, gameId, game, ctx) {
+  // Slice 6.10: explicit step transition into the Zillo special window.
+  if (game?.pendingCombat && game.pendingCombat.currentStep === 'step5') {
+    game.pendingCombat.currentStep = 'zillo-window';
+  }
   if (await maybePromptZilloPierceCancel(thread, game, ctx)) return;
   if (game?.pendingCombat) {
     await sendCombatGate(thread, game, game.pendingCombat, 'pre_resolve', ctx);
