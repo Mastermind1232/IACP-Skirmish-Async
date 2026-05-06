@@ -477,12 +477,24 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         || _classification.step === _legacyStep;
       const _tag = _matches ? 'ok' : 'WARN';
       console.log(`[combat-order ${_tag}] CC '${card}' played at legacy step '${_legacyStep}' — canonical step '${_classification.step}' (${_classification.side}). reason: ${_classification.reason}`);
-      // Surface mismatches to game log so they're visible without log tail.
+      // Slice 4.13 (destruct 2026-05-06): the canonical step transitions
+      // are now wired (slices 4.7-4.12) and locked by audit test
+      // currentstep-transition-audit.test.js. Surface mismatches both as
+      // a console warn AND a game-log entry. Strict-throw mode is
+      // available via env IACP_COMBAT_ORDER_STRICT=1 (used in CI / tests
+      // but NOT default in production — a runtime throw would break
+      // legitimate plays of cards we haven't audited yet, since the
+      // registry is currently 27/~200 cards).
       if (!_matches && logGameAction && client) {
         await logGameAction(game, client,
           `⚠️ **[combat-order]** \`${card}\` played at \`${_legacyStep}\` — canonical step is \`${_classification.step}\` (${_classification.side}). reason: ${_classification.reason}`,
           { phase: 'ROUND', icon: 'card' }
         ).catch(discordCatch);
+      }
+      if (!_matches && process.env.IACP_COMBAT_ORDER_STRICT === '1') {
+        throw new Error(
+          `[combat-order strict] CC '${card}' played at '${_legacyStep}' but canonical step is '${_classification.step}'. ${_classification.reason}`,
+        );
       }
     }
   }
