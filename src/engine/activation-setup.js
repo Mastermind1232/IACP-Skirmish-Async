@@ -572,10 +572,11 @@ export async function finalizeActivation({
   }
 
   // D16. Advanced Firepower (General Sorin)
+  // ACS extends "adjacent" to "within 3 spaces" per the IACP ACS card text.
   if (_abilityIds.includes('advanced_firepower_sorin')) {
     const _afAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
     const _afHasACS = cardNameIncludes(_afAtts, 'Advanced Com Systems');
-    const _afRange = _afHasACS ? 'within 2 spaces (ACS)' : 'adjacent';
+    const _afRange = _afHasACS ? 'within 3 spaces (ACS)' : 'adjacent';
     await thread.send({ content: `🔧 **Advanced Firepower** — ${_afRange} DROID or VEHICLE figures may use Sorin's surge abilities.` }).catch(discordCatch);
   }
 

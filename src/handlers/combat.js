@@ -2339,8 +2339,12 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Advanced Firepower (General Sorin): adjacent friendly DROID or VEHICLE may use Sorin's surge abilities
-  // With Advanced Com Systems: extends from adjacent to within 2 spaces
+  // Advanced Firepower (General Sorin): adjacent friendly DROID or VEHICLE may use Sorin's surge abilities.
+  // With Advanced Com Systems attached: ACS reads "abilities on your DC
+  // that choose or affect adjacent friendly figures OR friendly figures
+  // within 2 spaces can choose or affect other friendly figures within 3
+  // spaces instead." Sorin's text targets ADJACENT, so ACS extends to 3.
+  // (Previously incorrectly capped at 2 — destruct flagged 2026-05-06.)
   if (mapSpaces) {
     const atkPosAF = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     const atkKwsAF = (getDcKeywordsGlobal(game)[meta.dcName] || []).map(k => String(k).toUpperCase());
@@ -2352,11 +2356,11 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!(fkEff?.specialAbilityIds || []).includes('advanced_firepower_sorin')) continue;
-        // Check range: adjacent normally, within 2 with ACS
+        // Check range: adjacent normally, within 3 with ACS
         const _afSorinMsgId = findDcMessageIdForFigure?.(game.gameId, attackerPlayerNum, fk);
         const _afAtts = _afSorinMsgId ? (game.p1DcAttachments?.[_afSorinMsgId] || game.p2DcAttachments?.[_afSorinMsgId] || []) : [];
         const _afHasACS = cardNameIncludes(_afAtts, 'Advanced Com Systems');
-        const _afMaxRange = _afHasACS ? 2 : 1;
+        const _afMaxRange = _afHasACS ? 3 : 1;
         const _afDist = _csRawMs ? countSpaces(_csRawMs, atkPosAF, pos, _csClosedDoorEdges) : Infinity;
         if (_afDist > _afMaxRange) continue;
         if (!attackerIsDroidOrVehicle) {
